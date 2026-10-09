@@ -1,0 +1,108 @@
+"""The launcher's own reads and writes in workspace/, confined to the six writable areas.
+
+The launcher runs outside the sandbox, so this module is what keeps its writes inside the areas: every path is
+checked against them, and a file the agent wrote is read only if it is a plain file with one link, so a symbolic or
+hard link the agent planted can never carry content from outside the areas into a record.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import stat
+from collections.abc import Iterator, Mapping
+from pathlib import Path
+
+from .boundary import Boundary, ConfigError, is_within
+
+
+class UnsafeFile(Exception):
+    """A path in an area that is not a plain, singly linked file."""
+
+
+class Areas:
+    def __init__(self, boundary: Boundary):
+        self.workspace = boundary.repo_root / "workspace"
+        self.paths = dict(boundary.areas)
+
+    def path(self, key: str, *parts: str) -> Path:
+        return self.check(self.paths[key].joinpath(*parts))
+
+    def check(self, path: Path, area_itself: bool = False) -> Path:
+        """A path inside one of the areas, compared without following links below the area itself.
+
+        An area's own directory passes only when area_itself is set, for listing; nothing ever replaces it.
+        """
+        absolute = Path(os.path.abspath(str(path)))
+        if not any(is_within(absolute, area) and (area_itself or absolute != area) for area in self.paths.values()):
+            raise ConfigError(f"refusing to touch {absolute}: it is outside the writable areas")
+        return absolute
+
+    def relative(self, path: Path) -> str:
+        """A path relative to workspace/, the form records use to point at each other."""
+        return str(Path(os.path.abspath(str(path))).relative_to(self.workspace))
+
+    def write_text(self, path: Path, text: str) -> None:
+        """Write atomically: a reader such as Mandu never sees half a file."""
+        path = self.check(path)
+        self.check_parents(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.is_symlink():
+            path.unlink()
+        temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+        temporary.write_text(text, encoding="utf-8")
+        os.replace(str(temporary), str(path))
+
+    def write_json(self, path: Path, data: Mapping) -> None:
+        self.write_text(path, json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+
+    def write_bytes(self, path: Path, data: bytes) -> None:
+        path = self.check(path)
+        self.check_parents(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if path.is_symlink():
+            path.unlink()
+        temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}")
+        temporary.write_bytes(data)
+        os.replace(str(temporary), str(path))
+
+    def check_parents(self, path: Path) -> None:
+        """No directory between the area and the path may be a symbolic link, or a write could leave the area."""
+        for parent in path.parents:
+            if parent in self.paths.values():
+                return
+            if parent.is_symlink():
+                raise ConfigError(f"refusing to write {path}: {parent} is a symbolic link")
+
+    def remove(self, path: Path) -> None:
+        path = self.check(path)
+        if path.is_symlink() or path.is_file():
+            path.unlink()
+
+    def files(self, directory: Path) -> Iterator[Path]:
+        """Every non-directory entry under a directory inside an area, without following links."""
+        directory = self.check(directory, area_itself=True)
+        if not directory.is_dir() or directory.is_symlink():
+            return
+        for root, subdirs, names in os.walk(str(directory)):
+            for name in list(subdirs):
+                if Path(root, name).is_symlink():
+                    names.append(name)
+                    subdirs.remove(name)
+            for name in sorted(names):
+                yield Path(root, name)
+
+
+def read_plain(path: Path) -> bytes:
+    """The bytes of a plain file with exactly one link; anything else raises UnsafeFile."""
+    try:
+        descriptor = os.open(str(path), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+    except OSError as error:
+        raise UnsafeFile(f"cannot open without following links: {error.strerror}") from error
+    with os.fdopen(descriptor, "rb") as handle:
+        info = os.fstat(handle.fileno())
+        if not stat.S_ISREG(info.st_mode):
+            raise UnsafeFile("not a plain file")
+        if info.st_nlink != 1:
+            raise UnsafeFile(f"has {info.st_nlink} hard links")
+        return handle.read()

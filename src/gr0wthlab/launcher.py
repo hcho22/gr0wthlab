@@ -102,15 +102,17 @@ def run(
     out: TextIO = sys.stdout,
     now: datetime | None = None,
     facts: Sequence[str] = (),
+    run_id: str | None = None,
 ) -> dict[str, object]:
-    """Run once and return the run record; record["exit_code"] is the launcher's exit status.
+    """Run the agent once and return the run record; record["exit_code"] is the launcher's exit status.
 
     facts are extra header lines for the prompt, which the configuration fingerprint does not cover.
+    record["agent_started"] says whether Codex itself was started, after the preflight passed.
     """
     if trigger not in TRIGGERS:
         raise ConfigError(f"trigger must be one of {', '.join(TRIGGERS)}")
     started = now or datetime.now(timezone.utc)
-    run_id = new_run_id(trigger, started)
+    run_id = run_id or new_run_id(trigger, started)
     log_dir = default_log_dir(env, home)
     log_dir.mkdir(parents=True, exist_ok=True)
     record_path = log_dir / f"{run_id}.json"
@@ -119,6 +121,7 @@ def run(
         "trigger": trigger,
         "started_at": started.isoformat(),
         "instruction": str(instruction_path),
+        "agent_started": False,
     }
     try:
         instruction = instruction_path.read_text(encoding="utf-8")
@@ -150,6 +153,7 @@ def run(
     prompt = compose_prompt(
         resolved.boundary, run_id, trigger, started.isoformat(), instruction_path, instruction, facts
     )
+    record["agent_started"] = True
     write_json(record_path, record)
     with (
         (log_dir / f"{run_id}.events.jsonl").open("w", encoding="utf-8") as events,

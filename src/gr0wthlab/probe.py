@@ -297,7 +297,12 @@ def summarize(result: Mapping[str, object], out: TextIO) -> None:
 
 
 def main(
-    repo_root: Path, env: Mapping[str, str], home: Path, verify_run_id: str | None, out: TextIO = sys.stdout
+    repo_root: Path,
+    env: Mapping[str, str],
+    home: Path,
+    verify_run_id: str | None,
+    out: TextIO = sys.stdout,
+    trigger: str = "on-demand",
 ) -> int:
     _, boundary = load_boundary(repo_root, env, home)
     log_dir = launcher.default_log_dir(env, home)
@@ -307,9 +312,7 @@ def main(
         before = snapshots(boundary)
         with local_listeners() as listeners:
             facts = [f"Local listener {listener.label}: {listener.address}" for listener in listeners]
-            record = launcher.run(
-                repo_root, repo_root / PROBE_INSTRUCTION, "on-demand", env, home, out=out, facts=facts
-            )
+            record = launcher.run(repo_root, repo_root / PROBE_INSTRUCTION, trigger, env, home, out=out, facts=facts)
             result = verify(boundary, str(record["run_id"]), log_dir, before, listeners)
     summarize(result, out)
     print(f"  evidence: {log_dir / (str(result['run_id']) + '.boundary-check.json')}", file=out)

@@ -2,11 +2,15 @@
 
 import io
 import json
+import os
+import plistlib
 import subprocess
+import sys
 import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest import mock
 
 from gr0wthlab import boundary, cli, launcher
 from tests.test_boundary import CONFIG, REGISTRY
@@ -81,6 +85,29 @@ class CliTest(unittest.TestCase):
         args = parser.parse_args(["launch-agent", "--instruction", "i.md", "--weekly", "monday", "07:30"])
         self.assertEqual(args.weekly, ["monday", "07:30"])
         self.assertEqual(parser.parse_args(["boundary-check", "--verify", "R"]).verify, "R")
+        self.assertEqual(parser.parse_args(["boundary-check", "--trigger", "scheduled"]).trigger, "scheduled")
+        args = parser.parse_args(["run", "--trigger", "scheduled", "--weekly", "sunday", "16:00"])
+        self.assertEqual((args.instruction, args.weekly), (None, ["sunday", "16:00"]))
+        self.assertEqual(parser.parse_args(["launch-agent"]).weekly, None)
+        self.assertTrue(
+            parser.parse_args(["launch-agent", "--boundary-check", "--once", "2026-10-11T16:00"]).boundary_check
+        )
+        self.assertEqual(parser.parse_args(["check-incoming"]).command, "check-incoming")
+
+    def test_launch_agent_defaults_to_the_configured_weekly_run(self):
+        out = io.BytesIO()
+        with tempfile.TemporaryDirectory() as directory:
+            codex = Path(directory) / "codex"
+            codex.write_text("#!/bin/sh\n")
+            codex.chmod(0o755)
+            env = {"GR0WTHLAB_CODEX_BIN": str(codex), "GR0WTHLAB_PRE_RUN": "{}", "GR0WTHLAB_LOG_DIR": directory}
+            with mock.patch.dict(os.environ, env), mock.patch.object(sys, "stdout", mock.Mock(buffer=out)):
+                self.assertEqual(cli.main(["launch-agent"]), 0)
+        agent = plistlib.loads(out.getvalue())
+        self.assertEqual(agent["StartCalendarInterval"], {"Weekday": 0, "Hour": 16, "Minute": 0})
+        self.assertEqual(agent["ProgramArguments"][1:4], ["run", "--trigger", "scheduled"])
+        self.assertEqual(agent["ProgramArguments"][-3:], ["--weekly", "sunday", "16:00"])
+        self.assertNotIn("GR0WTHLAB_PRE_RUN", agent["EnvironmentVariables"])
 
     def test_entry_point_starts_through_its_shebang(self):
         completed = subprocess.run([str(cli.ENTRY), "--help"], capture_output=True, text=True)
