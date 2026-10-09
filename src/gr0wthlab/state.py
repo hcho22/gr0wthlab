@@ -77,7 +77,8 @@ def entries(data: Mapping, key: str) -> dict[str, Mapping]:
 
 
 # Review Queue: decided items, and items left undecided at a sitting with that sitting's date, by identifier and
-# fingerprint; and the Mandu records already reported as unusable, by fingerprint, so each is reported once.
+# fingerprint; and the Mandu records already reported as unusable, by fingerprint, so each is reported once unless
+# Mandu must replace it.
 
 
 @dataclass

@@ -25,7 +25,7 @@ To move the folder, change that configuration through a gr0wthlab pull request.
    If the time in its `next_run` has passed, tell the Founder first that the weekly run due then has not finished, so the queue and report are from an earlier run.
 2. Show the summary at the top of the run report that `queue.json` names in `run_report`.
 3. Present each entry of `open`, in the listed order, by showing its item file.
-   Skip any entry that already has a decision record.
+   Skip any entry that already has a decision record, unless gr0wthlab has asked Mandu to replace that record and it does not show the Founder's decision (see Decision records).
    For an entry with `"carried_over": true`, say it was carried over from the sitting on the date in `carried_over_from`.
 4. The Founder approves an item, optionally with a one-line note, or rejects it with a one-line reason, or leaves it undecided.
    An undecided item needs nothing written; it returns, marked carried over, at the next sitting.
@@ -119,7 +119,7 @@ gr0wthlab may add fields; ignore any you do not use.
 
 ## Decision records (Mandu writes)
 
-One file per decided item, `decisions/<id>.json`, written once and never edited or deleted:
+One file per decided item, `decisions/<id>.json`, written once and never edited or deleted, except to replace a record gr0wthlab could not use for an item still open (below):
 
 ```json
 {
@@ -143,10 +143,14 @@ gr0wthlab matches each record to its item by `item`, keeps every reason and note
 A decision on an item that a newer item superseded before gr0wthlab read the decision, for example while a late run was still running during the sitting, is kept the same way.
 Its Evidence also names the newer item, which stays open, and the Marketing Engineer sees the decision, with its reason or note, beside that newer item.
 
-gr0wthlab cannot use a decision or sitting record that does not follow its format, a decision that names no queued item, or a decision that differs from the one already taken for its item.
+A decision record for an item still open that does not follow this format is not a decision, and gr0wthlab does not take it in.
+gr0wthlab names it, with the exact problem, in the run report and in a notice at every run while the item stays open.
+Mandu replaces it with a valid record in this format of the Founder's decision; if the record does not show that decision, Mandu presents the item again at the next sitting and writes the new decision in its place.
+This is the only case where a record is rewritten.
+
+gr0wthlab also cannot use a decision that names no queued item, a decision that differs from the one already taken for its item, or any other record that does not follow its format, such as a decision on an item no longer open or a sitting record.
 It reports each such record to the Founder once, in one notice, and again only if the file changes.
-Such a record changes nothing: an item it names that is still open stays open, and a decision already taken stands.
-Mandu does not need to rewrite or remove it.
+Such a record changes nothing: a decision already taken stands, and Mandu does not need to rewrite or remove it.
 
 ## Sitting records (Mandu writes)
 

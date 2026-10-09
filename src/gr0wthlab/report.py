@@ -33,11 +33,15 @@ class SourceLine:
 
 @dataclass(frozen=True)
 class Unusable:
-    """A Mandu record the run could not use; its fingerprint changes whenever its name or content does."""
+    """A Mandu record the run could not use; its fingerprint changes whenever its name or content does.
+
+    open_item is the item still open that a decision record is for, when Mandu must replace the record with a valid one.
+    """
 
     name: str
     problems: tuple[str, ...]
     fingerprint: str
+    open_item: str = ""
 
 
 @dataclass
@@ -92,8 +96,12 @@ class RunState:
     def failed_sources(self) -> list[SourceLine]:
         return [line for line in self.sources if line.status == package.FAILED]
 
-    def newly_unusable(self) -> list[Unusable]:
-        return [record for record in self.unusable if record.fingerprint not in self.reported_before]
+    def reports(self, record: Unusable) -> bool:
+        """A record Mandu must replace is reported at every run until it does; any other record only once."""
+        return bool(record.open_item) or record.fingerprint not in self.reported_before
+
+    def unusable_to_report(self) -> list[Unusable]:
+        return [record for record in self.unusable if self.reports(record)]
 
 
 def wall_clock(moment: datetime) -> datetime:
@@ -223,7 +231,7 @@ def table(header: Sequence[str], rows: Sequence[Sequence[str]]) -> list[str]:
 
 
 def decision_lines(state: RunState, taken_only: bool = False) -> list[str]:
-    """The decisions taken in this run, then, unless taken_only, each Mandu record no earlier run reported unusable."""
+    """The decisions taken in this run, then, unless taken_only, each Mandu record this run reports unusable."""
     lines = []
     for outcome in state.decisions:
         decision, entry = outcome.decision, outcome.entry
@@ -236,7 +244,14 @@ def decision_lines(state: RunState, taken_only: bool = False) -> list[str]:
         else:
             lines.append(f"- Rejected `{decision.item}`{replaced}: {entry['ask']}. Reason: {decision.reason}")
     if not taken_only:
-        lines += [f"- Could not use `{record.name}`: {'; '.join(record.problems)}" for record in state.newly_unusable()]
+        for record in state.unusable_to_report():
+            fix = (
+                f". Mandu must replace it with a valid record of the decision on `{record.open_item}`, which stays"
+                " undecided until then"
+                if record.open_item
+                else ""
+            )
+            lines.append(f"- Could not use `{record.name}`: {'; '.join(record.problems)}{fix}")
     return lines
 
 
@@ -429,15 +444,30 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
             needs = ", ".join(line.needed_by) or "nothing else"
             lines.append(bullet(f"{line.name}: {line.detail} Incomplete: {needs}."))
         sections.append((f"{plural(len(failed), 'source')} could not be read on {day}", "\n".join(lines)))
-    unusable = state.newly_unusable()
-    if unusable:
+    unusable = state.unusable_to_report()
+    to_replace = [record for record in unusable if record.open_item]
+    if to_replace:
         sections.append(
             (
-                f"{plural(len(unusable), 'Mandu record')} could not be used on {day}",
-                "Some records in Mandu could not be used, so nothing was taken from them: an item still waiting for"
-                " your decision stays in the queue, and a decision already taken stands."
-                " Each record is reported once, and again only if it changes:\n"
-                + "\n".join(bullet(f"`{record.name}`: {'; '.join(record.problems)}") for record in unusable),
+                f"{plural(len(to_replace), 'decision')} in Mandu could not be taken in on {day}",
+                "These decision records in Mandu could not be used, so the decisions in them were not taken in and"
+                " their items stay undecided. Mandu must replace each with a valid record of the same decision, in the"
+                " format of the Mandu exchange; until it does, this notice comes back at every run while the item is"
+                " open:\n"
+                + "\n".join(
+                    bullet(f"`{record.name}`, for `{record.open_item}`: {'; '.join(record.problems)}")
+                    for record in to_replace
+                ),
+            )
+        )
+    others = [record for record in unusable if not record.open_item]
+    if others:
+        sections.append(
+            (
+                f"{plural(len(others), 'Mandu record')} could not be used on {day}",
+                "Some records in Mandu could not be used, so nothing was taken from them; a decision already taken"
+                " stands, and Mandu need not change them. Each is reported once, and again only if it changes:\n"
+                + "\n".join(bullet(f"`{record.name}`: {'; '.join(record.problems)}") for record in others),
             )
         )
     if state.set_aside:
