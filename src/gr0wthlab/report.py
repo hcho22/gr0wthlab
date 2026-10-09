@@ -390,44 +390,72 @@ def render_report(state: RunState) -> str:
 
 
 def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, str] | None:
-    """One notice for the Founder per run with problems, in plain outcome language; None if there were none."""
-    sections = []
+    """One notice for the Founder per run with problems, in plain outcome language; None if there were none.
+
+    A notice about one problem says what it is in its title; a notice about several counts them.
+    """
+    day = wall_clock(state.started).strftime("%Y-%m-%d")
+    sections: list[tuple[str, str]] = []
     failed = state.failed_sources()
     if failed:
         lines = ["These sources could not be read, so the work that needs them is incomplete this run:"]
         for line in failed:
             needs = ", ".join(line.needed_by) or "nothing else"
             lines.append(f"- {line.name}: {line.detail} Incomplete: {needs}.")
-        sections.append("\n".join(lines))
+        sections.append((f"{plural(len(failed), 'source')} could not be read on {day}", "\n".join(lines)))
     taken_problems = [line[2:] for line in decision_lines(state) if line.startswith(("- Not used", "- Could not"))]
     if taken_problems:
         sections.append(
-            "Some decision records in Mandu could not be used, so those items are still open:\n"
-            + "\n".join(f"- {line}" for line in taken_problems)
+            (
+                f"{plural(len(taken_problems), 'Mandu record')} could not be used on {day}",
+                "Some records in Mandu could not be used, so the items they name are still open:\n"
+                + "\n".join(f"- {line}" for line in taken_problems),
+            )
         )
     if state.set_aside:
         sections.append(
-            "Some items the Marketing Engineer prepared did not meet the item format and were not queued:\n"
-            + "\n".join(f"- `{item.name}`: {'; '.join(item.problems)}" for item in state.set_aside)
+            (
+                f"{plural(len(state.set_aside), 'prepared item')} not queued on {day}",
+                "Some items the Marketing Engineer prepared were not queued, because they did not meet the item format"
+                " or asked the same as an item already queued or decided:\n"
+                + "\n".join(f"- `{item.name}`: {'; '.join(item.problems)}" for item in state.set_aside),
+            )
         )
     if state.restored:
         sections.append(
-            "The agent changed records only the launcher writes; the launcher undid it:\n"
-            + "\n".join(f"- {path}" for path in state.restored)
+            (
+                f"the launcher undid {plural(len(state.restored), 'change')} by the agent on {day}",
+                "The agent changed records only the launcher writes; the launcher undid it:\n"
+                + "\n".join(f"- {path}" for path in state.restored),
+            )
         )
     agent = state.agent.get("exit_code")
     if not state.agent.get("agent_started"):
-        sections.append(f"The agent did not start: {state.agent.get('error') or 'see the run report'}.")
+        error = state.agent.get("error") or "see the run report"
+        sections.append((f"the agent did not start on {day}", f"The agent did not start: {error}."))
     elif agent != 0:
-        sections.append(f"The agent stopped with exit code {agent}, so this run's review may be incomplete.")
+        sections.append(
+            (
+                f"the agent stopped early on {day}",
+                f"The agent stopped with exit code {agent}, so this run's review may be incomplete.",
+            )
+        )
     if state.problems:
-        sections.append("The launcher hit problems:\n" + "\n".join(f"- {problem}" for problem in state.problems))
+        sections.append(
+            (
+                f"the launcher hit {plural(len(state.problems), 'problem')} on {day}",
+                "The launcher hit problems:\n" + "\n".join(f"- {problem}" for problem in state.problems),
+            )
+        )
     if not sections:
         return None
-    day = wall_clock(state.started).strftime("%Y-%m-%d")
-    count = len(sections)
-    title = f"Notice: the run on {day} had {count} problem{'s' if count > 1 else ''}"
-    body = "\n\n".join(sections) + "\n\nNothing else was affected; the next run tries every source again."
+    title = (
+        f"Notice: {sections[0][0]}" if len(sections) == 1 else f"Notice: the run on {day} had {len(sections)} problems"
+    )
+    body = (
+        "\n\n".join(text for _, text in sections)
+        + "\n\nEverything else in this run finished; the run report has the details."
+    )
     touches = "- Nothing changes; this notice is for your information."
     evidence = f"- The run report: `{report_path}`"
     return title, body, touches, evidence

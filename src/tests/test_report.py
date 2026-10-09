@@ -95,7 +95,7 @@ class NoticeTest(unittest.TestCase):
             SourceLine("RepToday package: `a.md`", package.FAILED, "missing.", ("Package review", "Post Drafts"))
         )
         title, body, touches, evidence = report.problems_notice(state, "run-reports/R.md")
-        self.assertEqual(title, "Notice: the run on 2026-10-11 had 1 problem")
+        self.assertEqual(title, "Notice: 1 source could not be read on 2026-10-11")
         self.assertIn("- RepToday package: `a.md`: missing. Incomplete: Package review, Post Drafts.", body)
         self.assertIn("`run-reports/R.md`", evidence)
 
@@ -104,7 +104,7 @@ class NoticeTest(unittest.TestCase):
         state.agent = {"agent_started": False, "exit_code": 3, "error": None}
         state.problems.append("the ledger could not be read")
         title, body, _, _ = report.problems_notice(state, "run-reports/R.md")
-        self.assertIn("2 problems", title)
+        self.assertEqual(title, "Notice: the run on 2026-10-11 had 2 problems")
         self.assertIn("The agent did not start", body)
 
     def test_the_report_lists_every_source_and_output(self):
