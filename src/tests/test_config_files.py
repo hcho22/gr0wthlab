@@ -1,7 +1,6 @@
 """The committed configuration: the Product registry parses and the runtime grants writes only to the six areas."""
 
 import json
-import re
 import unittest
 from pathlib import Path
 
@@ -48,12 +47,8 @@ class RuntimeConfigTest(unittest.TestCase):
     def test_runtime_is_codex(self):
         self.assertEqual(self.config["runtime"], "codex")
 
-    def test_areas_are_the_readme_writable_areas(self):
-        readme = (REPO / "README.md").read_text(encoding="utf-8")
-        writable = set(re.findall(r"^\| \[`(workspace/[a-z-]+)/`\]\([^)]*\) \| [^|]+ \| Yes \|$", readme, re.M))
-        self.assertEqual(writable, set(self.config["writable_areas"].values()))
-        self.assertEqual(len(writable), 6)
-        for area in writable:
+    def test_every_area_exists_with_a_readme(self):
+        for area in self.config["writable_areas"].values():
             self.assertTrue((REPO / area / "README.md").is_file(), area)
 
     def test_the_real_configuration_writes_only_in_the_areas(self):

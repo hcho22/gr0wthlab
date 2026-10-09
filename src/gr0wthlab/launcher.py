@@ -54,10 +54,9 @@ class Resolved:
     def __init__(self, repo_root: Path, env: Mapping[str, str], home: Path, last_message: Path):
         self.config, self.boundary = load_boundary(repo_root, env, home)
         self.codex_bin = codex.resolve_codex_binary(env)
-        self.environment = codex.child_environment(env, home, self.codex_bin, codex.user_temp_dir())
+        self.environment = codex.child_environment(home, self.codex_bin, codex.user_temp_dir())
         self.codex_version = codex.codex_version(self.codex_bin, self.environment)
-        self.model = codex.model(self.config, env)
-        self.command = codex.build_exec_command(self.config, self.boundary, self.codex_bin, self.model, last_message)
+        self.command = codex.build_exec_command(self.config, self.boundary, self.codex_bin, last_message)
         self.fingerprint = codex.fingerprint(self.command, self.environment, self.codex_version)
 
     def describe(self) -> dict[str, object]:
@@ -65,7 +64,7 @@ class Resolved:
             "fingerprint": self.fingerprint,
             "codex": str(self.codex_bin),
             "codex_version": self.codex_version,
-            "model": self.model,
+            "model": self.config["codex"]["model"],
             "working_directory": str(self.boundary.working_directory),
             "filesystem_policy": filesystem_policy(self.boundary),
             "network": self.boundary.network,

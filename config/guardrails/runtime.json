@@ -49,8 +49,6 @@
   },
   "machine_overrides": {
     "GR0WTHLAB_CODEX_BIN": "Absolute path of the codex executable; default: codex on the launcher's PATH.",
-    "GR0WTHLAB_CODEX_MODEL": "Model to use instead of codex.model, for an account that does not offer it.",
-    "GR0WTHLAB_CODEX_HOME": "Codex home holding the login; default: ~/.codex. Its config.toml and rules are never loaded.",
     "GR0WTHLAB_LOG_DIR": "Directory for launcher logs; default: ~/Library/Logs/gr0wthlab.",
     "GR0WTHLAB_MANDU_DIR, GR0WTHLAB_REPTODAY_DIR, GR0WTHLAB_IMMERSE_DIR": "Read-only checkout locations, as config/products.json describes."
   }

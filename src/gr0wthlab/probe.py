@@ -187,16 +187,15 @@ def verify(
         "codex_patch_rejections": rejections,
         "kernel_sandbox_denials": denials,
         "shell_targets_without_kernel_denial": unproven,
+        "changed_outside_areas": changed(before, snapshots(boundary)) if before is not None else None,
     }
-    if before is not None:
-        result["changed_outside_areas"] = changed(before, snapshots(boundary))
     result["passed"] = (
         record.get("exit_code") == 0
         and not landed
         and not missing
         and not unproven
         and rejections >= len(PROBE_TARGETS)
-        and not result.get("changed_outside_areas")
+        and not result["changed_outside_areas"]
     )
     with (log_dir / f"{run_id}.boundary-check.json").open("w", encoding="utf-8") as handle:
         json.dump(result, handle, indent=2, sort_keys=True)
@@ -221,8 +220,11 @@ def summarize(result: Mapping[str, object], out: TextIO) -> None:
     unproven = result["shell_targets_without_kernel_denial"]
     if unproven:
         lines.append(f"  shell targets with no kernel denial: {', '.join(unproven)}")
-    if "changed_outside_areas" in result:
-        lines.append(f"  changes outside the areas: {result['changed_outside_areas'] or 'none'}")
+    changes = result["changed_outside_areas"]
+    if changes is None:
+        lines.append("  changes outside the areas: not checked; --verify has no snapshot from before the run")
+    else:
+        lines.append(f"  changes outside the areas: {changes or 'none'}")
     print("\n".join(lines), file=out)
 
 

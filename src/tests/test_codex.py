@@ -43,10 +43,14 @@ class CodexTestCase(unittest.TestCase):
         for name in ("src", "config/guardrails", ".git"):
             (self.repo / name).mkdir(parents=True)
         self.home = root / "home"
+        (self.home / ".codex").mkdir()
+        self.temp_dir = root / "T"
+        self.temp_dir.mkdir()
         self.boundary = boundary.resolve_boundary(
             self.repo, CODEX_CONFIG, REGISTRY, {}, self.home, git=[self.repo / ".git"]
         )
         self.codex_bin = root / "bin" / "codex"
+        self.environment = codex.child_environment(self.home, self.codex_bin, str(self.temp_dir))
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -82,12 +86,12 @@ class CommandTest(CodexTestCase):
         self.assertEqual(disabled, ["apps", "hooks"])
 
     def test_exec_command_reads_the_prompt_from_stdin_and_never_widens_the_sandbox(self):
-        command = codex.build_exec_command(CODEX_CONFIG, self.boundary, self.codex_bin, "model-b", Path("/logs/run.md"))
+        command = codex.build_exec_command(CODEX_CONFIG, self.boundary, self.codex_bin, Path("/logs/run.md"))
         self.assertEqual(command[:4], [str(self.codex_bin), "exec", "--cd", str(self.repo / "workspace")])
         self.assertEqual(command[-1], "-")
         for flag in ("--ignore-user-config", "--ignore-rules", "--ephemeral", "--json"):
             self.assertIn(flag, command)
-        self.assertEqual(command[command.index("--model") + 1], "model-b")
+        self.assertEqual(command[command.index("--model") + 1], "model-a")
         for widening in (
             "--sandbox",
             "-s",
@@ -99,15 +103,12 @@ class CommandTest(CodexTestCase):
         ):
             self.assertNotIn(widening, command)
 
-    def test_model_override(self):
-        self.assertEqual(codex.model(CODEX_CONFIG, {}), "model-a")
-        self.assertEqual(codex.model(CODEX_CONFIG, {"GR0WTHLAB_CODEX_MODEL": "model-c"}), "model-c")
-
     def test_fingerprint_ignores_the_run_output_path_only(self):
         env = {"HOME": "/h"}
-        first = codex.build_exec_command(CODEX_CONFIG, self.boundary, self.codex_bin, "m", Path("/l/a.md"))
-        second = codex.build_exec_command(CODEX_CONFIG, self.boundary, self.codex_bin, "m", Path("/l/b.md"))
-        other_model = codex.build_exec_command(CODEX_CONFIG, self.boundary, self.codex_bin, "n", Path("/l/a.md"))
+        other_config = dict(CODEX_CONFIG, codex=dict(CODEX_CONFIG["codex"], model="model-b"))
+        first = codex.build_exec_command(CODEX_CONFIG, self.boundary, self.codex_bin, Path("/l/a.md"))
+        second = codex.build_exec_command(CODEX_CONFIG, self.boundary, self.codex_bin, Path("/l/b.md"))
+        other_model = codex.build_exec_command(other_config, self.boundary, self.codex_bin, Path("/l/a.md"))
         self.assertEqual(codex.fingerprint(first, env, "v1"), codex.fingerprint(second, env, "v1"))
         self.assertNotEqual(codex.fingerprint(first, env, "v1"), codex.fingerprint(other_model, env, "v1"))
         self.assertNotEqual(codex.fingerprint(first, env, "v1"), codex.fingerprint(first, {"HOME": "/x"}, "v1"))
@@ -116,13 +117,11 @@ class CommandTest(CodexTestCase):
 
 class EnvironmentTest(CodexTestCase):
     def test_environment_is_built_from_scratch(self):
-        parent = {"PATH": "/opt/anything", "GH_TOKEN": "secret", "OPENAI_API_KEY": "secret", "CODEX_HOME": "/x"}
-        env = codex.child_environment(parent, self.home, self.codex_bin, "/tmp/user")
+        env = codex.child_environment(self.home, self.codex_bin, "/tmp/user")
         self.assertEqual(set(env), {"HOME", "USER", "LOGNAME", "SHELL", "LANG", "TMPDIR", "PATH", "CODEX_HOME"})
         self.assertEqual(env["PATH"].split(os.pathsep), [str(self.codex_bin.parent)] + list(codex.SYSTEM_PATH))
+        self.assertEqual(env["TMPDIR"], "/tmp/user")
         self.assertEqual(env["CODEX_HOME"], str(self.home / ".codex"))
-        override = codex.child_environment({"GR0WTHLAB_CODEX_HOME": "/codex"}, self.home, self.codex_bin, "/t")
-        self.assertEqual(override["CODEX_HOME"], "/codex")
 
     def test_codex_binary_resolution(self):
         with self.assertRaises(ConfigError):
@@ -136,12 +135,17 @@ class EnvironmentTest(CodexTestCase):
 
 class PreflightTest(CodexTestCase):
     def test_targets_exclude_registry_locations(self):
-        allowed, forbidden = codex.preflight_targets(self.boundary)
+        allowed, forbidden = codex.preflight_targets(self.boundary, self.environment)
         self.assertEqual(allowed, list(self.boundary.area_paths))
         self.assertIn(self.repo, forbidden)
         self.assertIn(self.repo / "src", forbidden)
         self.assertIn(self.repo / ".git", forbidden)
         self.assertNotIn(self.home / "Mandu", forbidden)
+
+    def test_targets_include_the_directories_the_environment_names(self):
+        _, forbidden = codex.preflight_targets(self.boundary, self.environment)
+        for path in (self.home, self.temp_dir, self.home / ".codex"):
+            self.assertIn(path, forbidden)
 
     def test_evaluate_outcomes(self):
         area, other_area, root, src = Path("/a"), Path("/b"), Path("/r"), Path("/r/src")
@@ -159,9 +163,11 @@ class PreflightTest(CodexTestCase):
 
     def test_an_unenforced_sandbox_is_caught_and_its_sentinels_removed(self):
         self.install_fake_codex(FAKE_UNSANDBOXED_CODEX)
-        result = codex.run_preflight(CODEX_CONFIG, self.boundary, self.codex_bin, dict(os.environ), "t1")
+        result = codex.run_preflight(CODEX_CONFIG, self.boundary, self.codex_bin, self.environment, "t1")
         self.assertFalse(result.ok)
         self.assertIn(self.repo / "src" / ".gr0wthlab-preflight-t1", result.breaches)
+        self.assertIn(self.temp_dir / ".gr0wthlab-preflight-t1", result.breaches)
+        self.assertIn(self.home / ".codex" / ".gr0wthlab-preflight-t1", result.breaches)
         for path in result.breaches:
             self.assertFalse(path.exists())
         for path in self.boundary.area_paths:
@@ -169,7 +175,7 @@ class PreflightTest(CodexTestCase):
 
     def test_a_failing_sandbox_command_fails_the_preflight(self):
         self.install_fake_codex("#!/bin/sh\necho 'policy error' >&2\nexit 2\n")
-        result = codex.run_preflight(CODEX_CONFIG, self.boundary, self.codex_bin, dict(os.environ), "t2")
+        result = codex.run_preflight(CODEX_CONFIG, self.boundary, self.codex_bin, self.environment, "t2")
         self.assertFalse(result.ok)
         self.assertTrue(any("policy error" in failure for failure in result.failures))
         self.assertTrue(json.dumps(result.failures))

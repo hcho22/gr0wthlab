@@ -1,6 +1,7 @@
 """The boundary resolver fails closed on any configuration that could widen writes."""
 
 import copy
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -128,7 +129,10 @@ class ResolveBoundaryTest(unittest.TestCase):
             self.resolve(registry=registry)
 
     def test_rejects_a_runtime_other_than_codex(self):
-        with self.assertRaises(ConfigError):
+        path = self.repo / boundary.RUNTIME_CONFIG
+        path.parent.mkdir(parents=True)
+        path.write_text(json.dumps(dict(CONFIG, runtime="claude-code")), encoding="utf-8")
+        with self.assertRaisesRegex(ConfigError, "runtime must be 'codex'"):
             boundary.load_runtime_config(self.repo)
 
     def test_policy_grants_writes_only_to_areas(self):

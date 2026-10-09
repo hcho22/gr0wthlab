@@ -17,11 +17,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from .boundary import Boundary, ConfigError, filesystem_policy
+from .boundary import Boundary, ConfigError, canonical, filesystem_policy
 
 SYSTEM_PATH = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
 LANG = "en_US.UTF-8"
 PREFLIGHT_PREFIX = ".gr0wthlab-preflight-"
+# The directories the child environment names; a Codex change that made any of them writable would widen writes.
+ENVIRONMENT_DIRS = ("HOME", "TMPDIR", "CODEX_HOME")
 
 
 def toml_string(value: str) -> str:
@@ -79,7 +81,7 @@ def user_temp_dir() -> str:
     return tempfile.gettempdir()
 
 
-def child_environment(env: Mapping[str, str], home: Path, codex_bin: Path, temp_dir: str) -> dict[str, str]:
+def child_environment(home: Path, codex_bin: Path, temp_dir: str) -> dict[str, str]:
     """Build Codex's environment from scratch so a launchd run and a terminal run see the same variables."""
     user = pwd.getpwuid(os.getuid())
     return {
@@ -90,22 +92,16 @@ def child_environment(env: Mapping[str, str], home: Path, codex_bin: Path, temp_
         "LANG": LANG,
         "TMPDIR": temp_dir,
         "PATH": os.pathsep.join((str(codex_bin.parent),) + SYSTEM_PATH),
-        "CODEX_HOME": env.get("GR0WTHLAB_CODEX_HOME") or str(home / ".codex"),
+        "CODEX_HOME": str(home / ".codex"),
     }
 
 
-def model(config: Mapping, env: Mapping[str, str]) -> str:
-    return env.get("GR0WTHLAB_CODEX_MODEL") or config["codex"]["model"]
-
-
-def build_exec_command(
-    config: Mapping, boundary: Boundary, codex_bin: Path, model_name: str, last_message: Path
-) -> list[str]:
+def build_exec_command(config: Mapping, boundary: Boundary, codex_bin: Path, last_message: Path) -> list[str]:
     """codex exec reading its prompt from stdin; the run's only writable paths are the areas."""
     return (
         [str(codex_bin), "exec", "--cd", str(boundary.working_directory)]
         + list(config["codex"]["session_flags"])
-        + ["--model", model_name, "--json", "--output-last-message", str(last_message)]
+        + ["--model", config["codex"]["model"], "--json", "--output-last-message", str(last_message)]
         + config_overrides(config, boundary)
         + ["-"]
     )
@@ -157,7 +153,7 @@ class PreflightResult:
         return not self.breaches and not self.failures
 
 
-def preflight_targets(boundary: Boundary) -> tuple[list[Path], list[Path]]:
+def preflight_targets(boundary: Boundary, environment: Mapping[str, str]) -> tuple[list[Path], list[Path]]:
     """Paths every run must be able to write, and paths every run must be refused.
 
     Registry locations (Mandu, Products) are left to the agent-driven boundary check, so a routine run never
@@ -173,6 +169,7 @@ def preflight_targets(boundary: Boundary) -> tuple[list[Path], list[Path]]:
         Path("/private/var/tmp"),
     ]
     forbidden += list(boundary.git_dirs)
+    forbidden += [canonical(Path(environment[name])) for name in ENVIRONMENT_DIRS]
     return list(boundary.area_paths), [path for path in forbidden if path.is_dir()]
 
 
@@ -208,7 +205,7 @@ def run_preflight(
     The probe uses an empty Codex home so no user configuration can change the policy it sees.
     A sentinel that lands outside the areas is deleted here, outside the sandbox, and the run is refused.
     """
-    allowed, forbidden = preflight_targets(boundary)
+    allowed, forbidden = preflight_targets(boundary, environment)
     name = PREFLIGHT_PREFIX + run_id
     with tempfile.TemporaryDirectory(prefix="gr0wthlab-preflight-") as empty_home:
         # The same -c overrides as codex exec; the working directory comes from cwd because

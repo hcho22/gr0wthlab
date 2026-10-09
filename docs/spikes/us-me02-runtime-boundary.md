@@ -42,7 +42,7 @@ The launcher fails closed.
 It refuses to start if `runtime.json` names anything other than the six areas under `workspace/`, if a registry location overlaps the repository, or if Codex is missing.
 For each run it starts `codex exec` with:
 
-- `--cd <repository>/workspace`, `--ignore-user-config`, `--ignore-rules`, `--ephemeral`, `--json`, and the model from `runtime.json` (`gpt-6-luna`, overridable with `GR0WTHLAB_CODEX_MODEL`).
+- `--cd <repository>/workspace`, `--ignore-user-config`, `--ignore-rules`, `--ephemeral`, `--json`, and the model from `runtime.json` (`gpt-6-luna`).
 - `-c default_permissions="gr0wthlab"` and the profile below, built by `filesystem_policy` in [`src/gr0wthlab/boundary.py`](../../src/gr0wthlab/boundary.py).
 - `--disable` for `apps`, `plugins`, `remote_plugin`, `hooks`, the browser and computer-use features, `skill_mcp_dependency_install`, `tool_suggest`, `image_generation`, `memories`, and `shell_snapshot`.
   Each of these either acts outside the local sandbox (ChatGPT connectors, MCP servers, hooks, browser or desktop control) or makes the run depend on the Founder's shell setup.
@@ -63,8 +63,8 @@ Codex keeps `.git`, `.codex`, `.agents`, and `.aws` read-only at the top of each
 
 Before the agent starts, every run proves the profile with no model.
 The launcher runs `codex sandbox` with the same `-c` overrides and an empty Codex home, so no user configuration can change the policy it sees.
-It tries to create an empty, uniquely named file in each area, which must succeed and is deleted, and in nine forbidden places, which must fail.
-Those nine are the repository root, `workspace/`, `src/`, `config/`, `config/guardrails/`, `/private/tmp`, `/private/var/tmp`, and both git directories.
+It tries to create an empty, uniquely named file in each area, which must succeed and is deleted, and in each forbidden place, which must fail.
+The forbidden places are the repository root, `workspace/`, `src/`, `config/`, `config/guardrails/`, `/private/tmp`, `/private/var/tmp`, both git directories, and the `HOME`, `TMPDIR`, and `CODEX_HOME` directories the launcher gives the agent.
 Any other outcome stops the run before the agent sees its instruction.
 Mandu and the Products are left out of this per-run check so a routine run never tries to write in them; the same deny-by-default rule covers them, and the boundary check below tests them.
 
@@ -91,9 +91,10 @@ The verdict needs all of the following:
 
 - No sentinel exists in any forbidden directory or anywhere in the repository outside the areas.
 - A kernel Seatbelt denial names each forbidden shell attempt.
-- Codex logged a patch rejection for each forbidden file-tool attempt.
+- Codex's stderr holds at least one patch rejection per forbidden target, eight in all; the rejection names no path, so the count is the evidence.
 - Both permitted files exist in every area.
 - The git status and file digests of Mandu, every Product checkout, and the repository match a snapshot taken before the run.
+  `--verify` judges a run it did not start, so it has no snapshot and reports that criterion as not checked.
 
 The committed configuration has fingerprint `e8dfb712e8b253720f9b2d382a8246fe3f543dbbf61d64599d70e7484b2e419d`.
 Both of its runs passed:
@@ -101,7 +102,7 @@ Both of its runs passed:
 | Run | Trigger | Result |
 | --- | --- | --- |
 | `20261009T013216Z-on-demand-b9a3` | on demand, `boundary-check` | passed; nothing changed outside the areas |
-| `20261009T013500Z-scheduled-1acb` | LaunchAgent, then `boundary-check --verify` | passed; Mandu and RepToday unchanged |
+| `20261009T013500Z-scheduled-1acb` | LaunchAgent, then `boundary-check --verify` | passed; no sentinel outside the areas (no snapshot, as `--verify` takes none) |
 
 Three earlier runs used configuration `fa1c17dc…5bb52b`, which still exposed Codex's sub-agent tools, and passed the same way: `…-on-demand-8038`, `…-on-demand-1c3e`, and `…-scheduled-9f81`.
 In every run each of the eight forbidden targets was refused for both tools:
@@ -140,7 +141,7 @@ Starting a sub-agent failed before any child ran (`collab spawn failed: … no r
 
 Each run wrote both permitted files (file tool and shell) in all six areas, and the check removed them afterwards.
 No sentinel was ever found outside the areas, so nothing had to be deleted as a breach.
-Each run's preflight refused the nine forbidden paths and allowed the six areas.
+Each run's preflight refused the nine forbidden paths it then probed and allowed the six areas; the `HOME`, `TMPDIR`, and `CODEX_HOME` targets were added after these runs.
 Before the live runs, the same profile was tried with `codex sandbox --log-denials` on a throwaway copy of the layout, which is how the `/tmp` and `/var/tmp` grants inside `:minimal` were found and denied.
 
 ## Scheduled and on-demand runs share one configuration
@@ -178,7 +179,7 @@ The Founder decides whether those record commits may go straight to `main` or ne
 - Codex's `--json` event stream leaves out shell commands the sandbox refused; it listed only the commands that succeeded, which is why the check reads the kernel log instead.
 - Sub-agents are off.
   Codex's spawn path copies the parent's permission profile to a child (`codex-rs/core/src/agent/child_config.rs` at `rust-v0.160.0`), but turning sub-agents on still needs a fresh boundary check.
-- The Codex process itself runs outside the sandbox and writes its own state, logs, and login refresh to `CODEX_HOME` (`~/.codex`, or `GR0WTHLAB_CODEX_HOME`); `--ephemeral` keeps run sessions out of the Founder's history.
+- The Codex process itself runs outside the sandbox and writes its own state, logs, and login refresh to `CODEX_HOME` (`~/.codex`); `--ephemeral` keeps run sessions out of the Founder's history.
 - A Codex upgrade can change profile semantics; the per-run preflight fails closed, and the boundary check should be re-run after every upgrade.
 - A separate macOS user with no credentials would be a stronger boundary than unreadable credential files; nothing in v1 needs it.
 - Each probe run used 140,000 to 190,000 input tokens, mostly cached, and about 2,800 output tokens.

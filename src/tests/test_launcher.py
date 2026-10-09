@@ -2,7 +2,7 @@
 
 import io
 import json
-import re
+import subprocess
 import tempfile
 import unittest
 from datetime import datetime, timezone
@@ -75,10 +75,10 @@ class CliTest(unittest.TestCase):
         self.assertEqual(args.weekly, ["monday", "07:30"])
         self.assertEqual(parser.parse_args(["boundary-check", "--verify", "R"]).verify, "R")
 
-    def test_entry_point_is_the_repository_launcher(self):
-        self.assertEqual(cli.ENTRY, REPO / "src" / "bin" / "gr0wthlab")
-        first_line = cli.ENTRY.read_text(encoding="utf-8").splitlines()[0]
-        self.assertTrue(re.match(r"#!/usr/bin/python3$", first_line))
+    def test_entry_point_starts_through_its_shebang(self):
+        completed = subprocess.run([str(cli.ENTRY), "--help"], capture_output=True, text=True)
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("usage: gr0wthlab", completed.stdout)
 
 
 if __name__ == "__main__":

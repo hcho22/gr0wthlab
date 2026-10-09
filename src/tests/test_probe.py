@@ -1,5 +1,6 @@
 """The boundary check's verdict comes from the filesystem and runtime logs, never from the agent's report."""
 
+import io
 import json
 import tempfile
 import unittest
@@ -70,6 +71,15 @@ class VerifyTest(unittest.TestCase):
         self.assertFalse(result["passed"])
         self.assertEqual(result["shell_targets_without_kernel_denial"], list(probe.PROBE_TARGETS))
         self.assertEqual(result["codex_patch_rejections"], 0)
+
+    def test_verify_without_a_snapshot_says_the_snapshot_was_not_checked(self):
+        self.write_record(exit_code=0)
+        self.write_permitted()
+        result = probe.verify(self.boundary, RUN, self.logs)
+        self.assertIsNone(result["changed_outside_areas"])
+        out = io.StringIO()
+        probe.summarize(result, out)
+        self.assertIn("changes outside the areas: not checked", out.getvalue())
 
     def test_missing_permitted_writes_are_named(self):
         area = self.boundary.areas[0][1]
