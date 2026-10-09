@@ -118,12 +118,12 @@ Immerse joins as Listening only, after RepToday's first 14-day window has run cl
 
 **Acceptance Criteria:**
 
-- [ ] The runtime is chosen between a Codex automation and a Claude Code scheduled task on the Founder's Mac, recording why, and that choice is the only one the build relies on.
-- [ ] A scheduled weekly run and an on-demand run both start the agent with the same configuration.
-- [ ] During a run, the agent can write to its Evidence, Drafts, Review Queue, Weekly Read, run report, and Instructions areas.
-- [ ] During a run, writes to the repository's code and Guardrail configuration area, to anywhere in Mandu, and to any Product repository are refused by the runtime itself, not by the agent's choice.
-- [ ] A spike note records the runtime, its configuration, the refused-write evidence, and a go or no-go.
-- [ ] Time-box: about half a day; if neither runtime can enforce the boundary, stop and record the blocker for the Founder.
+- [x] The runtime is chosen between a Codex automation and a Claude Code scheduled task on the Founder's Mac, recording why, and that choice is the only one the build relies on.
+- [x] A scheduled weekly run and an on-demand run both start the agent with the same configuration.
+- [x] During a run, the agent can write to its Evidence, Drafts, Review Queue, Weekly Read, run report, and Instructions areas.
+- [x] During a run, writes to the repository's code and Guardrail configuration area, to anywhere in Mandu, and to any Product repository are refused by the runtime itself, not by the agent's choice.
+- [x] A spike note records the runtime, its configuration, the refused-write evidence, and a go or no-go.
+- [x] Time-box: about half a day; if neither runtime can enforce the boundary, stop and record the blocker for the Founder.
 
 **Validation Test:**
 

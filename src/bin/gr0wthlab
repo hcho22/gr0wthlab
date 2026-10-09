@@ -1,0 +1,15 @@
+#!/usr/bin/python3
+"""Entry point for every Marketing Engineer run; the LaunchAgent and on-demand runs both call this file."""
+
+import sys
+from pathlib import Path
+
+# An older python3 earlier on PATH would otherwise fail with a syntax error instead of this message.
+if sys.version_info < (3, 9):  # noqa: UP036
+    sys.exit("gr0wthlab needs Python 3.9 or newer; run it as /usr/bin/python3 or via this file's shebang")
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from gr0wthlab.cli import main  # noqa: E402
+
+sys.exit(main())

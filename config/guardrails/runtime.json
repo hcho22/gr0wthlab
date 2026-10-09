@@ -1,0 +1,57 @@
+{
+  "description": "The Marketing Engineer's runtime and write boundary (Guardrails G1, G2, G8), chosen in US-ME02. The launcher (src/bin/gr0wthlab) turns this file into a Codex permission profile and command-line flags, ignoring the Founder's own Codex configuration and rules. Why Codex, and the refused-write evidence: docs/spikes/us-me02-runtime-boundary.md.",
+  "runtime": "codex",
+  "working_directory": "workspace",
+  "writable_areas": {
+    "evidence": "workspace/evidence",
+    "drafts": "workspace/drafts",
+    "review_queue": "workspace/review-queue",
+    "weekly_reads": "workspace/weekly-reads",
+    "run_reports": "workspace/run-reports",
+    "instructions": "workspace/instructions"
+  },
+  "filesystem": {
+    "default": "deny",
+    "read_repository": true,
+    "read_registry_locations": true,
+    "read_system": [":minimal", "/Library/Developer/CommandLineTools"],
+    "deny": [":slash_tmp", "/private/var/tmp"],
+    "deny_why": "Codex's :minimal system grant also makes /tmp and /var/tmp writable; denying them keeps every write inside the writable areas."
+  },
+  "network": true,
+  "codex": {
+    "permission_profile": "gr0wthlab",
+    "model": "gpt-6-luna",
+    "approval_policy": "never",
+    "sub_agents": false,
+    "session_flags": ["--ignore-user-config", "--ignore-rules", "--ephemeral"],
+    "disabled_features": [
+      "apps",
+      "plugins",
+      "remote_plugin",
+      "hooks",
+      "browser_use",
+      "browser_use_external",
+      "browser_use_full_cdp_access",
+      "computer_use",
+      "in_app_browser",
+      "skill_mcp_dependency_install",
+      "tool_suggest",
+      "image_generation",
+      "multi_agent",
+      "multi_agent_v2",
+      "memories",
+      "shell_snapshot"
+    ],
+    "shell_environment": {
+      "GIT_CONFIG_GLOBAL": "/dev/null"
+    }
+  },
+  "machine_overrides": {
+    "GR0WTHLAB_CODEX_BIN": "Absolute path of the codex executable; default: codex on the launcher's PATH.",
+    "GR0WTHLAB_CODEX_MODEL": "Model to use instead of codex.model, for an account that does not offer it.",
+    "GR0WTHLAB_CODEX_HOME": "Codex home holding the login; default: ~/.codex. Its config.toml and rules are never loaded.",
+    "GR0WTHLAB_LOG_DIR": "Directory for launcher logs; default: ~/Library/Logs/gr0wthlab.",
+    "GR0WTHLAB_MANDU_DIR, GR0WTHLAB_REPTODAY_DIR, GR0WTHLAB_IMMERSE_DIR": "Read-only checkout locations, as config/products.json describes."
+  }
+}
