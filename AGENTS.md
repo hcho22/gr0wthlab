@@ -7,7 +7,9 @@ gr0wthlab is the Marketing Engineer's repository; [`README.md`](README.md) gives
 - [The v1 PRD](docs/prd/prd-marketing-engineer-v1_261008.md) is the story tracker: when a story lands and its Validation Test passes, flip that story's acceptance-criteria checkboxes and no others.
 - `workspace/` is the agent's only writable tree (Guardrail G1); code in `src/`, configuration in `config/` (Guardrails and the Product registry), and docs change only through firstmate's reviewed pull requests (G8).
   Keep that split when adding files, so the runtime can allow exactly one directory tree.
-- Never copy positioning, a Fit definition, claims, brand rules, or Angles into the repository outside the PRD and glossary; reference the package in Mandu through [`config/products.json`](config/products.json).
+- No reference copy of any Go-To-Market Package lives in this repository: configuration, the Product registry ([`config/products.json`](config/products.json)), and Instructions point to Mandu instead of restating package content.
+  A record (Draft, proposal, Evidence, memo) may quote only the specific package text it uses or proposes, citing its Mandu source.
+  The specification and decision records under `docs/` (including `docs/prd/design-decisions-2026-10-08.md`) and `CONTEXT.md` are committed as written.
 
 ## Maintaining this file
 

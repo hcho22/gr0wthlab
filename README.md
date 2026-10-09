@@ -12,8 +12,9 @@ Stories, requirements, and progress: [the v1 PRD](docs/prd/prd-marketing-enginee
 ## No strategy lives here
 
 Each Product's Go-To-Market Package (positioning, Fit, claims, brand rules, Angles) lives only in Mandu, for RepToday at `~/Mandu/projects/RepToday/gtm/`; the [Product registry](config/products.json) records where each package is.
-Nothing the agent works from - area contents, configuration, the Product registry, prompts, and Instructions - may carry positioning, a Fit definition, claims, brand rules, or Angles; they reference Mandu instead.
-The PRD and glossary are specification documents committed as written, even where they name a Product's Fit as an example.
+No reference copy of any Go-To-Market Package lives in this repository: configuration, the Product registry, and Instructions point to Mandu instead of restating package content.
+A record (a Draft, proposal, Evidence, or memo) may quote only the specific package text it uses or proposes, citing its Mandu source.
+The specification and decision records under `docs/` (the PRD, the [design decisions](docs/prd/design-decisions-2026-10-08.md) it cites, and the ADRs) and the glossary in `CONTEXT.md` are committed as written, even where they name a Product's Fit or a claim as an example.
 
 ## Who does what
 

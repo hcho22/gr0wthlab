@@ -5,4 +5,5 @@ Every run writes here and nowhere else; the runtime enforces that boundary (US-M
 
 Each area below holds one kind of record.
 Record formats are defined by the stories that first produce them, not here.
-Records reference the Go-To-Market Package in Mandu and never copy its positioning, Fit definition, claims, brand rules, or Angles into this tree.
+No reference copy of any Go-To-Market Package lives in this tree, and Instructions point to Mandu instead of restating package content.
+A record (a Draft, proposal, Evidence, or memo) may quote only the specific package text it uses or proposes, citing its Mandu source.

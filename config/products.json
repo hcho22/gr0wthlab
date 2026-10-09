@@ -14,7 +14,7 @@
       "gate": null,
       "repository": {
         "url": "github.com/hcho22/RepToday",
-        "local_checkout": "~/Developer/RepToday",
+        "local_checkout": "~/Developer/FM_Private/firstmate-private/projects/RepToday",
         "env": "GR0WTHLAB_REPTODAY_DIR",
         "branch": "main",
         "access": "read-only"
@@ -30,13 +30,11 @@
       "name": "Immerse",
       "status": "listening-only",
       "gate": {
-        "story": "US-ME18",
-        "met": false,
-        "condition": "RepToday's first 14-day window ran cleanly and the Founder confirmed it in Mandu; until then nothing runs for Immerse, and after it Immerse gets Listening only."
+        "story": "US-ME18"
       },
       "repository": {
         "url": "github.com/hcho22/Immerse",
-        "local_checkout": "~/Developer/Immerse",
+        "local_checkout": "~/Developer/FM_Private/firstmate-private/projects/Immerse",
         "env": "GR0WTHLAB_IMMERSE_DIR",
         "branch": "main",
         "access": "read-only"
