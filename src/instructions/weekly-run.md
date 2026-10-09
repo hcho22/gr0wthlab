@@ -15,12 +15,12 @@ The launcher has already done the deterministic work before you start, and does 
 1. Read the run brief named in the header above, before anything else.
    It lists the package files with their results, what changed, failed sources and what they block, the decisions taken in this run, the open Review Queue with any decision the Founder took on an item an open one replaced, and the package-change proposals already decided.
 2. Read your working guidance in `workspace/instructions/` (start with `package-review.md`).
-3. Review the Go-To-Market Package for contradictions, as the guidance describes.
+3. Review the Go-To-Market Package for contradictions, doing every pass in the guidance's "How to review"; the review is finished when every pass is, not when you find a contradiction.
    Read every package file the brief lists, and any other file in the same package folders that you need to find every place a contradiction appears.
 4. Write one package-change proposal for each contradiction you find that is not already open or decided in the brief.
    Where the brief shows the Founder decided an item that an open one replaced, make sure the open one answers that decision; if it does not, write a new item that supersedes it and does.
 5. Check your items with the command the brief gives, and fix every problem it reports.
-6. Finish with a short summary as your final message: what you checked, what you found, what you queued, and anything you skipped or could not do, with the reason.
+6. Finish with a short summary as your final message: what you checked (including each recorded outcome you traced), what you found, what you queued, and anything you skipped or could not do, with the reason.
    The launcher puts that summary in the run report as your account.
 
 ## Writing an item

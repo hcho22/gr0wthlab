@@ -11,7 +11,23 @@ Two places in the package that cannot both be true now, such as:
 - A number, date, name, or rule that differs between files that should agree.
 - A rule in one file that another file's plan breaks.
 
-A difference that the package itself explains (a superseded draft kept for history, a dated log entry, a file marked as an earlier version) is not a contradiction.
+Text the package marks as history (a superseded draft kept for history, a dated log entry describing the state on its date, a file marked as an earlier version) is not a contradiction.
+A record of an outcome that notes other files still state the earlier status does not explain them away: those files are stale, and that is a contradiction.
+
+## How to review
+
+Do every pass below before you write any item; finding a contradiction does not end the review.
+
+1. Recorded outcomes.
+   Take every item that a checklist or status line in the package marks done, cleared, or decided, with a date or an outcome.
+   For each one, search the whole package folder for text that still states the earlier status, as "Finding every place" describes.
+   Each outcome that other files still contradict is one stale fact.
+2. Facts that should agree.
+   Compare the numbers, dates, names, and rules that more than one file states.
+3. Rules and plans.
+   Check each plan against the rules it has to follow.
+
+Then write one proposal for each stale fact you found, and in your summary list each recorded outcome you traced with what you found for it.
 
 ## Deciding which side is current
 
