@@ -65,6 +65,7 @@ Every Evidence line names its source as a path in backticks or a URL.
 - Never assume a file is unreadable: read it, and if the read fails, report the exact error.
 - Do not queue an item that is already open; to replace one, write a new item with `supersedes: <id>` in its front matter.
 - Do not propose again what the Founder already rejected unless new Evidence answers the reason.
+  The launcher refuses an item that asks the same as an open or decided one, and rewording an ask does not make it new.
 - Quote only the specific package text a proposal uses or replaces, citing its file; never copy a package file or a large part of one.
 - Write only new item files in the incoming folder.
   The launcher alone writes the Review Queue ledger, queued items, decision and sitting Evidence, package snapshots, run reports, and the README files; any change you make to them is undone and reported to the Founder.

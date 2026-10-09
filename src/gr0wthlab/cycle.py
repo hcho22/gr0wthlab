@@ -21,9 +21,10 @@ from pathlib import Path
 from typing import TextIO
 
 from . import exchange, launcher, package, records, report, settings
+from . import state as run_state
 from .areas import Areas, UnsafeFile, read_plain
 from .boundary import Boundary, ConfigError, canonical, load_boundary, load_json
-from .queue import OPEN, Ledger, QueueError
+from .queue import OPEN, SUPERSEDED, Ledger, QueueError
 from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLine
 
 PRE_RUN_ENV = "GR0WTHLAB_PRE_RUN"
@@ -271,6 +272,75 @@ class Cycle:
             SourceLine("Mandu sittings", package.CHANGED if state.sittings else package.READ, sitting_detail)
         )
 
+    def load_state(self, state: RunState, areas: Areas, ledger: Ledger, run_id: str) -> run_state.States:
+        """Each workflow's run state; an invalid file is set aside and its workflow starts again from the record."""
+        states, invalid = run_state.load(areas)
+        for workflow, path, reason in invalid:
+            moved = ledger.set_aside(areas, path, f"run-reports/state/{path.name}", run_id, [reason])
+            rebuilt = "rebuilt from the Review Queue" if workflow == run_state.REVIEW_QUEUE else "started empty"
+            where = f"set aside as `{moved.moved_to}`" if moved.moved_to else "removed"
+            state.problems.append(f"the {workflow} run state was not valid ({reason}); it was {where} and {rebuilt}")
+        return states
+
+    def save_state(
+        self,
+        state: RunState,
+        areas: Areas,
+        ledger: Ledger,
+        states: run_state.States,
+        products: Sequence[str],
+        now: datetime,
+    ) -> None:
+        """Bring the Review Queue state into line with the ledger, note every difference, and save every state."""
+        hashes, _ = run_state.item_hashes(areas, ledger.entries, products, states.review_queue)
+        first_queued = {
+            identifier: report.local_date(str(entry["published_at"])) for identifier, entry in ledger.entries.items()
+        }
+        states.review_queue, state.state_notes = run_state.reconcile(
+            states.review_queue, ledger.entries, hashes, state.run_id, first_queued
+        )
+        state.carried_runs = {key: int(entry["runs"]) for key, entry in states.review_queue.carried.items()}
+        run_state.save(areas, states, state.run_id, now.isoformat())
+
+    def tallies(self, state: RunState, ledger: Ledger, incoming: int) -> list[run_state.Tally]:
+        """What each workflow checked and acted on this run, so a quiet run still says what it looked at."""
+        files = [file for result in state.snapshot for file in result.files]
+        failed = sum(1 for file in files if file.status == package.FAILED) + sum(
+            1 for result in state.snapshot if result.reason
+        )
+        changed = sum(1 for file in files if file.status == package.CHANGED)
+        queued = [ledger.entries[identifier] for identifier in state.published]
+        # Each queued item counts once, under the workflow that produced it; until a workflow has its own tally
+        # (Drafts, Weekly Reads, Dispatch requests), its items count under the Review Queue with the launcher's notices.
+        proposals = sum(1 for entry in queued if entry["kind"] == "package-change-proposal")
+        others = len(queued) - proposals
+        taken = sum(1 for outcome in state.decisions if outcome.status == "taken")
+        superseded = sum(
+            1
+            for entry in ledger.entries.values()
+            if entry["status"] == SUPERSEDED and entry.get("closed_by_run") == state.run_id
+        )
+        carried = sum(1 for entry in state.queue_after if entry.get("carried_over"))
+        records = len(state.decisions) + len(state.decision_problems)
+        return [
+            run_state.Tally(
+                "package-review",
+                len(files) + sum(1 for result in state.snapshot if result.reason),
+                proposals,
+                f"{len(files)} files, {changed} changed, {failed} failed;"
+                f" {report.plural(proposals, 'proposal')} queued",
+            ),
+            run_state.Tally(
+                "review-queue",
+                records + incoming + len(state.queue_before),
+                taken + others + superseded,
+                f"{taken} decisions taken in, {others} other items queued, {superseded} superseded,"
+                f" {carried} carried over, {len(state.set_aside)} set aside",
+            ),
+            run_state.Tally("listening", 0, 0, "not built until US-ME13"),
+            run_state.Tally("outreach", 0, 0, "not built until US-ME14"),
+        ]
+
     def outputs(self, state: RunState, config: settings.Settings, ledger_ok: bool) -> None:
         failed_package = [line.name for line in state.failed_sources() if "package" in line.name]
         agent_ok = state.agent.get("exit_code") == 0
@@ -389,6 +459,12 @@ class Cycle:
             ledger, ledger_ok = Ledger(), False
             state.problems.append(f"{error}; the Review Queue was left untouched this run")
         self.take_decisions(state, areas, folder, ledger)
+        states = self.load_state(state, areas, ledger, run_id)
+        hashes, unreadable = run_state.item_hashes(areas, ledger.entries, products, states.review_queue)
+        state.problems += unreadable
+        seen: dict[str, str] = {}
+        for identifier, fingerprint in hashes.items():
+            seen.setdefault(fingerprint, identifier)
         for source in config.not_connected:
             state.sources.append(
                 SourceLine(
@@ -435,7 +511,8 @@ class Cycle:
 
         now = self.now()
         if ledger_ok:
-            state.published, state.set_aside = ledger.take_incoming(areas, products, run_id, now)
+            state.published, state.set_aside = ledger.take_incoming(areas, products, run_id, now, seen)
+        incoming = len(state.published) + len(state.set_aside)
         report_path = areas.path("run_reports", f"{run_id}.md")
         state.queue_after = ledger.ordered()
         self.outputs(state, config, ledger_ok)
@@ -443,13 +520,19 @@ class Cycle:
         if notice and ledger_ok:
             title, body, touches, evidence = notice
             item = exchange.Item({"kind": "notice"}, title, body, touches, evidence)
-            state.notice = ledger.publish(areas, item, "notice-run-problems", run_id, now, topic="run-problems")
-            state.published.append(state.notice)
+            repeated = seen.get(exchange.item_hash(item))
+            if repeated and ledger.entries[repeated]["status"] == OPEN:
+                state.notice = repeated  # the same problems are already waiting for the Founder
+            else:
+                state.notice = ledger.publish(areas, item, "notice-run-problems", run_id, now, topic="run-problems")
+                state.published.append(state.notice)
             state.queue_after = ledger.ordered()
             self.outputs(state, config, ledger_ok)
         if ledger_ok:
             areas.write_json(ledger_path, ledger.as_json(run_id, now, areas.relative(report_path)))
             state.queue_after = ledger.ordered()
+            self.save_state(state, areas, ledger, states, products, now)
+        state.tallies = self.tallies(state, ledger, incoming)
         areas.write_text(report_path, report.render_report(state))
         self.say(f"run report: {report_path}")
 

@@ -100,6 +100,13 @@ class FirstRunTest(CycleTestCase):
         self.assertEqual(list((workspace / "review-queue/incoming").iterdir()), [])
 
         report = self.report()
+        self.assertIn(
+            "## Summary\n\n- checked=13 acted=1 note=package-review 12 files, 0 changed, 0 failed; 1 proposal queued\n",
+            report,
+        )
+        self.assertIn("- listening: checked=0 acted=0 note=not built until US-ME13", report)
+        for workflow in ("review-queue", "listening", "outreach"):
+            self.assertTrue((workspace / f"run-reports/state/{workflow}.json").is_file(), workflow)
         self.assertIn("On demand, started", report)
         self.assertIn("| RepToday package: `projects/RepToday/gtm/05-social-pmf/angles.md` | read |", report)
         self.assertIn("| Mandu decisions | skipped | no Review Queue item is waiting for a decision yet |", report)
@@ -109,6 +116,22 @@ class FirstRunTest(CycleTestCase):
         self.assertIn("> Checked the package.", report)
         self.assertNotIn("Notice:", report)
         self.assertIn("Run brief, read it first:", (self.codex_dir / "prompt.txt").read_text(encoding="utf-8"))
+
+    def test_a_quiet_run_still_says_what_it_checked(self):
+        self.run_cycle()
+        self.assertIn("- checked=12 acted=0 note=nothing new needed action\n", self.report())
+
+    def test_an_invalid_run_state_is_set_aside_rebuilt_and_reported(self):
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        (self.workspace() / "run-reports/state/review-queue.json").write_text("{broken", encoding="utf-8")
+        fakes.behave(self.codex_dir, {})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        notice = next(e for e in self.queue()["open"] if e["kind"] == "notice")
+        text = (self.workspace() / notice["file"]).read_text(encoding="utf-8")
+        self.assertIn("the review-queue run state was not valid", text)
+        rebuilt = json.loads((self.workspace() / "run-reports/state/review-queue.json").read_text(encoding="utf-8"))
+        self.assertIn("20261011-name-status-stale", rebuilt["carried"])
 
     def test_the_agent_sees_its_brief(self):
         self.run_cycle()
@@ -177,9 +200,30 @@ class DecisionRoundTripTest(CycleTestCase):
         self.assertIn("Sitting 2026-10-11: 41 minutes.", report)
         self.assertIn("carried over from 2026-10-11", report)
 
+        recorded = json.loads((self.workspace() / "run-reports/state/review-queue.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            {key: value["outcome"] for key, value in recorded["handled"].items()},
+            {
+                ids["post"]: "approved",
+                ids["notice"]: "approved",
+                ids["message"]: "rejected",
+                ids["package-change-proposal"]: "rejected",
+            },
+        )
+        self.assertEqual(
+            {key: value["runs"] for key, value in recorded["carried"].items()},
+            {ids["dispatch-request"]: 1, ids["weekly-read-decision"]: 1},
+        )
+        self.assertIn("note=review-queue 4 decisions taken in", report)
+
+        rejected_again = {"review-queue/incoming/again.md": fakes.proposal(title="name-status-stale")}
+        fakes.behave(self.codex_dir, {"write": rejected_again})
         code, _ = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
         third = self.queue()
-        self.assertEqual(len(third["open"]), 2)
+        self.assertEqual([e["kind"] for e in third["open"]], ["weekly-read-decision", "dispatch-request", "notice"])
+        notice = (self.workspace() / third["open"][2]["file"]).read_text(encoding="utf-8")
+        self.assertIn(f"asks the same as {ids['package-change-proposal']}, which is rejected", notice)
+        self.assertIn("carried over from 2026-10-11, 2 runs", self.report())
         self.assertIn("4 records, 0 new since the previous run", self.report())
         brief = sorted((self.workspace() / "run-reports").glob("*.brief.md"))[-1].read_text(encoding="utf-8")
         self.assertIn("rejected: Approve package change: name-status-stale. Reason: Wait for counsel.", brief)
@@ -228,6 +272,14 @@ class FailuresTest(CycleTestCase):
         self.assertIn("A failed source blocks only the work that needs it", brief)
         self.assertIn("Review every other package file as usual", brief)
         self.assertIn("angles.md`: missing. Incomplete without it: Package review, Post Drafts", brief)
+
+    def test_the_same_problems_are_not_queued_twice(self):
+        (self.mandu / "projects/RepToday/gtm/05-social-pmf/angles.md").unlink()
+        self.exchange.mkdir()
+        self.run_cycle()
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=30))
+        self.assertEqual([entry["kind"] for entry in self.queue()["open"]], ["notice"])
+        self.assertIn("are listed in the notice `20261011-notice-run-problems`", self.report())
 
     def test_a_malformed_item_is_set_aside_as_a_notice_not_dropped(self):
         broken = fakes.PROPOSAL.replace("## Evidence", "## Sources")

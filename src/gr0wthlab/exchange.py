@@ -7,6 +7,7 @@ post-run validation apply exactly the same rules.
 
 from __future__ import annotations
 
+import hashlib
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -196,6 +197,15 @@ def check_item(text: str, products: Sequence[str], published: bool = False) -> I
         return ItemCheck(None, problems)
     item = Item(dict(fields), title, content[expected[0]], content["Touches"], content["Evidence"])
     return ItemCheck(item, [])
+
+
+def item_hash(item: Item) -> str:
+    """A fingerprint of what an item asks: its kind, ask, and Draft or proposal, ignoring case and spacing.
+
+    Two items with the same fingerprint ask the Founder the same thing, whatever their Evidence or file name.
+    """
+    normalized = "\n".join(" ".join(text.split()).casefold() for text in (item.kind, item.ask, item.body))
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
 def render_item(fields: Mapping[str, str], ask: str, body: str, touches: str, evidence: str) -> str:

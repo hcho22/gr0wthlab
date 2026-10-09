@@ -13,6 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import exchange, package, schedule
+from .state import Tally, run_tally
 
 SKIPPED = "skipped"
 COMPLETE = "complete"
@@ -62,6 +63,9 @@ class RunState:
     outputs: list[tuple[str, str, str]] = field(default_factory=list)  # title, status, detail
     problems: list[str] = field(default_factory=list)
     notice: str | None = None
+    tallies: list[Tally] = field(default_factory=list)
+    state_notes: list[str] = field(default_factory=list)
+    carried_runs: dict[str, int] = field(default_factory=dict)
 
     @property
     def lateness(self) -> timedelta | None:
@@ -310,7 +314,7 @@ def summary_lines(state: RunState) -> list[str]:
     open_items = state.queue_after
     carried = sum(1 for entry in open_items if entry.get("carried_over"))
     agent = state.agent.get("exit_code")
-    lines = [f"- {start_line(state)}"]
+    lines = [f"- {run_tally(state.tallies).line()}", f"- {start_line(state)}"]
     if agent == 0:
         lines.append("- The run finished.")
     elif not state.agent.get("agent_started"):
@@ -348,7 +352,8 @@ def render_report(state: RunState) -> str:
         for number, entry in enumerate(state.queue_after, 1):
             slot = f", slot {entry['slot']}" if entry.get("slot") else ""
             queued = local_date(str(entry["published_at"]))
-            carried = f", carried over from {queued}" if entry.get("carried_over") else ""
+            runs = state.carried_runs.get(str(entry["id"]), 1)
+            carried = f", carried over from {queued}, {plural(runs, 'run')}" if entry.get("carried_over") else ""
             lines.append(f"{number}. `{entry['id']}` ({entry['kind']}{slot}{carried}): {entry['ask']}")
     else:
         lines.append("Nothing is waiting for the Founder.")
@@ -356,6 +361,11 @@ def render_report(state: RunState) -> str:
         lines.append(f"- Set aside, not queued: `{item.name}`: {'; '.join(item.problems)}")
     for path in state.restored:
         lines.append(f"- Undone: {path}")
+    lines += ["", "## Run state", ""]
+    lines += [f"- {tally.workflow}: {tally.line()}" for tally in state.tallies]
+    if state.state_notes:
+        lines += ["", "The run state disagreed with the Review Queue, which wins; the state was repaired:", ""]
+        lines += [f"- {note}" for note in state.state_notes]
     lines += ["", "## Outputs", ""] + table(["Output", "Status", "Detail"], state.outputs)
     lines += ["", "## Agent", ""]
     preflight = state.agent.get("preflight") or {}

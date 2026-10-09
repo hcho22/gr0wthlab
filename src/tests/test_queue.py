@@ -95,6 +95,22 @@ class IncomingTest(LedgerTestCase):
         self.assertTrue(secret.is_file())
         self.assertFalse(any((self.repo / "workspace/review-queue/set-aside").rglob("*.md")))
 
+    def test_an_item_that_asks_the_same_as_another_is_never_queued(self):
+        self.drop("first.md", fakes.PROPOSAL)
+        self.drop("second.md", fakes.PROPOSAL.replace("line 24", "line 25").replace("cleared", "  CLEARED "))
+        seen = {}
+        published, set_aside = self.ledger.take_incoming(self.areas, PRODUCTS, "RUN1", NOW, seen)
+        self.assertEqual(published, ["20261011-first"])
+        self.assertIn("asks the same as 20261011-first, which is open", set_aside[0].problems[0])
+        self.ledger.take_decisions([(decision("20261011-first", "reject", "No."), "x.json")], "RUN2", NOW)
+        self.drop("again.md", fakes.PROPOSAL)
+        published, set_aside = self.ledger.take_incoming(self.areas, PRODUCTS, "RUN2", NOW, seen)
+        self.assertEqual(published, [])
+        self.assertIn("asks the same as 20261011-first, which is rejected", set_aside[0].problems[0])
+        self.drop("reworded.md", fakes.proposal(title="record the name as searched and reserved"))
+        published, _ = self.ledger.take_incoming(self.areas, PRODUCTS, "RUN2", NOW, seen)
+        self.assertEqual(published, ["20261011-reworded"])
+
     def test_supersedes_withdraws_an_open_item_only(self):
         self.drop("first.md", fakes.PROPOSAL)
         self.take()
@@ -113,7 +129,7 @@ class DecisionsTest(LedgerTestCase):
     def setUp(self):
         super().setUp()
         for slug in ("a", "b", "c"):
-            self.drop(f"{slug}.md", fakes.PROPOSAL)
+            self.drop(f"{slug}.md", fakes.proposal(title=f"fix {slug}"))
         self.take()
 
     def test_each_decision_closes_its_item_once(self):
@@ -150,9 +166,9 @@ class DecisionsTest(LedgerTestCase):
 class OrderAndPersistenceTest(LedgerTestCase):
     def test_posts_by_nearest_slot_then_each_kind_oldest_first(self):
         self.drop("notice.md", fakes.proposal("notice"))
-        self.drop("later-post.md", fakes.proposal("post", "slot: 2026-10-16T19:00-07:00\n"))
+        self.drop("later-post.md", fakes.proposal("post", "slot: 2026-10-16T19:00-07:00\n", title="day 6"))
         self.drop("proposal.md", fakes.PROPOSAL)
-        self.drop("sooner-post.md", fakes.proposal("post", "slot: 2026-10-15T02:00Z\n"))
+        self.drop("sooner-post.md", fakes.proposal("post", "slot: 2026-10-15T02:00Z\n", title="day 5"))
         self.drop("message.md", fakes.proposal("message"))
         self.take()
         self.drop("old-request.md", fakes.proposal("dispatch-request"))

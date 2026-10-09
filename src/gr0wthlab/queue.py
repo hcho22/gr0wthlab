@@ -136,9 +136,19 @@ class Ledger:
         return identifier
 
     def take_incoming(
-        self, areas: Areas, products: Sequence[str], run_id: str, now: datetime
+        self,
+        areas: Areas,
+        products: Sequence[str],
+        run_id: str,
+        now: datetime,
+        seen: dict[str, str] | None = None,
     ) -> tuple[list[str], list[SetAside]]:
-        """Queue every valid item the agent wrote to incoming/; set every other file aside with its problems."""
+        """Queue every valid item the agent wrote to incoming/; set every other file aside with its problems.
+
+        seen maps each queued item's fingerprint to its identifier; an item that asks the same thing as one already
+        open or decided is set aside, so nothing decided is ever asked again under another name.
+        """
+        seen = {} if seen is None else seen
         incoming = areas.path("review_queue", INCOMING)
         published: list[str] = []
         set_aside: list[SetAside] = []
@@ -163,12 +173,17 @@ class Ledger:
                 target = self.entries.get(item.fields["supersedes"])
                 if target is None or target["status"] != OPEN:
                     problems.append(f"supersedes {item.fields['supersedes']}, which is not an open item")
+            fingerprint = exchange.item_hash(item) if item is not None else None
+            if fingerprint in seen:
+                earlier = self.entries.get(seen[fingerprint], {})
+                problems.append(f"asks the same as {seen[fingerprint]}, which is {earlier.get('status', 'queued')}")
             if problems or item is None:
                 set_aside.append(self.set_aside(areas, path, name, run_id, problems))
                 continue
             identifier = self.publish(areas, item, slug, run_id, now)
             areas.remove(path)
             published.append(identifier)
+            seen[str(fingerprint)] = identifier
             if item.fields.get("supersedes"):
                 superseding.append((item.fields["supersedes"], identifier))
         for directory in sorted((p for p in incoming.rglob("*") if p.is_dir() and not p.is_symlink()), reverse=True):
