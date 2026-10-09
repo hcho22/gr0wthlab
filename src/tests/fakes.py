@@ -17,7 +17,7 @@ AREAS = ("evidence", "drafts", "review-queue", "weekly-reads", "run-reports", "i
 # Stands in for codex. `codex sandbox` answers the preflight as an enforcing sandbox would, without running anything;
 # `codex exec` plays the agent from behavior.json beside it, writing straight into the workspace.
 FAKE_CODEX = """#!{python}
-import json, re, sys
+import json, re, shutil, sys
 from pathlib import Path
 
 here = Path(__file__).resolve().parent
@@ -37,10 +37,14 @@ prompt = sys.stdin.read()
 behavior = json.loads((here / "behavior.json").read_text())
 brief = Path(re.search(r"Run brief, read it first: (\\S+)", prompt).group(1))
 workspace = brief.parents[1]
+for relative in behavior.get("rmtree", []):
+    shutil.rmtree(workspace / relative)
 for relative, text in behavior.get("write", {{}}).items():
     target = workspace / relative
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text)
+for relative, target in behavior.get("symlink", {{}}).items():
+    (workspace / relative).symlink_to(target)
 for relative in behavior.get("delete", []):
     (workspace / relative).unlink()
 Path(args[args.index("--output-last-message") + 1]).write_text(behavior.get("summary", "Checked the package."))

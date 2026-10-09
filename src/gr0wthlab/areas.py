@@ -75,8 +75,9 @@ class Areas:
                 raise ConfigError(f"refusing to write {path}: {parent} is a symbolic link")
 
     def remove(self, path: Path) -> None:
+        """Remove anything but a real directory: a file, a link, or a special file such as a named pipe."""
         path = self.check(path)
-        if path.is_symlink() or path.is_file():
+        if path.is_symlink() or (path.exists() and not path.is_dir()):
             path.unlink()
 
     def files(self, directory: Path) -> Iterator[Path]:
@@ -96,7 +97,7 @@ class Areas:
 def read_plain(path: Path) -> bytes:
     """The bytes of a plain file with exactly one link; anything else raises UnsafeFile."""
     try:
-        descriptor = os.open(str(path), os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        descriptor = os.open(str(path), os.O_RDONLY | os.O_NONBLOCK | getattr(os, "O_NOFOLLOW", 0))
     except OSError as error:
         raise UnsafeFile(f"cannot open without following links: {error.strerror}") from error
     with os.fdopen(descriptor, "rb") as handle:

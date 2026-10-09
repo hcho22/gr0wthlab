@@ -26,7 +26,7 @@ from . import exchange, launcher, package, records, report, settings
 from . import state as run_state
 from .areas import Areas, UnsafeFile, read_plain
 from .boundary import Boundary, ConfigError, canonical, load_boundary, load_json
-from .queue import OPEN, SUPERSEDED, Ledger, QueueError
+from .queue import INCOMING, OPEN, SUPERSEDED, Ledger, QueueError
 from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLine
 
 PRE_RUN_ENV = "GR0WTHLAB_PRE_RUN"
@@ -131,10 +131,17 @@ def protected_state(areas: Areas) -> dict[Path, bytes]:
 
 
 def undo_agent_changes(areas: Areas, before: Mapping[Path, bytes], run_id: str, ledger: Ledger) -> list[str]:
-    """Restore launcher-only records the agent changed or removed, and set aside anything it added among them."""
+    """Restore launcher-only records the agent changed or removed, and set aside anything it added among them.
+
+    A file or link the agent put in place of a folder the launcher writes in is removed first, so the folder is real.
+    """
     undone = []
     after = protected_state(areas)
     directories, files = protected_paths(areas)
+    for directory in directories + [areas.path("review_queue", INCOMING)]:
+        if directory.is_symlink() or (directory.exists() and not directory.is_dir()):
+            areas.remove(directory)
+            undone.append(f"removed `{areas.relative(directory)}`, which the agent put in place of a folder")
     present = set(files) | {path for directory in directories for path in areas.files(directory)}
     for path in sorted(present):
         if path in before or (not path.exists() and not path.is_symlink()):

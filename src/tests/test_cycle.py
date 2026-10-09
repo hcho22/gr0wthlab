@@ -411,6 +411,42 @@ class FailuresTest(CycleTestCase):
         self.assertIn("set aside `evidence/decisions/20261011-name-status-stale.json`", report)
         self.assertIn("restored `drafts/README.md`", report)
 
+    def test_the_agent_cannot_replace_a_folder_the_launcher_writes_in(self):
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        items = self.workspace() / "review-queue/items"
+        item = items / "20261011-name-status-stale.md"
+        original = item.read_bytes()
+        outside = self.root / "outside"
+        (outside / "empty").mkdir(parents=True)
+        replacements = {
+            "a file": ("review-queue/items", {"write": {"review-queue/items": "not a folder"}}),
+            "a link": ("review-queue/items", {"symlink": {"review-queue/items": str(outside)}}),
+            "a linked incoming folder": ("review-queue/incoming", {"symlink": {"review-queue/incoming": str(outside)}}),
+        }
+        for number, (case, (folder, behavior)) in enumerate(replacements.items(), 1):
+            with self.subTest(case=case):
+                fakes.behave(self.codex_dir, dict(behavior, rmtree=[folder]))
+                code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10 * number))
+                self.assertEqual(code, 0, out)
+                self.assertTrue(items.is_dir() and not items.is_symlink())
+                self.assertEqual(item.read_bytes(), original)
+                report = self.report()
+                self.assertIn(f"removed `{folder}`, which the agent put in place of a folder", report)
+                if folder == "review-queue/items":
+                    self.assertIn("restored `review-queue/items/20261011-name-status-stale.md`", report)
+                self.assertEqual(sorted(path.name for path in outside.iterdir()), ["empty"])
+                self.assertIn("20261011-name-status-stale", [entry["id"] for entry in self.queue()["open"]])
+
+    def test_a_named_pipe_the_agent_leaves_does_not_stall_the_run(self):
+        incoming = self.workspace() / "review-queue/incoming"
+        incoming.mkdir()
+        os.mkfifo(str(incoming / "pipe.md"))
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        self.assertFalse(os.path.lexists(str(incoming / "pipe.md")))
+        self.assertIn("Set aside, not queued: `pipe.md`: unreadable", self.report())
+
     def test_an_agent_failure_is_reported_and_its_valid_items_still_queue(self):
         fakes.behave(
             self.codex_dir,
@@ -457,7 +493,7 @@ class FailuresTest(CycleTestCase):
     def test_the_run_refuses_a_task_definition_outside_src_instructions(self):
         out = io.StringIO()
         runner = cycle.Cycle(self.repo, self.env, self.home, out, self.clock)
-        code = runner.run(self.repo / "workspace/instructions/x.md", "on-demand", None, None, [])
+        code = runner.run(self.repo / "workspace/instructions/x.md", "on-demand", None, [])
         self.assertEqual(code, 2)
         self.assertIn("src/instructions", out.getvalue())
 
