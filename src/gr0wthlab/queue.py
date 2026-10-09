@@ -163,9 +163,7 @@ class Ledger:
             seen[exchange.item_hash(item)] = identifier
             if item.fields.get("supersedes"):
                 superseding.append((item.fields["supersedes"], identifier))
-        for directory in sorted((p for p in incoming.rglob("*") if p.is_dir() and not p.is_symlink()), reverse=True):
-            if not any(directory.iterdir()):
-                directory.rmdir()
+        areas.remove_empty_folders(incoming)
         for old, new in superseding:
             if self.entries[old]["status"] == OPEN:
                 self.close(self.entries[old], SUPERSEDED, run_id, now, superseded_by=new)

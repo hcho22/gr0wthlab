@@ -134,7 +134,8 @@ def undo_agent_changes(areas: Areas, before: Mapping[Path, bytes], run_id: str, 
     """Restore launcher-only records the agent changed or removed, and set aside anything it added among them.
 
     A file or link the agent put in place of an area or a folder the launcher writes in is removed first, outermost
-    first, so nothing after it reads or writes through a link.
+    first, so nothing after it reads or writes through a link, and each of those folders is made accessible again.
+    Every folder the agent added among the records is removed last, so no later write finds a folder in its place.
     """
     undone = []
     directories, files = protected_paths(areas)
@@ -143,6 +144,8 @@ def undo_agent_changes(areas: Areas, before: Mapping[Path, bytes], run_id: str, 
         if folder.is_symlink() or (folder.exists() and not folder.is_dir()):
             areas.remove(folder)
             undone.append(f"removed `{areas.relative(folder)}`, which the agent put in place of a folder")
+        elif folder.is_dir():
+            areas.make_accessible(folder)
     after = protected_state(areas)
     present = set(files) | {path for directory in directories for path in areas.files(directory)}
     for path in sorted(present):
@@ -164,6 +167,9 @@ def undo_agent_changes(areas: Areas, before: Mapping[Path, bytes], run_id: str, 
             shutil.rmtree(str(areas.check(path)))
         areas.write_bytes(path, content)
         undone.append(f"restored `{areas.relative(path)}`, which the agent changed or removed")
+    for directory in directories:
+        for folder in areas.remove_empty_folders(directory):
+            undone.append(f"removed folder `{areas.relative(folder)}`, which the agent added")
     return undone
 
 

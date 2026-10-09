@@ -476,6 +476,45 @@ class FailuresTest(CycleTestCase):
         snapshots = self.workspace() / "evidence/package-snapshots"
         self.assertEqual(len(list(snapshots.glob("*.json"))), 4)
 
+    def test_a_folder_the_agent_plants_where_the_launcher_writes_is_removed(self):
+        self.exchange.mkdir()
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        day = fakes.SUNDAY_RUN.astimezone().strftime("%Y%m%d")
+        planted = [
+            "evidence/decisions/20261011-name-status-stale.json",
+            "run-reports/{run}.md",
+            f"review-queue/items/{day}-notice-run-problems.md",
+            "run-reports/state/hidden/deeper",
+        ]
+        behavior = {
+            "write": {"run-reports/state/hidden/note.md": "hidden"},
+            "mkdir": planted,
+            "chmod": {"run-reports/state/hidden": 0},
+        }
+        fakes.behave(self.codex_dir, behavior)
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10))
+        self.assertEqual(code, 0, out)
+        workspace = self.workspace()
+        reports = (workspace / "run-reports").glob("2*Z-*.md")
+        run_id = sorted(path.name for path in reports if not path.name.endswith(".brief.md"))[-1][: -len(".md")]
+        self.assertTrue((workspace / f"run-reports/{run_id}.md").is_file())
+        report = self.report()
+        for folder in [*planted[:3], "run-reports/state/hidden"]:
+            name = folder.replace("{run}", run_id)
+            self.assertIn(f"removed folder `{name}`, which the agent added", report)
+        self.assertIn("set aside `run-reports/state/hidden/note.md`, which the agent added", report)
+        self.assertFalse((workspace / "evidence/decisions/20261011-name-status-stale.json").exists())
+        notice = next(entry for entry in self.queue()["open"] if entry["kind"] == "notice")
+        self.assertEqual(notice["id"], f"{day}-notice-run-problems")
+        self.assertTrue((workspace / notice["file"]).is_file())
+
+        self.decide("20261011-name-status-stale", "approve")
+        fakes.behave(self.codex_dir, {})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=20))
+        self.assertEqual(code, 0, out)
+        self.assertTrue((workspace / "evidence/decisions/20261011-name-status-stale.json").is_file())
+
     def test_a_named_pipe_the_agent_leaves_does_not_stall_the_run(self):
         incoming = self.workspace() / "review-queue/incoming"
         incoming.mkdir()

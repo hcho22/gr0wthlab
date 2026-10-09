@@ -90,18 +90,41 @@ class Areas:
                 return True
         return False
 
+    def make_accessible(self, folder: Path) -> None:
+        """Give the owner back read, write, and search on a real folder in the areas, which the agent may have taken."""
+        mode = os.lstat(str(self.check(folder, area_itself=True))).st_mode
+        if stat.S_ISDIR(mode) and mode & 0o700 != 0o700:
+            os.chmod(str(folder), stat.S_IMODE(mode) | 0o700)
+
     def files(self, directory: Path) -> Iterator[Path]:
-        """Every non-directory entry under a directory inside an area, without following links."""
+        """Every non-directory entry under a directory inside an area, without following links; every folder on the
+        way is made accessible first, so nothing the agent made unreadable stays hidden."""
         directory = self.check(directory, area_itself=True)
         if not self.real_folder(directory):
             return
+        self.make_accessible(directory)
         for root, subdirs, names in os.walk(str(directory)):
             for name in list(subdirs):
                 if Path(root, name).is_symlink():
                     names.append(name)
                     subdirs.remove(name)
+                else:
+                    self.make_accessible(Path(root, name))
             for name in sorted(names):
                 yield Path(root, name)
+
+    def remove_empty_folders(self, directory: Path) -> list[Path]:
+        """Remove every empty real folder below a directory in the areas, deepest first, and return them."""
+        removed: list[Path] = []
+        if not self.real_folder(self.check(directory, area_itself=True)):
+            return removed
+        for root, subdirs, _ in os.walk(str(directory), topdown=False):
+            for name in subdirs:
+                folder = Path(root, name)
+                if not folder.is_symlink() and folder.is_dir() and not any(folder.iterdir()):
+                    self.check(folder).rmdir()
+                    removed.append(folder)
+        return removed
 
 
 def read_plain(path: Path) -> bytes:

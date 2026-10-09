@@ -46,9 +46,13 @@ for relative, text in behavior.get("write", {{}}).items():
     target = at(relative)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text)
+for relative in behavior.get("mkdir", []):
+    at(relative).mkdir(parents=True)
 for relative, target in behavior.get("symlink", {{}}).items():
     at(relative).parent.mkdir(parents=True, exist_ok=True)
     at(relative).symlink_to(target)
+for relative, mode in behavior.get("chmod", {{}}).items():
+    at(relative).chmod(mode)
 for relative in behavior.get("delete", []):
     (workspace / relative).unlink()
 Path(args[args.index("--output-last-message") + 1]).write_text(behavior.get("summary", "Checked the package."))
