@@ -116,7 +116,9 @@ class FirstRunTest(CycleTestCase):
         brief = Path(prompt.split("Run brief, read it first: ")[1].split()[0])
         text = brief.read_text(encoding="utf-8")
         self.assertIn("## Package files", text)
-        self.assertIn("`projects/RepToday/gtm/05-social-pmf/cadence-14-day.md` | read: first snapshot", text)
+        cadence = self.mandu / "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md"
+        self.assertIn(f"`{cadence}` | read: first snapshot", text)
+        self.assertIn("a Product's own repository holds its code, never its package", text)
         self.assertIn("check-incoming", text)
 
 

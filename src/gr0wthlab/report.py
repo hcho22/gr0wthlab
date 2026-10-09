@@ -240,8 +240,10 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path) -> str:
     lines = [
         f"# Brief for run {state.run_id}",
         "",
-        "The launcher wrote this before you started; it reads only what this brief names and what you write to",
-        "`review-queue/incoming/`. Paths in backticks are relative to the Mandu checkout unless they start with /.",
+        "The launcher wrote this before you started.",
+        "Every Go-To-Market Package file is in the Mandu checkout, at the absolute path listed below;",
+        "a Product's own repository holds its code, never its package.",
+        "In the items you write, cite a package file by its path inside the Mandu checkout, as in the Changes list.",
         "",
         f"- {start_line(state)}",
         f"- Mandu checkout: `{state.mandu}`",
@@ -252,10 +254,11 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path) -> str:
         "",
     ]
     rows = []
+    mandu = Path(state.mandu)
     for result in state.snapshot:
         if result.reason:
-            rows.append([f"`{result.source.path}`", f"failed: {result.reason}"])
-        rows += [[f"`{file.path}`", f"{file.status}: {file_line(file)}"] for file in result.files]
+            rows.append([f"`{mandu / result.source.path}`", f"failed: {result.reason}"])
+        rows += [[f"`{mandu / file.path}`", f"{file.status}: {file_line(file)}"] for file in result.files]
     lines += table(["File", "This run"], rows) + ["", "## Changes since the previous snapshot", ""]
     lines += package_changes(state)
     lines += ["", "## Failed sources and what they block", ""]
