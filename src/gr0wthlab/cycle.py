@@ -505,6 +505,7 @@ class Cycle:
 
         run_id = self.run_id = launcher.new_run_id(trigger, started)
         state = RunState(run_id, trigger, started, str(task.relative_to(canonical(self.repo_root))), sync=sync)
+        state.problems += list(sync.get("repaired", []))
         state.late_after = timedelta(minutes=config.late_after_minutes)
         if trigger == "scheduled":
             state.due = report.due_time(started, config.weekly, once)
@@ -579,6 +580,7 @@ class Cycle:
         state.usage = report.token_usage(log_dir / f"{run_id}.events.jsonl")
         if state.usage:
             state.cost = report.cost(state.usage, config.prices)
+        state.problems += records.restore_access(canonical(self.repo_root))
 
         now = self.now()
         if ledger_ok:
@@ -588,12 +590,6 @@ class Cycle:
         state.queue_after = ledger.ordered()
         state.problems += areas.problems
         areas.problems.clear()
-        state.problems += records.set_aside_unreadable(
-            canonical(self.repo_root),
-            self.env,
-            self.store.path(REVIEW_QUEUE, SET_ASIDE, run_id),
-            str(areas.path("review_queue", INCOMING).relative_to(canonical(self.repo_root))),
-        )
         self.outputs(state, config, ledger_ok)
         notice = report.problems_notice(state, self.store.relative(report_path))
         if notice and ledger_ok:

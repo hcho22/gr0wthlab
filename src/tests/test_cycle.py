@@ -663,69 +663,29 @@ class FailuresTest(CycleTestCase):
         notice = (self.ledger() / queue["open"][0]["file"]).read_text(encoding="utf-8")
         self.assertIn("brand-guidelines.md`: Permission denied.", notice)
 
-    @unittest.skipIf(os.geteuid() == 0, "root can search any folder")
-    def test_an_unsearchable_folder_in_incoming_is_reported_not_fatal(self):
-        behavior = {
-            "write": {"review-queue/incoming/sub/inner/name-status-stale.md": fakes.PROPOSAL},
-            "chmod": {"review-queue/incoming/sub": "600"},
-        }
-        fakes.behave(self.codex_dir, behavior)
-        code, out = self.run_cycle()
-        self.assertEqual(code, 0, out)
-        problems = self.report().partition("\n## Launcher problems\n")[2]
-        self.assertIn(
-            "- `review-queue/incoming/sub/inner` could not be read (Permission denied), so nothing in it was read",
-            problems,
-        )
-
-    @unittest.skipIf(os.geteuid() == 0, "root can list any folder")
-    def test_an_unreadable_workspace_folder_is_reported_and_left_uncommitted(self):
-        behavior = {"write": {"drafts/sub/draft.md": "a draft\n"}, "chmod": {"drafts/sub": "000"}}
-        fakes.behave(self.codex_dir, behavior)
-        code, out = self.run_cycle()
-        self.assertEqual(code, 0, out)
-        line = "`workspace/drafts/sub` could not be read, so it was left uncommitted"
-        self.assertIn(f"- {line}", self.report().partition("\n## Launcher problems\n")[2])
-        notice = (self.ledger() / self.queue()["open"][0]["file"]).read_text(encoding="utf-8")
-        self.assertIn(line, notice)
-
     @unittest.skipIf(os.geteuid() == 0, "root can read any file")
-    def test_an_unreadable_committed_workspace_file_is_set_aside_and_put_back(self):
-        guide = self.workspace() / "instructions/guide.md"
-        guide.write_text("committed\n", encoding="utf-8")
-        fakes.git(self.repo, "add", "--all", env=self.env)
-        fakes.git(self.repo, "commit", "--quiet", "-m", "guide", env=self.env)
-        fakes.behave(
-            self.codex_dir, {"write": {"instructions/guide.md": "edited\n"}, "chmod": {"instructions/guide.md": "000"}}
-        )
-        code, out = self.run_cycle()
-        self.assertEqual(code, 0, out)
-        self.assertEqual(guide.read_text(encoding="utf-8"), "committed\n")
-        kept = list((self.ledger() / "review-queue/set-aside").glob("*/workspace--instructions--guide.md"))
-        self.assertEqual(len(kept), 1)
-        shown = kept[0].relative_to(self.repo)
-        line = (
-            f"`workspace/instructions/guide.md` could not be read, so it was set aside as `{shown}` and its committed"
-            " version put back"
-        )
-        self.assertIn(f"- {line}", self.report().partition("\n## Launcher problems\n")[2])
-        notice = (self.ledger() / self.queue()["open"][0]["file"]).read_text(encoding="utf-8")
-        self.assertIn(" ".join(line.split()), notice)
-
-    @unittest.skipIf(os.geteuid() == 0, "root can list any folder")
-    def test_an_unreadable_incoming_folder_is_reported_not_skipped(self):
+    def test_access_the_agent_removed_is_restored_and_reported_before_anything_is_taken_in(self):
         behavior = {
-            "write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL},
-            "chmod": {"review-queue/incoming": "300"},
+            "write": {
+                "review-queue/incoming/name-status-stale.md": fakes.PROPOSAL,
+                "drafts/sub/draft.md": "a draft\n",
+                "instructions/README.md": "edited\n",
+            },
+            "chmod": {"review-queue/incoming": "300", "drafts/sub": "000", "instructions/README.md": "000"},
         }
         fakes.behave(self.codex_dir, behavior)
         code, out = self.run_cycle()
         self.assertEqual(code, 0, out)
-        self.assertEqual(self.queue()["open"][0]["kind"], "notice")
         problems = self.report().partition("\n## Launcher problems\n")[2]
-        self.assertIn(
-            "- `review-queue/incoming` could not be read (Permission denied), so nothing in it was read", problems
-        )
+        restored = "was left without its owner's read and write access, so the launcher restored it"
+        for entry in ("workspace/drafts/sub", "workspace/instructions/README.md", "workspace/review-queue/incoming"):
+            self.assertIn(f"- `{entry}` {restored}", problems)
+        self.assertEqual((self.workspace() / "drafts/sub/draft.md").read_text(encoding="utf-8"), "a draft\n")
+        self.assertEqual((self.workspace() / "instructions/README.md").read_text(encoding="utf-8"), "edited\n")
+        queue = self.queue()
+        self.assertEqual([entry["kind"] for entry in queue["open"]], ["package-change-proposal", "notice"])
+        notice = (self.ledger() / queue["open"][1]["file"]).read_text(encoding="utf-8")
+        self.assertIn(f"`workspace/drafts/sub` {restored}", notice)
 
     def test_a_named_pipe_the_agent_leaves_does_not_stall_the_run(self):
         incoming = self.workspace() / "review-queue/incoming"
@@ -880,6 +840,42 @@ class ProductionCloneTest(CycleTestCase):
         code, out = self.run_cycle(repo=self.clone)
         self.assertEqual(code, 0, out)
         self.assertIn("fast-forwarded main", self.report(self.clone))
+
+    @unittest.skipIf(os.geteuid() == 0, "root can read any file")
+    def test_access_removed_in_the_workspace_never_stops_a_code_update_or_the_records_step(self):
+        (self.repo / "workspace/instructions/README.md").write_text("# instructions, reviewed\n")
+        fakes.git(self.repo, "commit", "--quiet", "-am", "reviewed", env=self.env)
+        fakes.git(self.repo, "push", "--quiet", "origin", "main", env=self.env)
+        (self.clone / "workspace/drafts/README.md").chmod(0)
+        (self.clone / "workspace/instructions").chmod(0)
+        calls = []
+        code, out = self.run_cycle(repo=self.clone, execve=lambda *args: calls.append(args))
+        self.assertEqual(len(calls), 1, out)
+        readme = self.clone / "workspace/instructions/README.md"
+        self.assertEqual(readme.read_text(encoding="utf-8"), "# instructions, reviewed\n")
+
+        self.env[cycle.PRE_RUN_ENV] = calls[0][2][cycle.PRE_RUN_ENV]
+        behavior = {"write": {"drafts/day-3.md": "a Draft\n"}, "chmod": {"drafts/day-3.md": "000", "drafts": "000"}}
+        fakes.behave(self.codex_dir, behavior)
+        code, out = self.run_cycle(repo=self.clone)
+        self.assertEqual(code, 0, out)
+        self.assertIn("records: pushed", out)
+        report = self.report(self.clone)
+        self.assertIn("fast-forwarded main", report)
+        problems = report.partition("\n## Launcher problems\n")[2]
+        restored = "was left without its owner's read and write access, so the launcher restored it"
+        entries = (
+            "workspace/instructions",
+            "workspace/drafts/README.md",
+            "workspace/drafts",
+            "workspace/drafts/day-3.md",
+        )
+        for entry in entries:
+            self.assertIn(f"- `{entry}` {restored}", problems)
+        changed = fakes.git(self.remote, "diff", "--name-only", "HEAD~1", "HEAD", env=self.env).split()
+        self.assertIn("workspace/drafts/day-3.md", changed)
+        notice = next(entry for entry in self.queue(self.clone)["open"] if entry["kind"] == "notice")
+        self.assertIn(f"`workspace/instructions` {restored}", (self.ledger(self.clone) / notice["file"]).read_text())
 
     def test_a_clone_off_main_or_with_code_changes_refuses_to_start(self):
         with (self.clone / "src/instructions/weekly-run.md").open("a") as handle:

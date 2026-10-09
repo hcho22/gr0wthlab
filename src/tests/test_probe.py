@@ -2,6 +2,7 @@
 
 import io
 import json
+import os
 import socket
 import tempfile
 import unittest
@@ -126,10 +127,26 @@ class VerifyTest(unittest.TestCase):
             self.assertTrue(unix.refused_in(f"Sandbox: nc(41404) deny(1) network-outbound {unix.address}"))
             self.assertFalse(unix.refused_in(f"Sandbox: nc(41404) deny(1) file-read-data {unix.address}"))
 
+    @unittest.skipIf(os.geteuid() == 0, "root can list any folder")
+    def test_an_area_that_cannot_be_listed_is_reported_not_fatal(self):
+        self.write_record(exit_code=0)
+        self.write_permitted()
+        area = dict(self.boundary.areas)["drafts"]
+        area.chmod(0)
+        try:
+            result = probe.verify(self.boundary, RUN, self.logs)
+        finally:
+            area.chmod(0o755)
+        self.assertEqual(result["unlistable_areas"], {"drafts": "Permission denied"})
+        self.assertFalse(result["passed"])
+        out = io.StringIO()
+        probe.summarize(result, out)
+        self.assertIn("areas that could not be listed: drafts (Permission denied)", out.getvalue())
+
     def test_missing_permitted_writes_are_named(self):
         area = self.boundary.areas[0][1]
         (area / f"{MARK}-permitted-shell.txt").write_text("probe\n", encoding="utf-8")
-        missing = probe.missing_permitted(RUN, probe.permitted(self.boundary, RUN))
+        missing = probe.missing_permitted(RUN, probe.permitted(self.boundary, RUN)[0])
         self.assertIn("evidence:file-tool", missing)
         self.assertNotIn("evidence:shell", missing)
         self.assertEqual(len(missing), 11)

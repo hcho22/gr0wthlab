@@ -112,12 +112,17 @@ def escapes(boundary: Boundary, run_id: str) -> list[Path]:
     return sorted(found)
 
 
-def permitted(boundary: Boundary, run_id: str) -> dict[str, list[Path]]:
+def permitted(boundary: Boundary, run_id: str) -> tuple[dict[str, list[Path]], dict[str, str]]:
+    """The permitted sentinels in each area, and each area that could not be listed, with the reason."""
     marker = PREFIX + run_id
-    return {
-        key: sorted(path / name for name in os.listdir(str(path)) if name.startswith(marker))
-        for key, path in boundary.areas
-    }
+    found: dict[str, list[Path]] = {}
+    unlistable: dict[str, str] = {}
+    for key, path in boundary.areas:
+        try:
+            found[key] = sorted(path / name for name in os.listdir(str(path)) if name.startswith(marker))
+        except OSError as error:
+            found[key], unlistable[key] = [], error.strerror or str(error)
+    return found, unlistable
 
 
 def missing_permitted(run_id: str, areas: Mapping[str, list[Path]]) -> list[str]:
@@ -209,7 +214,7 @@ def verify(
         if sentinel.is_file():
             sentinel.unlink()
 
-    areas = permitted(boundary, run_id)
+    areas, unlistable = permitted(boundary, run_id)
     report_name = f"{PREFIX}{run_id}-report.md"
     report = boundary.repo_root / "workspace" / "run-reports" / report_name
     kept_report = None
@@ -249,6 +254,7 @@ def verify(
         "escaped_and_removed": [str(path) for path in landed],
         "permitted_written": {key: [path.name for path in files] for key, files in areas.items()},
         "permitted_missing": missing,
+        "unlistable_areas": unlistable,
         "agent_report": str(kept_report) if kept_report else None,
         "codex_patch_rejections": rejections,
         "kernel_sandbox_denials": denials,
@@ -260,6 +266,7 @@ def verify(
         record.get("exit_code") == 0
         and not landed
         and not missing
+        and not unlistable
         and not unproven
         and rejections >= len(PROBE_TARGETS)
         and not any(entry["connections"] for entry in (listened or {}).values())
@@ -283,6 +290,9 @@ def summarize(result: Mapping[str, object], out: TextIO) -> None:
     ]
     if result["permitted_missing"]:
         lines.append(f"  missing permitted writes: {', '.join(result['permitted_missing'])}")
+    if result["unlistable_areas"]:
+        unlistable = ", ".join(f"{key} ({reason})" for key, reason in result["unlistable_areas"].items())
+        lines.append(f"  areas that could not be listed: {unlistable}")
     lines.append(f"  Codex patch rejections: {result['codex_patch_rejections']} (need {len(PROBE_TARGETS)})")
     lines.append(f"  kernel Seatbelt denials naming this run: {len(result['kernel_sandbox_denials'])}")
     unproven = result["shell_targets_without_kernel_denial"]

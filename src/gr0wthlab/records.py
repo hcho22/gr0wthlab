@@ -56,6 +56,7 @@ class Sync:
     unpushed: int = 0
     ok_to_run: bool = True
     excluded: list[str] = field(default_factory=list)
+    repaired: list[str] = field(default_factory=list)
 
     @property
     def code_changed(self) -> bool:
@@ -139,7 +140,39 @@ def local_commits_outside(git: Git, upstream: str) -> list[str]:
     return [commit for commit in git.commits(f"{upstream}..HEAD") if outside(git.changed_paths(commit))]
 
 
+def restore_access(repo: Path) -> list[str]:
+    """Give the owner read and write access, and search on folders (u+rwX), to every entry under workspace/ the agent
+    left without it, without following links, so the records step and code updates can read and replace everything
+    there; one line for each entry fixed, or that could not be."""
+    lines = []
+    for root, subdirs, files in os.walk(str(repo / RECORD_DIRS[0])):
+        subdirs.sort()
+        for name in subdirs + sorted(files):
+            path = os.path.join(root, name)
+            entry = os.path.relpath(path, str(repo))
+            try:
+                mode = os.lstat(path).st_mode
+                wanted = stat.S_IRUSR | stat.S_IWUSR | (stat.S_IXUSR if stat.S_ISDIR(mode) else 0)
+                if stat.S_ISLNK(mode) or mode & wanted == wanted:
+                    continue
+                os.chmod(path, stat.S_IMODE(mode) | wanted)
+            except OSError as error:
+                reason = error.strerror or error
+                lines.append(f"`{entry}` was left without its owner's access, which could not be restored ({reason})")
+                continue
+            lines.append(f"`{entry}` was left without its owner's read and write access, so the launcher restored it")
+    return lines
+
+
 def prepare(repo: Path, remote: str, branch: str, started: str, env: Mapping[str, str], max_bytes: int) -> Sync:
+    """Restore the owner's access to everything under workspace/, then bring the clone up to date with the remote."""
+    repaired = restore_access(repo)
+    result = update(repo, remote, branch, started, env, max_bytes)
+    result.repaired = repaired
+    return result
+
+
+def update(repo: Path, remote: str, branch: str, started: str, env: Mapping[str, str], max_bytes: int) -> Sync:
     """Bring the clone to the remote's main, by fast-forward or by replaying unpushed records commits on top.
 
     It refuses to run a clone that is off main, has changes outside workspace/ and ledger/, or has local commits
@@ -218,59 +251,6 @@ def replay(git: Git, upstream: str) -> str | None:
     git.run("rebase", "--abort", check=False)
     lines = (completed.stderr or completed.stdout or "").strip().splitlines()
     return lines[0] if lines else "no output"
-
-
-def unreadable(repo: Path) -> list[str]:
-    """Every entry under workspace/ the launcher cannot read, relative to the repository: a file it cannot read, or a
-    folder it cannot list or enter, whose contents are not looked at."""
-    found: list[str] = []
-
-    def note(error: OSError) -> None:
-        found.append(str(error.filename))
-
-    for root, subdirs, files in os.walk(str(repo / RECORD_DIRS[0]), onerror=note):
-        for name in list(subdirs):
-            path = os.path.join(root, name)
-            if not os.path.islink(path) and not os.access(path, os.R_OK | os.X_OK):
-                found.append(path)
-                subdirs.remove(name)
-        for name in files:
-            path = os.path.join(root, name)
-            if not os.path.islink(path) and not os.access(path, os.R_OK):
-                found.append(path)
-    return sorted(os.path.relpath(path, str(repo)) for path in found)
-
-
-def set_aside_unreadable(repo: Path, env: Mapping[str, str], folder: Path, skip: str) -> list[str]:
-    """One line for every entry under workspace/ the launcher cannot read, other than under skip, which is reported
-    where it is taken in. An unreadable committed file is moved into folder, which needs no read access, and its
-    committed version put back, so no replay or code update stalls on it; anything else is left uncommitted."""
-    entries = [entry for entry in unreadable(repo) if entry != skip and not entry.startswith(f"{skip}/")]
-    if not entries:
-        return []
-    git = Git(repo, env)
-    try:
-        tracked = set(git.fields("ls-files", "-z", "--", RECORD_DIRS[0]))
-    except GitError:
-        tracked = set()
-    lines = []
-    for entry in entries:
-        if entry not in tracked:
-            lines.append(f"`{entry}` could not be read, so it was left uncommitted")
-            continue
-        target = folder / entry.replace("/", "--")
-        try:
-            folder.mkdir(parents=True, exist_ok=True)
-            os.rename(str(repo / entry), str(target))
-            git.run("checkout", "--quiet", "HEAD", "--", entry)
-        except (OSError, GitError) as error:
-            lines.append(f"`{entry}` could not be read, and it could not be set aside either ({error})")
-            continue
-        shown = os.path.relpath(str(target), str(repo))
-        lines.append(
-            f"`{entry}` could not be read, so it was set aside as `{shown}` and its committed version put back"
-        )
-    return lines
 
 
 def staged(git: Git) -> list[tuple[str, str]]:

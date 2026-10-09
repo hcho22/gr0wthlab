@@ -51,6 +51,24 @@ class LedgerTestCase(unittest.TestCase):
 
 
 class IncomingTest(LedgerTestCase):
+    @unittest.skipIf(os.geteuid() == 0, "root can list any folder")
+    def test_a_folder_that_cannot_be_listed_or_searched_is_reported_not_fatal(self):
+        self.drop("item.md", fakes.PROPOSAL)
+        self.drop("sub/inner/item.md", fakes.PROPOSAL)
+        cases = {
+            self.incoming: (0o300, "`review-queue/incoming` could not be read (Permission denied)"),
+            self.incoming / "sub": (0o600, "`review-queue/incoming/sub/inner` could not be read (Permission denied)"),
+        }
+        for folder, (mode, problem) in cases.items():
+            with self.subTest(folder=folder.name):
+                self.areas.problems.clear()
+                folder.chmod(mode)
+                try:
+                    self.take()
+                finally:
+                    folder.chmod(0o755)
+                self.assertTrue(any(line.startswith(problem) for line in self.areas.problems), self.areas.problems)
+
     def test_a_valid_item_is_queued_under_a_stable_identifier(self):
         self.drop("name-status-stale.md", fakes.PROPOSAL)
         published, set_aside = self.take()

@@ -100,6 +100,20 @@ class PrepareTest(RecordsTestCase):
         self.assertEqual((result.status, result.ok_to_run, result.code_changed), (records.OFFLINE, True, False))
         self.assertIn("ran the current code", result.detail)
 
+    @unittest.skipIf(os.geteuid() == 0, "root can read any file")
+    def test_access_removed_in_the_workspace_is_restored_before_new_code_is_fast_forwarded(self):
+        self.land_upstream("workspace/instructions/README.md", "# instructions, reviewed\n")
+        (self.clone / "workspace/drafts/README.md").chmod(0)
+        (self.clone / "workspace/instructions").chmod(0)
+        result = self.prepare()
+        self.assertEqual(result.status, records.UPDATED, result.detail)
+        restored = "was left without its owner's read and write access, so the launcher restored it"
+        self.assertEqual(
+            result.repaired,
+            [f"`workspace/instructions` {restored}", f"`workspace/drafts/README.md` {restored}"],
+        )
+        self.assertEqual((self.clone / "workspace/instructions/README.md").read_text(), "# instructions, reviewed\n")
+
     def test_leftover_outputs_are_committed_and_unpushed_records_replayed_onto_new_code(self):
         self.write("workspace/run-reports/old.md")
         self.land_upstream("src/new.py", "x = 1\n")
@@ -182,7 +196,7 @@ class SaveTest(RecordsTestCase):
             self.assertIn(name, excluded)
 
     @unittest.skipIf(os.geteuid() == 0, "root can read any file")
-    def test_an_unreadable_record_is_left_out_and_never_stops_the_next_run(self):
+    def test_an_unreadable_record_is_left_out_then_restored_before_the_next_run(self):
         self.write("workspace/drafts/locked.md").chmod(0)
         self.write("workspace/drafts/ok.md")
         result = self.save()
@@ -191,7 +205,10 @@ class SaveTest(RecordsTestCase):
         self.assertIn("workspace/drafts/locked.md (could not be read)", result.excluded)
         result = self.prepare()
         self.assertTrue(result.ok_to_run, result.detail)
-        self.assertIn("workspace/drafts/locked.md (could not be read)", result.excluded)
+        restored = "was left without its owner's read and write access, so the launcher restored it"
+        self.assertEqual(result.repaired, [f"`workspace/drafts/locked.md` {restored}"])
+        self.assertEqual(result.excluded, [])
+        self.assertEqual(self.git(self.clone, "status", "--porcelain"), "")
 
     def commit_upstream_and_update(self, relative, text):
         self.land_upstream(relative, text)
@@ -209,29 +226,17 @@ class SaveTest(RecordsTestCase):
         self.assertIn("could not be replayed (error: cannot rebase: You have unstaged changes.)", result.detail)
 
     @unittest.skipIf(os.geteuid() == 0, "root can read any file")
-    def test_an_unreadable_committed_file_is_set_aside_so_the_replay_after_a_failed_push_goes_through(self):
+    def test_restored_access_lets_the_replay_after_a_failed_push_go_through(self):
         self.commit_upstream_and_update("workspace/instructions/guide.md", "committed\n")
         self.write("workspace/instructions/guide.md", "edited\n").chmod(0)
-        self.write("workspace/drafts/new.md").chmod(0)
         self.write("workspace/run-reports/r.md")
         self.land_upstream("src/new.py", "x = 1\n")
-        folder = self.clone / "ledger/review-queue/set-aside/RUN1"
-        lines = records.set_aside_unreadable(self.clone, self.env, folder, "workspace/review-queue/incoming")
-        self.assertEqual(
-            lines,
-            [
-                "`workspace/drafts/new.md` could not be read, so it was left uncommitted",
-                "`workspace/instructions/guide.md` could not be read, so it was set aside as"
-                " `ledger/review-queue/set-aside/RUN1/workspace--instructions--guide.md` and its committed version"
-                " put back",
-            ],
-        )
-        self.assertEqual((self.clone / "workspace/instructions/guide.md").read_text(), "committed\n")
-        self.assertTrue(os.path.lexists(str(folder / "workspace--instructions--guide.md")))
+        restored = "was left without its owner's read and write access, so the launcher restored it"
+        self.assertEqual(records.restore_access(self.clone), [f"`workspace/instructions/guide.md` {restored}"])
         result = self.save()
         self.assertEqual(result.status, records.PUSHED, result.detail)
         self.assertIn("had moved; replayed", result.detail)
-        self.assertEqual(self.remote_files(), ["workspace/run-reports/r.md"])
+        self.assertEqual(self.remote_files(), ["workspace/instructions/guide.md", "workspace/run-reports/r.md"])
 
     def test_a_moved_remote_is_replayed_and_pushed_once_never_forced(self):
         self.land_upstream("src/new.py", "x = 1\n")
