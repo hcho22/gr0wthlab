@@ -290,11 +290,13 @@ class DecisionRoundTripTest(CycleTestCase):
         )
         ask = "Approve package change: record the name as cleared"
         self.assertIn(
-            f"- Rejected `{old}`, which `{new}` had already replaced: {ask}. Reason: Wait for counsel.", self.report()
+            f"- Rejected `{old}`, which `{new}` replaced before this decision was taken in: {ask}."
+            " Reason: Wait for counsel.",
+            self.report(),
         )
         replaced = (
-            f"- `{new}` (package-change-proposal): {ask} and reserved. It replaces `{old}`, which the Founder rejected"
-            f" after it was replaced: {ask}. Reason: Wait for counsel."
+            f"- `{new}` (package-change-proposal): {ask} and reserved. It replaces `{old}`, which the Founder rejected:"
+            f" {ask}. Reason: Wait for counsel."
         )
         self.assertIn(replaced, self.brief())
 
@@ -328,10 +330,9 @@ class DecisionRoundTripTest(CycleTestCase):
         self.assertEqual([entry["kind"] for entry in self.queue()["open"]], kinds)
         report = self.report()
         self.assertIn(
-            "| Mandu decisions | read | 2 records, 0 new since the previous run, 2 could not be used"
-            " (2 reported by an earlier run) |",
-            report,
+            "| Mandu decisions | read | 2 records, 0 new since the previous run, 2 could not be used |", report
         )
+        self.assertIn("- Not listed again: 2 records that could not be used, reported by an earlier run", report)
         self.assertNotIn("Could not use", report)
 
         self.decide("20261011-unknown", "approve", note="Rewritten, still about no item.")
@@ -341,6 +342,45 @@ class DecisionRoundTripTest(CycleTestCase):
         notice = (self.ledger() / queue["open"][2]["file"]).read_text(encoding="utf-8")
         self.assertIn("`decisions/20261011-unknown.json`", notice)
         self.assertNotIn(old, notice)
+
+    def test_a_malformed_decision_on_an_item_superseded_in_the_same_run_is_reported_once(self):
+        old = "20261011-name-status-stale"
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        self.decide(old, "reject")
+        newer = fakes.proposal(extra=f"supersedes: {old}\n", title="record the name as cleared and reserved")
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-cleared.md": newer}})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        queue = self.queue()
+        self.assertEqual([entry["kind"] for entry in queue["open"]], ["package-change-proposal", "notice"])
+        self.assertEqual(queue["open"][0]["supersedes"], old)
+        notice = (self.ledger() / queue["open"][1]["file"]).read_text(encoding="utf-8")
+        self.assertIn("# Notice: 1 Mandu record could not be used on", notice)
+        self.assertIn(f"`decisions/{old}.json`: reason is required", notice)
+        self.assertNotIn("must replace", notice)
+        self.assertNotIn("must replace", self.report())
+
+        fakes.behave(self.codex_dir, {})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
+        self.assertEqual(len(self.queue()["open"]), 2)
+        self.assertNotIn("Could not use", self.report())
+
+    def test_a_missing_exchange_folder_keeps_what_was_already_reported(self):
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        self.decide("20261011-unknown", "approve")
+        fakes.behave(self.codex_dir, {})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertIn("- Could not use `decisions/20261011-unknown.json`", self.report())
+        away = self.exchange.with_name("exchange-away")
+        self.exchange.rename(away)
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
+        self.assertIn("| Mandu decisions | failed |", self.report())
+        away.rename(self.exchange)
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=21))
+        report = self.report()
+        self.assertNotIn("Could not use", report)
+        self.assertIn("- Not listed again: 1 record that could not be used", report)
 
     def test_a_malformed_decision_on_an_open_item_is_reported_every_run_until_replaced(self):
         item = "20261011-name-status-stale"
@@ -554,6 +594,21 @@ class FailuresTest(CycleTestCase):
         code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10))
         self.assertEqual(code, cycle.launcher.EXIT_CONFIG)
         self.assertIn("writable area evidence", out)
+
+    @unittest.skipIf(os.geteuid() == 0, "root can list any folder")
+    def test_an_unreadable_incoming_folder_is_reported_not_skipped(self):
+        behavior = {
+            "write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL},
+            "chmod": {"review-queue/incoming": "300"},
+        }
+        fakes.behave(self.codex_dir, behavior)
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.queue()["open"][0]["kind"], "notice")
+        problems = self.report().partition("\n## Launcher problems\n")[2]
+        self.assertIn(
+            "- `review-queue/incoming` could not be read (Permission denied), so nothing in it was read", problems
+        )
 
     def test_a_named_pipe_the_agent_leaves_does_not_stall_the_run(self):
         incoming = self.workspace() / "review-queue/incoming"

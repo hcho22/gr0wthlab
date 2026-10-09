@@ -75,12 +75,17 @@ class Areas:
 
     def files(self, directory: Path) -> Iterator[Path]:
         """Every non-directory entry under a real folder inside an area, without following links; a folder that is not
-        a real folder is noted in problems, since nothing in it was read."""
+        a real folder, or that cannot be listed, is noted in problems, since nothing in it was read."""
         directory = self.check(directory, area_itself=True)
         if not self.real_folder(directory):
             self.problems.append(f"`{self.relative(directory)}` is not a real folder, so nothing in it was read")
             return
-        for root, subdirs, names in os.walk(str(directory)):
+
+        def unreadable(error: OSError) -> None:
+            folder = self.relative(Path(str(error.filename)))
+            self.problems.append(f"`{folder}` could not be read ({error.strerror or error}), so nothing in it was read")
+
+        for root, subdirs, names in os.walk(str(directory), onerror=unreadable):
             for name in list(subdirs):
                 if Path(root, name).is_symlink():
                     names.append(name)

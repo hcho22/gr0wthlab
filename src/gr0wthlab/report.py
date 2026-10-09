@@ -35,13 +35,13 @@ class SourceLine:
 class Unusable:
     """A Mandu record the run could not use; its fingerprint changes whenever its name or content does.
 
-    open_item is the item still open that a decision record is for, when Mandu must replace the record with a valid one.
+    item is the item a decision record is named for, if any.
     """
 
     name: str
     problems: tuple[str, ...]
     fingerprint: str
-    open_item: str = ""
+    item: str = ""
 
 
 @dataclass
@@ -96,9 +96,14 @@ class RunState:
     def failed_sources(self) -> list[SourceLine]:
         return [line for line in self.sources if line.status == package.FAILED]
 
+    def open_item(self, record: Unusable) -> str:
+        """The item a record is for when that item is still open as this run leaves the Review Queue, so Mandu must
+        replace the record with a valid one; empty otherwise."""
+        return record.item if any(entry["id"] == record.item for entry in self.queue_after) else ""
+
     def reports(self, record: Unusable) -> bool:
         """A record Mandu must replace is reported at every run until it does; any other record only once."""
-        return bool(record.open_item) or record.fingerprint not in self.reported_before
+        return bool(self.open_item(record)) or record.fingerprint not in self.reported_before
 
     def unusable_to_report(self) -> list[Unusable]:
         return [record for record in self.unusable if self.reports(record)]
@@ -237,21 +242,33 @@ def decision_lines(state: RunState, taken_only: bool = False) -> list[str]:
         decision, entry = outcome.decision, outcome.entry
         if outcome.status != "taken":
             continue
-        replaced = f", which `{entry['superseded_by']}` had already replaced" if entry.get("superseded_by") else ""
+        replaced = (
+            f", which `{entry['superseded_by']}` replaced before this decision was taken in"
+            if entry.get("superseded_by")
+            else ""
+        )
         if decision.decision == exchange.APPROVE:
             note = f" Note: {decision.note}" if decision.note else ""
             lines.append(f"- Approved `{decision.item}`{replaced}: {entry['ask']}.{note}")
         else:
             lines.append(f"- Rejected `{decision.item}`{replaced}: {entry['ask']}. Reason: {decision.reason}")
     if not taken_only:
-        for record in state.unusable_to_report():
+        listed = state.unusable_to_report()
+        for record in listed:
+            item = state.open_item(record)
             fix = (
-                f". Mandu must replace it with a valid record of the decision on `{record.open_item}`, which stays"
-                " undecided until then"
-                if record.open_item
+                f". Mandu must replace it with a valid record of the decision on `{item}`, which stays undecided until"
+                " then"
+                if item
                 else ""
             )
             lines.append(f"- Could not use `{record.name}`: {'; '.join(record.problems)}{fix}")
+        quiet = len(state.unusable) - len(listed)
+        if quiet:
+            lines.append(
+                f"- Not listed again: {plural(quiet, 'record')} that could not be used, reported by an earlier run"
+                " and unchanged since."
+            )
     return lines
 
 
@@ -319,8 +336,8 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
             line = f"- `{entry['id']}` ({entry['kind']}): {entry['ask']}"
             for earlier in state.replaced.get(str(entry["id"]), ()):
                 line += (
-                    f". It replaces `{earlier['id']}`, which the Founder {earlier['decided']} after it was replaced:"
-                    f" {earlier['ask']}.{founder_words(earlier)}"
+                    f". It replaces `{earlier['id']}`, which the Founder {earlier['decided']}: {earlier['ask']}."
+                    f"{founder_words(earlier)}"
                 )
             lines.append(line)
     else:
@@ -445,7 +462,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
             lines.append(bullet(f"{line.name}: {line.detail} Incomplete: {needs}."))
         sections.append((f"{plural(len(failed), 'source')} could not be read on {day}", "\n".join(lines)))
     unusable = state.unusable_to_report()
-    to_replace = [record for record in unusable if record.open_item]
+    to_replace = [record for record in unusable if state.open_item(record)]
     if to_replace:
         sections.append(
             (
@@ -455,12 +472,12 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 " format of the Mandu exchange; until it does, this notice comes back at every run while the item is"
                 " open:\n"
                 + "\n".join(
-                    bullet(f"`{record.name}`, for `{record.open_item}`: {'; '.join(record.problems)}")
+                    bullet(f"`{record.name}`, for `{record.item}`: {'; '.join(record.problems)}")
                     for record in to_replace
                 ),
             )
         )
-    others = [record for record in unusable if not record.open_item]
+    others = [record for record in unusable if not state.open_item(record)]
     if others:
         sections.append(
             (

@@ -103,17 +103,10 @@ def parse_records(found, parser) -> tuple[list[tuple[object, Path, str]], list[U
     return parsed, problems
 
 
-def for_open_item(record: Unusable, open_items: set[str]) -> Unusable:
-    """A decision record named for an item still open, which Mandu must replace with a valid one."""
+def named_item(record: Unusable) -> Unusable:
+    """A decision record with the item its file is named for."""
     name = Path(record.name)
-    return replace(record, open_item=name.stem) if name.suffix == ".json" and name.stem in open_items else record
-
-
-def could_not_use(records: Sequence[Unusable], state: RunState) -> str:
-    if not records:
-        return ""
-    before = sum(1 for record in records if not state.reports(record))
-    return f", {len(records)} could not be used" + (f" ({before} reported by an earlier run)" if before else "")
+    return replace(record, item=name.stem) if name.suffix == ".json" else record
 
 
 # The run.
@@ -186,7 +179,7 @@ class Cycle:
         first run to find it as it is, and the Review Queue state remembers it by its fingerprint while it stays so."""
         anything_queued = bool(ledger.entries)
         needs = output_titles(config, ("decisions", "review-queue"))
-        state.reported_before, review_state.reported = set(review_state.reported), []
+        state.reported_before = set(review_state.reported)
         if not folder.is_dir():
             if anything_queued and ledger.open_entries():
                 detail = f"Mandu's exchange folder `{folder}` does not exist, so no decision can reach gr0wthlab."
@@ -205,13 +198,12 @@ class Cycle:
         now = self.now()
         outcomes = ledger.take_decisions([d for d, _, _ in decisions], state.run_id, now)
         state.decisions = [outcome for outcome in outcomes if outcome.status in ("taken", "already-taken")]
-        open_items = {str(entry["id"]) for entry in ledger.open_entries()}
-        problems = [for_open_item(record, open_items) for record in problems]
         contents = {name: data for name, _, data in found}
         for outcome in outcomes:
             if outcome.status in ("unknown-item", "conflict"):
                 name = f"{outcome.decision.item}.json"
                 problems.append(unusable(f"decisions/{name}", [report.outcome_text(outcome.status)], contents[name]))
+        problems = [named_item(record) for record in problems]
         state.unusable = problems + sitting_problems
         review_state.reported = sorted({record.fingerprint for record in state.unusable})
         digests = {d.item: (str(path), digest) for d, path, digest in decisions}
@@ -260,13 +252,13 @@ class Cycle:
                 self.store.write_json(target, dict(record, taken_in_by_run=first))
                 state.sittings.append(sitting)
         taken = sum(1 for outcome in state.decisions if outcome.status == "taken")
-        detail = f"{report.plural(len(found), 'record')}, {taken} new since the previous run" + could_not_use(
-            problems, state
+        detail = f"{report.plural(len(found), 'record')}, {taken} new since the previous run" + (
+            f", {len(problems)} could not be used" if problems else ""
         )
         status = package.CHANGED if taken else package.READ
         state.sources.append(SourceLine("Mandu decisions", status, detail, needs))
-        sitting_detail = f"{report.plural(len(sittings_found), 'record')}, {len(state.sittings)} new" + could_not_use(
-            sitting_problems, state
+        sitting_detail = f"{report.plural(len(sittings_found), 'record')}, {len(state.sittings)} new" + (
+            f", {len(sitting_problems)} could not be used" if sitting_problems else ""
         )
         state.sources.append(
             SourceLine("Mandu sittings", package.CHANGED if state.sittings else package.READ, sitting_detail)
