@@ -438,6 +438,44 @@ class FailuresTest(CycleTestCase):
                 self.assertEqual(sorted(path.name for path in outside.iterdir()), ["empty"])
                 self.assertIn("20261011-name-status-stale", [entry["id"] for entry in self.queue()["open"]])
 
+    def test_the_agent_cannot_replace_an_area_or_this_run_s_set_aside_folder(self):
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        outside = self.root / "outside"
+        (outside / "decisions").mkdir(parents=True)
+        (outside / "decisions/20261011-name-status-stale.json").write_text('{"decision": "approve"}', encoding="utf-8")
+
+        def tree():
+            return {str(path.relative_to(outside)): path.is_dir() or path.read_bytes() for path in outside.rglob("*")}
+
+        untouched = tree()
+        replacements = {
+            "evidence": {"rmtree": ["evidence"], "symlink": {"evidence": str(outside)}},
+            "run-reports": {"rmtree": ["run-reports"], "symlink": {"run-reports": str(outside)}},
+            "review-queue/set-aside/{run}": {
+                "symlink": {"review-queue/set-aside/{run}": str(outside)},
+                "write": {"review-queue/items/forged.md": "forged"},
+            },
+        }
+        for number, (folder, behavior) in enumerate(replacements.items(), 1):
+            with self.subTest(folder=folder):
+                fakes.behave(self.codex_dir, behavior)
+                code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10 * number))
+                self.assertEqual(code, 0, out)
+                self.assertEqual(tree(), untouched)
+                reports = (self.workspace() / "run-reports").glob("2*Z-*.md")
+                run_id = sorted(path.name for path in reports if not path.name.endswith(".brief.md"))[-1][: -len(".md")]
+                report = self.report()
+                name = folder.replace("{run}", run_id)
+                self.assertIn(f"removed `{name}`, which the agent put in place of a folder", report)
+                for area in ("evidence", "run-reports"):
+                    path = self.workspace() / area
+                    self.assertTrue(path.is_dir() and not path.is_symlink() and (path / "README.md").is_file())
+                self.assertIn("20261011-name-status-stale", [entry["id"] for entry in self.queue()["open"]])
+        self.assertIn("set aside `review-queue/items/forged.md`, which the agent added", report)
+        snapshots = self.workspace() / "evidence/package-snapshots"
+        self.assertEqual(len(list(snapshots.glob("*.json"))), 4)
+
     def test_a_named_pipe_the_agent_leaves_does_not_stall_the_run(self):
         incoming = self.workspace() / "review-queue/incoming"
         incoming.mkdir()

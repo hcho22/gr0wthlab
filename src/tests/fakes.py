@@ -37,14 +37,18 @@ prompt = sys.stdin.read()
 behavior = json.loads((here / "behavior.json").read_text())
 brief = Path(re.search(r"Run brief, read it first: (\\S+)", prompt).group(1))
 workspace = brief.parents[1]
+run = brief.name[: -len(".brief.md")]
+def at(relative):
+    return workspace / relative.replace("{{run}}", run)
 for relative in behavior.get("rmtree", []):
-    shutil.rmtree(workspace / relative)
+    shutil.rmtree(at(relative))
 for relative, text in behavior.get("write", {{}}).items():
-    target = workspace / relative
+    target = at(relative)
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text)
 for relative, target in behavior.get("symlink", {{}}).items():
-    (workspace / relative).symlink_to(target)
+    at(relative).parent.mkdir(parents=True, exist_ok=True)
+    at(relative).symlink_to(target)
 for relative in behavior.get("delete", []):
     (workspace / relative).unlink()
 Path(args[args.index("--output-last-message") + 1]).write_text(behavior.get("summary", "Checked the package."))

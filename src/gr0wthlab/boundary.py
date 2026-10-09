@@ -84,7 +84,10 @@ def resolve_area(repo_root: Path, key: str, relative: object) -> Path:
         raise ConfigError(f"writable area {key} must be a plain relative path, got {relative!r}")
     if pure.parts[0] != WORKSPACE.name or len(pure.parts) != 2:
         raise ConfigError(f"writable area {key} must be a direct child of workspace/, got {relative!r}")
-    return canonical(repo_root / pure)
+    path = canonical(repo_root) / pure
+    if canonical(path) != path or (path.exists() and not path.is_dir()):
+        raise ConfigError(f"writable area {key} at {path} must be a real folder, not a link or a file")
+    return path
 
 
 def resolve_location(label: str, location: Mapping, env: Mapping[str, str], home: Path) -> Location:

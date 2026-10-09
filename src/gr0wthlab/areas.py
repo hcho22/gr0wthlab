@@ -31,7 +31,7 @@ class Areas:
     def check(self, path: Path, area_itself: bool = False) -> Path:
         """A path inside one of the areas, compared without following links below the area itself.
 
-        An area's own directory passes only when area_itself is set, for listing; nothing ever replaces it.
+        An area's own directory passes only when area_itself is set: to list it, or to remove what stands in its place.
         """
         absolute = Path(os.path.abspath(str(path)))
         if not any(is_within(absolute, area) and (area_itself or absolute != area) for area in self.paths.values()):
@@ -67,23 +67,33 @@ class Areas:
         os.replace(str(temporary), str(path))
 
     def check_parents(self, path: Path) -> None:
-        """No directory between the area and the path may be a symbolic link, or a write could leave the area."""
+        """Every folder from the path's parent up to and including its area is a real folder or not there yet, so a
+        write cannot leave the area through a link."""
         for parent in path.parents:
+            if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
+                raise ConfigError(f"refusing to write {path}: {parent} is not a real folder")
             if parent in self.paths.values():
                 return
-            if parent.is_symlink():
-                raise ConfigError(f"refusing to write {path}: {parent} is a symbolic link")
 
     def remove(self, path: Path) -> None:
         """Remove anything but a real directory: a file, a link, or a special file such as a named pipe."""
-        path = self.check(path)
+        path = self.check(path, area_itself=True)
         if path.is_symlink() or (path.exists() and not path.is_dir()):
             path.unlink()
+
+    def real_folder(self, path: Path) -> bool:
+        """Whether a path, and every folder above it up to and including its area, is a real folder."""
+        for folder in (path, *path.parents):
+            if folder.is_symlink() or not folder.is_dir():
+                return False
+            if folder in self.paths.values():
+                return True
+        return False
 
     def files(self, directory: Path) -> Iterator[Path]:
         """Every non-directory entry under a directory inside an area, without following links."""
         directory = self.check(directory, area_itself=True)
-        if not directory.is_dir() or directory.is_symlink():
+        if not self.real_folder(directory):
             return
         for root, subdirs, names in os.walk(str(directory)):
             for name in list(subdirs):

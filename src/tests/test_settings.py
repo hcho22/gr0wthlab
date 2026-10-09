@@ -114,6 +114,22 @@ class AreasTest(unittest.TestCase):
             self.areas.write_text(self.repo / "workspace/drafts/link/x.md", "x")
         self.assertEqual(list(elsewhere.iterdir()), [])
 
+    def test_an_area_replaced_by_a_link_is_never_read_or_written_through(self):
+        elsewhere = self.repo.parent / "elsewhere"
+        (elsewhere / "decisions").mkdir(parents=True)
+        (elsewhere / "decisions/record.json").write_text("{}", encoding="utf-8")
+        area = self.repo / "workspace/evidence"
+        area.rmdir()
+        area.symlink_to(elsewhere)
+        self.assertEqual(list(self.areas.files(area / "decisions")), [])
+        with self.assertRaisesRegex(ConfigError, "not a real folder"):
+            self.areas.write_json(area / "decisions/record.json", {"forged": True})
+        self.areas.remove(area)
+        self.assertFalse(os.path.lexists(str(area)))
+        self.assertEqual((elsewhere / "decisions/record.json").read_text(encoding="utf-8"), "{}")
+        self.areas.write_json(area / "decisions/record.json", {"a": 1})
+        self.assertTrue(area.is_dir() and not area.is_symlink())
+
     def test_read_plain_refuses_links(self):
         target = self.repo / "workspace/drafts/real.md"
         target.write_text("x", encoding="utf-8")
