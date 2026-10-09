@@ -126,10 +126,27 @@ class AreasTest(unittest.TestCase):
 
 
 class CheckIncomingTest(unittest.TestCase):
-    def test_reports_each_item(self):
+    def test_reports_each_item_as_the_launcher_would(self):
         with tempfile.TemporaryDirectory() as directory:
-            incoming = Path(directory)
-            (incoming / "good.md").write_text(fakes.PROPOSAL, encoding="utf-8")
+            queue_dir = Path(directory) / "workspace" / "review-queue"
+            incoming = queue_dir / "incoming"
+            (queue_dir / "items").mkdir(parents=True)
+            incoming.mkdir()
+            queued = fakes.proposal(extra="exchange: 1\nid: 20261011-queued\n")
+            (queue_dir / "items" / "20261011-queued.md").write_text(queued, encoding="utf-8")
+            entry = {
+                "id": "20261011-queued",
+                "kind": "package-change-proposal",
+                "ask": "x",
+                "status": "rejected",
+                "file": "review-queue/items/20261011-queued.md",
+                "published_at": "2026-10-11T23:00:00+00:00",
+            }
+            (queue_dir / "queue.json").write_text(
+                json.dumps({"exchange": 1, "open": [], "closed": [entry]}), encoding="utf-8"
+            )
+            (incoming / "good.md").write_text(fakes.proposal(title="a new ask"), encoding="utf-8")
+            (incoming / "again.md").write_text(fakes.PROPOSAL, encoding="utf-8")
             (incoming / "bad.md").write_text("# no front matter\n", encoding="utf-8")
             original = cli.INCOMING
             cli.INCOMING = incoming
@@ -143,7 +160,10 @@ class CheckIncomingTest(unittest.TestCase):
         text = out.getvalue()
         self.assertIn("OK good.md", text)
         self.assertIn("PROBLEM bad.md", text)
-        self.assertIn("2 items checked, 1 with problems", text)
+        self.assertIn(
+            "PROBLEM again.md\n  - asks the same as 20261011-queued, which is already queued or decided", text
+        )
+        self.assertIn("3 items checked, 2 with problems", text)
 
 
 if __name__ == "__main__":

@@ -9,8 +9,10 @@ import sys
 from pathlib import Path
 
 from . import codex, cycle, exchange, launcher, probe, schedule, settings
+from . import state as run_state
 from .areas import UnsafeFile, read_plain
 from .boundary import PRODUCT_REGISTRY, ConfigError, load_json
+from .queue import QUEUE_FILE, Ledger, QueueError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ENTRY = REPO_ROOT / "src" / "bin" / "gr0wthlab"
@@ -48,15 +50,36 @@ def parser() -> argparse.ArgumentParser:
     return root
 
 
+def queued_fingerprints(products: list[str]) -> tuple[dict[str, str], str | None]:
+    """Each queued item's fingerprint, mapped to its identifier, as of the last saved Review Queue."""
+    try:
+        ledger = Ledger.load(INCOMING.parent / QUEUE_FILE)
+    except QueueError as error:
+        return {}, f"repeats were not checked: {error}"
+    hashes, _ = run_state.item_hashes(INCOMING.parents[1], ledger.entries, products, run_state.ReviewQueueState())
+    seen: dict[str, str] = {}
+    for identifier, fingerprint in hashes.items():
+        seen.setdefault(fingerprint, identifier)
+    return seen, None
+
+
 def check_incoming(out=sys.stdout) -> int:
     """The same item check the launcher applies after the run, for the agent to use before it finishes."""
     products = [product["name"] for product in load_json(REPO_ROOT / PRODUCT_REGISTRY).get("products", [])]
     names = sorted(name for name in os.listdir(str(INCOMING))) if INCOMING.is_dir() else []
+    seen, warning = queued_fingerprints(products)
+    if warning:
+        print(warning, file=out)
     failed = 0
     for name in names:
         try:
             check = exchange.check_item(read_plain(INCOMING / name).decode("utf-8"), products)
             problems = check.problems
+            if check.item is not None:
+                fingerprint = exchange.item_hash(check.item)
+                if fingerprint in seen:
+                    problems = [f"asks the same as {seen[fingerprint]}, which is already queued or decided"]
+                seen.setdefault(fingerprint, name)
         except (UnsafeFile, OSError, UnicodeDecodeError) as error:
             problems = [f"unreadable: {error}"]
         slug = name[: -len(".md")] if name.endswith(".md") else ""
@@ -66,7 +89,7 @@ def check_incoming(out=sys.stdout) -> int:
         print(f"{'PROBLEM' if problems else 'OK'} {name}", file=out)
         for problem in problems:
             print(f"  - {problem}", file=out)
-    print(f"{len(names)} items checked, {failed} with problems", file=out)
+    print(f"{len(names)} item{'' if len(names) == 1 else 's'} checked, {failed} with problems", file=out)
     return 1 if failed else 0
 
 

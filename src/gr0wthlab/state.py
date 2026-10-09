@@ -311,7 +311,7 @@ def save(areas: Areas, states: States, run_id: str, at: str) -> None:
 
 
 def item_hashes(
-    areas: Areas,
+    workspace: Path,
     ledger_entries: Mapping[str, Mapping[str, object]],
     products: Sequence[str],
     previous: ReviewQueueState,
@@ -320,7 +320,10 @@ def item_hashes(
     hashes, problems = {}, []
     for identifier, entry in ledger_entries.items():
         try:
-            text = read_plain(areas.workspace / str(entry["file"])).decode("utf-8")
+            relative = Path(str(entry["file"]))
+            if relative.is_absolute() or ".." in relative.parts:
+                raise StateError("its path leaves workspace/")
+            text = read_plain(workspace / relative).decode("utf-8")
             check = exchange.check_item(text, products, published=True)
             if check.item is None:
                 raise StateError("; ".join(check.problems))

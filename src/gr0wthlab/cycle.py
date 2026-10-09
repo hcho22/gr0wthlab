@@ -292,7 +292,7 @@ class Cycle:
         now: datetime,
     ) -> None:
         """Bring the Review Queue state into line with the ledger, note every difference, and save every state."""
-        hashes, _ = run_state.item_hashes(areas, ledger.entries, products, states.review_queue)
+        hashes, _ = run_state.item_hashes(areas.workspace, ledger.entries, products, states.review_queue)
         first_queued = {
             identifier: report.local_date(str(entry["published_at"])) for identifier, entry in ledger.entries.items()
         }
@@ -460,7 +460,7 @@ class Cycle:
             state.problems.append(f"{error}; the Review Queue was left untouched this run")
         self.take_decisions(state, areas, folder, ledger)
         states = self.load_state(state, areas, ledger, run_id)
-        hashes, unreadable = run_state.item_hashes(areas, ledger.entries, products, states.review_queue)
+        hashes, unreadable = run_state.item_hashes(areas.workspace, ledger.entries, products, states.review_queue)
         state.problems += unreadable
         seen: dict[str, str] = {}
         for identifier, fingerprint in hashes.items():
