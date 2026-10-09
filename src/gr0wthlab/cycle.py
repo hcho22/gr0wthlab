@@ -14,7 +14,6 @@ import fcntl
 import hashlib
 import json
 import os
-import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
@@ -32,9 +31,10 @@ from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLi
 PRE_RUN_ENV = "GR0WTHLAB_PRE_RUN"
 EXIT_RECORDS = 4
 EXIT_BUSY = 5
+EXIT_STOPPED = 6
 CHECKOUTS = "checkouts"
 LOCK_FILE = "run.lock"
-REFUSED_DIR = "refused-runs"
+NOTES_DIR = "notes"
 SNAPSHOTS = "package-snapshots"
 SUMMARY_LIMIT = 4000
 # Records only the launcher writes; the agent's changes to them are undone after it finishes.
@@ -63,7 +63,7 @@ def head(repo_root: Path) -> str:
 
 
 def checkout_logs(log_dir: Path, repo_root: Path) -> Path:
-    """The log folder of one checkout's run lock and refused runs, apart from every other checkout on the Mac."""
+    """The log folder of one checkout's run lock and notes for its next report, apart from every other checkout."""
     return log_dir / CHECKOUTS / hashlib.sha256(str(canonical(repo_root)).encode("utf-8")).hexdigest()[:12]
 
 
@@ -134,39 +134,46 @@ def undo_agent_changes(areas: Areas, before: Mapping[Path, bytes], run_id: str, 
     """Restore launcher-only records the agent changed or removed, and set aside anything it added among them.
 
     A file or link the agent put in place of an area or a folder the launcher writes in is removed first, outermost
-    first, so nothing after it reads or writes through a link, and each of those folders is made accessible again.
+    first, so nothing after it reads or writes through a link, and the owner takes back each of those folders.
     Every folder the agent added among the records is removed last, so no later write finds a folder in its place.
+    A repair that fails is noted in areas.problems, which reach the notice, and never stops the run.
     """
     undone = []
     directories, files = protected_paths(areas)
     folders = [*areas.paths.values(), *directories, areas.path("review_queue", INCOMING)]
     for folder in folders + [areas.path("review_queue", SET_ASIDE, run_id)]:
-        if folder.is_symlink() or (folder.exists() and not folder.is_dir()):
-            areas.remove(folder)
-            undone.append(f"removed `{areas.relative(folder)}`, which the agent put in place of a folder")
-        elif folder.is_dir():
-            areas.make_accessible(folder)
+        try:
+            if folder.is_symlink() or (folder.exists() and not folder.is_dir()):
+                if areas.remove(folder):
+                    undone.append(f"removed `{areas.relative(folder)}`, which the agent put in place of a folder")
+            elif folder.is_dir():
+                areas.reclaim(folder)
+        except OSError as error:
+            areas.problems.append(f"could not undo the agent's change to `{areas.relative(folder)}` ({error})")
     after = protected_state(areas)
     present = set(files) | {path for directory in directories for path in areas.files(directory)}
     for path in sorted(present):
-        if path in before or (not path.exists() and not path.is_symlink()):
+        if path in before or not os.path.lexists(str(path)):
             continue
         name = areas.relative(path)
-        if path.is_dir() and not path.is_symlink():
-            shutil.rmtree(str(areas.check(path)))
-            undone.append(f"removed folder `{name}`, which the agent added")
-        else:
-            moved = ledger.set_aside(areas, path, name, run_id, [])
-            undone.append(
-                f"set aside `{name}`, which the agent added" + (f", as `{moved.moved_to}`" if moved.moved_to else "")
-            )
+        try:
+            if path.is_dir() and not path.is_symlink():
+                if areas.remove(path):
+                    undone.append(f"removed folder `{name}`, which the agent added")
+            else:
+                moved = ledger.set_aside(areas, path, name, run_id, [])
+                kept = f", as `{moved.moved_to}`" if moved.moved_to else ""
+                undone.append(f"set aside `{name}`, which the agent added{kept}")
+        except OSError as error:
+            areas.problems.append(f"could not undo the agent's change to `{name}` ({error})")
     for path, content in sorted(before.items()):
         if after.get(path) == content:
             continue
-        if path.is_dir() and not path.is_symlink():
-            shutil.rmtree(str(areas.check(path)))
-        areas.write_bytes(path, content)
-        undone.append(f"restored `{areas.relative(path)}`, which the agent changed or removed")
+        try:
+            areas.write_bytes(path, content)
+            undone.append(f"restored `{areas.relative(path)}`, which the agent changed or removed")
+        except (OSError, ConfigError) as error:
+            areas.problems.append(f"could not undo the agent's change to `{areas.relative(path)}` ({error})")
     for directory in directories:
         for folder in areas.remove_empty_folders(directory):
             undone.append(f"removed folder `{areas.relative(folder)}`, which the agent added")
@@ -407,11 +414,17 @@ class Cycle:
             rows.append([title, INCOMPLETE if gaps else COMPLETE, "; ".join(gaps) or done])
         state.outputs = rows
 
-    def lock(self, log_dir: Path, trigger: str) -> TextIO | None:
-        """This checkout's run lock, held until the returned file is closed; None if another run holds it.
+    def leave_note(self, log_dir: Path, run_id: str, line: str) -> None:
+        """A one-line note in this checkout's log folder, which its next run's report shows."""
+        folder = checkout_logs(log_dir, self.repo_root) / NOTES_DIR
+        folder.mkdir(parents=True, exist_ok=True)
+        temporary = folder / f".{run_id}.tmp"
+        temporary.write_text(line + "\n", encoding="utf-8")
+        os.replace(str(temporary), str(folder / f"{run_id}.txt"))
 
-        A refused run leaves a one-line record in the checkout's log folder, which its next run's report shows.
-        """
+    def lock(self, log_dir: Path, trigger: str) -> TextIO | None:
+        """This checkout's run lock, held until the returned file is closed; None if another run holds it, in which
+        case the refusal is left as a note for the checkout's next run report."""
         logs = checkout_logs(log_dir, self.repo_root)
         logs.mkdir(parents=True, exist_ok=True)
         handle = (logs / LOCK_FILE).open("a")
@@ -425,11 +438,7 @@ class Cycle:
                 f"Run {run_id} ({trigger}) was refused at {report.wall_clock(now):%A %Y-%m-%d %H:%M}:"
                 " another run was in progress."
             )
-            folder = logs / REFUSED_DIR
-            folder.mkdir(exist_ok=True)
-            temporary = folder / f".{run_id}.tmp"
-            temporary.write_text(line + "\n", encoding="utf-8")
-            os.replace(str(temporary), str(folder / f"{run_id}.txt"))
+            self.leave_note(log_dir, run_id, line)
             self.say("refusing to start: another run is in progress; the next run's report will say so")
             return None
         return handle
@@ -442,11 +451,22 @@ class Cycle:
         argv: Sequence[str],
         execve: Callable[[str, list[str], Mapping[str, str]], None] = os.execve,
     ) -> int:
-        lock = self.lock(launcher.default_log_dir(self.env, self.home), trigger)
+        log_dir = launcher.default_log_dir(self.env, self.home)
+        lock = self.lock(log_dir, trigger)
         if lock is None:
             return EXIT_BUSY
         with lock:
-            return self.locked_run(instruction, trigger, once, argv, execve)
+            try:
+                return self.locked_run(instruction, trigger, once, argv, execve)
+            except (OSError, ConfigError) as error:
+                now = self.now()
+                line = (
+                    f"A {trigger} run started at {report.wall_clock(now):%A %Y-%m-%d %H:%M} stopped before it"
+                    f" finished: {error}."
+                )
+                self.leave_note(log_dir, launcher.new_run_id(trigger, now), line)
+                self.say(f"the run stopped: {error}; the next run's report will say so")
+                return EXIT_STOPPED
 
     def locked_run(
         self,
@@ -550,6 +570,8 @@ class Cycle:
         brief = areas.path("run_reports", f"{run_id}.brief.md")
         areas.write_text(brief, report.render_brief(state, canonical(self.repo_root), areas.workspace))
 
+        for directory in protected_paths(areas)[0]:
+            areas.remove_empty_folders(directory)
         before = protected_state(areas)
         try:
             state.agent = launcher.run(
@@ -581,6 +603,8 @@ class Cycle:
         incoming = len(state.published) + len(state.set_aside)
         report_path = areas.path("run_reports", f"{run_id}.md")
         state.queue_after = ledger.ordered()
+        state.problems += areas.problems
+        areas.problems.clear()
         self.outputs(state, config, ledger_ok)
         notice = report.problems_notice(state, areas.relative(report_path))
         if notice and ledger_ok:
@@ -590,23 +614,41 @@ class Cycle:
             if repeated and ledger.entries[repeated]["status"] == OPEN:
                 state.notice = repeated  # the same problems are already waiting for the Founder
             else:
-                state.notice = ledger.publish(areas, item, "notice-run-problems", run_id, now)
-                state.published.append(state.notice)
+                try:
+                    state.notice = ledger.publish(areas, item, "notice-run-problems", run_id, now)
+                    state.published.append(state.notice)
+                except (OSError, ConfigError) as error:
+                    state.problems.append(f"the notice of this run's problems could not be written ({error})")
             state.queue_after = ledger.ordered()
             self.outputs(state, config, ledger_ok)
         if ledger_ok:
             ledger.mark_carried_over(sittings)
             next_run = report.next_due(now, config.weekly)
-            areas.write_json(ledger_path, ledger.as_json(run_id, now, areas.relative(report_path), next_run))
+            try:
+                areas.write_json(ledger_path, ledger.as_json(run_id, now, areas.relative(report_path), next_run))
+            except (OSError, ConfigError) as error:
+                state.problems.append(
+                    f"`review-queue/queue.json` could not be written, so Mandu sees the last one ({error})"
+                )
             state.queue_after = ledger.ordered()
-            self.save_state(state, areas, ledger, states, products, now)
+            try:
+                self.save_state(state, areas, ledger, states, products, now)
+            except (OSError, ConfigError) as error:
+                state.problems.append(f"the run state could not be saved ({error})")
         state.tallies = self.tallies(state, ledger, incoming)
-        refused = sorted((checkout_logs(log_dir, self.repo_root) / REFUSED_DIR).glob("*.txt"))
-        state.refused_runs = [path.read_text(encoding="utf-8").strip() for path in refused]
-        areas.write_text(report_path, report.render_report(state))
-        for path in refused:
-            path.unlink()
-        self.say(f"run report: {report_path}")
+        notes = sorted((checkout_logs(log_dir, self.repo_root) / NOTES_DIR).glob("*.txt"))
+        state.notes = [path.read_text(encoding="utf-8").strip() for path in notes]
+        state.problems += areas.problems
+        try:
+            areas.write_text(report_path, report.render_report(state))
+        except (OSError, ConfigError) as error:
+            line = f"Run {run_id} could not write its report `{areas.relative(report_path)}`: {error}."
+            self.leave_note(log_dir, run_id, line)
+            self.say(f"{line} The next run's report will say so.")
+        else:
+            for path in notes:
+                path.unlink()
+            self.say(f"run report: {report_path}")
 
         saved = None
         if production and config.records.save_after_run:
@@ -637,6 +679,7 @@ class Cycle:
             usage=state.usage,
             cost_usd=state.cost,
             queued=state.published,
+            problems=state.problems,
             set_aside=[item.name for item in state.set_aside],
             undone=state.restored,
         )

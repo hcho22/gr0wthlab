@@ -17,7 +17,7 @@ AREAS = ("evidence", "drafts", "review-queue", "weekly-reads", "run-reports", "i
 # Stands in for codex. `codex sandbox` answers the preflight as an enforcing sandbox would, without running anything;
 # `codex exec` plays the agent from behavior.json beside it, writing straight into the workspace.
 FAKE_CODEX = """#!{python}
-import json, re, shutil, sys
+import json, os, re, shutil, subprocess, sys
 from pathlib import Path
 
 here = Path(__file__).resolve().parent
@@ -42,6 +42,8 @@ def at(relative):
     return workspace / relative.replace("{{run}}", run)
 for relative in behavior.get("rmtree", []):
     shutil.rmtree(at(relative))
+for relative in behavior.get("delete", []):
+    at(relative).unlink()
 for relative, text in behavior.get("write", {{}}).items():
     target = at(relative)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -53,8 +55,10 @@ for relative, target in behavior.get("symlink", {{}}).items():
     at(relative).symlink_to(target)
 for relative, mode in behavior.get("chmod", {{}}).items():
     at(relative).chmod(mode)
-for relative in behavior.get("delete", []):
-    (workspace / relative).unlink()
+for relative, entry in behavior.get("acl", {{}}).items():
+    subprocess.run(["/bin/chmod", "+a", entry, str(at(relative))], check=True)
+for relative, flags in behavior.get("chflags", {{}}).items():
+    os.chflags(str(at(relative)), flags, follow_symlinks=False)
 Path(args[args.index("--output-last-message") + 1]).write_text(behavior.get("summary", "Checked the package."))
 usage = {{"input_tokens": 200000, "cached_input_tokens": 150000, "cache_write_input_tokens": 0, "output_tokens": 4000}}
 print(json.dumps({{"type": "turn.completed", "usage": usage}}))

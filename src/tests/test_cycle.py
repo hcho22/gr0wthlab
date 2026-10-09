@@ -6,6 +6,8 @@ import json
 import os
 import plistlib
 import re
+import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -13,7 +15,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
-from gr0wthlab import cli, cycle, exchange
+from gr0wthlab import cli, cycle, exchange, package
+from gr0wthlab.areas import Areas
 from gr0wthlab.report import next_due
 from tests import fakes
 
@@ -43,9 +46,15 @@ class CycleTestCase(unittest.TestCase):
         self.clock = fakes.Clock(fakes.SUNDAY_RUN)
 
     def tearDown(self):
+        if sys.platform == "darwin":
+            subprocess.run(["/bin/chmod", "-R", "-N", self.tmp.name], capture_output=True, check=False)
         for root, dirs, files in os.walk(self.tmp.name):
             for name in dirs + files:
-                os.chmod(os.path.join(root, name), 0o755)
+                path = os.path.join(root, name)
+                if hasattr(os, "chflags"):
+                    os.chflags(path, 0, follow_symlinks=False)
+                if not os.path.islink(path):
+                    os.chmod(path, 0o755)
         self.tmp.cleanup()
 
     def run_cycle(self, repo=None, trigger="on-demand", execve=None, at=None):
@@ -152,6 +161,16 @@ class FirstRunTest(CycleTestCase):
         self.assertIn("the review-queue run state was not valid", text)
         rebuilt = json.loads((self.workspace() / "run-reports/state/review-queue.json").read_text(encoding="utf-8"))
         self.assertEqual(rebuilt["carried"]["20261011-name-status-stale"]["carried_over_from"], day)
+
+    def test_state_files_the_launcher_sets_aside_are_not_reported_as_the_agent_s(self):
+        self.run_cycle()
+        for path in (self.workspace() / "run-reports/state").iterdir():
+            path.write_text("{broken", encoding="utf-8")
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(code, 0, out)
+        report = self.report()
+        self.assertIn("the review-queue run state was not valid", report)
+        self.assertNotIn("which the agent", report)
 
     def test_the_agent_sees_its_brief(self):
         self.run_cycle()
@@ -319,7 +338,7 @@ class RunLockTest(CycleTestCase):
         self.assertRegex(
             self.report(), r"\n- Run \S+-scheduled-\S+ \(scheduled\) was refused at .*: another run was in progress\.\n"
         )
-        self.assertEqual(list((cycle.checkout_logs(self.logs, self.repo) / cycle.REFUSED_DIR).iterdir()), [])
+        self.assertEqual(list((cycle.checkout_logs(self.logs, self.repo) / cycle.NOTES_DIR).iterdir()), [])
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10))
         self.assertNotIn("was refused", self.report())
 
@@ -515,6 +534,61 @@ class FailuresTest(CycleTestCase):
         self.assertEqual(code, 0, out)
         self.assertTrue((workspace / "evidence/decisions/20261011-name-status-stale.json").is_file())
 
+    def assert_complete(self, code, out):
+        self.assertEqual(code, 0, out)
+        workspace = self.workspace()
+        reports = (workspace / "run-reports").glob("2*Z-*.md")
+        run_id = sorted(path.name for path in reports if not path.name.endswith(".brief.md"))[-1][: -len(".md")]
+        self.assertEqual(self.queue()["updated_by_run"], run_id)
+        notice = next(entry for entry in self.queue()["open"] if entry["kind"] == "notice")
+        self.assertTrue((workspace / notice["file"]).is_file())
+        for workflow in ("review-queue", "listening", "outreach"):
+            state = json.loads((workspace / f"run-reports/state/{workflow}.json").read_text(encoding="utf-8"))
+            self.assertEqual(state["updated_by_run"], run_id)
+        return self.report()
+
+    def test_a_locked_folder_in_place_of_a_record_does_not_stop_the_run(self):
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        behavior = {
+            "delete": ["review-queue/queue.json", "evidence/README.md"],
+            "write": {"review-queue/queue.json/x/y.md": "hidden", "evidence/README.md/x/y.md": "hidden"},
+            "chmod": {"review-queue/queue.json/x": 0, "evidence/README.md/x": 0},
+        }
+        fakes.behave(self.codex_dir, behavior)
+        report = self.assert_complete(*self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10)))
+        self.assertIn("restored `review-queue/queue.json`", report)
+        self.assertIn("restored `evidence/README.md`", report)
+        self.assertTrue((self.workspace() / "evidence/README.md").is_file())
+
+    @unittest.skipUnless(sys.platform == "darwin", "BSD flags and ACLs are macOS's")
+    def test_flags_and_acls_the_agent_sets_do_not_stop_the_run(self):
+        self.exchange.mkdir()
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        behavior = {
+            "write": {"review-queue/items/forged.md": "forged", "review-queue/items/denied.md": "denied"},
+            "mkdir": ["evidence/decisions/locked"],
+            "acl": {
+                "review-queue/items/denied.md": "everyone deny delete,writesecurity",
+                "review-queue/items": "everyone deny add_file,delete_child,list,writesecurity",
+            },
+            "chflags": {
+                "evidence/decisions/locked": stat.UF_IMMUTABLE,
+                "review-queue/items/forged.md": stat.UF_IMMUTABLE,
+                "run-reports": stat.UF_IMMUTABLE,
+            },
+        }
+        fakes.behave(self.codex_dir, behavior)
+        report = self.assert_complete(*self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10)))
+        self.assertIn("removed folder `evidence/decisions/locked`, which the agent added", report)
+        for name in ("forged", "denied"):
+            self.assertIn(f"set aside `review-queue/items/{name}.md`, which the agent added", report)
+            self.assertFalse((self.workspace() / f"review-queue/items/{name}.md").exists())
+        self.assertEqual(os.lstat(str(self.workspace() / "run-reports")).st_flags, 0)
+        self.assertNotIn("could not undo", report)
+        self.assertNotIn("could not remove", report)
+
     def test_a_named_pipe_the_agent_leaves_does_not_stall_the_run(self):
         incoming = self.workspace() / "review-queue/incoming"
         incoming.mkdir()
@@ -573,6 +647,36 @@ class FailuresTest(CycleTestCase):
         code = runner.run(self.repo / "workspace/instructions/x.md", "on-demand", None, [])
         self.assertEqual(code, 2)
         self.assertIn("src/instructions", out.getvalue())
+
+
+class NotesTest(CycleTestCase):
+    def test_a_report_that_cannot_be_written_is_named_in_the_next_one(self):
+        original = Areas.write_text
+
+        def refuse_reports(areas, path, text):
+            if path.parent.name == "run-reports" and not path.name.endswith(".brief.md"):
+                raise PermissionError(1, "Operation not permitted", str(path))
+            original(areas, path, text)
+
+        with mock.patch.object(Areas, "write_text", refuse_reports):
+            code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        self.assertIn("could not write its report", out)
+        reports = [path for path in (self.workspace() / "run-reports").glob("2*Z-*.md") if ".brief." not in path.name]
+        self.assertEqual(reports, [])
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10))
+        self.assertRegex(self.report(), r"\n- Run \S+ could not write its report `run-reports/\S+\.md`: ")
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=20))
+        self.assertNotIn("could not write its report", self.report())
+
+    def test_a_run_that_cannot_finish_stops_and_the_next_report_says_so(self):
+        with mock.patch.object(package, "record", side_effect=PermissionError(1, "Operation not permitted")):
+            code, out = self.run_cycle(trigger="scheduled")
+        self.assertEqual(code, cycle.EXIT_STOPPED)
+        self.assertIn("the run stopped: [Errno 1] Operation not permitted", out)
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10))
+        self.assertIn("scheduled run started at", self.report())
+        self.assertIn("stopped before it finished: [Errno 1] Operation not permitted.", self.report())
 
 
 class ProductionCloneTest(CycleTestCase):

@@ -16,6 +16,7 @@ from pathlib import Path
 
 from . import exchange
 from .areas import Areas, UnsafeFile, read_plain
+from .boundary import ConfigError
 
 OPEN = "open"
 APPROVED = "approved"
@@ -157,7 +158,11 @@ class Ledger:
             if item is None:
                 set_aside.append(self.set_aside(areas, path, name, run_id, problems))
                 continue
-            identifier = self.publish(areas, item, slug_of(name), run_id, now)
+            try:
+                identifier = self.publish(areas, item, slug_of(name), run_id, now)
+            except (OSError, ConfigError) as error:
+                set_aside.append(self.set_aside(areas, path, name, run_id, [f"could not be queued ({error})"]))
+                continue
             areas.remove(path)
             published.append(identifier)
             seen[exchange.item_hash(item)] = identifier
@@ -205,7 +210,7 @@ class Ledger:
         target = areas.path("review_queue", SET_ASIDE, run_id, name.replace("/", "--"))
         try:
             areas.write_bytes(target, read_plain(path))
-        except (UnsafeFile, OSError) as error:
+        except (UnsafeFile, OSError, ConfigError) as error:
             problems = list(problems) + [f"not kept: {error}"]
             target = None
         areas.remove(path)

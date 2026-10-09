@@ -66,7 +66,7 @@ class RunState:
     notice: str | None = None
     tallies: list[Tally] = field(default_factory=list)
     state_notes: list[str] = field(default_factory=list)
-    refused_runs: list[str] = field(default_factory=list)
+    notes: list[str] = field(default_factory=list)
 
     @property
     def lateness(self) -> timedelta | None:
@@ -312,7 +312,7 @@ def summary_lines(state: RunState) -> list[str]:
     carried = sum(1 for entry in open_items if entry.get("carried_over"))
     agent = state.agent.get("exit_code")
     lines = [f"- {run_tally(state.tallies).line()}", f"- {start_line(state)}"]
-    lines += [f"- {line}" for line in state.refused_runs]
+    lines += [f"- {line}" for line in state.notes]
     if agent == 0:
         lines.append("- The run finished.")
     elif not state.agent.get("agent_started"):
