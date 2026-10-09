@@ -49,9 +49,11 @@ class ItemCheckTest(unittest.TestCase):
 
     def test_the_agent_leaves_out_the_id_and_a_published_item_has_one(self):
         self.assertTrue(exchange.check_item(item(extra_fields="id: 20261011-x\n"), PRODUCTS).problems)
-        self.assertEqual(exchange.check_item(item(extra_fields="exchange: 1\n"), PRODUCTS).problems, [])
+        self.assertEqual(
+            exchange.check_item(item(extra_fields=f"exchange: {exchange.EXCHANGE_VERSION}\n"), PRODUCTS).problems, []
+        )
         self.assertTrue(exchange.check_item(item(), PRODUCTS, published=True).problems)
-        published = item(extra_fields="exchange: 1\nid: 20261011-fix-status\n")
+        published = item(extra_fields=f"exchange: {exchange.EXCHANGE_VERSION}\nid: 20261011-fix-status\n")
         self.assertEqual(exchange.check_item(published, PRODUCTS, published=True).problems, [])
 
     def test_nothing_else_is_allowed(self):
@@ -89,22 +91,26 @@ class ItemCheckTest(unittest.TestCase):
         for body, fits in ((at_limit, True), (over, False)):
             with self.subTest(fits=fits):
                 self.assertEqual(exchange.check_item(item(body=body), PRODUCTS).item is not None, fits)
-                fields = dict(short.fields, exchange="1", id="20261011-fix-status")
+                fields = dict(short.fields, exchange=str(exchange.EXCHANGE_VERSION), id="20261011-fix-status")
                 published = exchange.render_item(fields, short.ask, body, short.touches, short.evidence)
                 self.assertEqual(exchange.check_item(published, PRODUCTS, published=True).item is not None, fits)
 
     def test_render_writes_a_published_item_that_passes(self):
         check = exchange.check_item(item(extra_fields="supersedes: 20261004-old\n"), PRODUCTS)
-        fields = dict(check.item.fields, exchange="1", id="20261011-fix-status")
+        fields = dict(check.item.fields, exchange=str(exchange.EXCHANGE_VERSION), id="20261011-fix-status")
         text = exchange.render_item(fields, check.item.ask, check.item.body, check.item.touches, check.item.evidence)
-        self.assertTrue(text.startswith("---\nexchange: 1\nid: 20261011-fix-status\nkind: package-change-proposal\n"))
+        self.assertTrue(
+            text.startswith(
+                f"---\nexchange: {exchange.EXCHANGE_VERSION}\nid: 20261011-fix-status\nkind: package-change-proposal\n"
+            )
+        )
         again = exchange.check_item(text, PRODUCTS, published=True)
         self.assertEqual(again.problems, [])
         self.assertEqual(again.item.fields["supersedes"], "20261004-old")
 
 
 DECISION = {
-    "exchange": 1,
+    "exchange": exchange.EXCHANGE_VERSION,
     "item": "20261011-fix-status",
     "decision": "reject",
     "reason": "Keep the legal line until counsel confirms.",
@@ -144,7 +150,7 @@ class DecisionTest(unittest.TestCase):
         self.assertTrue(self.parse(decision="maybe")[1])
         self.assertTrue(self.parse(item="20261011-other")[1])
         self.assertTrue(self.parse(decided_at="2026-10-11T19:42:00")[1])
-        self.assertTrue(self.parse(exchange=2)[1])
+        self.assertTrue(self.parse(exchange=1)[1], "an earlier version is reported, not guessed at")
         self.assertTrue(self.parse(sitting="Oct 11")[1])
         self.assertTrue(exchange.parse_decision("x", ["not", "an", "object"])[1])
 
@@ -154,12 +160,13 @@ class DecisionTest(unittest.TestCase):
 
 class SittingTest(unittest.TestCase):
     def test_minutes_and_date(self):
-        sitting, problems = exchange.parse_sitting("2026-10-11", {"exchange": 1, "date": "2026-10-11", "minutes": 48})
+        good = {"exchange": exchange.EXCHANGE_VERSION, "date": "2026-10-11", "minutes": 48}
+        sitting, problems = exchange.parse_sitting("2026-10-11", good)
         self.assertEqual(problems, [])
         self.assertEqual(sitting.minutes, 48)
         for bad in ({"minutes": 0}, {"minutes": True}, {"minutes": "48"}, {"date": "2026-10-12"}):
             with self.subTest(bad=bad):
-                record = dict({"exchange": 1, "date": "2026-10-11", "minutes": 48}, **bad)
+                record = dict(good, **bad)
                 self.assertTrue(exchange.parse_sitting("2026-10-11", record)[1])
 
 

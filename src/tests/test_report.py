@@ -115,7 +115,7 @@ class NoticeTest(unittest.TestCase):
         title, body, touches, evidence = report.problems_notice(state, "run-reports/R.md")
         self.assertIn("- And more: the run report lists every problem.", body)
         self.assertIn("- `odd # name.md`: name it <slug>.md", body)
-        fields = {"exchange": "1", "id": "20261011-notice-run-problems", "kind": "notice"}
+        fields = {"exchange": str(exchange.EXCHANGE_VERSION), "id": "20261011-notice-run-problems", "kind": "notice"}
         text = exchange.render_item(fields, title, body, touches, evidence)
         self.assertEqual(exchange.check_item(text, [], published=True).problems, [])
 
@@ -128,6 +128,22 @@ class NoticeTest(unittest.TestCase):
         self.assertIn("| Weekly Read memo | not built yet | US-ME12 |", text)
         self.assertIn("1 skipped", text)
         self.assertTrue(text.startswith("# Run report: R\n\n## Summary\n"))
+
+
+class NextDueTest(unittest.TestCase):
+    def test_the_next_weekly_time_after_a_run_with_its_offset(self):
+        weekly = ("sunday", "16:00")
+        for finished, due in (
+            (local(2026, 10, 11, 16, 40), local(2026, 10, 18, 16)),
+            (local(2026, 10, 11, 15, 0), local(2026, 10, 11, 16)),
+            (local(2026, 10, 14, 9, 0), local(2026, 10, 18, 16)),
+            (local(2026, 10, 30, 16, 40), local(2026, 11, 1, 16)),
+        ):
+            with self.subTest(finished=finished):
+                next_run = report.next_due(finished, weekly)
+                self.assertIsNotNone(next_run.utcoffset())
+                self.assertEqual(next_run, due)
+                self.assertEqual(report.wall_clock(next_run), datetime(due.year, due.month, due.day, 16, 0))
 
 
 class DurationTest(unittest.TestCase):

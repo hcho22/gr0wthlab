@@ -104,6 +104,11 @@ def due_time(started: datetime, weekly: tuple[str, str] | None = None, once: str
     return due
 
 
+def next_due(after: datetime, weekly: tuple[str, str]) -> datetime:
+    """The first weekly time after a moment, in the Mac's local time with its UTC offset."""
+    return (due_time(after, weekly) + timedelta(days=7)).astimezone()
+
+
 def duration(span: timedelta) -> str:
     minutes = int(span.total_seconds() // 60)
     days, minutes = divmod(minutes, 24 * 60)

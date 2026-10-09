@@ -4,12 +4,14 @@ import fcntl
 import io
 import json
 import os
+import re
 import tempfile
 import unittest
-from datetime import timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from gr0wthlab import cycle, exchange
+from gr0wthlab.report import next_due
 from tests import fakes
 
 
@@ -67,7 +69,7 @@ class CycleTestCase(unittest.TestCase):
         folder = self.exchange / "decisions"
         folder.mkdir(parents=True, exist_ok=True)
         record = {
-            "exchange": 1,
+            "exchange": exchange.EXCHANGE_VERSION,
             "item": item,
             "decision": decision,
             "reason": reason,
@@ -82,7 +84,9 @@ class CycleTestCase(unittest.TestCase):
         day = day or fakes.SUNDAY_RUN.astimezone().strftime("%Y-%m-%d")
         folder = self.exchange / "sittings"
         folder.mkdir(parents=True, exist_ok=True)
-        (folder / f"{day}.json").write_text(json.dumps({"exchange": 1, "date": day, "minutes": 41}), encoding="utf-8")
+        (folder / f"{day}.json").write_text(
+            json.dumps({"exchange": exchange.EXCHANGE_VERSION, "date": day, "minutes": 41}), encoding="utf-8"
+        )
         return day
 
 
@@ -104,6 +108,9 @@ class FirstRunTest(CycleTestCase):
         queue = self.queue()
         self.assertEqual([entry["id"] for entry in queue["open"]], ["20261011-name-status-stale"])
         self.assertFalse(queue["open"][0]["carried_over"])
+        next_run = datetime.fromisoformat(queue["next_run"])
+        self.assertEqual(next_run, next_due(datetime.fromisoformat(queue["updated_at"]), ("sunday", "16:00")))
+        self.assertTrue(timedelta(0) < next_run - datetime.fromisoformat(queue["updated_at"]) <= timedelta(days=7))
         item = (workspace / "review-queue/items/20261011-name-status-stale.md").read_text(encoding="utf-8")
         self.assertEqual(exchange.check_item(item, ["RepToday", "Immerse"], published=True).problems, [])
         self.assertEqual(list((workspace / "review-queue/incoming").iterdir()), [])
@@ -289,10 +296,15 @@ class CarryOverTest(CycleTestCase):
 
 
 class RunLockTest(CycleTestCase):
+    def hold_lock(self, repo):
+        logs = cycle.checkout_logs(self.logs, repo)
+        logs.mkdir(parents=True, exist_ok=True)
+        held = (logs / cycle.LOCK_FILE).open("a")
+        fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return held
+
     def test_a_run_started_while_another_runs_is_refused_and_the_next_report_says_so(self):
-        self.logs.mkdir(parents=True)
-        with (self.logs / cycle.LOCK_FILE).open("a") as held:
-            fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with self.hold_lock(self.repo):
             code, out = self.run_cycle(trigger="scheduled")
         self.assertEqual(code, cycle.EXIT_BUSY)
         self.assertIn("refusing to start: another run is in progress", out)
@@ -304,9 +316,23 @@ class RunLockTest(CycleTestCase):
         self.assertRegex(
             self.report(), r"\n- Run \S+-scheduled-\S+ \(scheduled\) was refused at .*: another run was in progress\.\n"
         )
-        self.assertEqual(list((self.logs / cycle.REFUSED_DIR).iterdir()), [])
+        self.assertEqual(list((cycle.checkout_logs(self.logs, self.repo) / cycle.REFUSED_DIR).iterdir()), [])
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10))
         self.assertNotIn("was refused", self.report())
+
+    def test_each_checkout_has_its_own_lock_and_refused_runs(self):
+        other = fakes.make_repo(self.root / "worktree", self.env)
+        with self.hold_lock(other):
+            code, out = self.run_cycle(trigger="scheduled")
+            self.assertEqual(code, 0, out)
+            self.assertEqual(self.run_cycle(repo=other, at=fakes.SUNDAY_RUN + timedelta(minutes=5))[0], cycle.EXIT_BUSY)
+        with self.hold_lock(self.repo):
+            refused, _ = self.run_cycle(trigger="scheduled", at=fakes.SUNDAY_RUN + timedelta(minutes=10))
+            self.assertEqual(refused, cycle.EXIT_BUSY)
+        self.run_cycle(repo=other, at=fakes.SUNDAY_RUN + timedelta(minutes=15))
+        self.assertEqual(re.findall(r"\(([a-z-]+)\) was refused", self.report(other)), ["on-demand"])
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=20))
+        self.assertEqual(re.findall(r"\(([a-z-]+)\) was refused", self.report()), ["scheduled"])
 
 
 class FailuresTest(CycleTestCase):

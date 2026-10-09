@@ -9,7 +9,7 @@ import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
-from gr0wthlab import boundary, cli, settings
+from gr0wthlab import boundary, cli, exchange, settings
 from gr0wthlab.areas import Areas, UnsafeFile, read_plain
 from gr0wthlab.boundary import ConfigError
 from tests import fakes
@@ -132,7 +132,7 @@ class CheckIncomingTest(unittest.TestCase):
             incoming = queue_dir / "incoming"
             (queue_dir / "items").mkdir(parents=True)
             incoming.mkdir()
-            queued = fakes.proposal(extra="exchange: 1\nid: 20261011-queued\n")
+            queued = fakes.proposal(extra=f"exchange: {exchange.EXCHANGE_VERSION}\nid: 20261011-queued\n")
             (queue_dir / "items" / "20261011-queued.md").write_text(queued, encoding="utf-8")
             entry = {
                 "id": "20261011-queued",
@@ -143,7 +143,7 @@ class CheckIncomingTest(unittest.TestCase):
                 "published_at": "2026-10-11T23:00:00+00:00",
             }
             (queue_dir / "queue.json").write_text(
-                json.dumps({"exchange": 1, "open": [], "closed": [entry]}), encoding="utf-8"
+                json.dumps({"exchange": exchange.EXCHANGE_VERSION, "open": [], "closed": [entry]}), encoding="utf-8"
             )
             (incoming / "good.md").write_text(fakes.proposal(title="a new ask"), encoding="utf-8")
             (incoming / "twin.md").write_text(fakes.proposal(title="a new ask"), encoding="utf-8")

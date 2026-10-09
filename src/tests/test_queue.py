@@ -55,7 +55,9 @@ class IncomingTest(LedgerTestCase):
         self.assertEqual((published, set_aside), (["20261011-name-status-stale"], []))
         item = self.repo / "workspace/review-queue/items/20261011-name-status-stale.md"
         self.assertTrue(
-            item.read_text(encoding="utf-8").startswith("---\nexchange: 1\nid: 20261011-name-status-stale\n")
+            item.read_text(encoding="utf-8").startswith(
+                f"---\nexchange: {exchange.EXCHANGE_VERSION}\nid: 20261011-name-status-stale\n"
+            )
         )
         entry = self.ledger.entries["20261011-name-status-stale"]
         self.assertEqual(entry["status"], OPEN)
@@ -208,7 +210,9 @@ class OrderAndPersistenceTest(LedgerTestCase):
         self.ledger.take_decisions([(decision("20261011-old"), "x.json")], "RUN2", NOW)
         self.drop("kept.md", fakes.PROPOSAL)
         self.take("RUN1")
-        data = self.ledger.as_json("RUN2", NOW, "run-reports/RUN2.md")
+        next_run = datetime(2026, 10, 18, 16, 0).astimezone()
+        data = self.ledger.as_json("RUN2", NOW, "run-reports/RUN2.md", next_run)
+        self.assertEqual(datetime.fromisoformat(data["next_run"]), next_run)
         self.assertEqual([entry["id"] for entry in data["open"]], ["20261011-kept", "20261018-new"])
         self.assertEqual([entry["id"] for entry in data["closed"]], ["20261011-old"])
         path = self.repo / "workspace/review-queue/queue.json"
@@ -222,7 +226,7 @@ class OrderAndPersistenceTest(LedgerTestCase):
         path.write_text("{not json", encoding="utf-8")
         with self.assertRaises(QueueError):
             Ledger.load(path)
-        path.write_text(json.dumps({"exchange": 2}), encoding="utf-8")
+        path.write_text(json.dumps({"exchange": 1, "open": [], "closed": []}), encoding="utf-8")
         with self.assertRaises(QueueError):
             Ledger.load(path)
         self.assertEqual(len(Ledger.load(path.with_name("absent.json")).entries), 0)

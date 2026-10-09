@@ -56,7 +56,8 @@ If the Mac is asleep at that time, launchd starts the run when it wakes, and the
 ~/gr0wthlab/src/bin/gr0wthlab run
 ```
 
-Only one run works at a time: a run started while another is in progress, scheduled or on demand, refuses to start with exit code 5, and the next run's report says it was refused.
+Only one run works at a time in each checkout: a run started while another is in progress in the same checkout, scheduled or on demand, refuses to start with exit code 5, and that checkout's next run report says it was refused.
+Each checkout keeps its run lock and refused-run records in its own folder under `~/Library/Logs/gr0wthlab/checkouts/`, so a run in a firstmate worktree never blocks or hides a production run.
 
 ## Stop or remove the schedule
 

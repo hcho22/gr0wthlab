@@ -4,8 +4,8 @@ Order: bring the production clone up to origin's main; snapshot the Go-To-Market
 decisions from Mandu; brief the agent and run it inside the sandbox (launcher.run); undo any change it made to
 records only the launcher writes; queue the items it wrote that pass the format; write the Review Queue and the run
 report; commit and push workspace/. Every step but the agent is deterministic code outside the sandbox, and every
-write it makes goes through Areas, so it stays inside the six areas. One run at a time holds the run lock from the
-sync to the saved records; a run started meanwhile refuses to start, and the next run's report says so.
+write it makes goes through Areas, so it stays inside the six areas. One run at a time per checkout holds its run lock
+from the sync to the saved records; a run started meanwhile refuses to start, and that checkout's next report says so.
 """
 
 from __future__ import annotations
@@ -32,6 +32,7 @@ from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLi
 PRE_RUN_ENV = "GR0WTHLAB_PRE_RUN"
 EXIT_RECORDS = 4
 EXIT_BUSY = 5
+CHECKOUTS = "checkouts"
 LOCK_FILE = "run.lock"
 REFUSED_DIR = "refused-runs"
 SNAPSHOTS = "package-snapshots"
@@ -59,6 +60,11 @@ def head(repo_root: Path) -> str:
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
+
+
+def checkout_logs(log_dir: Path, repo_root: Path) -> Path:
+    """The log folder of one checkout's run lock and refused runs, apart from every other checkout on the Mac."""
+    return log_dir / CHECKOUTS / hashlib.sha256(str(canonical(repo_root)).encode("utf-8")).hexdigest()[:12]
 
 
 def output_titles(config: settings.Settings, keys: Sequence[str]) -> tuple[str, ...]:
@@ -387,12 +393,13 @@ class Cycle:
         state.outputs = rows
 
     def lock(self, log_dir: Path, trigger: str) -> TextIO | None:
-        """The run lock, held until the returned file is closed; None if another run holds it.
+        """This checkout's run lock, held until the returned file is closed; None if another run holds it.
 
-        A refused run leaves a one-line record in the log folder, which the next run's report shows.
+        A refused run leaves a one-line record in the checkout's log folder, which its next run's report shows.
         """
-        log_dir.mkdir(parents=True, exist_ok=True)
-        handle = (log_dir / LOCK_FILE).open("a")
+        logs = checkout_logs(log_dir, self.repo_root)
+        logs.mkdir(parents=True, exist_ok=True)
+        handle = (logs / LOCK_FILE).open("a")
         try:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
@@ -403,7 +410,7 @@ class Cycle:
                 f"Run {run_id} ({trigger}) was refused at {report.wall_clock(now):%A %Y-%m-%d %H:%M}:"
                 " another run was in progress."
             )
-            folder = log_dir / REFUSED_DIR
+            folder = logs / REFUSED_DIR
             folder.mkdir(exist_ok=True)
             temporary = folder / f".{run_id}.tmp"
             temporary.write_text(line + "\n", encoding="utf-8")
@@ -576,11 +583,12 @@ class Cycle:
             self.outputs(state, config, ledger_ok)
         if ledger_ok:
             ledger.mark_carried_over(sittings)
-            areas.write_json(ledger_path, ledger.as_json(run_id, now, areas.relative(report_path)))
+            next_run = report.next_due(now, config.weekly)
+            areas.write_json(ledger_path, ledger.as_json(run_id, now, areas.relative(report_path), next_run))
             state.queue_after = ledger.ordered()
             self.save_state(state, areas, ledger, states, products, now)
         state.tallies = self.tallies(state, ledger, incoming)
-        refused = sorted((log_dir / REFUSED_DIR).glob("*.txt"))
+        refused = sorted((checkout_logs(log_dir, self.repo_root) / REFUSED_DIR).glob("*.txt"))
         state.refused_runs = [path.read_text(encoding="utf-8").strip() for path in refused]
         areas.write_text(report_path, report.render_report(state))
         for path in refused:

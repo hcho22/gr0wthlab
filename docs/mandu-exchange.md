@@ -1,4 +1,4 @@
-# Mandu exchange, version 1
+# Mandu exchange, version 2
 
 How gr0wthlab (the Marketing Engineer) and Mandu pass the Review Queue and the Founder's decisions between them.
 Mandu's own agent builds Mandu's side from this page.
@@ -22,7 +22,7 @@ To move the folder, change that configuration through a gr0wthlab pull request.
 ## The sitting
 
 1. Read `queue.json`.
-   If its `updated_at` is more than eight days old, tell the Founder first that this week's run has not happened.
+   If the time in its `next_run` has passed, tell the Founder first that the weekly run due then has not finished, so the queue and report are from an earlier run.
 2. Show the summary at the top of the run report that `queue.json` names in `run_report`.
 3. Present each entry of `open`, in the listed order, by showing its item file.
    Skip any entry that already has a decision record.
@@ -41,7 +41,7 @@ Each item is one Markdown file, named by its identifier, holding the front matte
 
 ```markdown
 ---
-exchange: 1
+exchange: 2
 id: 20261011-trademark-status-stale
 kind: package-change-proposal
 product: RepToday
@@ -89,10 +89,11 @@ A notice is informational, such as a failed source or a change to the Marketing 
 
 ```json
 {
-  "exchange": 1,
+  "exchange": 2,
   "updated_by_run": "20261011T230002Z-scheduled-1a2b",
   "updated_at": "2026-10-11T23:41:09+00:00",
   "run_report": "run-reports/20261011T230002Z-scheduled-1a2b.md",
+  "next_run": "2026-10-18T16:00:00-07:00",
   "open": [
     {
       "id": "20261011-trademark-status-stale",
@@ -108,6 +109,8 @@ A notice is informational, such as a failed source or a change to the Marketing 
 }
 ```
 
+`next_run` is when the next weekly run is due on gr0wthlab's schedule, and every run that writes `queue.json` moves it forward.
+Once it has passed, that run was missed, started late, is still running, or was refused because another run was in progress.
 `open` is already in presentation order: posts by nearest slot first, then messages, Weekly Read decisions, Dispatch requests, package-change proposals, and notices, oldest first within each kind.
 `carried_over` is `true` for an item that was open at an earlier sitting and left undecided, and `carried_over_from` then gives the date of the first such sitting.
 An item queued after the latest sitting is not carried over, whichever run queued it.
@@ -120,7 +123,7 @@ One file per decided item, `decisions/<id>.json`, written once and never edited 
 
 ```json
 {
-  "exchange": 1,
+  "exchange": 2,
   "item": "20261011-trademark-status-stale",
   "decision": "reject",
   "reason": "Keep the legal line until counsel confirms the filing.",
@@ -145,7 +148,7 @@ Such a record is not a decision, so Mandu fixes it by rewriting it in this forma
 One file per sitting, `sittings/<YYYY-MM-DD>.json`, with the minutes the Founder spent, measured by Mandu or reported by the Founder:
 
 ```json
-{"exchange": 1, "date": "2026-10-11", "minutes": 48, "note": null}
+{"exchange": 2, "date": "2026-10-11", "minutes": 48, "note": null}
 ```
 
 `minutes` is a whole number from 1 to 600, and `date` equals the file name.
@@ -153,7 +156,8 @@ Write it when the sitting ends: gr0wthlab counts an item as left undecided at th
 
 ## Rules for both sides
 
-- Every record states `"exchange": 1`, and every item states `exchange: 1`; a reader that meets a version it does not know reports it and never guesses.
+- Every record states `"exchange": 2`, and every item states `exchange: 2`; a reader that meets a version it does not know reports it and never guesses.
+- Version 2 replaced the eight-day staleness rule with `next_run`, and added `carried_over_from`.
 - Times carry their UTC offset; dates are `YYYY-MM-DD`.
 - Write each file whole: write a temporary file whose name starts with `.` in the same folder, then rename it; both sides ignore files whose names start with `.`.
 - Neither side ever writes, moves, or deletes a file in the other's repository.

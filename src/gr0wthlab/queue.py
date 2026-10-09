@@ -245,8 +245,8 @@ class Ledger:
             else:
                 entry.pop("carried_over_from", None)
 
-    def as_json(self, run_id: str, now: datetime, report: str) -> dict[str, object]:
-        """queue.json: the open items in presentation order, then every closed item."""
+    def as_json(self, run_id: str, now: datetime, report: str, next_run: datetime) -> dict[str, object]:
+        """queue.json: when the next weekly run is due, the open items in presentation order, then every closed item."""
         closed = sorted(
             (entry for entry in self.entries.values() if entry["status"] != OPEN),
             key=lambda entry: (str(entry.get("closed_at", "")), str(entry["id"])),
@@ -256,6 +256,7 @@ class Ledger:
             "updated_by_run": run_id,
             "updated_at": now.isoformat(),
             "run_report": report,
+            "next_run": next_run.isoformat(),
             "paths": "Every path here is relative to the workspace/ directory that holds this file's folder.",
             "open": self.ordered(),
             "closed": closed,

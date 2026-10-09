@@ -209,14 +209,22 @@ The weekly run itself was run live through the launcher on the same day; Mandu's
 
 On 2026-10-09 the run gained a per-workflow run state (`workspace/run-reports/state/`, `src/gr0wthlab/state.py`) and a `checked=N acted=N note=...` line atop every run report.
 It changed nothing the boundary check exercises (the launcher's agent start, `codex.py`, `boundary.py`, the probe, `runtime.json`, `products.json`), so the check above still stands; `preflight` was re-run and passed again.
-The affected runs were repeated live against Mandu as it is, and Mandu was again unchanged after each:
+The affected runs were repeated live against Mandu as it is, and Mandu was again unchanged after each.
+Review then changed what carries over: an item carries over once Mandu records a sitting that left it undecided, no longer once a later run starts.
+It also moved the exchange to version 2, which adds `next_run` to the queue, and gave each checkout its own run lock.
+The round trip and the failed source were therefore run again from a linked worktree on that code, with Codex CLI 0.160.0, and those runs replace the earlier ones below:
 
 | Run | What it showed |
 | --- | --- |
 | `20261009T122859Z-on-demand-1477` | The trademark contradiction queued as one proposal citing both sides; the report opened with `checked=16 acted=1`, and the three state files were written |
-| `20261009T123014Z-on-demand-9729`, `20261009T123108Z-on-demand-0385` | One item of each kind, then two approvals, two rejections with reasons, and two undecided: every decision matched and kept as Evidence, the undecided items carried over and counted in the state, and a word-for-word re-ask of the rejected proposal set aside as asking the same as it |
-| `20261009T123400Z-on-demand-15d7` | A failed source named with its reason, a notice queued, its outputs marked incomplete, and the carried items counted at two runs |
+| `20261009T133037Z-on-demand-28d5`, `20261009T133107Z-on-demand-1ebc` | One item of each kind, queued post first with `next_run` set to Sunday 16:00; then a simulated version 2 exchange folder with two approvals, two rejections with reasons, two undecided, and a sitting record for 2026-10-09. Every decision matched its item and was kept as Evidence with its reason or note, the two undecided items were marked carried over from the 2026-10-09 sitting in `queue.json` and the state, no decided item reappeared, and a word-for-word re-ask of the rejected proposal was set aside as asking the same as it, with a notice |
+| `20261009T133200Z-on-demand-d31b` | Against a copy of Mandu with `angles.md` unreadable: the file was named as failed with its reason, a notice was queued naming every output it leaves incomplete, the package snapshot and review were marked incomplete for the same reason, the agent still queued a new proposal from the files it could read, and the two undecided items stayed carried over from the sitting |
 | `20261009T123633Z-on-demand-baa1` | A production clone of a throwaway bare remote fast-forwarded, restarted, ran, and pushed one records commit with the state files, touching only `workspace/` |
+
+Mandu's HEAD, git status, index, and every package file digest were unchanged after the new runs.
+Two attempts before them do not count.
+In `20261009T132721Z-on-demand-69ac` and `20261009T132831Z-on-demand-f0d7` the round trip passed the same way, but the agent escaped the quotes in the proposal's title when it re-asked it, so it asked something different and was queued; the counted runs had the agent copy the item file with `sed` instead.
+In `20261009T132955Z-on-demand-db7f` the agent tried shell here-documents, which the sandbox refused, and wrote no item.
 
 ## Scheduled and on-demand runs share one configuration
 
