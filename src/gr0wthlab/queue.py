@@ -124,8 +124,13 @@ class Ledger:
             number += 1
         return candidate
 
-    def publish(self, store: Store, item: exchange.Item, slug: str, run_id: str, now: datetime) -> str:
-        """Queue an item under a new identifier, writing its canonical text to review-queue/items/<id>.md."""
+    def publish(
+        self, store: Store, item: exchange.Item, slug: str, run_id: str, now: datetime, origin: str | None = None
+    ) -> str:
+        """Queue an item under a new identifier, writing its canonical text to review-queue/items/<id>.md.
+
+        origin marks an item the launcher files from reviewed text, such as a Dispatch request, so later runs find it.
+        """
         # The identifier's date is the Mac's local date, the one the Founder sees on the run.
         identifier = self.next_id(now.astimezone().date(), slug)
         fields = dict(item.fields, exchange=str(exchange.EXCHANGE_VERSION), id=identifier)
@@ -143,6 +148,8 @@ class Ledger:
         for key in ("product", "slot", "supersedes"):
             if item.fields.get(key):
                 entry[key] = item.fields[key]
+        if origin:
+            entry["origin"] = origin
         self.entries[identifier] = entry
         return identifier
 

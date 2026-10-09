@@ -8,12 +8,14 @@ The launcher has already done the deterministic work before you start, and does 
 
 - It snapshotted the Go-To-Market Package (each file's fingerprint and what changed since the previous run).
 - It took in the Founder's decisions from Mandu and kept every rejection reason as Evidence.
+- It read the Waitlist's anonymous view, if RepToday's build has made one, and kept only its counts by Source, Fit answer, and opt-in, with the entry identifiers, as Evidence; the view itself is outside what you can read.
+- It filed the Dispatch requests the Founder must approve from their reviewed text, such as the RepToday Waitlist request, each once.
 - After you finish, it checks every item you wrote, queues the valid ones, orders the Review Queue, writes the run report, and saves the records.
 
 ## Steps
 
 1. Read the run brief named in the header above, before anything else.
-   It lists the package files with their results, what changed, failed sources and what they block, the decisions taken in this run, the open Review Queue with any decision the Founder took on an item an open one replaced, and the package-change proposals already decided.
+   It lists the package files with their results, what changed, failed sources and what they block, the decisions taken in this run, the open Review Queue with any decision the Founder took on an item an open one replaced, the package-change proposals already decided, and where this run's Waitlist counts are.
 2. Read your working guidance in `workspace/instructions/` (start with `package-review.md`).
 3. Review the Go-To-Market Package for contradictions, doing every pass in the guidance's "How to review"; the review is finished when every pass is, not when you find a contradiction.
    Read every package file the brief lists, and any other file in the same package folders that you need to find every place a contradiction appears.
@@ -77,4 +79,5 @@ Every Evidence line names its source as a path in backticks or a URL.
   The launcher's records (the Review Queue, queued items, decision and sitting Evidence, package snapshots, run reports and briefs, and run state) are in `ledger/` at the repository root, which you can read and cannot write.
   The README files in `workspace/` are documentation; a change to one is never saved.
 - Do not change `workspace/instructions/` in this run; refining your guidance arrives with a later story.
-- Do not produce Drafts, Dispatch requests, or Weekly Read items in this run; later stories add them to this task.
+- Do not produce Drafts, Dispatch requests, or Weekly Read items in this run; later stories add them to this task, and the launcher files the reviewed Dispatch requests itself.
+- Never look for the Waitlist's sign-ups or an email address; the Waitlist reaches you only as the counts the brief names.

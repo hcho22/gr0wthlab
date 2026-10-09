@@ -1,6 +1,6 @@
 {
   "description": "Product registry: which Products the Marketing Engineer serves, their gates, and the read-only locations of each Product's repository and Go-To-Market Package. It records where strategy lives, never the strategy itself.",
-  "path_resolution": "A local path starting with ~/ resolves against the home directory of the account running the Marketing Engineer. On a machine with a different layout, set the environment variable named in a location's env field to an absolute path; it replaces that location's default. Paths inside Mandu are relative to the resolved Mandu checkout.",
+  "path_resolution": "A local path starting with ~/ resolves against the home directory of the account running the Marketing Engineer. On a machine with a different layout, set the environment variable named in a location's env field to an absolute path; it replaces that location's default. Paths inside Mandu are relative to the resolved Mandu checkout. The sandbox reads Mandu and every Product repository; a Product's Waitlist view is read by the launcher alone.",
   "mandu": {
     "repository": "github.com/hcho22/Mandu",
     "local_checkout": "~/Mandu",
@@ -118,6 +118,21 @@
           }
         ],
         "sources_note": "The package sources each run snapshots, from the PRD's list; a path ending in / covers every file under it. Every source also feeds the package review, so a failed one makes that review incomplete as well as the outputs it names."
+      },
+      "waitlist": {
+        "view": {
+          "local_path": null,
+          "env": "GR0WTHLAB_WAITLIST_VIEW",
+          "access": "read-only",
+          "format": "src/dispatches/reptoday-waitlist.md",
+          "note": "The anonymous Waitlist view RepToday's Waitlist build produces, in the format its Dispatch request specifies. Only the launcher reads it, never the sandboxed agent, so it must lie outside this repository and every location above; the launcher refuses to start otherwise. null until the build lands (US-ME05), when a reviewed change sets its path."
+        },
+        "source_tags": ["tiktok", "youtube", "reddit", "network"],
+        "fit_answers": ["lost-the-routine", "exercises-regularly", "never-had-a-routine"],
+        "good_fit": ["lost-the-routine"],
+        "beta_cohort_bar": 50,
+        "stale_after_hours": 48,
+        "note": "How each run counts the view (US-ME06): the Source tags and Fit answers the Dispatch request defines, unknown for a sign-up with no tag or no answer; good Fit is the 'used to exercise and lost the routine' answer unless the Founder approves another definition, which is one reviewed edit to good_fit; progress is good-Fit opt-ins toward the Beta Cohort bar of about 50; a view older than stale_after_hours fails the read."
       }
     },
     {

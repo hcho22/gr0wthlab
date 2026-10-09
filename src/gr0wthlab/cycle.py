@@ -1,7 +1,8 @@
 """One Marketing Engineer run, scheduled or on demand, from the pre-run sync to the saved records.
 
 Order: bring the production clone up to origin's main; snapshot the Go-To-Market Package; take in the Founder's
-decisions from Mandu; brief the agent and run it inside the sandbox (launcher.run); queue the items it wrote to
+decisions from Mandu; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests
+that need filing; brief the agent and run it inside the sandbox (launcher.run); queue the items it wrote to
 workspace/review-queue/incoming/ that pass the format; write the Review Queue and the run report; commit and push
 workspace/ and ledger/. Every step but the agent is deterministic code outside the sandbox. The launcher's records live
 in ledger/, which the agent can read and never write, so nothing it does can change them; in workspace/ the launcher
@@ -25,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TextIO
 
-from . import exchange, launcher, package, records, report, settings
+from . import dispatch, exchange, launcher, package, records, report, settings, waitlist
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
@@ -41,6 +42,7 @@ NOTES_DIR = "notes"
 RUN_REPORTS = "run-reports"
 SNAPSHOTS = "package-snapshots"
 SUMMARY_LIMIT = 4000
+WAITLIST_NEEDS = ("waitlist-counts", "weekly-read", "beta-recruiting")
 
 
 def entry_point(repo_root: Path) -> Path:
@@ -302,6 +304,54 @@ class Cycle:
                 SourceLine("Mandu sittings", package.CHANGED if state.sittings else package.READ, detail)
             )
 
+    def read_waitlist(self, state: RunState, config: settings.Settings, rules: settings.Waitlist | None) -> None:
+        """Read the Waitlist's anonymous view before the agent starts and keep its counts as Evidence when it is usable;
+        the agent reads only those counts, never the view, which lies outside everything the sandbox can read."""
+        reading = state.waitlist = waitlist.read(rules, self.now())
+        needs = output_titles(config, WAITLIST_NEEDS)
+        state.sources.append(SourceLine(waitlist.SOURCE_NAME, reading.status, reading.detail, needs))
+        if reading.status == package.READ:
+            path = self.store.path("evidence", "waitlist", f"{state.run_id}.json")
+            self.store.write_json(path, waitlist.evidence(reading, state.run_id, self.now()))
+            state.waitlist_file = self.store.relative(path)
+
+    def file_dispatches(
+        self, state: RunState, ledger: Ledger, products: Sequence[str], hashes: Mapping[str, str], seen: dict[str, str]
+    ) -> None:
+        """File each reviewed Dispatch request that needs filing, before the agent starts, so its brief lists it."""
+        requests, problems = dispatch.load(self.repo_root, products)
+        state.problems += problems
+        state.dispatches = dispatch.file(ledger, self.store, requests, hashes, seen, state.run_id, self.now())
+        state.published += [str(filing.identifier) for filing in state.dispatches if filing.acted]
+
+    def queue_notice(
+        self,
+        state: RunState,
+        ledger: Ledger,
+        seen: dict[str, str],
+        notice: tuple[str, str, str, str],
+        slug: str,
+        what: str,
+        product: str | None = None,
+    ) -> str | None:
+        """Queue one of the launcher's notices, unless the same one is already waiting for the Founder; its identifier
+        either way, or None when it could not be written."""
+        title, body, touches, evidence = notice
+        fields = {"kind": "notice", "product": product} if product else {"kind": "notice"}
+        item = exchange.Item(fields, title, body, touches, evidence)
+        fingerprint = exchange.item_hash(item)
+        repeated = seen.get(fingerprint)
+        if repeated and ledger.entries[repeated]["status"] == OPEN:
+            return repeated
+        try:
+            identifier = ledger.publish(self.store, item, slug, state.run_id, self.now())
+        except (OSError, ConfigError) as error:
+            state.problems.append(f"{what} could not be written ({error})")
+            return None
+        state.published.append(identifier)
+        seen.setdefault(fingerprint, identifier)
+        return identifier
+
     def sitting_runs(self, state: RunState) -> dict[str, str]:
         """Each sitting taken in so far, by date, with the run that first took in its record."""
         runs = {}
@@ -334,16 +384,18 @@ class Cycle:
         states.review_queue, state.state_notes = run_state.reconcile(states.review_queue, ledger.entries, hashes)
         run_state.save(self.store, states, state.run_id, now.isoformat())
 
-    def tallies(self, state: RunState, ledger: Ledger, incoming: int) -> list[run_state.Tally]:
+    def tallies(self, state: RunState, ledger: Ledger, incoming: int, ledger_ok: bool) -> list[run_state.Tally]:
         """What each workflow checked and acted on this run, so a quiet run still says what it looked at."""
         files = [file for result in state.snapshot for file in result.files]
         failed = sum(1 for file in files if file.status == package.FAILED) + sum(
             1 for result in state.snapshot if result.reason
         )
         changed = sum(1 for file in files if file.status == package.CHANGED)
-        queued = [ledger.entries[identifier] for identifier in state.published]
+        filed = {str(filing.identifier) for filing in state.dispatches if filing.acted}
+        breach = state.breach_notice if state.breach_notice in state.published else None
+        queued = [ledger.entries[i] for i in state.published if i not in filed and i != breach]
         # Each queued item counts once, under the workflow that produced it; until a workflow has its own tally
-        # (Drafts, Weekly Reads, Dispatch requests), its items count under the Review Queue with the launcher's notices.
+        # (Drafts, Weekly Reads), its items count under the Review Queue with the launcher's notices.
         proposals = sum(1 for entry in queued if entry["kind"] == "package-change-proposal")
         others = len(queued) - proposals
         taken = sum(1 for outcome in state.decisions if outcome.status == "taken")
@@ -370,9 +422,31 @@ class Cycle:
                 f"{report.plural(taken, 'decision')} taken in, {report.plural(others, 'other item')} queued,"
                 f" {superseded} superseded, {carried} carried over, {len(state.set_aside)} set aside",
             ),
+            self.waitlist_tally(state, breach),
+            run_state.Tally(
+                "dispatch-requests",
+                len(state.dispatches),
+                len(filed),
+                "; ".join(filing.account() for filing in state.dispatches)
+                or ("no reviewed Dispatch request" if ledger_ok else "none filed: the Review Queue could not be read"),
+            ),
             run_state.Tally("listening", 0, 0, "not built until US-ME13"),
             run_state.Tally("outreach", 0, 0, "not built until US-ME14"),
         ]
+
+    def waitlist_tally(self, state: RunState, breach: str | None) -> run_state.Tally:
+        """The Waitlist's line: the sign-ups counted, or why there are no counts; a routine read acts on nothing, and a
+        breach notice queued this run is the one thing it acts on."""
+        reading = state.waitlist
+        if reading is None or reading.status == SKIPPED:
+            return run_state.Tally("waitlist", 0, 0, f"skipped: {reading.detail if reading else 'not read'}")
+        if reading.status == package.READ:
+            note = f"{report.plural(len(reading.entries), 'sign-up')} counted; {report.waitlist_progress(reading)}"
+            return run_state.Tally("waitlist", len(reading.entries), 0, note)
+        if reading.status == waitlist.REFUSED:
+            note = "read refused" + (f"; breach notice `{breach}` queued" if breach else "")
+            return run_state.Tally("waitlist", 0, int(bool(breach)), note, "the view held what looks like an address")
+        return run_state.Tally("waitlist", 0, 0, "no counts this run", "the view could not be used")
 
     def outputs(self, state: RunState, config: settings.Settings, ledger_ok: bool) -> None:
         """Each output's status: a built output is incomplete when a failed source it needs names it, or when its own
@@ -383,6 +457,8 @@ class Cycle:
             f"; {len(state.set_aside)} set aside" if state.set_aside else ""
         )
         review_gap = state.review_gap()
+        reading = state.waitlist
+        skipped = {"waitlist-counts": reading.detail} if reading and reading.status == SKIPPED else {}
         own = {
             "package-snapshot": ([], f"`{state.snapshot_file}`"),
             "package-review": ([review_gap] if review_gap else [], "the agent finished its review"),
@@ -391,12 +467,21 @@ class Cycle:
                 [] if ledger_ok else ["the ledger could not be read; the queue was left as it was"],
                 queued,
             ),
+            "waitlist-counts": (
+                ["the read was refused, as the view held what looks like an email address (Guardrail G6)"]
+                if reading and reading.status == waitlist.REFUSED
+                else [],
+                f"`{state.waitlist_file}`",
+            ),
         }
         rows = []
         for key, output in config.outputs.items():
             title = str(output.get("title", key))
             if not output.get("built"):
                 rows.append([title, NOT_BUILT, str(output.get("story", ""))])
+                continue
+            if key in skipped:
+                rows.append([title, SKIPPED, skipped[key]])
                 continue
             gaps, done = own.get(key, ([], ""))
             gaps = [f"{line.name} could not be read" for line in failed if title in line.needed_by] + gaps
@@ -515,6 +600,7 @@ class Cycle:
             _, boundary = load_boundary(self.repo_root, self.env, self.home)
             registry = load_json(self.repo_root / "config" / "products.json")
             folder = settings.exchange_dir(registry, boundary, self.env, self.home)
+            rules = settings.waitlist(registry, boundary, self.env, self.home)
         except ConfigError as error:
             self.say(f"refusing to start: {error}")
             return launcher.EXIT_CONFIG
@@ -547,6 +633,9 @@ class Cycle:
                     output_titles(config, source.get("needed_by", ())),
                 )
             )
+        self.read_waitlist(state, config, rules)
+        if ledger_ok:
+            self.file_dispatches(state, ledger, products, hashes, seen)
         state.queue_before = ledger.ordered()
         state.replaced = {str(entry["id"]): ledger.decided_replaced(entry) for entry in state.queue_before}
         state.closed_proposals = [
@@ -586,27 +675,37 @@ class Cycle:
         state.problems += records.restore_access(canonical(self.repo_root))
 
         now = self.now()
+        published: list[str] = []
         if ledger_ok:
-            state.published, state.set_aside = ledger.take_incoming(areas, self.store, products, run_id, now, seen)
-        incoming = len(state.published) + len(state.set_aside)
+            published, state.set_aside = ledger.take_incoming(areas, self.store, products, run_id, now, seen)
+            state.published += published
+        incoming = len(published) + len(state.set_aside)
         report_path = self.store.path(RUN_REPORTS, f"{run_id}.md")
-        state.queue_after = ledger.ordered()
         state.problems += areas.problems
         areas.problems.clear()
+        if state.waitlist is not None and state.waitlist.status == waitlist.REFUSED:
+            if ledger_ok:
+                state.breach_notice = self.queue_notice(
+                    state,
+                    ledger,
+                    seen,
+                    report.breach_notice(state, self.store.relative(report_path)),
+                    "notice-waitlist-breach",
+                    "the Guardrail breach notice",
+                    state.waitlist.rules.product,
+                )
+            else:
+                state.problems.append(
+                    "the Guardrail breach notice could not be queued, as the Review Queue could not be read; this"
+                    " report is the only place it is told"
+                )
+        state.queue_after = ledger.ordered()
         self.outputs(state, config, ledger_ok)
         notice = report.problems_notice(state, self.store.relative(report_path))
         if notice and ledger_ok:
-            title, body, touches, evidence = notice
-            item = exchange.Item({"kind": "notice"}, title, body, touches, evidence)
-            repeated = seen.get(exchange.item_hash(item))
-            if repeated and ledger.entries[repeated]["status"] == OPEN:
-                state.notice = repeated  # the same problems are already waiting for the Founder
-            else:
-                try:
-                    state.notice = ledger.publish(self.store, item, "notice-run-problems", run_id, now)
-                    state.published.append(state.notice)
-                except (OSError, ConfigError) as error:
-                    state.problems.append(f"the notice of this run's problems could not be written ({error})")
+            state.notice = self.queue_notice(
+                state, ledger, seen, notice, "notice-run-problems", "the notice of this run's problems"
+            )
             state.queue_after = ledger.ordered()
             self.outputs(state, config, ledger_ok)
         if ledger_ok:
@@ -623,7 +722,7 @@ class Cycle:
                 self.save_state(state, ledger, states, products, now)
             except (OSError, ConfigError) as error:
                 state.problems.append(f"the run state could not be saved ({error})")
-        state.tallies = self.tallies(state, ledger, incoming)
+        state.tallies = self.tallies(state, ledger, incoming, ledger_ok)
         notes = sorted(self.store.path(NOTES_DIR).glob("*.txt"))
         state.notes = [path.read_text(encoding="utf-8").strip() for path in notes]
         try:

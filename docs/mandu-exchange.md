@@ -85,6 +85,10 @@ The Draft or proposal itself.
 
 A notice is informational, such as a failed source or a change to the Marketing Engineer's Instructions; acknowledging it records `approve`.
 
+A Dispatch request asks the Founder to approve a change to the Product it names in `product`, which firstmate then builds through that Product's normal reviewed path.
+gr0wthlab never sends a Dispatch request anywhere itself.
+Once the Founder approves one, Mandu hands that item, with the Founder's note if there is one, to firstmate under Mandu's existing Dispatch arrangement; a Dispatch request that is undecided, rejected, or superseded never reaches firstmate.
+
 ## The queue (gr0wthlab writes)
 
 ```json

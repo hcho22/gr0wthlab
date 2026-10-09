@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
-from gr0wthlab import cli, cycle, exchange, package
+from gr0wthlab import cli, cycle, exchange, launcher, package
 from gr0wthlab.areas import Store
 from gr0wthlab.report import next_due
 from tests import fakes
@@ -855,6 +855,166 @@ class NotesTest(CycleTestCase):
         self.assertEqual(code, cycle.EXIT_STOPPED)
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10))
         self.assertRegex(self.report(), r"\n- Run \S+-on-demand-\S+ \(on-demand\), started .*, stopped before it")
+
+
+class WaitlistRunTest(CycleTestCase):
+    """US-ME06's validation test through the launcher, with the view in a temporary folder outside every checkout."""
+
+    def setUp(self):
+        super().setUp()
+        self.view = self.root / "RepToday-exports" / "waitlist-view.json"
+        self.env["GR0WTHLAB_WAITLIST_VIEW"] = str(self.view)
+        self.exchange.mkdir()
+
+    def assert_no_address_anywhere(self):
+        """Every output of every run so far: the records, the agent's areas, the logs, and what the agent was told."""
+        for place in (self.ledger(), self.workspace(), self.logs, self.codex_dir):
+            for path in place.rglob("*"):
+                if path.is_file():
+                    data = path.read_bytes()
+                    for part in (fakes.ADDRESS, "jane", "example.com"):
+                        self.assertNotIn(part.encode(), data, path)
+
+    def test_the_clean_seed_is_counted_then_the_address_bearing_variant_is_refused(self):
+        fakes.write_view(self.view, fakes.waitlist_view())
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        (evidence,) = (self.ledger() / "evidence/waitlist").glob("*.json")
+        record = json.loads(evidence.read_text(encoding="utf-8"))
+        self.assertEqual(len(record["entries"]), 12)
+        self.assertEqual(record["progress"], {"good_fit_opt_ins": 5, "bar": 50})
+        self.assertEqual([week["sign_ups"] for week in record["weeks"]], [5, 7])
+        self.assertEqual(record["cumulative"]["by_source"]["tiktok"]["good_fit_opt_ins"], 2)
+        report = self.report()
+        for line in (
+            "| Waitlist anonymous view | read | generated 2026-10-11T22:00:00+00:00: sign-ups 12, good-Fit opt-ins 5"
+            " of about 50 |",
+            "- Waitlist: 12 sign-ups, 7 of them in the week of 2026-10-05; 5 good-Fit opt-ins of about 50, 10% of the"
+            " way.",
+            "| 2026-09-28 | 5 | 3 | 3 | 2 |",
+            "| 2026-10-05 | 7 | 3 | 5 | 3 |",
+            "| All weeks | 12 | 6 | 8 | 5 |",
+            "| tiktok | 2 | 4 | 3 | 3 | 2 |",
+            "| unknown | 1 | 1 | 0 | 1 | 0 |",
+            "| lost-the-routine | 3 | 6 | 5 |",
+            "| unknown | 2 | 2 | 1 |",
+            f"| Waitlist counts | complete | `evidence/waitlist/{evidence.name}` |",
+            "- waitlist: checked=12 acted=0 note=12 sign-ups counted; 5 good-Fit opt-ins of about 50, 10% of the way",
+        ):
+            self.assertIn(line, report)
+        self.assertIn(f"`{evidence}`", self.brief())
+        prompt = (self.codex_dir / "prompt.txt").read_text(encoding="utf-8")
+        self.assertNotIn(str(self.view), prompt + self.brief())
+        self.assert_no_address_anywhere()
+
+        fakes.write_view(self.view, fakes.address_variant())
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(list((self.ledger() / "evidence/waitlist").glob("*.json")), [evidence])
+        report = self.report()
+        self.assertIn(
+            "| Waitlist anonymous view | refused | something in the view looked like an email address"
+            " (entry 3, a field outside the format); the whole read was discarded and nothing from it was kept |",
+            report,
+        )
+        self.assertIn("- Waitlist refused, a Guardrail breach (G6): the view held something", report)
+        self.assertIn("## Waitlist\n\nRefused, a Guardrail breach (G6):", report)
+        self.assertIn("| Waitlist counts | incomplete | the read was refused, as the view held what looks like", report)
+        (notice,) = [entry for entry in self.queue()["open"] if entry["kind"] == "notice"]
+        self.assertEqual(notice["ask"][:56], "Notice: Guardrail breach, the Waitlist view held an emai")
+        self.assertIn(
+            f"- waitlist: checked=0 acted=1 note=read refused; breach notice `{notice['id']}` queued;", report
+        )
+        text = (self.ledger() / notice["file"]).read_text(encoding="utf-8")
+        self.assertIn("it recorded no Waitlist count or other Waitlist Evidence, and no address was stored", text)
+        self.assertIn("- entry 3, a field outside the format", text)
+        self.assertEqual(exchange.check_item(text, ["RepToday", "Immerse"], published=True).problems, [])
+        self.assertIn("- Refused: the view held something that looks like an email address", self.brief())
+        self.assert_no_address_anywhere()
+
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=2))
+        self.assertEqual([entry["id"] for entry in self.queue()["open"]], [notice["id"]])
+
+    def test_no_view_yet_is_skipped_because_the_build_has_not_landed(self):
+        del self.env["GR0WTHLAB_WAITLIST_VIEW"]
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        reason = "RepToday's Waitlist build has not landed, so no view location is configured yet (US-ME05)"
+        report = self.report()
+        self.assertIn(f"| Waitlist anonymous view | skipped | {reason} |", report)
+        self.assertIn(f"| Waitlist counts | skipped | {reason} |", report)
+        self.assertIn(f"- Waitlist skipped: {reason}.", report)
+        self.assertIn(f"## Waitlist\n\nSkipped: {reason}.", report)
+        self.assertIn(f"- Skipped: {reason}; there are no counts yet.", self.brief())
+        self.assertEqual(self.queue()["open"], [])
+        self.assertFalse((self.ledger() / "evidence/waitlist").exists())
+
+    def test_an_unusable_view_fails_with_a_notice(self):
+        self.view.parent.mkdir()
+        self.view.write_text("{not json", encoding="utf-8")
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        report = self.report()
+        self.assertIn(f"| Waitlist anonymous view | failed | `{self.view}` is not valid JSON (line 1). |", report)
+        self.assertIn("| Waitlist counts | incomplete | Waitlist anonymous view could not be read |", report)
+        (notice,) = self.queue()["open"]
+        text = (self.ledger() / notice["file"]).read_text(encoding="utf-8")
+        self.assertIn("Incomplete: Waitlist counts, Weekly Read memo, Beta Cohort recruiting.", text)
+        self.assertFalse((self.ledger() / "evidence/waitlist").exists())
+
+        early = [entry for entry in fakes.WAITLIST_ENTRIES if entry[4] <= "2026-10-08"]
+        fakes.write_view(self.view, fakes.waitlist_view("2026-10-08T22:00:00+00:00", early))
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))
+        self.assertIn("74 hours before this run, so it has stopped being refreshed", self.report())
+
+    def test_a_view_the_sandbox_could_read_stops_the_run_before_it_starts(self):
+        self.env["GR0WTHLAB_WAITLIST_VIEW"] = str(self.mandu / "exports/waitlist-view.json")
+        code, out = self.run_cycle()
+        self.assertEqual(code, launcher.EXIT_CONFIG)
+        self.assertIn("which the sandboxed agent can read", out)
+        self.assertFalse((self.codex_dir / "prompt.txt").exists())
+
+
+class DispatchRunTest(CycleTestCase):
+    def setUp(self):
+        super().setUp()
+        fakes.add_dispatches(self.repo, self.env)
+
+    def test_the_waitlist_request_is_filed_once_and_never_asked_again(self):
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        (entry,) = self.queue()["open"]
+        identifier = "20261011-reptoday-waitlist"
+        self.assertEqual(
+            (entry["id"], entry["kind"], entry["origin"], entry["product"]),
+            (identifier, "dispatch-request", "dispatch/reptoday-waitlist", "RepToday"),
+        )
+        text = (self.ledger() / entry["file"]).read_text(encoding="utf-8")
+        self.assertEqual(exchange.check_item(text, ["RepToday", "Immerse"], published=True).problems, [])
+        self.assertIn(f"- `{identifier}` (dispatch-request): Approve Dispatch: build RepToday's Waitlist", self.brief())
+        report = self.report()
+        self.assertIn(f"- dispatch-requests: checked=1 acted=1 note=reptoday-waitlist filed as `{identifier}`", report)
+        self.assertIn("1 item open for the next sitting (1 new this run, 0 carried over)", report)
+
+        again = (fakes.REPO / "src/dispatches/reptoday-waitlist.md").read_text(encoding="utf-8")
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/waitlist-again.md": again}})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        queue = self.queue()
+        self.assertEqual([e["id"] for e in queue["open"] if e["kind"] == "dispatch-request"], [identifier])
+        report = self.report()
+        self.assertIn(f"note=reptoday-waitlist open as `{identifier}`", report)
+        self.assertIn(f"`waitlist-again.md`: asks the same as {identifier}, which is open", report)
+
+        self.decide(identifier, "approve", note="Go ahead.")
+        fakes.behave(self.codex_dir, {})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
+        queue = self.queue()
+        self.assertEqual([e for e in queue["open"] if e["kind"] == "dispatch-request"], [])
+        self.assertEqual(next(e for e in queue["closed"] if e["id"] == identifier)["status"], "approved")
+        self.assertIn(f"note=reptoday-waitlist approved as `{identifier}`; never filed again", self.report())
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=21))
+        ids = [entry["id"] for entry in self.queue()["open"] + self.queue()["closed"] if "waitlist" in entry["id"]]
+        self.assertEqual(ids, [identifier])
 
 
 class ProductionCloneTest(CycleTestCase):
