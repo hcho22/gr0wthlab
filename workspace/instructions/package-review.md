@@ -22,6 +22,7 @@ A difference that the package itself explains (a superseded draft kept for histo
 ## Finding every place
 
 Once you know the stale fact, search the whole package folder for it (for example with `grep -rn` on the package directory), not only the files the brief lists.
+Search for every way it is phrased: its key words in upper and lower case, the caveat's wording, and checklist items about it that are still unchecked.
 List every file that carries the stale fact in Touches, so one approval fixes all of them.
 Group every file with the same stale fact into one proposal; a different stale fact is a different proposal.
 
@@ -31,5 +32,6 @@ Group every file with the same stale fact into one proposal; a different stale f
 - Proposal: one short paragraph saying what is stale and what is current, then each file with the wording to remove and the wording you propose instead.
   Quote only the words that change.
   Where a file's wording is a rule (for example a required legal line), propose the replacement rule rather than deleting it.
+  Propose wording that claims exactly what the current record says and nothing more; a status the record does not state, such as a registration, is never implied.
 - Evidence: at least one line for each side, each with its file path in backticks and the line number.
 - Keep it decidable in under a minute.

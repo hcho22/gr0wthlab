@@ -99,6 +99,11 @@ def due_time(started: datetime, weekly: tuple[str, str] | None = None, once: str
     return due
 
 
+def local_date(moment: str) -> str:
+    """The Mac's local date of a recorded time, as the Founder reads it."""
+    return wall_clock(datetime.fromisoformat(moment)).strftime("%Y-%m-%d")
+
+
 def duration(span: timedelta) -> str:
     minutes = int(span.total_seconds() // 60)
     days, minutes = divmod(minutes, 24 * 60)
@@ -332,7 +337,8 @@ def render_report(state: RunState) -> str:
     if state.queue_after:
         for number, entry in enumerate(state.queue_after, 1):
             slot = f", slot {entry['slot']}" if entry.get("slot") else ""
-            carried = f", carried over from {str(entry['published_at'])[:10]}" if entry.get("carried_over") else ""
+            queued = local_date(str(entry["published_at"]))
+            carried = f", carried over from {queued}" if entry.get("carried_over") else ""
             lines.append(f"{number}. `{entry['id']}` ({entry['kind']}{slot}{carried}): {entry['ask']}")
     else:
         lines.append("Nothing is waiting for the Founder.")

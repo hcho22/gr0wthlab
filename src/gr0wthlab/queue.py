@@ -113,7 +113,8 @@ class Ledger:
         topic: str | None = None,
     ) -> str:
         """Queue an item under a new identifier, writing its canonical text to items/<id>.md."""
-        identifier = self.next_id(now.date(), slug)
+        # The identifier's date is the Mac's local date, the one the Founder sees on the run.
+        identifier = self.next_id(now.astimezone().date(), slug)
         fields = dict(item.fields, exchange=str(exchange.EXCHANGE_VERSION), id=identifier)
         path = areas.path("review_queue", ITEMS, f"{identifier}.md")
         areas.write_text(path, exchange.render_item(fields, item.ask, item.body, item.touches, item.evidence))
