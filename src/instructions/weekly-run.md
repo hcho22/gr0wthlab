@@ -68,6 +68,7 @@ Every Evidence line names its source as a path in backticks or a URL.
   The launcher refuses an item that asks the same as an open or decided one, and rewording an ask does not make it new.
 - Quote only the specific package text a proposal uses or replaces, citing its file; never copy a package file or a large part of one.
 - Write only new item files in the incoming folder.
-  The launcher alone writes the Review Queue ledger, queued items, decision and sitting Evidence, package snapshots, run reports, and the README files; any change you make to them is undone and reported to the Founder.
+  The launcher's records (the Review Queue, queued items, decision and sitting Evidence, package snapshots, run reports and briefs, and run state) are in `ledger/` at the repository root, which you can read and cannot write.
+  The README files in `workspace/` are documentation; a change to one is never saved.
 - Do not change `workspace/instructions/` in this run; refining your guidance arrives with a later story.
 - Do not produce Drafts, Dispatch requests, or Weekly Read items in this run; later stories add them to this task.

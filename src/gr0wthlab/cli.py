@@ -10,12 +10,13 @@ from pathlib import Path
 
 from . import codex, cycle, exchange, launcher, probe, schedule, settings
 from . import state as run_state
-from .boundary import PRODUCT_REGISTRY, ConfigError, load_json
-from .queue import QUEUE_FILE, Ledger, QueueError
+from .boundary import LEDGER, PRODUCT_REGISTRY, ConfigError, load_json
+from .queue import QUEUE_FILE, REVIEW_QUEUE, Ledger, QueueError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ENTRY = REPO_ROOT / "src" / "bin" / "gr0wthlab"
 INCOMING = REPO_ROOT / "workspace" / "review-queue" / "incoming"
+LEDGER_DIR = REPO_ROOT / LEDGER
 
 
 def parser() -> argparse.ArgumentParser:
@@ -50,10 +51,10 @@ def parser() -> argparse.ArgumentParser:
 def queued(products: list[str]) -> tuple[Ledger, dict[str, str], str | None]:
     """The last saved Review Queue, and each queued item's fingerprint mapped to its identifier."""
     try:
-        ledger = Ledger.load(INCOMING.parent / QUEUE_FILE)
+        ledger = Ledger.load(LEDGER_DIR / REVIEW_QUEUE / QUEUE_FILE)
     except QueueError as error:
         return Ledger(), {}, f"repeats and supersedes could not be checked: {error}"
-    hashes, _ = run_state.item_hashes(INCOMING.parents[1], ledger.entries, products, run_state.ReviewQueueState())
+    hashes, _ = run_state.item_hashes(LEDGER_DIR, ledger.entries, products, run_state.ReviewQueueState())
     seen: dict[str, str] = {}
     for identifier, fingerprint in hashes.items():
         seen.setdefault(fingerprint, identifier)

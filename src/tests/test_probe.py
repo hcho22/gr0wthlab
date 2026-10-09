@@ -22,6 +22,7 @@ class VerifyTest(unittest.TestCase):
         for area in CONFIG["writable_areas"].values():
             (self.repo / area).mkdir(parents=True)
         (self.repo / "src").mkdir()
+        (self.repo / "ledger").mkdir()
         (self.home / "Mandu").mkdir(parents=True)
         self.logs = root / "logs"
         self.logs.mkdir()
@@ -45,7 +46,11 @@ class VerifyTest(unittest.TestCase):
     def test_an_escaped_sentinel_fails_the_check_and_is_removed(self):
         self.write_record(exit_code=0)
         self.write_permitted()
-        escaped = [self.home / "Mandu" / (MARK + "-mandu-shell.txt"), self.repo / "src" / (MARK + "-src-file-tool.txt")]
+        escaped = [
+            self.home / "Mandu" / (MARK + "-mandu-shell.txt"),
+            self.repo / "src" / (MARK + "-src-file-tool.txt"),
+            self.repo / "ledger" / (MARK + "-ledger-shell.txt"),
+        ]
         for path in escaped:
             path.write_text("probe\n", encoding="utf-8")
         result = probe.verify(self.boundary, RUN, self.logs)

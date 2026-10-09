@@ -1,11 +1,12 @@
 """One Marketing Engineer run, scheduled or on demand, from the pre-run sync to the saved records.
 
 Order: bring the production clone up to origin's main; snapshot the Go-To-Market Package; take in the Founder's
-decisions from Mandu; brief the agent and run it inside the sandbox (launcher.run); undo any change it made to
-records only the launcher writes; queue the items it wrote that pass the format; write the Review Queue and the run
-report; commit and push workspace/. Every step but the agent is deterministic code outside the sandbox, and every
-write it makes goes through Areas, so it stays inside the six areas. One run at a time per checkout holds its run lock
-from the sync to the saved records; a run started meanwhile refuses to start, and that checkout's next report says so.
+decisions from Mandu; brief the agent and run it inside the sandbox (launcher.run); queue the items it wrote to
+workspace/review-queue/incoming/ that pass the format; write the Review Queue and the run report; commit and push
+workspace/ and ledger/. Every step but the agent is deterministic code outside the sandbox. The launcher's records live
+in ledger/, which the agent can read and never write, so nothing it does can change them; in workspace/ the launcher
+only reads and removes the incoming items it takes in. One run at a time per checkout holds the run lock in its
+ledger/ from the sync to the saved records; a run started meanwhile refuses to start, and the next report says so.
 """
 
 from __future__ import annotations
@@ -23,30 +24,20 @@ from typing import TextIO
 
 from . import exchange, launcher, package, records, report, settings
 from . import state as run_state
-from .areas import Areas, UnsafeFile, read_plain
-from .boundary import Boundary, ConfigError, canonical, load_boundary, load_json
-from .queue import INCOMING, OPEN, SET_ASIDE, SUPERSEDED, Ledger, QueueError
+from .areas import Areas, Store, UnsafeFile, read_plain
+from .boundary import LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
+from .queue import INCOMING, OPEN, QUEUE_FILE, REVIEW_QUEUE, SET_ASIDE, SUPERSEDED, Ledger, QueueError
 from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLine
 
 PRE_RUN_ENV = "GR0WTHLAB_PRE_RUN"
 EXIT_RECORDS = 4
 EXIT_BUSY = 5
 EXIT_STOPPED = 6
-CHECKOUTS = "checkouts"
 LOCK_FILE = "run.lock"
 NOTES_DIR = "notes"
+RUN_REPORTS = "run-reports"
 SNAPSHOTS = "package-snapshots"
 SUMMARY_LIMIT = 4000
-# Records only the launcher writes; the agent's changes to them are undone after it finishes.
-PROTECTED_DIRS = (
-    ("review_queue", "items"),
-    ("review_queue", "set-aside"),
-    ("evidence", "decisions"),
-    ("evidence", "sittings"),
-    ("evidence", SNAPSHOTS),
-    ("run_reports",),
-)
-PROTECTED_FILES = (("review_queue", "queue.json"),)
 
 
 def entry_point(repo_root: Path) -> Path:
@@ -60,11 +51,6 @@ def head(repo_root: Path) -> str:
         ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return "unknown"
-
-
-def checkout_logs(log_dir: Path, repo_root: Path) -> Path:
-    """The log folder of one checkout's run lock and notes for its next report, apart from every other checkout."""
-    return log_dir / CHECKOUTS / hashlib.sha256(str(canonical(repo_root)).encode("utf-8")).hexdigest()[:12]
 
 
 def output_titles(config: settings.Settings, keys: Sequence[str]) -> tuple[str, ...]:
@@ -109,77 +95,6 @@ def parse_records(found, parser) -> tuple[list[tuple[object, Path, str]], list[t
     return parsed, problems
 
 
-# Records only the launcher writes.
-
-
-def protected_paths(areas: Areas) -> tuple[list[Path], list[Path]]:
-    directories = [areas.path(*parts) if len(parts) > 1 else areas.paths[parts[0]] for parts in PROTECTED_DIRS]
-    files = [areas.path(*parts) for parts in PROTECTED_FILES]
-    files += [path / "README.md" for path in areas.paths.values()]
-    return directories, files
-
-
-def protected_state(areas: Areas) -> dict[Path, bytes]:
-    directories, files = protected_paths(areas)
-    state = {}
-    for path in files + [file for directory in directories for file in areas.files(directory)]:
-        try:
-            state[path] = read_plain(path)
-        except (UnsafeFile, OSError):
-            continue
-    return state
-
-
-def undo_agent_changes(areas: Areas, before: Mapping[Path, bytes], run_id: str, ledger: Ledger) -> list[str]:
-    """Restore launcher-only records the agent changed or removed, and set aside anything it added among them.
-
-    A file or link the agent put in place of an area or a folder the launcher writes in is removed first, outermost
-    first, so nothing after it reads or writes through a link, and the owner takes back each of those folders.
-    Every folder the agent added among the records is removed last, so no later write finds a folder in its place.
-    A repair that fails is noted in areas.problems, which reach the notice, and never stops the run.
-    """
-    undone = []
-    directories, files = protected_paths(areas)
-    folders = [*areas.paths.values(), *directories, areas.path("review_queue", INCOMING)]
-    for folder in folders + [areas.path("review_queue", SET_ASIDE, run_id)]:
-        try:
-            if folder.is_symlink() or (folder.exists() and not folder.is_dir()):
-                if areas.remove(folder):
-                    undone.append(f"removed `{areas.relative(folder)}`, which the agent put in place of a folder")
-            elif folder.is_dir():
-                areas.reclaim(folder)
-        except OSError as error:
-            areas.problems.append(f"could not undo the agent's change to `{areas.relative(folder)}` ({error})")
-    after = protected_state(areas)
-    present = set(files) | {path for directory in directories for path in areas.files(directory)}
-    for path in sorted(present):
-        if path in before or not os.path.lexists(str(path)):
-            continue
-        name = areas.relative(path)
-        try:
-            if path.is_dir() and not path.is_symlink():
-                if areas.remove(path):
-                    undone.append(f"removed folder `{name}`, which the agent added")
-            else:
-                moved = ledger.set_aside(areas, path, name, run_id, [])
-                kept = f", as `{moved.moved_to}`" if moved.moved_to else ""
-                undone.append(f"set aside `{name}`, which the agent added{kept}")
-        except OSError as error:
-            areas.problems.append(f"could not undo the agent's change to `{name}` ({error})")
-    for path, content in sorted(before.items()):
-        if after.get(path) == content:
-            continue
-        try:
-            areas.write_bytes(path, content)
-            undone.append(f"restored `{areas.relative(path)}`, which the agent changed or removed")
-        except (OSError, ConfigError) as error:
-            areas.problems.append(f"could not undo the agent's change to `{areas.relative(path)}` ({error})")
-    for directory in directories:
-        for folder in areas.remove_empty_folders(directory):
-            undone.append(f"removed folder `{areas.relative(folder)}`, which the agent added")
-    return undone
-
-
 # The run.
 
 
@@ -197,6 +112,7 @@ class Cycle:
         self.home = home
         self.out = out
         self.clock = clock
+        self.store = Store(canonical(repo_root) / LEDGER)
         self.started: datetime | None = None
         self.run_id: str | None = None
 
@@ -206,10 +122,10 @@ class Cycle:
     def now(self) -> datetime:
         return self.clock()
 
-    def snapshot(self, state: RunState, config: settings.Settings, areas: Areas, boundary: Boundary, registry) -> None:
+    def snapshot(self, state: RunState, config: settings.Settings, boundary: Boundary, registry) -> None:
         mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
         state.mandu = str(mandu)
-        directory = areas.path("evidence", SNAPSHOTS)
+        directory = self.store.path("evidence", SNAPSHOTS)
         previous = package.latest_snapshot(directory, state.run_id)
         state.previous_snapshot = previous[0] if previous else None
         sources = package.package_sources(registry)
@@ -217,8 +133,10 @@ class Cycle:
             mandu, sources, package.last_known(previous[1] if previous else None), lambda: self.now().isoformat()
         )
         path = directory / f"{state.run_id}.json"
-        areas.write_json(path, package.record(state.run_id, self.now(), mandu, state.snapshot, state.previous_snapshot))
-        state.snapshot_file = areas.relative(path)
+        self.store.write_json(
+            path, package.record(state.run_id, self.now(), mandu, state.snapshot, state.previous_snapshot)
+        )
+        state.snapshot_file = self.store.relative(path)
         for result in state.snapshot:
             needs = output_titles(config, ("package-snapshot", "package-review", *result.source.needed_by))
             label = f"{result.source.product} package"
@@ -234,9 +152,7 @@ class Cycle:
                     SourceLine(f"{label}: `{removed}`", package.CHANGED, "removed since the previous snapshot", needs)
                 )
 
-    def take_decisions(
-        self, state: RunState, config: settings.Settings, areas: Areas, folder: Path, ledger: Ledger
-    ) -> None:
+    def take_decisions(self, state: RunState, config: settings.Settings, folder: Path, ledger: Ledger) -> None:
         anything_queued = bool(ledger.entries)
         needs = output_titles(config, ("decisions", "review-queue"))
         if not folder.is_dir():
@@ -263,8 +179,8 @@ class Cycle:
                 continue
             decision, entry = outcome.decision, outcome.entry
             source, digest = digests[decision.item]
-            areas.write_json(
-                areas.path("evidence", "decisions", f"{decision.item}.json"),
+            self.store.write_json(
+                self.store.path("evidence", "decisions", f"{decision.item}.json"),
                 {
                     "item": decision.item,
                     "kind": entry["kind"],
@@ -284,7 +200,7 @@ class Cycle:
             if decision.reason:
                 entry["reason"] = decision.reason
         for sitting, path, digest in sittings:
-            target = areas.path("evidence", "sittings", f"{sitting.day}.json")
+            target = self.store.path("evidence", "sittings", f"{sitting.day}.json")
             record = {
                 "date": sitting.day,
                 "minutes": sitting.minutes,
@@ -298,7 +214,7 @@ class Cycle:
             existing = existing if isinstance(existing, dict) else None
             if existing is None or existing.get("source") != record["source"]:
                 first = (existing or {}).get("taken_in_by_run", state.run_id)
-                areas.write_json(target, dict(record, taken_in_by_run=first))
+                self.store.write_json(target, dict(record, taken_in_by_run=first))
                 state.sittings.append(sitting)
         taken = sum(1 for outcome in state.decisions if outcome.status == "taken")
         unusable = len(problems) + sum(1 for o in state.decisions if o.status not in ("taken", "already-taken"))
@@ -314,41 +230,37 @@ class Cycle:
             SourceLine("Mandu sittings", package.CHANGED if state.sittings else package.READ, sitting_detail)
         )
 
-    def sitting_runs(self, state: RunState, areas: Areas) -> dict[str, str]:
+    def sitting_runs(self, state: RunState) -> dict[str, str]:
         """Each sitting taken in so far, by date, with the run that first took in its record."""
         runs = {}
-        for path in areas.files(areas.path("evidence", "sittings")):
+        folder = self.store.path("evidence", "sittings")
+        for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
             try:
                 record = json.loads(read_plain(path).decode("utf-8"))
                 runs[str(record["date"])] = str(record["taken_in_by_run"])
             except (OSError, ValueError, KeyError, TypeError, UnsafeFile) as error:
-                name = areas.relative(path)
+                name = self.store.relative(path)
                 state.problems.append(f"`{name}` could not be read, so no item carries over from it ({error})")
         return runs
 
-    def load_state(self, state: RunState, areas: Areas, ledger: Ledger, run_id: str) -> run_state.States:
+    def load_state(self, state: RunState, run_id: str) -> run_state.States:
         """Each workflow's run state; an invalid file is set aside and its workflow starts again from the record."""
-        states, invalid = run_state.load(areas)
+        states, invalid = run_state.load(self.store)
         for workflow, path, reason in invalid:
-            moved = ledger.set_aside(areas, path, f"run-reports/state/{path.name}", run_id, [reason])
+            target = self.store.path(REVIEW_QUEUE, SET_ASIDE, run_id, f"{RUN_REPORTS}--state--{path.name}")
+            self.store.move(path, target)
             rebuilt = "rebuilt from the Review Queue" if workflow == run_state.REVIEW_QUEUE else "started empty"
-            where = f"set aside as `{moved.moved_to}`" if moved.moved_to else "removed"
+            where = f"set aside as `{self.store.relative(target)}`"
             state.problems.append(f"the {workflow} run state was not valid ({reason}); it was {where} and {rebuilt}")
         return states
 
     def save_state(
-        self,
-        state: RunState,
-        areas: Areas,
-        ledger: Ledger,
-        states: run_state.States,
-        products: Sequence[str],
-        now: datetime,
+        self, state: RunState, ledger: Ledger, states: run_state.States, products: Sequence[str], now: datetime
     ) -> None:
         """Bring the Review Queue state into line with the ledger, note every difference, and save every state."""
-        hashes, _ = run_state.item_hashes(areas.workspace, ledger.entries, products, states.review_queue)
+        hashes, _ = run_state.item_hashes(self.store.root, ledger.entries, products, states.review_queue)
         states.review_queue, state.state_notes = run_state.reconcile(states.review_queue, ledger.entries, hashes)
-        run_state.save(areas, states, state.run_id, now.isoformat())
+        run_state.save(self.store, states, state.run_id, now.isoformat())
 
     def tallies(self, state: RunState, ledger: Ledger, incoming: int) -> list[run_state.Tally]:
         """What each workflow checked and acted on this run, so a quiet run still says what it looked at."""
@@ -420,20 +332,16 @@ class Cycle:
             rows.append([title, INCOMPLETE if gaps else COMPLETE, "; ".join(gaps) or done])
         state.outputs = rows
 
-    def leave_note(self, log_dir: Path, run_id: str, line: str) -> None:
-        """A one-line note in this checkout's log folder, which its next run's report shows."""
-        folder = checkout_logs(log_dir, self.repo_root) / NOTES_DIR
-        folder.mkdir(parents=True, exist_ok=True)
-        temporary = folder / f".{run_id}.tmp"
-        temporary.write_text(line + "\n", encoding="utf-8")
-        os.replace(str(temporary), str(folder / f"{run_id}.txt"))
+    def leave_note(self, run_id: str, line: str) -> None:
+        """A one-line note in ledger/notes/, which the next run's report shows."""
+        self.store.write_text(self.store.path(NOTES_DIR, f"{run_id}.txt"), line + "\n")
 
-    def lock(self, log_dir: Path, trigger: str) -> TextIO | None:
-        """This checkout's run lock, held until the returned file is closed; None if another run holds it, in which
-        case the refusal is left as a note for the checkout's next run report."""
-        logs = checkout_logs(log_dir, self.repo_root)
-        logs.mkdir(parents=True, exist_ok=True)
-        handle = (logs / LOCK_FILE).open("a")
+    def lock(self, trigger: str) -> TextIO | None:
+        """This checkout's run lock in its ledger/, held until the returned file is closed; None if another run holds
+        it, in which case the refusal is left as a note for the next run report."""
+        path = self.store.path(LOCK_FILE)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        handle = path.open("a")
         try:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
@@ -444,7 +352,7 @@ class Cycle:
                 f"Run {run_id} ({trigger}) was refused at {report.wall_clock(now):%A %Y-%m-%d %H:%M}:"
                 " another run was in progress."
             )
-            self.leave_note(log_dir, run_id, line)
+            self.leave_note(run_id, line)
             self.say("refusing to start: another run is in progress; the next run's report will say so")
             return None
         return handle
@@ -457,8 +365,7 @@ class Cycle:
         argv: Sequence[str],
         execve: Callable[[str, list[str], Mapping[str, str]], None] = os.execve,
     ) -> int:
-        log_dir = launcher.default_log_dir(self.env, self.home)
-        lock = self.lock(log_dir, trigger)
+        lock = self.lock(trigger)
         if lock is None:
             return EXIT_BUSY
         with lock:
@@ -471,7 +378,7 @@ class Cycle:
                     f"Run {run_id} ({trigger}), started {report.wall_clock(started):%A %Y-%m-%d %H:%M}, stopped"
                     f" before it finished: {error}."
                 )
-                self.leave_note(log_dir, run_id, line)
+                self.leave_note(run_id, line)
                 self.say(f"the run stopped: {error}; the next run's report will say so")
                 return EXIT_STOPPED
 
@@ -543,18 +450,18 @@ class Cycle:
         products = [str(product["name"]) for product in registry.get("products", [])]
         self.say(f"run {run_id} ({trigger}): {report.start_line(state)}")
 
-        self.snapshot(state, config, areas, boundary, registry)
-        ledger_path = areas.path("review_queue", "queue.json")
+        self.snapshot(state, config, boundary, registry)
+        ledger_path = self.store.path(REVIEW_QUEUE, QUEUE_FILE)
         ledger_ok = True
         try:
             ledger = Ledger.load(ledger_path)
         except QueueError as error:
             ledger, ledger_ok = Ledger(), False
             state.problems.append(f"{error}; the Review Queue was left untouched this run")
-        self.take_decisions(state, config, areas, folder, ledger)
-        sittings = self.sitting_runs(state, areas)
-        states = self.load_state(state, areas, ledger, run_id)
-        hashes, unreadable = run_state.item_hashes(areas.workspace, ledger.entries, products, states.review_queue)
+        self.take_decisions(state, config, folder, ledger)
+        sittings = self.sitting_runs(state)
+        states = self.load_state(state, run_id)
+        hashes, unreadable = run_state.item_hashes(self.store.root, ledger.entries, products, states.review_queue)
         state.problems += unreadable
         seen: dict[str, str] = {}
         for identifier, fingerprint in hashes.items():
@@ -574,13 +481,12 @@ class Cycle:
             for entry in ledger.entries.values()
             if entry["kind"] == "package-change-proposal" and entry["status"] != OPEN
         ]
-        areas.path("review_queue", "incoming").mkdir(parents=True, exist_ok=True)
-        brief = areas.path("run_reports", f"{run_id}.brief.md")
-        areas.write_text(brief, report.render_brief(state, canonical(self.repo_root), areas.workspace))
+        areas.path("review_queue", INCOMING).mkdir(parents=True, exist_ok=True)
+        brief = self.store.path(RUN_REPORTS, f"{run_id}.brief.md")
+        self.store.write_text(
+            brief, report.render_brief(state, canonical(self.repo_root), areas.workspace, self.store.root)
+        )
 
-        for directory in protected_paths(areas)[0]:
-            areas.remove_empty_folders(directory)
-        before = protected_state(areas)
         try:
             state.agent = launcher.run(
                 self.repo_root,
@@ -595,8 +501,6 @@ class Cycle:
             )
         except OSError as error:
             state.agent = {"exit_code": launcher.EXIT_CONFIG, "agent_started": False, "error": str(error)}
-        finally:
-            state.restored = undo_agent_changes(areas, before, run_id, ledger)
         log_dir = launcher.default_log_dir(self.env, self.home)
         last_message = log_dir / f"{run_id}.last-message.md"
         if last_message.is_file():
@@ -607,14 +511,14 @@ class Cycle:
 
         now = self.now()
         if ledger_ok:
-            state.published, state.set_aside = ledger.take_incoming(areas, products, run_id, now, seen)
+            state.published, state.set_aside = ledger.take_incoming(areas, self.store, products, run_id, now, seen)
         incoming = len(state.published) + len(state.set_aside)
-        report_path = areas.path("run_reports", f"{run_id}.md")
+        report_path = self.store.path(RUN_REPORTS, f"{run_id}.md")
         state.queue_after = ledger.ordered()
         state.problems += areas.problems
         areas.problems.clear()
         self.outputs(state, config, ledger_ok)
-        notice = report.problems_notice(state, areas.relative(report_path))
+        notice = report.problems_notice(state, self.store.relative(report_path))
         if notice and ledger_ok:
             title, body, touches, evidence = notice
             item = exchange.Item({"kind": "notice"}, title, body, touches, evidence)
@@ -623,7 +527,7 @@ class Cycle:
                 state.notice = repeated  # the same problems are already waiting for the Founder
             else:
                 try:
-                    state.notice = ledger.publish(areas, item, "notice-run-problems", run_id, now)
+                    state.notice = ledger.publish(self.store, item, "notice-run-problems", run_id, now)
                     state.published.append(state.notice)
                 except (OSError, ConfigError) as error:
                     state.problems.append(f"the notice of this run's problems could not be written ({error})")
@@ -633,25 +537,25 @@ class Cycle:
             ledger.mark_carried_over(sittings)
             next_run = report.next_due(now, config.weekly)
             try:
-                areas.write_json(ledger_path, ledger.as_json(run_id, now, areas.relative(report_path), next_run))
-            except (OSError, ConfigError) as error:
-                state.problems.append(
-                    f"`review-queue/queue.json` could not be written, so Mandu sees the last one ({error})"
+                self.store.write_json(
+                    ledger_path, ledger.as_json(run_id, now, self.store.relative(report_path), next_run)
                 )
+            except OSError as error:
+                state.problems.append(f"the Review Queue could not be written, so Mandu sees the last one ({error})")
             state.queue_after = ledger.ordered()
             try:
-                self.save_state(state, areas, ledger, states, products, now)
+                self.save_state(state, ledger, states, products, now)
             except (OSError, ConfigError) as error:
                 state.problems.append(f"the run state could not be saved ({error})")
         state.tallies = self.tallies(state, ledger, incoming)
-        notes = sorted((checkout_logs(log_dir, self.repo_root) / NOTES_DIR).glob("*.txt"))
+        notes = sorted(self.store.path(NOTES_DIR).glob("*.txt"))
         state.notes = [path.read_text(encoding="utf-8").strip() for path in notes]
         state.problems += areas.problems
         try:
-            areas.write_text(report_path, report.render_report(state))
-        except (OSError, ConfigError) as error:
-            line = f"Run {run_id} could not write its report `{areas.relative(report_path)}`: {error}."
-            self.leave_note(log_dir, run_id, line)
+            self.store.write_text(report_path, report.render_report(state))
+        except OSError as error:
+            line = f"Run {run_id} could not write its report `{self.store.relative(report_path)}`: {error}."
+            self.leave_note(run_id, line)
             self.say(f"{line} The next run's report will say so.")
         else:
             for path in notes:
@@ -689,7 +593,6 @@ class Cycle:
             queued=state.published,
             problems=state.problems,
             set_aside=[item.name for item in state.set_aside],
-            undone=state.restored,
         )
         launcher.write_json(path, record)
 

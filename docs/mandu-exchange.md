@@ -9,9 +9,9 @@ Each side writes only its own repository and only reads the other's: gr0wthlab w
 
 | What | Written by | Path on the Founder's Mac |
 | --- | --- | --- |
-| The Review Queue | gr0wthlab | `~/gr0wthlab/workspace/review-queue/queue.json` |
-| Each item | gr0wthlab | `~/gr0wthlab/workspace/review-queue/items/<id>.md` |
-| Each run report | gr0wthlab | `~/gr0wthlab/workspace/run-reports/<run id>.md` |
+| The Review Queue | gr0wthlab | `~/gr0wthlab/ledger/review-queue/queue.json` |
+| Each item | gr0wthlab | `~/gr0wthlab/ledger/review-queue/items/<id>.md` |
+| Each run report | gr0wthlab | `~/gr0wthlab/ledger/run-reports/<run id>.md` |
 | Decisions | Mandu | `~/Mandu/projects/gr0wthlab/exchange/decisions/<id>.json` |
 | Sittings | Mandu | `~/Mandu/projects/gr0wthlab/exchange/sittings/<YYYY-MM-DD>.json` |
 
@@ -33,7 +33,7 @@ To move the folder, change that configuration through a gr0wthlab pull request.
 6. At the end, write one sitting record with how many minutes the sitting took.
    Once gr0wthlab reads that record, it marks the items left undecided at the sitting as carried over.
 
-Paths inside `queue.json` are relative to `~/gr0wthlab/workspace/`.
+Paths inside `queue.json` are relative to `~/gr0wthlab/ledger/`, the folder where gr0wthlab keeps its records.
 
 ## Items (gr0wthlab writes)
 

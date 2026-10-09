@@ -1,6 +1,7 @@
 """The Review Queue: every item ever queued, which are still open, and the order Mandu presents them in.
 
-The ledger lives in workspace/review-queue/queue.json, which the launcher alone writes.
+The ledger lives in ledger/review-queue/queue.json, beside the published items; only the launcher writes there, and
+the agent can only read it. The agent proposes items in workspace/review-queue/incoming/, which the launcher checks.
 An item is queued once, under an identifier that never changes, and is closed by the Founder's decision (approved
 or rejected) or by a newer item that supersedes it; a closed item never returns to the open list.
 An open item is carried over once the Founder has left it undecided at a sitting.
@@ -15,13 +16,14 @@ from datetime import date, datetime
 from pathlib import Path
 
 from . import exchange
-from .areas import Areas, UnsafeFile, read_plain
+from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import ConfigError
 
 OPEN = "open"
 APPROVED = "approved"
 REJECTED = "rejected"
 SUPERSEDED = "superseded"
+REVIEW_QUEUE = "review-queue"
 INCOMING = "incoming"
 ITEMS = "items"
 SET_ASIDE = "set-aside"
@@ -112,18 +114,18 @@ class Ledger:
             number += 1
         return candidate
 
-    def publish(self, areas: Areas, item: exchange.Item, slug: str, run_id: str, now: datetime) -> str:
-        """Queue an item under a new identifier, writing its canonical text to items/<id>.md."""
+    def publish(self, store: Store, item: exchange.Item, slug: str, run_id: str, now: datetime) -> str:
+        """Queue an item under a new identifier, writing its canonical text to review-queue/items/<id>.md."""
         # The identifier's date is the Mac's local date, the one the Founder sees on the run.
         identifier = self.next_id(now.astimezone().date(), slug)
         fields = dict(item.fields, exchange=str(exchange.EXCHANGE_VERSION), id=identifier)
-        path = areas.path("review_queue", ITEMS, f"{identifier}.md")
-        areas.write_text(path, exchange.render_item(fields, item.ask, item.body, item.touches, item.evidence))
+        path = store.path(REVIEW_QUEUE, ITEMS, f"{identifier}.md")
+        store.write_text(path, exchange.render_item(fields, item.ask, item.body, item.touches, item.evidence))
         entry: dict[str, object] = {
             "id": identifier,
             "kind": item.kind,
             "ask": item.ask,
-            "file": areas.relative(path),
+            "file": store.relative(path),
             "published_at": now.isoformat(),
             "published_by_run": run_id,
             "status": OPEN,
@@ -137,6 +139,7 @@ class Ledger:
     def take_incoming(
         self,
         areas: Areas,
+        store: Store,
         products: Sequence[str],
         run_id: str,
         now: datetime,
@@ -156,12 +159,13 @@ class Ledger:
             name = areas.relative(path)[len("review-queue/incoming/") :]
             item, problems = self.check_incoming(path, name, products, seen)
             if item is None:
-                set_aside.append(self.set_aside(areas, path, name, run_id, problems))
+                set_aside.append(self.set_aside(areas, store, path, name, run_id, problems))
                 continue
             try:
-                identifier = self.publish(areas, item, slug_of(name), run_id, now)
+                identifier = self.publish(store, item, slug_of(name), run_id, now)
             except (OSError, ConfigError) as error:
-                set_aside.append(self.set_aside(areas, path, name, run_id, [f"could not be queued ({error})"]))
+                problem = f"could not be queued ({error})"
+                set_aside.append(self.set_aside(areas, store, path, name, run_id, [problem]))
                 continue
             areas.remove(path)
             published.append(identifier)
@@ -205,16 +209,18 @@ class Ledger:
             problems.append(f"asks the same as {seen[fingerprint]}, which is {status}")
         return (None if problems else item), problems
 
-    def set_aside(self, areas: Areas, path: Path, name: str, run_id: str, problems: Sequence[str]) -> SetAside:
-        """Move a file out of the agent's reach into set-aside/<run>/, keeping a plain file's text for the record."""
-        target = areas.path("review_queue", SET_ASIDE, run_id, name.replace("/", "--"))
+    def set_aside(
+        self, areas: Areas, store: Store, path: Path, name: str, run_id: str, problems: Sequence[str]
+    ) -> SetAside:
+        """Take a file out of incoming/ into review-queue/set-aside/<run>/, keeping a plain file's text."""
+        target = store.path(REVIEW_QUEUE, SET_ASIDE, run_id, name.replace("/", "--"))
         try:
-            areas.write_bytes(target, read_plain(path))
-        except (UnsafeFile, OSError, ConfigError) as error:
+            store.write_bytes(target, read_plain(path))
+        except (UnsafeFile, OSError) as error:
             problems = list(problems) + [f"not kept: {error}"]
             target = None
         areas.remove(path)
-        return SetAside(name, areas.relative(target) if target else "", tuple(problems))
+        return SetAside(name, store.relative(target) if target else "", tuple(problems))
 
     def ordered(self) -> list[dict[str, object]]:
         """Open items in presentation order: posts by nearest slot, then each kind in turn, oldest first."""
@@ -261,7 +267,7 @@ class Ledger:
             "updated_at": now.isoformat(),
             "run_report": report,
             "next_run": next_run.isoformat(),
-            "paths": "Every path here is relative to the workspace/ directory that holds this file's folder.",
+            "paths": "Every path here is relative to the ledger/ directory that holds this file's folder.",
             "open": self.ordered(),
             "closed": closed,
         }

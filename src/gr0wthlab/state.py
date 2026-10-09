@@ -6,7 +6,7 @@ State is a convenience, never the record.
 The Review Queue ledger and Mandu's decision records say what was decided and who was contacted; each run checks
 the state against them, repairs any difference in their favor, and says so in the run report.
 Entries hold identifiers, dates, counts, and SHA-256 hashes only: never a URL, a name, or any personal data.
-The files live in workspace/run-reports/state/, which only the launcher writes.
+The files live in ledger/run-reports/state/, which only the launcher writes and the agent can only read.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 from . import exchange
-from .areas import Areas, UnsafeFile, read_plain
+from .areas import Store, UnsafeFile, read_plain
 
 STATE_FORMAT = 1
 STATE_DIR = "state"
@@ -271,16 +271,16 @@ class States:
 PARSERS = {REVIEW_QUEUE: ReviewQueueState, LISTENING: ListeningState, OUTREACH: OutreachState}
 
 
-def state_path(areas: Areas, workflow: str) -> Path:
-    return areas.path("run_reports", STATE_DIR, f"{workflow}.json")
+def state_path(store: Store, workflow: str) -> Path:
+    return store.path("run-reports", STATE_DIR, f"{workflow}.json")
 
 
-def load(areas: Areas) -> tuple[States, list[tuple[str, Path, str]]]:
+def load(store: Store) -> tuple[States, list[tuple[str, Path, str]]]:
     """Every workflow's state; a missing file is an empty state, and an invalid one is returned with its reason."""
     states = States()
     invalid = []
     for workflow, parser in PARSERS.items():
-        path = state_path(areas, workflow)
+        path = state_path(store, workflow)
         if not path.exists() and not path.is_symlink():
             continue
         try:
@@ -295,15 +295,15 @@ def load(areas: Areas) -> tuple[States, list[tuple[str, Path, str]]]:
     return states, invalid
 
 
-def save(areas: Areas, states: States, run_id: str, at: str) -> None:
+def save(store: Store, states: States, run_id: str, at: str) -> None:
     for workflow, state in states.by_workflow().items():
         record = {"format": STATE_FORMAT, "workflow": workflow, "updated_by_run": run_id, "updated_at": at}
         record.update(state.as_json())
-        areas.write_json(state_path(areas, workflow), record)
+        store.write_json(state_path(store, workflow), record)
 
 
 def item_hashes(
-    workspace: Path,
+    root: Path,
     ledger_entries: Mapping[str, Mapping[str, object]],
     products: Sequence[str],
     previous: ReviewQueueState,
@@ -314,8 +314,8 @@ def item_hashes(
         try:
             relative = Path(str(entry["file"]))
             if relative.is_absolute() or ".." in relative.parts:
-                raise StateError("its path leaves workspace/")
-            text = read_plain(workspace / relative).decode("utf-8")
+                raise StateError(f"its path leaves {root.name}/")
+            text = read_plain(root / relative).decode("utf-8")
             check = exchange.check_item(text, products, published=True)
             if check.item is None:
                 raise StateError("; ".join(check.problems))

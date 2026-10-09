@@ -8,7 +8,7 @@ from datetime import date
 from pathlib import Path
 
 from gr0wthlab import boundary, state
-from gr0wthlab.areas import Areas
+from gr0wthlab.areas import Store
 from gr0wthlab.state import ListeningState, OutreachState, ReviewQueueState, StateError, Tally
 from tests.test_boundary import CONFIG, REGISTRY
 
@@ -161,32 +161,32 @@ class FilesTest(unittest.TestCase):
         for area in CONFIG["writable_areas"].values():
             (self.repo / area).mkdir(parents=True)
         resolved = boundary.resolve_boundary(self.repo, CONFIG, REGISTRY, {}, self.repo.parent, git=[])
-        self.areas = Areas(resolved)
+        self.store = Store(resolved.ledger)
 
     def tearDown(self):
         self.tmp.cleanup()
 
     def test_missing_files_are_empty_states_and_saved_files_round_trip(self):
-        states, invalid = state.load(self.areas)
+        states, invalid = state.load(self.store)
         self.assertEqual(invalid, [])
         states.listening.mark("https://example.com/t/1", date(2026, 10, 11))
-        state.save(self.areas, states, "RUN1", "2026-10-11T23:00:00+00:00")
+        state.save(self.store, states, "RUN1", "2026-10-11T23:00:00+00:00")
         for workflow in state.WORKFLOWS:
-            record = json.loads(state.state_path(self.areas, workflow).read_text(encoding="utf-8"))
+            record = json.loads(state.state_path(self.store, workflow).read_text(encoding="utf-8"))
             self.assertEqual((record["format"], record["workflow"], record["updated_by_run"]), (1, workflow, "RUN1"))
-        again, invalid = state.load(self.areas)
+        again, invalid = state.load(self.store)
         self.assertEqual(invalid, [])
         self.assertTrue(again.listening.seen("https://example.com/t/1"))
 
     def test_an_invalid_or_linked_file_is_reported_not_trusted(self):
-        directory = self.repo / "workspace/run-reports/state"
+        directory = self.repo / "ledger/run-reports/state"
         directory.mkdir(parents=True)
         (directory / "review-queue.json").write_text("{not json", encoding="utf-8")
         (directory / "listening.json").write_text(json.dumps({"format": 1, "workflow": "outreach"}), encoding="utf-8")
         elsewhere = self.repo.parent / "outreach.json"
         elsewhere.write_text(json.dumps({"format": 1, "workflow": "outreach", "targets": {}}), encoding="utf-8")
         os.symlink(str(elsewhere), str(directory / "outreach.json"))
-        states, invalid = state.load(self.areas)
+        states, invalid = state.load(self.store)
         self.assertEqual([workflow for workflow, _, _ in invalid], ["review-queue", "listening", "outreach"])
         self.assertEqual(states.outreach.targets, {})
 

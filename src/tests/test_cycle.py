@@ -6,8 +6,6 @@ import json
 import os
 import plistlib
 import re
-import stat
-import subprocess
 import sys
 import tempfile
 import unittest
@@ -16,7 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 from gr0wthlab import cli, cycle, exchange, package
-from gr0wthlab.areas import Areas
+from gr0wthlab.areas import Store
 from gr0wthlab.report import next_due
 from tests import fakes
 
@@ -46,13 +44,9 @@ class CycleTestCase(unittest.TestCase):
         self.clock = fakes.Clock(fakes.SUNDAY_RUN)
 
     def tearDown(self):
-        if sys.platform == "darwin":
-            subprocess.run(["/bin/chmod", "-R", "-N", self.tmp.name], capture_output=True, check=False)
         for root, dirs, files in os.walk(self.tmp.name):
             for name in dirs + files:
                 path = os.path.join(root, name)
-                if hasattr(os, "chflags"):
-                    os.chflags(path, 0, follow_symlinks=False)
                 if not os.path.islink(path):
                     os.chmod(path, 0o755)
         self.tmp.cleanup()
@@ -69,11 +63,14 @@ class CycleTestCase(unittest.TestCase):
     def workspace(self, repo=None):
         return (repo or self.repo) / "workspace"
 
+    def ledger(self, repo=None):
+        return (repo or self.repo) / "ledger"
+
     def queue(self, repo=None):
-        return json.loads((self.workspace(repo) / "review-queue/queue.json").read_text(encoding="utf-8"))
+        return json.loads((self.ledger(repo) / "review-queue/queue.json").read_text(encoding="utf-8"))
 
     def report(self, repo=None):
-        reports = sorted((self.workspace(repo) / "run-reports").glob("2*Z-*.md"))
+        reports = sorted((self.ledger(repo) / "run-reports").glob("2*Z-*.md"))
         reports = [path for path in reports if not path.name.endswith(".brief.md")]
         return reports[-1].read_text(encoding="utf-8")
 
@@ -107,9 +104,9 @@ class FirstRunTest(CycleTestCase):
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
         code, out = self.run_cycle()
         self.assertEqual(code, 0, out)
-        workspace = self.workspace()
+        ledger = self.ledger()
 
-        snapshots = list((workspace / "evidence/package-snapshots").glob("*.json"))
+        snapshots = list((ledger / "evidence/package-snapshots").glob("*.json"))
         self.assertEqual(len(snapshots), 1)
         snapshot = json.loads(snapshots[0].read_text(encoding="utf-8"))
         files = snapshot["products"]["RepToday"]["files"]
@@ -123,9 +120,9 @@ class FirstRunTest(CycleTestCase):
         next_run = datetime.fromisoformat(queue["next_run"])
         self.assertEqual(next_run, next_due(datetime.fromisoformat(queue["updated_at"]), ("sunday", "16:00")))
         self.assertTrue(timedelta(0) < next_run - datetime.fromisoformat(queue["updated_at"]) <= timedelta(days=7))
-        item = (workspace / "review-queue/items/20261011-name-status-stale.md").read_text(encoding="utf-8")
+        item = (ledger / "review-queue/items/20261011-name-status-stale.md").read_text(encoding="utf-8")
         self.assertEqual(exchange.check_item(item, ["RepToday", "Immerse"], published=True).problems, [])
-        self.assertEqual(list((workspace / "review-queue/incoming").iterdir()), [])
+        self.assertEqual(list((self.workspace() / "review-queue/incoming").iterdir()), [])
 
         report = self.report()
         self.assertIn(
@@ -134,7 +131,7 @@ class FirstRunTest(CycleTestCase):
         )
         self.assertIn("- listening: checked=0 acted=0 note=not built until US-ME13", report)
         for workflow in ("review-queue", "listening", "outreach"):
-            self.assertTrue((workspace / f"run-reports/state/{workflow}.json").is_file(), workflow)
+            self.assertTrue((ledger / f"run-reports/state/{workflow}.json").is_file(), workflow)
         self.assertIn("On demand, started", report)
         self.assertIn("| RepToday package: `projects/RepToday/gtm/05-social-pmf/angles.md` | read |", report)
         self.assertIn("| Mandu decisions | skipped | no Review Queue item is waiting for a decision yet |", report)
@@ -152,19 +149,19 @@ class FirstRunTest(CycleTestCase):
     def test_an_invalid_run_state_is_set_aside_rebuilt_and_reported(self):
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
         self.run_cycle()
-        (self.workspace() / "run-reports/state/review-queue.json").write_text("{broken", encoding="utf-8")
+        (self.ledger() / "run-reports/state/review-queue.json").write_text("{broken", encoding="utf-8")
         day = self.sit()
         fakes.behave(self.codex_dir, {})
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
         notice = next(e for e in self.queue()["open"] if e["kind"] == "notice")
-        text = (self.workspace() / notice["file"]).read_text(encoding="utf-8")
+        text = (self.ledger() / notice["file"]).read_text(encoding="utf-8")
         self.assertIn("the review-queue run state was not valid", text)
-        rebuilt = json.loads((self.workspace() / "run-reports/state/review-queue.json").read_text(encoding="utf-8"))
+        rebuilt = json.loads((self.ledger() / "run-reports/state/review-queue.json").read_text(encoding="utf-8"))
         self.assertEqual(rebuilt["carried"]["20261011-name-status-stale"]["carried_over_from"], day)
 
     def test_state_files_the_launcher_sets_aside_are_not_reported_as_the_agent_s(self):
         self.run_cycle()
-        for path in (self.workspace() / "run-reports/state").iterdir():
+        for path in (self.ledger() / "run-reports/state").iterdir():
             path.write_text("{broken", encoding="utf-8")
         code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
         self.assertEqual(code, 0, out)
@@ -222,21 +219,21 @@ class DecisionRoundTripTest(CycleTestCase):
         closed = {entry["id"]: entry["status"] for entry in second["closed"]}
         self.assertEqual(closed[ids["post"]], "approved")
         self.assertEqual(closed[ids["message"]], "rejected")
-        evidence = self.workspace() / "evidence/decisions"
+        evidence = self.ledger() / "evidence/decisions"
         rejected = json.loads((evidence / f"{ids['message']}.json").read_text(encoding="utf-8"))
         self.assertEqual((rejected["decision"], rejected["reason"]), ("reject", "Too salesy for my network."))
         self.assertEqual(rejected["item_file"], f"review-queue/items/{ids['message']}.md")
         self.assertEqual(rejected["source"]["path"], str(self.exchange / f"decisions/{ids['message']}.json"))
         approved = json.loads((evidence / f"{ids['post']}.json").read_text(encoding="utf-8"))
         self.assertEqual(approved["note"], "Good hook.")
-        self.assertTrue((self.workspace() / "evidence/sittings/2026-10-11.json").is_file())
+        self.assertTrue((self.ledger() / "evidence/sittings/2026-10-11.json").is_file())
         report = self.report()
         self.assertIn("| Mandu decisions | changed | 4 records, 4 new since the previous run |", report)
         self.assertIn("Reason: Wait for counsel.", report)
         self.assertIn(f"Sitting {day}: 41 minutes.", report)
         self.assertIn(f"carried over from the sitting on {day}", report)
 
-        recorded = json.loads((self.workspace() / "run-reports/state/review-queue.json").read_text(encoding="utf-8"))
+        recorded = json.loads((self.ledger() / "run-reports/state/review-queue.json").read_text(encoding="utf-8"))
         self.assertEqual(
             {key: value["outcome"] for key, value in recorded["handled"].items()},
             {
@@ -257,11 +254,11 @@ class DecisionRoundTripTest(CycleTestCase):
         code, _ = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
         third = self.queue()
         self.assertEqual([e["kind"] for e in third["open"]], ["weekly-read-decision", "dispatch-request", "notice"])
-        notice = (self.workspace() / third["open"][2]["file"]).read_text(encoding="utf-8")
+        notice = (self.ledger() / third["open"][2]["file"]).read_text(encoding="utf-8")
         self.assertIn(f"asks the same as {ids['package-change-proposal']}, which is rejected", notice)
         self.assertIn(f"carried over from the sitting on {day}", self.report())
         self.assertIn("4 records, 0 new since the previous run", self.report())
-        brief = sorted((self.workspace() / "run-reports").glob("*.brief.md"))[-1].read_text(encoding="utf-8")
+        brief = sorted((self.ledger() / "run-reports").glob("*.brief.md"))[-1].read_text(encoding="utf-8")
         self.assertIn("rejected: Approve package change: name-status-stale. Reason: Wait for counsel.", brief)
 
     def test_bad_and_unmatched_decisions_become_a_notice_and_the_item_stays_open(self):
@@ -274,7 +271,7 @@ class DecisionRoundTripTest(CycleTestCase):
         queue = self.queue()
         kinds = [entry["kind"] for entry in queue["open"]]
         self.assertEqual(kinds, ["package-change-proposal", "notice"])
-        notice = (self.workspace() / queue["open"][1]["file"]).read_text(encoding="utf-8")
+        notice = (self.ledger() / queue["open"][1]["file"]).read_text(encoding="utf-8")
         self.assertIn("reason is required", notice)
         self.assertIn("no queued item has this identifier", notice)
 
@@ -319,9 +316,7 @@ class CarryOverTest(CycleTestCase):
 
 class RunLockTest(CycleTestCase):
     def hold_lock(self, repo):
-        logs = cycle.checkout_logs(self.logs, repo)
-        logs.mkdir(parents=True, exist_ok=True)
-        held = (logs / cycle.LOCK_FILE).open("a")
+        held = (self.ledger(repo) / cycle.LOCK_FILE).open("a")
         fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         return held
 
@@ -331,14 +326,14 @@ class RunLockTest(CycleTestCase):
         self.assertEqual(code, cycle.EXIT_BUSY)
         self.assertIn("refusing to start: another run is in progress", out)
         self.assertFalse((self.codex_dir / "prompt.txt").exists())
-        self.assertFalse((self.workspace() / "review-queue/queue.json").exists())
+        self.assertFalse((self.ledger() / "review-queue/queue.json").exists())
 
         code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=5))
         self.assertEqual(code, 0, out)
         self.assertRegex(
             self.report(), r"\n- Run \S+-scheduled-\S+ \(scheduled\) was refused at .*: another run was in progress\.\n"
         )
-        self.assertEqual(list((cycle.checkout_logs(self.logs, self.repo) / cycle.NOTES_DIR).iterdir()), [])
+        self.assertEqual(list((self.ledger() / cycle.NOTES_DIR).iterdir()), [])
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10))
         self.assertNotIn("was refused", self.report())
 
@@ -373,11 +368,11 @@ class FailuresTest(CycleTestCase):
         self.assertIn("| Founder decisions taken in | complete |", report)
         queue = self.queue()
         self.assertEqual([entry["kind"] for entry in queue["open"]], ["notice"])
-        notice = (self.workspace() / queue["open"][0]["file"]).read_text(encoding="utf-8")
+        notice = (self.ledger() / queue["open"][0]["file"]).read_text(encoding="utf-8")
         self.assertIn("could not be read, so the work that needs them is incomplete", notice)
         self.assertIn("Post Drafts", notice)
         self.assertIn("Weekly Read memo", notice)
-        brief = next((self.workspace() / "run-reports").glob("*.brief.md")).read_text(encoding="utf-8")
+        brief = next((self.ledger() / "run-reports").glob("*.brief.md")).read_text(encoding="utf-8")
         self.assertIn("A failed source blocks only the work that needs it", brief)
         self.assertIn("Review every other package file as usual", brief)
         self.assertIn(
@@ -399,233 +394,49 @@ class FailuresTest(CycleTestCase):
         self.run_cycle()
         queue = self.queue()
         self.assertEqual([entry["kind"] for entry in queue["open"]], ["notice"])
-        kept = list((self.workspace() / "review-queue/set-aside").rglob("broken.md"))
+        kept = list((self.ledger() / "review-queue/set-aside").rglob("broken.md"))
         self.assertEqual(len(kept), 1)
-        notice = (self.workspace() / queue["open"][0]["file"]).read_text(encoding="utf-8")
+        notice = (self.ledger() / queue["open"][0]["file"]).read_text(encoding="utf-8")
         self.assertIn("`broken.md`: sections must be exactly", notice)
 
-    def test_the_agent_cannot_change_launcher_records(self):
+    def test_look_alikes_in_the_agent_s_areas_never_change_the_launcher_s_records(self):
+        self.exchange.mkdir()
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
         self.run_cycle()
-        queue_before = (self.workspace() / "review-queue/queue.json").read_text(encoding="utf-8")
-        forged = {"exchange": 1, "open": [], "closed": []}
-        fakes.behave(
-            self.codex_dir,
-            {
-                "write": {
-                    "review-queue/queue.json": json.dumps(forged),
-                    "evidence/decisions/20261011-name-status-stale.json": "{}",
-                },
-                "delete": ["drafts/README.md"],
-            },
-        )
+        forged = {"exchange": exchange.EXCHANGE_VERSION, "open": [], "closed": []}
+        writes = {
+            "review-queue/queue.json": json.dumps(forged),
+            "evidence/decisions/20261011-name-status-stale.json": "{}",
+        }
+        fakes.behave(self.codex_dir, {"write": writes})
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
-        queue = self.queue()
-        self.assertEqual([entry["id"] for entry in queue["open"]][:1], ["20261011-name-status-stale"])
-        self.assertFalse((self.workspace() / "evidence/decisions/20261011-name-status-stale.json").exists())
-        self.assertTrue((self.workspace() / "drafts/README.md").is_file())
-        self.assertNotEqual(queue_before, "")
-        report = self.report()
-        self.assertIn("restored `review-queue/queue.json`", report)
-        self.assertIn("set aside `evidence/decisions/20261011-name-status-stale.json`", report)
-        self.assertIn("restored `drafts/README.md`", report)
+        self.assertEqual([entry["id"] for entry in self.queue()["open"]], ["20261011-name-status-stale"])
+        self.assertFalse((self.ledger() / "evidence/decisions/20261011-name-status-stale.json").exists())
 
-    def test_the_agent_cannot_replace_a_folder_the_launcher_writes_in(self):
-        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
-        self.run_cycle()
-        items = self.workspace() / "review-queue/items"
-        item = items / "20261011-name-status-stale.md"
-        original = item.read_bytes()
+    def test_a_linked_incoming_folder_is_never_followed(self):
         outside = self.root / "outside"
         (outside / "empty").mkdir(parents=True)
-        replacements = {
-            "a file": ("review-queue/items", {"write": {"review-queue/items": "not a folder"}}),
-            "a link": ("review-queue/items", {"symlink": {"review-queue/items": str(outside)}}),
-            "a linked incoming folder": ("review-queue/incoming", {"symlink": {"review-queue/incoming": str(outside)}}),
-        }
-        for number, (case, (folder, behavior)) in enumerate(replacements.items(), 1):
-            with self.subTest(case=case):
-                fakes.behave(self.codex_dir, dict(behavior, rmtree=[folder]))
-                code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10 * number))
-                self.assertEqual(code, 0, out)
-                self.assertTrue(items.is_dir() and not items.is_symlink())
-                self.assertEqual(item.read_bytes(), original)
-                report = self.report()
-                self.assertIn(f"removed `{folder}`, which the agent put in place of a folder", report)
-                if folder == "review-queue/items":
-                    self.assertIn("restored `review-queue/items/20261011-name-status-stale.md`", report)
-                self.assertEqual(sorted(path.name for path in outside.iterdir()), ["empty"])
-                self.assertIn("20261011-name-status-stale", [entry["id"] for entry in self.queue()["open"]])
+        fakes.behave(
+            self.codex_dir, {"rmtree": ["review-queue/incoming"], "symlink": {"review-queue/incoming": str(outside)}}
+        )
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(sorted(path.name for path in outside.iterdir()), ["empty"])
 
-    def test_the_agent_cannot_replace_an_area_or_this_run_s_set_aside_folder(self):
-        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
-        self.run_cycle()
+    def test_an_area_replaced_by_a_link_is_never_followed_and_stops_the_next_run(self):
         outside = self.root / "outside"
         (outside / "decisions").mkdir(parents=True)
-        (outside / "decisions/20261011-name-status-stale.json").write_text('{"decision": "approve"}', encoding="utf-8")
-
-        def tree():
-            return {str(path.relative_to(outside)): path.is_dir() or path.read_bytes() for path in outside.rglob("*")}
-
-        untouched = tree()
-        replacements = {
-            "evidence": {"rmtree": ["evidence"], "symlink": {"evidence": str(outside)}},
-            "run-reports": {"rmtree": ["run-reports"], "symlink": {"run-reports": str(outside)}},
-            "review-queue/set-aside/{run}": {
-                "symlink": {"review-queue/set-aside/{run}": str(outside)},
-                "write": {"review-queue/items/forged.md": "forged"},
-            },
-        }
-        for number, (folder, behavior) in enumerate(replacements.items(), 1):
-            with self.subTest(folder=folder):
-                fakes.behave(self.codex_dir, behavior)
-                code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10 * number))
-                self.assertEqual(code, 0, out)
-                self.assertEqual(tree(), untouched)
-                reports = (self.workspace() / "run-reports").glob("2*Z-*.md")
-                run_id = sorted(path.name for path in reports if not path.name.endswith(".brief.md"))[-1][: -len(".md")]
-                report = self.report()
-                name = folder.replace("{run}", run_id)
-                self.assertIn(f"removed `{name}`, which the agent put in place of a folder", report)
-                for area in ("evidence", "run-reports"):
-                    path = self.workspace() / area
-                    self.assertTrue(path.is_dir() and not path.is_symlink() and (path / "README.md").is_file())
-                self.assertIn("20261011-name-status-stale", [entry["id"] for entry in self.queue()["open"]])
-        self.assertIn("set aside `review-queue/items/forged.md`, which the agent added", report)
-        snapshots = self.workspace() / "evidence/package-snapshots"
-        self.assertEqual(len(list(snapshots.glob("*.json"))), 4)
-
-    def test_a_folder_the_agent_plants_where_the_launcher_writes_is_removed(self):
-        self.exchange.mkdir()
-        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
-        self.run_cycle()
-        day = fakes.SUNDAY_RUN.astimezone().strftime("%Y%m%d")
-        planted = [
-            "evidence/decisions/20261011-name-status-stale.json",
-            "run-reports/{run}.md",
-            f"review-queue/items/{day}-notice-run-problems.md",
-            "run-reports/state/hidden/deeper",
-        ]
-        behavior = {
-            "write": {"run-reports/state/hidden/note.md": "hidden"},
-            "mkdir": planted,
-            "chmod": {"run-reports/state/hidden": 0},
-        }
-        fakes.behave(self.codex_dir, behavior)
-        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10))
-        self.assertEqual(code, 0, out)
-        workspace = self.workspace()
-        reports = (workspace / "run-reports").glob("2*Z-*.md")
-        run_id = sorted(path.name for path in reports if not path.name.endswith(".brief.md"))[-1][: -len(".md")]
-        self.assertTrue((workspace / f"run-reports/{run_id}.md").is_file())
-        report = self.report()
-        for folder in [*planted[:3], "run-reports/state/hidden"]:
-            name = folder.replace("{run}", run_id)
-            self.assertIn(f"removed folder `{name}`, which the agent added", report)
-        self.assertIn("set aside `run-reports/state/hidden/note.md`, which the agent added", report)
-        self.assertFalse((workspace / "evidence/decisions/20261011-name-status-stale.json").exists())
-        notice = next(entry for entry in self.queue()["open"] if entry["kind"] == "notice")
-        self.assertEqual(notice["id"], f"{day}-notice-run-problems")
-        self.assertTrue((workspace / notice["file"]).is_file())
-
-        self.decide("20261011-name-status-stale", "approve")
-        fakes.behave(self.codex_dir, {})
-        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=20))
-        self.assertEqual(code, 0, out)
-        self.assertTrue((workspace / "evidence/decisions/20261011-name-status-stale.json").is_file())
-
-    def assert_complete(self, code, out):
-        self.assertEqual(code, 0, out)
-        workspace = self.workspace()
-        reports = (workspace / "run-reports").glob("2*Z-*.md")
-        run_id = sorted(path.name for path in reports if not path.name.endswith(".brief.md"))[-1][: -len(".md")]
-        self.assertEqual(self.queue()["updated_by_run"], run_id)
-        notice = next(entry for entry in self.queue()["open"] if entry["kind"] == "notice")
-        self.assertTrue((workspace / notice["file"]).is_file())
-        for workflow in ("review-queue", "listening", "outreach"):
-            state = json.loads((workspace / f"run-reports/state/{workflow}.json").read_text(encoding="utf-8"))
-            self.assertEqual(state["updated_by_run"], run_id)
-        return self.report()
-
-    def test_a_locked_folder_in_place_of_a_record_does_not_stop_the_run(self):
-        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
-        self.run_cycle()
-        behavior = {
-            "delete": ["review-queue/queue.json", "evidence/README.md"],
-            "write": {"review-queue/queue.json/x/y.md": "hidden", "evidence/README.md/x/y.md": "hidden"},
-            "chmod": {"review-queue/queue.json/x": 0, "evidence/README.md/x": 0},
-        }
-        fakes.behave(self.codex_dir, behavior)
-        report = self.assert_complete(*self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10)))
-        self.assertIn("restored `review-queue/queue.json`", report)
-        self.assertIn("restored `evidence/README.md`", report)
-        self.assertTrue((self.workspace() / "evidence/README.md").is_file())
-
-    @unittest.skipUnless(sys.platform == "darwin", "BSD flags and ACLs are macOS's")
-    def test_flags_and_acls_the_agent_sets_do_not_stop_the_run(self):
-        self.exchange.mkdir()
-        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
-        self.run_cycle()
-        behavior = {
-            "write": {"review-queue/items/forged.md": "forged", "review-queue/items/denied.md": "denied"},
-            "mkdir": ["evidence/decisions/locked"],
-            "acl": {
-                "review-queue/items/denied.md": "everyone deny delete,writesecurity",
-                "review-queue/items": "everyone deny add_file,delete_child,list,writesecurity",
-            },
-            "chflags": {
-                "evidence/decisions/locked": stat.UF_IMMUTABLE,
-                "review-queue/items/forged.md": stat.UF_IMMUTABLE,
-                "run-reports": stat.UF_IMMUTABLE,
-            },
-        }
-        fakes.behave(self.codex_dir, behavior)
-        report = self.assert_complete(*self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10)))
-        self.assertIn("removed folder `evidence/decisions/locked`, which the agent added", report)
-        for name in ("forged", "denied"):
-            self.assertIn(f"set aside `review-queue/items/{name}.md`, which the agent added", report)
-            self.assertFalse((self.workspace() / f"review-queue/items/{name}.md").exists())
-        self.assertEqual(os.lstat(str(self.workspace() / "run-reports")).st_flags, 0)
-        self.assertNotIn("could not undo", report)
-        self.assertNotIn("could not remove", report)
-
-    def test_links_the_agent_plants_never_carry_a_launcher_write_outside_the_workspace(self):
-        self.exchange.mkdir()
-        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
-        self.run_cycle()
-        outside = self.root / "outside"
-        outside.mkdir()
-        (outside / "kept.md").write_text("kept", encoding="utf-8")
-        notice = f"review-queue/items/{fakes.SUNDAY_RUN.astimezone():%Y%m%d}-notice-run-problems.md"
-        written = [
-            "review-queue/queue.json",
-            "drafts/README.md",
-            "run-reports/{run}.md",
-            "run-reports/state/review-queue.json",
-            "review-queue/set-aside/{run}/review-queue--items--forged.md",
-            notice,
-        ]
-        links = {}
-        for number, record in enumerate(written):
-            folder, name = record.rsplit("/", 1)
-            links[f"{folder}/.{name}.tmp-{{ppid}}"] = str(outside / f"temporary-{number}")
-        links.update({record: str(outside / "kept.md") for record in written})
-        behavior = {
-            "delete": ["review-queue/queue.json", "drafts/README.md", "run-reports/state/review-queue.json"],
-            "write": {"review-queue/items/forged.md": "forged"},
-            "symlink": links,
-        }
-        fakes.behave(self.codex_dir, behavior)
-        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10))
+        (outside / "decisions/20261011-x.json").write_text("{}", encoding="utf-8")
+        fakes.behave(self.codex_dir, {"rmtree": ["evidence"], "symlink": {"evidence": str(outside)}})
+        code, out = self.run_cycle()
         self.assertEqual(code, 0, out)
         self.assertEqual(
-            {path.name: path.read_text(encoding="utf-8") for path in outside.iterdir()}, {"kept.md": "kept"}
+            sorted(str(path.relative_to(outside)) for path in outside.rglob("*")),
+            ["decisions", "decisions/20261011-x.json"],
         )
-        for record in ("review-queue/queue.json", "drafts/README.md", notice):
-            path = self.workspace() / record
-            self.assertTrue(path.is_file() and not path.is_symlink(), record)
-        self.assertIn("set aside `review-queue/items/forged.md`, which the agent added", self.report())
-        self.assertIn(notice, [entry["file"] for entry in self.queue()["open"]])
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10))
+        self.assertEqual(code, cycle.launcher.EXIT_CONFIG)
+        self.assertIn("writable area evidence", out)
 
     def test_a_named_pipe_the_agent_leaves_does_not_stall_the_run(self):
         incoming = self.workspace() / "review-queue/incoming"
@@ -689,18 +500,18 @@ class FailuresTest(CycleTestCase):
 
 class NotesTest(CycleTestCase):
     def test_a_report_that_cannot_be_written_is_named_in_the_next_one(self):
-        original = Areas.write_text
+        original = Store.write_text
 
-        def refuse_reports(areas, path, text):
+        def refuse_reports(store, path, text):
             if path.parent.name == "run-reports" and not path.name.endswith(".brief.md"):
                 raise PermissionError(1, "Operation not permitted", str(path))
-            original(areas, path, text)
+            original(store, path, text)
 
-        with mock.patch.object(Areas, "write_text", refuse_reports):
+        with mock.patch.object(Store, "write_text", refuse_reports):
             code, out = self.run_cycle()
         self.assertEqual(code, 0, out)
         self.assertIn("could not write its report", out)
-        reports = [path for path in (self.workspace() / "run-reports").glob("2*Z-*.md") if ".brief." not in path.name]
+        reports = [path for path in (self.ledger() / "run-reports").glob("2*Z-*.md") if ".brief." not in path.name]
         self.assertEqual(reports, [])
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10))
         self.assertRegex(self.report(), r"\n- Run \S+ could not write its report `run-reports/\S+\.md`: ")
@@ -734,7 +545,7 @@ class NotesTest(CycleTestCase):
 
 
 class ProductionCloneTest(CycleTestCase):
-    """The production clone syncs from its remote before a run and pushes workspace/ after it."""
+    """The production clone syncs from its remote before a run and pushes workspace/ and ledger/ after it."""
 
     def setUp(self):
         super().setUp()
@@ -745,16 +556,24 @@ class ProductionCloneTest(CycleTestCase):
         self.clone = self.root / "production"
         fakes.git(self.root, "clone", "--quiet", str(self.remote), str(self.clone), env=self.env)
 
-    def test_a_run_saves_only_workspace_to_main(self):
-        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+    def test_a_run_saves_only_workspace_and_ledger_to_main(self):
+        writes = {
+            "review-queue/incoming/name-status-stale.md": fakes.PROPOSAL,
+            "drafts/README.md": "rewritten by the agent\n",
+            "drafts/day-3.md": "a Draft\n",
+        }
+        fakes.behave(self.codex_dir, {"write": writes})
         code, out = self.run_cycle(repo=self.clone)
         self.assertEqual(code, 0, out)
         self.assertIn("pre-run: current", out)
         self.assertIn("records: pushed", out)
         changed = fakes.git(self.remote, "diff", "--name-only", "HEAD~1", "HEAD", env=self.env).split()
-        self.assertTrue(changed)
-        self.assertTrue(all(path.startswith("workspace/") for path in changed), changed)
-        self.assertIn("workspace/review-queue/queue.json", changed)
+        self.assertTrue(all(path.startswith(("workspace/", "ledger/")) for path in changed), changed)
+        self.assertIn("ledger/review-queue/queue.json", changed)
+        self.assertIn("workspace/drafts/day-3.md", changed)
+        self.assertNotIn("workspace/drafts/README.md", changed)
+        self.assertNotIn("ledger/run.lock", changed)
+        self.assertEqual((self.clone / "workspace/drafts/README.md").read_text(encoding="utf-8"), "# drafts\n")
         self.assertEqual(fakes.git(self.clone, "status", "--porcelain", env=self.env), "")
 
     def test_new_reviewed_code_is_fast_forwarded_and_the_run_restarts_on_it(self):
@@ -778,7 +597,7 @@ class ProductionCloneTest(CycleTestCase):
             handle.write("Unreviewed line.\n")
         code, out = self.run_cycle(repo=self.clone)
         self.assertEqual(code, cycle.EXIT_RECORDS)
-        self.assertIn("changes outside workspace/", out)
+        self.assertIn("changes outside workspace/ and ledger/", out)
         self.assertFalse((self.codex_dir / "prompt.txt").exists())
 
 

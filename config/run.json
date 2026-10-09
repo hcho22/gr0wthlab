@@ -1,5 +1,5 @@
 {
-  "description": "How each Marketing Engineer run works around the agent: its task definition, weekly schedule, the outputs and sources its run report accounts for, the records step that saves workspace/ to main, and the prices behind its approximate cost. The launcher reads this file; the agent cannot write it (G8). The exchange with Mandu: docs/mandu-exchange.md. Operating the production clone: docs/operations.md.",
+  "description": "How each Marketing Engineer run works around the agent: its task definition, weekly schedule, the outputs and sources its run report accounts for, the records step that saves workspace/ and ledger/ to main, and the prices behind its approximate cost. The launcher reads this file; the agent cannot write it (G8). The exchange with Mandu: docs/mandu-exchange.md. Operating the production clone: docs/operations.md.",
   "instruction": "src/instructions/weekly-run.md",
   "schedule": {
     "day": "sunday",

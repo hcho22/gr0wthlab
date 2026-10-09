@@ -1,7 +1,9 @@
 """The production clone's git steps, run by the launcher outside the sandbox.
 
 Before a run, bring main up to the reviewed code on origin by fast-forward only.
-After a run, commit the changed workspace/ paths and push them to main, never anything else and never by force.
+After a run, commit the changed workspace/ and ledger/ paths, the agent's outputs and the launcher's records, and push
+them to main, never anything else and never by force; a README in either is documentation, which only a reviewed pull
+request changes, so a change to one is put back instead.
 Only the production clone (config/run.json's records.production_clone) runs either step; every other checkout,
 such as a firstmate worktree, runs without touching git.
 """
@@ -15,11 +17,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-WORKSPACE = "workspace/"
+from .boundary import LEDGER
+
+RECORD_DIRS = ("workspace/", f"{LEDGER}/")
 NETWORK_TIMEOUT = 120
 LOCAL_TIMEOUT = 60
-# Files that would change how git treats the records themselves are never committed from workspace/.
+# Files that would change how git treats the records themselves are never committed.
 GIT_CONTROL_FILES = (".gitattributes", ".gitignore", ".gitmodules")
+DOCUMENTATION = "README.md"
 PLAIN_MODES = ("100644", "100755")
 
 # Pre-run outcomes.
@@ -67,7 +72,7 @@ class Save:
     commit: str | None = None
     pushed: int = 0
     excluded: list[str] = field(default_factory=list)
-    outside_workspace: list[str] = field(default_factory=list)
+    outside_records: list[str] = field(default_factory=list)
 
     def as_json(self) -> dict[str, object]:
         return dict(self.__dict__)
@@ -126,19 +131,19 @@ class Git:
 
 
 def outside(paths: Sequence[str]) -> list[str]:
-    return sorted({path for path in paths if path and not path.startswith(WORKSPACE)})
+    return sorted({path for path in paths if path and not path.startswith(RECORD_DIRS)})
 
 
 def local_commits_outside(git: Git, upstream: str) -> list[str]:
-    """Commits on main but not on the remote that touch anything outside workspace/."""
+    """Commits on main but not on the remote that touch anything outside workspace/ and ledger/."""
     return [commit for commit in git.commits(f"{upstream}..HEAD") if outside(git.changed_paths(commit))]
 
 
 def prepare(repo: Path, remote: str, branch: str, started: str, env: Mapping[str, str], max_bytes: int) -> Sync:
     """Bring the clone to the remote's main, by fast-forward or by replaying unpushed records commits on top.
 
-    It refuses to run a clone that is off main, has changes outside workspace/, or has local commits that change
-    anything outside workspace/, because the production clone runs only code reviewed onto the remote.
+    It refuses to run a clone that is off main, has changes outside workspace/ and ledger/, or has local commits
+    that change anything outside them, because the production clone runs only code reviewed onto the remote.
     """
     git = Git(repo, env)
     upstream = f"{remote}/{branch}"
@@ -148,9 +153,11 @@ def prepare(repo: Path, remote: str, branch: str, started: str, env: Mapping[str
             return Sync(REFUSED, f"the clone is on {current or 'a detached HEAD'}, not {branch}", ok_to_run=False)
         stray = outside(git.status())
         if stray:
-            return Sync(REFUSED, f"the clone has changes outside workspace/: {', '.join(stray[:5])}", ok_to_run=False)
+            detail = f"the clone has changes outside workspace/ and ledger/: {', '.join(stray[:5])}"
+            return Sync(REFUSED, detail, ok_to_run=False)
         if local_commits_outside(git, upstream):
-            return Sync(REFUSED, f"{branch} has local commits that change files outside workspace/", ok_to_run=False)
+            detail = f"{branch} has local commits that change files outside workspace/ and ledger/"
+            return Sync(REFUSED, detail, ok_to_run=False)
         excluded: list[str] = []
         leftover = save_commit(git, f"chore(records): outputs left by a run before {started}", max_bytes, excluded)
         before = git.head()
@@ -160,7 +167,10 @@ def prepare(repo: Path, remote: str, branch: str, started: str, env: Mapping[str
             return Sync(OFFLINE, f"could not fetch {remote}: {reason}; ran the current code", before, before)
         if local_commits_outside(git, upstream):
             return Sync(
-                REFUSED, f"{branch} has commits outside workspace/ that {upstream} lacks", before, ok_to_run=False
+                REFUSED,
+                f"{branch} has commits outside workspace/ and ledger/ that {upstream} lacks",
+                before,
+                ok_to_run=False,
             )
         result = integrate(git, branch, upstream, before, leftover)
         result.excluded = excluded
@@ -218,9 +228,11 @@ def staged(git: Git) -> list[tuple[str, str]]:
 
 
 def unsafe(repo: Path, mode: str, path: str, max_bytes: int) -> str | None:
-    """Why a staged workspace path may not be committed, or None."""
+    """Why a staged record path may not be committed, or None."""
     if Path(path).name in GIT_CONTROL_FILES:
         return "a git control file"
+    if Path(path).name == DOCUMENTATION:
+        return "documentation, which only a reviewed pull request changes; put back"
     if mode == "000000":
         return None  # a deletion
     if mode not in PLAIN_MODES:
@@ -237,17 +249,21 @@ def unsafe(repo: Path, mode: str, path: str, max_bytes: int) -> str | None:
 
 
 def save_commit(git: Git, message: str, max_bytes: int, excluded: list[str] | None = None) -> str | None:
-    """Stage workspace/ only, drop anything unsafe, and commit; returns the new commit or None."""
-    git.run("add", "--all", "--", WORKSPACE)
+    """Stage workspace/ and ledger/ only, drop anything unsafe, put back any README, and commit; returns the new
+    commit or None."""
+    git.run("add", "--all", "--", *RECORD_DIRS)
     entries = staged(git)
     stray = outside([path for _, path in entries])
     if stray:
-        git.run("reset", "--quiet", "--", WORKSPACE)
-        raise GitError(["commit"], None, f"refusing to commit paths outside workspace/: {', '.join(stray[:5])}")
+        git.run("reset", "--quiet", "--", *RECORD_DIRS)
+        detail = f"refusing to commit paths outside workspace/ and ledger/: {', '.join(stray[:5])}"
+        raise GitError(["commit"], None, detail)
     for mode, path in entries:
         reason = unsafe(git.repo, mode, path, max_bytes or 1 << 62)
         if reason:
             git.run("reset", "--quiet", "--", path)
+            if Path(path).name == DOCUMENTATION:
+                git.run("checkout", "--quiet", "HEAD", "--", path, check=False)
             if excluded is not None:
                 excluded.append(f"{path} ({reason})")
     if not staged(git):
@@ -257,7 +273,7 @@ def save_commit(git: Git, message: str, max_bytes: int, excluded: list[str] | No
 
 
 def save(repo: Path, remote: str, branch: str, run_id: str, env: Mapping[str, str], max_bytes: int) -> Save:
-    """Commit this run's workspace/ changes and push main; on a moved remote, replay and retry once."""
+    """Commit this run's workspace/ and ledger/ changes and push main; on a moved remote, replay and retry once."""
     git = Git(repo, env)
     upstream = f"{remote}/{branch}"
     result = Save(NOT_PUSHED, "")
@@ -267,18 +283,19 @@ def save(repo: Path, remote: str, branch: str, run_id: str, env: Mapping[str, st
             return result
         result.commit = save_commit(
             git,
-            f"chore(records): outputs of run {run_id}\n\nWritten by the gr0wthlab launcher; only workspace/ changes.",
+            f"chore(records): outputs of run {run_id}\n\n"
+            "Written by the gr0wthlab launcher; only workspace/ and ledger/ change.",
             max_bytes,
             result.excluded,
         )
-        result.outside_workspace = outside(git.status())
+        result.outside_records = outside(git.status())
         unpushed = git.commits(f"{upstream}..HEAD")
         if not unpushed:
-            result.status, result.detail = NOTHING, "no workspace/ changes to save"
+            result.status, result.detail = NOTHING, "no workspace/ or ledger/ changes to save"
             return result
         foreign = local_commits_outside(git, upstream)
         if foreign:
-            result.detail = f"{branch} has local commits outside workspace/; nothing was pushed"
+            result.detail = f"{branch} has local commits outside workspace/ and ledger/; nothing was pushed"
             return result
         if push(git, remote, branch):
             result.status, result.pushed = PUSHED, len(unpushed)

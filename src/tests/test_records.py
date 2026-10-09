@@ -1,4 +1,4 @@
-"""The production clone's git steps, against a throwaway bare remote: fast-forward before, workspace/ only after."""
+"""The production clone's git steps, against a throwaway bare remote: fast-forward before, records only after."""
 
 import os
 import tempfile
@@ -124,21 +124,28 @@ class PrepareTest(RecordsTestCase):
 
 
 class SaveTest(RecordsTestCase):
-    def test_commits_and_pushes_only_workspace(self):
-        self.write("workspace/review-queue/queue.json", "{}\n")
-        self.write("workspace/evidence/decisions/x.json", "{}\n")
-        (self.clone / "workspace/drafts/README.md").unlink()
+    def test_commits_and_pushes_only_workspace_and_ledger(self):
+        self.write("ledger/review-queue/queue.json", "{}\n")
+        self.write("workspace/drafts/day-3.md", "a Draft\n")
         result = self.save()
         self.assertEqual(result.status, records.PUSHED, result.detail)
-        self.assertEqual(
-            sorted(self.remote_files()),
-            ["workspace/drafts/README.md", "workspace/evidence/decisions/x.json", "workspace/review-queue/queue.json"],
-        )
+        self.assertEqual(sorted(self.remote_files()), ["ledger/review-queue/queue.json", "workspace/drafts/day-3.md"])
         message = self.git(self.remote, "log", "--format=%s", "-1", "main")
         self.assertEqual(message, "chore(records): outputs of run RUN1")
 
     def test_nothing_to_save(self):
         self.assertEqual(self.save().status, records.NOTHING)
+
+    def test_a_readme_change_is_never_committed_and_is_put_back(self):
+        self.write("workspace/drafts/README.md", "rewritten\n")
+        (self.clone / "ledger/README.md").unlink()
+        self.write("workspace/drafts/day-3.md", "a Draft\n")
+        result = self.save()
+        self.assertEqual(result.status, records.PUSHED, result.detail)
+        self.assertEqual(self.remote_files(), ["workspace/drafts/day-3.md"])
+        self.assertEqual((self.clone / "workspace/drafts/README.md").read_text(), "# drafts\n")
+        self.assertEqual((self.clone / "ledger/README.md").read_text(), "# ledger\n")
+        self.assertEqual(self.git(self.clone, "status", "--porcelain"), "")
 
     def test_never_commits_a_change_outside_workspace(self):
         self.write("workspace/run-reports/r.md")
@@ -146,7 +153,7 @@ class SaveTest(RecordsTestCase):
         result = self.save()
         self.assertEqual(result.status, records.PUSHED)
         self.assertEqual(self.remote_files(), ["workspace/run-reports/r.md"])
-        self.assertEqual(result.outside_workspace, ["src/stray.py"])
+        self.assertEqual(result.outside_records, ["src/stray.py"])
 
     def test_refuses_when_a_path_outside_workspace_is_staged(self):
         self.write("workspace/run-reports/r.md")
@@ -155,7 +162,7 @@ class SaveTest(RecordsTestCase):
         before = self.git(self.remote, "rev-parse", "main")
         result = self.save()
         self.assertEqual(result.status, records.NOT_PUSHED)
-        self.assertIn("refusing to commit paths outside workspace/: config/run.json", result.detail)
+        self.assertIn("refusing to commit paths outside workspace/ and ledger/: config/run.json", result.detail)
         self.assertEqual(self.git(self.remote, "rev-parse", "main"), before)
         self.assertEqual(self.git(self.clone, "diff", "--cached", "--name-only"), "config/run.json")
 

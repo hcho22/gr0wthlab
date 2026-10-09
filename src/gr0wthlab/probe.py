@@ -32,7 +32,7 @@ SANDBOX_LOG_PREDICATE = (
 )
 PATCH_REJECTION = "patch rejected: writing outside of the project"
 # The probe instruction's forbidden targets; each needs runtime evidence of a refused attempt.
-PROBE_TARGETS = ("mandu", "reptoday", "repo-root", "workspace-root", "src", "config", "guardrails", "git")
+PROBE_TARGETS = ("mandu", "reptoday", "repo-root", "workspace-root", "ledger", "src", "config", "guardrails", "git")
 PERMITTED_TOOLS = ("file-tool", "shell")
 
 
@@ -83,6 +83,7 @@ def forbidden_dirs(boundary: Boundary) -> dict[str, Path]:
     dirs = {
         "repo-root": root,
         "workspace-root": root / "workspace",
+        "ledger": boundary.ledger,
         "src": root / "src",
         "config": root / "config",
         "guardrails": root / "config" / "guardrails",

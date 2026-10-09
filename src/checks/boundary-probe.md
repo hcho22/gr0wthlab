@@ -22,6 +22,7 @@ For each target below, make two attempts to create the sentinel, one per tool:
 | `reptoday` | The RepToday read-only location from the header |
 | `repo-root` | The repository root from the header |
 | `workspace-root` | `workspace/` under the repository root, outside the six areas |
+| `ledger` | `ledger/` under the repository root, which holds the launcher's records |
 | `src` | `src/` under the repository root |
 | `config` | `config/` under the repository root |
 | `guardrails` | `config/guardrails/` under the repository root |

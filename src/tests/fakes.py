@@ -17,7 +17,7 @@ AREAS = ("evidence", "drafts", "review-queue", "weekly-reads", "run-reports", "i
 # Stands in for codex. `codex sandbox` answers the preflight as an enforcing sandbox would, without running anything;
 # `codex exec` plays the agent from behavior.json beside it, writing straight into the workspace.
 FAKE_CODEX = """#!{python}
-import json, os, re, shutil, subprocess, sys
+import json, re, shutil, sys
 from pathlib import Path
 
 here = Path(__file__).resolve().parent
@@ -36,29 +36,16 @@ prompt = sys.stdin.read()
 (here / "prompt.txt").write_text(prompt)
 behavior = json.loads((here / "behavior.json").read_text())
 brief = Path(re.search(r"Run brief, read it first: (\\S+)", prompt).group(1))
-workspace = brief.parents[1]
-run = brief.name[: -len(".brief.md")]
-def at(relative):
-    return workspace / relative.replace("{{run}}", run).replace("{{ppid}}", str(os.getppid()))
+workspace = brief.parents[2] / "workspace"
 for relative in behavior.get("rmtree", []):
-    shutil.rmtree(at(relative))
-for relative in behavior.get("delete", []):
-    at(relative).unlink()
+    shutil.rmtree(workspace / relative)
 for relative, text in behavior.get("write", {{}}).items():
-    target = at(relative)
+    target = workspace / relative
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text)
-for relative in behavior.get("mkdir", []):
-    at(relative).mkdir(parents=True)
 for relative, target in behavior.get("symlink", {{}}).items():
-    at(relative).parent.mkdir(parents=True, exist_ok=True)
-    at(relative).symlink_to(target)
-for relative, mode in behavior.get("chmod", {{}}).items():
-    at(relative).chmod(mode)
-for relative, entry in behavior.get("acl", {{}}).items():
-    subprocess.run(["/bin/chmod", "+a", entry, str(at(relative))], check=True)
-for relative, flags in behavior.get("chflags", {{}}).items():
-    os.chflags(str(at(relative)), flags, follow_symlinks=False)
+    (workspace / relative).parent.mkdir(parents=True, exist_ok=True)
+    (workspace / relative).symlink_to(target)
 Path(args[args.index("--output-last-message") + 1]).write_text(behavior.get("summary", "Checked the package."))
 usage = {{"input_tokens": 200000, "cached_input_tokens": 150000, "cache_write_input_tokens": 0, "output_tokens": 4000}}
 print(json.dumps({{"type": "turn.completed", "usage": usage}}))
@@ -83,6 +70,9 @@ def make_repo(path: Path, env: dict[str, str]) -> Path:
     """A gr0wthlab checkout with the real configuration, task definition, and area READMEs, committed on main."""
     shutil.copytree(str(REPO / "config"), str(path / "config"))
     shutil.copytree(str(REPO / "src" / "instructions"), str(path / "src" / "instructions"))
+    shutil.copy(str(REPO / ".gitignore"), str(path / ".gitignore"))
+    (path / "ledger").mkdir()
+    (path / "ledger" / "README.md").write_text("# ledger\n")
     for area in AREAS:
         (path / "workspace" / area).mkdir(parents=True)
         (path / "workspace" / area / "README.md").write_text(f"# {area}\n")

@@ -55,7 +55,6 @@ class RunState:
     closed_proposals: list[Mapping[str, object]] = field(default_factory=list)
     published: list[str] = field(default_factory=list)
     set_aside: list = field(default_factory=list)  # queue.SetAside
-    restored: list[str] = field(default_factory=list)
     queue_after: list[Mapping[str, object]] = field(default_factory=list)
     agent: Mapping[str, object] = field(default_factory=dict)
     agent_summary: str = ""
@@ -236,7 +235,7 @@ def outcome_text(status: str) -> str:
     }.get(status, status)
 
 
-def render_brief(state: RunState, repo_root: Path, workspace: Path) -> str:
+def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path) -> str:
     """The facts the agent works from, written before it starts."""
     lines = [
         f"# Brief for run {state.run_id}",
@@ -250,7 +249,7 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path) -> str:
         "",
         f"- {start_line(state)}",
         f"- Mandu checkout: `{state.mandu}`",
-        f"- Package snapshot: `{workspace / state.snapshot_file}`"
+        f"- Package snapshot: `{ledger / state.snapshot_file}`"
         + (f" (previous: run {state.previous_snapshot})" if state.previous_snapshot else " (the first one)"),
         "",
         "## Package files",
@@ -299,6 +298,7 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path) -> str:
         "## Where to write",
         "",
         f"- New items: `{workspace / 'review-queue' / 'incoming'}/<slug>.md`.",
+        f"- The launcher's records, which you can read and never write: `{ledger}`.",
         f"- Their format: `{repo_root / 'docs' / 'mandu-exchange.md'}`.",
         f"- Check them before you finish: `/usr/bin/python3 {repo_root / 'src/bin/gr0wthlab'} check-incoming`.",
         "",
@@ -331,7 +331,7 @@ def summary_lines(state: RunState) -> list[str]:
         f"- Review Queue: {plural(len(open_items), 'item')} open for the next sitting ({len(state.published)} new"
         f" this run, {carried} carried over); {plural(len(taken), 'Founder decision')} taken in."
     )
-    if state.problems or state.set_aside or state.restored or failed:
+    if state.problems or state.set_aside or failed:
         lines.append(f"- Problems this run are listed in the notice `{state.notice}`." if state.notice else "")
     lines.append(f"- {cost_line(state)}")
     return [line for line in lines if line]
@@ -357,8 +357,6 @@ def render_report(state: RunState) -> str:
         lines.append("Nothing is waiting for the Founder.")
     for item in state.set_aside:
         lines.append(f"- Set aside, not queued: `{item.name}`: {'; '.join(item.problems)}")
-    for path in state.restored:
-        lines.append(f"- Undone: {path}")
     lines += ["", "## Run state", ""]
     lines += [f"- {tally.workflow}: {tally.line()}" for tally in state.tallies]
     if state.state_notes:
@@ -422,14 +420,6 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 "Some items the Marketing Engineer prepared were not queued, because they did not meet the item format"
                 " or asked the same as an item already queued or decided:\n"
                 + "\n".join(bullet(f"`{item.name}`: {'; '.join(item.problems)}") for item in state.set_aside),
-            )
-        )
-    if state.restored:
-        sections.append(
-            (
-                f"the launcher undid {plural(len(state.restored), 'change')} by the agent on {day}",
-                "The agent changed records only the launcher writes; the launcher undid it:\n"
-                + "\n".join(bullet(path) for path in state.restored),
             )
         )
     agent = state.agent.get("exit_code")

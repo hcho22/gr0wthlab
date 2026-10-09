@@ -8,9 +8,10 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest import mock
 
 from gr0wthlab import boundary, cli, exchange, settings
-from gr0wthlab.areas import Areas, UnsafeFile, read_plain
+from gr0wthlab.areas import Areas, Store, UnsafeFile, read_plain
 from gr0wthlab.boundary import ConfigError
 from tests import fakes
 from tests.test_boundary import CONFIG
@@ -93,42 +94,36 @@ class AreasTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def test_writes_stay_inside_the_areas(self):
-        target = self.repo / "workspace/evidence/sub/record.json"
-        self.areas.write_json(target, {"a": 1})
+    def test_the_store_writes_only_inside_the_ledger(self):
+        store = Store(self.repo / "ledger")
+        target = store.path("evidence", "sub", "record.json")
+        store.write_json(target, {"a": 1})
         self.assertEqual(json.loads(target.read_text(encoding="utf-8")), {"a": 1})
-        for outside in (
-            self.repo / "src/x.py",
-            self.repo / "workspace/x.md",
-            self.repo / "workspace/evidence",
-            self.repo / "workspace/evidence/../../config/x.json",
-        ):
+        for outside in (("..", "src", "x.py"), ("..", "workspace", "x.md")):
             with self.subTest(path=outside), self.assertRaises(ConfigError):
-                self.areas.write_text(outside, "x")
+                store.path(*outside)
 
-    def test_a_symbolic_link_inside_an_area_cannot_redirect_a_write(self):
+    def test_a_link_at_a_temporary_s_name_cannot_redirect_a_store_write(self):
+        store = Store(self.repo / "ledger")
         elsewhere = self.repo.parent / "elsewhere"
         elsewhere.mkdir()
-        os.symlink(str(elsewhere), str(self.repo / "workspace/drafts/link"))
-        with self.assertRaises(ConfigError):
-            self.areas.write_text(self.repo / "workspace/drafts/link/x.md", "x")
+        folder = self.repo / "ledger/review-queue"
+        folder.mkdir(parents=True)
+        os.symlink(str(elsewhere / "captured"), str(folder / f".queue.json.tmp-{os.getpid()}"))
+        store.write_text(folder / "queue.json", "{}")
         self.assertEqual(list(elsewhere.iterdir()), [])
+        self.assertTrue((folder / "queue.json").is_file() and not (folder / "queue.json").is_symlink())
 
-    def test_an_area_replaced_by_a_link_is_never_read_or_written_through(self):
+    def test_an_area_replaced_by_a_link_is_never_read_or_removed_through(self):
         elsewhere = self.repo.parent / "elsewhere"
-        (elsewhere / "decisions").mkdir(parents=True)
-        (elsewhere / "decisions/record.json").write_text("{}", encoding="utf-8")
-        area = self.repo / "workspace/evidence"
+        (elsewhere / "incoming").mkdir(parents=True)
+        (elsewhere / "incoming/item.md").write_text("{}", encoding="utf-8")
+        area = self.repo / "workspace/review-queue"
         area.rmdir()
         area.symlink_to(elsewhere)
-        self.assertEqual(list(self.areas.files(area / "decisions")), [])
-        with self.assertRaisesRegex(ConfigError, "not a real folder"):
-            self.areas.write_json(area / "decisions/record.json", {"forged": True})
-        self.areas.remove(area)
-        self.assertFalse(os.path.lexists(str(area)))
-        self.assertEqual((elsewhere / "decisions/record.json").read_text(encoding="utf-8"), "{}")
-        self.areas.write_json(area / "decisions/record.json", {"a": 1})
-        self.assertTrue(area.is_dir() and not area.is_symlink())
+        self.assertEqual(list(self.areas.files(area / "incoming")), [])
+        self.areas.remove_empty_folders(area / "incoming")
+        self.assertEqual((elsewhere / "incoming/item.md").read_text(encoding="utf-8"), "{}")
 
     def test_read_plain_refuses_links(self):
         target = self.repo / "workspace/drafts/real.md"
@@ -144,10 +139,10 @@ class AreasTest(unittest.TestCase):
 class CheckIncomingTest(unittest.TestCase):
     def test_reports_each_item_as_the_launcher_would(self):
         with tempfile.TemporaryDirectory() as directory:
-            queue_dir = Path(directory) / "workspace" / "review-queue"
-            incoming = queue_dir / "incoming"
+            queue_dir = Path(directory) / "ledger" / "review-queue"
+            incoming = Path(directory) / "workspace" / "review-queue" / "incoming"
             (queue_dir / "items").mkdir(parents=True)
-            incoming.mkdir()
+            incoming.mkdir(parents=True)
             queued = fakes.proposal(extra=f"exchange: {exchange.EXCHANGE_VERSION}\nid: 20261011-queued\n")
             (queue_dir / "items" / "20261011-queued.md").write_text(queued, encoding="utf-8")
             entry = {
@@ -168,14 +163,13 @@ class CheckIncomingTest(unittest.TestCase):
             rejected_again = fakes.proposal(extra="supersedes: 20261011-queued\n", title="supersede a decided one")
             (incoming / "supersede.md").write_text(rejected_again, encoding="utf-8")
             (incoming / f"{'long-' * 13}name.md").write_text(fakes.proposal(title="a long name"), encoding="utf-8")
-            original = cli.INCOMING
-            cli.INCOMING = incoming
-            try:
-                out = io.StringIO()
-                with redirect_stdout(out):
-                    code = cli.check_incoming(out)
-            finally:
-                cli.INCOMING = original
+            out = io.StringIO()
+            with (
+                mock.patch.object(cli, "INCOMING", incoming),
+                mock.patch.object(cli, "LEDGER_DIR", Path(directory) / "ledger"),
+                redirect_stdout(out),
+            ):
+                code = cli.check_incoming(out)
         self.assertEqual(code, 1)
         text = out.getvalue()
         self.assertIn("OK good.md", text)

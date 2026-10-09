@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from gr0wthlab import boundary, exchange, state
-from gr0wthlab.areas import Areas
+from gr0wthlab.areas import Areas, Store
 from gr0wthlab.queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger, QueueError
 from tests import fakes
 from tests.test_boundary import CONFIG, REGISTRY
@@ -32,6 +32,7 @@ class LedgerTestCase(unittest.TestCase):
             self.repo, CONFIG, REGISTRY, {}, self.repo.parent, git=[self.repo / ".git"]
         )
         self.areas = Areas(resolved)
+        self.store = Store(resolved.ledger)
         self.incoming = self.repo / "workspace/review-queue/incoming"
         self.incoming.mkdir()
         self.ledger = Ledger()
@@ -46,7 +47,7 @@ class LedgerTestCase(unittest.TestCase):
         return path
 
     def take(self, run="RUN1", now=NOW):
-        return self.ledger.take_incoming(self.areas, PRODUCTS, run, now)
+        return self.ledger.take_incoming(self.areas, self.store, PRODUCTS, run, now)
 
 
 class IncomingTest(LedgerTestCase):
@@ -54,7 +55,7 @@ class IncomingTest(LedgerTestCase):
         self.drop("name-status-stale.md", fakes.PROPOSAL)
         published, set_aside = self.take()
         self.assertEqual((published, set_aside), (["20261011-name-status-stale"], []))
-        item = self.repo / "workspace/review-queue/items/20261011-name-status-stale.md"
+        item = self.repo / "ledger/review-queue/items/20261011-name-status-stale.md"
         self.assertTrue(
             item.read_text(encoding="utf-8").startswith(
                 f"---\nexchange: {exchange.EXCHANGE_VERSION}\nid: 20261011-name-status-stale\n"
@@ -84,7 +85,7 @@ class IncomingTest(LedgerTestCase):
         self.assertEqual(set(names), {"broken.md", "Bad Name.md", "nested/deep.md", ".hidden.md"})
         self.assertTrue(any("sections must be exactly" in problem for problem in names["broken.md"].problems))
         self.assertEqual(names["nested/deep.md"].moved_to, "review-queue/set-aside/RUN1/nested--deep.md")
-        self.assertTrue((self.repo / "workspace" / names["broken.md"].moved_to).is_file())
+        self.assertTrue((self.repo / "ledger" / names["broken.md"].moved_to).is_file())
         self.assertEqual(list(self.incoming.iterdir()), [])
 
     def test_links_are_never_followed(self):
@@ -96,22 +97,22 @@ class IncomingTest(LedgerTestCase):
         self.assertEqual(published, [])
         self.assertEqual({item.name: item.moved_to for item in set_aside}, {"linked.md": "", "hard.md": ""})
         self.assertTrue(secret.is_file())
-        self.assertFalse(any((self.repo / "workspace/review-queue/set-aside").rglob("*.md")))
+        self.assertFalse(any((self.repo / "ledger/review-queue/set-aside").rglob("*.md")))
 
     def test_an_item_that_asks_the_same_as_another_is_never_queued(self):
         self.drop("first.md", fakes.PROPOSAL)
         self.drop("second.md", fakes.PROPOSAL.replace("line 24", "line 25").replace("cleared", "  CLEARED "))
         seen = {}
-        published, set_aside = self.ledger.take_incoming(self.areas, PRODUCTS, "RUN1", NOW, seen)
+        published, set_aside = self.ledger.take_incoming(self.areas, self.store, PRODUCTS, "RUN1", NOW, seen)
         self.assertEqual(published, ["20261011-first"])
         self.assertIn("asks the same as 20261011-first, which is open", set_aside[0].problems[0])
         self.ledger.take_decisions([(decision("20261011-first", "reject", "No."), "x.json")], "RUN2", NOW)
         self.drop("again.md", fakes.PROPOSAL)
-        published, set_aside = self.ledger.take_incoming(self.areas, PRODUCTS, "RUN2", NOW, seen)
+        published, set_aside = self.ledger.take_incoming(self.areas, self.store, PRODUCTS, "RUN2", NOW, seen)
         self.assertEqual(published, [])
         self.assertIn("asks the same as 20261011-first, which is rejected", set_aside[0].problems[0])
         self.drop("reworded.md", fakes.proposal(title="record the name as searched and reserved"))
-        published, _ = self.ledger.take_incoming(self.areas, PRODUCTS, "RUN2", NOW, seen)
+        published, _ = self.ledger.take_incoming(self.areas, self.store, PRODUCTS, "RUN2", NOW, seen)
         self.assertEqual(published, ["20261011-reworded"])
 
     def test_supersedes_withdraws_an_open_item_only(self):
@@ -216,14 +217,15 @@ class OrderAndPersistenceTest(LedgerTestCase):
         self.assertEqual(datetime.fromisoformat(data["next_run"]), next_run)
         self.assertEqual([entry["id"] for entry in data["open"]], ["20261011-kept", "20261018-new"])
         self.assertEqual([entry["id"] for entry in data["closed"]], ["20261011-old"])
-        path = self.repo / "workspace/review-queue/queue.json"
-        self.areas.write_json(path, data)
+        path = self.repo / "ledger/review-queue/queue.json"
+        self.store.write_json(path, data)
         loaded = Ledger.load(path)
         self.assertEqual(sorted(loaded.entries), sorted(self.ledger.entries))
         self.assertEqual(loaded.entries["20261011-old"]["status"], APPROVED)
 
     def test_an_unreadable_ledger_is_not_overwritten(self):
-        path = self.repo / "workspace/review-queue/queue.json"
+        path = self.repo / "ledger/review-queue/queue.json"
+        path.parent.mkdir(parents=True)
         path.write_text("{not json", encoding="utf-8")
         with self.assertRaises(QueueError):
             Ledger.load(path)
@@ -235,12 +237,12 @@ class OrderAndPersistenceTest(LedgerTestCase):
     def test_a_queue_and_its_items_still_read_after_a_version_bump(self):
         self.drop("first.md", fakes.PROPOSAL)
         [first] = self.take()[0]
-        path = self.repo / "workspace/review-queue/queue.json"
-        self.areas.write_json(path, self.ledger.as_json("RUN1", NOW, "run-reports/RUN1.md", NOW))
+        path = self.repo / "ledger/review-queue/queue.json"
+        self.store.write_json(path, self.ledger.as_json("RUN1", NOW, "run-reports/RUN1.md", NOW))
         with mock.patch.object(exchange, "EXCHANGE_VERSION", exchange.EXCHANGE_VERSION + 1):
             loaded = Ledger.load(path)
             hashes, problems = state.item_hashes(
-                self.repo / "workspace", loaded.entries, PRODUCTS, state.ReviewQueueState()
+                self.repo / "ledger", loaded.entries, PRODUCTS, state.ReviewQueueState()
             )
         self.assertEqual(list(loaded.entries), [first])
         self.assertEqual((list(hashes), problems), ([first], []))
