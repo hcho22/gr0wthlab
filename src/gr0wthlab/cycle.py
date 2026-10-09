@@ -357,15 +357,15 @@ class Cycle:
                 "package-review",
                 len(files) + sum(1 for result in state.snapshot if result.reason),
                 proposals,
-                f"{len(files)} files, {changed} changed, {failed} failed;"
+                f"{report.plural(len(files), 'file')}, {changed} changed, {failed} failed;"
                 f" {report.plural(proposals, 'proposal')} queued",
             ),
             run_state.Tally(
                 "review-queue",
                 records + incoming + len(state.queue_before),
                 taken + others + superseded,
-                f"{taken} decisions taken in, {others} other items queued, {superseded} superseded,"
-                f" {carried} carried over, {len(state.set_aside)} set aside",
+                f"{report.plural(taken, 'decision')} taken in, {report.plural(others, 'other item')} queued,"
+                f" {superseded} superseded, {carried} carried over, {len(state.set_aside)} set aside",
             ),
             run_state.Tally("listening", 0, 0, "not built until US-ME13"),
             run_state.Tally("outreach", 0, 0, "not built until US-ME14"),

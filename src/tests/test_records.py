@@ -120,6 +120,7 @@ class PrepareTest(RecordsTestCase):
         result = self.prepare()
         self.assertEqual(result.status, records.UPDATED, result.detail)
         self.assertEqual(result.unpushed, 1)
+        self.assertIn("with 1 unpushed records commit on top", result.detail)
         self.assertTrue((self.clone / "src/new.py").is_file())
         log = self.git(self.clone, "log", "--format=%s", "-2").splitlines()
         self.assertEqual(log[0], "chore(records): outputs left by a run before 20261011T230000Z")
@@ -133,6 +134,7 @@ class PrepareTest(RecordsTestCase):
         self.land_upstream("workspace/instructions/guide.md", "reviewed rewrite\n")
         result = self.prepare()
         self.assertEqual((result.status, result.ok_to_run), (records.NOT_REPLAYED, True))
+        self.assertIn("1 unpushed records commit could not be replayed onto origin/main", result.detail)
         self.assertEqual(self.git(self.clone, "rev-parse", "HEAD"), before)
         self.assertEqual(self.git(self.clone, "status", "--porcelain"), "")
 
@@ -143,6 +145,7 @@ class SaveTest(RecordsTestCase):
         self.write("workspace/drafts/day-3.md", "a Draft\n")
         result = self.save()
         self.assertEqual(result.status, records.PUSHED, result.detail)
+        self.assertEqual(result.detail, "pushed 1 records commit to origin/main")
         self.assertEqual(sorted(self.remote_files()), ["ledger/review-queue/queue.json", "workspace/drafts/day-3.md"])
         message = self.git(self.remote, "log", "--format=%s", "-1", "main")
         self.assertEqual(message, "chore(records): outputs of run RUN1")
@@ -243,7 +246,7 @@ class SaveTest(RecordsTestCase):
         self.write("workspace/run-reports/r.md")
         result = self.save()
         self.assertEqual(result.status, records.PUSHED, result.detail)
-        self.assertIn("had moved; replayed", result.detail)
+        self.assertEqual(result.detail, "origin/main had moved; replayed and pushed 1 records commit")
         self.assertEqual(self.remote_files(), ["workspace/run-reports/r.md"])
         self.assertEqual(self.remote_files("main~1"), ["src/new.py"])
 
@@ -264,7 +267,9 @@ class SaveTest(RecordsTestCase):
         self.assertEqual(result.status, records.NOT_PUSHED)
         self.assertIsNotNone(result.commit)
         self.git(self.clone, "remote", "set-url", "origin", str(self.remote))
-        self.assertEqual(self.prepare().unpushed, 1)
+        prepared = self.prepare()
+        self.assertEqual(prepared.unpushed, 1)
+        self.assertIn("this run pushes 1 unpushed records commit", prepared.detail)
         self.assertEqual(self.save().status, records.PUSHED)
 
 

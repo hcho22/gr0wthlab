@@ -300,6 +300,8 @@ class DecisionRoundTripTest(CycleTestCase):
         )
         self.assertIn(replaced, self.brief())
 
+        self.assertIn("note=review-queue 1 decision taken in,", self.report())
+
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
         self.assertEqual([entry["id"] for entry in self.queue()["open"]], [new])
         self.assertIn("| Mandu decisions | read | 1 record, 0 new since the previous run |", self.report())
@@ -553,6 +555,7 @@ class FailuresTest(CycleTestCase):
         self.assertIn(f"| Package review (contradictions) | incomplete | {angles} |", report)
         self.assertIn(f"| Package snapshot | incomplete | {angles} |", report)
         self.assertIn("| Founder decisions taken in | complete |", report)
+        self.assertIn("- review-queue: checked=0 acted=1 note=0 decisions taken in, 1 other item queued,", report)
         queue = self.queue()
         self.assertEqual([entry["kind"] for entry in queue["open"]], ["notice"])
         notice = (self.ledger() / queue["open"][0]["file"]).read_text(encoding="utf-8")

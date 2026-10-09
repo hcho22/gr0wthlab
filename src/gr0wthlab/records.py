@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .boundary import LEDGER
+from .report import plural
 
 RECORD_DIRS = ("workspace/", f"{LEDGER}/")
 NETWORK_TIMEOUT = 120
@@ -226,18 +227,19 @@ def integrate(git: Git, branch: str, upstream: str, before: str, leftover: str |
     failure = replay(git, upstream)
     if failure:
         detail = (
-            f"{ahead} unpushed records commits could not be replayed onto {upstream} ({failure}); ran the current code"
+            f"{plural(ahead, 'unpushed records commit')} could not be replayed onto {upstream} ({failure});"
+            " ran the current code"
         )
         return Sync(NOT_REPLAYED, detail, before, before, ahead)
     after = git.head()
-    detail = f"moved {branch} from {before[:7]} to {upstream} with {ahead} unpushed records commits on top"
+    detail = f"moved {branch} from {before[:7]} to {upstream} with {plural(ahead, 'unpushed records commit')} on top"
     return Sync(UPDATED, detail, before, after, ahead)
 
 
 def note_unpushed(ahead: int, leftover: str | None) -> str:
     parts = []
     if ahead:
-        parts.append(f"{ahead} records commits are not pushed yet; this run pushes them")
+        parts.append(f"this run pushes {plural(ahead, 'unpushed records commit')}")
     if leftover:
         parts.append("outputs left by an earlier run were committed first")
     return "; " + "; ".join(parts) if parts else ""
@@ -342,7 +344,7 @@ def save(repo: Path, remote: str, branch: str, run_id: str, env: Mapping[str, st
             return result
         if push(git, remote, branch):
             result.status, result.pushed = PUSHED, len(unpushed)
-            result.detail = f"pushed {len(unpushed)} records commits to {upstream}"
+            result.detail = f"pushed {plural(len(unpushed), 'records commit')} to {upstream}"
             return result
         fetched = git.run("fetch", "--quiet", remote, branch, timeout=NETWORK_TIMEOUT, check=False)
         moved = fetched.returncode == 0 and git.commits(f"HEAD..{upstream}")
@@ -362,7 +364,7 @@ def save(repo: Path, remote: str, branch: str, run_id: str, env: Mapping[str, st
         unpushed = git.commits(f"{upstream}..HEAD")
         if push(git, remote, branch):
             result.status, result.pushed = PUSHED, len(unpushed)
-            result.detail = f"{upstream} had moved; replayed and pushed {len(unpushed)} records commits"
+            result.detail = f"{upstream} had moved; replayed and pushed {plural(len(unpushed), 'records commit')}"
         else:
             result.detail = "the retried push failed; the commits stay local for the next run"
         return result
