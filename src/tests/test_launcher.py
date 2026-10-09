@@ -98,15 +98,15 @@ class CliTest(unittest.TestCase):
         self.assertEqual(parser.parse_args(["check-incoming"]).command, "check-incoming")
 
     def test_launch_agent_defaults_to_the_configured_weekly_run(self):
-        out = io.BytesIO()
+        out = io.TextIOWrapper(io.BytesIO())
         with tempfile.TemporaryDirectory() as directory:
             codex = Path(directory) / "codex"
             codex.write_text("#!/bin/sh\n")
             codex.chmod(0o755)
             env = {"GR0WTHLAB_CODEX_BIN": str(codex), "GR0WTHLAB_PRE_RUN": "{}", "GR0WTHLAB_LOG_DIR": directory}
-            with mock.patch.dict(os.environ, env), mock.patch.object(sys, "stdout", mock.Mock(buffer=out)):
+            with mock.patch.dict(os.environ, env), mock.patch.object(sys, "stdout", out):
                 self.assertEqual(cli.main(["launch-agent"]), 0)
-        agent = plistlib.loads(out.getvalue())
+        agent = plistlib.loads(out.buffer.getvalue())
         self.assertEqual(agent["StartCalendarInterval"], {"Weekday": 0, "Hour": 16, "Minute": 0})
         self.assertEqual(agent["ProgramArguments"][1:4], ["run", "--trigger", "scheduled"])
         self.assertEqual(

@@ -412,6 +412,23 @@ class DecisionRoundTripTest(CycleTestCase):
         self.assertNotIn("Could not use", report)
         self.assertIn("- Not listed again: 1 record that could not be used", report)
 
+    @unittest.skipIf(os.geteuid() == 0, "root can search any folder")
+    def test_an_unsearchable_exchange_folder_fails_both_its_sources_with_the_reason(self):
+        item = "20261011-name-status-stale"
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        self.decide(item, "approve")
+        self.sit()
+        self.exchange.chmod(0o600)
+        fakes.behave(self.codex_dir, {})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(code, 0, out)
+        report = self.report()
+        for folder in ("decisions", "sittings"):
+            detail = f"`{self.exchange / folder}` could not be read: Permission denied."
+            self.assertIn(f"| Mandu {folder} | failed | {detail} |", report)
+        self.assertEqual([entry["id"] for entry in self.queue()["open"] if entry["kind"] != "notice"], [item])
+
     def test_an_unreadable_review_queue_matches_no_decision_and_still_takes_in_sittings(self):
         item = "20261011-name-status-stale"
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
@@ -767,15 +784,15 @@ class FailuresTest(CycleTestCase):
         config = json.loads(path.read_text(encoding="utf-8"))
         config["schedule"].update(day="wednesday", time="09:30")
         path.write_text(json.dumps(config), encoding="utf-8")
-        plist = io.BytesIO()
+        stdout = io.TextIOWrapper(io.BytesIO())
         with (
             mock.patch.dict(os.environ, self.env),
             mock.patch.object(cli, "REPO_ROOT", self.repo),
             mock.patch.object(cli, "ENTRY", self.repo / "src/bin/gr0wthlab"),
-            mock.patch.object(sys, "stdout", mock.Mock(buffer=plist)),
+            mock.patch.object(sys, "stdout", stdout),
         ):
             self.assertEqual(cli.main(["launch-agent"]), 0)
-        agent = plistlib.loads(plist.getvalue())
+        agent = plistlib.loads(stdout.buffer.getvalue())
         self.assertEqual(agent["StartCalendarInterval"], {"Weekday": 3, "Hour": 9, "Minute": 30})
         command = cli.parser().parse_args(agent["ProgramArguments"][1:])
         self.assertEqual((command.command, command.trigger, command.once), ("run", "scheduled", None))

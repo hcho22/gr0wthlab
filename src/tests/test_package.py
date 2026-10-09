@@ -144,6 +144,15 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual((results[1].reason, results[1].removed), ("Permission denied", []))
         self.assertEqual(self.snapshot(results), first)
 
+    def test_a_folder_that_cannot_be_searched_fails_its_sources_with_the_reason(self):
+        first = self.snapshot(self.take())
+        os.chmod(str(self.mandu / "p/gtm"), 0o600)
+        if os.access(str(self.mandu / "p/gtm/angles.md"), os.F_OK):
+            self.skipTest("running as a user who can search any folder")
+        results = self.take(first)
+        self.assertEqual(results[0].failure(), "angles.md: Permission denied")
+        self.assertEqual((results[1].reason, results[1].removed), ("Permission denied", []))
+
     def test_the_last_known_fingerprint_carries_through_a_failed_read(self):
         snapshot = {
             "products": {

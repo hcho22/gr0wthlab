@@ -16,6 +16,7 @@ import fcntl
 import hashlib
 import json
 import os
+import stat
 import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
@@ -74,7 +75,7 @@ def read_records(directory: Path) -> tuple[list[tuple[str, Path, bytes]], list[U
     why the folder itself could not be listed, if it could not; hidden files are Mandu's temporaries."""
     found, problems = [], []
     try:
-        names = sorted(os.listdir(str(directory))) if directory.is_dir() else []
+        names = sorted(os.listdir(str(directory))) if package.file_type(directory) == stat.S_IFDIR else []
     except OSError as error:
         return found, problems, error.strerror or str(error)
     for name in names:
@@ -82,7 +83,7 @@ def read_records(directory: Path) -> tuple[list[tuple[str, Path, bytes]], list[U
         if name.startswith("."):
             continue
         try:
-            if not name.endswith(".json") or not path.is_file():
+            if not name.endswith(".json") or package.file_type(path) != stat.S_IFREG:
                 problems.append(unusable(f"{directory.name}/{name}", ["only <name>.json record files belong here"]))
                 continue
             found.append((name, path, path.read_bytes()))
@@ -197,7 +198,7 @@ class Cycle:
             )
         )
         try:
-            present = folder.is_dir()
+            present = package.file_type(folder) == stat.S_IFDIR
         except OSError as error:
             detail = f"Mandu's exchange folder `{folder}` could not be read: {error.strerror or error}."
             state.sources.append(unmatched or SourceLine("Mandu decisions", package.FAILED, detail, needs))

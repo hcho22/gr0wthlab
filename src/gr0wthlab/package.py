@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import stat
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -103,6 +104,16 @@ def fingerprint(path: Path) -> tuple[str, int]:
     return digest.hexdigest(), size
 
 
+def file_type(path: Path) -> int | None:
+    """What a path names, following links, as a stat.S_IFMT value, or None when nothing is there. A path that cannot
+    be examined, such as one in a folder that cannot be searched, raises with its reason: from Python 3.14 on,
+    Path.exists() and is_dir() say False for it, which would report it as missing."""
+    try:
+        return stat.S_IFMT(os.stat(str(path)).st_mode)
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+
+
 def raise_error(error: OSError) -> None:
     raise error
 
@@ -127,10 +138,11 @@ def read_file(
     path = mandu / relative
     result = FileResult(relative, source, FAILED, previous_sha256=previous.get(relative) or None)
     try:
-        if not path.exists():
+        kind = file_type(path)
+        if kind is None:
             result.reason = "missing"
             return result
-        if not path.is_file():
+        if kind != stat.S_IFREG:
             result.reason = "not a file"
             return result
         result.sha256, result.bytes = fingerprint(path)
@@ -163,8 +175,9 @@ def take(
             root = mandu / source.path
             names: list[str] = []
             try:
-                if not root.is_dir():
-                    result.reason = "missing" if not root.exists() else "not a directory"
+                kind = file_type(root)
+                if kind != stat.S_IFDIR:
+                    result.reason = "missing" if kind is None else "not a directory"
                 else:
                     names = directory_files(mandu, source.path)
                     result.reason = None if names else "holds no files"
