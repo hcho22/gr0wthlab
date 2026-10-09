@@ -430,9 +430,13 @@ class FailuresTest(CycleTestCase):
                 self.assertEqual(code, 0, out)
                 self.assertEqual(sorted(path.name for path in outside.iterdir()), ["empty"])
                 self.assertTrue(incoming.is_dir() and not incoming.is_symlink())
-                notice = next(entry for entry in self.queue()["open"] if entry["kind"] == "notice")
-                text = (self.ledger() / notice["file"]).read_text(encoding="utf-8")
-                self.assertIn("`review-queue/incoming` was not a folder", text)
+                report = self.report()
+                problem = "`review-queue/incoming` was not a folder"
+                self.assertIn(f"- {problem}", report.partition("\n## Launcher problems\n")[2])
+                named = re.search(r"listed in the notice `([^`]+)`", report)
+                self.assertIsNotNone(named, report)
+                notice = next(entry for entry in self.queue()["open"] if entry["id"] == named.group(1))
+                self.assertIn(problem, (self.ledger() / notice["file"]).read_text(encoding="utf-8"))
 
                 slug = f"after-{number}"
                 write = {f"review-queue/incoming/{slug}.md": fakes.proposal(title=f"queued after {case}")}
