@@ -91,6 +91,22 @@ class ResolveBoundaryTest(unittest.TestCase):
             with self.subTest(value=value), self.assertRaises(ConfigError):
                 self.resolve(self.with_area("drafts", value))
 
+    def test_rejects_an_area_that_is_a_link_or_a_file(self):
+        outside = self.root / "outside"
+        outside.mkdir()
+        area = self.repo / "workspace" / "evidence"
+        area.parent.mkdir()
+        area.symlink_to(outside)
+        with self.assertRaisesRegex(ConfigError, "evidence .* must be a real folder"):
+            self.resolve()
+        area.unlink()
+        area.write_text("not a folder", encoding="utf-8")
+        with self.assertRaisesRegex(ConfigError, "evidence .* must be a real folder"):
+            self.resolve()
+        area.unlink()
+        area.mkdir()
+        self.assertEqual(dict(self.resolve().areas)["evidence"], area)
+
     def test_rejects_duplicate_areas(self):
         with self.assertRaises(ConfigError):
             self.resolve(self.with_area("drafts", "workspace/evidence"))

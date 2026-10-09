@@ -166,10 +166,10 @@ Immerse joins as Listening only, after RepToday's first 14-day window has run cl
 
 **Acceptance Criteria:**
 
-- [ ] Each run reads the package sources listed at the top of this PRD from Mandu, read-only, and records which files were read with a content fingerprint and the read time.
-- [ ] A source that is missing or unreadable is named in the run report and blocks only the work that depends on it.
-- [ ] The run lists what changed in the package since the previous run.
-- [ ] Contradictions inside the package are surfaced as package-change proposals that cite both sides.
+- [x] Each run reads the package sources listed at the top of this PRD from Mandu, read-only, and records which files were read with a content fingerprint and the read time.
+- [x] A source that is missing or unreadable is named in the run report and blocks only the work that depends on it.
+- [x] The run lists what changed in the package since the previous run.
+- [x] Contradictions inside the package are surfaced as package-change proposals that cite both sides.
   The first expected proposal: about a dozen files still say trademark clearance for "Rep Today" is unverified, while the launch checklist records it cleared and reserved on 2026-08-07.
 - [ ] The run reads every Founder decision Mandu has recorded since the previous run and matches each to its Review Queue item.
 
@@ -240,12 +240,12 @@ Immerse joins as Listening only, after RepToday's first 14-day window has run cl
 
 **Acceptance Criteria:**
 
-- [ ] Every item has a stable identifier, a kind, a one-line ask, the Draft or proposal itself, what it affects, the Evidence behind it with sources, and the decision options.
-- [ ] Item kinds are: post, message, package-change proposal, Dispatch request, Weekly Read decision, and notice (informational, such as an Instructions refinement or a failed source).
-- [ ] A rejection requires a one-line reason; an approval may carry an optional note.
+- [x] Every item has a stable identifier, a kind, a one-line ask, the Draft or proposal itself, what it affects, the Evidence behind it with sources, and the decision options.
+- [x] Item kinds are: post, message, package-change proposal, Dispatch request, Weekly Read decision, and notice (informational, such as an Instructions refinement or a failed source).
+- [x] A rejection requires a one-line reason; an approval may carry an optional note.
 - [ ] The Marketing Engineer writes items only in its own repository, and Mandu reads them from there; Mandu records the Founder's decisions in its own records, and the Marketing Engineer reads them from there.
-- [ ] An item is never re-asked once decided; an undecided item carries over to the next sitting and is marked as carried over.
-- [ ] A week's items are ordered so posts with the nearest slot come first.
+- [x] An item is never re-asked once decided; an undecided item carries over to the next sitting and is marked as carried over.
+- [x] A week's items are ordered so posts with the nearest slot come first.
 
 **Validation Test:**
 
@@ -476,10 +476,10 @@ Immerse joins as Listening only, after RepToday's first 14-day window has run cl
 **Acceptance Criteria:**
 
 - [ ] The weekly run is scheduled shortly before the Founder's Mandu sitting, and an on-demand run is available.
-- [ ] A run that starts late, for example because the Mac was asleep, says so.
-- [ ] The run report lists every source with its result: read, changed, failed with the reason, or skipped with the reason; there are no silent skips.
-- [ ] A failed source becomes a notice in the Review Queue, and every output that depended on it is marked incomplete.
-- [ ] The run report records the run's approximate cost.
+- [x] A run that starts late, for example because the Mac was asleep, says so.
+- [x] The run report lists every source with its result: read, changed, failed with the reason, or skipped with the reason; there are no silent skips.
+- [x] A failed source becomes a notice in the Review Queue, and every output that depended on it is marked incomplete.
+- [x] The run report records the run's approximate cost.
 
 **Validation Test:**
 

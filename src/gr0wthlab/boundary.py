@@ -20,6 +20,8 @@ PRODUCT_REGISTRY = Path("config/products.json")
 # Guardrail G1's six areas, by their keys in runtime.json's writable_areas.
 REQUIRED_AREAS = ("evidence", "drafts", "review_queue", "weekly_reads", "run_reports", "instructions")
 WORKSPACE = PurePosixPath("workspace")
+# The launcher's own records, outside every area: a run reads them and never writes them.
+LEDGER = "ledger"
 
 
 class ConfigError(Exception):
@@ -47,6 +49,10 @@ class Boundary:
     @property
     def area_paths(self) -> tuple[Path, ...]:
         return tuple(path for _, path in self.areas)
+
+    @property
+    def ledger(self) -> Path:
+        return self.repo_root / LEDGER
 
 
 def load_json(path: Path) -> dict:
@@ -84,7 +90,10 @@ def resolve_area(repo_root: Path, key: str, relative: object) -> Path:
         raise ConfigError(f"writable area {key} must be a plain relative path, got {relative!r}")
     if pure.parts[0] != WORKSPACE.name or len(pure.parts) != 2:
         raise ConfigError(f"writable area {key} must be a direct child of workspace/, got {relative!r}")
-    return canonical(repo_root / pure)
+    path = canonical(repo_root) / pure
+    if canonical(path) != path or (path.exists() and not path.is_dir()):
+        raise ConfigError(f"writable area {key} at {path} must be a real folder, not a link or a file")
+    return path
 
 
 def resolve_location(label: str, location: Mapping, env: Mapping[str, str], home: Path) -> Location:

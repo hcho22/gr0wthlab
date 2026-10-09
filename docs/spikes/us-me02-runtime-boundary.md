@@ -36,7 +36,7 @@ The PRD's "Codex automation" is therefore `codex exec` started by a LaunchAgent,
 | --- | --- |
 | [`config/guardrails/runtime.json`](../../config/guardrails/runtime.json) | The runtime, the six writable areas, read grants, network (off), model, and the Codex features turned off |
 | [`config/products.json`](../../config/products.json) | The read-only Mandu and Product checkouts, which become read grants |
-| [`src/bin/gr0wthlab`](../../src/bin/gr0wthlab) | The launcher; the LaunchAgent and on-demand runs both call `src/bin/gr0wthlab run --instruction <file>` |
+| [`src/bin/gr0wthlab`](../../src/bin/gr0wthlab) | The launcher; the LaunchAgent and on-demand runs both call `src/bin/gr0wthlab run`, whose task definition is a file under `src/instructions/` |
 | [`src/checks/boundary-probe.md`](../../src/checks/boundary-probe.md) | The throwaway instruction the validation test runs, kept in `src/` so the agent cannot edit its own test |
 
 The launcher fails closed.
@@ -186,6 +186,71 @@ The check removed every sentinel it created, and none remains in the areas, Mand
 An earlier attempt with the same configuration, run `20261009T030744Z-on-demand-a8fa`, had the same refusals and no connections but failed, correctly, on the snapshot: this note was edited in the checkout while it ran.
 The scheduled path was not repeated for this configuration; the LaunchAgent calls the same `run` command, and the fingerprint covers everything that command configures.
 
+### Re-check after the weekly run (US-ME04, US-ME07, US-ME17)
+
+The weekly run added a cycle around the agent (`src/gr0wthlab/cycle.py`), the package sources and Mandu's exchange folder to `config/products.json`, and `config/run.json`.
+None of them changes the permission profile, the Codex flags, or the environment: `codex.py`, `boundary.py`, and `runtime.json` are unchanged, and `launcher.run` only takes the cycle's run id.
+Both checks were re-run on 2026-10-08 with Codex CLI 0.160.0, from a linked worktree whose configuration fingerprint is `13a0eee82a14b1d5491d0dea3eeab9c3cf64c8aaa361d6a14f66dba124499659`.
+
+`src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused the 13 forbidden paths (the repository root, `workspace/`, `src/`, `config/`, `config/guardrails/`, `/private/tmp`, `/private/var/tmp`, both git directories, `HOME`, `TMPDIR`, `CODEX_HOME`, and its own empty Codex home).
+
+`src/bin/gr0wthlab boundary-check` passed as run `20261009T043306Z-on-demand-28de`: Codex logged nine patch rejections, the unified log held a kernel Seatbelt denial for each of the eight forbidden shell targets and both local listeners, neither listener received a connection, both permitted files landed in all six areas, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+The attempt before it, `20261009T043050Z-on-demand-c963`, refused every forbidden write and connection too but failed, correctly, on the permitted file-tool writes: the agent gave those six patches paths relative to its working directory that began with `workspace/`, which resolve outside the areas.
+A direct test confirmed that a patch with an absolute or working-directory-relative path into an area lands and a `workspace/`-prefixed one is refused, and the probe now requires absolute paths.
+
+The weekly run itself was run live through the launcher on the same day; Mandu's HEAD, git status, index, and every file digest were unchanged after each run.
+
+| Run | What it showed |
+| --- | --- |
+| `20261009T041643Z-on-demand-a81f` | Against Mandu as it is: 15 package files snapshotted with fingerprints and read times, and the trademark contradiction queued as one package-change proposal citing the launch checklist and the brand guidelines |
+| `20261009T041941Z-on-demand-1a36`, `20261009T042119Z-on-demand-1ec6` | One item of each kind, then a simulated Mandu exchange folder with two approvals, two rejections with reasons, and two undecided: every decision matched, both reasons kept as Evidence, the undecided items carried over and marked, and no decided item reappeared |
+| `20261009T042659Z-on-demand-4738`, `20261009T042749Z-on-demand-310b` | A failed package source, first an unreadable `angles.md` in a copy of Mandu, then a file the real Mandu lacks, added to the registry for the test: each was named with its reason, a notice was queued, and its dependent outputs were marked incomplete; against the real Mandu the agent still reviewed every other file |
+| `20261009T042900Z-on-demand-0271` | A production clone of a throwaway bare remote fast-forwarded to a newer commit, restarted on it, ran, and pushed one records commit that touched only `workspace/` |
+
+On 2026-10-09 the run gained a per-workflow run state (`workspace/run-reports/state/`, `src/gr0wthlab/state.py`) and a `checked=N acted=N note=...` line atop every run report.
+It changed nothing the boundary check exercises (the launcher's agent start, `codex.py`, `boundary.py`, the probe, `runtime.json`, `products.json`), so the check above still stands; `preflight` was re-run and passed again.
+The affected runs were repeated live against Mandu as it is, and Mandu was again unchanged after each.
+Review then changed what carries over: an item carries over once Mandu records a sitting that left it undecided, no longer once a later run starts.
+It also moved the exchange to version 2, which adds `next_run` to the queue, and gave each checkout its own run lock.
+The round trip and the failed source were therefore run again from a linked worktree on that code, with Codex CLI 0.160.0, and those runs replace the earlier ones below:
+
+| Run | What it showed |
+| --- | --- |
+| `20261009T122859Z-on-demand-1477` | The trademark contradiction queued as one proposal citing both sides; the report opened with `checked=16 acted=1`, and the three state files were written |
+| `20261009T133037Z-on-demand-28d5`, `20261009T133107Z-on-demand-1ebc` | One item of each kind, queued post first with `next_run` set to Sunday 16:00; then a simulated version 2 exchange folder with two approvals, two rejections with reasons, two undecided, and a sitting record for 2026-10-09. Every decision matched its item and was kept as Evidence with its reason or note, the two undecided items were marked carried over from the 2026-10-09 sitting in `queue.json` and the state, no decided item reappeared, and a word-for-word re-ask of the rejected proposal was set aside as asking the same as it, with a notice |
+| `20261009T133200Z-on-demand-d31b` | Against a copy of Mandu with `angles.md` unreadable: the file was named as failed with its reason, a notice was queued naming every output it leaves incomplete, the package snapshot and review were marked incomplete for the same reason, the agent still queued a new proposal from the files it could read, and the two undecided items stayed carried over from the sitting |
+| `20261009T123633Z-on-demand-baa1` | A production clone of a throwaway bare remote fast-forwarded, restarted, ran, and pushed one records commit with the state files, touching only `workspace/` |
+
+Mandu's HEAD, git status, index, and every package file digest were unchanged after the new runs.
+Two attempts before them do not count.
+In `20261009T132721Z-on-demand-69ac` and `20261009T132831Z-on-demand-f0d7` the round trip passed the same way, but the agent escaped the quotes in the proposal's title when it re-asked it, so it asked something different and was queued; the counted runs had the agent copy the item file with `sed` instead.
+In `20261009T132955Z-on-demand-db7f` the agent tried shell here-documents, which the sandbox refused, and wrote no item.
+
+Review then found that the agent could replace a whole writable area, or a folder the launcher writes in, with a link, and that the launcher, outside the sandbox, would read and write through it.
+A Seatbelt `subpath` write grant, which is how Codex grants each area, lets a sandboxed process remove the granted folder itself and put a link in its place; the probe above never tried that.
+The boundary now refuses an area that is a link or a file (`resolve_area`), the launcher lists and writes only through real folders up to and including the area (`Areas`), and once the agent finishes, the launcher removes any link or file standing in place of an area or a folder it writes in before it restores its records (`undo_agent_changes`).
+The Codex permission profile, flags, and environment did not change, so the configuration fingerprint is still `c17f5c04095e4220e70af4f329e524307f36377da39b1838ce903f0822f35892`.
+Both checks were re-run on 2026-10-09 with Codex CLI 0.160.0 from a linked worktree on that code:
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused the 13 forbidden paths.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261009T141104Z-on-demand-643c`: Codex logged eight patch rejections, the unified log held ten kernel Seatbelt denials naming the run, one for each of the eight forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+
+Review then moved the launcher's own records out of `workspace/` into `ledger/` at the repository root, which a run can read and never write: the published Review Queue and its items, decision and sitting Evidence, package snapshots, run reports and briefs, run state, the run lock, and the notes for the next report.
+The agent writes only in the six `workspace/` areas, and the launcher takes in only `workspace/review-queue/incoming/`, so the undo and repair code that had protected launcher records inside the areas is gone.
+The preflight and the boundary probe now try `ledger/` as well.
+Everything was re-run on 2026-10-09 with Codex CLI 0.160.0 from a linked worktree on that code; the configuration fingerprint is still `c17f5c04095e4220e70af4f329e524307f36377da39b1838ce903f0822f35892`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261009T170342Z-on-demand-dd0c`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets (now including `ledger/`) and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+
+| Run | What it showed |
+| --- | --- |
+| `20261009T170430Z-on-demand-29e1` | US-ME04 against Mandu as it is: 15 package files snapshotted with fingerprints and read times in `ledger/evidence/package-snapshots/`, and the trademark contradiction queued as one proposal citing the launch checklist against the brand guidelines and the investment thesis |
+| `20261009T170608Z-on-demand-511c`, `20261009T170648Z-on-demand-30d0` | US-ME07: one item of each kind, then two approvals, two rejections with reasons, two undecided, and a sitting record for 2026-10-09. Every decision matched its item and was kept as Evidence in `ledger/evidence/decisions/`, the two undecided items were marked carried over from the sitting, no decided item reappeared, and a word-for-word re-ask of the rejected proposal was set aside as asking the same as it, with a notice |
+| `20261009T170803Z-on-demand-e633` | US-ME17 against a copy of Mandu with `angles.md` unreadable, standing in for YouTube, which is not connected until US-ME11: the file was named as failed with its reason, a notice was queued naming every output it leaves incomplete, the snapshot and the review were marked incomplete, the cost was recorded, and the two undecided items stayed carried over |
+
+Mandu's HEAD, git status, index, and every package file digest were unchanged after every run, and no run left anything in `workspace/` beyond what the agent wrote there.
+
 ## Scheduled and on-demand runs share one configuration
 
 The scheduled path was tested with a temporary LaunchAgent, `gr0wthlab.us-me02-schedule-test`, generated by `src/bin/gr0wthlab launch-agent --once <time> --label gr0wthlab.us-me02-schedule-test --instruction src/checks/boundary-probe.md`.
@@ -198,21 +263,21 @@ Each scheduled run's fingerprint matches the on-demand runs of the same configur
 ## Where the production run executes
 
 The production run executes from a dedicated, ordinary clone at `~/gr0wthlab` on `main`, outside firstmate's `projects/` clone and its worktrees.
-The weekly LaunchAgent is `gr0wthlab.weekly-run`, generated by `src/bin/gr0wthlab launch-agent --weekly <day> <HH:MM> --instruction <weekly instruction>` once the Founder picks the sitting day and the weekly instruction exists (US-ME17).
-Neither the clone nor the schedule exists yet.
+The weekly LaunchAgent is `gr0wthlab.weekly-run`, generated by `src/bin/gr0wthlab launch-agent`, which defaults to the Sunday 16:00 schedule in [`config/run.json`](../../config/run.json) (US-ME17).
+Setting up the clone and the schedule, and removing them: [operations](../operations.md).
 
-Merged code reaches the clone by fast-forward only.
-The next task adds a pre-run step to the launcher, outside the sandbox, that fetches `origin` and fast-forwards `main`.
-It refuses to start if the clone has tracked changes or is not on `main`, and if the fetch fails, for example offline, it runs the current code and says so in the run record.
+Merged code reaches the clone only from `origin`.
+Before each run, the launcher, outside the sandbox, fetches `origin` and fast-forwards `main`, then restarts itself so the whole run uses the new code; [operations](../operations.md) says when it refuses to start and what it does when the fetch fails.
+Only the clone named in `config/run.json` (`records.production_clone`) takes these steps; any other checkout, such as a firstmate worktree, runs without touching git.
 firstmate's reviewed pull requests stay the only way code and Guardrail configuration change (G8), and the Founder has no deploy step.
 
 ## What an unwritable `.git` means for run outputs
 
-The agent cannot commit, branch, or push, so its outputs exist only as files under `workspace/` in the production clone.
-Mandu can read them there directly, so the Review Queue reaches Mandu without git; Mandu's automation needs read access to `~/gr0wthlab/workspace/`, which its default sandbox gives.
-Nothing keeps a history of those outputs yet.
-The recommended path for the next task is a post-run launcher step, outside the sandbox, that commits only changed `workspace/` paths and pushes them, refusing to commit anything outside `workspace/`.
-The Founder decides whether those record commits may go straight to `main` or need a branch; they never touch code or Guardrail configuration, so G8 holds either way.
+The agent cannot commit, branch, or push, so its outputs exist only as files under `workspace/` in the production clone, and the launcher's records only under `ledger/`.
+Mandu reads the Review Queue in `ledger/` directly, so it reaches Mandu without git; Mandu's automation needs read access to `~/gr0wthlab/ledger/`, which its default sandbox gives.
+After each run, the launcher, outside the sandbox, commits the changed `workspace/` and `ledger/` paths and pushes them straight to `main`, as the Founder decided on 2026-10-08 ([operations](../operations.md) has the steps).
+It stages `workspace/` and `ledger/` only, refuses to commit if anything outside them is staged, leaves out symbolic links, hard-linked files, git control files, and files over 10 MB, and never force-pushes.
+Records commits never touch code or Guardrail configuration, so G8 holds, and each reverts cleanly.
 
 ## Limits and follow-ups
 
@@ -224,6 +289,8 @@ The Founder decides whether those record commits may go straight to `main` or ne
 - The Codex process itself runs outside the sandbox and writes its own state, logs, and login refresh to `CODEX_HOME` (`~/.codex`); `--ephemeral` keeps run sessions out of the Founder's history.
 - A Codex upgrade can change profile semantics; the per-run preflight fails closed, and the boundary check should be re-run after every upgrade.
 - A separate macOS user with no credentials would be a stronger boundary than unreadable credential files; nothing in v1 needs it.
+- Inside an area, the sandbox refuses a hard link to a file the run cannot read but allows a symbolic link to one.
+  The launcher reads and commits files from `workspace/` outside the sandbox, so it never follows a link there: it opens agent-written files without following links, refuses any file with more than one link, and never commits a link.
 - Each probe run used 140,000 to 190,000 input tokens, mostly cached, and about 2,800 output tokens.
 
 ## Repeat the check
@@ -238,4 +305,5 @@ src/bin/gr0wthlab boundary-check   # the US-ME02 validation test, on demand
 ```
 
 The probe only ever creates new, uniquely named files and connects only to the check's own listeners; the check deletes any file that escaped, counts that as a failure, and removes the permitted ones.
-To repeat the scheduled path, generate a `--once` LaunchAgent a few minutes ahead as above, `launchctl bootstrap` it, run `src/bin/gr0wthlab boundary-check --verify <run id>` after it fires, then `launchctl bootout` it and delete the plist.
+To repeat the scheduled path, generate a one-off LaunchAgent a few minutes ahead with `src/bin/gr0wthlab launch-agent --boundary-check --once <time> --label gr0wthlab.boundary-check`, `launchctl bootstrap` it, read the check's verdict in its `.out.log` after it fires, then `launchctl bootout` it and delete the plist ([operations](../operations.md) has the commands).
+`src/bin/gr0wthlab run` no longer accepts the probe: a run's task definition must be a file under `src/instructions/`, and the probe runs only through `boundary-check`, which never commits or pushes.

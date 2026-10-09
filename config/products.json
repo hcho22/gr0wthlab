@@ -5,7 +5,13 @@
     "repository": "github.com/hcho22/Mandu",
     "local_checkout": "~/Mandu",
     "env": "GR0WTHLAB_MANDU_DIR",
-    "access": "read-only"
+    "access": "read-only",
+    "exchange": {
+      "path": "projects/gr0wthlab/exchange/",
+      "env": "GR0WTHLAB_EXCHANGE_DIR",
+      "access": "read-only",
+      "spec": "docs/mandu-exchange.md"
+    }
   },
   "products": [
     {
@@ -23,7 +29,95 @@
         "in": "mandu",
         "path": "projects/RepToday/gtm/",
         "launch_checklist": "projects/RepToday/02-marketing-launch-checklist_260807.md",
-        "access": "read-only"
+        "access": "read-only",
+        "sources": [
+          {
+            "path": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md",
+            "needed_by": [
+              "post-drafts",
+              "filming-plan",
+              "weekly-read"
+            ]
+          },
+          {
+            "path": "projects/RepToday/gtm/05-social-pmf/angles.md",
+            "needed_by": [
+              "post-drafts",
+              "filming-plan",
+              "weekly-read",
+              "listening"
+            ]
+          },
+          {
+            "path": "projects/RepToday/gtm/05-social-pmf/ab-pairs.md",
+            "needed_by": [
+              "post-drafts",
+              "weekly-read"
+            ]
+          },
+          {
+            "path": "projects/RepToday/gtm/05-social-pmf/platform-assignment.md",
+            "needed_by": [
+              "post-drafts"
+            ]
+          },
+          {
+            "path": "projects/RepToday/gtm/05-social-pmf/read-the-results.md",
+            "needed_by": [
+              "weekly-read"
+            ]
+          },
+          {
+            "path": "projects/RepToday/gtm/02-brand/brand-guidelines.md",
+            "needed_by": [
+              "post-drafts",
+              "outreach-drafts",
+              "beta-recruiting"
+            ]
+          },
+          {
+            "path": "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json",
+            "needed_by": [
+              "post-drafts",
+              "outreach-drafts",
+              "beta-recruiting"
+            ]
+          },
+          {
+            "path": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md",
+            "needed_by": [
+              "post-drafts",
+              "outreach-drafts"
+            ]
+          },
+          {
+            "path": "projects/RepToday/gtm/06-channels/",
+            "needed_by": [
+              "waitlist-counts",
+              "outreach-drafts"
+            ]
+          },
+          {
+            "path": "projects/RepToday/gtm/07-thesis/",
+            "needed_by": [
+              "beta-recruiting"
+            ]
+          },
+          {
+            "path": "projects/RepToday/02-marketing-launch-checklist_260807.md",
+            "needed_by": [
+              "post-drafts",
+              "outreach-drafts"
+            ]
+          },
+          {
+            "path": "projects/RepToday/gtm/09-extras/marketing-agent/BUILD-SPEC.md",
+            "needed_by": [
+              "post-drafts"
+            ]
+          }
+        ],
+        "sources_note": "The package sources each run snapshots, from the PRD's list; a path ending in / covers every file under it. Every source also feeds the package review, so a failed one makes that review incomplete as well as the outputs it names."
       }
     },
     {

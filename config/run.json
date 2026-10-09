@@ -1,0 +1,56 @@
+{
+  "description": "How each Marketing Engineer run works around the agent: its task definition, weekly schedule, the outputs and sources its run report accounts for, the records step that saves workspace/ and ledger/ to main, and the prices behind its approximate cost. The launcher reads this file; the agent cannot write it (G8). The exchange with Mandu: docs/mandu-exchange.md. Operating the production clone: docs/operations.md.",
+  "instruction": "src/instructions/weekly-run.md",
+  "schedule": {
+    "day": "sunday",
+    "time": "16:00",
+    "why": "The Founder's Mandu sitting is Sunday evening. 16:00 in the Mac's local time zone leaves a few hours to finish, or to re-run on demand, before it.",
+    "late_after_minutes": 15
+  },
+  "records": {
+    "production_clone": "~/gr0wthlab",
+    "env": "GR0WTHLAB_PRODUCTION_CLONE",
+    "remote": "origin",
+    "branch": "main",
+    "sync_before_run": true,
+    "save_after_run": true,
+    "max_file_bytes": 10000000,
+    "why": "Only the production clone syncs and saves records; every other checkout runs without touching git. Setting sync_before_run or save_after_run to false turns that step off."
+  },
+  "cost": {
+    "model": "gpt-6-luna",
+    "usd_per_million_tokens": {
+      "input": 0.1,
+      "cached_input": 0.01,
+      "cache_write_input": 0.125,
+      "output": 0.5
+    },
+    "source": "https://developers.openai.com/api/docs/pricing (standard, short context), read 2026-10-08",
+    "why": "The run report states the run's approximate cost at API prices from Codex's token counts."
+  },
+  "outputs": {
+    "package-snapshot": {"title": "Package snapshot", "story": "US-ME04", "built": true},
+    "package-review": {"title": "Package review (contradictions)", "story": "US-ME04", "built": true},
+    "decisions": {"title": "Founder decisions taken in", "story": "US-ME07", "built": true},
+    "review-queue": {"title": "Review Queue", "story": "US-ME07", "built": true},
+    "waitlist-counts": {"title": "Waitlist counts", "story": "US-ME06", "built": false},
+    "post-drafts": {"title": "Post Drafts", "story": "US-ME08", "built": false},
+    "filming-plan": {"title": "Filming plan", "story": "US-ME09", "built": false},
+    "scheduler-drafts": {"title": "Scheduling-service drafts", "story": "US-ME10", "built": false},
+    "results": {"title": "Post results", "story": "US-ME11", "built": false},
+    "weekly-read": {"title": "Weekly Read memo", "story": "US-ME12", "built": false},
+    "listening": {"title": "Listening Evidence", "story": "US-ME13", "built": false},
+    "outreach-drafts": {"title": "Outreach Drafts", "story": "US-ME14", "built": false},
+    "beta-recruiting": {"title": "Beta Cohort recruiting", "story": "US-ME15", "built": false}
+  },
+  "sources_not_connected": [
+    {"name": "RepToday repository", "story": "US-ME08", "needed_by": ["post-drafts"]},
+    {"name": "Waitlist anonymous view", "story": "US-ME06", "needed_by": ["waitlist-counts", "weekly-read", "beta-recruiting"]},
+    {"name": "Scheduling service", "story": "US-ME10", "needed_by": ["scheduler-drafts"]},
+    {"name": "YouTube results", "story": "US-ME11", "needed_by": ["results", "weekly-read"]},
+    {"name": "TikTok export in Mandu", "story": "US-ME11", "needed_by": ["results", "weekly-read"]},
+    {"name": "Listening sources", "story": "US-ME13", "needed_by": ["listening"]},
+    {"name": "Beta Build approval in Mandu", "story": "US-ME15", "needed_by": ["beta-recruiting"]},
+    {"name": "Immerse Listening confirmation in Mandu", "story": "US-ME18", "needed_by": []}
+  ]
+}

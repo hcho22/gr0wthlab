@@ -1,5 +1,5 @@
 {
-  "description": "The Marketing Engineer's runtime and write boundary (Guardrails G1, G2, G8), chosen in US-ME02. The launcher (src/bin/gr0wthlab) turns this file into a Codex permission profile and command-line flags, ignoring the Founder's own Codex configuration and rules. Why Codex, and the refused-write evidence: docs/spikes/us-me02-runtime-boundary.md.",
+  "description": "The Marketing Engineer's runtime and write boundary (Guardrails G1, G2, G8), chosen in US-ME02. The launcher (src/bin/gr0wthlab) turns this file into a Codex permission profile and command-line flags, ignoring the Founder's own Codex configuration and rules. The launcher's own records live in ledger/, which the run reads with the rest of the repository and never writes. Why Codex, and the refused-write evidence: docs/spikes/us-me02-runtime-boundary.md.",
   "runtime": "codex",
   "working_directory": "workspace",
   "writable_areas": {

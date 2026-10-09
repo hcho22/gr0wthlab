@@ -40,6 +40,30 @@ class ProductRegistryTest(unittest.TestCase):
         self.assertEqual(locations["Immerse"], HOME / "Developer/FM_Private/firstmate-private/projects/Immerse")
 
 
+class RunConfigTest(unittest.TestCase):
+    def setUp(self):
+        self.config = load("config/run.json")
+        self.registry = load("config/products.json")
+
+    def test_every_package_source_and_unconnected_source_feeds_a_known_output(self):
+        outputs = set(self.config["outputs"])
+        reptoday = next(p for p in self.registry["products"] if p["name"] == "RepToday")
+        sources = reptoday["go_to_market_package"]["sources"]
+        self.assertEqual(len(sources), 12)
+        for source in sources + self.config["sources_not_connected"]:
+            self.assertLessEqual(set(source["needed_by"]), outputs, source)
+
+    def test_the_exchange_folder_is_read_only_and_overridable(self):
+        exchange = self.registry["mandu"]["exchange"]
+        self.assertEqual(exchange["access"], "read-only")
+        self.assertEqual(exchange["env"], "GR0WTHLAB_EXCHANGE_DIR")
+        self.assertTrue((REPO / exchange["spec"]).is_file())
+
+    def test_the_weekly_task_definition_is_reviewed_code(self):
+        self.assertTrue(self.config["instruction"].startswith("src/instructions/"))
+        self.assertTrue((REPO / self.config["instruction"]).is_file())
+
+
 class RuntimeConfigTest(unittest.TestCase):
     def setUp(self):
         self.config = load("config/guardrails/runtime.json")

@@ -2,12 +2,14 @@
 
 import io
 import json
+import os
 import socket
 import tempfile
 import unittest
 from pathlib import Path
 
 from gr0wthlab import boundary, probe
+from tests import fakes
 from tests.test_boundary import CONFIG, REGISTRY
 
 RUN = "20261009T000000Z-on-demand-abcd"
@@ -22,6 +24,7 @@ class VerifyTest(unittest.TestCase):
         for area in CONFIG["writable_areas"].values():
             (self.repo / area).mkdir(parents=True)
         (self.repo / "src").mkdir()
+        (self.repo / "ledger").mkdir()
         (self.home / "Mandu").mkdir(parents=True)
         self.logs = root / "logs"
         self.logs.mkdir()
@@ -45,7 +48,11 @@ class VerifyTest(unittest.TestCase):
     def test_an_escaped_sentinel_fails_the_check_and_is_removed(self):
         self.write_record(exit_code=0)
         self.write_permitted()
-        escaped = [self.home / "Mandu" / (MARK + "-mandu-shell.txt"), self.repo / "src" / (MARK + "-src-file-tool.txt")]
+        escaped = [
+            self.home / "Mandu" / (MARK + "-mandu-shell.txt"),
+            self.repo / "src" / (MARK + "-src-file-tool.txt"),
+            self.repo / "ledger" / (MARK + "-ledger-shell.txt"),
+        ]
         for path in escaped:
             path.write_text("probe\n", encoding="utf-8")
         result = probe.verify(self.boundary, RUN, self.logs)
@@ -121,10 +128,26 @@ class VerifyTest(unittest.TestCase):
             self.assertTrue(unix.refused_in(f"Sandbox: nc(41404) deny(1) network-outbound {unix.address}"))
             self.assertFalse(unix.refused_in(f"Sandbox: nc(41404) deny(1) file-read-data {unix.address}"))
 
+    @unittest.skipIf(os.geteuid() == 0, "root can list any folder")
+    def test_an_area_that_cannot_be_listed_is_reported_not_fatal(self):
+        self.write_record(exit_code=0)
+        self.write_permitted()
+        area = dict(self.boundary.areas)["drafts"]
+        area.chmod(0)
+        try:
+            result = probe.verify(self.boundary, RUN, self.logs)
+        finally:
+            area.chmod(0o755)
+        self.assertEqual(result["unlistable_areas"], {"drafts": "Permission denied"})
+        self.assertFalse(result["passed"])
+        out = io.StringIO()
+        probe.summarize(result, out)
+        self.assertIn("areas that could not be listed: drafts (Permission denied)", out.getvalue())
+
     def test_missing_permitted_writes_are_named(self):
         area = self.boundary.areas[0][1]
         (area / f"{MARK}-permitted-shell.txt").write_text("probe\n", encoding="utf-8")
-        missing = probe.missing_permitted(RUN, probe.permitted(self.boundary, RUN))
+        missing = probe.missing_permitted(RUN, probe.permitted(self.boundary, RUN)[0])
         self.assertIn("evidence:file-tool", missing)
         self.assertNotIn("evidence:shell", missing)
         self.assertEqual(len(missing), 11)
@@ -135,6 +158,18 @@ class VerifyTest(unittest.TestCase):
             encoding="utf-8",
         )
         self.assertEqual(probe.patch_rejections(self.logs, RUN), 3)
+
+    @unittest.skipIf(os.geteuid() == 0, "root can read any file")
+    def test_an_unreadable_changed_file_is_marked_and_changes_are_still_seen(self):
+        fakes.git(self.repo, "init", "--quiet")
+        locked = self.repo / "workspace/drafts/locked.md"
+        locked.write_text("kept from me\n", encoding="utf-8")
+        locked.chmod(0)
+        before = {"repository": probe.snapshot(self.repo)}
+        self.assertEqual(before["repository"]["workspace/drafts/locked.md"], "?? unreadable")
+        (self.repo / "workspace/drafts/new.md").write_text("new\n", encoding="utf-8")
+        after = {"repository": probe.snapshot(self.repo)}
+        self.assertEqual(probe.changed(before, after), {"repository": ["workspace/drafts/new.md"]})
 
     def test_changed_reports_new_and_modified_entries(self):
         before = {"Mandu": {"a.md": " M 1", "b.md": "?? 2"}}

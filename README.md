@@ -55,17 +55,21 @@ The PRD's Guardrails section says what enforces each one.
 | --- | --- | --- |
 | [`workspace/evidence/`](workspace/evidence/) | Evidence | Yes |
 | [`workspace/drafts/`](workspace/drafts/) | Drafts | Yes |
-| [`workspace/review-queue/`](workspace/review-queue/) | Review Queue items | Yes |
+| [`workspace/review-queue/`](workspace/review-queue/) | Review Queue items the agent proposes, before the launcher checks them | Yes |
 | [`workspace/weekly-reads/`](workspace/weekly-reads/) | Weekly Read memos | Yes |
-| [`workspace/run-reports/`](workspace/run-reports/) | Run reports | Yes |
+| [`workspace/run-reports/`](workspace/run-reports/) | Notes the agent writes during a run | Yes |
 | [`workspace/instructions/`](workspace/instructions/) | The Marketing Engineer's Instructions | Yes |
+| [`ledger/`](ledger/) | The launcher's records: the published Review Queue, decision and sitting Evidence, package snapshots, run reports, and run state | No |
 | [`src/`](src/) | Code | No |
-| [`config/`](config/) | Guardrail configuration and the Product registry | No |
+| [`config/`](config/) | Guardrail configuration, the Product registry, and the run's settings | No |
 | `docs/`, `CONTEXT.md`, this README | Specification and decision records | No |
 
-`workspace/` is the only tree the agent may write (G1); everything outside it changes only through firstmate's reviewed pull requests (G8).
+`workspace/` is the only tree the agent may write (G1); `ledger/` is written only by the launcher, outside the sandbox, and everything else changes only through firstmate's reviewed pull requests (G8).
 
 ## Runs
 
-Every run, scheduled or on demand, starts through `src/bin/gr0wthlab run --instruction <file>`, which runs Codex inside the write boundary in [`config/guardrails/runtime.json`](config/guardrails/runtime.json).
+Every run, scheduled or on demand, starts through `src/bin/gr0wthlab run`, which runs Codex inside the write boundary in [`config/guardrails/runtime.json`](config/guardrails/runtime.json) with the task definition in [`src/instructions/`](src/instructions/).
+The weekly run is scheduled for Sunday afternoon, before the Founder's Sunday evening sitting; [`config/run.json`](config/run.json) holds the schedule and the step that saves each run's `workspace/` and `ledger/` records to `main`.
+Setting up the production clone and the schedule, and removing them: [operations](docs/operations.md).
+How the Review Queue reaches Mandu and the Founder's decisions come back: [the Mandu exchange](docs/mandu-exchange.md).
 Why Codex, how the boundary is enforced, and the refused-write evidence: [the US-ME02 spike note](docs/spikes/us-me02-runtime-boundary.md).

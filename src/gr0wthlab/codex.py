@@ -163,6 +163,7 @@ def preflight_targets(boundary: Boundary, *environments: Mapping[str, str]) -> t
     forbidden = [
         boundary.repo_root,
         boundary.repo_root / "workspace",
+        boundary.ledger,
         boundary.repo_root / "src",
         boundary.repo_root / "config",
         boundary.repo_root / "config" / "guardrails",

@@ -42,7 +42,7 @@ class CodexTestCase(unittest.TestCase):
         self.repo = root / "home" / "gr0wthlab"
         for area in CONFIG["writable_areas"].values():
             (self.repo / area).mkdir(parents=True)
-        for name in ("src", "config/guardrails", ".git"):
+        for name in ("src", "config/guardrails", ".git", "ledger"):
             (self.repo / name).mkdir(parents=True)
         self.home = root / "home"
         (self.home / ".codex").mkdir()
@@ -142,6 +142,7 @@ class PreflightTest(CodexTestCase):
         self.assertIn(self.repo, forbidden)
         self.assertIn(self.repo / "src", forbidden)
         self.assertIn(self.repo / ".git", forbidden)
+        self.assertIn(self.repo / "ledger", forbidden)
         self.assertNotIn(self.home / "Mandu", forbidden)
 
     def test_targets_include_the_directories_each_environment_names(self):

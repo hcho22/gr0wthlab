@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import plistlib
 import re
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
 
@@ -43,11 +43,24 @@ def once(moment: str) -> dict[str, int]:
     return {"Month": when.month, "Day": when.day, "Hour": when.hour, "Minute": when.minute}
 
 
+def run_arguments(entry: Path, instruction: Path, once_at: str | None) -> list[str]:
+    """The scheduled run's command line; a weekly run takes its schedule from config/run.json, as the LaunchAgent does,
+    and a one-off run names its time, so either can tell whether it started late."""
+    arguments = [str(entry), "run", "--trigger", "scheduled", "--instruction", str(instruction)]
+    if once_at:
+        arguments += ["--once", once_at]
+    return arguments
+
+
+def boundary_check_arguments(entry: Path) -> list[str]:
+    """A one-off scheduled boundary check, which repeats the US-ME02 check on the scheduled path."""
+    return [str(entry), "boundary-check", "--trigger", "scheduled"]
+
+
 def launch_agent(
     label: str,
-    entry: Path,
+    arguments: Sequence[str],
     repo_root: Path,
-    instruction: Path,
     calendar: Mapping[str, int],
     overrides: Mapping[str, str],
     log_dir: Path,
@@ -59,7 +72,7 @@ def launch_agent(
     return plistlib.dumps(
         {
             "Label": label,
-            "ProgramArguments": [str(entry), "run", "--trigger", "scheduled", "--instruction", str(instruction)],
+            "ProgramArguments": list(arguments),
             "WorkingDirectory": str(repo_root),
             "EnvironmentVariables": environment,
             "StartCalendarInterval": dict(calendar),

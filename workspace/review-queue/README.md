@@ -1,5 +1,8 @@
 # Review Queue
 
 Items awaiting the Founder's decision: posts, messages, package-change proposals, Dispatch requests, Weekly Read decisions, and notices.
-Mandu reads items from here and records the Founder's decisions in its own records; nothing here is a decision.
-Format: US-ME07.
+The format, and what Mandu writes back: [the Mandu exchange](../../docs/mandu-exchange.md).
+
+- `incoming/`: where the agent writes new items during a run; the launcher checks them, publishes the valid ones, sets the rest aside, and empties it.
+
+The published Review Queue (`queue.json`, each item, and what was set aside) is in [`ledger/review-queue/`](../../ledger/README.md), which only the launcher writes and Mandu reads.

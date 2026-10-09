@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+    # Records commits from the production clone change only workspace/ and ledger/; they hold no code to test.
+    paths-ignore: ["workspace/**", "ledger/**"]
 
 permissions:
   contents: read
