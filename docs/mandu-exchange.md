@@ -134,6 +134,7 @@ One file per decided item, `decisions/<id>.json`, written once and never edited 
 
 gr0wthlab matches each record to its item by `item`, keeps every reason and note as Evidence, and never asks about that item again.
 A record that does not follow this format, or names no queued item, is reported to the Founder as a notice, and its item stays open.
+Such a record is not a decision, so Mandu fixes it by rewriting it in this format.
 
 ## Sitting records (Mandu writes)
 

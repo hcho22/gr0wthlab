@@ -217,7 +217,7 @@ class FailuresTest(CycleTestCase):
             "| RepToday package: `projects/RepToday/gtm/05-social-pmf/angles.md` | failed | missing. |", report
         )
         self.assertIn("| Package review (contradictions) | incomplete |", report)
-        self.assertIn("| Package snapshot | incomplete | 1 package sources could not be read |", report)
+        self.assertIn("| Package snapshot | incomplete | 1 package source could not be read |", report)
         queue = self.queue()
         self.assertEqual([entry["kind"] for entry in queue["open"]], ["notice"])
         notice = (self.workspace() / queue["open"][0]["file"]).read_text(encoding="utf-8")

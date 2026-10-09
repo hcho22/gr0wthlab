@@ -36,7 +36,7 @@ The PRD's "Codex automation" is therefore `codex exec` started by a LaunchAgent,
 | --- | --- |
 | [`config/guardrails/runtime.json`](../../config/guardrails/runtime.json) | The runtime, the six writable areas, read grants, network (off), model, and the Codex features turned off |
 | [`config/products.json`](../../config/products.json) | The read-only Mandu and Product checkouts, which become read grants |
-| [`src/bin/gr0wthlab`](../../src/bin/gr0wthlab) | The launcher; the LaunchAgent and on-demand runs both call `src/bin/gr0wthlab run --instruction <file>` |
+| [`src/bin/gr0wthlab`](../../src/bin/gr0wthlab) | The launcher; the LaunchAgent and on-demand runs both call `src/bin/gr0wthlab run`, whose task definition is a file under `src/instructions/` |
 | [`src/checks/boundary-probe.md`](../../src/checks/boundary-probe.md) | The throwaway instruction the validation test runs, kept in `src/` so the agent cannot edit its own test |
 
 The launcher fails closed.
@@ -185,6 +185,27 @@ Both permitted files landed in all six areas, no sentinel was found outside them
 The check removed every sentinel it created, and none remains in the areas, Mandu, or RepToday.
 An earlier attempt with the same configuration, run `20261009T030744Z-on-demand-a8fa`, had the same refusals and no connections but failed, correctly, on the snapshot: this note was edited in the checkout while it ran.
 The scheduled path was not repeated for this configuration; the LaunchAgent calls the same `run` command, and the fingerprint covers everything that command configures.
+
+### Re-check after the weekly run (US-ME04, US-ME07, US-ME17)
+
+The weekly run added a cycle around the agent (`src/gr0wthlab/cycle.py`), the package sources and Mandu's exchange folder to `config/products.json`, and `config/run.json`.
+None of them changes the permission profile, the Codex flags, or the environment: `codex.py`, `boundary.py`, and `runtime.json` are unchanged, and `launcher.run` only takes the cycle's run id.
+Both checks were re-run on 2026-10-08 with Codex CLI 0.160.0, from a linked worktree whose configuration fingerprint is `13a0eee82a14b1d5491d0dea3eeab9c3cf64c8aaa361d6a14f66dba124499659`.
+
+`src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused the 13 forbidden paths (the repository root, `workspace/`, `src/`, `config/`, `config/guardrails/`, `/private/tmp`, `/private/var/tmp`, both git directories, `HOME`, `TMPDIR`, `CODEX_HOME`, and its own empty Codex home).
+
+`src/bin/gr0wthlab boundary-check` passed as run `20261009T043306Z-on-demand-28de`: Codex logged nine patch rejections, the unified log held a kernel Seatbelt denial for each of the eight forbidden shell targets and both local listeners, neither listener received a connection, both permitted files landed in all six areas, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+The attempt before it, `20261009T043050Z-on-demand-c963`, refused every forbidden write and connection too but failed, correctly, on the permitted file-tool writes: the agent gave those six patches paths relative to its working directory that began with `workspace/`, which resolve outside the areas.
+A direct test confirmed that a patch with an absolute or working-directory-relative path into an area lands and a `workspace/`-prefixed one is refused, and the probe now requires absolute paths.
+
+The weekly run itself was run live through the launcher on the same day; Mandu's HEAD, git status, index, and every file digest were unchanged after each run.
+
+| Run | What it showed |
+| --- | --- |
+| `20261009T041643Z-on-demand-a81f` | Against Mandu as it is: 15 package files snapshotted with fingerprints and read times, and the trademark contradiction queued as one package-change proposal citing the launch checklist and the brand guidelines |
+| `20261009T041941Z-on-demand-1a36`, `20261009T042119Z-on-demand-1ec6` | One item of each kind, then a simulated Mandu exchange folder with two approvals, two rejections with reasons, and two undecided: every decision matched, both reasons kept as Evidence, the undecided items carried over and marked, and no decided item reappeared |
+| `20261009T042659Z-on-demand-4738`, `20261009T042749Z-on-demand-310b` | A failed package source, first an unreadable `angles.md` in a copy of Mandu, then a file the real Mandu lacks, added to the registry for the test: each was named with its reason, a notice was queued, and its dependent outputs were marked incomplete; against the real Mandu the agent still reviewed every other file |
+| `20261009T042900Z-on-demand-0271` | A production clone of a throwaway bare remote fast-forwarded to a newer commit, restarted on it, ran, and pushed one records commit that touched only `workspace/` |
 
 ## Scheduled and on-demand runs share one configuration
 

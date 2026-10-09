@@ -276,7 +276,13 @@ class Cycle:
         agent_ok = state.agent.get("exit_code") == 0
         rows = []
         if failed_package:
-            rows.append(("Package snapshot", INCOMPLETE, f"{len(failed_package)} package sources could not be read"))
+            rows.append(
+                (
+                    "Package snapshot",
+                    INCOMPLETE,
+                    f"{report.plural(len(failed_package), 'package source')} could not be read",
+                )
+            )
         else:
             rows.append(("Package snapshot", COMPLETE, f"`{state.snapshot_file}`"))
         review_gaps = [f"{name} could not be read" for name in failed_package]
