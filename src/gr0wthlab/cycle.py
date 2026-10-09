@@ -352,6 +352,8 @@ class Cycle:
                 # Run the reviewed code just fetched, not the code already loaded in this process.
                 entry = str(entry_point(self.repo_root))
                 carried = json.dumps({"started_at": started.isoformat(), "sync": sync})
+                for stream in (self.out, sys.stdout, sys.stderr):
+                    stream.flush()  # execve discards anything still buffered
                 execve(entry, [entry, *argv], dict(self.env, **{PRE_RUN_ENV: carried}))
                 return 0  # only reached when execve is replaced in tests
 
