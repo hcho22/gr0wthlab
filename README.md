@@ -64,3 +64,8 @@ The PRD's Guardrails section says what enforces each one.
 | `docs/`, `CONTEXT.md`, this README | Specification and decision records | No |
 
 `workspace/` is the only tree the agent may write (G1); everything outside it changes only through firstmate's reviewed pull requests (G8).
+
+## Runs
+
+Every run, scheduled or on demand, starts through `src/bin/gr0wthlab run --instruction <file>`, which runs Codex inside the write boundary in [`config/guardrails/runtime.json`](config/guardrails/runtime.json).
+Why Codex, how the boundary is enforced, and the refused-write evidence: [the US-ME02 spike note](docs/spikes/us-me02-runtime-boundary.md).

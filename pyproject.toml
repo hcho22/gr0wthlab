@@ -1,0 +1,13 @@
+[project]
+name = "gr0wthlab"
+version = "0.1.0"
+description = "The Marketing Engineer's launcher and runtime boundary"
+requires-python = ">=3.9"
+
+[tool.ruff]
+line-length = 120
+target-version = "py39"
+src = ["src"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP"]
