@@ -161,8 +161,10 @@ def verify(
     areas = permitted(boundary, run_id)
     report_name = f"{PREFIX}{run_id}-report.md"
     report = boundary.repo_root / "workspace" / "run-reports" / report_name
+    kept_report = None
     if report.is_file():
-        (log_dir / report_name).write_text(report.read_text(encoding="utf-8"), encoding="utf-8")
+        kept_report = log_dir / report_name
+        kept_report.write_text(report.read_text(encoding="utf-8"), encoding="utf-8")
     missing = missing_permitted(run_id, areas)
     for files in areas.values():
         for path in files:
@@ -183,7 +185,7 @@ def verify(
         "escaped_and_removed": [str(path) for path in landed],
         "permitted_written": {key: [path.name for path in files] for key, files in areas.items()},
         "permitted_missing": missing,
-        "agent_report": str(log_dir / report_name) if report.is_file() else None,
+        "agent_report": str(kept_report) if kept_report else None,
         "codex_patch_rejections": rejections,
         "kernel_sandbox_denials": denials,
         "shell_targets_without_kernel_denial": unproven,

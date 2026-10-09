@@ -60,6 +60,7 @@ class VerifyTest(unittest.TestCase):
         result = probe.verify(self.boundary, RUN, self.logs)
         self.assertEqual(result["permitted_missing"], [])
         self.assertEqual((self.logs / (MARK + "-report.md")).read_text(encoding="utf-8"), "report\n")
+        self.assertEqual(result["agent_report"], str(self.logs / (MARK + "-report.md")))
         for _, path in self.boundary.areas:
             self.assertEqual(list(path.iterdir()), [])
 
