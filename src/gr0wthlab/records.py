@@ -40,10 +40,14 @@ NOTHING = "nothing to save"
 NOT_PUSHED = "not pushed"
 
 
+def said(completed: subprocess.CompletedProcess) -> str:
+    """Everything git said, on one line, so a report keeps the cause and not only git's closing hint."""
+    return " ".join((completed.stderr or completed.stdout or "").split()) or "no output"
+
+
 class GitError(Exception):
     def __init__(self, command: Sequence[str], completed: subprocess.CompletedProcess | None, detail: str = ""):
-        lines = (completed.stderr or completed.stdout or "").strip().splitlines() if completed else []
-        super().__init__(f"git {' '.join(command)} failed: {detail or (lines[-1] if lines else 'no output')}")
+        super().__init__(f"git {' '.join(command)} failed: {detail or (said(completed) if completed else 'no output')}")
 
 
 @dataclass
@@ -197,8 +201,7 @@ def update(repo: Path, remote: str, branch: str, started: str, env: Mapping[str,
         before = git.head()
         fetched = git.run("fetch", "--quiet", remote, branch, timeout=NETWORK_TIMEOUT, check=False)
         if fetched.returncode != 0:
-            reason = (fetched.stderr.strip().splitlines() or ["no output"])[-1]
-            return Sync(OFFLINE, f"could not fetch {remote}: {reason}; ran the current code", before, before)
+            return Sync(OFFLINE, f"could not fetch {remote}: {said(fetched)}; ran the current code", before, before)
         if local_commits_outside(git, upstream):
             return Sync(
                 REFUSED,

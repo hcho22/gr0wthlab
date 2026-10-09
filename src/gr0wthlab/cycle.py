@@ -359,6 +359,7 @@ class Cycle:
                 proposals,
                 f"{report.plural(len(files), 'file')}, {changed} changed, {failed} failed;"
                 f" {report.plural(proposals, 'proposal')} queued",
+                state.review_gap(),
             ),
             run_state.Tally(
                 "review-queue",
@@ -379,12 +380,10 @@ class Cycle:
         queued = report.plural(len(state.queue_after), "open item") + (
             f"; {len(state.set_aside)} set aside" if state.set_aside else ""
         )
+        review_gap = state.review_gap()
         own = {
             "package-snapshot": ([], f"`{state.snapshot_file}`"),
-            "package-review": (
-                [] if state.agent.get("exit_code") == 0 else ["the agent did not finish"],
-                "the agent finished its review",
-            ),
+            "package-review": ([review_gap] if review_gap else [], "the agent finished its review"),
             "decisions": ([] if ledger_ok else ["the ledger could not be read; no decision was matched"], decisions),
             "review-queue": (
                 [] if ledger_ok else ["the ledger could not be read; the queue was left as it was"],
@@ -576,7 +575,9 @@ class Cycle:
         log_dir = launcher.default_log_dir(self.env, self.home)
         last_message = log_dir / f"{run_id}.last-message.md"
         if last_message.is_file():
-            state.agent_summary = last_message.read_text(encoding="utf-8", errors="replace")[:SUMMARY_LIMIT]
+            summary = last_message.read_text(encoding="utf-8", errors="replace")
+            state.agent_summary = summary[:SUMMARY_LIMIT]
+            state.review = (summary.strip().splitlines() or [""])[-1].strip()
         state.usage = report.token_usage(log_dir / f"{run_id}.events.jsonl")
         if state.usage:
             state.cost = report.cost(state.usage, config.prices)

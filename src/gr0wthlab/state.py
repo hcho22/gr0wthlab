@@ -348,13 +348,18 @@ class Tally:
     checked: int
     acted: int
     note: str
+    incomplete: str = ""  # why this workflow's work is incomplete this run, if it is
+
+    def account(self) -> str:
+        return self.note + (f"; incomplete: {self.incomplete}" if self.incomplete else "")
 
     def line(self) -> str:
-        return f"checked={self.checked} acted={self.acted} note={self.note}"
+        return f"checked={self.checked} acted={self.acted} note={self.account()}"
 
 
 def run_tally(tallies: Sequence[Tally]) -> Tally:
-    """The run's own line: everything checked and acted on, and what acted, or that nothing needed to."""
-    acted = [f"{tally.workflow} {tally.note}" for tally in tallies if tally.acted]
-    note = "; ".join(acted) if acted else "nothing new needed action"
+    """The run's own line: everything checked and acted on, and what acted or is incomplete, or that nothing needed
+    to, so a run that fell short is never a quiet one."""
+    named = [f"{tally.workflow} {tally.account()}" for tally in tallies if tally.acted or tally.incomplete]
+    note = "; ".join(named) if named else "nothing new needed action"
     return Tally("run", sum(t.checked for t in tallies), sum(t.acted for t in tallies), note)

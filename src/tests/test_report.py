@@ -86,10 +86,18 @@ class NoticeTest(unittest.TestCase):
     def state(self):
         state = RunState("R", "on-demand", local(2026, 10, 11, 16), "i.md")
         state.agent = {"agent_started": True, "exit_code": 0}
+        state.review = report.REVIEW_COMPLETE
         return state
 
     def test_a_clean_run_has_no_notice(self):
         self.assertIsNone(report.problems_notice(self.state(), "run-reports/R.md"))
+
+    def test_a_review_the_agent_did_not_finish_is_a_problem(self):
+        state = self.state()
+        state.review = "Review: incomplete: the rules pass is unfinished"
+        title, body, _, _ = report.problems_notice(state, "run-reports/R.md")
+        self.assertEqual(title, "Notice: the package review was not finished on 2026-10-11")
+        self.assertIn("(the agent did not finish its review: the rules pass is unfinished)", body)
 
     def test_a_failed_source_names_what_it_leaves_incomplete(self):
         state = self.state()

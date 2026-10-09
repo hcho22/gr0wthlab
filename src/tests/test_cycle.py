@@ -182,6 +182,7 @@ class FirstRunTest(CycleTestCase):
         self.assertIn(f"`{cadence}` | read: first snapshot", text)
         self.assertIn("a Product's own repository holds its code, never its package", text)
         self.assertIn("check-incoming", text)
+        self.assertIn("written with your file-editing tool (apply_patch)", text)
 
 
 class DecisionRoundTripTest(CycleTestCase):
@@ -709,6 +710,44 @@ class FailuresTest(CycleTestCase):
         kinds = [entry["kind"] for entry in self.queue()["open"]]
         self.assertEqual(kinds, ["package-change-proposal", "notice"])
         self.assertIn("The agent stopped with exit code 1", self.report())
+
+    def test_a_review_the_agent_did_not_finish_is_incomplete_and_never_a_quiet_week(self):
+        summary = "I could not complete this run's review, and I queued nothing."
+        accounts = {
+            "says it did not finish": (
+                f"{summary}\n\nReview: incomplete: the rules pass is unfinished\n",
+                "the agent did not finish its review: the rules pass is unfinished",
+            ),
+            "never says it finished": (summary, "the agent did not end its summary with `Review: complete`"),
+        }
+        for number, (case, (text, gap)) in enumerate(accounts.items()):
+            with self.subTest(case=case):
+                fakes.behave(self.codex_dir, {"summary": text})
+                code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7 * number))
+                self.assertEqual(code, 0, out)
+                report = self.report()
+                self.assertIn(f"| Package review (contradictions) | incomplete | {gap} |", report)
+                self.assertIn(
+                    " acted=1 note=package-review 12 files, 0 changed, 0 failed; 0 proposals queued;"
+                    f" incomplete: {gap}; review-queue 0 decisions taken in, 1 other item queued,",
+                    report.partition("\n- ")[2].partition("\n")[0],
+                )
+                named = re.search(r"listed in the notice `([^`]+)`", report)
+                self.assertIsNotNone(named, report)
+                notice = next(entry for entry in self.queue()["open"] if entry["id"] == named.group(1))
+                self.assertEqual(notice["kind"], "notice")
+                text = (self.ledger() / notice["file"]).read_text(encoding="utf-8")
+                self.assertIn(f"did not finish reviewing the Go-To-Market Package ({gap})", text)
+
+    def test_a_finished_review_is_complete_however_long_the_summary(self):
+        summary = "Traced every recorded outcome.\n\n" + "x" * cycle.SUMMARY_LIMIT + "\n\nReview: complete\n"
+        fakes.behave(self.codex_dir, {"summary": summary})
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        report = self.report()
+        self.assertIn("| Package review (contradictions) | complete | the agent finished its review |", report)
+        self.assertIn("- checked=12 acted=0 note=nothing new needed action\n", report)
+        self.assertEqual(self.queue()["open"], [])
 
     def test_a_late_scheduled_run_says_so(self):
         due = datetime(2026, 10, 11, 16, 0).astimezone()

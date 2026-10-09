@@ -48,7 +48,8 @@ for relative, target in behavior.get("symlink", {{}}).items():
     (workspace / relative).symlink_to(target)
 for relative, mode in behavior.get("chmod", {{}}).items():
     os.chmod(workspace / relative, int(mode, 8))
-Path(args[args.index("--output-last-message") + 1]).write_text(behavior.get("summary", "Checked the package."))
+summary = behavior.get("summary", "Checked the package.\\n\\nReview: complete\\n")
+Path(args[args.index("--output-last-message") + 1]).write_text(summary)
 usage = {{"input_tokens": 200000, "cached_input_tokens": 150000, "cache_write_input_tokens": 0, "output_tokens": 4000}}
 print(json.dumps({{"type": "turn.completed", "usage": usage}}))
 sys.exit(behavior.get("exit", 0))

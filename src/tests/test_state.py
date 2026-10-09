@@ -204,6 +204,13 @@ class TallyTest(unittest.TestCase):
             state.run_tally(busy).line(), "checked=21 acted=3 note=review-queue 2 decisions taken in, 1 queued"
         )
 
+    def test_an_incomplete_workflow_is_named_even_when_nothing_acted(self):
+        tallies = [Tally("package-review", 15, 0, "15 files", "the rules pass is unfinished")]
+        self.assertEqual(
+            state.run_tally(tallies).line(),
+            "checked=15 acted=0 note=package-review 15 files; incomplete: the rules pass is unfinished",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

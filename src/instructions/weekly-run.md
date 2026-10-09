@@ -22,10 +22,15 @@ The launcher has already done the deterministic work before you start, and does 
 5. Check your items with the command the brief gives, and fix every problem it reports.
 6. Finish with a short summary as your final message: what you checked (including each recorded outcome you traced), what you found, what you queued, and anything you skipped or could not do, with the reason.
    The launcher puts that summary in the run report as your account.
+   End it with exactly one of these lines, as plain text on its own line with nothing after it:
+   `Review: complete` when you finished every pass of step 3, or `Review: incomplete: <the passes you did not finish, and why>` otherwise.
+   Unless that line reads `Review: complete`, the launcher marks the package review incomplete and tells the Founder.
 
 ## Writing an item
 
 Write each item as a new file `<slug>.md` in the incoming folder the brief names, where the slug is lowercase words joined by hyphens, such as `trademark-status-stale.md`.
+Create and fix each item file with your file-editing tool (apply_patch), never with a shell here-document (`<<`) or redirect.
+The sandbox gives the shell no writable temporary folder, so a here-document fails and can leave an empty item behind.
 The format is in `docs/mandu-exchange.md` at the repository root; a package-change proposal looks like this, with nothing else in the file:
 
 ```markdown

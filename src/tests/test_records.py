@@ -98,6 +98,7 @@ class PrepareTest(RecordsTestCase):
         self.git(self.clone, "remote", "set-url", "origin", str(self.root / "missing.git"))
         result = self.prepare()
         self.assertEqual((result.status, result.ok_to_run, result.code_changed), (records.OFFLINE, True, False))
+        self.assertIn("does not appear to be a git repository", result.detail)
         self.assertIn("ran the current code", result.detail)
 
     @unittest.skipIf(os.geteuid() == 0, "root can read any file")

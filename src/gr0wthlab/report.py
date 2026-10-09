@@ -19,6 +19,9 @@ SKIPPED = "skipped"
 COMPLETE = "complete"
 INCOMPLETE = "incomplete"
 NOT_BUILT = "not built yet"
+# The line the agent's summary ends with: its own account of whether it finished every pass of its review.
+REVIEW_COMPLETE = "Review: complete"
+REVIEW_INCOMPLETE = "Review: incomplete"
 USAGE_FIELDS = ("input_tokens", "cached_input_tokens", "cache_write_input_tokens", "output_tokens")
 NOTICE_BODY_LIMIT = exchange.MAX_ITEM_CHARS // 2
 
@@ -73,6 +76,7 @@ class RunState:
     queue_after: list[Mapping[str, object]] = field(default_factory=list)
     agent: Mapping[str, object] = field(default_factory=dict)
     agent_summary: str = ""
+    review: str = ""  # the last line of the agent's whole summary
     usage: Mapping[str, int] | None = None
     cost: float | None = None
     outputs: list[tuple[str, str, str]] = field(default_factory=list)  # title, status, detail
@@ -95,6 +99,18 @@ class RunState:
 
     def failed_sources(self) -> list[SourceLine]:
         return [line for line in self.sources if line.status == package.FAILED]
+
+    def review_gap(self) -> str:
+        """Why the agent's package review is incomplete, or "" when it finished: it must stop with exit code 0 and end
+        its summary with the line `Review: complete`, so a summary that says otherwise, or says nothing, is not."""
+        if self.agent.get("exit_code") != 0:
+            return "the agent did not finish"
+        if self.review == REVIEW_COMPLETE:
+            return ""
+        if self.review.startswith(REVIEW_INCOMPLETE):
+            why = self.review[len(REVIEW_INCOMPLETE) :].lstrip(":").strip()
+            return "the agent did not finish its review" + (f": {why}" if why else "")
+        return f"the agent did not end its summary with `{REVIEW_COMPLETE}`"
 
     def open_item(self, record: Unusable) -> str:
         """The item a record is for when that item is still open as this run leaves the Review Queue, so Mandu must
@@ -354,7 +370,8 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
         "",
         "## Where to write",
         "",
-        f"- New items: `{workspace / 'review-queue' / 'incoming'}/<slug>.md`.",
+        f"- New items: `{workspace / 'review-queue' / 'incoming'}/<slug>.md`, written with your file-editing tool"
+        " (apply_patch): a shell here-document (`<<`) fails here, as the sandbox has no writable temporary folder.",
         f"- The launcher's records, which you can read and never write: `{ledger}`.",
         f"- Their format: `{repo_root / 'docs' / 'mandu-exchange.md'}`.",
         f"- Check them before you finish: `/usr/bin/python3 {repo_root / 'src/bin/gr0wthlab'} check-incoming`.",
@@ -505,6 +522,14 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
             (
                 f"the agent stopped early on {day}",
                 f"The agent stopped with exit code {agent}, so this run's review may be incomplete.",
+            )
+        )
+    elif state.review_gap():
+        sections.append(
+            (
+                f"the package review was not finished on {day}",
+                f"The Marketing Engineer did not finish reviewing the Go-To-Market Package ({state.review_gap()}),"
+                " so a contradiction it did not reach is not in the Review Queue yet; the next run reviews it again.",
             )
         )
     if state.problems:
