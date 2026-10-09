@@ -5,8 +5,9 @@ decisions from Mandu; brief the agent and run it inside the sandbox (launcher.ru
 workspace/review-queue/incoming/ that pass the format; write the Review Queue and the run report; commit and push
 workspace/ and ledger/. Every step but the agent is deterministic code outside the sandbox. The launcher's records live
 in ledger/, which the agent can read and never write, so nothing it does can change them; in workspace/ the launcher
-only reads and removes the incoming items it takes in. One run at a time per checkout holds the run lock in its
-ledger/ from the sync to the saved records; a run started meanwhile refuses to start, and the next report says so.
+only restores its owner's access to entries the agent left without it, and reads and removes the incoming items it
+takes in. One run at a time per checkout holds the run lock in its ledger/ from the sync to the saved records; a run
+started meanwhile refuses to start, and the next report says so.
 """
 
 from __future__ import annotations

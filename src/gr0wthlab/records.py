@@ -1,6 +1,7 @@
 """The production clone's git steps, run by the launcher outside the sandbox.
 
-Before a run, bring main up to the reviewed code on origin by fast-forward only.
+Before a run, restore the owner's access to everything under workspace/, then bring main up to the reviewed code on
+origin by fast-forward, or by replaying unpushed records commits on top of it.
 After a run, commit the changed workspace/ and ledger/ paths, the agent's outputs and the launcher's records, and push
 them to main, never anything else and never by force; a README in either is documentation, which only a reviewed pull
 request changes, so a change to one is put back instead.
