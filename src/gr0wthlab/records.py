@@ -251,7 +251,13 @@ def unsafe(repo: Path, mode: str, path: str, max_bytes: int) -> str | None:
 def save_commit(git: Git, message: str, max_bytes: int, excluded: list[str] | None = None) -> str | None:
     """Stage workspace/ and ledger/ only, drop anything unsafe, put back any README, and commit; returns the new
     commit or None."""
-    git.run("add", "--all", "--", *RECORD_DIRS)
+    added = git.run("add", "--all", "--ignore-errors", "--", *RECORD_DIRS, check=False)
+    if added.returncode not in (0, 1):
+        raise GitError(["add"], added)
+    if added.returncode and excluded is not None:
+        unread = git.fields("ls-files", "-z", "--others", "--exclude-standard", "--", *RECORD_DIRS)
+        unread += git.fields("diff", "-z", "--name-only", "--", *RECORD_DIRS)
+        excluded += [f"{path} (could not be read)" for path in unread if path]
     entries = staged(git)
     stray = outside([path for _, path in entries])
     if stray:

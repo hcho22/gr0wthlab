@@ -409,6 +409,31 @@ class DecisionRoundTripTest(CycleTestCase):
         self.assertNotIn("Could not use", report)
         self.assertIn("- Not listed again: 1 record that could not be used", report)
 
+    def test_an_unreadable_review_queue_matches_no_decision_and_still_takes_in_sittings(self):
+        item = "20261011-name-status-stale"
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        self.decide(item, "approve")
+        day = self.sit()
+        (self.ledger() / "review-queue/queue.json").write_text("{", encoding="utf-8")
+        fakes.behave(self.codex_dir, {})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(code, 0, out)
+        report = self.report()
+        self.assertIn(
+            "| Mandu decisions | skipped | the Review Queue could not be read, so no decision could be matched to its"
+            " item |",
+            report,
+        )
+        self.assertIn(
+            "| Founder decisions taken in | incomplete | the ledger could not be read; no decision was matched |",
+            report,
+        )
+        self.assertNotIn("Could not use", report)
+        self.assertFalse((self.ledger() / f"evidence/decisions/{item}.json").exists())
+        self.assertIn("| Mandu sittings | changed | 1 record, 1 new |", report)
+        self.assertTrue((self.ledger() / f"evidence/sittings/{day}.json").is_file())
+
     def test_a_malformed_decision_on_an_open_item_is_reported_every_run_until_replaced(self):
         item = "20261011-name-status-stale"
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
@@ -637,6 +662,21 @@ class FailuresTest(CycleTestCase):
         self.assertEqual([entry["kind"] for entry in queue["open"]], ["notice"])
         notice = (self.ledger() / queue["open"][0]["file"]).read_text(encoding="utf-8")
         self.assertIn("brand-guidelines.md`: Permission denied.", notice)
+
+    @unittest.skipIf(os.geteuid() == 0, "root can search any folder")
+    def test_an_unsearchable_folder_in_incoming_is_reported_not_fatal(self):
+        behavior = {
+            "write": {"review-queue/incoming/sub/inner/name-status-stale.md": fakes.PROPOSAL},
+            "chmod": {"review-queue/incoming/sub": "600"},
+        }
+        fakes.behave(self.codex_dir, behavior)
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        problems = self.report().partition("\n## Launcher problems\n")[2]
+        self.assertIn(
+            "- `review-queue/incoming/sub/inner` could not be read (Permission denied), so nothing in it was read",
+            problems,
+        )
 
     @unittest.skipIf(os.geteuid() == 0, "root can list any folder")
     def test_an_unreadable_incoming_folder_is_reported_not_skipped(self):

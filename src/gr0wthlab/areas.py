@@ -87,7 +87,13 @@ class Areas:
 
         for root, subdirs, names in os.walk(str(directory), onerror=unreadable):
             for name in list(subdirs):
-                if Path(root, name).is_symlink():
+                try:
+                    linked = Path(root, name).is_symlink()
+                except OSError as error:
+                    unreadable(error)
+                    subdirs.remove(name)
+                    continue
+                if linked:
                     names.append(name)
                     subdirs.remove(name)
             for name in sorted(names):

@@ -64,14 +64,23 @@ def queued(products: list[str]) -> tuple[Ledger, dict[str, str], str | None]:
 def check_incoming(out=sys.stdout) -> int:
     """The launcher's own check of each item in incoming/, for the agent to use before it finishes."""
     products = [product["name"] for product in load_json(REPO_ROOT / PRODUCT_REGISTRY).get("products", [])]
-    if any(
-        path.is_symlink() or (os.path.lexists(str(path)) and not path.is_dir()) for path in (INCOMING.parent, INCOMING)
-    ):
+    try:
+        if any(
+            path.is_symlink() or (os.path.lexists(str(path)) and not path.is_dir())
+            for path in (INCOMING.parent, INCOMING)
+        ):
+            print(
+                f"PROBLEM {INCOMING} is not a real folder; the launcher removes it and takes in nothing from it",
+                file=out,
+            )
+            return 1
+        names = sorted(os.listdir(str(INCOMING))) if INCOMING.is_dir() else []
+    except OSError as error:
         print(
-            f"PROBLEM {INCOMING} is not a real folder; the launcher removes it and takes in nothing from it", file=out
+            f"PROBLEM {INCOMING} could not be read ({error.strerror or error}); the launcher takes in nothing from it",
+            file=out,
         )
         return 1
-    names = sorted(name for name in os.listdir(str(INCOMING))) if INCOMING.is_dir() else []
     ledger, seen, warning = queued(products)
     if warning:
         print(warning, file=out)

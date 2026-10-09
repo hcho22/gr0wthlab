@@ -152,6 +152,22 @@ class CheckIncomingTest(unittest.TestCase):
         self.assertIn("is not a real folder; the launcher removes it and takes in nothing from it", out.getvalue())
         self.assertNotIn("item.md", out.getvalue())
 
+    @unittest.skipIf(os.geteuid() == 0, "root can list any folder")
+    def test_an_unreadable_incoming_folder_is_reported(self):
+        with tempfile.TemporaryDirectory() as directory:
+            incoming = Path(directory) / "workspace" / "review-queue" / "incoming"
+            incoming.mkdir(parents=True)
+            (incoming / "item.md").write_text(fakes.PROPOSAL, encoding="utf-8")
+            incoming.chmod(0o300)
+            out = io.StringIO()
+            try:
+                with mock.patch.object(cli, "INCOMING", incoming), redirect_stdout(out):
+                    code = cli.check_incoming(out)
+            finally:
+                incoming.chmod(0o700)
+        self.assertEqual(code, 1)
+        self.assertIn("could not be read (Permission denied); the launcher takes in nothing from it", out.getvalue())
+
     def test_reports_each_item_as_the_launcher_would(self):
         with tempfile.TemporaryDirectory() as directory:
             queue_dir = Path(directory) / "ledger" / "review-queue"

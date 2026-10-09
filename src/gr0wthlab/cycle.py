@@ -175,24 +175,37 @@ class Cycle:
         config: settings.Settings,
         folder: Path,
         ledger: Ledger,
+        ledger_ok: bool,
         review_state: run_state.ReviewQueueState,
     ) -> None:
-        """Take in Mandu's decision and sitting records. A decision record for an item still open that cannot be used
-        is reported at every run until Mandu replaces it; any other record that cannot be used is reported by the
-        first run to find it as it is, and the Review Queue state remembers it by its fingerprint while it stays so."""
-        anything_queued = bool(ledger.entries)
+        """Take in Mandu's decision and sitting records; when the ledger could not be read, no decision is matched and
+        only sittings are taken in. A decision record for an item still open that cannot be used is reported at every
+        run until Mandu replaces it; any other record that cannot be used is reported by the first run to find it as
+        it is, and the Review Queue state remembers it by its fingerprint while it stays so."""
         needs = output_titles(config, ("decisions", "review-queue"))
         sitting_needs = output_titles(config, ("review-queue",))
         state.reported_before = set(review_state.reported)
+        unmatched = (
+            None
+            if ledger_ok
+            else SourceLine(
+                "Mandu decisions",
+                SKIPPED,
+                "the Review Queue could not be read, so no decision could be matched to its item",
+                needs,
+            )
+        )
         try:
             present = folder.is_dir()
         except OSError as error:
             detail = f"Mandu's exchange folder `{folder}` could not be read: {error.strerror or error}."
-            state.sources.append(SourceLine("Mandu decisions", package.FAILED, detail, needs))
+            state.sources.append(unmatched or SourceLine("Mandu decisions", package.FAILED, detail, needs))
             state.sources.append(SourceLine("Mandu sittings", package.FAILED, detail, sitting_needs))
             return
         if not present:
-            if anything_queued and ledger.open_entries():
+            if unmatched:
+                state.sources.append(unmatched)
+            elif ledger.open_entries():
                 detail = f"Mandu's exchange folder `{folder}` does not exist, so no decision can reach gr0wthlab."
                 state.sources.append(SourceLine("Mandu decisions", package.FAILED, detail, needs))
             else:
@@ -200,7 +213,7 @@ class Cycle:
                 state.sources.append(SourceLine("Mandu decisions", SKIPPED, detail, needs))
             state.sources.append(SourceLine("Mandu sittings", SKIPPED, "Mandu's exchange folder does not exist yet"))
             return
-        found, problems, failure = read_records(folder / "decisions")
+        found, problems, failure = ([], [], None) if unmatched else read_records(folder / "decisions")
         decisions, more = parse_records(found, exchange.parse_decision)
         problems += more
         sittings_found, sitting_problems, sitting_failure = read_records(folder / "sittings")
@@ -264,7 +277,9 @@ class Cycle:
                 self.store.write_json(target, dict(record, taken_in_by_run=first))
                 state.sittings.append(sitting)
         taken = sum(1 for outcome in state.decisions if outcome.status == "taken")
-        if failure:
+        if unmatched:
+            state.sources.append(unmatched)
+        elif failure:
             detail = f"`{folder / 'decisions'}` could not be read: {failure}."
             state.sources.append(SourceLine("Mandu decisions", package.FAILED, detail, needs))
         else:
@@ -370,7 +385,7 @@ class Cycle:
                 [] if state.agent.get("exit_code") == 0 else ["the agent did not finish"],
                 "the agent finished its review",
             ),
-            "decisions": ([], decisions),
+            "decisions": ([] if ledger_ok else ["the ledger could not be read; no decision was matched"], decisions),
             "review-queue": (
                 [] if ledger_ok else ["the ledger could not be read; the queue was left as it was"],
                 queued,
@@ -514,7 +529,7 @@ class Cycle:
             ledger, ledger_ok = Ledger(), False
             state.problems.append(f"{error}; the Review Queue was left untouched this run")
         states = self.load_state(state, run_id)
-        self.take_decisions(state, config, folder, ledger, states.review_queue)
+        self.take_decisions(state, config, folder, ledger, ledger_ok, states.review_queue)
         sittings = self.sitting_runs(state)
         hashes, unreadable = run_state.item_hashes(self.store.root, ledger.entries, products, states.review_queue)
         state.problems += unreadable

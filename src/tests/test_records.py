@@ -181,6 +181,18 @@ class SaveTest(RecordsTestCase):
         for name in ("link.md", "hard.md", ".gitattributes", "big.md"):
             self.assertIn(name, excluded)
 
+    @unittest.skipIf(os.geteuid() == 0, "root can read any file")
+    def test_an_unreadable_record_is_left_out_and_never_stops_the_next_run(self):
+        self.write("workspace/drafts/locked.md").chmod(0)
+        self.write("workspace/drafts/ok.md")
+        result = self.save()
+        self.assertEqual(result.status, records.PUSHED, result.detail)
+        self.assertEqual(self.remote_files(), ["workspace/drafts/ok.md"])
+        self.assertIn("workspace/drafts/locked.md (could not be read)", result.excluded)
+        result = self.prepare()
+        self.assertTrue(result.ok_to_run, result.detail)
+        self.assertIn("workspace/drafts/locked.md (could not be read)", result.excluded)
+
     def test_a_moved_remote_is_replayed_and_pushed_once_never_forced(self):
         self.land_upstream("src/new.py", "x = 1\n")
         self.write("workspace/run-reports/r.md")
