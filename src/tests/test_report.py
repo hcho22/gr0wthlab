@@ -94,10 +94,24 @@ class NoticeTest(unittest.TestCase):
 
     def test_a_review_the_agent_did_not_finish_is_a_problem(self):
         state = self.state()
-        state.review = "Review: incomplete: the rules pass is unfinished"
+        state.review = "Review: incomplete: the rules pass is unfinished."
         title, body, _, _ = report.problems_notice(state, "run-reports/R.md")
         self.assertEqual(title, "Notice: the package review was not finished on 2026-10-11")
-        self.assertIn("(the agent did not finish its review: the rules pass is unfinished)", body)
+        self.assertTrue(
+            body.startswith(
+                "The Marketing Engineer did not finish reviewing the Go-To-Market Package (the rules pass is"
+                " unfinished), so a contradiction"
+            ),
+            body,
+        )
+
+    def test_a_review_the_agent_never_confirmed_finishing_says_only_that(self):
+        state = self.state()
+        state.review = "I traced every outcome."
+        title, body, _, _ = report.problems_notice(state, "run-reports/R.md")
+        self.assertEqual(title, "Notice: the package review was not confirmed finished on 2026-10-11")
+        self.assertTrue(body.startswith("The Marketing Engineer did not confirm that it finished every pass"), body)
+        self.assertNotIn("Review: complete", body)
 
     def test_a_failed_source_names_what_it_leaves_incomplete(self):
         state = self.state()
@@ -116,6 +130,14 @@ class NoticeTest(unittest.TestCase):
         title, body, _, _ = report.problems_notice(state, "run-reports/R.md")
         self.assertEqual(title, "Notice: the run on 2026-10-11 had 2 problems")
         self.assertIn("The agent did not start", body)
+
+    def test_a_notice_about_several_kinds_of_problem_counts_every_problem(self):
+        state = self.state()
+        state.review = "Review: incomplete: the rules pass is unfinished"
+        for name in ("a.md", "b.md", "c.json"):
+            state.sources.append(SourceLine(f"RepToday package: `{name}`", package.FAILED, "missing.", ()))
+        title, _, _, _ = report.problems_notice(state, "run-reports/R.md")
+        self.assertEqual(title, "Notice: the run on 2026-10-11 had 4 problems")
 
     def test_a_notice_stays_a_valid_item_however_many_problems_it_lists(self):
         state = self.state()

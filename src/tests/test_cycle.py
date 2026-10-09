@@ -715,12 +715,17 @@ class FailuresTest(CycleTestCase):
         summary = "I could not complete this run's review, and I queued nothing."
         accounts = {
             "says it did not finish": (
-                f"{summary}\n\nReview: incomplete: the rules pass is unfinished\n",
+                f"{summary}\n\nReview: incomplete: the rules pass is unfinished.\n",
                 "the agent did not finish its review: the rules pass is unfinished",
+                "did not finish reviewing the Go-To-Market Package (the rules pass is unfinished), so",
             ),
-            "never says it finished": (summary, "the agent did not end its summary with `Review: complete`"),
+            "never says it finished": (
+                summary,
+                "the agent did not confirm that it finished every pass",
+                "did not confirm that it finished every pass of its review of the Go-To-Market Package, so",
+            ),
         }
-        for number, (case, (text, gap)) in enumerate(accounts.items()):
+        for number, (case, (text, gap, told)) in enumerate(accounts.items()):
             with self.subTest(case=case):
                 fakes.behave(self.codex_dir, {"summary": text})
                 code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7 * number))
@@ -737,7 +742,7 @@ class FailuresTest(CycleTestCase):
                 notice = next(entry for entry in self.queue()["open"] if entry["id"] == named.group(1))
                 self.assertEqual(notice["kind"], "notice")
                 text = (self.ledger() / notice["file"]).read_text(encoding="utf-8")
-                self.assertIn(f"did not finish reviewing the Go-To-Market Package ({gap})", text)
+                self.assertIn(told, text)
 
     def test_a_finished_review_is_complete_however_long_the_summary(self):
         summary = "Traced every recorded outcome.\n\n" + "x" * cycle.SUMMARY_LIMIT + "\n\nReview: complete\n"

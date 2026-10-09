@@ -108,9 +108,14 @@ class RunState:
         if self.review == REVIEW_COMPLETE:
             return ""
         if self.review.startswith(REVIEW_INCOMPLETE):
-            why = self.review[len(REVIEW_INCOMPLETE) :].lstrip(":").strip()
+            why = self.review_reason()
             return "the agent did not finish its review" + (f": {why}" if why else "")
-        return f"the agent did not end its summary with `{REVIEW_COMPLETE}`"
+        return "the agent did not confirm that it finished every pass"
+
+    def review_reason(self) -> str:
+        """The agent's own reason after `Review: incomplete:`, without the closing punctuation that would clash with
+        the sentence it is quoted in."""
+        return self.review[len(REVIEW_INCOMPLETE) :].lstrip(":").strip().rstrip(".!;:, ")
 
     def open_item(self, record: Unusable) -> str:
         """The item a record is for when that item is still open as this run leaves the Review Queue, so Mandu must
@@ -467,22 +472,23 @@ def bullet(text: str) -> str:
 def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, str] | None:
     """One notice for the Founder per run with problems, in plain outcome language; None if there were none.
 
-    A notice about one problem says what it is in its title; a notice about several counts them.
+    A notice about one kind of problem says what it is in its title; a notice about several counts every problem.
     """
     day = wall_clock(state.started).strftime("%Y-%m-%d")
-    sections: list[tuple[str, str]] = []
+    sections: list[tuple[int, str, str]] = []  # how many problems, the title, the text
     failed = state.failed_sources()
     if failed:
         lines = ["These sources could not be read, so the work that needs them is incomplete this run:"]
         for line in failed:
             needs = ", ".join(line.needed_by) or "nothing else"
             lines.append(bullet(f"{line.name}: {line.detail} Incomplete: {needs}."))
-        sections.append((f"{plural(len(failed), 'source')} could not be read on {day}", "\n".join(lines)))
+        sections.append((len(failed), f"{plural(len(failed), 'source')} could not be read on {day}", "\n".join(lines)))
     unusable = state.unusable_to_report()
     to_replace = [record for record in unusable if state.open_item(record)]
     if to_replace:
         sections.append(
             (
+                len(to_replace),
                 f"{plural(len(to_replace), 'decision')} in Mandu could not be taken in on {day}",
                 "These decision records in Mandu could not be used, so the decisions in them were not taken in and"
                 " their items stay undecided. Mandu must replace each with a valid record of the same decision, in the"
@@ -498,6 +504,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     if others:
         sections.append(
             (
+                len(others),
                 f"{plural(len(others), 'Mandu record')} could not be used on {day}",
                 "Some records in Mandu could not be used, so nothing was taken from them; a decision already taken"
                 " stands, and Mandu need not change them. Each is reported once, and again only if it changes:\n"
@@ -507,6 +514,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     if state.set_aside:
         sections.append(
             (
+                len(state.set_aside),
                 f"{plural(len(state.set_aside), 'prepared item')} not queued on {day}",
                 "Some items the Marketing Engineer prepared were not queued, because they did not meet the item format"
                 " or asked the same as an item already queued or decided:\n"
@@ -516,25 +524,41 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     agent = state.agent.get("exit_code")
     if not state.agent.get("agent_started"):
         error = state.agent.get("error") or "see the run report"
-        sections.append((f"the agent did not start on {day}", f"The agent did not start: {error}."))
+        sections.append((1, f"the agent did not start on {day}", f"The agent did not start: {error}."))
     elif agent != 0:
         sections.append(
             (
+                1,
                 f"the agent stopped early on {day}",
                 f"The agent stopped with exit code {agent}, so this run's review may be incomplete.",
+            )
+        )
+    elif state.review.startswith(REVIEW_INCOMPLETE):
+        why = state.review_reason()
+        sections.append(
+            (
+                1,
+                f"the package review was not finished on {day}",
+                "The Marketing Engineer did not finish reviewing the Go-To-Market Package"
+                + (f" ({why})" if why else "")
+                + ", so a contradiction it did not reach is not in the Review Queue yet; the next run reviews it"
+                " again.",
             )
         )
     elif state.review_gap():
         sections.append(
             (
-                f"the package review was not finished on {day}",
-                f"The Marketing Engineer did not finish reviewing the Go-To-Market Package ({state.review_gap()}),"
-                " so a contradiction it did not reach is not in the Review Queue yet; the next run reviews it again.",
+                1,
+                f"the package review was not confirmed finished on {day}",
+                "The Marketing Engineer did not confirm that it finished every pass of its review of the Go-To-Market"
+                " Package, so a contradiction it did not reach may not be in the Review Queue yet; the next run reviews"
+                " it again.",
             )
         )
     if state.problems:
         sections.append(
             (
+                len(state.problems),
                 f"the launcher hit {plural(len(state.problems), 'problem')} on {day}",
                 "The launcher hit problems:\n" + "\n".join(bullet(problem) for problem in state.problems),
             )
@@ -542,9 +566,11 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     if not sections:
         return None
     title = (
-        f"Notice: {sections[0][0]}" if len(sections) == 1 else f"Notice: the run on {day} had {len(sections)} problems"
+        f"Notice: {sections[0][1]}"
+        if len(sections) == 1
+        else f"Notice: the run on {day} had {plural(sum(count for count, _, _ in sections), 'problem')}"
     )
-    body = "\n\n".join(text for _, text in sections)
+    body = "\n\n".join(text for _, _, text in sections)
     if len(body) > NOTICE_BODY_LIMIT:
         cut = body.rfind("\n", 0, NOTICE_BODY_LIMIT)
         body = body[: cut if cut > 0 else NOTICE_BODY_LIMIT] + "\n- And more: the run report lists every problem."
