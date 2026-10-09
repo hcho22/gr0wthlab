@@ -62,6 +62,7 @@ Every Evidence line names its source as a path in backticks or a URL.
 
 - Never guess what a failed source says.
   Work that needs it is incomplete this run; say so in your summary and do everything else.
+- Never assume a file is unreadable: read it, and if the read fails, report the exact error.
 - Do not queue an item that is already open; to replace one, write a new item with `supersedes: <id>` in its front matter.
 - Do not propose again what the Founder already rejected unless new Evidence answers the reason.
 - Quote only the specific package text a proposal uses or replaces, citing its file; never copy a package file or a large part of one.
