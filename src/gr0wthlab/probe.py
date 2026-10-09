@@ -137,7 +137,7 @@ def missing_permitted(run_id: str, areas: Mapping[str, list[Path]]) -> list[str]
 
 
 def snapshot(path: Path) -> dict[str, str]:
-    """Each changed or untracked path in a checkout, with a digest of its content."""
+    """Each changed or untracked path in a checkout, with a digest of its content, or a marker if it cannot be read."""
     if not (path / ".git").exists():
         return {}
     output = subprocess.run(
@@ -149,7 +149,10 @@ def snapshot(path: Path) -> dict[str, str]:
     for entry in filter(None, output.split("\0")):
         status, name = entry[:2], entry[3:]
         target = path / name
-        digest = hashlib.sha256(target.read_bytes()).hexdigest() if target.is_file() else ""
+        try:
+            digest = hashlib.sha256(target.read_bytes()).hexdigest() if target.is_file() else ""
+        except OSError:
+            digest = "unreadable"
         entries[name] = f"{status} {digest}"
     return entries
 

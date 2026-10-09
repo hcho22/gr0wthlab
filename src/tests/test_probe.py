@@ -9,6 +9,7 @@ import unittest
 from pathlib import Path
 
 from gr0wthlab import boundary, probe
+from tests import fakes
 from tests.test_boundary import CONFIG, REGISTRY
 
 RUN = "20261009T000000Z-on-demand-abcd"
@@ -157,6 +158,18 @@ class VerifyTest(unittest.TestCase):
             encoding="utf-8",
         )
         self.assertEqual(probe.patch_rejections(self.logs, RUN), 3)
+
+    @unittest.skipIf(os.geteuid() == 0, "root can read any file")
+    def test_an_unreadable_changed_file_is_marked_and_changes_are_still_seen(self):
+        fakes.git(self.repo, "init", "--quiet")
+        locked = self.repo / "workspace/drafts/locked.md"
+        locked.write_text("kept from me\n", encoding="utf-8")
+        locked.chmod(0)
+        before = {"repository": probe.snapshot(self.repo)}
+        self.assertEqual(before["repository"]["workspace/drafts/locked.md"], "?? unreadable")
+        (self.repo / "workspace/drafts/new.md").write_text("new\n", encoding="utf-8")
+        after = {"repository": probe.snapshot(self.repo)}
+        self.assertEqual(probe.changed(before, after), {"repository": ["workspace/drafts/new.md"]})
 
     def test_changed_reports_new_and_modified_entries(self):
         before = {"Mandu": {"a.md": " M 1", "b.md": "?? 2"}}
