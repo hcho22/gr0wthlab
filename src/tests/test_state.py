@@ -103,6 +103,7 @@ class ReviewQueueTest(unittest.TestCase):
         good = {
             "handled": {"20261011-a": {"outcome": "rejected", "hash": H1}},
             "carried": {"20261011-b": {"hash": H2, "carried_over_from": "2026-10-11"}},
+            "reported": [H3],
         }
         self.assertEqual(ReviewQueueState.from_json(good).as_json(), good)
         bad_cases = [
@@ -116,6 +117,8 @@ class ReviewQueueTest(unittest.TestCase):
                 "carried": {"20261011-a": {"hash": H1, "carried_over_from": "2026-10-11"}},
             },
             {"handled": ["20261011-a"]},
+            {"reported": H3},
+            {"reported": ["decisions/20261011-a.json"]},
         ]
         for bad in bad_cases:
             with self.subTest(bad=bad), self.assertRaises(StateError):
@@ -128,8 +131,9 @@ class ReviewQueueTest(unittest.TestCase):
             "20261011-c": entry("open"),
         }
         hashes = {"20261011-a": H1, "20261011-b": H2, "20261011-c": H3}
-        current, differences = state.reconcile(ReviewQueueState(), ledger, hashes)
+        current, differences = state.reconcile(ReviewQueueState(reported=[H3]), ledger, hashes)
         self.assertEqual(differences, [])
+        self.assertEqual(current.reported, [H3])
         self.assertEqual(current.handled, {"20261011-a": {"outcome": "rejected", "hash": H1}})
         self.assertEqual(current.carried, {"20261011-b": {"hash": H2, "carried_over_from": "2026-10-11"}})
 

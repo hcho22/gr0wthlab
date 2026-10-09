@@ -77,17 +77,22 @@ def entries(data: Mapping, key: str) -> dict[str, Mapping]:
 
 
 # Review Queue: decided items, and items left undecided at a sitting with that sitting's date, by identifier and
-# fingerprint.
+# fingerprint; and the Mandu records already reported as unusable, by fingerprint, so each is reported once.
 
 
 @dataclass
 class ReviewQueueState:
     handled: dict[str, dict[str, str]] = field(default_factory=dict)
     carried: dict[str, dict[str, str]] = field(default_factory=dict)
+    reported: list[str] = field(default_factory=list)
 
     @classmethod
     def from_json(cls, data: Mapping) -> ReviewQueueState:
         state = cls()
+        reported = data.get("reported", [])
+        if not isinstance(reported, list):
+            raise StateError("reported must list SHA-256 hashes")
+        state.reported = sorted({hash_value(value, "a reported record") for value in reported})
         for identifier, entry in entries(data, "handled").items():
             if not exchange.ID_PATTERN.fullmatch(identifier):
                 raise StateError(f"handled item {identifier!r} is not an item identifier")
@@ -105,7 +110,11 @@ class ReviewQueueState:
         return state
 
     def as_json(self) -> dict[str, object]:
-        return {"handled": dict(sorted(self.handled.items())), "carried": dict(sorted(self.carried.items()))}
+        return {
+            "handled": dict(sorted(self.handled.items())),
+            "carried": dict(sorted(self.carried.items())),
+            "reported": self.reported,
+        }
 
 
 def reconcile(
@@ -116,8 +125,9 @@ def reconcile(
     """The Review Queue state as the ledger says it is now, and every way the previous state disagreed.
 
     The ledger wins every disagreement; an open item is carried over from the sitting the ledger marks it with.
+    The records already reported stay as the run left them.
     """
-    current = ReviewQueueState()
+    current = ReviewQueueState(reported=previous.reported)
     differences = []
     for identifier, entry in ledger_entries.items():
         status = str(entry["status"])

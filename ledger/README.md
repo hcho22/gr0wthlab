@@ -8,11 +8,11 @@ Each run's records step commits this folder to `main` together with `workspace/`
 - `review-queue/items/<id>.md`: each queued item, under an identifier that never changes.
 - `review-queue/set-aside/<run id>/`: what the launcher refused to queue that run, kept for the record and named in that run's notice.
 - `evidence/package-snapshots/<run id>.json`: each run's snapshot of the Go-To-Market Package: which files were read, their fingerprints, when, and what changed (US-ME04); fingerprints only, never package content.
-- `evidence/decisions/<item id>.json`: each Founder decision taken in from Mandu, with its reason or note and its Mandu source (US-ME07).
+- `evidence/decisions/<item id>.json`: each Founder decision taken in from Mandu, with its reason or note, its Mandu source, and the newer item that had already superseded the decided one, if any (US-ME07).
 - `evidence/sittings/<date>.json`: how long each sitting took, from Mandu, and the run that first took it in.
 - `run-reports/<run id>.md`: the run report: every source checked with its result, every failure and skip with its reason, whether a scheduled run started late, and the run's approximate cost; its first line counts what the run checked and acted on (`checked=N acted=N note=...`).
 - `run-reports/<run id>.brief.md`: the facts the launcher gave the agent before it started.
-- `run-reports/state/<workflow>.json`: each workflow's run state - Review Queue items decided, and those carried over with the sitting they were left undecided at, Listening threads already read, outreach targets and their follow-up waits - by identifier and hash only, never a name, address, or URL.
+- `run-reports/state/<workflow>.json`: each workflow's run state - Review Queue items decided, those carried over with the sitting they were left undecided at, and the Mandu records already reported as unusable; Listening threads already read; outreach targets and their follow-up waits - by identifier and hash only, never a name, address, or URL.
   The launcher checks it every run against the Review Queue and Mandu's decision records, which win any disagreement.
 - `notes/<id>.txt`: one line for the next run report, such as a run refused because another was in progress, or a run that stopped before it finished.
 - `run.lock`: the lock one run holds from start to finish; it is never committed.

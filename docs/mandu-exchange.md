@@ -140,8 +140,13 @@ One file per decided item, `decisions/<id>.json`, written once and never edited 
 - `decided_at` is the time of the decision with its UTC offset; `sitting` is the sitting's date and may be left out.
 
 gr0wthlab matches each record to its item by `item`, keeps every reason and note as Evidence, and never asks about that item again.
-A record that does not follow this format, or names no queued item, is reported to the Founder as a notice, and its item stays open.
-Such a record is not a decision, so Mandu fixes it by rewriting it in this format.
+A decision on an item that a newer item superseded before gr0wthlab read the decision, for example while a late run was still running during the sitting, is kept the same way.
+Its Evidence also names the newer item, which stays open, and the Marketing Engineer sees the decision, with its reason or note, beside that newer item.
+
+gr0wthlab cannot use a decision or sitting record that does not follow its format, a decision that names no queued item, or a decision that differs from the one already taken for its item.
+It reports each such record to the Founder once, in one notice, and again only if the file changes.
+Such a record changes nothing: an item it names that is still open stays open, and a decision already taken stands.
+Mandu does not need to rewrite or remove it.
 
 ## Sitting records (Mandu writes)
 

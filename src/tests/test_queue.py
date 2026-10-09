@@ -106,7 +106,7 @@ class IncomingTest(LedgerTestCase):
         published, set_aside = self.ledger.take_incoming(self.areas, self.store, PRODUCTS, "RUN1", NOW, seen)
         self.assertEqual(published, ["20261011-first"])
         self.assertIn("asks the same as 20261011-first, which is open", set_aside[0].problems[0])
-        self.ledger.take_decisions([(decision("20261011-first", "reject", "No."), "x.json")], "RUN2", NOW)
+        self.ledger.take_decisions([decision("20261011-first", "reject", "No.")], "RUN2", NOW)
         self.drop("again.md", fakes.PROPOSAL)
         published, set_aside = self.ledger.take_incoming(self.areas, self.store, PRODUCTS, "RUN2", NOW, seen)
         self.assertEqual(published, [])
@@ -138,33 +138,40 @@ class DecisionsTest(LedgerTestCase):
 
     def test_each_decision_closes_its_item_once(self):
         outcomes = self.ledger.take_decisions(
-            [(decision("20261011-a"), "a.json"), (decision("20261011-b", "reject", "No."), "b.json")], "RUN2", NOW
+            [decision("20261011-a"), decision("20261011-b", "reject", "No.")], "RUN2", NOW
         )
         self.assertEqual([outcome.status for outcome in outcomes], ["taken", "taken"])
         self.assertEqual(self.ledger.entries["20261011-a"]["status"], APPROVED)
         self.assertEqual(self.ledger.entries["20261011-b"]["status"], REJECTED)
         self.assertEqual([entry["id"] for entry in self.ledger.ordered()], ["20261011-c"])
-        again = self.ledger.take_decisions([(decision("20261011-a"), "a.json")], "RUN3", NOW)
+        again = self.ledger.take_decisions([decision("20261011-a")], "RUN3", NOW)
         self.assertEqual(again[0].status, "already-taken")
-        changed = self.ledger.take_decisions(
-            [(decision("20261011-a", "reject", "Actually no."), "a.json")], "RUN3", NOW
-        )
+        changed = self.ledger.take_decisions([decision("20261011-a", "reject", "Actually no.")], "RUN3", NOW)
         self.assertEqual(changed[0].status, "conflict")
         self.assertEqual(self.ledger.entries["20261011-a"]["status"], APPROVED)
 
-    def test_unknown_and_withdrawn_items(self):
+    def test_unknown_items_and_decisions_on_superseded_items(self):
         self.drop("d.md", fakes.proposal(extra="supersedes: 20261011-c\n"))
         self.take("RUN2")
+        self.drop("e.md", fakes.proposal(extra="supersedes: 20261011-d\n", title="fix e"))
+        self.take("RUN3")
         outcomes = self.ledger.take_decisions(
-            [(decision("20261011-zzz"), "z.json"), (decision("20261011-c"), "c.json")], "RUN3", NOW
+            [decision("20261011-zzz"), decision("20261011-c", "reject", "No.")], "RUN4", NOW
         )
         self.assertEqual(
             {o.decision.item: o.status for o in outcomes},
-            {
-                "20261011-zzz": "unknown-item",
-                "20261011-c": "item-withdrawn",
-            },
+            {"20261011-zzz": "unknown-item", "20261011-c": "taken"},
         )
+        superseded = self.ledger.entries["20261011-c"]
+        self.assertEqual((superseded["status"], superseded["decided"]), (SUPERSEDED, REJECTED))
+        self.assertEqual([entry["id"] for entry in self.ledger.ordered()], ["20261011-a", "20261011-b", "20261011-e"])
+        replaced = self.ledger.decided_replaced(self.ledger.entries["20261011-e"])
+        self.assertEqual([entry["id"] for entry in replaced], ["20261011-c"])
+        again = self.ledger.take_decisions([decision("20261011-c", "reject", "No.")], "RUN5", NOW)
+        self.assertEqual(again[0].status, "already-taken")
+        changed = self.ledger.take_decisions([decision("20261011-c")], "RUN5", NOW)
+        self.assertEqual(changed[0].status, "conflict")
+        self.assertEqual(superseded["decided"], REJECTED)
 
 
 class OrderAndPersistenceTest(LedgerTestCase):
@@ -201,7 +208,7 @@ class OrderAndPersistenceTest(LedgerTestCase):
         entry = self.ledger.entries[after]
         self.assertEqual((entry["carried_over"], "carried_over_from" in entry), (False, False))
 
-        self.ledger.take_decisions([(decision(first), "x.json")], "20261018T230000Z-scheduled-dddd", NOW)
+        self.ledger.take_decisions([decision(first)], "20261018T230000Z-scheduled-dddd", NOW)
         self.assertNotIn("carried_over_from", self.ledger.entries[first])
 
     def test_queue_json_round_trips(self):
@@ -209,7 +216,7 @@ class OrderAndPersistenceTest(LedgerTestCase):
         self.take("RUN1")
         self.drop("new.md", fakes.PROPOSAL)
         self.take("RUN2", NOW + timedelta(days=7))
-        self.ledger.take_decisions([(decision("20261011-old"), "x.json")], "RUN2", NOW)
+        self.ledger.take_decisions([decision("20261011-old")], "RUN2", NOW)
         self.drop("kept.md", fakes.PROPOSAL)
         self.take("RUN1")
         next_run = datetime(2026, 10, 18, 16, 0).astimezone()

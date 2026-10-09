@@ -3,7 +3,8 @@
 The ledger lives in ledger/review-queue/queue.json, beside the published items; only the launcher writes there, and
 the agent can only read it. The agent proposes items in workspace/review-queue/incoming/, which the launcher checks.
 An item is queued once, under an identifier that never changes, and is closed by the Founder's decision (approved
-or rejected) or by a newer item that supersedes it; a closed item never returns to the open list.
+or rejected) or by a newer item that supersedes it; a closed item never returns to the open list. A decision the
+Founder took on an item a newer one had already superseded is kept on that item, which stays superseded.
 An open item is carried over once the Founder has left it undecided at a sitting.
 """
 
@@ -40,8 +41,7 @@ class DecisionOutcome:
     """What became of one decision record Mandu holds."""
 
     decision: exchange.Decision
-    source: str
-    status: str  # taken, already-taken, conflict, unknown-item, item-withdrawn
+    status: str  # taken, already-taken, conflict, unknown-item
     entry: Mapping[str, object] | None
 
 
@@ -82,29 +82,39 @@ class Ledger:
         entry.pop("carried_over_from", None)
 
     def take_decisions(
-        self, decisions: Sequence[tuple[exchange.Decision, str]], run_id: str, now: datetime
+        self, decisions: Sequence[exchange.Decision], run_id: str, now: datetime
     ) -> list[DecisionOutcome]:
         """Close each open item Mandu recorded a decision for; a decided item is never reopened or re-asked."""
         outcomes = []
-        for decision, source in sorted(decisions, key=lambda pair: pair[0].item):
+        for decision in sorted(decisions, key=lambda decision: decision.item):
             entry = self.entries.get(decision.item)
+            decided = APPROVED if decision.decision == exchange.APPROVE else REJECTED
             if entry is None:
                 status = "unknown-item"
             elif entry["status"] == OPEN:
-                closed = APPROVED if decision.decision == exchange.APPROVE else REJECTED
-                self.close(entry, closed, run_id, now, decided_at=decision.decided_at)
+                self.close(entry, decided, run_id, now, decided_at=decision.decided_at)
                 status = "taken"
-            elif entry["status"] == SUPERSEDED:
-                status = "item-withdrawn"
-            elif (
-                entry["status"] == (APPROVED if decision.decision == exchange.APPROVE else REJECTED)
-                and entry.get("decided_at") == decision.decided_at
-            ):
+            elif entry["status"] == SUPERSEDED and "decided_at" not in entry:
+                entry.update(decided=decided, decided_at=decision.decided_at)
+                status = "taken"
+            elif entry.get("decided", entry["status"]) == decided and entry.get("decided_at") == decision.decided_at:
                 status = "already-taken"
             else:
                 status = "conflict"
-            outcomes.append(DecisionOutcome(decision, source, status, entry))
+            outcomes.append(DecisionOutcome(decision, status, entry))
         return outcomes
+
+    def decided_replaced(self, entry: Mapping[str, object]) -> list[dict[str, object]]:
+        """Each item this one replaced, directly or through the items it replaced, that the Founder then decided."""
+        decided, seen = [], set()
+        target = entry.get("supersedes")
+        while target in self.entries and target not in seen:
+            seen.add(target)
+            earlier = self.entries[str(target)]
+            if earlier.get("decided"):
+                decided.append(earlier)
+            target = earlier.get("supersedes")
+        return decided
 
     def next_id(self, day: date, slug: str) -> str:
         base = exchange.item_id(day, slug)[: exchange.MAX_ID]

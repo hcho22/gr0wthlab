@@ -27,7 +27,7 @@ from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
 from .queue import INCOMING, OPEN, QUEUE_FILE, REVIEW_QUEUE, SET_ASIDE, SUPERSEDED, Ledger, QueueError
-from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLine
+from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLine, Unusable
 
 PRE_RUN_ENV = "GR0WTHLAB_PRE_RUN"
 EXIT_RECORDS = 4
@@ -60,7 +60,14 @@ def output_titles(config: settings.Settings, keys: Sequence[str]) -> tuple[str, 
 # Mandu's exchange folder, read only.
 
 
-def read_records(directory: Path) -> tuple[list[tuple[str, Path, bytes]], list[tuple[str, list[str]]]]:
+def unusable(name: str, problems: Sequence[str], content: bytes | None = None) -> Unusable:
+    """A record that could not be used, fingerprinted by its name and its content, or by its problems when it could not
+    be read, so it is reported again only once that changes."""
+    data = "; ".join(problems).encode("utf-8") if content is None else content
+    return Unusable(name, tuple(problems), run_state.digest(f"{name}\n{hashlib.sha256(data).hexdigest()}"))
+
+
+def read_records(directory: Path) -> tuple[list[tuple[str, Path, bytes]], list[Unusable]]:
     """(name, path, bytes) for every record file in one exchange subfolder; hidden files are Mandu's temporaries."""
     found, problems = [], []
     if not directory.is_dir():
@@ -70,29 +77,36 @@ def read_records(directory: Path) -> tuple[list[tuple[str, Path, bytes]], list[t
         if name.startswith("."):
             continue
         if not name.endswith(".json") or not path.is_file():
-            problems.append((f"{directory.name}/{name}", ["only <name>.json record files belong here"]))
+            problems.append(unusable(f"{directory.name}/{name}", ["only <name>.json record files belong here"]))
             continue
         try:
             found.append((name, path, path.read_bytes()))
         except OSError as error:
-            problems.append((f"{directory.name}/{name}", [error.strerror or str(error)]))
+            problems.append(unusable(f"{directory.name}/{name}", [error.strerror or str(error)]))
     return found, problems
 
 
-def parse_records(found, parser) -> tuple[list[tuple[object, Path, str]], list[tuple[str, list[str]]]]:
+def parse_records(found, parser) -> tuple[list[tuple[object, Path, str]], list[Unusable]]:
     parsed, problems = [], []
     for name, path, data in found:
         try:
             value = json.loads(data.decode("utf-8"))
         except (UnicodeDecodeError, ValueError) as error:
-            problems.append((f"{path.parent.name}/{name}", [f"not JSON: {error}"]))
+            problems.append(unusable(f"{path.parent.name}/{name}", [f"not JSON: {error}"], data))
             continue
         record, issues = parser(name[: -len(".json")], value)
         if issues:
-            problems.append((f"{path.parent.name}/{name}", issues))
+            problems.append(unusable(f"{path.parent.name}/{name}", issues, data))
         else:
             parsed.append((record, path, hashlib.sha256(data).hexdigest()))
     return parsed, problems
+
+
+def could_not_use(records: Sequence[Unusable], reported_before: set[str]) -> str:
+    if not records:
+        return ""
+    before = sum(1 for record in records if record.fingerprint in reported_before)
+    return f", {len(records)} could not be used" + (f" ({before} reported by an earlier run)" if before else "")
 
 
 # The run.
@@ -152,9 +166,19 @@ class Cycle:
                     SourceLine(f"{label}: `{removed}`", package.CHANGED, "removed since the previous snapshot", needs)
                 )
 
-    def take_decisions(self, state: RunState, config: settings.Settings, folder: Path, ledger: Ledger) -> None:
+    def take_decisions(
+        self,
+        state: RunState,
+        config: settings.Settings,
+        folder: Path,
+        ledger: Ledger,
+        review_state: run_state.ReviewQueueState,
+    ) -> None:
+        """Take in Mandu's decision and sitting records; each record that cannot be used is reported by the first run
+        to find it as it is, and the Review Queue state remembers it by its fingerprint while it stays that way."""
         anything_queued = bool(ledger.entries)
         needs = output_titles(config, ("decisions", "review-queue"))
+        state.reported_before, review_state.reported = set(review_state.reported), []
         if not folder.is_dir():
             if anything_queued and ledger.open_entries():
                 detail = f"Mandu's exchange folder `{folder}` does not exist, so no decision can reach gr0wthlab."
@@ -170,9 +194,16 @@ class Cycle:
         sittings_found, sitting_problems = read_records(folder / "sittings")
         sittings, more = parse_records(sittings_found, exchange.parse_sitting)
         sitting_problems += more
-        state.decision_problems = problems + sitting_problems
         now = self.now()
-        state.decisions = ledger.take_decisions([(d, str(path)) for d, path, _ in decisions], state.run_id, now)
+        outcomes = ledger.take_decisions([d for d, _, _ in decisions], state.run_id, now)
+        state.decisions = [outcome for outcome in outcomes if outcome.status in ("taken", "already-taken")]
+        contents = {name: data for name, _, data in found}
+        for outcome in outcomes:
+            if outcome.status in ("unknown-item", "conflict"):
+                name = f"{outcome.decision.item}.json"
+                problems.append(unusable(f"decisions/{name}", [report.outcome_text(outcome.status)], contents[name]))
+        state.unusable = problems + sitting_problems
+        review_state.reported = sorted({record.fingerprint for record in state.unusable})
         digests = {d.item: (str(path), digest) for d, path, digest in decisions}
         for outcome in state.decisions:
             if outcome.status != "taken":
@@ -191,14 +222,16 @@ class Cycle:
                     "note": decision.note,
                     "decided_at": decision.decided_at,
                     "sitting": decision.sitting,
+                    "superseded_by": entry.get("superseded_by"),
                     "source": {"path": source, "sha256": digest},
                     "taken_in_by_run": state.run_id,
                     "taken_in_at": now.isoformat(),
                 },
             )
             entry["evidence"] = f"evidence/decisions/{decision.item}.json"
-            if decision.reason:
-                entry["reason"] = decision.reason
+            for key in ("reason", "note"):
+                if getattr(decision, key):
+                    entry[key] = getattr(decision, key)
         for sitting, path, digest in sittings:
             target = self.store.path("evidence", "sittings", f"{sitting.day}.json")
             record = {
@@ -217,14 +250,13 @@ class Cycle:
                 self.store.write_json(target, dict(record, taken_in_by_run=first))
                 state.sittings.append(sitting)
         taken = sum(1 for outcome in state.decisions if outcome.status == "taken")
-        unusable = len(problems) + sum(1 for o in state.decisions if o.status not in ("taken", "already-taken"))
-        detail = f"{report.plural(len(found), 'record')}, {taken} new since the previous run" + (
-            f", {unusable} could not be used" if unusable else ""
+        detail = f"{report.plural(len(found), 'record')}, {taken} new since the previous run" + could_not_use(
+            problems, state.reported_before
         )
         status = package.CHANGED if taken else package.READ
         state.sources.append(SourceLine("Mandu decisions", status, detail, needs))
-        sitting_detail = f"{report.plural(len(sittings_found), 'record')}, {len(state.sittings)} new" + (
-            f", {len(sitting_problems)} could not be used" if sitting_problems else ""
+        sitting_detail = f"{report.plural(len(sittings_found), 'record')}, {len(state.sittings)} new" + could_not_use(
+            sitting_problems, state.reported_before
         )
         state.sources.append(
             SourceLine("Mandu sittings", package.CHANGED if state.sittings else package.READ, sitting_detail)
@@ -281,7 +313,7 @@ class Cycle:
             if entry["status"] == SUPERSEDED and entry.get("closed_by_run") == state.run_id
         )
         carried = sum(1 for entry in state.queue_after if entry.get("carried_over"))
-        records = len(state.decisions) + len(state.decision_problems)
+        records = len(state.decisions) + len(state.unusable)
         return [
             run_state.Tally(
                 "package-review",
@@ -458,9 +490,9 @@ class Cycle:
         except QueueError as error:
             ledger, ledger_ok = Ledger(), False
             state.problems.append(f"{error}; the Review Queue was left untouched this run")
-        self.take_decisions(state, config, folder, ledger)
-        sittings = self.sitting_runs(state)
         states = self.load_state(state, run_id)
+        self.take_decisions(state, config, folder, ledger, states.review_queue)
+        sittings = self.sitting_runs(state)
         hashes, unreadable = run_state.item_hashes(self.store.root, ledger.entries, products, states.review_queue)
         state.problems += unreadable
         seen: dict[str, str] = {}
@@ -476,6 +508,7 @@ class Cycle:
                 )
             )
         state.queue_before = ledger.ordered()
+        state.replaced = {str(entry["id"]): ledger.decided_replaced(entry) for entry in state.queue_before}
         state.closed_proposals = [
             entry
             for entry in ledger.entries.values()

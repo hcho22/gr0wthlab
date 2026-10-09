@@ -31,6 +31,15 @@ class SourceLine:
     needed_by: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class Unusable:
+    """A Mandu record the run could not use; its fingerprint changes whenever its name or content does."""
+
+    name: str
+    problems: tuple[str, ...]
+    fingerprint: str
+
+
 @dataclass
 class RunState:
     """Everything the launcher learned in one run, in the order it learned it."""
@@ -48,10 +57,12 @@ class RunState:
     previous_snapshot: str | None = None
     mandu: str = ""
     sources: list[SourceLine] = field(default_factory=list)
-    decisions: list = field(default_factory=list)  # queue.DecisionOutcome
-    decision_problems: list[tuple[str, list[str]]] = field(default_factory=list)
+    decisions: list = field(default_factory=list)  # queue.DecisionOutcome, taken in now or before
+    unusable: list[Unusable] = field(default_factory=list)
+    reported_before: set[str] = field(default_factory=set)  # fingerprints of the unusable records already reported
     sittings: list[exchange.Sitting] = field(default_factory=list)
     queue_before: list[Mapping[str, object]] = field(default_factory=list)
+    replaced: dict[str, list[Mapping[str, object]]] = field(default_factory=dict)  # open id: decided items it replaced
     closed_proposals: list[Mapping[str, object]] = field(default_factory=list)
     published: list[str] = field(default_factory=list)
     set_aside: list = field(default_factory=list)  # queue.SetAside
@@ -80,6 +91,9 @@ class RunState:
 
     def failed_sources(self) -> list[SourceLine]:
         return [line for line in self.sources if line.status == package.FAILED]
+
+    def newly_unusable(self) -> list[Unusable]:
+        return [record for record in self.unusable if record.fingerprint not in self.reported_before]
 
 
 def wall_clock(moment: datetime) -> datetime:
@@ -209,30 +223,34 @@ def table(header: Sequence[str], rows: Sequence[Sequence[str]]) -> list[str]:
 
 
 def decision_lines(state: RunState, taken_only: bool = False) -> list[str]:
+    """The decisions taken in this run, then, unless taken_only, each Mandu record no earlier run reported unusable."""
     lines = []
     for outcome in state.decisions:
-        decision, entry = outcome.decision, outcome.entry or {}
-        ask = entry.get("ask", "")
-        if outcome.status == "taken":
-            if decision.decision == exchange.APPROVE:
-                note = f" Note: {decision.note}" if decision.note else ""
-                lines.append(f"- Approved `{decision.item}`: {ask}.{note}")
-            else:
-                lines.append(f"- Rejected `{decision.item}`: {ask}. Reason: {decision.reason}")
-        elif not taken_only and outcome.status != "already-taken":
-            lines.append(f"- Not used, `{decision.item}`: {outcome_text(outcome.status)} ({outcome.source})")
+        decision, entry = outcome.decision, outcome.entry
+        if outcome.status != "taken":
+            continue
+        replaced = f", which `{entry['superseded_by']}` had already replaced" if entry.get("superseded_by") else ""
+        if decision.decision == exchange.APPROVE:
+            note = f" Note: {decision.note}" if decision.note else ""
+            lines.append(f"- Approved `{decision.item}`{replaced}: {entry['ask']}.{note}")
+        else:
+            lines.append(f"- Rejected `{decision.item}`{replaced}: {entry['ask']}. Reason: {decision.reason}")
     if not taken_only:
-        for name, problems in state.decision_problems:
-            lines.append(f"- Could not read `{name}`: {'; '.join(problems)}")
+        lines += [f"- Could not use `{record.name}`: {'; '.join(record.problems)}" for record in state.newly_unusable()]
     return lines
 
 
 def outcome_text(status: str) -> str:
     return {
         "unknown-item": "no queued item has this identifier",
-        "item-withdrawn": "the item had already been withdrawn by a newer one",
         "conflict": "it differs from the decision already taken for this item, which stands",
-    }.get(status, status)
+    }[status]
+
+
+def founder_words(entry: Mapping[str, object]) -> str:
+    return "".join(
+        f" {label}: {entry[key]}" for key, label in (("reason", "Reason"), ("note", "Note")) if entry.get(key)
+    )
 
 
 def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path) -> str:
@@ -282,15 +300,22 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
     lines += ["", "## Open Review Queue items", ""]
     if state.queue_before:
         lines.append("Do not queue these again; to change one, write a new item with `supersedes: <id>`.")
-        lines += [f"- `{entry['id']}` ({entry['kind']}): {entry['ask']}" for entry in state.queue_before]
+        for entry in state.queue_before:
+            line = f"- `{entry['id']}` ({entry['kind']}): {entry['ask']}"
+            for earlier in state.replaced.get(str(entry["id"]), ()):
+                line += (
+                    f". It replaces `{earlier['id']}`, which the Founder {earlier['decided']} after it was replaced:"
+                    f" {earlier['ask']}.{founder_words(earlier)}"
+                )
+            lines.append(line)
     else:
         lines.append("None.")
     lines += ["", "## Package-change proposals already decided or withdrawn", ""]
     if state.closed_proposals:
         lines.append("Do not propose these again unless new Evidence answers the reason.")
         for entry in state.closed_proposals:
-            reason = f" Reason: {entry['reason']}" if entry.get("reason") else ""
-            lines.append(f"- `{entry['id']}` {entry['status']}: {entry['ask']}.{reason}")
+            status = entry["status"] + (f" and {entry['decided']}" if entry.get("decided") else "")
+            lines.append(f"- `{entry['id']}` {status}: {entry['ask']}.{founder_words(entry)}")
     else:
         lines.append("None.")
     lines += [
@@ -331,8 +356,8 @@ def summary_lines(state: RunState) -> list[str]:
         f"- Review Queue: {plural(len(open_items), 'item')} open for the next sitting ({len(state.published)} new"
         f" this run, {carried} carried over); {plural(len(taken), 'Founder decision')} taken in."
     )
-    if state.problems or state.set_aside or failed:
-        lines.append(f"- Problems this run are listed in the notice `{state.notice}`." if state.notice else "")
+    if state.notice:
+        lines.append(f"- Problems this run are listed in the notice `{state.notice}`.")
     lines.append(f"- {cost_line(state)}")
     return [line for line in lines if line]
 
@@ -404,13 +429,15 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
             needs = ", ".join(line.needed_by) or "nothing else"
             lines.append(bullet(f"{line.name}: {line.detail} Incomplete: {needs}."))
         sections.append((f"{plural(len(failed), 'source')} could not be read on {day}", "\n".join(lines)))
-    taken_problems = [line[2:] for line in decision_lines(state) if line.startswith(("- Not used", "- Could not"))]
-    if taken_problems:
+    unusable = state.newly_unusable()
+    if unusable:
         sections.append(
             (
-                f"{plural(len(taken_problems), 'Mandu record')} could not be used on {day}",
-                "Some records in Mandu could not be used, so the items they name are still open:\n"
-                + "\n".join(bullet(line) for line in taken_problems),
+                f"{plural(len(unusable), 'Mandu record')} could not be used on {day}",
+                "Some records in Mandu could not be used, so nothing was taken from them: an item still waiting for"
+                " your decision stays in the queue, and a decision already taken stands."
+                " Each record is reported once, and again only if it changes:\n"
+                + "\n".join(bullet(f"`{record.name}`: {'; '.join(record.problems)}") for record in unusable),
             )
         )
     if state.set_aside:

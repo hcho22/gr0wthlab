@@ -74,6 +74,9 @@ class CycleTestCase(unittest.TestCase):
         reports = [path for path in reports if not path.name.endswith(".brief.md")]
         return reports[-1].read_text(encoding="utf-8")
 
+    def brief(self, repo=None):
+        return sorted((self.ledger(repo) / "run-reports").glob("*.brief.md"))[-1].read_text(encoding="utf-8")
+
     def decide(self, item, decision, reason=None, note=None):
         folder = self.exchange / "decisions"
         folder.mkdir(parents=True, exist_ok=True)
@@ -258,10 +261,49 @@ class DecisionRoundTripTest(CycleTestCase):
         self.assertIn(f"asks the same as {ids['package-change-proposal']}, which is rejected", notice)
         self.assertIn(f"carried over from the sitting on {day}", self.report())
         self.assertIn("4 records, 0 new since the previous run", self.report())
-        brief = sorted((self.ledger() / "run-reports").glob("*.brief.md"))[-1].read_text(encoding="utf-8")
-        self.assertIn("rejected: Approve package change: name-status-stale. Reason: Wait for counsel.", brief)
+        self.assertIn("rejected: Approve package change: name-status-stale. Reason: Wait for counsel.", self.brief())
 
-    def test_bad_and_unmatched_decisions_become_a_notice_and_the_item_stays_open(self):
+    def test_a_decision_on_an_item_superseded_before_it_was_taken_in_is_kept(self):
+        old, new = "20261011-name-status-stale", "20261011-name-status-cleared"
+        self.exchange.mkdir()
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        newer = fakes.proposal(extra=f"supersedes: {old}\n", title="record the name as cleared and reserved")
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-cleared.md": newer}})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=30))
+        self.decide(old, "reject", reason="Wait for counsel.")
+        fakes.behave(self.codex_dir, {})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(code, 0, out)
+
+        evidence = json.loads((self.ledger() / f"evidence/decisions/{old}.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            (evidence["item"], evidence["decision"], evidence["reason"], evidence["superseded_by"]),
+            (old, "reject", "Wait for counsel.", new),
+        )
+        queue = self.queue()
+        self.assertEqual([entry["id"] for entry in queue["open"]], [new])
+        closed = next(entry for entry in queue["closed"] if entry["id"] == old)
+        self.assertEqual(
+            (closed["status"], closed["decided"], closed["evidence"]),
+            ("superseded", "rejected", f"evidence/decisions/{old}.json"),
+        )
+        ask = "Approve package change: record the name as cleared"
+        self.assertIn(
+            f"- Rejected `{old}`, which `{new}` had already replaced: {ask}. Reason: Wait for counsel.", self.report()
+        )
+        replaced = (
+            f"- `{new}` (package-change-proposal): {ask} and reserved. It replaces `{old}`, which the Founder rejected"
+            f" after it was replaced: {ask}. Reason: Wait for counsel."
+        )
+        self.assertIn(replaced, self.brief())
+
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
+        self.assertEqual([entry["id"] for entry in self.queue()["open"]], [new])
+        self.assertIn("| Mandu decisions | read | 1 record, 0 new since the previous run |", self.report())
+        self.assertIn(replaced, self.brief())
+
+    def test_bad_and_unmatched_decisions_are_reported_once_until_they_change(self):
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
         self.run_cycle()
         self.decide("20261011-name-status-stale", "reject")
@@ -274,6 +316,25 @@ class DecisionRoundTripTest(CycleTestCase):
         notice = (self.ledger() / queue["open"][1]["file"]).read_text(encoding="utf-8")
         self.assertIn("reason is required", notice)
         self.assertIn("no queued item has this identifier", notice)
+        self.assertNotIn("still open", notice)
+
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
+        self.assertEqual([entry["kind"] for entry in self.queue()["open"]], kinds)
+        report = self.report()
+        self.assertIn(
+            "| Mandu decisions | read | 2 records, 0 new since the previous run, 2 could not be used"
+            " (2 reported by an earlier run) |",
+            report,
+        )
+        self.assertNotIn("Could not use", report)
+
+        self.decide("20261011-name-status-stale", "reject", note="Rewritten, still without a reason.")
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=21))
+        queue = self.queue()
+        self.assertEqual([entry["kind"] for entry in queue["open"]], kinds + ["notice"])
+        notice = (self.ledger() / queue["open"][2]["file"]).read_text(encoding="utf-8")
+        self.assertIn("`decisions/20261011-name-status-stale.json`", notice)
+        self.assertNotIn("20261011-unknown", notice)
 
     def test_a_missing_exchange_folder_fails_once_items_wait(self):
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
