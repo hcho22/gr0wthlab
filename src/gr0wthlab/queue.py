@@ -3,6 +3,7 @@
 The ledger lives in workspace/review-queue/queue.json, which the launcher alone writes.
 An item is queued once, under an identifier that never changes, and is closed by the Founder's decision (approved
 or rejected) or by a newer item that supersedes it; a closed item never returns to the open list.
+An open item is carried over once the Founder has left it undecided at a sitting.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ INCOMING = "incoming"
 ITEMS = "items"
 SET_ASIDE = "set-aside"
 QUEUE_FILE = "queue.json"
+MAX_SLUG = 60
 
 
 class QueueError(Exception):
@@ -45,6 +47,10 @@ class SetAside:
     name: str
     moved_to: str
     problems: tuple[str, ...]
+
+
+def slug_of(name: str) -> str:
+    return name[: -len(".md")] if name.endswith(".md") else ""
 
 
 class Ledger:
@@ -69,6 +75,7 @@ class Ledger:
     def close(self, entry: dict[str, object], status: str, run_id: str, now: datetime, **details: object) -> None:
         entry.update(status=status, closed_by_run=run_id, closed_at=now.isoformat(), **details)
         entry.pop("carried_over", None)
+        entry.pop("carried_over_from", None)
 
     def take_decisions(
         self, decisions: Sequence[tuple[exchange.Decision, str]], run_id: str, now: datetime
@@ -103,15 +110,7 @@ class Ledger:
             number += 1
         return candidate
 
-    def publish(
-        self,
-        areas: Areas,
-        item: exchange.Item,
-        slug: str,
-        run_id: str,
-        now: datetime,
-        topic: str | None = None,
-    ) -> str:
+    def publish(self, areas: Areas, item: exchange.Item, slug: str, run_id: str, now: datetime) -> str:
         """Queue an item under a new identifier, writing its canonical text to items/<id>.md."""
         # The identifier's date is the Mac's local date, the one the Founder sees on the run.
         identifier = self.next_id(now.astimezone().date(), slug)
@@ -130,8 +129,6 @@ class Ledger:
         for key in ("product", "slot", "supersedes"):
             if item.fields.get(key):
                 entry[key] = item.fields[key]
-        if topic:
-            entry["topic"] = topic
         self.entries[identifier] = entry
         return identifier
 
@@ -155,35 +152,14 @@ class Ledger:
         superseding: list[tuple[str, str]] = []
         for path in list(areas.files(incoming)):
             name = areas.relative(path)[len("review-queue/incoming/") :]
-            problems: list[str] = []
-            item = None
-            slug = path.name[: -len(".md")] if path.name.endswith(".md") else ""
-            if "/" in name or not exchange.SLUG_PATTERN.fullmatch(slug) or len(slug) > 60:
-                problems.append("name it <slug>.md directly in incoming/, the slug in lowercase-with-hyphens")
-            try:
-                text = read_plain(path).decode("utf-8")
-            except (UnsafeFile, UnicodeDecodeError, OSError) as error:
-                problems.append(f"unreadable: {error}")
-                text = None
-            if text is not None:
-                check = exchange.check_item(text, products)
-                problems += check.problems
-                item = check.item
-            if item is not None and item.fields.get("supersedes"):
-                target = self.entries.get(item.fields["supersedes"])
-                if target is None or target["status"] != OPEN:
-                    problems.append(f"supersedes {item.fields['supersedes']}, which is not an open item")
-            fingerprint = exchange.item_hash(item) if item is not None else None
-            if fingerprint in seen:
-                earlier = self.entries.get(seen[fingerprint], {})
-                problems.append(f"asks the same as {seen[fingerprint]}, which is {earlier.get('status', 'queued')}")
-            if problems or item is None:
+            item, problems = self.check_incoming(path, name, products, seen)
+            if item is None:
                 set_aside.append(self.set_aside(areas, path, name, run_id, problems))
                 continue
-            identifier = self.publish(areas, item, slug, run_id, now)
+            identifier = self.publish(areas, item, slug_of(name), run_id, now)
             areas.remove(path)
             published.append(identifier)
-            seen[str(fingerprint)] = identifier
+            seen[exchange.item_hash(item)] = identifier
             if item.fields.get("supersedes"):
                 superseding.append((item.fields["supersedes"], identifier))
         for directory in sorted((p for p in incoming.rglob("*") if p.is_dir() and not p.is_symlink()), reverse=True):
@@ -193,6 +169,37 @@ class Ledger:
             if self.entries[old]["status"] == OPEN:
                 self.close(self.entries[old], SUPERSEDED, run_id, now, superseded_by=new)
         return published, set_aside
+
+    def check_incoming(
+        self, path: Path, name: str, products: Sequence[str], seen: Mapping[str, str]
+    ) -> tuple[exchange.Item | None, list[str]]:
+        """Every rule a file in incoming/ must pass to be queued, for the launcher and the agent's own check alike:
+        its name, the item format, an open item to supersede, and no repeat of an item queued or decided.
+
+        name is the file's path inside incoming/; seen maps each queued item's fingerprint to its identifier.
+        The item comes back only when there is no problem.
+        """
+        problems: list[str] = []
+        slug = slug_of(name)
+        if "/" in name or not exchange.SLUG_PATTERN.fullmatch(slug) or len(slug) > MAX_SLUG:
+            problems.append("name it <slug>.md directly in incoming/, the slug in lowercase-with-hyphens")
+        try:
+            check = exchange.check_item(read_plain(path).decode("utf-8"), products)
+        except (UnsafeFile, UnicodeDecodeError, OSError) as error:
+            return None, problems + [f"unreadable: {error}"]
+        problems += check.problems
+        item = check.item
+        if item is None:
+            return None, problems
+        target = item.fields.get("supersedes")
+        if target and self.entries.get(target, {}).get("status") != OPEN:
+            problems.append(f"supersedes {target}, which is not an open item")
+        fingerprint = exchange.item_hash(item)
+        if fingerprint in seen:
+            earlier = self.entries.get(seen[fingerprint])
+            status = earlier["status"] if earlier else "also in incoming/"
+            problems.append(f"asks the same as {seen[fingerprint]}, which is {status}")
+        return (None if problems else item), problems
 
     def set_aside(self, areas: Areas, path: Path, name: str, run_id: str, problems: Sequence[str]) -> SetAside:
         """Move a file out of the agent's reach into set-aside/<run>/, keeping a plain file's text for the record."""
@@ -220,12 +227,26 @@ class Ledger:
 
         return sorted(self.open_entries(), key=key)
 
+    def mark_carried_over(self, sittings: Mapping[str, str]) -> None:
+        """Mark each open item the Founder left undecided at a sitting, with the date of the first such sitting.
+
+        sittings maps each sitting's date to the run that first took in its record. An item was open at a sitting
+        dated no earlier than the day it was queued whose record reached gr0wthlab only after the run that queued
+        it; an item queued after a sitting, even on the same day, is not carried over from it.
+        """
+        for entry in self.open_entries():
+            queued_on = datetime.fromisoformat(str(entry["published_at"])).astimezone().date().isoformat()
+            undecided_at = sorted(
+                day for day, run in sittings.items() if day >= queued_on and run > str(entry["published_by_run"])
+            )
+            entry["carried_over"] = bool(undecided_at)
+            if undecided_at:
+                entry["carried_over_from"] = undecided_at[0]
+            else:
+                entry.pop("carried_over_from", None)
+
     def as_json(self, run_id: str, now: datetime, report: str) -> dict[str, object]:
-        """queue.json: open items in order, each marked carried_over if an earlier run queued it."""
-        opened = []
-        for entry in self.ordered():
-            entry["carried_over"] = entry["published_by_run"] != run_id
-            opened.append(entry)
+        """queue.json: the open items in presentation order, then every closed item."""
         closed = sorted(
             (entry for entry in self.entries.values() if entry["status"] != OPEN),
             key=lambda entry: (str(entry.get("closed_at", "")), str(entry["id"])),
@@ -236,6 +257,6 @@ class Ledger:
             "updated_at": now.isoformat(),
             "run_report": report,
             "paths": "Every path here is relative to the workspace/ directory that holds this file's folder.",
-            "open": opened,
+            "open": self.ordered(),
             "closed": closed,
         }

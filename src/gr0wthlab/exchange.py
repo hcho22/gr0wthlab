@@ -168,8 +168,6 @@ def evidence_problems(text: str) -> list[str]:
 def check_item(text: str, products: Sequence[str], published: bool = False) -> ItemCheck:
     """Validate an item; published items carry exchange and id, items the agent writes leave both out."""
     problems: list[str] = []
-    if len(text) > MAX_ITEM_CHARS:
-        problems.append(f"the item is {len(text)} characters; keep it under {MAX_ITEM_CHARS} so it can be decided fast")
     lines = text.splitlines()
     fields, start = front_matter(lines, problems)
     check_fields(fields, products, published, problems)
@@ -196,6 +194,10 @@ def check_item(text: str, products: Sequence[str], published: bool = False) -> I
     if problems:
         return ItemCheck(None, problems)
     item = Item(dict(fields), title, content[expected[0]], content["Touches"], content["Evidence"])
+    length = len(render_content(kind, item.ask, item.body, item.touches, item.evidence))
+    if length > MAX_ITEM_CHARS:
+        problem = f"the item is {length} characters; keep it under {MAX_ITEM_CHARS} so it can be decided fast"
+        return ItemCheck(None, [problem])
     return ItemCheck(item, [])
 
 
@@ -208,15 +210,19 @@ def item_hash(item: Item) -> str:
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 
-def render_item(fields: Mapping[str, str], ask: str, body: str, touches: str, evidence: str) -> str:
-    """The canonical text of an item; publication writes every item through here."""
-    ordered = [(key, fields[key]) for key in ITEM_KEYS if fields.get(key) is not None]
-    kind = fields["kind"]
-    lines = ["---"] + [f"{key}: {value}" for key, value in ordered] + ["---", "", f"# {ask}", ""]
-    lines += [f"## {KINDS[kind]}", "", body.strip(), "", "## Touches", "", touches.strip(), ""]
+def render_content(kind: str, ask: str, body: str, touches: str, evidence: str) -> str:
+    """The canonical title and four sections of an item: everything the Founder reads."""
+    lines = [f"# {ask}", "", f"## {KINDS[kind]}", "", body.strip(), "", "## Touches", "", touches.strip(), ""]
     lines += ["## Evidence", "", evidence.strip(), "", "## Options", ""]
     lines += [f"- {option}" for option in options(kind)]
     return "\n".join(lines) + "\n"
+
+
+def render_item(fields: Mapping[str, str], ask: str, body: str, touches: str, evidence: str) -> str:
+    """The canonical text of an item; publication writes every item through here."""
+    ordered = [(key, fields[key]) for key in ITEM_KEYS if fields.get(key) is not None]
+    front = ["---"] + [f"{key}: {value}" for key, value in ordered] + ["---", ""]
+    return "\n".join(front) + "\n" + render_content(fields["kind"], ask, body, touches, evidence)
 
 
 # Records Mandu writes.
@@ -240,16 +246,17 @@ class Sitting:
 
 
 def one_line(value: object, name: str, problems: list[str], required: bool) -> str | None:
-    if value is None or value == "":
+    if value is not None and (not isinstance(value, str) or "\n" in value or "\r" in value):
+        problems.append(f"{name} must be one line of text")
+        return None
+    text = (value or "").strip()
+    if not text:
         if required:
             problems.append(f"{name} is required")
         return None
-    if not isinstance(value, str) or "\n" in value or "\r" in value:
-        problems.append(f"{name} must be one line of text")
-        return None
-    if len(value) > MAX_LINE:
+    if len(text) > MAX_LINE:
         problems.append(f"{name} must be at most {MAX_LINE} characters")
-    return value.strip()
+    return text
 
 
 def check_version(data: Mapping, problems: list[str]) -> None:

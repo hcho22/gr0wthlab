@@ -1,5 +1,6 @@
 """Whole runs with a fake Codex: snapshot, decisions, Review Queue, run report, and the production clone's records."""
 
+import fcntl
 import io
 import json
 import os
@@ -76,6 +77,14 @@ class CycleTestCase(unittest.TestCase):
         }
         (folder / f"{item}.json").write_text(json.dumps(record), encoding="utf-8")
 
+    def sit(self, day=None):
+        """Mandu's record of a sitting, by default on the Mac's local date of the first run."""
+        day = day or fakes.SUNDAY_RUN.astimezone().strftime("%Y-%m-%d")
+        folder = self.exchange / "sittings"
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / f"{day}.json").write_text(json.dumps({"exchange": 1, "date": day, "minutes": 41}), encoding="utf-8")
+        return day
+
 
 class FirstRunTest(CycleTestCase):
     def test_snapshot_proposal_queue_and_report(self):
@@ -125,13 +134,14 @@ class FirstRunTest(CycleTestCase):
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
         self.run_cycle()
         (self.workspace() / "run-reports/state/review-queue.json").write_text("{broken", encoding="utf-8")
+        day = self.sit()
         fakes.behave(self.codex_dir, {})
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
         notice = next(e for e in self.queue()["open"] if e["kind"] == "notice")
         text = (self.workspace() / notice["file"]).read_text(encoding="utf-8")
         self.assertIn("the review-queue run state was not valid", text)
         rebuilt = json.loads((self.workspace() / "run-reports/state/review-queue.json").read_text(encoding="utf-8"))
-        self.assertIn("20261011-name-status-stale", rebuilt["carried"])
+        self.assertEqual(rebuilt["carried"]["20261011-name-status-stale"]["carried_over_from"], day)
 
     def test_the_agent_sees_its_brief(self):
         self.run_cycle()
@@ -170,10 +180,7 @@ class DecisionRoundTripTest(CycleTestCase):
         self.decide(ids["notice"], "approve")
         self.decide(ids["message"], "reject", reason="Too salesy for my network.")
         self.decide(ids["package-change-proposal"], "reject", reason="Wait for counsel.")
-        (self.exchange / "sittings").mkdir()
-        (self.exchange / "sittings/2026-10-11.json").write_text(
-            json.dumps({"exchange": 1, "date": "2026-10-11", "minutes": 41}), encoding="utf-8"
-        )
+        day = self.sit()
         fakes.behave(self.codex_dir, {})
         code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
         self.assertEqual(code, 0, out)
@@ -197,8 +204,8 @@ class DecisionRoundTripTest(CycleTestCase):
         report = self.report()
         self.assertIn("| Mandu decisions | changed | 4 records, 4 new since the previous run |", report)
         self.assertIn("Reason: Wait for counsel.", report)
-        self.assertIn("Sitting 2026-10-11: 41 minutes.", report)
-        self.assertIn("carried over from 2026-10-11", report)
+        self.assertIn(f"Sitting {day}: 41 minutes.", report)
+        self.assertIn(f"carried over from the sitting on {day}", report)
 
         recorded = json.loads((self.workspace() / "run-reports/state/review-queue.json").read_text(encoding="utf-8"))
         self.assertEqual(
@@ -211,8 +218,8 @@ class DecisionRoundTripTest(CycleTestCase):
             },
         )
         self.assertEqual(
-            {key: value["runs"] for key, value in recorded["carried"].items()},
-            {ids["dispatch-request"]: 1, ids["weekly-read-decision"]: 1},
+            {key: value["carried_over_from"] for key, value in recorded["carried"].items()},
+            {ids["dispatch-request"]: day, ids["weekly-read-decision"]: day},
         )
         self.assertIn("note=review-queue 4 decisions taken in", report)
 
@@ -223,7 +230,7 @@ class DecisionRoundTripTest(CycleTestCase):
         self.assertEqual([e["kind"] for e in third["open"]], ["weekly-read-decision", "dispatch-request", "notice"])
         notice = (self.workspace() / third["open"][2]["file"]).read_text(encoding="utf-8")
         self.assertIn(f"asks the same as {ids['package-change-proposal']}, which is rejected", notice)
-        self.assertIn("carried over from 2026-10-11, 2 runs", self.report())
+        self.assertIn(f"carried over from the sitting on {day}", self.report())
         self.assertIn("4 records, 0 new since the previous run", self.report())
         brief = sorted((self.workspace() / "run-reports").glob("*.brief.md"))[-1].read_text(encoding="utf-8")
         self.assertIn("rejected: Approve package change: name-status-stale. Reason: Wait for counsel.", brief)
@@ -247,7 +254,59 @@ class DecisionRoundTripTest(CycleTestCase):
         self.run_cycle()
         fakes.behave(self.codex_dir, {})
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
-        self.assertIn("| Mandu decisions | failed | Mandu's exchange folder", self.report())
+        report = self.report()
+        self.assertIn("| Mandu decisions | failed | Mandu's exchange folder", report)
+        self.assertIn("| Founder decisions taken in | incomplete | Mandu decisions could not be read |", report)
+        self.assertIn("| Review Queue | incomplete | Mandu decisions could not be read |", report)
+
+
+class CarryOverTest(CycleTestCase):
+    def test_an_item_carries_over_only_once_a_sitting_has_left_it_undecided(self):
+        self.exchange.mkdir()
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        fakes.behave(self.codex_dir, {})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=30))
+        self.assertEqual([entry["carried_over"] for entry in self.queue()["open"]], [False])
+        self.assertIn("(0 new this run, 0 carried over)", self.report())
+
+        day = self.sit()
+        after = {"review-queue/incoming/after.md": fakes.proposal(title="queued after the sitting")}
+        fakes.behave(self.codex_dir, {"write": after})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=45))
+        carried = {entry["id"]: entry.get("carried_over_from") for entry in self.queue()["open"]}
+        self.assertEqual(carried, {"20261011-name-status-stale": day, "20261011-after": None})
+        self.assertIn(
+            f"`20261011-name-status-stale` (package-change-proposal, carried over from the sitting on {day})",
+            self.report(),
+        )
+        self.assertIn("1 new this run, 1 carried over", self.report())
+
+        fakes.behave(self.codex_dir, {})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        carried = {entry["id"]: entry.get("carried_over_from") for entry in self.queue()["open"]}
+        self.assertEqual(carried, {"20261011-name-status-stale": day, "20261011-after": None})
+
+
+class RunLockTest(CycleTestCase):
+    def test_a_run_started_while_another_runs_is_refused_and_the_next_report_says_so(self):
+        self.logs.mkdir(parents=True)
+        with (self.logs / cycle.LOCK_FILE).open("a") as held:
+            fcntl.flock(held.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+            code, out = self.run_cycle(trigger="scheduled")
+        self.assertEqual(code, cycle.EXIT_BUSY)
+        self.assertIn("refusing to start: another run is in progress", out)
+        self.assertFalse((self.codex_dir / "prompt.txt").exists())
+        self.assertFalse((self.workspace() / "review-queue/queue.json").exists())
+
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=5))
+        self.assertEqual(code, 0, out)
+        self.assertRegex(
+            self.report(), r"\n- Run \S+-scheduled-\S+ \(scheduled\) was refused at .*: another run was in progress\.\n"
+        )
+        self.assertEqual(list((self.logs / cycle.REFUSED_DIR).iterdir()), [])
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10))
+        self.assertNotIn("was refused", self.report())
 
 
 class FailuresTest(CycleTestCase):
@@ -260,8 +319,10 @@ class FailuresTest(CycleTestCase):
         self.assertIn(
             "| RepToday package: `projects/RepToday/gtm/05-social-pmf/angles.md` | failed | missing. |", report
         )
-        self.assertIn("| Package review (contradictions) | incomplete |", report)
-        self.assertIn("| Package snapshot | incomplete | 1 package source could not be read |", report)
+        angles = "RepToday package: `projects/RepToday/gtm/05-social-pmf/angles.md` could not be read"
+        self.assertIn(f"| Package review (contradictions) | incomplete | {angles} |", report)
+        self.assertIn(f"| Package snapshot | incomplete | {angles} |", report)
+        self.assertIn("| Founder decisions taken in | complete |", report)
         queue = self.queue()
         self.assertEqual([entry["kind"] for entry in queue["open"]], ["notice"])
         notice = (self.workspace() / queue["open"][0]["file"]).read_text(encoding="utf-8")
@@ -271,7 +332,10 @@ class FailuresTest(CycleTestCase):
         brief = next((self.workspace() / "run-reports").glob("*.brief.md")).read_text(encoding="utf-8")
         self.assertIn("A failed source blocks only the work that needs it", brief)
         self.assertIn("Review every other package file as usual", brief)
-        self.assertIn("angles.md`: missing. Incomplete without it: Package review, Post Drafts", brief)
+        self.assertIn(
+            "angles.md`: missing. Incomplete without it: Package snapshot, Package review (contradictions), Post",
+            brief,
+        )
 
     def test_the_same_problems_are_not_queued_twice(self):
         (self.mandu / "projects/RepToday/gtm/05-social-pmf/angles.md").unlink()
@@ -310,7 +374,6 @@ class FailuresTest(CycleTestCase):
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
         queue = self.queue()
         self.assertEqual([entry["id"] for entry in queue["open"]][:1], ["20261011-name-status-stale"])
-        self.assertTrue(queue["open"][0]["carried_over"])
         self.assertFalse((self.workspace() / "evidence/decisions/20261011-name-status-stale.json").exists())
         self.assertTrue((self.workspace() / "drafts/README.md").is_file())
         self.assertNotEqual(queue_before, "")

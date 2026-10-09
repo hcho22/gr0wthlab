@@ -2,6 +2,7 @@
 
 How gr0wthlab (the Marketing Engineer) and Mandu pass the Review Queue and the Founder's decisions between them.
 Mandu's own agent builds Mandu's side from this page.
+Later stories extend the exchange, each with a version bump: the TikTok export (US-ME11), the Beta Build approval (US-ME15), and the US-ME18 confirmation.
 Each side writes only its own repository and only reads the other's: gr0wthlab writes items in gr0wthlab, and Mandu writes decisions in Mandu.
 
 ## Where things are
@@ -25,11 +26,12 @@ To move the folder, change that configuration through a gr0wthlab pull request.
 2. Show the summary at the top of the run report that `queue.json` names in `run_report`.
 3. Present each entry of `open`, in the listed order, by showing its item file.
    Skip any entry that already has a decision record.
-   For an entry with `"carried_over": true`, say it was carried over from the date in `published_at`.
+   For an entry with `"carried_over": true`, say it was carried over from the sitting on the date in `carried_over_from`.
 4. The Founder approves an item, optionally with a one-line note, or rejects it with a one-line reason, or leaves it undecided.
    An undecided item needs nothing written; it returns, marked carried over, at the next sitting.
 5. Write one decision record for each decided item as soon as it is decided.
 6. At the end, write one sitting record with how many minutes the sitting took.
+   Once gr0wthlab reads that record, it marks the items left undecided at the sitting as carried over.
 
 Paths inside `queue.json` are relative to `~/gr0wthlab/workspace/`.
 
@@ -107,6 +109,8 @@ A notice is informational, such as a failed source or a change to the Marketing 
 ```
 
 `open` is already in presentation order: posts by nearest slot first, then messages, Weekly Read decisions, Dispatch requests, package-change proposals, and notices, oldest first within each kind.
+`carried_over` is `true` for an item that was open at an earlier sitting and left undecided, and `carried_over_from` then gives the date of the first such sitting.
+An item queued after the latest sitting is not carried over, whichever run queued it.
 `closed` lists every decided or superseded item and is history only; never present it.
 gr0wthlab may add fields; ignore any you do not use.
 
@@ -145,28 +149,7 @@ One file per sitting, `sittings/<YYYY-MM-DD>.json`, with the minutes the Founder
 ```
 
 `minutes` is a whole number from 1 to 600, and `date` equals the file name.
-
-## Reserved for later stories
-
-Mandu builds these folders the same way when the story that reads them arrives; their shapes are fixed now so Mandu's side is built once.
-
-| Path in the exchange folder | Story | Holds |
-| --- | --- | --- |
-| `tiktok-exports/<YYYY-MM-DD>/` | US-ME11 | Exactly what the Founder exported from TikTok Studio (screenshots or the downloaded file), plus `export.json` |
-| `beta-builds/<Product>-<YYYY-MM-DD>.json` | US-ME15 | The Founder's record that a Beta Build passed Apple's review for external testing |
-| `gates/us-me18.json` | US-ME18 | The Founder's confirmation that window 1 ran cleanly, so Immerse Listening may start |
-
-```json
-{"exchange": 1, "exported_on": "2026-10-18", "files": ["studio-1.png", "studio-2.png"], "posts_not_exported": [], "note": null}
-```
-
-```json
-{"exchange": 1, "product": "RepToday", "build": "1.0 (42)", "approved_on": "2026-10-20", "recorded_at": "2026-10-20T09:15:00-07:00", "note": null}
-```
-
-```json
-{"exchange": 1, "gate": "us-me18", "confirmed": true, "confirmed_at": "2026-10-25T19:30:00-07:00", "note": null}
-```
+Write it when the sitting ends: gr0wthlab counts an item as left undecided at the sitting when the item is still open, was queued on or before the sitting's date, and was queued before gr0wthlab first read this record.
 
 ## Rules for both sides
 

@@ -6,7 +6,8 @@ import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from gr0wthlab import package, report
+from gr0wthlab import exchange, package, report
+from gr0wthlab.queue import SetAside
 from gr0wthlab.report import RunState, SourceLine
 
 
@@ -106,6 +107,17 @@ class NoticeTest(unittest.TestCase):
         title, body, _, _ = report.problems_notice(state, "run-reports/R.md")
         self.assertEqual(title, "Notice: the run on 2026-10-11 had 2 problems")
         self.assertIn("The agent did not start", body)
+
+    def test_a_notice_stays_a_valid_item_however_many_problems_it_lists(self):
+        state = self.state()
+        state.problems = [f"problem {number}: " + "x" * 100 for number in range(500)]
+        state.set_aside = [SetAside("odd\n# name.md", "", ("name it <slug>.md",))]
+        title, body, touches, evidence = report.problems_notice(state, "run-reports/R.md")
+        self.assertIn("- And more: the run report lists every problem.", body)
+        self.assertIn("- `odd # name.md`: name it <slug>.md", body)
+        fields = {"exchange": "1", "id": "20261011-notice-run-problems", "kind": "notice"}
+        text = exchange.render_item(fields, title, body, touches, evidence)
+        self.assertEqual(exchange.check_item(text, [], published=True).problems, [])
 
     def test_the_report_lists_every_source_and_output(self):
         state = self.state()

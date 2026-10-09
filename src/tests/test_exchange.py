@@ -78,6 +78,21 @@ class ItemCheckTest(unittest.TestCase):
     def test_an_item_too_long_to_decide_fast_is_refused(self):
         self.assertTrue(exchange.check_item(item(body="x " * 7000), PRODUCTS).problems)
 
+    def test_the_length_limit_gives_the_same_answer_before_and_after_publication(self):
+        short = exchange.check_item(item(body="x"), PRODUCTS).item
+        at_limit = "x" * (exchange.MAX_ITEM_CHARS - len(item(body="")))
+        over = "x" * (
+            exchange.MAX_ITEM_CHARS
+            - len(exchange.render_content(short.kind, short.ask, "", short.touches, short.evidence))
+            + 1
+        )
+        for body, fits in ((at_limit, True), (over, False)):
+            with self.subTest(fits=fits):
+                self.assertEqual(exchange.check_item(item(body=body), PRODUCTS).item is not None, fits)
+                fields = dict(short.fields, exchange="1", id="20261011-fix-status")
+                published = exchange.render_item(fields, short.ask, body, short.touches, short.evidence)
+                self.assertEqual(exchange.check_item(published, PRODUCTS, published=True).item is not None, fits)
+
     def test_render_writes_a_published_item_that_passes(self):
         check = exchange.check_item(item(extra_fields="supersedes: 20261004-old\n"), PRODUCTS)
         fields = dict(check.item.fields, exchange="1", id="20261011-fix-status")
@@ -115,10 +130,12 @@ class DecisionTest(unittest.TestCase):
         self.assertEqual(problems, [])
         self.assertEqual(decision.note, "Ship it.")
         self.assertEqual(self.parse(decision="approve", reason=None, sitting=None)[1], [])
+        self.assertIsNone(self.parse(decision="approve", reason=None, note="  ")[0].note)
 
     def test_a_rejection_needs_a_one_line_reason(self):
         self.assertTrue(self.parse(reason=None)[1])
         self.assertTrue(self.parse(reason="")[1])
+        self.assertIn("reason is required", self.parse(reason="   ")[1])
         self.assertTrue(self.parse(reason="line one\nline two")[1])
         self.assertTrue(self.parse(reason="x" * 301)[1])
 

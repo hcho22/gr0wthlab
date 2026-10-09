@@ -146,8 +146,12 @@ class CheckIncomingTest(unittest.TestCase):
                 json.dumps({"exchange": 1, "open": [], "closed": [entry]}), encoding="utf-8"
             )
             (incoming / "good.md").write_text(fakes.proposal(title="a new ask"), encoding="utf-8")
+            (incoming / "twin.md").write_text(fakes.proposal(title="a new ask"), encoding="utf-8")
             (incoming / "again.md").write_text(fakes.PROPOSAL, encoding="utf-8")
             (incoming / "bad.md").write_text("# no front matter\n", encoding="utf-8")
+            rejected_again = fakes.proposal(extra="supersedes: 20261011-queued\n", title="supersede a decided one")
+            (incoming / "supersede.md").write_text(rejected_again, encoding="utf-8")
+            (incoming / f"{'long-' * 13}name.md").write_text(fakes.proposal(title="a long name"), encoding="utf-8")
             original = cli.INCOMING
             cli.INCOMING = incoming
             try:
@@ -160,10 +164,11 @@ class CheckIncomingTest(unittest.TestCase):
         text = out.getvalue()
         self.assertIn("OK good.md", text)
         self.assertIn("PROBLEM bad.md", text)
-        self.assertIn(
-            "PROBLEM again.md\n  - asks the same as 20261011-queued, which is already queued or decided", text
-        )
-        self.assertIn("3 items checked, 2 with problems", text)
+        self.assertIn("PROBLEM again.md\n  - asks the same as 20261011-queued, which is rejected", text)
+        self.assertIn("PROBLEM twin.md\n  - asks the same as good.md, which is also in incoming/", text)
+        self.assertIn("PROBLEM supersede.md\n  - supersedes 20261011-queued, which is not an open item", text)
+        self.assertIn(f"PROBLEM {'long-' * 13}name.md\n  - name it <slug>.md directly in incoming/", text)
+        self.assertIn("6 items checked, 5 with problems", text)
 
 
 if __name__ == "__main__":

@@ -179,7 +179,28 @@ class OrderAndPersistenceTest(LedgerTestCase):
             order, ["sooner-post", "later-post", "message", "decision", "old-request", "proposal", "notice"]
         )
 
-    def test_queue_json_marks_carried_over_items_and_round_trips(self):
+    def test_an_item_carries_over_only_once_a_sitting_has_left_it_undecided(self):
+        self.drop("first.md", fakes.PROPOSAL)
+        [first] = self.take("20261011T230000Z-scheduled-aaaa")[0]
+        self.drop("rerun.md", fakes.proposal(title="queued by a re-run before the sitting"))
+        self.take("20261011T233000Z-on-demand-bbbb", NOW + timedelta(minutes=30))
+        self.ledger.mark_carried_over({})
+        self.assertEqual([entry["carried_over"] for entry in self.ledger.ordered()], [False, False])
+
+        sitting = NOW.astimezone().date().isoformat()
+        self.drop("after.md", fakes.proposal(title="queued after the sitting"))
+        [after] = self.take("20261011T234500Z-on-demand-cccc", NOW + timedelta(minutes=45))[0]
+        read_by = "20261011T234500Z-on-demand-cccc"
+        self.ledger.mark_carried_over({"2026-10-01": read_by, sitting: read_by})
+        entry = self.ledger.entries[first]
+        self.assertEqual((entry["carried_over"], entry["carried_over_from"]), (True, sitting))
+        entry = self.ledger.entries[after]
+        self.assertEqual((entry["carried_over"], "carried_over_from" in entry), (False, False))
+
+        self.ledger.take_decisions([(decision(first), "x.json")], "20261018T230000Z-scheduled-dddd", NOW)
+        self.assertNotIn("carried_over_from", self.ledger.entries[first])
+
+    def test_queue_json_round_trips(self):
         self.drop("old.md", fakes.PROPOSAL)
         self.take("RUN1")
         self.drop("new.md", fakes.PROPOSAL)
@@ -188,10 +209,7 @@ class OrderAndPersistenceTest(LedgerTestCase):
         self.drop("kept.md", fakes.PROPOSAL)
         self.take("RUN1")
         data = self.ledger.as_json("RUN2", NOW, "run-reports/RUN2.md")
-        self.assertEqual(
-            [(entry["id"], entry["carried_over"]) for entry in data["open"]],
-            [("20261011-kept", True), ("20261018-new", False)],
-        )
+        self.assertEqual([entry["id"] for entry in data["open"]], ["20261011-kept", "20261018-new"])
         self.assertEqual([entry["id"] for entry in data["closed"]], ["20261011-old"])
         path = self.repo / "workspace/review-queue/queue.json"
         self.areas.write_json(path, data)

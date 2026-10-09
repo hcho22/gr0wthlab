@@ -54,10 +54,13 @@ class FileResult:
 
 @dataclass
 class SourceResult:
+    """One source's read; carried keeps the last fingerprints of the files of a directory that could not be read."""
+
     source: Source
     files: list[FileResult] = field(default_factory=list)
     removed: list[str] = field(default_factory=list)
     reason: str | None = None
+    carried: list[FileResult] = field(default_factory=list)
 
     @property
     def status(self) -> str:
@@ -99,10 +102,17 @@ def fingerprint(path: Path) -> tuple[str, int]:
     return digest.hexdigest(), size
 
 
+def raise_error(error: OSError) -> None:
+    raise error
+
+
 def directory_files(root: Path, relative: str) -> list[str]:
-    """Mandu-relative paths of every regular file under a directory, skipping hidden files such as .DS_Store."""
+    """Mandu-relative paths of every regular file under a directory, skipping hidden files such as .DS_Store.
+
+    A folder that cannot be listed raises, so the source fails with the real reason.
+    """
     found = []
-    for directory, subdirs, files in os.walk(str(root / relative)):
+    for directory, subdirs, files in os.walk(str(root / relative), onerror=raise_error):
         subdirs[:] = sorted(name for name in subdirs if not name.startswith("."))
         for name in sorted(files):
             if not name.startswith("."):
@@ -149,21 +159,26 @@ def take(
         result = SourceResult(source)
         if source.is_directory:
             root = mandu / source.path
+            names: list[str] = []
             if not root.is_dir():
                 result.reason = "missing" if not root.exists() else "not a directory"
             else:
                 try:
                     names = directory_files(mandu, source.path)
                 except OSError as error:
-                    names = []
                     result.reason = error.strerror or str(error)
                 if not names and not result.reason:
                     result.reason = "holds no files"
+            known = sorted(name for name in previous if name.startswith(source.path))
+            if result.reason:
+                result.carried = [
+                    FileResult(name, source.path, FAILED, previous_sha256=previous[name] or None, reason=result.reason)
+                    for name in known
+                ]
+            else:
                 result.files = [read_file(mandu, name, source.path, previous, clock) for name in names]
                 listed = set(names)
-                result.removed = sorted(
-                    name for name in previous if name.startswith(source.path) and name not in listed
-                )
+                result.removed = [name for name in known if name not in listed]
         else:
             result.files = [read_file(mandu, source.path, source.path, previous, clock)]
         results.append(result)
@@ -211,7 +226,7 @@ def record(
                 **({"reason": result.failure()} if result.status == FAILED else {}),
             }
         )
-        product["files"] += [file.as_json() for file in result.files]
+        product["files"] += [file.as_json() for file in result.files + result.carried]
         if previous_run is not None:
             changes = product["changes"]
             changes["added"] += [f.path for f in result.files if f.change == "added"]

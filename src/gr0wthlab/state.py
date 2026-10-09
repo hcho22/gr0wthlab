@@ -76,13 +76,14 @@ def entries(data: Mapping, key: str) -> dict[str, Mapping]:
     return value
 
 
-# Review Queue: decided items and carried-over items, each by identifier and fingerprint.
+# Review Queue: decided items, and items left undecided at a sitting with that sitting's date, by identifier and
+# fingerprint.
 
 
 @dataclass
 class ReviewQueueState:
     handled: dict[str, dict[str, str]] = field(default_factory=dict)
-    carried: dict[str, dict[str, object]] = field(default_factory=dict)
+    carried: dict[str, dict[str, str]] = field(default_factory=dict)
 
     @classmethod
     def from_json(cls, data: Mapping) -> ReviewQueueState:
@@ -97,13 +98,9 @@ class ReviewQueueState:
         for identifier, entry in entries(data, "carried").items():
             if not exchange.ID_PATTERN.fullmatch(identifier) or identifier in state.handled:
                 raise StateError(f"carried item {identifier!r} is not an open item identifier")
-            runs = entry.get("runs")
-            if isinstance(runs, bool) or not isinstance(runs, int) or runs < 1:
-                raise StateError(f"carried item {identifier} needs runs, a count of at least 1")
             state.carried[identifier] = {
                 "hash": hash_value(entry.get("hash"), identifier),
-                "first_queued": day(entry.get("first_queued"), f"{identifier} first_queued").isoformat(),
-                "runs": runs,
+                "carried_over_from": day(entry.get("carried_over_from"), f"{identifier} carried_over_from").isoformat(),
             }
         return state
 
@@ -115,12 +112,10 @@ def reconcile(
     previous: ReviewQueueState,
     ledger_entries: Mapping[str, Mapping[str, object]],
     hashes: Mapping[str, str],
-    run_id: str,
-    first_queued: Mapping[str, str],
 ) -> tuple[ReviewQueueState, list[str]]:
     """The Review Queue state as the ledger says it is now, and every way the previous state disagreed.
 
-    The ledger wins every disagreement; an item open since an earlier run counts one more run carried over.
+    The ledger wins every disagreement; an open item is carried over from the sitting the ledger marks it with.
     """
     current = ReviewQueueState()
     differences = []
@@ -137,13 +132,10 @@ def reconcile(
             before = previous.handled.get(identifier)
             if before:
                 differences.append(f"state had `{identifier}` {before['outcome']}; the Review Queue has it open")
-            if entry.get("published_by_run") != run_id and fingerprint:
-                earlier = previous.carried.get(identifier)
-                runs = int(earlier["runs"]) + 1 if earlier else 1
+            if entry.get("carried_over_from") and fingerprint:
                 current.carried[identifier] = {
                     "hash": fingerprint,
-                    "first_queued": first_queued[identifier],
-                    "runs": runs,
+                    "carried_over_from": str(entry["carried_over_from"]),
                 }
         before_hash = (previous.handled.get(identifier) or previous.carried.get(identifier) or {}).get("hash")
         if before_hash and fingerprint and before_hash != fingerprint:

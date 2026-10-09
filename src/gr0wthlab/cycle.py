@@ -4,11 +4,13 @@ Order: bring the production clone up to origin's main; snapshot the Go-To-Market
 decisions from Mandu; brief the agent and run it inside the sandbox (launcher.run); undo any change it made to
 records only the launcher writes; queue the items it wrote that pass the format; write the Review Queue and the run
 report; commit and push workspace/. Every step but the agent is deterministic code outside the sandbox, and every
-write it makes goes through Areas, so it stays inside the six areas.
+write it makes goes through Areas, so it stays inside the six areas. One run at a time holds the run lock from the
+sync to the saved records; a run started meanwhile refuses to start, and the next run's report says so.
 """
 
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import os
@@ -29,6 +31,9 @@ from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLi
 
 PRE_RUN_ENV = "GR0WTHLAB_PRE_RUN"
 EXIT_RECORDS = 4
+EXIT_BUSY = 5
+LOCK_FILE = "run.lock"
+REFUSED_DIR = "refused-runs"
 SNAPSHOTS = "package-snapshots"
 SUMMARY_LIMIT = 4000
 # Records only the launcher writes; the agent's changes to them are undone after it finishes.
@@ -185,7 +190,7 @@ class Cycle:
         areas.write_json(path, package.record(state.run_id, self.now(), mandu, state.snapshot, state.previous_snapshot))
         state.snapshot_file = areas.relative(path)
         for result in state.snapshot:
-            needs = ("Package review",) + output_titles(config, result.source.needed_by)
+            needs = output_titles(config, ("package-snapshot", "package-review", *result.source.needed_by))
             label = f"{result.source.product} package"
             if result.reason:
                 state.sources.append(
@@ -199,9 +204,11 @@ class Cycle:
                     SourceLine(f"{label}: `{removed}`", package.CHANGED, "removed since the previous snapshot", needs)
                 )
 
-    def take_decisions(self, state: RunState, areas: Areas, folder: Path, ledger: Ledger) -> None:
+    def take_decisions(
+        self, state: RunState, config: settings.Settings, areas: Areas, folder: Path, ledger: Ledger
+    ) -> None:
         anything_queued = bool(ledger.entries)
-        needs = ("Founder decisions taken in", "Review Queue")
+        needs = output_titles(config, ("decisions", "review-queue"))
         if not folder.is_dir():
             if anything_queued and ledger.open_entries():
                 detail = f"Mandu's exchange folder `{folder}` does not exist, so no decision can reach gr0wthlab."
@@ -256,7 +263,8 @@ class Cycle:
             }
             existing = json.loads(target.read_text(encoding="utf-8")) if target.is_file() else None
             if existing is None or existing.get("source") != record["source"]:
-                areas.write_json(target, dict(record, taken_in_by_run=state.run_id))
+                first = (existing or {}).get("taken_in_by_run", state.run_id)
+                areas.write_json(target, dict(record, taken_in_by_run=first))
                 state.sittings.append(sitting)
         taken = sum(1 for outcome in state.decisions if outcome.status == "taken")
         unusable = len(problems) + sum(1 for o in state.decisions if o.status not in ("taken", "already-taken"))
@@ -271,6 +279,18 @@ class Cycle:
         state.sources.append(
             SourceLine("Mandu sittings", package.CHANGED if state.sittings else package.READ, sitting_detail)
         )
+
+    def sitting_runs(self, state: RunState, areas: Areas) -> dict[str, str]:
+        """Each sitting taken in so far, by date, with the run that first took in its record."""
+        runs = {}
+        for path in areas.files(areas.path("evidence", "sittings")):
+            try:
+                record = json.loads(read_plain(path).decode("utf-8"))
+                runs[str(record["date"])] = str(record["taken_in_by_run"])
+            except (OSError, ValueError, KeyError, TypeError, UnsafeFile) as error:
+                name = areas.relative(path)
+                state.problems.append(f"`{name}` could not be read, so no item carries over from it ({error})")
+        return runs
 
     def load_state(self, state: RunState, areas: Areas, ledger: Ledger, run_id: str) -> run_state.States:
         """Each workflow's run state; an invalid file is set aside and its workflow starts again from the record."""
@@ -293,13 +313,7 @@ class Cycle:
     ) -> None:
         """Bring the Review Queue state into line with the ledger, note every difference, and save every state."""
         hashes, _ = run_state.item_hashes(areas.workspace, ledger.entries, products, states.review_queue)
-        first_queued = {
-            identifier: report.local_date(str(entry["published_at"])) for identifier, entry in ledger.entries.items()
-        }
-        states.review_queue, state.state_notes = run_state.reconcile(
-            states.review_queue, ledger.entries, hashes, state.run_id, first_queued
-        )
-        state.carried_runs = {key: int(entry["runs"]) for key, entry in states.review_queue.carried.items()}
+        states.review_queue, state.state_notes = run_state.reconcile(states.review_queue, ledger.entries, hashes)
         run_state.save(areas, states, state.run_id, now.isoformat())
 
     def tallies(self, state: RunState, ledger: Ledger, incoming: int) -> list[run_state.Tally]:
@@ -342,45 +356,61 @@ class Cycle:
         ]
 
     def outputs(self, state: RunState, config: settings.Settings, ledger_ok: bool) -> None:
-        failed_package = [line.name for line in state.failed_sources() if "package" in line.name]
-        agent_ok = state.agent.get("exit_code") == 0
-        rows = []
-        if failed_package:
-            rows.append(
-                (
-                    "Package snapshot",
-                    INCOMPLETE,
-                    f"{report.plural(len(failed_package), 'package source')} could not be read",
-                )
-            )
-        else:
-            rows.append(("Package snapshot", COMPLETE, f"`{state.snapshot_file}`"))
-        review_gaps = [f"{name} could not be read" for name in failed_package]
-        if not agent_ok:
-            review_gaps.append("the agent did not finish")
-        rows.append(
-            (
-                "Package review (contradictions)",
-                INCOMPLETE if review_gaps else COMPLETE,
-                "; ".join(review_gaps) or "the agent finished its review",
-            )
+        """Each output's status: a built output is incomplete when a failed source it needs names it, or when its own
+        step fell short."""
+        failed = state.failed_sources()
+        decisions = next((line.detail for line in state.sources if line.name == "Mandu decisions"), "")
+        queued = report.plural(len(state.queue_after), "open item") + (
+            f"; {len(state.set_aside)} set aside" if state.set_aside else ""
         )
-        decisions = next((line for line in state.sources if line.name == "Mandu decisions"), None)
-        if decisions and decisions.status == package.FAILED:
-            rows.append(("Founder decisions taken in", INCOMPLETE, decisions.detail))
-        else:
-            rows.append(("Founder decisions taken in", COMPLETE, decisions.detail if decisions else ""))
-        if ledger_ok:
-            detail = report.plural(len(state.queue_after), "open item") + (
-                f"; {len(state.set_aside)} set aside" if state.set_aside else ""
-            )
-            rows.append(("Review Queue", COMPLETE, detail))
-        else:
-            rows.append(("Review Queue", INCOMPLETE, "the ledger could not be read; the queue was left as it was"))
+        own = {
+            "package-snapshot": ([], f"`{state.snapshot_file}`"),
+            "package-review": (
+                [] if state.agent.get("exit_code") == 0 else ["the agent did not finish"],
+                "the agent finished its review",
+            ),
+            "decisions": ([], decisions),
+            "review-queue": (
+                [] if ledger_ok else ["the ledger could not be read; the queue was left as it was"],
+                queued,
+            ),
+        }
+        rows = []
         for key, output in config.outputs.items():
+            title = str(output.get("title", key))
             if not output.get("built"):
-                rows.append((str(output.get("title", key)), NOT_BUILT, str(output.get("story", ""))))
-        state.outputs = [list(row) for row in rows]
+                rows.append([title, NOT_BUILT, str(output.get("story", ""))])
+                continue
+            gaps, done = own.get(key, ([], ""))
+            gaps = [f"{line.name} could not be read" for line in failed if title in line.needed_by] + gaps
+            rows.append([title, INCOMPLETE if gaps else COMPLETE, "; ".join(gaps) or done])
+        state.outputs = rows
+
+    def lock(self, log_dir: Path, trigger: str) -> TextIO | None:
+        """The run lock, held until the returned file is closed; None if another run holds it.
+
+        A refused run leaves a one-line record in the log folder, which the next run's report shows.
+        """
+        log_dir.mkdir(parents=True, exist_ok=True)
+        handle = (log_dir / LOCK_FILE).open("a")
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            handle.close()
+            now = self.now()
+            run_id = launcher.new_run_id(trigger, now)
+            line = (
+                f"Run {run_id} ({trigger}) was refused at {report.wall_clock(now):%A %Y-%m-%d %H:%M}:"
+                " another run was in progress."
+            )
+            folder = log_dir / REFUSED_DIR
+            folder.mkdir(exist_ok=True)
+            temporary = folder / f".{run_id}.tmp"
+            temporary.write_text(line + "\n", encoding="utf-8")
+            os.replace(str(temporary), str(folder / f"{run_id}.txt"))
+            self.say("refusing to start: another run is in progress; the next run's report will say so")
+            return None
+        return handle
 
     def run(
         self,
@@ -390,6 +420,21 @@ class Cycle:
         once: str | None,
         argv: Sequence[str],
         execve: Callable[[str, list[str], Mapping[str, str]], None] = os.execve,
+    ) -> int:
+        lock = self.lock(launcher.default_log_dir(self.env, self.home), trigger)
+        if lock is None:
+            return EXIT_BUSY
+        with lock:
+            return self.locked_run(instruction, trigger, weekly, once, argv, execve)
+
+    def locked_run(
+        self,
+        instruction: Path | None,
+        trigger: str,
+        weekly: tuple[str, str] | None,
+        once: str | None,
+        argv: Sequence[str],
+        execve: Callable[[str, list[str], Mapping[str, str]], None],
     ) -> int:
         pre = json.loads(self.env[PRE_RUN_ENV]) if self.env.get(PRE_RUN_ENV) else None
         started = datetime.fromisoformat(pre["started_at"]) if pre else self.now()
@@ -458,7 +503,8 @@ class Cycle:
         except QueueError as error:
             ledger, ledger_ok = Ledger(), False
             state.problems.append(f"{error}; the Review Queue was left untouched this run")
-        self.take_decisions(state, areas, folder, ledger)
+        self.take_decisions(state, config, areas, folder, ledger)
+        sittings = self.sitting_runs(state, areas)
         states = self.load_state(state, areas, ledger, run_id)
         hashes, unreadable = run_state.item_hashes(areas.workspace, ledger.entries, products, states.review_queue)
         state.problems += unreadable
@@ -524,16 +570,21 @@ class Cycle:
             if repeated and ledger.entries[repeated]["status"] == OPEN:
                 state.notice = repeated  # the same problems are already waiting for the Founder
             else:
-                state.notice = ledger.publish(areas, item, "notice-run-problems", run_id, now, topic="run-problems")
+                state.notice = ledger.publish(areas, item, "notice-run-problems", run_id, now)
                 state.published.append(state.notice)
             state.queue_after = ledger.ordered()
             self.outputs(state, config, ledger_ok)
         if ledger_ok:
+            ledger.mark_carried_over(sittings)
             areas.write_json(ledger_path, ledger.as_json(run_id, now, areas.relative(report_path)))
             state.queue_after = ledger.ordered()
             self.save_state(state, areas, ledger, states, products, now)
         state.tallies = self.tallies(state, ledger, incoming)
+        refused = sorted((log_dir / REFUSED_DIR).glob("*.txt"))
+        state.refused_runs = [path.read_text(encoding="utf-8").strip() for path in refused]
         areas.write_text(report_path, report.render_report(state))
+        for path in refused:
+            path.unlink()
         self.say(f"run report: {report_path}")
 
         saved = None

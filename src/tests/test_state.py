@@ -15,8 +15,11 @@ from tests.test_boundary import CONFIG, REGISTRY
 H1, H2, H3 = "a" * 64, "b" * 64, "c" * 64
 
 
-def entry(status, run="RUN1"):
-    return {"status": status, "published_by_run": run, "published_at": "2026-10-11T23:00:00+00:00"}
+def entry(status, carried_over_from=None):
+    record = {"status": status, "published_by_run": "RUN1", "published_at": "2026-10-11T23:00:00+00:00"}
+    if carried_over_from:
+        record.update(carried_over=True, carried_over_from=carried_over_from)
+    return record
 
 
 class KeysTest(unittest.TestCase):
@@ -99,17 +102,18 @@ class ReviewQueueTest(unittest.TestCase):
     def test_validation(self):
         good = {
             "handled": {"20261011-a": {"outcome": "rejected", "hash": H1}},
-            "carried": {"20261011-b": {"hash": H2, "first_queued": "2026-10-11", "runs": 2}},
+            "carried": {"20261011-b": {"hash": H2, "carried_over_from": "2026-10-11"}},
         }
         self.assertEqual(ReviewQueueState.from_json(good).as_json(), good)
         bad_cases = [
             {"handled": {"not-an-id": {"outcome": "rejected", "hash": H1}}},
             {"handled": {"20261011-a": {"outcome": "maybe", "hash": H1}}},
             {"handled": {"20261011-a": {"outcome": "approved", "hash": "short"}}},
-            {"carried": {"20261011-b": {"hash": H2, "first_queued": "2026-10-11", "runs": 0}}},
+            {"carried": {"20261011-b": {"hash": H2}}},
+            {"carried": {"20261011-b": {"hash": H2, "carried_over_from": "Oct 11"}}},
             {
                 "handled": {"20261011-a": {"outcome": "approved", "hash": H1}},
-                "carried": {"20261011-a": {"hash": H1, "first_queued": "2026-10-11", "runs": 1}},
+                "carried": {"20261011-a": {"hash": H1, "carried_over_from": "2026-10-11"}},
             },
             {"handled": ["20261011-a"]},
         ]
@@ -117,21 +121,17 @@ class ReviewQueueTest(unittest.TestCase):
             with self.subTest(bad=bad), self.assertRaises(StateError):
                 ReviewQueueState.from_json(bad)
 
-    def test_reconcile_follows_the_ledger_and_counts_runs_carried(self):
+    def test_reconcile_follows_the_ledger_and_carries_only_what_it_marks_carried_over(self):
         ledger = {
             "20261011-a": entry("rejected"),
-            "20261011-b": entry("open"),
-            "20261018-c": entry("open", run="RUN2"),
+            "20261011-b": entry("open", carried_over_from="2026-10-11"),
+            "20261011-c": entry("open"),
         }
-        hashes = {"20261011-a": H1, "20261011-b": H2, "20261018-c": H3}
-        dates = dict.fromkeys(ledger, "2026-10-11")
-        first, differences = state.reconcile(ReviewQueueState(), ledger, hashes, "RUN2", dates)
+        hashes = {"20261011-a": H1, "20261011-b": H2, "20261011-c": H3}
+        current, differences = state.reconcile(ReviewQueueState(), ledger, hashes)
         self.assertEqual(differences, [])
-        self.assertEqual(first.handled, {"20261011-a": {"outcome": "rejected", "hash": H1}})
-        self.assertEqual(first.carried, {"20261011-b": {"hash": H2, "first_queued": "2026-10-11", "runs": 1}})
-        second, _ = state.reconcile(first, ledger, hashes, "RUN3", dates)
-        self.assertEqual(second.carried["20261011-b"]["runs"], 2)
-        self.assertEqual(second.carried["20261018-c"]["runs"], 1)
+        self.assertEqual(current.handled, {"20261011-a": {"outcome": "rejected", "hash": H1}})
+        self.assertEqual(current.carried, {"20261011-b": {"hash": H2, "carried_over_from": "2026-10-11"}})
 
     def test_the_ledger_wins_every_disagreement(self):
         previous = ReviewQueueState(
@@ -139,12 +139,13 @@ class ReviewQueueTest(unittest.TestCase):
                 "20261011-a": {"outcome": "approved", "hash": H1},
                 "20261011-gone": {"outcome": "approved", "hash": H3},
             },
-            carried={"20261011-b": {"hash": H3, "first_queued": "2026-10-11", "runs": 1}},
+            carried={"20261011-b": {"hash": H3, "carried_over_from": "2026-10-11"}},
         )
-        ledger = {"20261011-a": entry("open"), "20261011-b": entry("open")}
-        current, differences = state.reconcile(
-            previous, ledger, {"20261011-a": H1, "20261011-b": H2}, "RUN2", dict.fromkeys(ledger, "2026-10-11")
-        )
+        ledger = {
+            "20261011-a": entry("open", carried_over_from="2026-10-11"),
+            "20261011-b": entry("open", carried_over_from="2026-10-11"),
+        }
+        current, differences = state.reconcile(previous, ledger, {"20261011-a": H1, "20261011-b": H2})
         self.assertEqual(current.handled, {})
         self.assertEqual(set(current.carried), {"20261011-a", "20261011-b"})
         joined = " | ".join(differences)

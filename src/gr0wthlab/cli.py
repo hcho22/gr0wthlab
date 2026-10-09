@@ -10,7 +10,6 @@ from pathlib import Path
 
 from . import codex, cycle, exchange, launcher, probe, schedule, settings
 from . import state as run_state
-from .areas import UnsafeFile, read_plain
 from .boundary import PRODUCT_REGISTRY, ConfigError, load_json
 from .queue import QUEUE_FILE, Ledger, QueueError
 
@@ -50,41 +49,31 @@ def parser() -> argparse.ArgumentParser:
     return root
 
 
-def queued_fingerprints(products: list[str]) -> tuple[dict[str, str], str | None]:
-    """Each queued item's fingerprint, mapped to its identifier, as of the last saved Review Queue."""
+def queued(products: list[str]) -> tuple[Ledger, dict[str, str], str | None]:
+    """The last saved Review Queue, and each queued item's fingerprint mapped to its identifier."""
     try:
         ledger = Ledger.load(INCOMING.parent / QUEUE_FILE)
     except QueueError as error:
-        return {}, f"repeats were not checked: {error}"
+        return Ledger(), {}, f"repeats and supersedes could not be checked: {error}"
     hashes, _ = run_state.item_hashes(INCOMING.parents[1], ledger.entries, products, run_state.ReviewQueueState())
     seen: dict[str, str] = {}
     for identifier, fingerprint in hashes.items():
         seen.setdefault(fingerprint, identifier)
-    return seen, None
+    return ledger, seen, None
 
 
 def check_incoming(out=sys.stdout) -> int:
-    """The same item check the launcher applies after the run, for the agent to use before it finishes."""
+    """The launcher's own check of each item in incoming/, for the agent to use before it finishes."""
     products = [product["name"] for product in load_json(REPO_ROOT / PRODUCT_REGISTRY).get("products", [])]
     names = sorted(name for name in os.listdir(str(INCOMING))) if INCOMING.is_dir() else []
-    seen, warning = queued_fingerprints(products)
+    ledger, seen, warning = queued(products)
     if warning:
         print(warning, file=out)
     failed = 0
     for name in names:
-        try:
-            check = exchange.check_item(read_plain(INCOMING / name).decode("utf-8"), products)
-            problems = check.problems
-            if check.item is not None:
-                fingerprint = exchange.item_hash(check.item)
-                if fingerprint in seen:
-                    problems = [f"asks the same as {seen[fingerprint]}, which is already queued or decided"]
-                seen.setdefault(fingerprint, name)
-        except (UnsafeFile, OSError, UnicodeDecodeError) as error:
-            problems = [f"unreadable: {error}"]
-        slug = name[: -len(".md")] if name.endswith(".md") else ""
-        if not exchange.SLUG_PATTERN.fullmatch(slug):
-            problems = ["name it <slug>.md, the slug in lowercase-with-hyphens"] + problems
+        item, problems = ledger.check_incoming(INCOMING / name, name, products, seen)
+        if item is not None:
+            seen[exchange.item_hash(item)] = name
         failed += bool(problems)
         print(f"{'PROBLEM' if problems else 'OK'} {name}", file=out)
         for problem in problems:

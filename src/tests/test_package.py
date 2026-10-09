@@ -111,6 +111,39 @@ class SnapshotTest(unittest.TestCase):
         (self.mandu / "p/gtm/thesis").mkdir()
         self.assertEqual(self.take()[2].reason, "holds no files")
 
+    def snapshot(self, results):
+        return package.last_known(
+            package.record("RUN", datetime(2026, 10, 11, tzinfo=timezone.utc), self.mandu, results, None)
+        )
+
+    def test_a_failed_directory_keeps_its_files_fingerprints_and_removes_none(self):
+        first = self.snapshot(self.take())
+        channels = self.mandu / "p/gtm/channels"
+        channels.rename(self.mandu / "p/gtm/elsewhere")
+        missing = self.take(first)
+        self.assertEqual((missing[1].reason, missing[1].removed, missing[1].files), ("missing", [], []))
+        second = self.snapshot(missing)
+        self.assertEqual(second, first)
+        (self.mandu / "p/gtm/elsewhere").rename(channels)
+        back = self.take(second)
+        self.assertEqual(
+            {path: (file.status, file.change) for path, file in self.files(back).items()},
+            dict.fromkeys(
+                ["p/gtm/angles.md", "p/gtm/channels/plan.md", "p/gtm/channels/schema.md"], (package.READ, None)
+            ),
+        )
+        self.assertEqual(back[1].removed, [])
+
+    def test_an_unreadable_folder_fails_with_its_reason(self):
+        first = self.snapshot(self.take())
+        self.write("p/gtm/channels/sub/deep.md", "deep\n")
+        os.chmod(str(self.mandu / "p/gtm/channels/sub"), 0)
+        if os.access(str(self.mandu / "p/gtm/channels/sub"), os.R_OK):
+            self.skipTest("running as a user who can read any folder")
+        results = self.take(first)
+        self.assertEqual((results[1].reason, results[1].removed), ("Permission denied", []))
+        self.assertEqual(self.snapshot(results), first)
+
     def test_the_last_known_fingerprint_carries_through_a_failed_read(self):
         snapshot = {
             "products": {

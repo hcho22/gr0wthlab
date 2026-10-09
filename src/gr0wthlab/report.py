@@ -20,6 +20,7 @@ COMPLETE = "complete"
 INCOMPLETE = "incomplete"
 NOT_BUILT = "not built yet"
 USAGE_FIELDS = ("input_tokens", "cached_input_tokens", "cache_write_input_tokens", "output_tokens")
+NOTICE_BODY_LIMIT = exchange.MAX_ITEM_CHARS // 2
 
 
 @dataclass
@@ -65,7 +66,7 @@ class RunState:
     notice: str | None = None
     tallies: list[Tally] = field(default_factory=list)
     state_notes: list[str] = field(default_factory=list)
-    carried_runs: dict[str, int] = field(default_factory=dict)
+    refused_runs: list[str] = field(default_factory=list)
 
     @property
     def lateness(self) -> timedelta | None:
@@ -101,11 +102,6 @@ def due_time(started: datetime, weekly: tuple[str, str] | None = None, once: str
     if due > local:
         due -= timedelta(days=7)
     return due
-
-
-def local_date(moment: str) -> str:
-    """The Mac's local date of a recorded time, as the Founder reads it."""
-    return wall_clock(datetime.fromisoformat(moment)).strftime("%Y-%m-%d")
 
 
 def duration(span: timedelta) -> str:
@@ -315,6 +311,7 @@ def summary_lines(state: RunState) -> list[str]:
     carried = sum(1 for entry in open_items if entry.get("carried_over"))
     agent = state.agent.get("exit_code")
     lines = [f"- {run_tally(state.tallies).line()}", f"- {start_line(state)}"]
+    lines += [f"- {line}" for line in state.refused_runs]
     if agent == 0:
         lines.append("- The run finished.")
     elif not state.agent.get("agent_started"):
@@ -351,9 +348,9 @@ def render_report(state: RunState) -> str:
     if state.queue_after:
         for number, entry in enumerate(state.queue_after, 1):
             slot = f", slot {entry['slot']}" if entry.get("slot") else ""
-            queued = local_date(str(entry["published_at"]))
-            runs = state.carried_runs.get(str(entry["id"]), 1)
-            carried = f", carried over from {queued}, {plural(runs, 'run')}" if entry.get("carried_over") else ""
+            carried = (
+                f", carried over from the sitting on {entry['carried_over_from']}" if entry.get("carried_over") else ""
+            )
             lines.append(f"{number}. `{entry['id']}` ({entry['kind']}{slot}{carried}): {entry['ask']}")
     else:
         lines.append("Nothing is waiting for the Founder.")
@@ -389,6 +386,11 @@ def render_report(state: RunState) -> str:
     return "\n".join(lines) + "\n"
 
 
+def bullet(text: str) -> str:
+    """A notice's list line, on one line whatever the text it quotes holds."""
+    return "- " + " ".join(text.split())
+
+
 def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, str] | None:
     """One notice for the Founder per run with problems, in plain outcome language; None if there were none.
 
@@ -401,7 +403,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
         lines = ["These sources could not be read, so the work that needs them is incomplete this run:"]
         for line in failed:
             needs = ", ".join(line.needed_by) or "nothing else"
-            lines.append(f"- {line.name}: {line.detail} Incomplete: {needs}.")
+            lines.append(bullet(f"{line.name}: {line.detail} Incomplete: {needs}."))
         sections.append((f"{plural(len(failed), 'source')} could not be read on {day}", "\n".join(lines)))
     taken_problems = [line[2:] for line in decision_lines(state) if line.startswith(("- Not used", "- Could not"))]
     if taken_problems:
@@ -409,7 +411,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
             (
                 f"{plural(len(taken_problems), 'Mandu record')} could not be used on {day}",
                 "Some records in Mandu could not be used, so the items they name are still open:\n"
-                + "\n".join(f"- {line}" for line in taken_problems),
+                + "\n".join(bullet(line) for line in taken_problems),
             )
         )
     if state.set_aside:
@@ -418,7 +420,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 f"{plural(len(state.set_aside), 'prepared item')} not queued on {day}",
                 "Some items the Marketing Engineer prepared were not queued, because they did not meet the item format"
                 " or asked the same as an item already queued or decided:\n"
-                + "\n".join(f"- `{item.name}`: {'; '.join(item.problems)}" for item in state.set_aside),
+                + "\n".join(bullet(f"`{item.name}`: {'; '.join(item.problems)}") for item in state.set_aside),
             )
         )
     if state.restored:
@@ -426,7 +428,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
             (
                 f"the launcher undid {plural(len(state.restored), 'change')} by the agent on {day}",
                 "The agent changed records only the launcher writes; the launcher undid it:\n"
-                + "\n".join(f"- {path}" for path in state.restored),
+                + "\n".join(bullet(path) for path in state.restored),
             )
         )
     agent = state.agent.get("exit_code")
@@ -444,7 +446,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
         sections.append(
             (
                 f"the launcher hit {plural(len(state.problems), 'problem')} on {day}",
-                "The launcher hit problems:\n" + "\n".join(f"- {problem}" for problem in state.problems),
+                "The launcher hit problems:\n" + "\n".join(bullet(problem) for problem in state.problems),
             )
         )
     if not sections:
@@ -452,10 +454,11 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     title = (
         f"Notice: {sections[0][0]}" if len(sections) == 1 else f"Notice: the run on {day} had {len(sections)} problems"
     )
-    body = (
-        "\n\n".join(text for _, text in sections)
-        + "\n\nEverything else in this run finished; the run report has the details."
-    )
+    body = "\n\n".join(text for _, text in sections)
+    if len(body) > NOTICE_BODY_LIMIT:
+        cut = body.rfind("\n", 0, NOTICE_BODY_LIMIT)
+        body = body[: cut if cut > 0 else NOTICE_BODY_LIMIT] + "\n- And more: the run report lists every problem."
+    body += "\n\nEverything else in this run finished; the run report has the details."
     touches = "- Nothing changes; this notice is for your information."
     evidence = f"- The run report: `{report_path}`"
     return title, body, touches, evidence

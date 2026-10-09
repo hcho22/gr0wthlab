@@ -56,6 +56,8 @@ If the Mac is asleep at that time, launchd starts the run when it wakes, and the
 ~/gr0wthlab/src/bin/gr0wthlab run
 ```
 
+Only one run works at a time: a run started while another is in progress, scheduled or on demand, refuses to start with exit code 5, and the next run's report says it was refused.
+
 ## Stop or remove the schedule
 
 ```sh
