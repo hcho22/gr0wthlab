@@ -382,6 +382,33 @@ class DecisionRoundTripTest(CycleTestCase):
         self.assertNotIn("Could not use", report)
         self.assertIn("- Not listed again: 1 record that could not be used", report)
 
+    @unittest.skipIf(os.geteuid() == 0, "root can list any folder")
+    def test_an_unreadable_decisions_folder_fails_only_its_own_source(self):
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        self.decide("20261011-unknown", "approve")
+        fakes.behave(self.codex_dir, {})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertIn("- Could not use `decisions/20261011-unknown.json`", self.report())
+        decisions = self.exchange / "decisions"
+        decisions.chmod(0o300)
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
+        self.assertEqual(code, 0, out)
+        report = self.report()
+        self.assertIn(f"| Mandu decisions | failed | `{decisions}` could not be read: Permission denied. |", report)
+        self.assertIn("| Mandu sittings | read |", report)
+        self.assertIn("| Founder decisions taken in | incomplete | Mandu decisions could not be read |", report)
+        self.assertIn("| Review Queue | incomplete | Mandu decisions could not be read |", report)
+        notice = (self.ledger() / self.queue()["open"][-1]["file"]).read_text(encoding="utf-8")
+        self.assertIn("could not be read, so the work that needs them is incomplete", notice)
+        self.assertIn("Permission denied", notice)
+
+        decisions.chmod(0o755)
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=21))
+        report = self.report()
+        self.assertNotIn("Could not use", report)
+        self.assertIn("- Not listed again: 1 record that could not be used", report)
+
     def test_a_malformed_decision_on_an_open_item_is_reported_every_run_until_replaced(self):
         item = "20261011-name-status-stale"
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
@@ -594,6 +621,22 @@ class FailuresTest(CycleTestCase):
         code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10))
         self.assertEqual(code, cycle.launcher.EXIT_CONFIG)
         self.assertIn("writable area evidence", out)
+
+    @unittest.skipIf(os.geteuid() == 0, "root can search any folder")
+    def test_an_unsearchable_package_folder_fails_only_its_own_sources(self):
+        for folder in ("gtm/06-channels", "gtm/02-brand"):
+            (self.mandu / "projects/RepToday" / folder).chmod(0o600)
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        report = self.report()
+        for path in ("gtm/06-channels/plan.md", "gtm/02-brand/brand-guidelines.md"):
+            self.assertIn(f"| RepToday package: `projects/RepToday/{path}` | failed | Permission denied. |", report)
+        self.assertIn("| RepToday package: `projects/RepToday/gtm/07-thesis/plan.md` | read |", report)
+        self.assertIn("| Package review (contradictions) | incomplete |", report)
+        queue = self.queue()
+        self.assertEqual([entry["kind"] for entry in queue["open"]], ["notice"])
+        notice = (self.ledger() / queue["open"][0]["file"]).read_text(encoding="utf-8")
+        self.assertIn("brand-guidelines.md`: Permission denied.", notice)
 
     @unittest.skipIf(os.geteuid() == 0, "root can list any folder")
     def test_an_unreadable_incoming_folder_is_reported_not_skipped(self):

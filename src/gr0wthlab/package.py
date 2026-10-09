@@ -126,13 +126,13 @@ def read_file(
 ) -> FileResult:
     path = mandu / relative
     result = FileResult(relative, source, FAILED, previous_sha256=previous.get(relative) or None)
-    if not path.exists():
-        result.reason = "missing"
-        return result
-    if not path.is_file():
-        result.reason = "not a file"
-        return result
     try:
+        if not path.exists():
+            result.reason = "missing"
+            return result
+        if not path.is_file():
+            result.reason = "not a file"
+            return result
         result.sha256, result.bytes = fingerprint(path)
     except OSError as error:
         result.reason = error.strerror or str(error)
@@ -154,22 +154,22 @@ def read_file(
 def take(
     mandu: Path, sources: Sequence[Source], previous: Mapping[str, str], clock: Callable[[], str]
 ) -> list[SourceResult]:
-    """Read every source; previous maps each Mandu-relative file to its last known fingerprint."""
+    """Read every source; previous maps each Mandu-relative file to its last known fingerprint. A source that cannot
+    be found, listed, or read fails on its own, with the reason."""
     results = []
     for source in sources:
         result = SourceResult(source)
         if source.is_directory:
             root = mandu / source.path
             names: list[str] = []
-            if not root.is_dir():
-                result.reason = "missing" if not root.exists() else "not a directory"
-            else:
-                try:
+            try:
+                if not root.is_dir():
+                    result.reason = "missing" if not root.exists() else "not a directory"
+                else:
                     names = directory_files(mandu, source.path)
-                except OSError as error:
-                    result.reason = error.strerror or str(error)
-                if not names and not result.reason:
-                    result.reason = "holds no files"
+                    result.reason = None if names else "holds no files"
+            except OSError as error:
+                result.reason = error.strerror or str(error)
             known = sorted(name for name in previous if name.startswith(source.path))
             if result.reason:
                 result.carried = [

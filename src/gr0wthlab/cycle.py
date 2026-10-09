@@ -68,23 +68,26 @@ def unusable(name: str, problems: Sequence[str], content: bytes | None = None) -
     return Unusable(name, tuple(problems), run_state.digest(f"{name}\n{hashlib.sha256(data).hexdigest()}"))
 
 
-def read_records(directory: Path) -> tuple[list[tuple[str, Path, bytes]], list[Unusable]]:
-    """(name, path, bytes) for every record file in one exchange subfolder; hidden files are Mandu's temporaries."""
+def read_records(directory: Path) -> tuple[list[tuple[str, Path, bytes]], list[Unusable], str | None]:
+    """(name, path, bytes) for every record file in one exchange subfolder, the records that could not be read, and
+    why the folder itself could not be listed, if it could not; hidden files are Mandu's temporaries."""
     found, problems = [], []
-    if not directory.is_dir():
-        return found, problems
-    for name in sorted(os.listdir(str(directory))):
+    try:
+        names = sorted(os.listdir(str(directory))) if directory.is_dir() else []
+    except OSError as error:
+        return found, problems, error.strerror or str(error)
+    for name in names:
         path = directory / name
         if name.startswith("."):
             continue
-        if not name.endswith(".json") or not path.is_file():
-            problems.append(unusable(f"{directory.name}/{name}", ["only <name>.json record files belong here"]))
-            continue
         try:
+            if not name.endswith(".json") or not path.is_file():
+                problems.append(unusable(f"{directory.name}/{name}", ["only <name>.json record files belong here"]))
+                continue
             found.append((name, path, path.read_bytes()))
         except OSError as error:
             problems.append(unusable(f"{directory.name}/{name}", [error.strerror or str(error)]))
-    return found, problems
+    return found, problems, None
 
 
 def parse_records(found, parser) -> tuple[list[tuple[object, Path, str]], list[Unusable]]:
@@ -179,8 +182,16 @@ class Cycle:
         first run to find it as it is, and the Review Queue state remembers it by its fingerprint while it stays so."""
         anything_queued = bool(ledger.entries)
         needs = output_titles(config, ("decisions", "review-queue"))
+        sitting_needs = output_titles(config, ("review-queue",))
         state.reported_before = set(review_state.reported)
-        if not folder.is_dir():
+        try:
+            present = folder.is_dir()
+        except OSError as error:
+            detail = f"Mandu's exchange folder `{folder}` could not be read: {error.strerror or error}."
+            state.sources.append(SourceLine("Mandu decisions", package.FAILED, detail, needs))
+            state.sources.append(SourceLine("Mandu sittings", package.FAILED, detail, sitting_needs))
+            return
+        if not present:
             if anything_queued and ledger.open_entries():
                 detail = f"Mandu's exchange folder `{folder}` does not exist, so no decision can reach gr0wthlab."
                 state.sources.append(SourceLine("Mandu decisions", package.FAILED, detail, needs))
@@ -189,10 +200,10 @@ class Cycle:
                 state.sources.append(SourceLine("Mandu decisions", SKIPPED, detail, needs))
             state.sources.append(SourceLine("Mandu sittings", SKIPPED, "Mandu's exchange folder does not exist yet"))
             return
-        found, problems = read_records(folder / "decisions")
+        found, problems, failure = read_records(folder / "decisions")
         decisions, more = parse_records(found, exchange.parse_decision)
         problems += more
-        sittings_found, sitting_problems = read_records(folder / "sittings")
+        sittings_found, sitting_problems, sitting_failure = read_records(folder / "sittings")
         sittings, more = parse_records(sittings_found, exchange.parse_sitting)
         sitting_problems += more
         now = self.now()
@@ -205,7 +216,8 @@ class Cycle:
                 problems.append(unusable(f"decisions/{name}", [report.outcome_text(outcome.status)], contents[name]))
         problems = [named_item(record) for record in problems]
         state.unusable = problems + sitting_problems
-        review_state.reported = sorted({record.fingerprint for record in state.unusable})
+        reported = {record.fingerprint for record in state.unusable}
+        review_state.reported = sorted(reported | state.reported_before if failure or sitting_failure else reported)
         digests = {d.item: (str(path), digest) for d, path, digest in decisions}
         for outcome in state.decisions:
             if outcome.status != "taken":
@@ -252,17 +264,26 @@ class Cycle:
                 self.store.write_json(target, dict(record, taken_in_by_run=first))
                 state.sittings.append(sitting)
         taken = sum(1 for outcome in state.decisions if outcome.status == "taken")
-        detail = f"{report.plural(len(found), 'record')}, {taken} new since the previous run" + (
-            f", {len(problems)} could not be used" if problems else ""
-        )
-        status = package.CHANGED if taken else package.READ
-        state.sources.append(SourceLine("Mandu decisions", status, detail, needs))
-        sitting_detail = f"{report.plural(len(sittings_found), 'record')}, {len(state.sittings)} new" + (
-            f", {len(sitting_problems)} could not be used" if sitting_problems else ""
-        )
-        state.sources.append(
-            SourceLine("Mandu sittings", package.CHANGED if state.sittings else package.READ, sitting_detail)
-        )
+        if failure:
+            detail = f"`{folder / 'decisions'}` could not be read: {failure}."
+            state.sources.append(SourceLine("Mandu decisions", package.FAILED, detail, needs))
+        else:
+            detail = f"{report.plural(len(found), 'record')}, {taken} new since the previous run" + (
+                f", {len(problems)} could not be used" if problems else ""
+            )
+            state.sources.append(
+                SourceLine("Mandu decisions", package.CHANGED if taken else package.READ, detail, needs)
+            )
+        if sitting_failure:
+            detail = f"`{folder / 'sittings'}` could not be read: {sitting_failure}."
+            state.sources.append(SourceLine("Mandu sittings", package.FAILED, detail, sitting_needs))
+        else:
+            detail = f"{report.plural(len(sittings_found), 'record')}, {len(state.sittings)} new" + (
+                f", {len(sitting_problems)} could not be used" if sitting_problems else ""
+            )
+            state.sources.append(
+                SourceLine("Mandu sittings", package.CHANGED if state.sittings else package.READ, detail)
+            )
 
     def sitting_runs(self, state: RunState) -> dict[str, str]:
         """Each sitting taken in so far, by date, with the run that first took in its record."""
