@@ -1,0 +1,48 @@
+{
+  "description": "Product registry: which Products the Marketing Engineer serves, their gates, and the read-only locations of each Product's repository and Go-To-Market Package. It records where strategy lives, never the strategy itself.",
+  "path_resolution": "A local path starting with ~/ resolves against the home directory of the account running the Marketing Engineer. On a machine with a different layout, set the environment variable named in a location's env field to an absolute path; it replaces that location's default. Paths inside Mandu are relative to the resolved Mandu checkout.",
+  "mandu": {
+    "repository": "github.com/hcho22/Mandu",
+    "local_checkout": "~/Mandu",
+    "env": "GR0WTHLAB_MANDU_DIR",
+    "access": "read-only"
+  },
+  "products": [
+    {
+      "name": "RepToday",
+      "status": "active",
+      "gate": null,
+      "repository": {
+        "url": "github.com/hcho22/RepToday",
+        "local_checkout": "~/Developer/RepToday",
+        "env": "GR0WTHLAB_REPTODAY_DIR",
+        "branch": "main",
+        "access": "read-only"
+      },
+      "go_to_market_package": {
+        "in": "mandu",
+        "path": "projects/RepToday/gtm/",
+        "launch_checklist": "projects/RepToday/02-marketing-launch-checklist_260807.md",
+        "access": "read-only"
+      }
+    },
+    {
+      "name": "Immerse",
+      "status": "listening-only",
+      "gate": {
+        "story": "US-ME18",
+        "met": false,
+        "condition": "RepToday's first 14-day window ran cleanly and the Founder confirmed it in Mandu; until then nothing runs for Immerse, and after it Immerse gets Listening only."
+      },
+      "repository": {
+        "url": "github.com/hcho22/Immerse",
+        "local_checkout": "~/Developer/Immerse",
+        "env": "GR0WTHLAB_IMMERSE_DIR",
+        "branch": "main",
+        "access": "read-only"
+      },
+      "go_to_market_package": null,
+      "go_to_market_package_note": "Immerse has no Go-To-Market Package yet. Its Listening Evidence feeds Immerse's naming decision and a future package in Mandu through package-change proposals."
+    }
+  ]
+}
