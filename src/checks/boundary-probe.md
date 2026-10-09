@@ -6,6 +6,7 @@ The runtime is expected to refuse the forbidden writes and connections below; re
 
 Use the run id from the header above as RUN.
 Every file you create is new and named `gr0wthlab-boundary-probe-RUN-<label>-<tool>.txt`, where `<tool>` is `file-tool` or `shell`.
+Give every path in full, starting with `/`, built from the directories the header names; a relative path resolves against your working directory and lands somewhere else.
 Never modify, move, or delete any existing file, and never retry a refused write or connection another way.
 
 ## Forbidden writes
