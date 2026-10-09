@@ -6,7 +6,7 @@ Each run's records step commits this folder to `main` together with `workspace/`
 
 - `review-queue/queue.json`: every item ever queued; `open` is the next sitting's list in presentation order.
 - `review-queue/items/<id>.md`: each queued item, under an identifier that never changes.
-- `review-queue/set-aside/<run id>/`: what the launcher refused to queue that run, kept for the record and named in that run's notice.
+- `review-queue/set-aside/<run id>/`: what the launcher refused to queue that run, and any committed workspace file the agent left unreadable, which the launcher moved here and replaced with its committed version; each is kept for the record and named in that run's notice.
 - `evidence/package-snapshots/<run id>.json`: each run's snapshot of the Go-To-Market Package: which files were read, their fingerprints, when, and what changed (US-ME04); fingerprints only, never package content.
 - `evidence/decisions/<item id>.json`: each Founder decision taken in from Mandu, with its reason or note, its Mandu source, and the newer item that had already superseded the decided one, if any (US-ME07).
 - `evidence/sittings/<date>.json`: how long each sitting took, from Mandu, and the run that first took it in.

@@ -31,7 +31,7 @@ PLAIN_MODES = ("100644", "100755")
 UPDATED = "updated"
 CURRENT = "current"
 OFFLINE = "offline"
-CONFLICT = "conflict"
+NOT_REPLAYED = "not replayed"
 REFUSED = "refused"
 # Post-run outcomes.
 PUSHED = "pushed"
@@ -190,9 +190,12 @@ def integrate(git: Git, branch: str, upstream: str, before: str, leftover: str |
         git.run("merge", "--ff-only", "--quiet", upstream)
         after = git.head()
         return Sync(UPDATED, f"fast-forwarded {branch} from {before[:7]} to {after[:7]}", before, after)
-    if not replay(git, upstream):
-        detail = f"{ahead} unpushed records commits conflict with {upstream}; ran the current code"
-        return Sync(CONFLICT, detail, before, before, ahead)
+    failure = replay(git, upstream)
+    if failure:
+        detail = (
+            f"{ahead} unpushed records commits could not be replayed onto {upstream} ({failure}); ran the current code"
+        )
+        return Sync(NOT_REPLAYED, detail, before, before, ahead)
     after = git.head()
     detail = f"moved {branch} from {before[:7]} to {upstream} with {ahead} unpushed records commits on top"
     return Sync(UPDATED, detail, before, after, ahead)
@@ -207,13 +210,67 @@ def note_unpushed(ahead: int, leftover: str | None) -> str:
     return "; " + "; ".join(parts) if parts else ""
 
 
-def replay(git: Git, upstream: str) -> bool:
-    """Rebase unpushed records commits onto the remote; on any conflict, leave main exactly as it was."""
+def replay(git: Git, upstream: str) -> str | None:
+    """Rebase unpushed records commits onto the remote; on any failure, leave main exactly as it was and say why."""
     completed = git.run("rebase", "--quiet", upstream, check=False)
     if completed.returncode == 0:
-        return True
+        return None
     git.run("rebase", "--abort", check=False)
-    return False
+    lines = (completed.stderr or completed.stdout or "").strip().splitlines()
+    return lines[0] if lines else "no output"
+
+
+def unreadable(repo: Path) -> list[str]:
+    """Every entry under workspace/ the launcher cannot read, relative to the repository: a file it cannot read, or a
+    folder it cannot list or enter, whose contents are not looked at."""
+    found: list[str] = []
+
+    def note(error: OSError) -> None:
+        found.append(str(error.filename))
+
+    for root, subdirs, files in os.walk(str(repo / RECORD_DIRS[0]), onerror=note):
+        for name in list(subdirs):
+            path = os.path.join(root, name)
+            if not os.path.islink(path) and not os.access(path, os.R_OK | os.X_OK):
+                found.append(path)
+                subdirs.remove(name)
+        for name in files:
+            path = os.path.join(root, name)
+            if not os.path.islink(path) and not os.access(path, os.R_OK):
+                found.append(path)
+    return sorted(os.path.relpath(path, str(repo)) for path in found)
+
+
+def set_aside_unreadable(repo: Path, env: Mapping[str, str], folder: Path, skip: str) -> list[str]:
+    """One line for every entry under workspace/ the launcher cannot read, other than under skip, which is reported
+    where it is taken in. An unreadable committed file is moved into folder, which needs no read access, and its
+    committed version put back, so no replay or code update stalls on it; anything else is left uncommitted."""
+    entries = [entry for entry in unreadable(repo) if entry != skip and not entry.startswith(f"{skip}/")]
+    if not entries:
+        return []
+    git = Git(repo, env)
+    try:
+        tracked = set(git.fields("ls-files", "-z", "--", RECORD_DIRS[0]))
+    except GitError:
+        tracked = set()
+    lines = []
+    for entry in entries:
+        if entry not in tracked:
+            lines.append(f"`{entry}` could not be read, so it was left uncommitted")
+            continue
+        target = folder / entry.replace("/", "--")
+        try:
+            folder.mkdir(parents=True, exist_ok=True)
+            os.rename(str(repo / entry), str(target))
+            git.run("checkout", "--quiet", "HEAD", "--", entry)
+        except (OSError, GitError) as error:
+            lines.append(f"`{entry}` could not be read, and it could not be set aside either ({error})")
+            continue
+        shown = os.path.relpath(str(target), str(repo))
+        lines.append(
+            f"`{entry}` could not be read, so it was set aside as `{shown}` and its committed version put back"
+        )
+    return lines
 
 
 def staged(git: Git) -> list[tuple[str, str]]:
@@ -312,8 +369,15 @@ def save(repo: Path, remote: str, branch: str, run_id: str, env: Mapping[str, st
         if not moved:
             result.detail = "the push failed and the remote has not moved; the commits stay local for the next run"
             return result
-        if local_commits_outside(git, upstream) or not replay(git, upstream):
-            result.detail = f"{upstream} moved and the records commits could not be replayed; they stay local"
+        failure = (
+            "there are local commits outside workspace/ and ledger/"
+            if local_commits_outside(git, upstream)
+            else replay(git, upstream)
+        )
+        if failure:
+            result.detail = (
+                f"{upstream} moved and the records commits could not be replayed ({failure}); they stay local"
+            )
             return result
         unpushed = git.commits(f"{upstream}..HEAD")
         if push(git, remote, branch):

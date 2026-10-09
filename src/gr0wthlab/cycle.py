@@ -588,6 +588,12 @@ class Cycle:
         state.queue_after = ledger.ordered()
         state.problems += areas.problems
         areas.problems.clear()
+        state.problems += records.set_aside_unreadable(
+            canonical(self.repo_root),
+            self.env,
+            self.store.path(REVIEW_QUEUE, SET_ASIDE, run_id),
+            str(areas.path("review_queue", INCOMING).relative_to(canonical(self.repo_root))),
+        )
         self.outputs(state, config, ledger_ok)
         notice = report.problems_notice(state, self.store.relative(report_path))
         if notice and ledger_ok:

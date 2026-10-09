@@ -679,6 +679,40 @@ class FailuresTest(CycleTestCase):
         )
 
     @unittest.skipIf(os.geteuid() == 0, "root can list any folder")
+    def test_an_unreadable_workspace_folder_is_reported_and_left_uncommitted(self):
+        behavior = {"write": {"drafts/sub/draft.md": "a draft\n"}, "chmod": {"drafts/sub": "000"}}
+        fakes.behave(self.codex_dir, behavior)
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        line = "`workspace/drafts/sub` could not be read, so it was left uncommitted"
+        self.assertIn(f"- {line}", self.report().partition("\n## Launcher problems\n")[2])
+        notice = (self.ledger() / self.queue()["open"][0]["file"]).read_text(encoding="utf-8")
+        self.assertIn(line, notice)
+
+    @unittest.skipIf(os.geteuid() == 0, "root can read any file")
+    def test_an_unreadable_committed_workspace_file_is_set_aside_and_put_back(self):
+        guide = self.workspace() / "instructions/guide.md"
+        guide.write_text("committed\n", encoding="utf-8")
+        fakes.git(self.repo, "add", "--all", env=self.env)
+        fakes.git(self.repo, "commit", "--quiet", "-m", "guide", env=self.env)
+        fakes.behave(
+            self.codex_dir, {"write": {"instructions/guide.md": "edited\n"}, "chmod": {"instructions/guide.md": "000"}}
+        )
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(guide.read_text(encoding="utf-8"), "committed\n")
+        kept = list((self.ledger() / "review-queue/set-aside").glob("*/workspace--instructions--guide.md"))
+        self.assertEqual(len(kept), 1)
+        shown = kept[0].relative_to(self.repo)
+        line = (
+            f"`workspace/instructions/guide.md` could not be read, so it was set aside as `{shown}` and its committed"
+            " version put back"
+        )
+        self.assertIn(f"- {line}", self.report().partition("\n## Launcher problems\n")[2])
+        notice = (self.ledger() / self.queue()["open"][0]["file"]).read_text(encoding="utf-8")
+        self.assertIn(" ".join(line.split()), notice)
+
+    @unittest.skipIf(os.geteuid() == 0, "root can list any folder")
     def test_an_unreadable_incoming_folder_is_reported_not_skipped(self):
         behavior = {
             "write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL},

@@ -118,7 +118,7 @@ class PrepareTest(RecordsTestCase):
         before = self.git(self.clone, "rev-parse", "HEAD")
         self.land_upstream("workspace/instructions/guide.md", "reviewed rewrite\n")
         result = self.prepare()
-        self.assertEqual((result.status, result.ok_to_run), (records.CONFLICT, True))
+        self.assertEqual((result.status, result.ok_to_run), (records.NOT_REPLAYED, True))
         self.assertEqual(self.git(self.clone, "rev-parse", "HEAD"), before)
         self.assertEqual(self.git(self.clone, "status", "--porcelain"), "")
 
@@ -192,6 +192,46 @@ class SaveTest(RecordsTestCase):
         result = self.prepare()
         self.assertTrue(result.ok_to_run, result.detail)
         self.assertIn("workspace/drafts/locked.md (could not be read)", result.excluded)
+
+    def commit_upstream_and_update(self, relative, text):
+        self.land_upstream(relative, text)
+        result = self.prepare()
+        self.assertEqual(result.status, records.UPDATED, result.detail)
+
+    @unittest.skipIf(os.geteuid() == 0, "root can read any file")
+    def test_an_unread_edit_to_a_committed_file_stops_the_replay_and_says_why(self):
+        self.commit_upstream_and_update("workspace/instructions/guide.md", "committed\n")
+        self.write("workspace/instructions/guide.md", "edited\n").chmod(0)
+        self.write("workspace/run-reports/r.md")
+        self.land_upstream("src/new.py", "x = 1\n")
+        result = self.save()
+        self.assertEqual(result.status, records.NOT_PUSHED)
+        self.assertIn("could not be replayed (error: cannot rebase: You have unstaged changes.)", result.detail)
+
+    @unittest.skipIf(os.geteuid() == 0, "root can read any file")
+    def test_an_unreadable_committed_file_is_set_aside_so_the_replay_after_a_failed_push_goes_through(self):
+        self.commit_upstream_and_update("workspace/instructions/guide.md", "committed\n")
+        self.write("workspace/instructions/guide.md", "edited\n").chmod(0)
+        self.write("workspace/drafts/new.md").chmod(0)
+        self.write("workspace/run-reports/r.md")
+        self.land_upstream("src/new.py", "x = 1\n")
+        folder = self.clone / "ledger/review-queue/set-aside/RUN1"
+        lines = records.set_aside_unreadable(self.clone, self.env, folder, "workspace/review-queue/incoming")
+        self.assertEqual(
+            lines,
+            [
+                "`workspace/drafts/new.md` could not be read, so it was left uncommitted",
+                "`workspace/instructions/guide.md` could not be read, so it was set aside as"
+                " `ledger/review-queue/set-aside/RUN1/workspace--instructions--guide.md` and its committed version"
+                " put back",
+            ],
+        )
+        self.assertEqual((self.clone / "workspace/instructions/guide.md").read_text(), "committed\n")
+        self.assertTrue(os.path.lexists(str(folder / "workspace--instructions--guide.md")))
+        result = self.save()
+        self.assertEqual(result.status, records.PUSHED, result.detail)
+        self.assertIn("had moved; replayed", result.detail)
+        self.assertEqual(self.remote_files(), ["workspace/run-reports/r.md"])
 
     def test_a_moved_remote_is_replayed_and_pushed_once_never_forced(self):
         self.land_upstream("src/new.py", "x = 1\n")

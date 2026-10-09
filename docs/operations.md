@@ -16,9 +16,10 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
 4. It writes the agent's brief and runs the agent in the sandbox with the task definition `src/instructions/weekly-run.md`.
    The agent writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records, and never write there.
 5. It queues the items the agent wrote to `workspace/review-queue/incoming/` that pass the format, sets the rest aside, and turns every problem into one notice.
+   It names every `workspace/` entry it cannot read: a committed file goes to `ledger/review-queue/set-aside/<run id>/` and its committed version is put back, and anything else stays uncommitted.
 6. It writes `ledger/review-queue/queue.json`, each workflow's run state (`ledger/run-reports/state/`), and the run report (`ledger/run-reports/<run id>.md`), whose first line is `checked=N acted=N note=...` even when nothing happened.
 7. In the production clone only, it commits the changed `workspace/` and `ledger/` paths and pushes them to `main`, never anything else and never by force; a change to a README in either is put back, since only a reviewed pull request changes documentation.
-   If `origin/main` moved meanwhile, it replays the records commit on top and retries once; a commit that cannot be pushed stays local and goes with the next run.
+   If `origin/main` moved meanwhile, it replays the records commit on top and retries once; a commit that cannot be pushed stays local and goes with the next run, and the run log says why the replay failed.
 
 The schedule, the production clone's path, and the records step are in [`config/run.json`](../config/run.json).
 Launcher logs, Codex's event stream, and each run's record go to `~/Library/Logs/gr0wthlab/`.
