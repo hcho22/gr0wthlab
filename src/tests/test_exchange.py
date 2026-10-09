@@ -1,6 +1,7 @@
 """The Mandu exchange formats: items gr0wthlab writes, decision and sitting records Mandu writes."""
 
 import unittest
+from unittest import mock
 
 from gr0wthlab import exchange
 
@@ -150,12 +151,37 @@ class DecisionTest(unittest.TestCase):
         self.assertTrue(self.parse(decision="maybe")[1])
         self.assertTrue(self.parse(item="20261011-other")[1])
         self.assertTrue(self.parse(decided_at="2026-10-11T19:42:00")[1])
-        self.assertTrue(self.parse(exchange=1)[1], "an earlier version is reported, not guessed at")
         self.assertTrue(self.parse(sitting="Oct 11")[1])
         self.assertTrue(exchange.parse_decision("x", ["not", "an", "object"])[1])
 
     def test_mandu_may_add_its_own_fields(self):
         self.assertEqual(self.parse(presented_at="2026-10-11T19:40:00-07:00")[1], [])
+
+
+class VersionTest(unittest.TestCase):
+    def test_records_and_items_of_earlier_versions_still_read_after_a_bump(self):
+        current = exchange.EXCHANGE_VERSION
+        sitting = {"exchange": current, "date": "2026-10-11", "minutes": 48}
+        published = item(extra_fields=f"exchange: {current}\nid: 20261011-fix-status\n")
+        with mock.patch.object(exchange, "EXCHANGE_VERSION", current + 1):
+            self.assertEqual(exchange.parse_decision("20261011-fix-status", DECISION)[1], [])
+            self.assertEqual(exchange.parse_decision("20261011-fix-status", dict(DECISION, exchange=1))[1], [])
+            self.assertEqual(exchange.parse_sitting("2026-10-11", sitting)[1], [])
+            self.assertEqual(exchange.check_item(published, PRODUCTS, published=True).problems, [])
+
+    def test_a_newer_or_malformed_version_is_reported_never_guessed_at(self):
+        newer = exchange.EXCHANGE_VERSION + 1
+        self.assertEqual(
+            exchange.parse_decision("20261011-fix-status", dict(DECISION, exchange=newer))[1],
+            [f"exchange version {newer} is newer than gr0wthlab can read (up to {exchange.EXCHANGE_VERSION})"],
+        )
+        for bad in (0, "2", True, None):
+            with self.subTest(bad=bad):
+                self.assertTrue(exchange.parse_decision("20261011-fix-status", dict(DECISION, exchange=bad))[1])
+        newer_item = item(extra_fields=f"exchange: {newer}\nid: 20261011-fix-status\n")
+        self.assertTrue(exchange.check_item(newer_item, PRODUCTS, published=True).problems)
+        self.assertTrue(exchange.check_item(item(extra_fields="exchange: two\n"), PRODUCTS).problems)
+        self.assertEqual(exchange.check_item(item(), PRODUCTS).problems, [])
 
 
 class SittingTest(unittest.TestCase):

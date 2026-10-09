@@ -423,7 +423,6 @@ class Cycle:
         self,
         instruction: Path | None,
         trigger: str,
-        weekly: tuple[str, str] | None,
         once: str | None,
         argv: Sequence[str],
         execve: Callable[[str, list[str], Mapping[str, str]], None] = os.execve,
@@ -432,13 +431,12 @@ class Cycle:
         if lock is None:
             return EXIT_BUSY
         with lock:
-            return self.locked_run(instruction, trigger, weekly, once, argv, execve)
+            return self.locked_run(instruction, trigger, once, argv, execve)
 
     def locked_run(
         self,
         instruction: Path | None,
         trigger: str,
-        weekly: tuple[str, str] | None,
         once: str | None,
         argv: Sequence[str],
         execve: Callable[[str, list[str], Mapping[str, str]], None],
@@ -489,7 +487,7 @@ class Cycle:
         state = RunState(run_id, trigger, started, str(task.relative_to(canonical(self.repo_root))), sync=sync)
         state.late_after = timedelta(minutes=config.late_after_minutes)
         if trigger == "scheduled":
-            state.due = report.due_time(started, weekly, once)
+            state.due = report.due_time(started, config.weekly, once)
         state.code = head(self.repo_root)
         try:
             _, boundary = load_boundary(self.repo_root, self.env, self.home)
@@ -636,10 +634,9 @@ def main(
     trigger: str,
     env: Mapping[str, str],
     home: Path,
-    weekly: tuple[str, str] | None = None,
     once: str | None = None,
     argv: Sequence[str] = (),
     out: TextIO = sys.stdout,
 ) -> int:
     cycle = Cycle(repo_root, env, home, out, lambda: datetime.now(timezone.utc))
-    return cycle.run(instruction, trigger, weekly, once, argv)
+    return cycle.run(instruction, trigger, once, argv)

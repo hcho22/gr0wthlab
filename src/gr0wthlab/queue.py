@@ -65,8 +65,9 @@ class Ledger:
             data = json.loads(read_plain(path).decode("utf-8"))
         except (OSError, ValueError, UnsafeFile) as error:
             raise QueueError(f"cannot read {path.name}: {error}") from error
-        if not isinstance(data, dict) or data.get("exchange") != exchange.EXCHANGE_VERSION:
-            raise QueueError(f"{path.name} is not an exchange version {exchange.EXCHANGE_VERSION} queue")
+        problem = exchange.version_problem(data.get("exchange")) if isinstance(data, dict) else "not a JSON object"
+        if problem:
+            raise QueueError(f"cannot read {path.name}: {problem}")
         return cls(list(data.get("open", [])) + list(data.get("closed", [])))
 
     def open_entries(self) -> list[dict[str, object]]:

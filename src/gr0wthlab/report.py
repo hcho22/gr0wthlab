@@ -88,13 +88,11 @@ def wall_clock(moment: datetime) -> datetime:
     return moment.astimezone().replace(tzinfo=None)
 
 
-def due_time(started: datetime, weekly: tuple[str, str] | None = None, once: str | None = None) -> datetime | None:
+def due_time(started: datetime, weekly: tuple[str, str], once: str | None = None) -> datetime:
     """When a scheduled run was due: the latest weekly time at or before its start, or the one-off time."""
     local = wall_clock(started)
     if once:
         return datetime.strptime(once, "%Y-%m-%dT%H:%M")
-    if not weekly:
-        return None
     calendar = schedule.weekly(*weekly)
     python_weekday = (calendar["Weekday"] - 1) % 7
     due = local.replace(hour=calendar["Hour"], minute=calendar["Minute"], second=0, microsecond=0)
@@ -155,8 +153,6 @@ def start_line(state: RunState) -> str:
     started = wall_clock(state.started).strftime("%A %Y-%m-%d %H:%M")
     if state.trigger != "scheduled":
         return f"On demand, started {started} (Mac local time)."
-    if state.due is None:
-        return f"Scheduled, started {started}; its due time is unknown, so lateness was not checked."
     due = state.due.strftime("%A %Y-%m-%d %H:%M")
     if state.late:
         return (

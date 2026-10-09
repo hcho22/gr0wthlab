@@ -43,11 +43,10 @@ def once(moment: str) -> dict[str, int]:
     return {"Month": when.month, "Day": when.day, "Hour": when.hour, "Minute": when.minute}
 
 
-def run_arguments(entry: Path, instruction: Path, weekly_at: tuple[str, str] | None, once_at: str | None) -> list[str]:
-    """The scheduled run's command line; it names its own schedule so the run can tell whether it started late."""
+def run_arguments(entry: Path, instruction: Path, once_at: str | None) -> list[str]:
+    """The scheduled run's command line; a weekly run takes its schedule from config/run.json, as the LaunchAgent does,
+    and a one-off run names its time, so either can tell whether it started late."""
     arguments = [str(entry), "run", "--trigger", "scheduled", "--instruction", str(instruction)]
-    if weekly_at:
-        arguments += ["--weekly", *weekly_at]
     if once_at:
         arguments += ["--once", once_at]
     return arguments

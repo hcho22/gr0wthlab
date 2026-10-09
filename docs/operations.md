@@ -46,8 +46,8 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/gr0wthlab.weekly-run.pli
 launchctl print gui/$(id -u)/gr0wthlab.weekly-run | grep -E 'state|path'
 ```
 
-For another time, pass it explicitly, for example `launch-agent --weekly sunday 15:00`.
-The LaunchAgent runs `src/bin/gr0wthlab run --trigger scheduled --weekly <day> <time>`, so each run knows when it was due.
+The schedule lives only in `config/run.json`: the LaunchAgent takes its time from there, and each run reads the same entry to tell whether it started late and when the next run is due (`next_run` in the Review Queue).
+To change the sitting day or time, change `schedule` in `config/run.json` through a reviewed pull request, then reinstall the LaunchAgent as above once the change has reached the production clone.
 If the Mac is asleep at that time, launchd starts the run when it wakes, and the run report says how late it started.
 
 ## Run on demand

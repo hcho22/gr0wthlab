@@ -105,16 +105,16 @@ def check_fields(fields: Mapping[str, str], products: Sequence[str], published: 
     kind = fields.get("kind", "")
     if kind not in KINDS:
         problems.append(f"kind must be one of: {', '.join(KINDS)}")
+    version = fields.get("exchange")
+    if published or version is not None:
+        problem = version_problem(int(version) if version and re.fullmatch(r"[0-9]+", version) else version)
+        if problem:
+            problems.append(problem)
     if published:
-        if fields.get("exchange") != str(EXCHANGE_VERSION):
-            problems.append(f"exchange must be {EXCHANGE_VERSION}")
         if not ID_PATTERN.fullmatch(fields.get("id", "")):
             problems.append("id is missing or malformed")
-    else:
-        if "id" in fields:
-            problems.append("leave out id; gr0wthlab assigns it when the item is queued")
-        if fields.get("exchange", str(EXCHANGE_VERSION)) != str(EXCHANGE_VERSION):
-            problems.append(f"exchange must be {EXCHANGE_VERSION} or left out")
+    elif "id" in fields:
+        problems.append("leave out id; gr0wthlab assigns it when the item is queued")
     product = fields.get("product")
     if product is not None and product not in products:
         problems.append(f"product must be one of: {', '.join(products)}")
@@ -259,9 +259,20 @@ def one_line(value: object, name: str, problems: list[str], required: bool) -> s
     return text
 
 
+def version_problem(version: object) -> str | None:
+    """Why a record's exchange version cannot be read, or None: versions are additive, so every version up to this
+    reader's own reads as it is, and a newer one is never guessed at."""
+    if isinstance(version, bool) or not isinstance(version, int) or version < 1:
+        return f"exchange must be a version number; got {version!r}"
+    if version > EXCHANGE_VERSION:
+        return f"exchange version {version} is newer than gr0wthlab can read (up to {EXCHANGE_VERSION})"
+    return None
+
+
 def check_version(data: Mapping, problems: list[str]) -> None:
-    if data.get("exchange") != EXCHANGE_VERSION:
-        problems.append(f"exchange must be {EXCHANGE_VERSION}; got {data.get('exchange')!r}")
+    problem = version_problem(data.get("exchange"))
+    if problem:
+        problems.append(problem)
 
 
 def parse_decision(stem: str, data: object) -> tuple[Decision | None, list[str]]:

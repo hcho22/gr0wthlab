@@ -6,8 +6,9 @@ import tempfile
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
-from gr0wthlab import boundary, exchange
+from gr0wthlab import boundary, exchange, state
 from gr0wthlab.areas import Areas
 from gr0wthlab.queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger, QueueError
 from tests import fakes
@@ -226,9 +227,23 @@ class OrderAndPersistenceTest(LedgerTestCase):
         path.write_text("{not json", encoding="utf-8")
         with self.assertRaises(QueueError):
             Ledger.load(path)
-        path.write_text(json.dumps({"exchange": 1, "open": [], "closed": []}), encoding="utf-8")
+        newer = {"exchange": exchange.EXCHANGE_VERSION + 1, "open": [], "closed": []}
+        path.write_text(json.dumps(newer), encoding="utf-8")
         with self.assertRaises(QueueError):
             Ledger.load(path)
+
+    def test_a_queue_and_its_items_still_read_after_a_version_bump(self):
+        self.drop("first.md", fakes.PROPOSAL)
+        [first] = self.take()[0]
+        path = self.repo / "workspace/review-queue/queue.json"
+        self.areas.write_json(path, self.ledger.as_json("RUN1", NOW, "run-reports/RUN1.md", NOW))
+        with mock.patch.object(exchange, "EXCHANGE_VERSION", exchange.EXCHANGE_VERSION + 1):
+            loaded = Ledger.load(path)
+            hashes, problems = state.item_hashes(
+                self.repo / "workspace", loaded.entries, PRODUCTS, state.ReviewQueueState()
+            )
+        self.assertEqual(list(loaded.entries), [first])
+        self.assertEqual((list(hashes), problems), ([first], []))
         self.assertEqual(len(Ledger.load(path.with_name("absent.json")).entries), 0)
 
 

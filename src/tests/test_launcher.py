@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
@@ -82,13 +83,15 @@ class CliTest(unittest.TestCase):
         args = parser.parse_args(["run", "--instruction", "i.md", "--trigger", "scheduled"])
         self.assertEqual((args.command, args.trigger), ("run", "scheduled"))
         self.assertEqual(parser.parse_args(["run", "--instruction", "i.md"]).trigger, "on-demand")
-        args = parser.parse_args(["launch-agent", "--instruction", "i.md", "--weekly", "monday", "07:30"])
-        self.assertEqual(args.weekly, ["monday", "07:30"])
+        args = parser.parse_args(["launch-agent", "--instruction", "i.md", "--once", "2026-10-11T16:00"])
+        self.assertEqual(args.once, "2026-10-11T16:00")
         self.assertEqual(parser.parse_args(["boundary-check", "--verify", "R"]).verify, "R")
         self.assertEqual(parser.parse_args(["boundary-check", "--trigger", "scheduled"]).trigger, "scheduled")
-        args = parser.parse_args(["run", "--trigger", "scheduled", "--weekly", "sunday", "16:00"])
-        self.assertEqual((args.instruction, args.weekly), (None, ["sunday", "16:00"]))
-        self.assertEqual(parser.parse_args(["launch-agent"]).weekly, None)
+        args = parser.parse_args(["run", "--trigger", "scheduled"])
+        self.assertEqual((args.instruction, args.once), (None, None))
+        for command in (["run"], ["launch-agent"]):
+            with self.subTest(command=command), self.assertRaises(SystemExit), redirect_stderr(io.StringIO()):
+                parser.parse_args([*command, "--weekly", "sunday", "16:00"])
         self.assertTrue(
             parser.parse_args(["launch-agent", "--boundary-check", "--once", "2026-10-11T16:00"]).boundary_check
         )
@@ -106,7 +109,9 @@ class CliTest(unittest.TestCase):
         agent = plistlib.loads(out.getvalue())
         self.assertEqual(agent["StartCalendarInterval"], {"Weekday": 0, "Hour": 16, "Minute": 0})
         self.assertEqual(agent["ProgramArguments"][1:4], ["run", "--trigger", "scheduled"])
-        self.assertEqual(agent["ProgramArguments"][-3:], ["--weekly", "sunday", "16:00"])
+        self.assertEqual(
+            agent["ProgramArguments"][-2:], ["--instruction", str(cli.REPO_ROOT / "src/instructions/weekly-run.md")]
+        )
         self.assertNotIn("GR0WTHLAB_PRE_RUN", agent["EnvironmentVariables"])
 
     def test_entry_point_starts_through_its_shebang(self):

@@ -25,9 +25,7 @@ def parser() -> argparse.ArgumentParser:
     run = commands.add_parser("run", help="start one run: sync, snapshot, agent, Review Queue, report, records")
     run.add_argument("--instruction", type=Path, help="a task definition under src/instructions/ (default: run.json's)")
     run.add_argument("--trigger", choices=launcher.TRIGGERS, default="on-demand")
-    due = run.add_mutually_exclusive_group()
-    due.add_argument("--weekly", nargs=2, metavar=("DAY", "HH:MM"), help="the schedule a scheduled run was due on")
-    due.add_argument("--once", metavar="YYYY-MM-DDTHH:MM", help="the one-off time a scheduled run was due at")
+    run.add_argument("--once", metavar="YYYY-MM-DDTHH:MM", help="the one-off time a scheduled run was due at")
 
     commands.add_parser("show-config", help="print the resolved run configuration and its fingerprint")
     commands.add_parser("preflight", help="prove the write boundary in the sandbox, with no model")
@@ -39,9 +37,9 @@ def parser() -> argparse.ArgumentParser:
     )
     agent.add_argument("--label", default=schedule.DEFAULT_LABEL)
     agent.add_argument("--boundary-check", action="store_true", help="schedule the boundary check instead of a run")
-    when = agent.add_mutually_exclusive_group()
-    when.add_argument("--weekly", nargs=2, metavar=("DAY", "HH:MM"), help="default: run.json's schedule")
-    when.add_argument("--once", metavar="YYYY-MM-DDTHH:MM")
+    agent.add_argument(
+        "--once", metavar="YYYY-MM-DDTHH:MM", help="a one-off time instead of run.json's weekly schedule"
+    )
 
     check = commands.add_parser("boundary-check", help="run the boundary probe on demand and verify nothing escaped")
     check.add_argument("--verify", metavar="RUN_ID", help="only verify and clean up an earlier probe run")
@@ -89,8 +87,7 @@ def main(argv: list[str] | None = None) -> int:
     home = Path.home()
     try:
         if args.command == "run":
-            weekly = tuple(args.weekly) if args.weekly else None
-            return cycle.main(REPO_ROOT, args.instruction, args.trigger, env, home, weekly, args.once, arguments)
+            return cycle.main(REPO_ROOT, args.instruction, args.trigger, env, home, args.once, arguments)
         if args.command == "show-config":
             resolved = launcher.Resolved(REPO_ROOT, env, home, Path("<run>.last-message.md"))
             print(json.dumps(resolved.describe(), indent=2, sort_keys=True))
@@ -110,9 +107,8 @@ def main(argv: list[str] | None = None) -> int:
                 program = schedule.boundary_check_arguments(ENTRY)
             else:
                 instruction = settings.instruction_path(REPO_ROOT, args.instruction or config.instruction)
-                weekly_at = None if args.once else tuple(args.weekly or config.weekly)
-                program = schedule.run_arguments(ENTRY, instruction, weekly_at, args.once)
-            calendar = schedule.once(args.once) if args.once else schedule.weekly(*(args.weekly or config.weekly))
+                program = schedule.run_arguments(ENTRY, instruction, args.once)
+            calendar = schedule.once(args.once) if args.once else schedule.weekly(*config.weekly)
             overrides = {
                 key: value for key, value in env.items() if key.startswith("GR0WTHLAB_") and key != cycle.PRE_RUN_ENV
             }

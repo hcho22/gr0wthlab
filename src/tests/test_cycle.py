@@ -4,13 +4,16 @@ import fcntl
 import io
 import json
 import os
+import plistlib
 import re
+import sys
 import tempfile
 import unittest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
-from gr0wthlab import cycle, exchange
+from gr0wthlab import cli, cycle, exchange
 from gr0wthlab.report import next_due
 from tests import fakes
 
@@ -45,13 +48,13 @@ class CycleTestCase(unittest.TestCase):
                 os.chmod(os.path.join(root, name), 0o755)
         self.tmp.cleanup()
 
-    def run_cycle(self, repo=None, trigger="on-demand", weekly=None, execve=None, at=None):
+    def run_cycle(self, repo=None, trigger="on-demand", execve=None, at=None):
         if at is not None:
             self.clock.set(at)
         out = io.StringIO()
         runner = cycle.Cycle(repo or self.repo, self.env, self.home, out, self.clock)
         kwargs = {"execve": execve} if execve else {}
-        code = runner.run(None, trigger, weekly, None, ["run"], **kwargs)
+        code = runner.run(None, trigger, None, ["run"], **kwargs)
         return code, out.getvalue()
 
     def workspace(self, repo=None):
@@ -420,17 +423,36 @@ class FailuresTest(CycleTestCase):
         self.assertIn("The agent stopped with exit code 1", self.report())
 
     def test_a_late_scheduled_run_says_so(self):
-        late = fakes.SUNDAY_RUN + timedelta(hours=3)
-        local = late.astimezone()
-        due = (local - timedelta(hours=3)).strftime("%H:%M")
-        day = local.strftime("%A").lower() if (local - timedelta(hours=3)).date() == local.date() else None
-        if day is None:
-            self.skipTest("the due time falls on another day in this time zone")
-        self.run_cycle(trigger="scheduled", weekly=(day, due), at=late - timedelta(hours=3) + timedelta(minutes=1))
+        due = datetime(2026, 10, 11, 16, 0).astimezone()
+        self.run_cycle(trigger="scheduled", at=(due + timedelta(minutes=1)).astimezone(timezone.utc))
         self.assertIn("started on time", self.report())
-        self.run_cycle(trigger="scheduled", weekly=(day, due), at=late)
+        self.run_cycle(trigger="scheduled", at=(due + timedelta(hours=3)).astimezone(timezone.utc))
         self.assertIn("Started late:", self.report())
         self.assertIn("3 h 0 min after its time", self.report())
+
+    def test_the_launch_agent_lateness_and_next_run_all_follow_run_json(self):
+        path = self.repo / "config/run.json"
+        config = json.loads(path.read_text(encoding="utf-8"))
+        config["schedule"].update(day="wednesday", time="09:30")
+        path.write_text(json.dumps(config), encoding="utf-8")
+        plist = io.BytesIO()
+        with (
+            mock.patch.dict(os.environ, self.env),
+            mock.patch.object(cli, "REPO_ROOT", self.repo),
+            mock.patch.object(cli, "ENTRY", self.repo / "src/bin/gr0wthlab"),
+            mock.patch.object(sys, "stdout", mock.Mock(buffer=plist)),
+        ):
+            self.assertEqual(cli.main(["launch-agent"]), 0)
+        agent = plistlib.loads(plist.getvalue())
+        self.assertEqual(agent["StartCalendarInterval"], {"Weekday": 3, "Hour": 9, "Minute": 30})
+        command = cli.parser().parse_args(agent["ProgramArguments"][1:])
+        self.assertEqual((command.command, command.trigger, command.once), ("run", "scheduled", None))
+
+        code, out = self.run_cycle(trigger="scheduled", at=datetime(2026, 10, 14, 12, 30).astimezone(timezone.utc))
+        self.assertEqual(code, 0, out)
+        self.assertIn("Started late: due Wednesday 2026-10-14 09:30", self.report())
+        next_run = datetime.fromisoformat(self.queue()["next_run"])
+        self.assertEqual(next_run, datetime(2026, 10, 21, 9, 30).astimezone())
 
     def test_the_run_refuses_a_task_definition_outside_src_instructions(self):
         out = io.StringIO()

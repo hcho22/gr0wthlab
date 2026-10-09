@@ -156,8 +156,12 @@ Write it when the sitting ends: gr0wthlab counts an item as left undecided at th
 
 ## Rules for both sides
 
-- Every record states `"exchange": 2`, and every item states `exchange: 2`; a reader that meets a version it does not know reports it and never guesses.
-- Version 2 replaced the eight-day staleness rule with `next_run`, and added `carried_over_from`.
+- Every record states the exchange version its writer follows, `"exchange": 2` today, and every item states `exchange: 2`.
+- Versions are additive: a new version only adds record types or optional fields, so every record of an earlier version stays valid as written.
+- A reader reads every record at or below its own version, by that record's version: a field added after it is simply absent.
+- A record of a newer version than the reader knows is reported as unreadable and never guessed at.
+- A change that is not additive needs a migration story of its own, not a version bump.
+- Version 2 added `next_run` and `carried_over_from` to the queue.
 - Times carry their UTC offset; dates are `YYYY-MM-DD`.
 - Write each file whole: write a temporary file whose name starts with `.` in the same folder, then rename it; both sides ignore files whose names start with `.`.
 - Neither side ever writes, moves, or deletes a file in the other's repository.

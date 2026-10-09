@@ -22,8 +22,9 @@ class DueTimeTest(unittest.TestCase):
         self.assertEqual(report.due_time(sunday, ("sunday", "16:00")), datetime(2026, 10, 11, 16, 0))
         self.assertEqual(report.due_time(local(2026, 10, 11, 15, 59), ("sunday", "16:00")), datetime(2026, 10, 4, 16))
         self.assertEqual(report.due_time(local(2026, 10, 13, 9, 0), ("sunday", "16:00")), datetime(2026, 10, 11, 16))
-        self.assertEqual(report.due_time(sunday, None, "2026-10-11T15:30"), datetime(2026, 10, 11, 15, 30))
-        self.assertIsNone(report.due_time(sunday))
+        self.assertEqual(
+            report.due_time(sunday, ("sunday", "16:00"), "2026-10-11T15:30"), datetime(2026, 10, 11, 15, 30)
+        )
 
     def test_late_beyond_the_allowance(self):
         state = RunState("R", "scheduled", local(2026, 10, 11, 16, 14), "i.md", due=datetime(2026, 10, 11, 16))
