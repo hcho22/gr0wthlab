@@ -1,6 +1,6 @@
 """Start one Marketing Engineer run: resolve the boundary, prove it, then hand Codex the instruction.
 
-The weekly LaunchAgent and an on-demand run both call run(); only the trigger label in the prompt differs.
+The weekly LaunchAgent and an on-demand run both call run(); only the prompt's header differs, never the configuration.
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ import json
 import secrets
 import subprocess
 import sys
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TextIO
@@ -31,7 +31,13 @@ def new_run_id(trigger: str, now: datetime) -> str:
 
 
 def compose_prompt(
-    boundary: Boundary, run_id: str, trigger: str, started_at: str, instruction_path: Path, instruction: str
+    boundary: Boundary,
+    run_id: str,
+    trigger: str,
+    started_at: str,
+    instruction_path: Path,
+    instruction: str,
+    facts: Sequence[str] = (),
 ) -> str:
     """Facts about this run, then the instruction; the boundary itself is enforced by the sandbox, not by this text."""
     lines = [
@@ -44,6 +50,7 @@ def compose_prompt(
     lines += [f"  - {key}: {path}" for key, path in boundary.areas]
     lines.append("- Read-only locations:")
     lines += [f"  - {location.label}: {location.path}" for location in boundary.locations]
+    lines += [f"- {fact}" for fact in facts]
     lines += [f"- Instruction: {instruction_path}", "", "---", "", instruction.rstrip(), ""]
     return "\n".join(lines)
 
@@ -67,7 +74,6 @@ class Resolved:
             "model": self.config["codex"]["model"],
             "working_directory": str(self.boundary.working_directory),
             "filesystem_policy": filesystem_policy(self.boundary),
-            "network": self.boundary.network,
             "command": self.command,
             "environment": self.environment,
         }
@@ -95,8 +101,12 @@ def run(
     home: Path,
     out: TextIO = sys.stdout,
     now: datetime | None = None,
+    facts: Sequence[str] = (),
 ) -> dict[str, object]:
-    """Run once and return the run record; record["exit_code"] is the launcher's exit status."""
+    """Run once and return the run record; record["exit_code"] is the launcher's exit status.
+
+    facts are extra header lines for the prompt, which the configuration fingerprint does not cover.
+    """
     if trigger not in TRIGGERS:
         raise ConfigError(f"trigger must be one of {', '.join(TRIGGERS)}")
     started = now or datetime.now(timezone.utc)
@@ -137,7 +147,9 @@ def run(
         file=out,
     )
 
-    prompt = compose_prompt(resolved.boundary, run_id, trigger, started.isoformat(), instruction_path, instruction)
+    prompt = compose_prompt(
+        resolved.boundary, run_id, trigger, started.isoformat(), instruction_path, instruction, facts
+    )
     write_json(record_path, record)
     with (
         (log_dir / f"{run_id}.events.jsonl").open("w", encoding="utf-8") as events,

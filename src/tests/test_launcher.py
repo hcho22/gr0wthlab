@@ -24,13 +24,20 @@ class PromptTest(unittest.TestCase):
             Path("/srv/gr0wthlab"), CONFIG, REGISTRY, {}, Path("/srv/home/f"), git=[Path("/srv/gr0wthlab/.git")]
         )
         prompt = launcher.compose_prompt(
-            resolved, "RUN1", "scheduled", "2026-10-12T14:00:05+00:00", Path("/srv/i.md"), "Do the thing.\n"
+            resolved,
+            "RUN1",
+            "scheduled",
+            "2026-10-12T14:00:05+00:00",
+            Path("/srv/i.md"),
+            "Do the thing.\n",
+            ["Local listener localhost-tcp: 127.0.0.1:5"],
         )
         self.assertTrue(prompt.startswith("# gr0wthlab run RUN1\n"))
         self.assertIn("- Trigger: scheduled, started 2026-10-12T14:00:05+00:00.", prompt)
         self.assertIn("(git directory /srv/gr0wthlab/.git)", prompt)
         self.assertIn("  - drafts: /srv/gr0wthlab/workspace/drafts", prompt)
         self.assertIn("  - Mandu: /srv/home/f/Mandu", prompt)
+        self.assertIn("\n- Local listener localhost-tcp: 127.0.0.1:5\n- Instruction: /srv/i.md\n", prompt)
         self.assertTrue(prompt.endswith("---\n\nDo the thing.\n"))
 
 

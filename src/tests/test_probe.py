@@ -2,6 +2,7 @@
 
 import io
 import json
+import socket
 import tempfile
 import unittest
 from pathlib import Path
@@ -78,9 +79,47 @@ class VerifyTest(unittest.TestCase):
         self.write_permitted()
         result = probe.verify(self.boundary, RUN, self.logs)
         self.assertIsNone(result["changed_outside_areas"])
+        self.assertIsNone(result["local_listeners"])
         out = io.StringIO()
         probe.summarize(result, out)
         self.assertIn("changes outside the areas: not checked", out.getvalue())
+        self.assertIn("local connections: not checked", out.getvalue())
+
+    def test_a_connection_to_a_local_listener_fails_the_check(self):
+        self.write_record(exit_code=0)
+        self.write_permitted()
+        with probe.local_listeners() as listeners:
+            unix, tcp = listeners
+            with socket.socket(socket.AF_UNIX) as client:
+                client.connect(unix.address)
+            host, port = tcp.address.rsplit(":", 1)
+            with socket.create_connection((host, int(port))):
+                pass
+            result = probe.verify(self.boundary, RUN, self.logs, listeners=listeners)
+        self.assertFalse(result["passed"])
+        connections = {label: entry["connections"] for label, entry in result["local_listeners"].items()}
+        self.assertEqual(connections, {"unix-socket": 1, "localhost-tcp": 1})
+        out = io.StringIO()
+        probe.summarize(result, out)
+        self.assertIn("local connections that got through: unix-socket, localhost-tcp", out.getvalue())
+
+    def test_an_unreached_listener_still_needs_a_kernel_denial(self):
+        # No connection arrived, but without the kernel's denial the run may simply never have tried.
+        self.write_record(exit_code=0)
+        self.write_permitted()
+        with probe.local_listeners() as listeners:
+            result = probe.verify(self.boundary, RUN, self.logs, listeners=listeners)
+        self.assertEqual(result["local_listeners"]["unix-socket"]["connections"], 0)
+        self.assertEqual(result["shell_targets_without_kernel_denial"][-2:], ["unix-socket", "localhost-tcp"])
+        self.assertFalse(result["passed"])
+
+    def test_a_listener_matches_only_the_kernel_denial_of_its_own_endpoint(self):
+        with probe.local_listeners() as (unix, tcp):
+            port = tcp.address.rsplit(":", 1)[1]
+            self.assertTrue(tcp.refused_in(f"Sandbox: nc(41405) deny(1) network-outbound remote:*:{port}"))
+            self.assertFalse(tcp.refused_in(f"Sandbox: nc(41405) deny(1) network-outbound remote:*:{port}0"))
+            self.assertTrue(unix.refused_in(f"Sandbox: nc(41404) deny(1) network-outbound {unix.address}"))
+            self.assertFalse(unix.refused_in(f"Sandbox: nc(41404) deny(1) file-read-data {unix.address}"))
 
     def test_missing_permitted_writes_are_named(self):
         area = self.boundary.areas[0][1]

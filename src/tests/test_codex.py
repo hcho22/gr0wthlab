@@ -76,7 +76,7 @@ class CommandTest(CodexTestCase):
         args = codex.config_overrides(CODEX_CONFIG, self.boundary)
         overrides = [args[i + 1] for i, arg in enumerate(args) if arg == "-c"]
         self.assertIn('default_permissions="gr0wthlab"', overrides)
-        self.assertIn("permissions.gr0wthlab.network.enabled=true", overrides)
+        self.assertIn("permissions.gr0wthlab.network.enabled=false", overrides)
         self.assertIn('approval_policy="never"', overrides)
         self.assertIn("agents.enabled=false", overrides)
         self.assertIn('shell_environment_policy.set={"GIT_CONFIG_GLOBAL" = "/dev/null"}', overrides)

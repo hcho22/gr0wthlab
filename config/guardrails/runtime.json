@@ -18,7 +18,7 @@
     "deny": [":slash_tmp", "/private/var/tmp"],
     "deny_why": "Codex's :minimal system grant also makes /tmp and /var/tmp writable; denying them keeps every write inside the writable areas."
   },
-  "network": true,
+  "network": false,
   "codex": {
     "permission_profile": "gr0wthlab",
     "model": "gpt-6-luna",

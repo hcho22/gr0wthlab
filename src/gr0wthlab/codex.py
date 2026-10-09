@@ -42,7 +42,7 @@ def config_overrides(config: Mapping, boundary: Boundary) -> list[str]:
     overrides = [
         f"default_permissions={toml_string(profile)}",
         f"permissions.{profile}.filesystem={toml_inline_table(filesystem_policy(boundary))}",
-        f"permissions.{profile}.network.enabled={'true' if boundary.network else 'false'}",
+        f"permissions.{profile}.network.enabled=false",
         f"approval_policy={toml_string(codex['approval_policy'])}",
         f"agents.enabled={'true' if codex['sub_agents'] else 'false'}",
         f"shell_environment_policy.set={toml_inline_table(codex.get('shell_environment') or {})}",

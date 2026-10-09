@@ -43,7 +43,6 @@ class Boundary:
     git_dirs: tuple[Path, ...]
     read_system: tuple[str, ...]
     deny: tuple[str, ...]
-    network: bool
 
     @property
     def area_paths(self) -> tuple[Path, ...]:
@@ -180,9 +179,10 @@ def resolve_boundary(
                 " a write area would fall inside it"
             )
 
-    network = config.get("network")
-    if not isinstance(network, bool):
-        raise ConfigError("network must be true or false")
+    if config.get("network") is not False:
+        raise ConfigError(
+            "network must be false; a story that needs it adds a Codex network_proxy allow-list in a reviewed change"
+        )
 
     return Boundary(
         repo_root=repo_root,
@@ -192,7 +192,6 @@ def resolve_boundary(
         git_dirs=tuple(git if git is not None else git_dirs(repo_root)),
         read_system=read_system,
         deny=deny,
-        network=network,
     )
 
 

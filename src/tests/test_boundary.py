@@ -28,7 +28,7 @@ CONFIG = {
         "read_system": [":minimal"],
         "deny": [":slash_tmp"],
     },
-    "network": True,
+    "network": False,
 }
 REGISTRY = {
     "mandu": {"local_checkout": "~/Mandu", "env": "GR0WTHLAB_MANDU_DIR", "access": "read-only"},
@@ -127,6 +127,13 @@ class ResolveBoundaryTest(unittest.TestCase):
         registry["products"][0]["repository"]["access"] = "read-write"
         with self.assertRaises(ConfigError):
             self.resolve(registry=registry)
+
+    def test_rejects_network_unless_it_is_off(self):
+        for value in (True, None, "false"):
+            config = copy.deepcopy(CONFIG)
+            config["network"] = value
+            with self.subTest(value=value), self.assertRaisesRegex(ConfigError, "network must be false"):
+                self.resolve(config)
 
     def test_rejects_a_runtime_other_than_codex(self):
         path = self.repo / boundary.RUNTIME_CONFIG
