@@ -152,6 +152,7 @@ class Ledger:
         """
         seen = {} if seen is None else seen
         incoming = areas.path("review_queue", INCOMING)
+        areas.ensure_folder(incoming)
         published: list[str] = []
         set_aside: list[SetAside] = []
         superseding: list[tuple[str, str]] = []

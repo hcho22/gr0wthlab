@@ -137,6 +137,21 @@ class AreasTest(unittest.TestCase):
 
 
 class CheckIncomingTest(unittest.TestCase):
+    def test_a_linked_incoming_folder_is_never_followed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            elsewhere = Path(directory) / "elsewhere"
+            elsewhere.mkdir()
+            (elsewhere / "item.md").write_text(fakes.PROPOSAL, encoding="utf-8")
+            incoming = Path(directory) / "workspace" / "review-queue" / "incoming"
+            incoming.parent.mkdir(parents=True)
+            incoming.symlink_to(elsewhere)
+            out = io.StringIO()
+            with mock.patch.object(cli, "INCOMING", incoming), redirect_stdout(out):
+                code = cli.check_incoming(out)
+        self.assertEqual(code, 1)
+        self.assertIn("is not a real folder; the launcher removes it and takes in nothing from it", out.getvalue())
+        self.assertNotIn("item.md", out.getvalue())
+
     def test_reports_each_item_as_the_launcher_would(self):
         with tempfile.TemporaryDirectory() as directory:
             queue_dir = Path(directory) / "ledger" / "review-queue"

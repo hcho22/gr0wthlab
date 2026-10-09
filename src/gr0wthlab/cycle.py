@@ -481,7 +481,7 @@ class Cycle:
             for entry in ledger.entries.values()
             if entry["kind"] == "package-change-proposal" and entry["status"] != OPEN
         ]
-        areas.path("review_queue", INCOMING).mkdir(parents=True, exist_ok=True)
+        areas.ensure_folder(areas.path("review_queue", INCOMING))
         brief = self.store.path(RUN_REPORTS, f"{run_id}.brief.md")
         self.store.write_text(
             brief, report.render_brief(state, canonical(self.repo_root), areas.workspace, self.store.root)
@@ -550,7 +550,6 @@ class Cycle:
         state.tallies = self.tallies(state, ledger, incoming)
         notes = sorted(self.store.path(NOTES_DIR).glob("*.txt"))
         state.notes = [path.read_text(encoding="utf-8").strip() for path in notes]
-        state.problems += areas.problems
         try:
             self.store.write_text(report_path, report.render_report(state))
         except OSError as error:

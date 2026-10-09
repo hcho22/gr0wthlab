@@ -413,15 +413,33 @@ class FailuresTest(CycleTestCase):
         self.assertEqual([entry["id"] for entry in self.queue()["open"]], ["20261011-name-status-stale"])
         self.assertFalse((self.ledger() / "evidence/decisions/20261011-name-status-stale.json").exists())
 
-    def test_a_linked_incoming_folder_is_never_followed(self):
+    def test_a_link_or_file_in_place_of_incoming_is_noted_and_repaired(self):
+        self.exchange.mkdir()
         outside = self.root / "outside"
         (outside / "empty").mkdir(parents=True)
-        fakes.behave(
-            self.codex_dir, {"rmtree": ["review-queue/incoming"], "symlink": {"review-queue/incoming": str(outside)}}
-        )
-        code, out = self.run_cycle()
-        self.assertEqual(code, 0, out)
-        self.assertEqual(sorted(path.name for path in outside.iterdir()), ["empty"])
+        replacements = {
+            "a link": {"symlink": {"review-queue/incoming": str(outside)}},
+            "a file": {"write": {"review-queue/incoming": "not a folder"}},
+        }
+        incoming = self.workspace() / "review-queue/incoming"
+        day = f"{fakes.SUNDAY_RUN.astimezone():%Y%m%d}"
+        for number, (case, behavior) in enumerate(replacements.items()):
+            with self.subTest(case=case):
+                fakes.behave(self.codex_dir, dict(behavior, rmtree=["review-queue/incoming"]))
+                code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=20 * number))
+                self.assertEqual(code, 0, out)
+                self.assertEqual(sorted(path.name for path in outside.iterdir()), ["empty"])
+                self.assertTrue(incoming.is_dir() and not incoming.is_symlink())
+                notice = next(entry for entry in self.queue()["open"] if entry["kind"] == "notice")
+                text = (self.ledger() / notice["file"]).read_text(encoding="utf-8")
+                self.assertIn("`review-queue/incoming` was not a folder", text)
+
+                slug = f"after-{number}"
+                write = {f"review-queue/incoming/{slug}.md": fakes.proposal(title=f"queued after {case}")}
+                fakes.behave(self.codex_dir, {"write": write})
+                code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=20 * number + 10))
+                self.assertEqual(code, 0, out)
+                self.assertIn(f"{day}-{slug}", [entry["id"] for entry in self.queue()["open"]])
 
     def test_an_area_replaced_by_a_link_is_never_followed_and_stops_the_next_run(self):
         outside = self.root / "outside"

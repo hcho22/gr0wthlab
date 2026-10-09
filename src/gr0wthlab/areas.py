@@ -57,10 +57,28 @@ class Areas:
             return False
         return False
 
+    def ensure_folder(self, folder: Path) -> None:
+        """Make a folder inside a real area folder a real folder: a link or file the agent left in its place is noted
+        in problems and removed, so nothing behind it is ever read and the folder can be made again."""
+        folder = self.check(folder)
+        if not self.real_folder(folder.parent):
+            return
+        try:
+            if folder.is_symlink() or (os.path.lexists(str(folder)) and not folder.is_dir()):
+                self.problems.append(
+                    f"`{self.relative(folder)}` was not a folder, so what stood in its place was removed, not taken in"
+                )
+                self.remove(folder)
+            folder.mkdir(exist_ok=True)
+        except OSError as error:
+            self.problems.append(f"could not make `{self.relative(folder)}` a folder again ({error})")
+
     def files(self, directory: Path) -> Iterator[Path]:
-        """Every non-directory entry under a real folder inside an area, without following links."""
+        """Every non-directory entry under a real folder inside an area, without following links; a folder that is not
+        a real folder is noted in problems, since nothing in it was read."""
         directory = self.check(directory, area_itself=True)
         if not self.real_folder(directory):
+            self.problems.append(f"`{self.relative(directory)}` is not a real folder, so nothing in it was read")
             return
         for root, subdirs, names in os.walk(str(directory)):
             for name in list(subdirs):
