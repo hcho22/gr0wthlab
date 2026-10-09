@@ -1,0 +1,2 @@
+# gr0wthlab has no CI checks yet; remove this once the first real CI workflow lands.
+no_ci: true
