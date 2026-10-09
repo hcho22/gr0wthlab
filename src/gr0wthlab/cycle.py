@@ -197,6 +197,8 @@ class Cycle:
         self.home = home
         self.out = out
         self.clock = clock
+        self.started: datetime | None = None
+        self.run_id: str | None = None
 
     def say(self, message: str) -> None:
         print(f"gr0wthlab: {message}", file=self.out)
@@ -289,7 +291,11 @@ class Cycle:
                 "note": sitting.note,
                 "source": {"path": str(path), "sha256": digest},
             }
-            existing = json.loads(target.read_text(encoding="utf-8")) if target.is_file() else None
+            try:
+                existing = json.loads(read_plain(target).decode("utf-8"))
+            except (UnsafeFile, ValueError):
+                existing = None
+            existing = existing if isinstance(existing, dict) else None
             if existing is None or existing.get("source") != record["source"]:
                 first = (existing or {}).get("taken_in_by_run", state.run_id)
                 areas.write_json(target, dict(record, taken_in_by_run=first))
@@ -459,12 +465,13 @@ class Cycle:
             try:
                 return self.locked_run(instruction, trigger, once, argv, execve)
             except (OSError, ConfigError) as error:
-                now = self.now()
+                started = self.started or self.now()
+                run_id = self.run_id or launcher.new_run_id(trigger, started)
                 line = (
-                    f"A {trigger} run started at {report.wall_clock(now):%A %Y-%m-%d %H:%M} stopped before it"
-                    f" finished: {error}."
+                    f"Run {run_id} ({trigger}), started {report.wall_clock(started):%A %Y-%m-%d %H:%M}, stopped"
+                    f" before it finished: {error}."
                 )
-                self.leave_note(log_dir, launcher.new_run_id(trigger, now), line)
+                self.leave_note(log_dir, run_id, line)
                 self.say(f"the run stopped: {error}; the next run's report will say so")
                 return EXIT_STOPPED
 
@@ -478,6 +485,7 @@ class Cycle:
     ) -> int:
         pre = json.loads(self.env[PRE_RUN_ENV]) if self.env.get(PRE_RUN_ENV) else None
         started = datetime.fromisoformat(pre["started_at"]) if pre else self.now()
+        self.started, self.run_id = started, None
         try:
             config = settings.load(self.repo_root, self.env, self.home)
             task = config.instruction if instruction is None else settings.instruction_path(self.repo_root, instruction)
@@ -518,7 +526,7 @@ class Cycle:
                 execve(entry, [entry, *argv], dict(self.env, **{PRE_RUN_ENV: carried}))
                 return 0  # only reached when execve is replaced in tests
 
-        run_id = launcher.new_run_id(trigger, started)
+        run_id = self.run_id = launcher.new_run_id(trigger, started)
         state = RunState(run_id, trigger, started, str(task.relative_to(canonical(self.repo_root))), sync=sync)
         state.late_after = timedelta(minutes=config.late_after_minutes)
         if trigger == "scheduled":

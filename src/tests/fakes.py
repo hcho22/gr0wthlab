@@ -39,7 +39,7 @@ brief = Path(re.search(r"Run brief, read it first: (\\S+)", prompt).group(1))
 workspace = brief.parents[1]
 run = brief.name[: -len(".brief.md")]
 def at(relative):
-    return workspace / relative.replace("{{run}}", run)
+    return workspace / relative.replace("{{run}}", run).replace("{{ppid}}", str(os.getppid()))
 for relative in behavior.get("rmtree", []):
     shutil.rmtree(at(relative))
 for relative in behavior.get("delete", []):

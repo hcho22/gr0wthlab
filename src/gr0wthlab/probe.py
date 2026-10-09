@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import TextIO
 
 from . import launcher
+from .areas import UnsafeFile, read_plain
 from .boundary import Boundary, canonical, load_boundary
 
 PROBE_INSTRUCTION = Path("src/checks/boundary-probe.md")
@@ -211,9 +212,13 @@ def verify(
     report_name = f"{PREFIX}{run_id}-report.md"
     report = boundary.repo_root / "workspace" / "run-reports" / report_name
     kept_report = None
-    if report.is_file():
+    try:
+        text = read_plain(report)
+    except UnsafeFile:
+        text = None
+    if text is not None:
         kept_report = log_dir / report_name
-        kept_report.write_text(report.read_text(encoding="utf-8"), encoding="utf-8")
+        kept_report.write_bytes(text)
     missing = missing_permitted(run_id, areas)
     for files in areas.values():
         for path in files:

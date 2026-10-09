@@ -15,6 +15,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
+from .areas import UnsafeFile, read_plain
 from .boundary import ConfigError
 
 SNAPSHOT_FORMAT = 1
@@ -204,8 +205,8 @@ def latest_snapshot(directory: Path, before_run: str) -> tuple[str, dict] | None
     )
     for name in reversed(names):
         try:
-            return name[: -len(".json")], json.loads((directory / name).read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            return name[: -len(".json")], json.loads(read_plain(directory / name).decode("utf-8"))
+        except (UnsafeFile, ValueError):
             continue
     return None
 

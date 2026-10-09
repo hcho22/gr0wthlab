@@ -589,6 +589,44 @@ class FailuresTest(CycleTestCase):
         self.assertNotIn("could not undo", report)
         self.assertNotIn("could not remove", report)
 
+    def test_links_the_agent_plants_never_carry_a_launcher_write_outside_the_workspace(self):
+        self.exchange.mkdir()
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        outside = self.root / "outside"
+        outside.mkdir()
+        (outside / "kept.md").write_text("kept", encoding="utf-8")
+        notice = f"review-queue/items/{fakes.SUNDAY_RUN.astimezone():%Y%m%d}-notice-run-problems.md"
+        written = [
+            "review-queue/queue.json",
+            "drafts/README.md",
+            "run-reports/{run}.md",
+            "run-reports/state/review-queue.json",
+            "review-queue/set-aside/{run}/review-queue--items--forged.md",
+            notice,
+        ]
+        links = {}
+        for number, record in enumerate(written):
+            folder, name = record.rsplit("/", 1)
+            links[f"{folder}/.{name}.tmp-{{ppid}}"] = str(outside / f"temporary-{number}")
+        links.update({record: str(outside / "kept.md") for record in written})
+        behavior = {
+            "delete": ["review-queue/queue.json", "drafts/README.md", "run-reports/state/review-queue.json"],
+            "write": {"review-queue/items/forged.md": "forged"},
+            "symlink": links,
+        }
+        fakes.behave(self.codex_dir, behavior)
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(
+            {path.name: path.read_text(encoding="utf-8") for path in outside.iterdir()}, {"kept.md": "kept"}
+        )
+        for record in ("review-queue/queue.json", "drafts/README.md", notice):
+            path = self.workspace() / record
+            self.assertTrue(path.is_file() and not path.is_symlink(), record)
+        self.assertIn("set aside `review-queue/items/forged.md`, which the agent added", self.report())
+        self.assertIn(notice, [entry["file"] for entry in self.queue()["open"]])
+
     def test_a_named_pipe_the_agent_leaves_does_not_stall_the_run(self):
         incoming = self.workspace() / "review-queue/incoming"
         incoming.mkdir()
@@ -670,13 +708,29 @@ class NotesTest(CycleTestCase):
         self.assertNotIn("could not write its report", self.report())
 
     def test_a_run_that_cannot_finish_stops_and_the_next_report_says_so(self):
-        with mock.patch.object(package, "record", side_effect=PermissionError(1, "Operation not permitted")):
+        def fail_after_the_agent(events):
+            self.clock.set(self.clock.moment + timedelta(minutes=20))
+            raise PermissionError(1, "Operation not permitted")
+
+        with mock.patch.object(cycle.report, "token_usage", fail_after_the_agent):
             code, out = self.run_cycle(trigger="scheduled")
         self.assertEqual(code, cycle.EXIT_STOPPED)
         self.assertIn("the run stopped: [Errno 1] Operation not permitted", out)
+        [record] = self.logs.glob("2*Z-*.json")
+        started = datetime.fromisoformat(json.loads(record.read_text(encoding="utf-8"))["started_at"])
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=30))
+        self.assertIn(
+            f"Run {record.stem} (scheduled), started {cycle.report.wall_clock(started):%A %Y-%m-%d %H:%M}, stopped"
+            " before it finished: [Errno 1] Operation not permitted.",
+            self.report(),
+        )
+
+    def test_a_run_that_stops_before_its_snapshot_is_named_too(self):
+        with mock.patch.object(package, "record", side_effect=PermissionError(1, "Operation not permitted")):
+            code, _ = self.run_cycle()
+        self.assertEqual(code, cycle.EXIT_STOPPED)
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=10))
-        self.assertIn("scheduled run started at", self.report())
-        self.assertIn("stopped before it finished: [Errno 1] Operation not permitted.", self.report())
+        self.assertRegex(self.report(), r"\n- Run \S+-on-demand-\S+ \(on-demand\), started .*, stopped before it")
 
 
 class ProductionCloneTest(CycleTestCase):

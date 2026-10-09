@@ -14,6 +14,7 @@ import os
 import stat
 import subprocess
 import sys
+import tempfile
 from collections.abc import Iterator, Mapping
 from pathlib import Path
 
@@ -54,7 +55,11 @@ class Areas:
         self.write_text(path, json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
 
     def write_bytes(self, path: Path, data: bytes) -> None:
-        """Write atomically, so a reader such as Mandu never sees half a file, over whatever stands at the path."""
+        """Write atomically, so a reader such as Mandu never sees half a file, over whatever stands at the path.
+
+        The temporary gets a fresh, unpredictable name and is created only if nothing stands there, never through a
+        link, so no link the agent leaves can redirect the write.
+        """
         path = self.check(path)
         self.check_parents(path)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -62,9 +67,16 @@ class Areas:
             self.remove(path)
         else:
             self.reclaim(path)
-        temporary = path.with_name(f".{path.name}.tmp-{os.getpid()}")
-        temporary.write_bytes(data)
-        os.replace(str(temporary), str(path))
+        descriptor, temporary = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.")
+        try:
+            with os.fdopen(descriptor, "wb") as handle:
+                os.fchmod(handle.fileno(), 0o644)
+                handle.write(data)
+            os.replace(temporary, str(path))
+        except BaseException:
+            if os.path.lexists(temporary):
+                os.unlink(temporary)
+            raise
 
     def check_parents(self, path: Path) -> None:
         """Every folder from its area down to the path's parent is a real folder or not there yet, so a write cannot
@@ -83,6 +95,8 @@ class Areas:
         path = self.check(path, area_itself=True)
         try:
             info = os.lstat(str(path))
+            if stat.S_ISREG(info.st_mode) and info.st_nlink != 1:
+                return
             if getattr(info, "st_flags", 0):
                 os.chflags(str(path), 0, follow_symlinks=False)
             if not (stat.S_ISDIR(info.st_mode) or stat.S_ISREG(info.st_mode)):
