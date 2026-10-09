@@ -87,7 +87,7 @@ def snapshot(path: Path) -> dict[str, str]:
     if not (path / ".git").exists():
         return {}
     output = subprocess.run(
-        ["git", "-C", str(path), "status", "--porcelain=v1", "-z", "--untracked-files=all"],
+        ["git", "--no-optional-locks", "-C", str(path), "status", "--porcelain=v1", "-z", "--untracked-files=all"],
         check=True,
         capture_output=True,
     ).stdout.decode("utf-8", "surrogateescape")

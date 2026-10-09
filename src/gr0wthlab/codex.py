@@ -22,7 +22,7 @@ from .boundary import Boundary, ConfigError, canonical, filesystem_policy
 SYSTEM_PATH = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
 LANG = "en_US.UTF-8"
 PREFLIGHT_PREFIX = ".gr0wthlab-preflight-"
-# The directories the child environment names; a Codex change that made any of them writable would widen writes.
+# The directories an environment names; a Codex change that made any of them writable would widen writes.
 ENVIRONMENT_DIRS = ("HOME", "TMPDIR", "CODEX_HOME")
 
 
@@ -153,9 +153,10 @@ class PreflightResult:
         return not self.breaches and not self.failures
 
 
-def preflight_targets(boundary: Boundary, environment: Mapping[str, str]) -> tuple[list[Path], list[Path]]:
+def preflight_targets(boundary: Boundary, *environments: Mapping[str, str]) -> tuple[list[Path], list[Path]]:
     """Paths every run must be able to write, and paths every run must be refused.
 
+    The refused paths include the directories each given environment names.
     Registry locations (Mandu, Products) are left to the agent-driven boundary check, so a routine run never
     attempts a write inside the Founder's other repositories; they are refused by the same default-deny rule.
     """
@@ -169,8 +170,9 @@ def preflight_targets(boundary: Boundary, environment: Mapping[str, str]) -> tup
         Path("/private/var/tmp"),
     ]
     forbidden += list(boundary.git_dirs)
-    forbidden += [canonical(Path(environment[name])) for name in ENVIRONMENT_DIRS]
-    return list(boundary.area_paths), [path for path in forbidden if path.is_dir()]
+    for environment in environments:
+        forbidden += [canonical(Path(environment[name])) for name in ENVIRONMENT_DIRS]
+    return list(boundary.area_paths), [path for path in dict.fromkeys(forbidden) if path.is_dir()]
 
 
 def evaluate_preflight(output: str, name: str, allowed: Sequence[Path], forbidden: Sequence[Path]) -> PreflightResult:
@@ -202,12 +204,14 @@ def run_preflight(
 ) -> PreflightResult:
     """Prove the profile in the real sandbox, with no model, before the agent starts.
 
-    The probe uses an empty Codex home so no user configuration can change the policy it sees.
+    The probe uses an empty Codex home so no user configuration can change the policy it sees, and probes the
+    directories of both the run's environment and its own.
     A sentinel that lands outside the areas is deleted here, outside the sandbox, and the run is refused.
     """
-    allowed, forbidden = preflight_targets(boundary, environment)
     name = PREFLIGHT_PREFIX + run_id
     with tempfile.TemporaryDirectory(prefix="gr0wthlab-preflight-") as empty_home:
+        sandbox_environment = dict(environment, CODEX_HOME=empty_home)
+        allowed, forbidden = preflight_targets(boundary, environment, sandbox_environment)
         # The same -c overrides as codex exec; the working directory comes from cwd because
         # codex sandbox's -C would require selecting the profile with -P instead.
         command = (
@@ -220,7 +224,7 @@ def run_preflight(
             command,
             capture_output=True,
             text=True,
-            env=dict(environment, CODEX_HOME=empty_home),
+            env=sandbox_environment,
             cwd=str(boundary.working_directory),
         )
     result = evaluate_preflight(completed.stdout, name, allowed, forbidden)

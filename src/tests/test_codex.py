@@ -26,7 +26,9 @@ CODEX_CONFIG = dict(
 )
 
 # Stands in for `codex sandbox ... -- CMD...` without any sandbox, so every forbidden write lands.
+# It records the CODEX_HOME it was started with next to itself.
 FAKE_UNSANDBOXED_CODEX = """#!/bin/sh
+printf '%s' "$CODEX_HOME" > "$(dirname "$0")/codex-home"
 while [ "$1" != "--" ]; do shift; done
 shift
 exec "$@"
@@ -142,10 +144,13 @@ class PreflightTest(CodexTestCase):
         self.assertIn(self.repo / ".git", forbidden)
         self.assertNotIn(self.home / "Mandu", forbidden)
 
-    def test_targets_include_the_directories_the_environment_names(self):
-        _, forbidden = codex.preflight_targets(self.boundary, self.environment)
-        for path in (self.home, self.temp_dir, self.home / ".codex"):
-            self.assertIn(path, forbidden)
+    def test_targets_include_the_directories_each_environment_names(self):
+        sandbox_home = self.temp_dir / "empty-codex-home"
+        sandbox_home.mkdir()
+        sandbox_environment = dict(self.environment, CODEX_HOME=str(sandbox_home))
+        _, forbidden = codex.preflight_targets(self.boundary, self.environment, sandbox_environment)
+        for path in (self.home, self.temp_dir, self.home / ".codex", sandbox_home):
+            self.assertEqual(forbidden.count(path), 1, path)
 
     def test_evaluate_outcomes(self):
         area, other_area, root, src = Path("/a"), Path("/b"), Path("/r"), Path("/r/src")
@@ -168,6 +173,9 @@ class PreflightTest(CodexTestCase):
         self.assertIn(self.repo / "src" / ".gr0wthlab-preflight-t1", result.breaches)
         self.assertIn(self.temp_dir / ".gr0wthlab-preflight-t1", result.breaches)
         self.assertIn(self.home / ".codex" / ".gr0wthlab-preflight-t1", result.breaches)
+        sandbox_home = boundary.canonical(Path((self.codex_bin.parent / "codex-home").read_text(encoding="utf-8")))
+        self.assertNotEqual(sandbox_home, self.home / ".codex")
+        self.assertIn(sandbox_home / ".gr0wthlab-preflight-t1", result.breaches)
         for path in result.breaches:
             self.assertFalse(path.exists())
         for path in self.boundary.area_paths:

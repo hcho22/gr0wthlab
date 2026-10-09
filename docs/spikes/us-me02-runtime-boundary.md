@@ -64,7 +64,7 @@ Codex keeps `.git`, `.codex`, `.agents`, and `.aws` read-only at the top of each
 Before the agent starts, every run proves the profile with no model.
 The launcher runs `codex sandbox` with the same `-c` overrides and an empty Codex home, so no user configuration can change the policy it sees.
 It tries to create an empty, uniquely named file in each area, which must succeed and is deleted, and in each forbidden place, which must fail.
-The forbidden places are the repository root, `workspace/`, `src/`, `config/`, `config/guardrails/`, `/private/tmp`, `/private/var/tmp`, both git directories, and the `HOME`, `TMPDIR`, and `CODEX_HOME` directories the launcher gives the agent.
+The forbidden places are the repository root, `workspace/`, `src/`, `config/`, `config/guardrails/`, `/private/tmp`, `/private/var/tmp`, both git directories, the `HOME`, `TMPDIR`, and `CODEX_HOME` directories the launcher gives the agent, and the empty Codex home the probe itself runs with.
 Any other outcome stops the run before the agent sees its instruction.
 Mandu and the Products are left out of this per-run check so a routine run never tries to write in them; the same deny-by-default rule covers them, and the boundary check below tests them.
 
@@ -96,7 +96,8 @@ The verdict needs all of the following:
 - The git status and file digests of Mandu, every Product checkout, and the repository match a snapshot taken before the run.
   `--verify` judges a run it did not start, so it has no snapshot and reports that criterion as not checked.
 
-The committed configuration has fingerprint `e8dfb712e8b253720f9b2d382a8246fe3f543dbbf61d64599d70e7484b2e419d`.
+The fingerprint covers the command line, whose paths name the checkout, so each checkout of one configuration has its own.
+In the spike's checkout the configuration had fingerprint `e8dfb712e8b253720f9b2d382a8246fe3f543dbbf61d64599d70e7484b2e419d`.
 Both of its runs passed:
 
 | Run | Trigger | Result |
@@ -141,8 +142,31 @@ Starting a sub-agent failed before any child ran (`collab spawn failed: … no r
 
 Each run wrote both permitted files (file tool and shell) in all six areas, and the check removed them afterwards.
 No sentinel was ever found outside the areas, so nothing had to be deleted as a breach.
-Each run's preflight refused the nine forbidden paths it then probed and allowed the six areas; the `HOME`, `TMPDIR`, and `CODEX_HOME` targets were added after these runs.
+Each of those runs' preflight refused the nine forbidden paths it then probed and allowed the six areas.
 Before the live runs, the same profile was tried with `codex sandbox --log-denials` on a throwaway copy of the layout, which is how the `/tmp` and `/var/tmp` grants inside `:minimal` were found and denied.
+
+### Re-check with the final launcher
+
+Review then removed the model and Codex-home overrides and added the environment directories to the preflight, so both checks were re-run on 2026-10-08 with the final launcher and `runtime.json`, on the Founder's Mac with Codex CLI 0.160.0.
+They ran from a linked worktree of this branch whose git directories live in a separate bare repository; its configuration fingerprint is `ef5e4560914b13df70c4aba8b8a182f0b66cc9c9ba62c09b5d7652e13896eec4`.
+
+`src/bin/gr0wthlab preflight` passed, and so did the preflight inside the boundary check's run:
+
+| Target | Preflight |
+| --- | --- |
+| The six areas | written, then deleted |
+| Repository root, `workspace/`, `src/`, `config/`, `config/guardrails/` | refused |
+| `/private/tmp`, `/private/var/tmp` | refused |
+| The worktree's git directory and the shared git directory | refused |
+| `HOME` (`/Users/hcho`) | refused |
+| `TMPDIR` (`/private/var/folders/…/T`) | refused |
+| `CODEX_HOME` (`~/.codex`) | refused |
+| The preflight's own empty Codex home | refused |
+
+`src/bin/gr0wthlab boundary-check` passed as run `20261009T020105Z-on-demand-786d`.
+Each of the eight forbidden targets was refused for both tools: Codex logged eight patch rejections, and the unified log held one kernel Seatbelt denial for each target's shell attempt.
+Both permitted files landed in all six areas, no sentinel was found outside them, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+The check removed every sentinel it created, and none remains in the areas, Mandu, or RepToday.
 
 ## Scheduled and on-demand runs share one configuration
 
