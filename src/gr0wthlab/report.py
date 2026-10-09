@@ -244,6 +244,8 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path) -> str:
         "Every Go-To-Market Package file is in the Mandu checkout, at the absolute path listed below;",
         "a Product's own repository holds its code, never its package.",
         "In the items you write, cite a package file by its path inside the Mandu checkout, as in the Changes list.",
+        "The Mandu checkout and every read-only location in the header are readable, even inside a folder the",
+        "sandbox otherwise denies, such as /private/tmp.",
         "",
         f"- {start_line(state)}",
         f"- Mandu checkout: `{state.mandu}`",
@@ -261,12 +263,17 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path) -> str:
         rows += [[f"`{mandu / file.path}`", f"{file.status}: {file_line(file)}"] for file in result.files]
     lines += table(["File", "This run"], rows) + ["", "## Changes since the previous snapshot", ""]
     lines += package_changes(state)
-    lines += ["", "## Failed sources and what they block", ""]
+    lines += ["", "## Failed sources", ""]
     failed = state.failed_sources()
     if failed:
-        lines.append("Never guess what a failed source says; mark the work that needs it incomplete.")
         lines += [
-            f"- {line.name}: {line.detail} Blocks: {', '.join(line.needed_by) or 'nothing else'}." for line in failed
+            "A failed source blocks only the work that needs it: never guess what it says, and do everything else.",
+            "Review every other package file as usual; only contradictions that involve a failed file go unchecked.",
+            "",
+        ]
+        lines += [
+            f"- {line.name}: {line.detail} Incomplete without it: {', '.join(line.needed_by) or 'nothing else'}."
+            for line in failed
         ]
     else:
         lines.append("None.")

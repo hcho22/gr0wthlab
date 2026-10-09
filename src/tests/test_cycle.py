@@ -224,6 +224,10 @@ class FailuresTest(CycleTestCase):
         self.assertIn("could not be read, so the work that needs them is incomplete", notice)
         self.assertIn("Post Drafts", notice)
         self.assertIn("Weekly Read memo", notice)
+        brief = next((self.workspace() / "run-reports").glob("*.brief.md")).read_text(encoding="utf-8")
+        self.assertIn("A failed source blocks only the work that needs it", brief)
+        self.assertIn("Review every other package file as usual", brief)
+        self.assertIn("angles.md`: missing. Incomplete without it: Package review, Post Drafts", brief)
 
     def test_a_malformed_item_is_set_aside_as_a_notice_not_dropped(self):
         broken = fakes.PROPOSAL.replace("## Evidence", "## Sources")
