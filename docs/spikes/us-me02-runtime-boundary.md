@@ -225,6 +225,8 @@ Records commits never touch code or Guardrail configuration, so G8 holds, and ea
 - The Codex process itself runs outside the sandbox and writes its own state, logs, and login refresh to `CODEX_HOME` (`~/.codex`); `--ephemeral` keeps run sessions out of the Founder's history.
 - A Codex upgrade can change profile semantics; the per-run preflight fails closed, and the boundary check should be re-run after every upgrade.
 - A separate macOS user with no credentials would be a stronger boundary than unreadable credential files; nothing in v1 needs it.
+- Inside an area, the sandbox refuses a hard link to a file the run cannot read but allows a symbolic link to one.
+  The launcher reads and commits files from `workspace/` outside the sandbox, so it never follows a link there: it opens agent-written files without following links, refuses any file with more than one link, and never commits a link.
 - Each probe run used 140,000 to 190,000 input tokens, mostly cached, and about 2,800 output tokens.
 
 ## Repeat the check

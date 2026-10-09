@@ -259,12 +259,12 @@ class Cycle:
                 state.sittings.append(sitting)
         taken = sum(1 for outcome in state.decisions if outcome.status == "taken")
         unusable = len(problems) + sum(1 for o in state.decisions if o.status not in ("taken", "already-taken"))
-        detail = f"{len(found)} records, {taken} new since the previous run" + (
+        detail = f"{report.plural(len(found), 'record')}, {taken} new since the previous run" + (
             f", {unusable} could not be used" if unusable else ""
         )
         status = package.CHANGED if taken else package.READ
         state.sources.append(SourceLine("Mandu decisions", status, detail, needs))
-        sitting_detail = f"{len(sittings_found)} records, {len(state.sittings)} new" + (
+        sitting_detail = f"{report.plural(len(sittings_found), 'record')}, {len(state.sittings)} new" + (
             f", {len(sitting_problems)} could not be used" if sitting_problems else ""
         )
         state.sources.append(
