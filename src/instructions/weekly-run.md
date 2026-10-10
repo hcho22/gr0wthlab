@@ -149,8 +149,15 @@ leg: A
 - Leave out `pair` and `leg` for a day that is not an A/B pair leg.
 - Number the beats from 1 with times that follow on; only beat 1 is the hook beat, starting at 0s.
 - Each test platform the brief names gets one `##` section with exactly the `###` fields the brief lists for it; both carry identical content.
-- An A/B leg differs from its other leg only in the Hook: when the other leg already has an open or approved post, copy its Draft and change only the Hook's lines and, if the opening is re-cut, the hook beat.
-  The launcher checks the newer leg against that Draft field by field and blocks it on any other difference; it never changes the leg already posted.
+- An A/B leg differs from its other leg only in the Hook: when the other leg already has an open or approved post, copy its Draft and change only the Hook's lines; the hook beat's visual action and spoken line may change with them.
+  When you draft both legs in one run, write the earlier day first and copy it for the later day.
+  The launcher checks the newer leg against that Draft field by field, in the order of the beats, and blocks it on any other difference; it never changes the leg already posted.
+- A re-cut pair is one the kit marks as a re-cut, in the pair's own section of the A/B pairs or in the calendar row of either leg.
+  Each leg of a re-cut pair opens on its own Hook in the hook beat and may show the pair's other Hook in a later beat, as the pair's opening order says.
+  Every beat that shows neither Hook is the same in both legs, word for word, in whatever order the re-cut puts them.
+  In any other pair, and on a day that is not a pair leg, no beat shows another Hook.
+- When text a leg must share with its other leg fails a brand rule, leave it as the other leg has it and never reword one leg alone.
+  The launcher blocks the Draft naming the rule and tells the Founder that the pair cannot both pass until a package change or a re-cut of both legs resolves it.
 - Give each behavioral claim (anything the video or copy says the app does) its own item under Claims, with the lines of code at the brief's commit that support it; cut a claim no code supports.
 - Rewrite an open day's Draft only to change it for a reason, such as a package change or the Founder's decision; an unchanged Draft keeps its item.
 - A Draft the Founder rejected is not asked again until it changes: rewrite it to answer the reason the brief gives.

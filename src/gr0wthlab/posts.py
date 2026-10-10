@@ -69,6 +69,8 @@ class Plan:
     files: dict[str, tuple[str, str | None]]  # role: (Mandu-relative path, sha256 when read)
     folder: Path  # workspace/drafts/posts/window-<n>/
     waitlist_live: bool
+    # Each calendar day's open or approved post as the queue stood before the agent started.
+    posted: dict[int, dict[str, object]] = field(default_factory=dict)
     problems: list[str] = field(default_factory=list)
     # The location overrides the run resolved, so check-drafts, in an environment built from scratch, reads the same
     # Mandu and code checkouts as the launcher.
@@ -259,6 +261,17 @@ def day_entries(ledger: Ledger, product: str, window: int, number: int) -> list[
     ]
 
 
+def posted_days(ledger: Ledger, product: str, window: int, days: Sequence[int]) -> dict[int, dict[str, object]]:
+    """Each of the days' open or approved post, for the days that have one."""
+    found = {}
+    for number in days:
+        entries = day_entries(ledger, product, window, number)
+        post = next((entry for entry in entries if entry["status"] in (OPEN, APPROVED)), None)
+        if post is not None:
+            found[number] = post
+    return found
+
+
 def prepare(
     repo_root: Path,
     config: Settings,
@@ -302,8 +315,8 @@ def prepare(
         context,
         files,
         Path(boundary.repo_root) / "workspace" / "drafts" / DRAFTS / f"window-{config.window.number}",
-        # The Waitlist view is a connected source now, and whether the Waitlist is live is never read off that.
-        waitlist_live=False,
+        waitlist_live=config.waitlist_live(now.astimezone().date()),
+        posted=posted_days(ledger, product, config.window.number, list(parsed.days)),
     )
     names = {"Mandu": (registry.get("mandu") or {}).get("env"), product: (entry.get("repository") or {}).get("env")}
     plan.locations = [
@@ -350,38 +363,51 @@ def read_draft(areas: Areas, path: Path) -> tuple[PostDraft | None, str]:
     return parse(text, areas.relative(path)), ""
 
 
-def reference_leg(
-    plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas, ledger: Ledger
-) -> tuple[PostDraft | None, str]:
+def reference_leg(plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas) -> tuple[PostDraft | None, str]:
     """The Draft an A/B leg must match beyond the Hook, or why it cannot be compared with it.
 
-    The leg that already has an open or approved post is the reference, and only the other, newer leg is checked
-    against the Draft that post was queued from. A leg whose own open post came from this very Draft is not checked
-    again, so a deviation in the newer leg never blocks or withdraws the reference.
+    Decided from the queue as it stood before the agent started and the Drafts as they are now, so the launcher and
+    check-drafts agree. A leg whose own open post came from this very Draft is not checked again. A leg whose post
+    stands is the reference for the other, newer leg, in the Draft that post was queued from, so a deviation never
+    blocks or withdraws the reference. When this run takes a new Draft of both legs, the earlier day is checked on its
+    own and the later day against the earlier day's Draft.
     """
     other = plan.other_leg(day_plan.day)
     if other is None or (day_plan.open and day_plan.open.get("draft_sha256") == draft.sha256):
         return None, ""
-    entries = day_entries(ledger, plan.product, plan.window.number, other.day)
-    posted = next((entry for entry in entries if entry["status"] in (OPEN, APPROVED)), None)
+    posted = plan.posted.get(other.day)
+    current = read_draft(areas, plan.draft_path(other.day))[0]
+    taken = any(due.day.day == other.day and not due.approved for due in plan.days)
+    if taken and current is not None and current.sha256 != (posted or {}).get("draft_sha256"):
+        return (current if other.day < day_plan.day.day else None), ""
     if posted is None:
         return None, ""
-    reference = read_draft(areas, plan.draft_path(other.day))[0]
-    if reference is None or reference.sha256 != posted.get("draft_sha256"):
+    if current is None or current.sha256 != posted.get("draft_sha256"):
         return None, (
             f"day {other.day}'s Draft is no longer the one `{posted['id']}` was queued from, so this leg cannot be"
             " compared with it"
         )
-    return reference, ""
+    return current, ""
 
 
-def check_day(plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas, ledger: Ledger) -> Verdict:
-    """Every check of one day's Draft, as the launcher and check-drafts both run them."""
-    reference, problem = reference_leg(plan, day_plan, draft, areas, ledger)
+def check_day(
+    plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas, products: Sequence[str]
+) -> tuple[Verdict, exchange.Item | None]:
+    """Every check of one day's Draft, as the launcher and check-drafts both run them, and the post item a Draft that
+    passes becomes."""
+    reference, problem = reference_leg(plan, day_plan, draft, areas)
     verdict = evaluate(draft, plan.context, reference, day_plan.day.day)
     if problem:
         verdict.block("pair-legs", problem)
-    return verdict
+    if not verdict.passed:
+        return verdict, None
+    item = render(plan, day_plan, draft, verdict)
+    check = exchange.check_item(
+        exchange.render_item(item.fields, item.ask, item.body, item.touches, item.evidence), products
+    )
+    if check.item is None:
+        verdict.block("item", "; ".join(check.problems))
+    return verdict, item
 
 
 def take(
@@ -427,20 +453,13 @@ def take_day(
         if day_plan.open:
             return DayResult(number, KEPT, "no new Draft; the open item stands", str(day_plan.open["id"]))
         return DayResult(number, MISSING, f"no Draft at `{areas.relative(plan.draft_path(number))}`")
-    verdict = check_day(plan, day_plan, draft, areas, ledger)
+    verdict, item = check_day(plan, day_plan, draft, areas, products)
     result = DayResult(number, BLOCKED, "", None, draft.path, draft.sha256, verdict)
     if day_plan.open and unchecked(plan):
         # The open item passed when it was queued; a source that cannot be read now does not withdraw it.
         result.status, result.item = KEPT, str(day_plan.open["id"])
         result.detail = f"not checked again, since {'; '.join(unchecked(plan))}; the open item stands"
         return result
-    if verdict.passed:
-        item = render(plan, day_plan, draft, verdict)
-        check = exchange.check_item(
-            exchange.render_item(item.fields, item.ask, item.body, item.touches, item.evidence), products
-        )
-        if check.item is None:
-            verdict.block("item", "; ".join(check.problems))
     if not verdict.passed:
         if day_plan.open:
             result.withdrawn = str(day_plan.open["id"])
@@ -478,11 +497,6 @@ def withdraw(ledger: Ledger, outcome: Outcome, notice: str | None, run_id: str, 
 
 
 # The post item.
-
-
-def short(text: str, limit: int = 70) -> str:
-    text = " ".join(text.split())
-    return text if len(text) <= limit else text[: limit - 3] + "..."
 
 
 def cell(text: str) -> str:
@@ -529,7 +543,7 @@ def checklist_lines(plan: Plan, verdict: Verdict) -> list[str]:
     if checks:
         calendar = plan.context.paths.get("calendar", "the calendar")
         lines.append(f"- The kit's checklist for every asset (`{calendar}`), each line yours to judge on this post:")
-        lines += [f"  Line {check.line}: {short(check.text, 240)}" for check in checks]
+        lines += [f"  Line {check.line}: {lint.snippet(check.text, 240)}" for check in checks]
     return lines
 
 
@@ -595,9 +609,9 @@ def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict) ->
         f"- Calendar: day {day.day}, {day.asset}, {day.cell}, primary {day.primary}:"
         f" `{roles['calendar']}` line {day.line}",
         f"- Angle {angle.id}, {angle.name}: `{roles['angles']}` line {angle.line}",
-        f"- Sourced pain: {short(angle.pain, 400)}",
-        f"- Pre-registered signal: {short(angle.signal, 200)}: `{roles['angles']}` line {angle.line}",
-        f"- Kill criterion: {short(angle.kill, 200)}: `{roles['angles']}` line {angle.line}",
+        f"- Sourced pain: {lint.snippet(angle.pain, 400)}",
+        f"- Pre-registered signal: {lint.snippet(angle.signal, 200)}: `{roles['angles']}` line {angle.line}",
+        f"- Kill criterion: {lint.snippet(angle.kill, 200)}: `{roles['angles']}` line {angle.line}",
         f"- Frozen Hook: `{roles[hook.source]}` line {hook.line}",
     ]
     fields = {"kind": "post", "product": plan.product, "window": str(plan.window.number), "day": str(day.day)}
@@ -737,7 +751,7 @@ def checklist_summary(plan: Plan) -> list[str]:
         lines.append(
             "- Open checklist lines that block every post until Mandu checks them, so the launcher will block each"
             " Draft (write every Draft all the same): "
-            + "; ".join(f"line {item.line} ({short(item.title, 60)})" for item in every)
+            + "; ".join(f"line {item.line} ({lint.snippet(item.title, 60)})" for item in every)
             + "."
         )
     if claims:

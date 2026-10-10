@@ -74,12 +74,16 @@ def git_env(root: Path) -> dict[str, str]:
     return dict(os.environ, GIT_CONFIG_GLOBAL=str(config), GIT_CONFIG_NOSYSTEM="1")
 
 
-def set_window(repo: Path, window: dict) -> None:
-    """config/run.json's window in a throwaway checkout."""
+def set_run(repo: Path, section: str, values: dict) -> None:
+    """One section of config/run.json in a throwaway checkout."""
     path = repo / "config" / "run.json"
     data = json.loads(path.read_text(encoding="utf-8"))
-    data["window"] = dict(data["window"], **window)
+    data[section] = dict(data[section], **values)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def set_window(repo: Path, window: dict) -> None:
+    set_run(repo, "window", window)
 
 
 def make_repo(path: Path, env: dict[str, str], window: dict | None = None) -> Path:
@@ -289,6 +293,25 @@ def draft(day: int, caption: str = "This is the history view after three missed 
     text = text.replace("Skip a day and the score dips. It never resets.", hook)
     legs = f"pair: {pair}\nleg: {leg}\n" if pair else ""
     return text.replace("day: 3\nangle: P03\npair: AB-2\nleg: A\n", f"day: {day}\nangle: {angle}\n{legs}")
+
+
+def with_beats(text: str, *later: tuple[str, str]) -> str:
+    """A Draft with its beats after the hook beat replaced by the given (visual action, on-screen text) pairs."""
+    head, rest = text.split("### Beat 2", 1)
+    beats = "".join(
+        f"### Beat {number}: {3 * number - 3}-{3 * number}s\n\n- Visual action: {visual}\n- Spoken line: none\n"
+        f"- On-screen text: {shown}\n\n"
+        for number, (visual, shown) in enumerate(later, start=2)
+    )
+    return head + beats + "## TikTok" + rest.split("## TikTok", 1)[1]
+
+
+def recut_mandu(path: Path) -> Path:
+    """A Mandu whose synthetic calendar marks AB-1, days 1 and 8, as a re-cut pair."""
+    calendar = make_mandu(path) / "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md"
+    text = calendar.read_text(encoding="utf-8")
+    calendar.write_text(text.replace("only the hook changes", "re-cut opening"), encoding="utf-8")
+    return path
 
 
 def draft_path(day: int, window: int = 1) -> str:

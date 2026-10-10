@@ -7,6 +7,8 @@ import os
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from dataclasses import replace
+from datetime import date
 from pathlib import Path
 from unittest import mock
 
@@ -52,6 +54,19 @@ class RunSettingsTest(unittest.TestCase):
         ):
             with self.subTest(window=bad), self.assertRaises(ConfigError):
                 settings.load_window(bad, "sunday")
+
+    def test_the_waitlist_is_live_only_from_the_date_a_reviewed_change_sets(self):
+        unset = settings.load(REPO, {}, HOME)
+        self.assertIsNone(unset.waitlist_live_since)
+        self.assertFalse(unset.waitlist_live(date(2030, 1, 1)))
+        self.assertIsNone(settings.load_live_since({"live_since": None}))
+        since = settings.load_live_since({"live_since": "2026-10-20", "why": "set after US-ME05"})
+        self.assertEqual(since, date(2026, 10, 20))
+        live = replace(unset, waitlist_live_since=since)
+        self.assertEqual([live.waitlist_live(date(2026, 10, day)) for day in (19, 20, 21)], [False, True, True])
+        for bad in ({"live_since": "yes"}, {"live_since": True}, {"live_since": "2026-13-01"}, "2026-10-20"):
+            with self.subTest(waitlist=bad), self.assertRaises(ConfigError):
+                settings.load_live_since(bad)
 
     def test_the_task_definition_must_be_reviewed_code(self):
         self.assertEqual(

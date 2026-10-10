@@ -13,11 +13,12 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from collections.abc import Collection, Mapping, Sequence
+from dataclasses import dataclass, field, replace
+from itertools import zip_longest
 
 from .codebase import Code
-from .kit import Angle, ChecklistItem, FrozenHook, Kit, all_hooks, frozen_hook
+from .kit import Angle, ChecklistItem, FrozenHook, Kit, all_hooks, frozen_hook, recut_hooks
 from .lint import Copy, Finding, Platform, Rules, check_platform, hashtags, plain
 
 FRONT_KEYS = ("draft", "product", "window", "day", "angle", "pair", "leg")
@@ -355,17 +356,21 @@ def evaluate(
     if day.angle is not None and actual != expected:
         leg = f" / {day.pair} leg {day.leg}" if day.pair else ""
         verdict.block("calendar", f"day {day.day} is {day.angle}{leg} in {calendar} line {day.line}")
+    if day.angle is not None and day.angle not in kit.angles:
+        verdict.block("angle-bank", f"Angle {day.angle} is not in {context.paths.get('angles', 'the Angle bank')}")
+        return verdict
     verdict.hook, why = frozen_hook(day, kit)
     verdict.angle = kit.angles.get(draft.fields["angle"])
     if verdict.hook is None:
         verdict.block("frozen-hook", why)
     else:
         check_hook(draft, verdict.hook, context, verdict)
-    check_isolation(draft, kit, verdict)
+    opening = {norm(hook).casefold() for hook in recut_hooks(day, kit)}
+    check_isolation(draft, kit, opening, verdict)
     check_beats(draft, verdict)
     check_platforms(draft, context, verdict)
     if reference is not None and verdict.hook is not None:
-        check_pair(draft, reference, context, verdict)
+        check_pair(draft, reference, context, opening, verdict)
     if context.rules is not None:
         verdict.add(context.rules.check(draft.copies()))
         check_pain(verdict.angle, context, verdict)
@@ -400,9 +405,9 @@ def check_hook(draft: PostDraft, hook: FrozenHook, context: Context, verdict: Ve
             verdict.block("frozen-hook", f"the {platform} {title.name.lower()} must be the Hook")
 
 
-def check_isolation(draft: PostDraft, kit: Kit, verdict: Verdict) -> None:
-    """A Hook belongs to one Angle: no other Angle's Hook anywhere, and no other Hook of this Angle in any caption or
-    title or the hook beat; a later beat may show this Angle's other leg when the pair's opening order requires it."""
+def check_isolation(draft: PostDraft, kit: Kit, opening: Collection[str], verdict: Verdict) -> None:
+    """A Hook belongs to one Angle and one leg, so no other Hook appears anywhere in a Draft; only a later beat of a
+    re-cut pair's leg may show the pair's other Hook, one of opening, which the re-cut moves out of the first beat."""
     own = norm(draft.hook).casefold()
     angle = draft.fields.get("angle")
     reported = set()
@@ -411,7 +416,7 @@ def check_isolation(draft: PostDraft, kit: Kit, verdict: Verdict) -> None:
         video_after_hook = copy.field.startswith("beat ") and not copy.field.startswith("beat 1 ")
         for hook, owner in all_hooks(kit):
             folded = norm(hook).casefold()
-            if folded == own or folded not in text or (owner == angle and video_after_hook):
+            if folded == own or folded not in text or (folded in opening and video_after_hook):
                 continue
             if (hook, copy.field) in reported:
                 continue
@@ -465,36 +470,67 @@ def check_platforms(draft: PostDraft, context: Context, verdict: Verdict) -> Non
             )
 
 
-def beyond_hook(draft: PostDraft, context: Context) -> dict[str, object]:
-    """Everything in a Draft outside its Hook, by field: each beat after the hook beat, and each platform's text
-    after its first line, its hashtags, and its alt text. The hook beat and a title are the Hook's own."""
-    parts: dict[str, object] = {}
-    for beat in draft.beats[1:]:
-        for label, key in BEAT_LINES.items():
-            parts[f"beat {beat.number} {label.lower()}"] = norm(getattr(beat, key))
+def beyond_hook(draft: PostDraft, context: Context, opening: Collection[str]) -> PostDraft:
+    """The Draft with its Hook taken out, leaving what an A/B leg shares with its other leg: no hook beat, no title,
+    and no first line of each platform's text. In a re-cut pair a later beat that shows one of the pair's Hooks, one
+    of opening, goes too, since it is part of the opening the two legs cut differently."""
+    beats = [
+        beat
+        for beat in draft.beats[1:]
+        if not any(hook in norm(text).casefold() for hook in opening for text in (beat.spoken, beat.on_screen))
+    ]
+    platforms = {}
     for platform, values in draft.platforms.items():
         facts = context.platforms.get(platform)
-        for limit in facts.fields if facts else ():
-            text = values.get(limit.name, "")
-            if limit.title:
-                continue
-            if limit.hashtags:
-                parts[f"{platform} {limit.name.lower()}"] = hashtags(text)
-            elif limit.body:
-                parts[f"{platform} {limit.name.lower()}"] = [norm(line) for line in text.splitlines()[1:]]
-            else:
-                parts[f"{platform} {limit.name.lower()}"] = norm(text)
-    return parts
+        platforms[platform] = {
+            limit.name: "\n".join(values.get(limit.name, "").splitlines()[1 if limit.body else 0 :])
+            for limit in (facts.fields if facts else ())
+            if not limit.title
+        }
+    return replace(draft, hook="", beats=beats, platforms=platforms)
 
 
-def check_pair(draft: PostDraft, reference: PostDraft, context: Context, verdict: Verdict) -> None:
-    """An A/B leg differs from its reference leg only in the Hook, so every field outside the Hook matches."""
-    mine, theirs = beyond_hook(draft, context), beyond_hook(reference, context)
-    for where in list(mine) + [key for key in theirs if key not in mine]:
-        if mine.get(where) != theirs.get(where):
-            verdict.block(
-                "pair-legs", f"differs from day {reference.day}'s leg beyond the Hook (`{reference.path}`)", where
-            )
+def check_pair(
+    draft: PostDraft, reference: PostDraft, context: Context, opening: Collection[str], verdict: Verdict
+) -> None:
+    """An A/B leg differs from its reference leg only in the Hook, so every field outside the Hook matches: beat by
+    beat in order, or, in a re-cut pair, as the same set of beats in any order. Text the reference no longer passes
+    a brand rule with is never inherited or waived: this leg stays blocked, naming the rule, until the Founder
+    resolves it."""
+    mine, theirs = beyond_hook(draft, context, opening), beyond_hook(reference, context, opening)
+
+    def differs(where: str) -> None:
+        verdict.block(
+            "pair-legs", f"differs from day {reference.day}'s leg beyond the Hook (`{reference.path}`)", where
+        )
+
+    def lines(text: str) -> list[str]:
+        return [norm(line) for line in text.splitlines()]
+
+    ours, others = (
+        [[norm(getattr(beat, key)) for key in BEAT_LINES.values()] for beat in leg.beats] for leg in (mine, theirs)
+    )
+    if opening:
+        if sorted(ours) != sorted(others):
+            differs("beats after the re-cut opening")
+    else:
+        absent = [None] * len(BEAT_LINES)
+        for number, (here, there) in enumerate(zip_longest(ours, others, fillvalue=absent), start=2):
+            for label, said, expected in zip(BEAT_LINES, here, there):
+                if said != expected:
+                    differs(f"beat {number} {label.lower()}")
+    for platform, values in theirs.platforms.items():
+        for name, expected in values.items():
+            if lines(mine.platforms.get(platform, {}).get(name, "")) != lines(expected):
+                differs(f"{platform} {name.lower()}")
+    failing = context.rules.check(theirs.copies()) if context.rules else []
+    rules = sorted({finding.rule for finding in failing if finding.blocks and finding.field})
+    if rules:
+        verdict.block(
+            "pair-legs",
+            f"day {reference.day}'s leg, which this leg must match beyond the Hook, now fails {', '.join(rules)}, so"
+            " the pair cannot both pass until the Founder resolves it by a package change or by re-cutting both legs",
+        )
 
 
 def check_pain(angle: Angle | None, context: Context, verdict: Verdict) -> None:

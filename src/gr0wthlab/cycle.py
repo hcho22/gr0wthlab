@@ -477,12 +477,7 @@ class Cycle:
         plan, outcome = state.posts, state.post_outcome
         if plan is None:
             return [state.posts_problem] if state.posts_problem else []
-        context = plan.context
-        gaps = [f"`{context.paths.get(role, role)}` could not be used" for role in sorted(context.kit.problems)]
-        if plan.code.problem:
-            gaps.append(f"{plan.code.name}'s code could not be read")
-        if context.rules is None:
-            gaps.append("brand-rules.json could not be used")
+        gaps = posts.unchecked(plan)
         if outcome is None:
             gaps.append(state.posts_problem or "the Drafts were not taken in")
         else:

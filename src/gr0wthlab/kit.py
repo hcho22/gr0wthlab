@@ -19,6 +19,7 @@ URL = re.compile(r"https?://[^\s)\]]+")
 CHECKBOX = re.compile(r"- \[([ xX])\] (.*)")
 BLOCKING = re.compile(r"\(blocking: ([^)]*)\)")
 NAMED_CLAIM = re.compile(r"the \"([^\"]+)\" claim")
+RECUT = re.compile(r"\bre-?cut\b", re.IGNORECASE)
 # Blocking scopes that cover a social post; any other scope (site, video, submission...) gates other assets.
 SOCIAL_SCOPES = ("everything public", "social")
 NAME_ENDS = (" (", ": ", " - ", " | ", "! ")
@@ -40,6 +41,7 @@ class KitDay:
     primary: str
     line: int
     cell: str
+    row: str
 
 
 @dataclass(frozen=True)
@@ -181,6 +183,7 @@ def one_quote(text: str) -> str | None:
 def parse_calendar(text: str) -> dict[int, KitDay]:
     header, rows = table(text, ("Day", "Asset", "Angle", "platform"))
     days: dict[int, KitDay] = {}
+    lines = text.splitlines()
     for line, row in rows:
         if len(row) != len(header):
             raise KitError(f"calendar line {line} has {len(row)} cells; the header has {len(header)}")
@@ -202,6 +205,7 @@ def parse_calendar(text: str) -> dict[int, KitDay]:
             cell(row, header, "platform"),
             line,
             angle_cell,
+            lines[line - 1],
         )
     if not days:
         raise KitError("the calendar has no days")
@@ -437,6 +441,19 @@ def frozen_hook(day: KitDay, kit: Kit) -> tuple[FrozenHook | None, str]:
     if not angle.hook:
         return None, f"Angle {day.angle}'s Hook cell is not one quoted line, so its frozen text cannot be read"
     return FrozenHook(angle.hook, "angles", angle.line), ""
+
+
+def recut_hooks(day: KitDay, kit: Kit) -> tuple[str, ...]:
+    """Both frozen Hooks of a day's A/B pair when the kit marks the pair as a re-cut, in the pair's own section of
+    the A/B pairs or in the calendar row of either leg; none for any other day. The legs of a re-cut pair open on
+    one Hook each and may show the other in a later beat, so their openings differ by more than the Hook's text."""
+    pair = kit.pairs.get(day.pair or "")
+    if pair is None:
+        return ()
+    marks = [pair.text] + [other.row for other in kit.days.values() if other.pair == pair.id]
+    if not any(RECUT.search(mark) for mark in marks):
+        return ()
+    return tuple(leg.hook for leg in pair.legs.values() if leg.hook)
 
 
 def all_hooks(kit: Kit) -> list[tuple[str, str]]:

@@ -137,7 +137,7 @@ def check_drafts(out=sys.stdout, now: datetime | None = None) -> int:
                 file=out,
             )
             continue
-        verdict = posts.check_day(plan, day_plan, draft, areas, ledger)
+        verdict = posts.check_day(plan, day_plan, draft, areas, products)[0]
         failed += not verdict.passed
         print(f"{'OK' if verdict.passed else 'BLOCKED'} day {number}: {draft.path}", file=out)
         for line in posts.grouped(verdict.blocks):

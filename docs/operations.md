@@ -81,6 +81,18 @@ Until `first_sitting` is set, every run prepares calendar days 1 to 7 as the fir
 Once it is set, each run prepares the calendar days from the next day through the end of the week after the coming sitting (on the sitting's own day, exactly that week), skipping any day already approved, and each post's slot is its date at `slot`.
 A changed slot reaches an open post at the next run, which replaces the post with one that carries it.
 
+## Mark the Waitlist live
+
+No public post may go out before the Waitlist is live.
+That is a fact only the Founder sets, in `waitlist` in [`config/run.json`](../config/run.json), through a reviewed pull request once US-ME05's Validation Test has passed on reptoday.app:
+
+```json
+"waitlist": {"live_since": "2026-10-20"}
+```
+
+It is never inferred from whether a source is connected or what a source is called.
+While `live_since` is `null`, or a date still ahead, every post item, the run brief, and the run report say that nothing can be published until the Waitlist is live; from that date on, each post item says the Waitlist is live.
+
 ## Run on demand
 
 ```sh

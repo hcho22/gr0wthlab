@@ -17,9 +17,10 @@ def rules_of(verdict):
 class DraftTestCase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        root = Path(os.path.realpath(self.tmp.name))
-        env = fakes.git_env(root)
-        self.context = fakes.kit_context(fakes.make_code(root / "RepToday", env), env)
+        self.root = Path(os.path.realpath(self.tmp.name))
+        self.env = fakes.git_env(self.root)
+        self.code = fakes.make_code(self.root / "RepToday", self.env)
+        self.context = fakes.kit_context(self.code, self.env)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -131,6 +132,31 @@ class EvaluateTest(DraftTestCase):
         self.assertEqual(
             [finding.field for finding in self.check(shorter, reference).blocks],
             ["beat 3 visual action", "beat 3 spoken line", "beat 3 on-screen text"],
+        )
+
+    def test_a_re_cut_pair_s_legs_may_reorder_their_opening_and_match_as_a_set_of_beats(self):
+        hook_a, hook_b = fakes.KIT_DAYS[1][3], fakes.KIT_DAYS[8][3]
+        body = ("Open today's session and tap Start.", "Real phone, real time.")
+        leg_a = fakes.with_beats(fakes.draft(1), ("Hold on the session list.", hook_b), body)
+        leg_b = fakes.with_beats(fakes.draft(8), ("The home screen, then one tap.", hook_a), body)
+        reordered = fakes.with_beats(fakes.draft(8), body, ("The home screen, then one tap.", hook_a))
+        changed = fakes.with_beats(fakes.draft(8), ("The home screen.", hook_a), ("Open today's session.", body[1]))
+        # In an ordinary pair no beat shows the other leg's Hook, so neither check lets the opening move.
+        self.assertEqual(rules_of(self.check(leg_a)), ["hook-isolation"])
+        self.context = fakes.kit_context(self.code, self.env, fakes.recut_mandu(self.root / "Mandu"))
+        reference = drafts.parse(leg_a, "day-01.md")
+        self.assertEqual(self.check(leg_a).blocks, [])
+        self.assertEqual(self.check(leg_b, reference).blocks, [])
+        self.assertEqual(self.check(reordered, reference).blocks, [])
+        verdict = self.check(changed, reference)
+        self.assertEqual(
+            [(finding.rule, finding.field) for finding in verdict.blocks],
+            [("pair-legs", "beats after the re-cut opening")],
+        )
+        recaptioned = fakes.with_beats(fakes.draft(8, caption="Another second line."), ("A tap.", hook_a), body)
+        self.assertEqual(
+            [finding.field for finding in self.check(recaptioned, reference).blocks],
+            ["TikTok caption", "YouTube Shorts description"],
         )
 
     def test_no_field_names_a_competitor_and_a_visual_action_is_a_field(self):

@@ -7,7 +7,7 @@ import unittest
 from datetime import date, datetime, time, timezone
 from pathlib import Path
 
-from gr0wthlab import boundary, exchange, posts
+from gr0wthlab import boundary, exchange, lint, posts
 from gr0wthlab.areas import Areas, Store
 from gr0wthlab.boundary import ConfigError
 from gr0wthlab.queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger
@@ -135,7 +135,9 @@ class TakeTestCase(unittest.TestCase):
                 )
             )
         folder = self.repo / "workspace/drafts/posts/window-1"
-        return posts.Plan("RepToday", Window(1, None, None), "First batch.", plans, [], self.context, {}, folder, False)
+        posted = posts.posted_days(self.ledger, "RepToday", 1, list(kit.days))
+        window = Window(1, None, None)
+        return posts.Plan("RepToday", window, "First batch.", plans, [], self.context, {}, folder, False, posted)
 
     def write(self, day, text):
         path = self.repo / "workspace" / fakes.draft_path(day)
@@ -327,6 +329,73 @@ class TakeTest(TakeTestCase):
         [result] = self.take(3).results
         self.assertEqual(result.status, posts.BLOCKED)
         self.assertIn("could not be read", result.detail)
+
+    def test_a_consistent_rewrite_of_both_open_legs_lands_in_one_run(self):
+        self.write(1, fakes.draft(1))
+        self.write(8, fakes.draft(8))
+        first, second = self.take(1, 8).results
+        self.assertEqual((first.status, second.status), (posts.QUEUED, posts.QUEUED))
+        caption = "The same new second line."
+        self.write(1, fakes.draft(1, caption=caption))
+        self.write(8, fakes.draft(8, caption=caption))
+        outcome = self.take(1, 8, run="RUN2")
+        self.assertEqual([result.status for result in outcome.results], [posts.QUEUED, posts.QUEUED])
+        self.assertEqual(outcome.withdrawn, [])
+        for old, new in zip((first, second), outcome.results):
+            self.assertEqual(self.ledger.entries[old.item]["superseded_by"], new.item)
+
+    def test_two_legs_drafted_in_one_run_get_the_same_verdict_from_check_drafts_and_the_launcher(self):
+        self.write(1, fakes.draft(1))
+        self.write(8, fakes.draft(8, caption="A different second line."))
+        plan = self.plan(1, 8)
+        before = [
+            posts.check_day(
+                plan, due, posts.read_draft(self.areas, plan.draft_path(due.day.day))[0], self.areas, PRODUCTS
+            )[0]
+            for due in plan.days
+        ]
+        outcome = posts.take(plan, self.areas, self.store, self.ledger, "RUN1", NOW, PRODUCTS)
+        self.assertEqual([verdict.passed for verdict in before], [True, False])
+        self.assertEqual([result.status for result in outcome.results], [posts.QUEUED, posts.BLOCKED])
+        self.assertEqual(posts.grouped(before[1].blocks), posts.grouped(outcome.results[1].verdict.blocks))
+        self.assertIn("pair-legs: differs from day 1's leg beyond the Hook", posts.grouped(before[1].blocks)[0])
+
+    def test_a_rule_the_reference_leg_s_shared_text_now_fails_is_never_inherited_or_waived(self):
+        caption = "No leaderboard here, only today."
+        self.write(1, fakes.draft(1, caption=caption))
+        [first] = self.take(1).results
+        self.ledger.close(self.ledger.entries[first.item], APPROVED, "RUN2", NOW)
+        data = dict(self.context.rules.data)
+        data["banned_words_in_hook"] = [*data["banned_words_in_hook"], "leaderboard"]
+        self.context.rules = lint.Rules(data)
+        unresolved = (
+            "pair-legs: day 1's leg, which this leg must match beyond the Hook, now fails banned_words_in_hook, so"
+            " the pair cannot both pass until the Founder resolves it by a package change or by re-cutting both legs"
+        )
+        fields = "(TikTok caption, YouTube Shorts description)"
+        self.write(8, fakes.draft(8, caption=caption))
+        outcome = self.take(8, run="RUN3")
+        [copied] = outcome.results
+        self.assertEqual(
+            posts.grouped(copied.verdict.blocks),
+            [unresolved, f"banned_words_in_hook: banned word 'leaderboard' {fields}"],
+        )
+        self.assertIn(unresolved, posts.notice_section(outcome, "2026-10-11")[2])
+        self.write(8, fakes.draft(8, caption="Only today."))
+        [reworded] = self.take(8, run="RUN4").results
+        differs = f"pair-legs: differs from day 1's leg beyond the Hook (`drafts/posts/window-1/day-01.md`) {fields}"
+        self.assertEqual(posts.grouped(reworded.verdict.blocks), [differs, unresolved])
+
+    def test_a_pair_leg_whose_angle_is_missing_from_the_bank_is_blocked_and_never_rendered(self):
+        del self.context.kit.angles["P03"]
+        self.write(3, fakes.draft(3))
+        outcome = self.take(3)
+        [result] = outcome.results
+        self.assertEqual((result.status, outcome.published), (posts.BLOCKED, []))
+        self.assertEqual(
+            posts.grouped(result.verdict.blocks),
+            ["angle-bank: Angle P03 is not in projects/RepToday/gtm/05-social-pmf/angles.md"],
+        )
 
     def test_the_record_keeps_every_check_of_every_day(self):
         self.write(3, fakes.draft(3))

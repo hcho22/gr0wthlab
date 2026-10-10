@@ -1271,6 +1271,48 @@ class PostDraftsTest(CycleTestCase):
             self.report(),
         )
 
+    def test_a_post_says_the_waitlist_is_live_only_from_the_date_config_sets(self):
+        fakes.set_window(self.repo, {"first_sitting": None, "slot": None})
+        fakes.set_run(self.repo, "waitlist", {"live_since": "2026-10-12"})
+        fakes.behave(self.codex_dir, {"write": {fakes.draft_path(1): fakes.draft(1)}})
+        self.run_cycle()
+        [ahead] = [entry for entry in self.queue()["open"] if entry["kind"] == "post"]
+        waiting = "Nothing can be published until the RepToday Waitlist is live."
+        self.assertIn(waiting, (self.ledger() / ahead["file"]).read_text(encoding="utf-8"))
+        self.assertIn("The RepToday Waitlist is not live, so nothing can be published yet", self.brief())
+        self.assertIn("- Nothing can be published until the RepToday Waitlist is live", self.report())
+
+        fakes.set_run(self.repo, "waitlist", {"live_since": "2026-10-11"})
+        fakes.behave(self.codex_dir, {"write": {fakes.draft_path(2): fakes.draft(2)}})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))
+        live = next(entry for entry in self.queue()["open"] if entry.get("day") == 2)
+        text = (self.ledger() / live["file"]).read_text(encoding="utf-8")
+        self.assertIn("The Waitlist is live.", text)
+        self.assertNotIn(waiting, text)
+        self.assertNotIn("Waitlist is not live", self.brief())
+        self.assertNotIn("Nothing can be published until", self.report())
+
+    def test_check_drafts_checks_two_legs_drafted_in_one_run_as_the_launcher_will(self):
+        fakes.set_window(self.repo, fakes.window_from(fakes.SUNDAY_RUN.date()))
+        fakes.keep_days(self.mandu, 3, 10)
+        draft_dir = self.workspace() / "drafts/posts/window-1"
+        draft_dir.mkdir(parents=True)
+        (draft_dir / "day-03.md").write_text(fakes.draft(3), encoding="utf-8")
+        (draft_dir / "day-10.md").write_text(fakes.draft(10, caption="A different second line."), encoding="utf-8")
+        out = io.StringIO()
+        with (
+            mock.patch.object(cli, "REPO_ROOT", self.repo),
+            mock.patch.object(cli, "LEDGER_DIR", self.repo / "ledger"),
+            mock.patch.dict(os.environ, self.env),
+        ):
+            code = cli.check_drafts(out, now=fakes.SUNDAY_RUN + timedelta(days=1))  # a Monday run has both legs due
+        text = out.getvalue()
+        self.assertEqual(code, 1, text)
+        self.assertIn("OK day 3: drafts/posts/window-1/day-03.md", text)
+        self.assertIn("BLOCKED day 10: drafts/posts/window-1/day-10.md", text)
+        self.assertIn("  - pair-legs: differs from day 3's leg beyond the Hook", text)
+        self.assertIn("2 days due, 1 with problems", text)
+
     def test_the_brand_rules_proposal_is_filed_once_and_its_lists_are_pending_until_mandu_has_them(self):
         rules = self.mandu / "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json"
         data = json.loads(rules.read_text())

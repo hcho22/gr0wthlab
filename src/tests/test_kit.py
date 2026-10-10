@@ -114,6 +114,28 @@ class AnglesAndPairsTest(unittest.TestCase):
         self.assertEqual(owners["Five minutes still counts as showing up."], "P07")
 
 
+class RecutTest(unittest.TestCase):
+    CALENDAR = "05-social-pmf/cadence-14-day.md"
+    PAIRS = "05-social-pmf/ab-pairs.md"
+    HOOKS = ("Open it and the session is already waiting.", "The session is on screen before you decide.")
+
+    def hooks(self, calendar, pairs, day):
+        found = kit.Kit(days=kit.parse_calendar(calendar), pairs=kit.parse_pairs(pairs))
+        return kit.recut_hooks(found.days[day], found)
+
+    def test_a_pair_is_a_re_cut_only_where_the_kit_says_so(self):
+        calendar, pairs = read(self.CALENDAR), read(self.PAIRS)
+        for day in (1, 2, 8, 14):
+            self.assertEqual(self.hooks(calendar, pairs, day), ())
+        in_calendar = calendar.replace("only the hook changes", "Re-cut opening")
+        in_pairs = pairs.replace("same screen record)", "same screen record, recut)", 1)
+        for where, marked in (("calendar", (in_calendar, pairs)), ("pairs", (calendar, in_pairs))):
+            with self.subTest(marked_in=where):
+                self.assertEqual(self.hooks(*marked, 1), self.HOOKS)
+                self.assertEqual(self.hooks(*marked, 8), self.HOOKS)
+                self.assertEqual(self.hooks(*marked, 3), ())  # the other pair is not marked
+
+
 class PlatformsChecklistCompetitorsTest(unittest.TestCase):
     def test_the_test_platforms_in_order(self):
         self.assertEqual(

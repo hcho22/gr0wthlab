@@ -55,6 +55,11 @@ class Settings:
     outputs: Mapping[str, Mapping]
     not_connected: tuple[Mapping, ...]
     window: Window
+    waitlist_live_since: date | None
+
+    def waitlist_live(self, today: date) -> bool:
+        """Whether the Waitlist is live: only once a reviewed change has set the date it went live."""
+        return self.waitlist_live_since is not None and self.waitlist_live_since <= today
 
 
 def resolve_home_path(raw: object, name: str, env_name: str | None, env: Mapping[str, str], home: Path) -> Path:
@@ -80,6 +85,25 @@ def instruction_path(repo_root: Path, path: Path) -> Path:
     return resolved
 
 
+def iso_date(value: object) -> date | None:
+    """A YYYY-MM-DD date, or None for anything else."""
+    try:
+        return date.fromisoformat(value) if isinstance(value, str) and len(value) == 10 else None
+    except ValueError:
+        return None
+
+
+def load_live_since(data: object) -> date | None:
+    """config/run.json's waitlist.live_since: the date the Waitlist went live, unset until the Founder's reviewed
+    change sets it, and never inferred from a source's state."""
+    if not isinstance(data, dict):
+        raise ConfigError(f"{RUN_CONFIG}: waitlist must be an object")
+    value = data.get("live_since")
+    if value is not None and iso_date(value) is None:
+        raise ConfigError(f"{RUN_CONFIG}: waitlist.live_since must be null or a YYYY-MM-DD date")
+    return iso_date(value)
+
+
 def load_window(data: object, sitting_day: str) -> Window:
     """config/run.json's window; its first sitting, on the schedule's day, and its slot stay unset until the Founder
     sets them, and are never inferred."""
@@ -90,10 +114,7 @@ def load_window(data: object, sitting_day: str) -> Window:
         raise ConfigError(f"{RUN_CONFIG}: window.number must be a whole number from 1")
     first = data.get("first_sitting")
     if first is not None:
-        try:
-            first = date.fromisoformat(first) if isinstance(first, str) and len(first) == 10 else None
-        except ValueError:
-            first = None
+        first = iso_date(first)
         if first is None or first.weekday() != schedule.weekday(sitting_day):
             raise ConfigError(
                 f"{RUN_CONFIG}: window.first_sitting must be null or the YYYY-MM-DD date of a sitting, which falls on"
@@ -130,13 +151,14 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
         not_connected = tuple(data.get("sources_not_connected") or ())
         instruction = instruction_path(repo_root, Path(data["instruction"]))
         window = load_window(data["window"], weekly[0])
+        live_since = load_live_since(data["waitlist"])
     except (KeyError, TypeError, ValueError, schedule.ScheduleError) as error:
         raise ConfigError(f"{RUN_CONFIG} is incomplete or malformed: {error}") from error
     for source in not_connected:
         for output in source.get("needed_by", ()):
             if output not in outputs:
                 raise ConfigError(f"{RUN_CONFIG}: {source.get('name')} feeds unknown output {output}")
-    return Settings(data, instruction, weekly, late, resolved, prices, outputs, not_connected, window)
+    return Settings(data, instruction, weekly, late, resolved, prices, outputs, not_connected, window, live_since)
 
 
 def exchange_dir(registry: Mapping, boundary: Boundary, env: Mapping[str, str], home: Path) -> Path:
