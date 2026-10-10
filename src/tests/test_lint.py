@@ -92,6 +92,9 @@ class BrandRulesTest(unittest.TestCase):
             ("banned_words_in_hook", "grind"),
             ("no_emoji_in_hook", "yes"),
             ("stock_phrases", [""]),
+            ("stock_phrases", ["..."]),
+            ("banned_words_in_hook", ["--"]),
+            ("banned_characters_anywhere", [" "]),
         ):
             with self.subTest(key=key), self.assertRaises(lint.RulesError):
                 lint.Rules(dict(HOOK_RULES, **{key: value}))
@@ -160,27 +163,78 @@ class NewRuleTypesTest(unittest.TestCase):
         self.assertEqual(rules_hit(rules, "You can\u2019t stop."), [("banned_words_in_hook", True)])
         self.assertEqual(rules_hit(rules, "It's simply there, and really."), [])
 
-    def test_a_term_written_as_one_hashtag_is_caught_like_its_spaced_words(self):
+    def test_a_term_is_caught_anywhere_inside_a_hashtag(self):
         data = json.loads(KIT_RULES.read_text(encoding="utf-8"))
-        rules = lint.Rules(dict(data, capped_words=["in order to", "cutting-edge"], stock_phrases=["...", "level up"]))
+        rules = lint.Rules(dict(data, capped_words=["in order to", "cutting-edge"], stock_phrases=["level up"]))
         cases = {
             "#beastmode #NoExcuses": [("banned_words_in_hook", True)] * 2,
+            "#beast_mode #no_excuses": [("banned_words_in_hook", True)] * 2,
+            "#nobeastmode #beastmodeoff": [("banned_words_in_hook", True)],
+            "#dailygrind": [("banned_words_in_hook", True)],
+            "#transformation": [("banned_words_in_hook", True)],
             "#userslove": [("banned_social_proof_in_hook", True)],
             "#levelup": [("stock_phrases", True)],
             "#inorderto #cuttingedge": [("capped_words", True)],
             "#lastchance #only3left": [("fake_scarcity", True)] * 2,
             "#10kusers": [("invented_proof_terms", True)],
+            "#over10kusers #trustedby10k_users": [("invented_proof_terms", True)] * 2,
             "#thousandsofreviews": [("invented_proof_terms", True)],
         }
         for text, hits in cases.items():
             with self.subTest(text=text):
                 self.assertEqual(sorted(rules_hit(rules, text, field="TikTok hashtags")), sorted(hits))
-        [finding] = rules.check([lint.Copy("TikTok hashtags", "#buildinpublic #beastmodes")])
-        self.assertEqual(finding.line(), "banned_words_in_hook: banned word 'beast mode' (TikTok hashtags)")
-        # A hashtag is caught as a whole, and only a hashtag runs a term's words together.
-        self.assertEqual(rules_hit(rules, "#buildinpublic #nobeastmode #beastmodeoff", field="TikTok hashtags"), [])
+        lines = [finding.line() for finding in rules.check([lint.Copy("TikTok hashtags", "#nogrind #over10kusers")])]
+        self.assertEqual(
+            lines,
+            [
+                "banned_words_in_hook: banned word 'grind' (TikTok hashtags)",
+                "invented_proof_terms: unsourced proof '#over10kusers' (TikTok hashtags)",
+            ],
+        )
+        # Only a hashtag runs a term's words together, and a hashtag that holds no term passes.
         self.assertEqual(rules_hit(rules, "Beastmode is one word here, and so is levelup."), [])
-        self.assertEqual(rules_hit(rules, "Press the # key, then 3."), [])
+        self.assertEqual(rules_hit(rules, "#buildinpublic #homeworkout", field="TikTok hashtags"), [])
+
+    def test_an_allowed_phrase_inside_a_hashtag_hides_only_itself(self):
+        data = json.loads(KIT_RULES.read_text(encoding="utf-8"))
+        rules = lint.Rules(dict(data, banned_words_in_hook=["grind", "card"]))
+        self.assertEqual(rules_hit(rules, "#nocardrequired #no_card_required", field="TikTok hashtags"), [])
+        [finding] = rules.check([lint.Copy("TikTok hashtags", "#grindnocardrequired")])
+        self.assertEqual(finding.detail, "banned word 'grind'")
+        [finding] = rules.check([lint.Copy("TikTok hashtags", "#nocardrequiredcard")])
+        self.assertEqual(finding.detail, "banned word 'card'")
+
+    def test_a_term_s_words_match_whatever_sets_them_apart(self):
+        data = json.loads(KIT_RULES.read_text(encoding="utf-8"))
+        rules = lint.Rules(
+            dict(
+                data,
+                banned_words_in_hook=["weight loss", "grind", "card"],
+                capped_words=["cutting-edge", "world-class"],
+                fake_scarcity=["last chance", "{n}-day sale"],
+            )
+        )
+        cases = {
+            "This is not a weight-loss app.": [("banned_words_in_hook", True)],
+            "Weight_loss, again.": [("banned_words_in_hook", True)],
+            "Weight \u2013 loss.": [("banned_words_in_hook", True)],
+            "The weight_loss_plan and my_grind_plan.": [("banned_words_in_hook", True)] * 2,
+            "A real game changer.": [("stock_phrases", True)],
+            "A real game-changer.": [("stock_phrases", True)],
+            "Say-goodbye-to planning.": [("stock_phrases", True)],
+            "Cutting edge and world class.": [("capped_words", True)],
+            "Last-chance sign-up.": [("fake_scarcity", True)],
+            "A 3 day sale.": [("fake_scarcity", True)],
+            "Thousands-of people.": [("invented_proof_terms", True)],
+            "A 10k_user beta.": [("invented_proof_terms", True)],
+            "10k_really_happy_users.": [("invented_proof_terms", True)],
+        }
+        for text, hits in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(sorted(rules_hit(rules, text)), sorted(hits))
+        self.assertEqual(rules_hit(rules, "No-card-required beta."), [])
+        self.assertEqual(rules_hit(rules, "A weightloss app, a postcard, and grinding."), [])
+        self.assertEqual(rules_hit(rules, "10k_really_very_happy_users."), [])
 
     def test_a_need_marker_blocks_since_a_draft_never_fills_in_proof(self):
         self.assertIn(("need-marker", True), rules_hit(lint.Rules(HOOK_RULES), "Used by [NEED: source] people."))

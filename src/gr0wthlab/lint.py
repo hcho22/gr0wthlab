@@ -7,6 +7,10 @@ about the Hook itself. The newer rule types (stock phrases, capped words, long s
 scarcity) run with whatever lists brand-rules.json holds; one it does not hold yet is reported as pending, never
 filled in from anywhere else. A key gr0wthlab does not know blocks every Draft until a reviewed change teaches it,
 so no rule in Mandu is ever skipped silently.
+
+A listed word or phrase matches as whole words, whatever sets its words apart in the rule or in the text (spaces,
+hyphens, dashes, or underscores). A hashtag runs words together, so there it matches anywhere inside the tag, which
+is stricter: a false hit costs another hashtag, and a miss puts banned language in a public post.
 """
 
 from __future__ import annotations
@@ -21,6 +25,9 @@ NOT_APPLICABLE = "not applicable"
 DOCUMENTATION = ("comment", "notes")
 EMOJI_ABOVE = 0x2100  # the package's own lint treats any character above U+2100 as a non-text symbol
 NUMBER = r"\d[\d,.]*\s*(?:k|m|million|thousand)?\+?"
+SEPARATOR = r"[\s_\-\u2010-\u2015]+"  # what sets words apart: spaces, hyphens, dashes, and underscores
+LETTER = r"[^\W_]"  # a letter or digit, so a word ends at an underscore as at any other separator
+BEFORE, AFTER = f"(?<!{LETTER})", f"(?!{LETTER})"
 QUOTES = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'})
 NEED_MARKER = re.compile(r"\[NEED:[^\]]*\]", re.IGNORECASE)
 
@@ -100,28 +107,35 @@ def plain(text: str) -> str:
     return text.translate(QUOTES)
 
 
-def phrase(term: str, joined: bool = False) -> str:
-    """A term's words as a pattern, spacing free and quotes plain; {n} is any number. joined is the term as a hashtag
-    writes it: its words run together, each down to its letters, digits, and underscores, and empty when the term
-    has none."""
-    words = plain(term).split()
-    if joined:
+def phrase(term: str, tag: bool = False) -> str:
+    """A term's words as a pattern, quotes plain and {n} any number; any separator sets them apart, in the term and
+    in the text alike. tag is the term as a hashtag writes it: each word down to its letters and digits, run
+    together or joined by underscores."""
+    words = [word for word in re.split(SEPARATOR, plain(term)) if word]
+    if tag:
         words = [word if word == "{n}" else re.sub(r"\W", "", word) for word in words]
-    return ("" if joined else r"\s+").join(NUMBER if word == "{n}" else re.escape(word) for word in words)
+    return ("_*" if tag else SEPARATOR).join(NUMBER if word == "{n}" else re.escape(word) for word in words)
 
 
 def words_pattern(term: str, plural: bool = True) -> re.Pattern:
-    """A term as whole words, any case, with a plural ending when plural is set, or as one whole hashtag, which
-    cannot space its words."""
+    """A term in any case: as whole words, with a plural ending when plural is set, or anywhere inside a hashtag,
+    whose start, up to the term, is the tag group."""
     ending = "(?:s|es)?" if plural else ""
-    tag = phrase(term, joined=True)
-    forms = r"(?<!\w)" + phrase(term) + (f"|(?<=#){tag}" if tag else "")
-    return re.compile(f"(?:{forms}){ending}" + r"(?!\w)", re.IGNORECASE)
+    return re.compile(rf"{BEFORE}{phrase(term)}{ending}{AFTER}|(?P<tag>#\w*?){phrase(term, tag=True)}", re.IGNORECASE)
 
 
-def string_list(data: Mapping, key: str) -> tuple[str, ...]:
+def blank(match: re.Match) -> str:
+    """Spaces in place of a term words_pattern found, keeping the start of a hashtag that holds it."""
+    kept = match.group("tag") or ""
+    return kept + " " * (len(match.group(0)) - len(kept))
+
+
+def string_list(data: Mapping, key: str, words: bool = True) -> tuple[str, ...]:
+    """A list of brand-rules.json; in a list of words, every entry holds a letter or digit, so it has a word to
+    match."""
     value = data.get(key)
-    if not isinstance(value, list) or not all(isinstance(item, str) and item.strip() for item in value):
+    holds = re.compile(LETTER if words else r"\S")
+    if not isinstance(value, list) or not all(isinstance(item, str) and holds.search(item) for item in value):
         raise RulesError(f"brand-rules.json {key} must be a list of words or phrases")
     return tuple(item.strip() for item in value)
 
@@ -172,7 +186,7 @@ class Rules:
             "lint_allow_phrases",
         ):
             if key in data:
-                self.lists[key] = string_list(data, key)
+                self.lists[key] = string_list(data, key, words=key != "banned_characters_anywhere")
         for key in ("hook_max_words", "capped_words_per_paragraph", "long_sentence_words", "long_sentence_commas"):
             if key in data:
                 self.numbers[key] = whole_number(data, key)
@@ -214,7 +228,7 @@ class Rules:
     def masked(self, text: str) -> str:
         """The text with every allowed phrase blanked out, so no word or phrase rule counts inside one."""
         for pattern in self.allow:
-            text = pattern.sub(lambda match: " " * len(match.group(0)), text)
+            text = pattern.sub(blank, text)
         return text
 
     def check(self, copies: Sequence[Copy]) -> list[Finding]:
@@ -294,18 +308,19 @@ class Rules:
 
     def invented_proof(self, copy: Copy, text: str) -> list[Finding]:
         """Numbers and quantities of people, reviews, or results: the product has none, so none may be implied. An
-        amount counts next to a term as words, with up to two words between them, and as one hashtag that opens with
-        the amount and ends with the term."""
+        amount counts before a term as words, with up to two words between them, and anywhere before a term inside
+        one hashtag."""
         found = []
-        for start, between, joined in ((r"(?<!\w)", r"[\s-]+(?:\w+[\s-]+){0,2}", False), (r"(?<=#)", r"\w*?", True)):
-            terms, quantities = (
-                [pattern for pattern in (phrase(term, joined) for term in self.lists.get(key, ())) if pattern]
-                for key in ("invented_proof_terms", "invented_proof_quantities")
+        terms = self.lists["invented_proof_terms"]
+        quantities = self.lists.get("invented_proof_quantities", ())
+        if terms:
+            term, tag_term = ("|".join(phrase(word, tag) for word in terms) for tag in (False, True))
+            amount, tag_amount = (
+                "|".join([NUMBER] + [phrase(word, tag) for word in quantities]) for tag in (False, True)
             )
-            if not terms:
-                continue
             near = re.compile(
-                rf"{start}(?:{'|'.join([NUMBER] + quantities)}){between}(?:{'|'.join(terms)})(?:s|es)?(?!\w)",
+                rf"{BEFORE}(?:{amount}){SEPARATOR}(?:{LETTER}+{SEPARATOR}){{0,2}}(?:{term})(?:s|es)?{AFTER}"
+                rf"|#\w*?(?:{tag_amount})\w*?(?:{tag_term})\w*",
                 re.IGNORECASE,
             )
             for match in near.finditer(text):

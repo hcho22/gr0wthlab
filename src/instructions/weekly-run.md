@@ -149,6 +149,10 @@ leg: A
 - Leave out `pair` and `leg` for a day that is not an A/B pair leg.
 - Number the beats from 1 with times that follow on; only beat 1 is the hook beat, starting at 0s.
 - Each test platform the brief names gets one `##` section with exactly the `###` fields the brief lists for it; both carry identical content.
+- The brand lint matches a word or phrase a brand rule lists as whole words, whether spaces, hyphens, dashes, or underscores join them.
+  A hashtag runs its words together, so there the lint is stricter: a listed word or phrase blocks the Draft anywhere inside a hashtag, run together or joined by underscores, even as part of a longer word.
+  So does a number or quantity that comes before an invented-proof term inside one hashtag.
+  When a hashtag is blocked this way, choose another hashtag.
 - An A/B leg differs from its other leg only in the Hook: when the other leg already has an open or approved post, copy its Draft and change only the Hook's lines; the hook beat's visual action and spoken line may change with them.
   When you draft both legs in one run, write the earlier day first and copy it for the later day.
   The launcher checks the newer leg against that Draft field by field, in the order of the beats, and blocks it on any other difference; it never changes the leg already posted.

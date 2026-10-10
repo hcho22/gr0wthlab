@@ -30,6 +30,9 @@ The Draft's format is in the task definition, and the launcher's checks decide w
 - No call to action, link, or download line: the product has no listing, and the Waitlist is not live.
 - The other platform carries the same text, hashtags, and alt text; only the YouTube title differs, and it is the Hook.
 - Use at most one hashtag unless the kit asks for more.
+- The brand lint reads a hashtag as words run together: a word or phrase a brand rule lists blocks the Draft anywhere inside a hashtag, run together or joined by underscores, even as part of a longer word, and so does a number or quantity before an invented-proof term.
+  That is stricter than in every other field, where a listed phrase matches only as whole words, whatever joins them (spaces, hyphens, dashes, or underscores).
+  When a hashtag is blocked this way, choose another one.
 - Alt text says plainly what is on screen, for someone who cannot see it.
 
 ## Claims
