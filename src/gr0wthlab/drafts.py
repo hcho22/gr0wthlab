@@ -326,8 +326,13 @@ def checklist_status(draft: PostDraft, context: Context, angle: Angle | None) ->
     return lines
 
 
-def evaluate(draft: PostDraft, context: Context, other_leg: PostDraft | None = None) -> Verdict:
-    """Every deterministic check of one Draft; the Draft is offered for approval only when nothing blocks it."""
+def evaluate(
+    draft: PostDraft, context: Context, other_leg: PostDraft | None = None, file_day: int | None = None
+) -> Verdict:
+    """Every deterministic check of one Draft; the Draft is offered for approval only when nothing blocks it.
+
+    file_day is the day its file name gives, which its front matter must name too.
+    """
     verdict = Verdict()
     kit = context.kit
     for role, problem in sorted(kit.problems.items()):
@@ -339,6 +344,8 @@ def evaluate(draft: PostDraft, context: Context, other_leg: PostDraft | None = N
             verdict.block("format", problem)
         return verdict
     calendar = context.paths.get("calendar", "the calendar")
+    if file_day is not None and draft.day != file_day:
+        verdict.block("calendar", f"the Draft in the file for day {file_day} says day {draft.day}")
     day = kit.days.get(draft.day or 0)
     if draft.fields["product"] != context.product or draft.number("window") != context.window:
         verdict.block("calendar", f"the window being prepared is {context.product} window {context.window}")

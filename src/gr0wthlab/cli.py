@@ -139,7 +139,7 @@ def check_drafts(out=sys.stdout, now: datetime | None = None) -> int:
             continue
         other = plan.other_leg(day_plan.day)
         other_draft = posts.read_draft(areas, plan.draft_path(other.day))[0] if other else None
-        verdict = drafts.evaluate(draft, plan.context, other_draft)
+        verdict = drafts.evaluate(draft, plan.context, other_draft, number)
         failed += not verdict.passed
         print(f"{'OK' if verdict.passed else 'BLOCKED'} day {number}: {draft.path}", file=out)
         for line in posts.grouped(verdict.blocks):

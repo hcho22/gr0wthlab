@@ -387,13 +387,14 @@ def take_day(
     draft, problem = read_draft(areas, plan.draft_path(number))
     if draft is None:
         if problem:
-            return DayResult(number, BLOCKED, problem)
+            withdrawn = str(day_plan.open["id"]) if day_plan.open else None
+            return DayResult(number, BLOCKED, problem, withdrawn=withdrawn)
         if day_plan.open:
             return DayResult(number, KEPT, "no new Draft; the open item stands", str(day_plan.open["id"]))
         return DayResult(number, MISSING, f"no Draft at `{areas.relative(plan.draft_path(number))}`")
     other = plan.other_leg(day_plan.day)
     other_draft = read_draft(areas, plan.draft_path(other.day))[0] if other else None
-    verdict = evaluate(draft, plan.context, other_draft)
+    verdict = evaluate(draft, plan.context, other_draft, number)
     result = DayResult(number, BLOCKED, "", None, draft.path, draft.sha256, verdict)
     if day_plan.open and unchecked(plan):
         # The open item passed when it was queued; a source that cannot be read now does not withdraw it.

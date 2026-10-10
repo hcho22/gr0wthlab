@@ -233,6 +233,22 @@ class TakeTest(TakeTestCase):
         [again] = self.take(3, run="RUN3", seen=seen).results
         self.assertEqual((again.status, again.item), (posts.REPEATED, first.item))
 
+    def test_a_draft_must_be_for_the_day_its_file_names(self):
+        self.write(3, fakes.draft(4))
+        [result] = self.take(3).results
+        self.assertEqual(result.status, posts.BLOCKED)
+        self.assertIn("calendar: the Draft in the file for day 3 says day 4", posts.grouped(result.verdict.blocks))
+
+    def test_an_unreadable_draft_withdraws_its_day_s_open_post(self):
+        self.write(3, fakes.draft(3))
+        [first] = self.take(3).results
+        path = self.repo / "workspace" / fakes.draft_path(3)
+        path.unlink()
+        (self.repo.parent / "outside.md").write_text(fakes.draft(3))
+        path.symlink_to(self.repo.parent / "outside.md")
+        [result] = self.take(3, run="RUN2").results
+        self.assertEqual((result.status, result.withdrawn), (posts.BLOCKED, first.item))
+
     def test_a_draft_that_is_a_link_is_never_read(self):
         target = self.repo.parent / "outside.md"
         target.write_text(fakes.draft(3))
