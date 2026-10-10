@@ -15,6 +15,15 @@ identifier that never changes and marks its queue entry with the key, then, run 
 
 The whole text is the ask and all four sections, Touches and Evidence included: the Founder approves exactly the text
 firstmate receives.
+
+Two exceptions, both only after a reviewed change to the request's text while an item of it is open, which is
+firstmate's own reviewed act:
+
+- the rejected-text rule applies only while nothing is open, so a reviewed change that brings back a text the Founder
+  rejected, while another text is open, files the rejected text again in that open item's place;
+- an approval the Founder gave an item that a reviewed change had already replaced still counts as the request's
+  approval, though Mandu hands no superseded item to firstmate: the replacement stays open for the Founder to decide,
+  no reviewed change replaces it any more, and nothing is filed after it.
 """
 
 from __future__ import annotations
@@ -54,24 +63,32 @@ class Request:
 
 @dataclass(frozen=True)
 class Filing:
-    """What became of one reviewed request this run; identifier is its current queue item, if it has one."""
+    """What became of one reviewed request this run; identifier is its current queue item, if it has one, and
+    still_open is the replacement an approval of an already replaced item left open."""
 
     key: str
     status: str
     identifier: str | None
     replaced: str | None = None
+    still_open: str | None = None
 
     @property
     def acted(self) -> bool:
         return self.status in (FILED, REPLACED)
 
     def account(self) -> str:
+        done = f"{self.key} approved as `{self.identifier}`; never filed again"
+        if self.still_open:
+            done += (
+                f"; `{self.still_open}`, filed in its place before that approval was taken in, stays open, and no"
+                " reviewed change replaces it"
+            )
         return {
             FILED: f"{self.key} filed as `{self.identifier}`",
             REPLACED: f"{self.key} filed as `{self.identifier}` in place of `{self.replaced}`, as its reviewed text"
             " changed",
             WAITING: f"{self.key} open as `{self.identifier}`",
-            DONE: f"{self.key} approved as `{self.identifier}`; never filed again",
+            DONE: done,
             DECIDED: f"{self.key} rejected as `{self.identifier}`; not asked again unless any part of its reviewed"
             " text changes",
             ASKED: f"{self.key} asks the same as `{self.identifier}`, already queued; not filed",
@@ -147,7 +164,8 @@ def file(
         approved = [entry for entry in mine if APPROVED in (entry["status"], entry.get("decided"))]
         current = next((entry for entry in mine if entry["status"] == OPEN), None)
         if approved:
-            filings.append(Filing(request.key, DONE, str(approved[-1]["id"])))
+            still_open = str(current["id"]) if current is not None else None
+            filings.append(Filing(request.key, DONE, str(approved[-1]["id"]), still_open=still_open))
             continue
         if current is not None and queued_text(store, current, products) == text:
             filings.append(Filing(request.key, WAITING, str(current["id"])))

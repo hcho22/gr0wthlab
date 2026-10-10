@@ -230,6 +230,40 @@ class FilingTest(unittest.TestCase):
         self.assertEqual((fourth.status, fourth.identifier), (dispatch.DECIDED, third.identifier))
         self.assertIn(f"rejected as `{third.identifier}`", fourth.account())
 
+    def test_a_rejected_text_brought_back_while_another_is_open_is_filed_in_its_place(self):
+        (first,) = self.file()
+        self.decide(first.identifier, REJECTED)
+        self.revise()
+        (second,) = self.file(7)
+        self.assertEqual(second.status, dispatch.FILED)
+        self.revert()
+        (third,) = self.file(14)
+        self.assertEqual((third.status, third.replaced), (dispatch.REPLACED, second.identifier))
+        texts = [dispatch.queued_text(self.store, self.ledger.entries[f.identifier], PRODUCTS) for f in (first, third)]
+        self.assertEqual(texts[0], texts[1])
+
+    def test_an_approval_of_an_item_already_replaced_counts_and_leaves_the_replacement_open(self):
+        (first,) = self.file()
+        self.revise()
+        (second,) = self.file(7)
+        late = exchange.Decision(first.identifier, exchange.APPROVE, None, None, "2026-10-18T19:00:00-07:00", None)
+        self.ledger.take_decisions([late], "RUN2", NOW + timedelta(days=7))
+        self.retouch()
+        (filing,) = self.file(14)
+        self.assertEqual(
+            (filing.status, filing.identifier, filing.still_open), (dispatch.DONE, first.identifier, second.identifier)
+        )
+        self.assertEqual(
+            filing.account(),
+            f"reptoday-waitlist approved as `{first.identifier}`; never filed again; `{second.identifier}`, filed in"
+            " its place before that approval was taken in, stays open, and no reviewed change replaces it",
+        )
+        self.assertEqual(self.ledger.entries[second.identifier]["status"], OPEN)
+        self.decide(second.identifier, REJECTED)
+        (after,) = self.file(21)
+        self.assertEqual((after.status, after.identifier, after.still_open), (dispatch.DONE, first.identifier, None))
+        self.assertEqual(len(self.ledger.entries), 2)
+
     def test_a_request_already_asked_by_another_item_is_not_filed(self):
         requests, _ = dispatch.load(self.repo, PRODUCTS)
         seen = {exchange.item_hash(requests[0].item): "20261004-agent-waitlist"}

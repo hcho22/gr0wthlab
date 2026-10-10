@@ -20,6 +20,9 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
 5. It files each reviewed Dispatch request in `src/dispatches/` that needs filing, such as RepToday's Waitlist, under an identifier that never changes.
    A filed request stays open until the Founder decides it: any reviewed change to its text, the ask or any section, files the new text in its place, and no item the agent writes can replace it.
    A request is never filed again once the Founder approved it, and the same whole text is never asked again once the Founder rejected it.
+   Two exceptions arise only after a reviewed change to the request's text while an item of it is open, which is firstmate's own reviewed act.
+   A reviewed change that brings back a text the Founder rejected, while another text is open, files the rejected text again in that open item's place.
+   An approval the Founder gave an item that a reviewed change had already replaced still counts as the request's approval, though Mandu hands no superseded item to firstmate: the replacement stays open for the Founder to decide, no reviewed change replaces it any more, nothing is filed after it, and the run report says so.
 6. It writes the agent's brief and runs the agent in the sandbox with the task definition `src/instructions/weekly-run.md`.
    The agent writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records, and never write there.
 7. Once the agent finishes, it restores its owner's read and write access to anything under `workspace/` the agent left without it, and the run report names every entry it fixed, before or after the agent.
