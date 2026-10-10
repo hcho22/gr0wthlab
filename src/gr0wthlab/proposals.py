@@ -106,7 +106,6 @@ def describe(filing: Filing, ledger: Ledger) -> str:
     status = str(entry.get("decided") or entry["status"])
     where = {
         "open": "open for the Founder's decision",
-        "approved": "approved; it waits for Mandu to apply it",
         "rejected": f"rejected: {entry.get('reason', 'no reason recorded')}",
         "superseded": f"replaced by `{entry.get('superseded_by')}`",
     }.get(status, status)

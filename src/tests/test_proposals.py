@@ -72,19 +72,25 @@ class BrandRulesProposalTest(unittest.TestCase):
         self.assertIn("rejected: Too many words.", proposals.describe(later, self.ledger))
         self.assertEqual(len(self.ledger.entries), 1)
 
-    def test_an_approved_proposal_waits_for_mandu_and_is_not_filed_once_mandu_holds_the_lists(self):
+    def test_an_approved_proposal_says_only_that_and_is_not_filed_once_mandu_holds_the_lists(self):
         filed = self.file()
         self.ledger.close(self.ledger.entries[filed.item], "approved", "RUN2", NOW)
-        self.assertIn(
-            "approved; it waits for Mandu to apply it", proposals.describe(self.file(run="RUN2"), self.ledger)
-        )
-        fresh = Ledger()
-        self.ledger = fresh
         applied = json.loads(
             (
                 fakes.EXAMPLES / "files/mandu/projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json"
             ).read_text()
         )
+        # Whether Mandu holds the lists yet is the rule summary's to say, from Mandu's file; this line never guesses.
+        for target in (None, applied):
+            with self.subTest(applied=target is not None):
+                again = self.file(target=target, run="RUN3")
+                self.assertEqual((again.status, again.item), (proposals.QUEUED_BEFORE, filed.item))
+                self.assertEqual(
+                    proposals.describe(again, self.ledger),
+                    f"`{proposals.BRAND_RULES}` is `{filed.item}`, filed earlier, never re-asked: approved.",
+                )
+        fresh = Ledger()
+        self.ledger = fresh
         held = self.file(target=applied)
         self.assertEqual((held.status, held.item), (proposals.IN_MANDU, None))
         self.assertEqual(fresh.entries, {})

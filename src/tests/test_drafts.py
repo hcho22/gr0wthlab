@@ -181,6 +181,20 @@ class EvaluateTest(DraftTestCase):
         text = fakes.draft(3).split("## Claims")[0] + "## Claims\n"
         self.assertEqual(rules_of(self.check(text)), ["claims"])
 
+    def test_a_claim_s_excerpt_may_quote_more_than_one_line_of_the_code_and_is_checked_whole(self):
+        second = "value = max(floorValue, value - missPenalty)"
+        text = fakes.draft(3).replace(
+            f"  Shows: `{second}`",
+            f"  Shows: `// A missed day lowers the score; nothing resets it to zero.\n  {second}`",
+        )
+        verdict = self.check(text)
+        self.assertEqual(verdict.blocks, [])
+        excerpt = verdict.claims[0].claim.excerpt
+        self.assertEqual(excerpt, f"// A missed day lowers the score; nothing resets it to zero. {second}")
+        wrong = self.check(text.replace("missPenalty", "hitPenalty"))
+        self.assertEqual(rules_of(wrong), ["claim-location"])
+        self.assertIn(f"do not contain {excerpt.replace('missPenalty', 'hitPenalty')!r}", wrong.blocks[0].detail)
+
     def test_a_kit_rules_or_code_problem_blocks_every_draft(self):
         self.context.kit.problems["calendar"] = "Permission denied"
         self.assertIn("kit", rules_of(self.check(fakes.draft(3))))

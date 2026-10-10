@@ -161,6 +161,7 @@ leg: A
   If the other leg is approved, leave the text as that leg has it: the launcher blocks the Draft naming the rule and tells the Founder that the pair cannot both pass until a package change or a re-cut of both legs resolves it.
   Otherwise leave the text as it is and say so in your summary.
 - Give each behavioral claim (anything the video or copy says the app does) its own item under Claims, with the lines of code at the brief's commit that support it; cut a claim no code supports.
+  Shows may quote more than one of the cited lines: start each further line with two spaces, like the Code and Shows lines, and close the backtick after the last one.
 - Rewrite an open day's Draft only to change it for a reason, such as a package change or the Founder's decision; an unchanged Draft keeps its item.
 - A Draft the Founder rejected is not asked again until it changes: rewrite it to answer the reason the brief gives.
 

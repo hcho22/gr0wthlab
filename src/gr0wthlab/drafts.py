@@ -216,10 +216,15 @@ def parse_claims(draft: PostDraft, lines: Sequence[str]) -> None:
             draft.problems.append(f"## Claims holds only claim items; found {line.strip()!r}")
     for item in items:
         values: dict[str, str] = {}
+        field_name = ""
         for line in item:
             label, colon, value = line.partition(":")
             if colon and label.strip() in CLAIM_LINES:
-                values[label.strip()] = value.strip()
+                field_name = label.strip()
+                values[field_name] = value.strip()
+            elif field_name:
+                # A further line belongs to the field above it, so an excerpt of several lines is checked whole.
+                values[field_name] = f"{values[field_name]} {line}".strip()
         if list(values) != list(CLAIM_LINES):
             draft.problems.append(
                 f"each claim is - Claim:, then Code: `path:line`, then Shows: `code`; got {item[0]!r}"

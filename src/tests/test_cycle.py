@@ -1424,6 +1424,28 @@ class PostDraftsTest(CycleTestCase):
         self.assertEqual([entry["id"] for entry in again], [filed["id"]])
         self.assertIn("filed earlier, never re-asked", self.report())
 
+    def test_the_report_never_says_an_approved_proposal_waits_for_mandu_once_mandu_holds_its_lists(self):
+        rules = self.mandu / "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json"
+        applied = rules.read_text()
+        data = json.loads(applied)
+        for keys in lint.NEW_RULE_TYPES.values():
+            for key in keys:
+                data.pop(key, None)
+        rules.write_text(json.dumps(data))
+        self.run_cycle()
+        self.decide("20261011-brand-rules-word-lists", "approve")
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        approved = "is `20261011-brand-rules-word-lists`, filed earlier, never re-asked: approved.\n"
+        report = self.report()
+        self.assertIn(approved, report)
+        self.assertIn("Pending, until Mandu adds their lists: stock phrases, capped words per paragraph", report)
+        rules.write_text(applied)
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
+        report = self.report()
+        self.assertIn(approved, report)
+        self.assertNotIn("Pending, until Mandu adds their lists", report)
+        self.assertNotIn("waits for Mandu", report)
+
     def test_code_that_cannot_be_read_is_a_failed_source_and_blocks_every_draft(self):
         shutil.rmtree(self.code)
         fakes.set_window(self.repo, fakes.window_from(fakes.SUNDAY_RUN.date()))
