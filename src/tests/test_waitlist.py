@@ -272,7 +272,9 @@ class FormatTest(ReadTestCase):
         self.assertIn("is not valid JSON (line 1)", self.failure(raw=b"{not json"))
         self.assertIn("is not UTF-8 text", self.failure(raw=b'{"view": "\xff"}'))
         self.assertIn("the file is not a JSON object", self.failure(raw=b"[]"))
-        self.assertIn("is nested too deeply to be the view", self.failure(raw=b"[" * 100_000))
+        # Closed, so its depth is the file's only fault on an interpreter whose parser reads this deep.
+        deep = b"[" * 100_000 + b"]" * 100_000
+        self.assertIn("is nested too deeply to be the view", self.failure(raw=deep))
         with mock.patch.object(waitlist, "MAX_VIEW_BYTES", 10):
             self.assertIn("is larger than", self.failure(fakes.waitlist_view()))
 
