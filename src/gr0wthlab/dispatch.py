@@ -9,8 +9,9 @@ identifier that never changes and marks its queue entry with the key, then, run 
   change alters the text; no item the agent writes can supersede it (queue.check_incoming), so it stays open until
   the Founder decides it;
 - never files it again once the Founder approved it;
-- never asks the Founder the same text again once decided, so after a rejection only a reviewed change that alters the
-  text files it anew.
+- never asks the Founder the same text again once the Founder rejected it, so after a rejection only a reviewed change
+  that alters the text files it anew; a text replaced before the Founder decided it was never decided, and is filed
+  again if a reviewed change brings it back.
 """
 
 from __future__ import annotations
@@ -22,7 +23,7 @@ from pathlib import Path, PurePosixPath
 
 from . import exchange
 from .areas import Store
-from .queue import APPROVED, MAX_SLUG, OPEN, SUPERSEDED, Ledger
+from .queue import APPROVED, MAX_SLUG, OPEN, REJECTED, SUPERSEDED, Ledger
 
 DISPATCHES = PurePosixPath("src/dispatches")
 KIND = "dispatch-request"
@@ -66,7 +67,7 @@ class Filing:
             REPLACED: f"{self.key} filed as `{self.identifier}` in place of `{self.replaced}`, as its text changed",
             WAITING: f"{self.key} open as `{self.identifier}`",
             DONE: f"{self.key} approved as `{self.identifier}`; never filed again",
-            DECIDED: f"{self.key} decided as `{self.identifier}`; not asked again unless its reviewed text changes",
+            DECIDED: f"{self.key} rejected as `{self.identifier}`; not asked again unless its reviewed text changes",
             ASKED: f"{self.key} asks the same as `{self.identifier}`, already queued; not filed",
         }[self.status]
 
@@ -113,8 +114,8 @@ def file(
 ) -> list[Filing]:
     """Queue each reviewed request that needs it, following the rules above.
 
-    hashes maps each queued item to its fingerprint; seen maps each fingerprint to the item that first asked it, and
-    gains every item filed here.
+    hashes maps each queued item to its fingerprint; seen maps each fingerprint to an item that asks it, and comes to
+    name every item filed here.
     """
     filings = []
     for request in requests:
@@ -132,19 +133,21 @@ def file(
             filings.append(Filing(request.key, WAITING, str(current["id"])))
             continue
         if current is None:
-            asked = next((entry for entry in reversed(mine) if hashes.get(str(entry["id"])) == fingerprint), None)
+            rejected = (entry for entry in reversed(mine) if REJECTED in (entry["status"], entry.get("decided")))
+            asked = next((entry for entry in rejected if hashes.get(str(entry["id"])) == fingerprint), None)
             if asked is not None:
                 filings.append(Filing(request.key, DECIDED, str(asked["id"])))
                 continue
-            if fingerprint in seen:
-                filings.append(Filing(request.key, ASKED, seen[fingerprint]))
+            asker = seen.get(fingerprint)
+            if asker is not None and ledger.entries.get(asker, {}).get("origin") != request.origin:
+                filings.append(Filing(request.key, ASKED, asker))
                 continue
         fields = dict(request.item.fields)
         if current is not None:
             fields["supersedes"] = str(current["id"])
         item = exchange.Item(fields, request.item.ask, request.item.body, request.item.touches, request.item.evidence)
         identifier = ledger.publish(store, item, request.key, run_id, now, origin=request.origin)
-        seen.setdefault(fingerprint, identifier)
+        seen[fingerprint] = identifier
         if current is None:
             filings.append(Filing(request.key, FILED, identifier))
         else:

@@ -135,6 +135,10 @@ class FilingTest(unittest.TestCase):
         text = path.read_text(encoding="utf-8")
         path.write_text(text.replace("\n## Touches\n", "\nA revised ask.\n\n## Touches\n"), encoding="utf-8")
 
+    def revert(self):
+        """A reviewed change that puts the request's first text back."""
+        shutil.copy(str(REPO / "src/dispatches/reptoday-waitlist.md"), str(self.repo / "src/dispatches"))
+
     def decide(self, identifier, status):
         self.ledger.close(self.ledger.entries[identifier], status, "RUN", NOW, decided_at="2026-10-11T19:00:00-07:00")
 
@@ -180,6 +184,22 @@ class FilingTest(unittest.TestCase):
         self.assertEqual(again.status, dispatch.FILED)
         self.assertNotEqual(again.identifier, first.identifier)
         self.assertNotIn("supersedes", self.ledger.entries[again.identifier])
+
+    def test_a_text_replaced_before_any_decision_is_filed_again_when_it_comes_back(self):
+        (first,) = self.file()
+        self.revise()
+        (second,) = self.file(7)
+        self.decide(second.identifier, REJECTED)
+        self.revert()
+        (third,) = self.file(14)
+        self.assertEqual(third.status, dispatch.FILED)
+        self.assertNotIn(third.identifier, (first.identifier, second.identifier))
+        self.assertEqual(self.ledger.entries[third.identifier]["status"], OPEN)
+        self.assertEqual([(f.status, f.identifier) for f in self.file(21)], [(dispatch.WAITING, third.identifier)])
+        self.decide(third.identifier, REJECTED)
+        (fourth,) = self.file(28)
+        self.assertEqual((fourth.status, fourth.identifier), (dispatch.DECIDED, third.identifier))
+        self.assertIn(f"rejected as `{third.identifier}`", fourth.account())
 
     def test_a_request_already_asked_by_another_item_is_not_filed(self):
         requests, _ = dispatch.load(self.repo, PRODUCTS)

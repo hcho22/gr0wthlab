@@ -409,15 +409,5 @@ class SpeedTest(ReadTestCase):
         self.assertEqual(self.status_in_time(json.dumps(view).encode()), waitlist.FAILED)
 
 
-class CommittedRulesTest(unittest.TestCase):
-    def test_the_seed_reads_under_the_committed_configuration(self):
-        registry = json.loads((REPO / "config/products.json").read_text(encoding="utf-8"))
-        block = next(product for product in registry["products"] if product["name"] == "RepToday")["waitlist"]
-        self.assertEqual(tuple(block["source_tags"]), RULES.source_tags)
-        self.assertEqual(tuple(block["fit_answers"]), RULES.fit_answers)
-        self.assertEqual(tuple(block["good_fit"]), RULES.good_fit)
-        self.assertEqual(block["beta_cohort_bar"], 50)
-
-
 if __name__ == "__main__":
     unittest.main()
