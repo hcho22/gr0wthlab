@@ -164,6 +164,12 @@ class TakeTest(TakeTestCase):
         self.assertIn("- Angle P03, Score that dips: `projects/RepToday/gtm/05-social-pmf/angles.md` line 9", text)
         self.assertIn("- Kill criterion: Bottom quartile viewed rate on two reads:", text)
         self.assertIn("no open line blocks this post", text)
+        self.assertIn("  Done: line 7.\n  Open, gating other assets or none named: lines 8, 16.\n", text)
+        self.assertIn(
+            "  Open, gating only assets that use the 'under 100 milliseconds' claim, which this post does not:"
+            " line 12.",
+            text,
+        )
 
     def test_an_unchanged_draft_keeps_its_open_item_and_a_changed_one_supersedes_it(self):
         self.write(3, fakes.draft(3))

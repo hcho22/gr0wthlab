@@ -1209,7 +1209,11 @@ class PostDraftsTest(CycleTestCase):
         )
         self.assertIn(f"is commit `{fakes.git(self.code, 'rev-parse', 'main', env=self.env)}`", brief)
         self.assertIn("- Competitors the research names, which no Draft may name: IronFit, Pulseday, Stretchly.", brief)
-        self.assertIn("check-drafts", brief)
+        self.assertIn(
+            f"`GR0WTHLAB_MANDU_DIR={self.mandu} GR0WTHLAB_REPTODAY_DIR={self.code} /usr/bin/python3"
+            f" {self.repo}/src/bin/gr0wthlab check-drafts`",
+            brief,
+        )
 
     def test_a_banned_word_put_into_one_caption_blocks_that_draft_naming_the_rule(self):
         first = self.first_batch()

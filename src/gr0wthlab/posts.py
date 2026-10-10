@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shlex
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -68,6 +69,9 @@ class Plan:
     folder: Path  # workspace/drafts/posts/window-<n>/
     waitlist_live: bool
     problems: list[str] = field(default_factory=list)
+    # The location overrides the run resolved, so check-drafts, in an environment built from scratch, reads the same
+    # Mandu and code checkouts as the launcher.
+    locations: list[tuple[str, str]] = field(default_factory=list)
 
     @property
     def code(self) -> Code:
@@ -298,6 +302,10 @@ def prepare(
         # The Waitlist view is a connected source now, and whether the Waitlist is live is never read off that.
         waitlist_live=False,
     )
+    names = {"Mandu": (registry.get("mandu") or {}).get("env"), product: (entry.get("repository") or {}).get("env")}
+    plan.locations = [
+        (str(names[location.label]), str(location.path)) for location in boundary.locations if names.get(location.label)
+    ]
     if "calendar" in parsed.problems:
         plan.reason = f"The calendar could not be read ({parsed.problems['calendar']}), so no day can be prepared."
         return plan
@@ -468,19 +476,24 @@ def lint_line(plan: Plan, verdict: Verdict) -> str:
 
 
 def checklist_lines(verdict: Verdict) -> list[str]:
-    done = [
-        f"line {line.item.line} ({short(line.item.title, 50)})" for line in verdict.checklist if line.status == DONE
-    ]
-    open_lines = [line for line in verdict.checklist if line.status not in (DONE, BLOCKS)]
+    """The post's status against every checklist line, short enough to read at a glance: the lines done, the open
+    lines that gate only other assets, and each open line about a claim this post does not use."""
+    done = [str(line.item.line) for line in verdict.checklist if line.status == DONE]
+    waiting = [line for line in verdict.checklist if line.status not in (DONE, BLOCKS)]
+    others = [str(line.item.line) for line in waiting if not line.item.claim]
     lines = ["- Pre-publication checklist (`pre-publication-checklist.md`): no open line blocks this post."]
     if done:
-        lines.append("  Done: " + "; ".join(done) + ".")
-    if open_lines:
+        lines.append(f"  Done: line{'s' if len(done) > 1 else ''} {', '.join(done)}.")
+    if others:
         lines.append(
-            "  Open, not gating a social post: "
-            + "; ".join(f"line {line.item.line} ({short(line.item.title, 50)}: {line.note})" for line in open_lines)
-            + "."
+            f"  Open, gating other assets or none named: line{'s' if len(others) > 1 else ''} {', '.join(others)}."
         )
+    for line in waiting:
+        if line.item.claim:
+            lines.append(
+                f"  Open, gating only assets that use the {line.item.claim!r} claim, which this post does not:"
+                f" line {line.item.line}."
+            )
     return lines
 
 
@@ -699,6 +712,12 @@ def checklist_summary(plan: Plan) -> list[str]:
     return lines
 
 
+def check_command(plan: Plan, repo_root: Path) -> str:
+    """check-drafts as the agent runs it, reading the same Mandu and code checkouts as this run."""
+    overrides = " ".join(f"{name}={shlex.quote(path)}" for name, path in plan.locations)
+    return f"{overrides} /usr/bin/python3 {repo_root / 'src/bin/gr0wthlab'} check-drafts".strip()
+
+
 def brief_lines(plan: Plan, repo_root: Path) -> list[str]:
     roles = plan.context.paths
     lines = ["## Post Drafts", "", plan.reason]
@@ -709,9 +728,8 @@ def brief_lines(plan: Plan, repo_root: Path) -> list[str]:
     lines += [
         "",
         f"Write each day's Draft as `{plan.folder}/day-NN.md`, such as `day-03.md`, with your file-editing tool, in the"
-        " format the task definition gives. Check them before you finish:"
-        f" `/usr/bin/python3 {repo_root / 'src/bin/gr0wthlab'} check-drafts`. The launcher queues a post only from a"
-        " Draft that passes every check, and blocks any other, naming the rule.",
+        f" format the task definition gives. Check them before you finish: `{check_command(plan, repo_root)}`. The"
+        " launcher queues a post only from a Draft that passes every check, and blocks any other, naming the rule.",
         "",
         "| Day | Asset | Angle / pair leg | Primary | Frozen Hook | In the Review Queue |",
         "| --- | --- | --- | --- | --- | --- |",
