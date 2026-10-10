@@ -20,7 +20,7 @@ from pathlib import Path
 from . import exchange, kit, lint, schedule
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import Boundary, ConfigError, load_json
-from .codebase import Code, open_code
+from .codebase import CLT_GIT, Code, open_code
 from .drafts import BLOCKS, DONE, Context, PostDraft, Verdict, evaluate, parse
 from .queue import APPROVED, OPEN, REJECTED, Ledger
 from .settings import Settings, Window
@@ -30,7 +30,8 @@ DRAFTS = "posts"
 EVIDENCE = "post-drafts"
 FIRST_BATCH = 7
 ROLES = ("calendar", "angles", "pairs", "platforms", "brand_rules", "checklist", "competitors")
-GIT = "/Library/Developer/CommandLineTools/usr/bin/git"
+COMPETITOR_FILES = "competitor"  # the research files, in the competitors folder, whose names start with this
+GIT = str(CLT_GIT)
 
 # What became of each calendar day the run prepares.
 QUEUED = "queued"
@@ -125,12 +126,20 @@ def kit_config(registry: Mapping) -> tuple[str, Mapping[str, str]] | None:
             missing = [role for role in ROLES if not isinstance(roles.get(role), str)]
             if missing:
                 raise ConfigError(f"{product['name']} post_drafts must name: {', '.join(missing)}")
-            sources = [entry.get("path", "") for entry in package.get("sources") or ()]
             for role in ROLES:
-                if not any(
-                    roles[role] == path or (path.endswith("/") and roles[role].startswith(path)) for path in sources
-                ):
+                covering = [
+                    entry
+                    for entry in package.get("sources") or ()
+                    if roles[role] == entry.get("path")
+                    or (str(entry.get("path", "")).endswith("/") and roles[role].startswith(entry["path"]))
+                ]
+                if not covering:
                     raise ConfigError(f"{product['name']} post_drafts {role} must be one of its package sources")
+                if role == "competitors" and covering[0].get("files_starting_with", "") not in ("", COMPETITOR_FILES):
+                    raise ConfigError(
+                        f"{product['name']} post_drafts competitors reads the files starting with {COMPETITOR_FILES},"
+                        " so its package source must cover them"
+                    )
             return str(product["name"]), roles
     return None
 
@@ -194,7 +203,7 @@ def read_kit(mandu: Path, roles: Mapping[str, str]) -> tuple[kit.Kit, dict[str, 
         try:
             if role == "competitors":
                 folder = mandu / relative
-                names = sorted(path.name for path in folder.iterdir() if path.name.startswith("competitor"))
+                names = sorted(path.name for path in folder.iterdir() if path.name.startswith(COMPETITOR_FILES))
                 found = {name: (folder / name).read_text(encoding="utf-8") for name in names}
                 data = json.dumps(found, sort_keys=True).encode("utf-8")
                 parsed.competitors = kit.parse_competitors(found)
@@ -290,10 +299,10 @@ def prepare(
     numbers, plan.reason = target_days(config.window, list(parsed.days), now.astimezone().date(), config.weekly[0])
     for number in numbers:
         day = parsed.days[number]
-        hook, why = kit.frozen_hook(day, parsed) if not parsed.problems.keys() & {"angles", "pairs"} else (None, "")
         if day.angle is None:
-            plan.skipped.append((number, why))
+            plan.skipped.append((number, f"the calendar decides its Angle later ({day.cell})"))
             continue
+        hook = kit.frozen_hook(day, parsed)[0] if not parsed.problems.keys() & {"angles", "pairs"} else None
         entries = day_entries(ledger, product, config.window.number, number)
         plan.days.append(
             DayPlan(
@@ -671,7 +680,8 @@ def checklist_summary(plan: Plan) -> list[str]:
     lines = []
     if every:
         lines.append(
-            "- Open checklist lines that block every post until Mandu checks them: "
+            "- Open checklist lines that block every post until Mandu checks them, so the launcher will block each"
+            " Draft (write every Draft all the same): "
             + "; ".join(f"line {item.line} ({short(item.title, 60)})" for item in every)
             + "."
         )

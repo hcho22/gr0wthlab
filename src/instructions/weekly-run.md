@@ -22,8 +22,10 @@ The launcher has already done the deterministic work before you start, and does 
    Read every package file the brief lists, and any other file in the same package folders that you need to find every place a contradiction appears.
 4. Write one package-change proposal for each contradiction you find that is not already open or decided in the brief.
    Where the brief shows the Founder decided an item that an open one replaced, make sure the open one answers that decision; if it does not, write a new item that supersedes it and does.
-5. Prepare the post Drafts the brief's Post Drafts section lists, one per calendar day that has no open or approved item, as "Writing a post Draft" describes.
+5. Write a post Draft for every calendar day the brief's Post Drafts table lists, except a day it shows as approved or open with nothing to change, as "Writing a post Draft" describes.
+   Write each listed day's Draft even when the brief says an open checklist line or a brand rule will block it: the launcher then blocks it with the rule named, the Founder sees why, and the Draft is ready the moment the package changes.
    Read the kit files the brief names, the brand guidelines, and the Product's code at the commit the brief gives.
+   The run is not finished until every listed day has a Draft, or your summary says why it has none.
 6. Check your items with the brief's check-incoming command and your Drafts with its check-drafts command, and fix every problem either reports that the Draft can fix.
    A Draft blocked by the package itself (a frozen Hook that fails a brand rule, or an open checklist line) stays as the package requires: never change a Hook, signal, or kill criterion to pass a check; write a package-change proposal that cites both sides instead, unless one is already open or decided.
 7. Finish with a short summary as your final message: what you checked (including each recorded outcome you traced), what you found, what you queued, which Drafts you wrote and what check-drafts said of each, and anything you skipped or could not do, with the reason.

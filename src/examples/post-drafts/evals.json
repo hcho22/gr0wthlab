@@ -1,4 +1,5 @@
 {
+  "adapted_from": "the evals.json shape of github.com/coreyhaines31/marketingskills skills/*/evals/evals.json at commit 1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff (MIT; see THIRD_PARTY_NOTICES.md)",
   "skill_name": "post-drafts",
   "description": "The post-Draft workflow's example set (US-ME08, F5), in the marketingskills evals.json shape: each example's prompt, the output expected, its assertions, and its files. A deterministic assertion is checked by the unit tests (src/tests/test_examples.py) against the synthetic kit in files/mandu and the code in files/code; a judged assertion waits for US-ME16's re-run on every Instructions change.",
   "kit": "files/mandu",

@@ -18,6 +18,9 @@ from pathlib import Path, PurePosixPath
 MAX_SPAN = 40
 MIN_EXCERPT = 4
 TIMEOUT = 30
+# The Command Line Tools' git, called directly, reads without the xcrun shim's cache writes, which the sandbox refuses
+# with warnings; any other machine uses the git on its PATH.
+CLT_GIT = Path("/Library/Developer/CommandLineTools/usr/bin/git")
 LOCATION = re.compile(r"([^\s:`]+):(\d+)(?:-(\d+))?")
 
 
@@ -46,8 +49,9 @@ class Code:
         return (self.commit or "")[:7]
 
     def git(self, *args: str) -> subprocess.CompletedProcess:
+        git = str(CLT_GIT) if CLT_GIT.is_file() else "git"
         return subprocess.run(
-            ["git", "--no-optional-locks", "-C", str(self.checkout), *args],
+            [git, "--no-optional-locks", "-C", str(self.checkout), *args],
             capture_output=True,
             text=True,
             env=environment(self.env),
