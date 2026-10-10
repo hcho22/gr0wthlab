@@ -12,7 +12,7 @@ from pathlib import Path
 from . import codex, cycle, drafts, exchange, launcher, posts, probe, schedule, settings
 from . import state as run_state
 from .areas import Areas
-from .boundary import LEDGER, PRODUCT_REGISTRY, ConfigError, load_boundary, load_json
+from .boundary import LEDGER, PRODUCT_REGISTRY, ConfigError, load_json, load_runtime_config, resolve_boundary
 from .queue import QUEUE_FILE, REVIEW_QUEUE, Ledger, QueueError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -105,8 +105,10 @@ def check_drafts(out=sys.stdout, now: datetime | None = None) -> int:
     env = dict(os.environ)
     home = Path.home()
     config = settings.load(REPO_ROOT, env, home)
-    _, boundary = load_boundary(REPO_ROOT, env, home)
     registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
+    # Reading the areas and checkouts needs no git directories, and looking them up from the sandbox only adds xcrun's
+    # cache warnings.
+    boundary = resolve_boundary(REPO_ROOT, load_runtime_config(REPO_ROOT), registry, env, home, git=[])
     products = [product["name"] for product in registry.get("products", [])]
     ledger, _, warning = queued(products)
     if warning:

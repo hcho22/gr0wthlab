@@ -12,7 +12,7 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
    Before that, it restores its owner's read and write access to anything under `workspace/` left without it.
    It refuses to start if the clone is not on `main`, has changes outside `workspace/` and `ledger/`, or has local commits outside them.
    If the fetch fails, for example offline, it runs the current code and says so in the run report.
-2. It snapshots RepToday's Go-To-Market Package in Mandu (`ledger/evidence/package-snapshots/`).
+2. It snapshots RepToday's Go-To-Market Package in Mandu (`ledger/evidence/package-snapshots/`), reads the 14-day kit, works out which calendar days need post Drafts this run, and fixes RepToday's `main` to one commit for claim checks.
 3. It takes in the Founder's decisions from Mandu's exchange folder and keeps each one as Evidence (`ledger/evidence/decisions/`).
 4. It reads RepToday's anonymous Waitlist view, once its build has made one, and keeps the counts by Source, Fit answer, and opt-in, per week and cumulative, with the entry identifiers, as Evidence (`ledger/evidence/waitlist/`).
    It checks every value for anything that looks like an email address first; on a hit it discards the whole read, keeps nothing from it, and queues a Guardrail breach notice.
@@ -28,6 +28,8 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
 7. Once the agent finishes, it restores its owner's read and write access to anything under `workspace/` the agent left without it, and the run report names every entry it fixed, before or after the agent.
    It queues the items the agent wrote to `workspace/review-queue/incoming/` that pass the format, sets the rest aside, and turns every problem into one notice.
    The package review counts as complete only when the agent's summary ends with the line `Review: complete`; otherwise the run report marks it incomplete and the notice says so.
+   It checks each post Draft the agent wrote in `workspace/drafts/posts/` and queues a post only for one that passes; a blocked Draft is named in the run report and the notice with every failing rule or checklist line, and every check is kept in `ledger/evidence/post-drafts/`.
+   It files the brand lint's word-list proposal once, and never again whatever the Founder decides.
 8. It writes `ledger/review-queue/queue.json`, each workflow's run state (`ledger/run-reports/state/`), and the run report (`ledger/run-reports/<run id>.md`), whose first line is `checked=N acted=N note=...` even when nothing happened.
 9. In the production clone only, it commits the changed `workspace/` and `ledger/` paths and pushes them to `main`, never anything else and never by force; a change to a README in either is put back, since only a reviewed pull request changes documentation.
    If `origin/main` moved meanwhile, it replays the records commit on top and retries once; a commit that cannot be pushed stays local and goes with the next run, and the run log says why the replay failed.
@@ -62,6 +64,19 @@ launchctl print gui/$(id -u)/gr0wthlab.weekly-run | grep -E 'state|path'
 The schedule lives only in `config/run.json`: the LaunchAgent takes its time from there, and each run reads the same entry to tell whether it started late and when the next run is due (`next_run` in the Review Queue).
 To change the sitting day or time, change `schedule` in `config/run.json` through a reviewed pull request, then reinstall the LaunchAgent as above once the change has reached the production clone.
 If the Mac is asleep at that time, launchd starts the run when it wakes, and the run report says how late it started.
+
+## Set the 14-day window
+
+Day 1 of the window and its one fixed posting slot are the Founder's call, set in `window` in [`config/run.json`](../config/run.json) through a reviewed pull request and never inferred:
+
+```json
+"window": {"number": 1, "day_1": "2026-10-19", "slot": "19:00"}
+```
+
+`slot` is the Mac's local time.
+Until `day_1` is set, every run prepares calendar days 1 to 7 as the first batch, with no slot on the posts.
+Once it is set, each run prepares the calendar days from the next day through the end of the week after the coming sitting (on the sitting's own day, exactly that week), skipping any day already approved, and each post's slot is its date at `slot`.
+A changed slot reaches an open post at the next run, which replaces the post with one that carries it.
 
 ## Run on demand
 
