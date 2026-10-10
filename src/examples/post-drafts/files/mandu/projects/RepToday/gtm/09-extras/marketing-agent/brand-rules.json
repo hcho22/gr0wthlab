@@ -4,7 +4,7 @@
   "hook_must_not_be_question": true,
   "banned_words_in_hook": ["grind", "beast mode", "no excuses", "crush", "transform", "calories"],
   "banned_social_proof_in_hook": ["stars", "rated", "testimonial", "users love"],
-  "banned_characters_anywhere": ["—"],
+  "banned_characters_anywhere": ["\u2014"],
   "no_emoji_in_hook": true,
   "no_all_caps_words_in_hook": true,
   "all_caps_allowlist": ["100"],

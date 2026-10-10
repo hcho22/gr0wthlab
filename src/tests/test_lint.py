@@ -13,7 +13,7 @@ HOOK_RULES = {
     "hook_must_not_be_question": True,
     "banned_words_in_hook": ["grind", "streak", "beast mode"],
     "banned_social_proof_in_hook": ["stars", "rated", "users love"],
-    "banned_characters_anywhere": ["—"],
+    "banned_characters_anywhere": ["\u2014"],
     "no_emoji_in_hook": True,
     "no_all_caps_words_in_hook": True,
     "all_caps_allowlist": ["100"],
@@ -40,7 +40,7 @@ class BrandRulesTest(unittest.TestCase):
             "Streaks are gone.": "banned_words_in_hook",
             "Rated five stars.": "banned_social_proof_in_hook",
             "Ready? Go.": "hook_must_not_be_question",
-            "Open it — go.": "banned_characters_anywhere",
+            "Open it \u2014 go.": "banned_characters_anywhere",
             "Open it \U0001f525": "no_emoji_in_hook",
             "Open it NOW.": "no_all_caps_words_in_hook",
         }
