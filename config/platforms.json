@@ -1,0 +1,26 @@
+{
+  "adapted_from": "skills/social/references/platform-limits.md of github.com/coreyhaines31/marketingskills at commit 1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff (MIT License, Copyright (c) 2025 Corey Haines; see THIRD_PARTY_NOTICES.md)",
+  "description": "Platform facts the post-Draft lint checks deterministically (US-ME08): each test platform's Draft fields, their character limits, and its hashtag limits. These are facts about the platforms, not marketing strategy, which stays in Mandu. The launcher reads this file and the agent cannot write it (G8). A platform the kit's platform assignment names must appear here, or every Draft is blocked until it does.",
+  "fields_note": "Each platform's fields are the ### sections its ## section in a post Draft holds. body is the caption whose first line is the Hook and whose text both platforms share; title must be the Hook; hashtags lists the post's #tags, which count against the body's character limit. max_chars blocks a Draft over it; visible_chars only warns, since text past it is still posted.",
+  "platforms": {
+    "TikTok": {
+      "fields": {
+        "Caption": {"max_chars": 4000, "visible_chars": 150, "body": true},
+        "Hashtags": {"hashtags": true},
+        "Alt text": {}
+      },
+      "max_hashtags": 5,
+      "facts": "At most 5 hashtags since August 2025; captions up to 4,000 characters, hashtags included, with about 150 visible before \"more\"."
+    },
+    "YouTube Shorts": {
+      "fields": {
+        "Title": {"max_chars": 100, "visible_chars": 70, "title": true},
+        "Description": {"max_chars": 5000, "visible_chars": 100, "body": true},
+        "Hashtags": {"hashtags": true},
+        "Alt text": {}
+      },
+      "hashtags_void_above": 15,
+      "facts": "Titles up to 100 characters, about 70 visible before truncation; descriptions up to 5,000, about 100 visible before \"Show more\"; more than 15 hashtags makes YouTube ignore all of them."
+    }
+  }
+}

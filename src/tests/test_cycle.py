@@ -6,6 +6,7 @@ import json
 import os
 import plistlib
 import re
+import shutil
 import sys
 import tempfile
 import unittest
@@ -13,7 +14,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
-from gr0wthlab import cli, cycle, exchange, launcher, package
+from gr0wthlab import cli, cycle, exchange, launcher, lint, package
 from gr0wthlab.areas import Store
 from gr0wthlab.report import next_due
 from tests import fakes
@@ -28,6 +29,7 @@ class CycleTestCase(unittest.TestCase):
         (self.home / ".codex").mkdir(parents=True)
         self.repo = fakes.make_repo(self.root / "gr0wthlab", self.env)
         self.mandu = fakes.make_mandu(self.root / "Mandu")
+        self.code = fakes.make_code(self.root / "RepToday", self.env)
         self.exchange = self.root / "exchange"
         self.codex_dir = self.root / "codex-bin"
         codex = fakes.install_codex(self.codex_dir)
@@ -113,7 +115,7 @@ class FirstRunTest(CycleTestCase):
         self.assertEqual(len(snapshots), 1)
         snapshot = json.loads(snapshots[0].read_text(encoding="utf-8"))
         files = snapshot["products"]["RepToday"]["files"]
-        self.assertEqual(len(files), 12)
+        self.assertEqual(len(files), 14)
         self.assertTrue(all(len(entry["sha256"]) == 64 and entry["read_at"] for entry in files))
         self.assertNotIn("projects/RepToday", json.dumps([entry.get("text") for entry in files]))
 
@@ -129,7 +131,7 @@ class FirstRunTest(CycleTestCase):
 
         report = self.report()
         self.assertIn(
-            "## Summary\n\n- checked=13 acted=1 note=package-review 12 files, 0 changed, 0 failed; 1 proposal queued\n",
+            "## Summary\n\n- checked=15 acted=1 note=package-review 14 files, 0 changed, 0 failed; 1 proposal queued\n",
             report,
         )
         self.assertIn("- listening: checked=0 acted=0 note=not built until US-ME13", report)
@@ -147,7 +149,7 @@ class FirstRunTest(CycleTestCase):
 
     def test_a_quiet_run_still_says_what_it_checked(self):
         self.run_cycle()
-        self.assertIn("- checked=12 acted=0 note=nothing new needed action\n", self.report())
+        self.assertIn("- checked=14 acted=0 note=nothing new needed action\n", self.report())
 
     def test_an_invalid_run_state_is_set_aside_rebuilt_and_reported(self):
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
@@ -187,7 +189,6 @@ class FirstRunTest(CycleTestCase):
 
 class DecisionRoundTripTest(CycleTestCase):
     KINDS = {
-        "post": ("day-3-post", "slot: 2026-10-14T19:00-07:00\n"),
         "message": ("network-ask", ""),
         "package-change-proposal": ("name-status-stale", ""),
         "dispatch-request": ("waitlist", ""),
@@ -200,17 +201,21 @@ class DecisionRoundTripTest(CycleTestCase):
             f"review-queue/incoming/{slug}.md": fakes.proposal(kind, extra, title=slug)
             for kind, (slug, extra) in self.KINDS.items()
         }
+        writes[fakes.draft_path(1)] = fakes.draft(1)  # a post is queued only from its Draft
+        fakes.set_window(self.repo, fakes.window_due(1))
         fakes.behave(self.codex_dir, {"write": writes})
         self.assertEqual(self.run_cycle()[0], 0)
         first = self.queue()
         self.assertEqual([entry["kind"] for entry in first["open"]], list(exchange.KINDS))
         ids = {entry["kind"]: entry["id"] for entry in first["open"]}
+        self.assertEqual(ids["post"], "20261011-post-w1-day-01")
 
         self.decide(ids["post"], "approve", note="Good hook.")
         self.decide(ids["notice"], "approve")
         self.decide(ids["message"], "reject", reason="Too salesy for my network.")
         self.decide(ids["package-change-proposal"], "reject", reason="Wait for counsel.")
         day = self.sit()
+        fakes.set_window(self.repo, fakes.QUIET_WINDOW)
         fakes.behave(self.codex_dir, {})
         code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
         self.assertEqual(code, 0, out)
@@ -251,7 +256,7 @@ class DecisionRoundTripTest(CycleTestCase):
             {key: value["carried_over_from"] for key, value in recorded["carried"].items()},
             {ids["dispatch-request"]: day, ids["weekly-read-decision"]: day},
         )
-        self.assertIn("note=review-queue 4 decisions taken in", report)
+        self.assertIn("review-queue 4 decisions taken in", report)
 
         rejected_again = {"review-queue/incoming/again.md": fakes.proposal(title="name-status-stale")}
         fakes.behave(self.codex_dir, {"write": rejected_again})
@@ -750,7 +755,7 @@ class FailuresTest(CycleTestCase):
                 report = self.report()
                 self.assertIn(f"| Package review (contradictions) | incomplete | {gap} |", report)
                 self.assertIn(
-                    " acted=1 note=package-review 12 files, 0 changed, 0 failed; 0 proposals queued;"
+                    " acted=1 note=package-review 14 files, 0 changed, 0 failed; 0 proposals queued;"
                     f" incomplete: {gap}; review-queue 0 decisions taken in, 1 other item queued,",
                     report.partition("\n- ")[2].partition("\n")[0],
                 )
@@ -768,7 +773,7 @@ class FailuresTest(CycleTestCase):
         self.assertEqual(code, 0, out)
         report = self.report()
         self.assertIn("| Package review (contradictions) | complete | the agent finished its review |", report)
-        self.assertIn("- checked=12 acted=0 note=nothing new needed action\n", report)
+        self.assertIn("- checked=14 acted=0 note=nothing new needed action\n", report)
         self.assertEqual(self.queue()["open"], [])
 
     def test_a_late_scheduled_run_says_so(self):
@@ -1151,3 +1156,152 @@ class ProductionCloneTest(CycleTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PostDraftsTest(CycleTestCase):
+    """US-ME08's Validation Test, on the synthetic kit: the first batch matches the calendar, and a banned word put
+    into one caption blocks that Draft, naming the rule, so it never reaches the Review Queue."""
+
+    def first_batch(self):
+        fakes.set_window(self.repo, {"day_1": None, "slot": None})
+        writes = {fakes.draft_path(day): fakes.draft(day) for day in range(1, 8)}
+        fakes.behave(self.codex_dir, {"write": writes})
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        return self.queue()
+
+    def test_the_first_batch_is_days_1_to_7_and_each_passing_draft_is_one_post(self):
+        queue = self.first_batch()
+        posts_open = [entry for entry in queue["open"] if entry["kind"] == "post"]
+        self.assertEqual([entry["day"] for entry in posts_open], [1, 2, 3, 4, 6, 7])
+        self.assertTrue(all("slot" not in entry for entry in posts_open))
+        self.assertEqual(posts_open[0]["ask"], "Approve day 1 post: open-to-ready demo, hook A")
+        for entry in posts_open:
+            text = (self.ledger() / entry["file"]).read_text(encoding="utf-8")
+            angle = fakes.KIT_DAYS[entry["day"]][0]
+            self.assertIn(f"- Angle {angle},", text)
+            self.assertIn(fakes.KIT_DAYS[entry["day"]][3], text)
+            self.assertIn("Nothing can be published until the RepToday Waitlist is live.", text)
+
+        report = self.report()
+        self.assertIn("so this run prepares days 1 to 7 as the first batch", report)
+        self.assertIn("| 5 | P05 | blocked |", report)
+        self.assertIn(
+            "- projects/RepToday/gtm/08-redteam/pre-publication-checklist.md line 12: Device benchmark record for the"
+            ' "under 100 milliseconds" claim: Angle P05 depends on the claim',
+            report,
+        )
+        self.assertIn("- Post Drafts: 6 queued, 1 blocked.", report)
+        self.assertIn("| RepToday repository | read |", report)
+        self.assertIn("| Post Drafts | complete | 7 days: 6 queued, 1 blocked |", report)
+        notice = next(entry for entry in queue["open"] if entry["kind"] == "notice")
+        self.assertIn("Day 5 (`drafts/posts/window-1/day-05.md`)", (self.ledger() / notice["file"]).read_text())
+        evidence = json.loads((self.ledger() / f"evidence/post-drafts/{queue['updated_by_run']}.json").read_text())
+        self.assertEqual([day["status"] for day in evidence["days"]], ["queued"] * 4 + ["blocked"] + ["queued"] * 2)
+        self.assertNotIn("brand-rules-word-lists", json.dumps(queue))
+
+        brief = self.brief()
+        self.assertIn("## Post Drafts", brief)
+        self.assertIn(
+            "| 3 | Score dip demo | P03 / AB-2 leg A | YouTube Shorts | Skip a day and the score dips. It never resets."
+            " (`projects/RepToday/gtm/05-social-pmf/ab-pairs.md` line 13) | nothing yet |",
+            brief,
+        )
+        self.assertIn(f"is commit `{fakes.git(self.code, 'rev-parse', 'main', env=self.env)}`", brief)
+        self.assertIn("- Competitors the research names, which no Draft may name: IronFit, Pulseday, Stretchly.", brief)
+        self.assertIn("check-drafts", brief)
+
+    def test_a_banned_word_put_into_one_caption_blocks_that_draft_naming_the_rule(self):
+        first = self.first_batch()
+        day_3 = next(entry["id"] for entry in first["open"] if entry.get("day") == 3)
+        caption = "No grind here, only a score that forgives."
+        fakes.behave(self.codex_dir, {"write": {fakes.draft_path(3): fakes.draft(3, caption=caption)}})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))
+        self.assertEqual(code, 0, out)
+        queue = self.queue()
+        self.assertNotIn(3, [entry.get("day") for entry in queue["open"]])
+        self.assertNotIn(
+            "grind", json.dumps([(self.ledger() / e["file"]).read_text() for e in queue["open"] if e["kind"] == "post"])
+        )
+        withdrawn = next(entry for entry in queue["closed"] if entry["id"] == day_3)
+        self.assertEqual((withdrawn["status"], withdrawn["withdrawn"]), ("superseded", True))
+        notice = next(
+            entry for entry in queue["open"] if entry["kind"] == "notice" and entry["id"] != first["open"][-1]["id"]
+        )
+        text = (self.ledger() / notice["file"]).read_text(encoding="utf-8")
+        self.assertIn("banned_words_in_hook: banned word 'grind' (TikTok caption, YouTube Shorts description)", text)
+        self.assertEqual(withdrawn["superseded_by"], notice["id"])
+        report = self.report()
+        self.assertIn("| 3 | P03 / AB-2 leg A | blocked |", report)
+        self.assertIn("| 1 | P01 / AB-1 leg A | kept |", report)
+
+    def test_the_brand_rules_proposal_is_filed_once_and_its_lists_are_pending_until_mandu_has_them(self):
+        rules = self.mandu / "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json"
+        data = json.loads(rules.read_text())
+        for keys in lint.NEW_RULE_TYPES.values():
+            for key in keys:
+                data.pop(key, None)
+        rules.write_text(json.dumps(data))
+        self.run_cycle()
+        queue = self.queue()
+        [filed] = [
+            entry
+            for entry in queue["open"]
+            if entry.get("proposal_source") == "src/proposals/brand-rules-word-lists.md"
+        ]
+        self.assertEqual(filed["id"], "20261011-brand-rules-word-lists")
+        report = self.report()
+        self.assertIn("Pending, until Mandu adds their lists: stock phrases, capped words per paragraph", report)
+        self.assertIn("is `20261011-brand-rules-word-lists`, filed this run: open for the Founder's decision.", report)
+        self.assertIn("post-drafts 0 days: none due; the brand-rules proposal filed", report)
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        again = [entry for entry in self.queue()["open"] if entry.get("proposal_source")]
+        self.assertEqual([entry["id"] for entry in again], [filed["id"]])
+        self.assertIn("filed earlier, never re-asked", self.report())
+
+    def test_code_that_cannot_be_read_is_a_failed_source_and_blocks_every_draft(self):
+        shutil.rmtree(self.code)
+        fakes.set_window(self.repo, fakes.window_due(1))
+        fakes.behave(self.codex_dir, {"write": {fakes.draft_path(1): fakes.draft(1)}})
+        self.run_cycle()
+        report = self.report()
+        self.assertIn(f"| RepToday repository | failed | the RepToday checkout {self.code} does not exist. |", report)
+        self.assertIn("| 1 | P01 / AB-1 leg A | blocked |", report)
+        self.assertIn("RepToday's code could not be read", report)
+        self.assertNotIn("post", [entry["kind"] for entry in self.queue()["open"]])
+
+    def test_once_the_window_is_set_each_post_has_its_slot(self):
+        fakes.set_window(self.repo, fakes.window_due(2))
+        writes = {fakes.draft_path(day): fakes.draft(day) for day in (1, 2)}
+        fakes.behave(self.codex_dir, {"write": writes})
+        self.run_cycle()
+        posts_open = [entry for entry in self.queue()["open"] if entry["kind"] == "post"]
+        sunday = fakes.SUNDAY_RUN.astimezone().date()
+        self.assertEqual(
+            [entry["slot"][:16] for entry in posts_open],
+            [f"{sunday + timedelta(days=6)}T19:00", f"{sunday + timedelta(days=7)}T19:00"],
+        )
+        self.assertIn("this run prepares days 1 to 2", self.report())
+
+    def test_check_drafts_gives_the_agent_the_launcher_s_verdict(self):
+        fakes.set_window(self.repo, fakes.window_due(2))
+        draft_dir = self.workspace() / "drafts/posts/window-1"
+        draft_dir.mkdir(parents=True)
+        (draft_dir / "day-01.md").write_text(fakes.draft(1), encoding="utf-8")
+        (draft_dir / "day-02.md").write_text(fakes.draft(2, caption="Join 10,000 people."), encoding="utf-8")
+        out = io.StringIO()
+        with (
+            mock.patch.object(cli, "REPO_ROOT", self.repo),
+            mock.patch.object(cli, "LEDGER_DIR", self.repo / "ledger"),
+            mock.patch.dict(os.environ, self.env),
+        ):
+            code = cli.check_drafts(out, now=fakes.SUNDAY_RUN)
+        text = out.getvalue()
+        self.assertEqual(code, 1, text)
+        self.assertIn("OK day 1: drafts/posts/window-1/day-01.md", text)
+        self.assertIn("BLOCKED day 2: drafts/posts/window-1/day-02.md", text)
+        self.assertIn(
+            "  - invented_proof_terms: unsourced proof '10,000 people' (TikTok caption, YouTube Shorts description)",
+            text,
+        )
+        self.assertIn("2 days due, 1 with problems", text)

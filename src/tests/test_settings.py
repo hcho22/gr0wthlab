@@ -34,6 +34,21 @@ class RunSettingsTest(unittest.TestCase):
         with self.assertRaises(ConfigError):
             settings.load(REPO, {"GR0WTHLAB_PRODUCTION_CLONE": "relative"}, HOME)
 
+    def test_the_window_s_day_1_and_slot_are_set_only_as_the_founder_sets_them(self):
+        self.assertEqual(settings.load(REPO, {}, HOME).window, settings.Window(1, None, None))
+        window = settings.load_window({"number": 1, "day_1": "2026-10-12", "slot": "19:00"})
+        self.assertEqual((window.day_1.isoformat(), window.slot.isoformat()), ("2026-10-12", "19:00:00"))
+        for bad in (
+            {"number": 0, "day_1": None, "slot": None},
+            {"number": 1, "day_1": "next Monday", "slot": None},
+            {"number": 1, "day_1": "2026-13-01", "slot": None},
+            {"number": 1, "day_1": None, "slot": "7pm"},
+            {"number": 1, "day_1": None, "slot": "24:00"},
+            "monday",
+        ):
+            with self.subTest(window=bad), self.assertRaises(ConfigError):
+                settings.load_window(bad)
+
     def test_the_task_definition_must_be_reviewed_code(self):
         self.assertEqual(
             settings.instruction_path(REPO, Path("src/instructions/weekly-run.md")),

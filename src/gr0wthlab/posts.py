@@ -1,0 +1,843 @@
+"""The post-Draft workflow (US-ME08): which calendar days a run prepares, what the agent is told about them, and,
+once the agent has finished, which Drafts the launcher offers the Founder and which it blocks, naming the rule.
+
+The agent writes one Draft per calendar day under workspace/drafts/posts/window-<n>/day-<nn>.md. The launcher, outside
+the sandbox, checks each against the kit it read from Mandu before the agent started (drafts.evaluate) and queues a
+post item only for a Draft that passes, so a post never reaches the Review Queue any other way. A Draft that fails
+is blocked with every failing rule or checklist line named in the run report and a notice; an open post whose Draft
+no longer passes is withdrawn the same way. A day already approved is never asked again.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from datetime import date, datetime, timedelta
+from pathlib import Path
+
+from . import exchange, kit, lint, schedule
+from .areas import Areas, Store, UnsafeFile, read_plain
+from .boundary import Boundary, ConfigError, load_json
+from .codebase import Code, open_code
+from .drafts import BLOCKS, DONE, Context, PostDraft, Verdict, evaluate, parse
+from .queue import APPROVED, OPEN, REJECTED, Ledger
+from .settings import Settings, Window
+
+PLATFORMS_CONFIG = Path("config/platforms.json")
+DRAFTS = "posts"
+EVIDENCE = "post-drafts"
+FIRST_BATCH = 7
+ROLES = ("calendar", "angles", "pairs", "platforms", "brand_rules", "checklist", "competitors")
+GIT = "/Library/Developer/CommandLineTools/usr/bin/git"
+
+# What became of each calendar day the run prepares.
+QUEUED = "queued"
+KEPT = "kept"
+BLOCKED = "blocked"
+MISSING = "no Draft"
+APPROVED_BEFORE = "approved earlier"
+REPEATED = "not queued again"
+NOT_PREPARED = "not prepared"
+
+
+@dataclass
+class DayPlan:
+    day: kit.KitDay
+    hook: kit.FrozenHook | None
+    slot: str | None
+    open: dict[str, object] | None = None
+    approved: dict[str, object] | None = None
+    rejected: list[dict[str, object]] = field(default_factory=list)
+
+
+@dataclass
+class Plan:
+    """Everything the run knows about its post Drafts before the agent starts."""
+
+    product: str
+    window: Window
+    reason: str
+    days: list[DayPlan]
+    skipped: list[tuple[int, str]]
+    context: Context
+    files: dict[str, tuple[str, str | None]]  # role: (Mandu-relative path, sha256 when read)
+    folder: Path  # workspace/drafts/posts/window-<n>/
+    waitlist_live: bool
+    problems: list[str] = field(default_factory=list)
+
+    @property
+    def code(self) -> Code:
+        return self.context.code
+
+    def draft_path(self, number: int) -> Path:
+        return self.folder / f"day-{number:02d}.md"
+
+    def other_leg(self, day: kit.KitDay) -> kit.KitDay | None:
+        if not day.pair:
+            return None
+        return next(
+            (other for other in self.context.kit.days.values() if other.pair == day.pair and other.leg != day.leg),
+            None,
+        )
+
+
+@dataclass
+class DayResult:
+    day: int
+    status: str
+    detail: str = ""
+    item: str | None = None
+    draft: str | None = None
+    sha256: str | None = None
+    verdict: Verdict | None = None
+    withdrawn: str | None = None  # the open item this day's blocked Draft took off the queue
+
+
+@dataclass
+class Outcome:
+    results: list[DayResult] = field(default_factory=list)
+    published: list[str] = field(default_factory=list)
+    record: str | None = None
+
+    def count(self, status: str) -> int:
+        return sum(1 for result in self.results if result.status == status)
+
+    @property
+    def blocked(self) -> list[DayResult]:
+        return [result for result in self.results if result.status == BLOCKED]
+
+    @property
+    def withdrawn(self) -> list[str]:
+        return [result.withdrawn for result in self.results if result.withdrawn]
+
+
+# Before the agent.
+
+
+def kit_config(registry: Mapping) -> tuple[str, Mapping[str, str]] | None:
+    """The Product whose post Drafts the run prepares, and the package file that plays each part in the checks."""
+    for product in registry.get("products", []):
+        package = product.get("go_to_market_package") or {}
+        if product.get("status") == "active" and package.get("post_drafts"):
+            roles = package["post_drafts"]
+            missing = [role for role in ROLES if not isinstance(roles.get(role), str)]
+            if missing:
+                raise ConfigError(f"{product['name']} post_drafts must name: {', '.join(missing)}")
+            sources = [entry.get("path", "") for entry in package.get("sources") or ()]
+            for role in ROLES:
+                if not any(
+                    roles[role] == path or (path.endswith("/") and roles[role].startswith(path)) for path in sources
+                ):
+                    raise ConfigError(f"{product['name']} post_drafts {role} must be one of its package sources")
+            return str(product["name"]), roles
+    return None
+
+
+def target_days(window: Window, calendar: Sequence[int], today: date, sitting_day: str) -> tuple[list[int], str]:
+    """The calendar days this run prepares: days 1 to 7 until day 1 is set; then the days in the week after the coming
+    sitting (today, when today is the sitting's weekday), and any day before that week from tomorrow on, which a run
+    that started late or on demand mid-week would otherwise leave unprepared."""
+    if window.day_1 is None:
+        return (
+            [number for number in sorted(calendar) if number <= FIRST_BATCH],
+            f"Window {window.number}'s day 1 is not set in config/run.json, so this run prepares days 1 to"
+            f" {FIRST_BATCH} as the first batch, with no posting slot yet.",
+        )
+    weekday = (schedule.WEEKDAYS.index(sitting_day.lower()) - 1) % 7
+    sitting = today + timedelta(days=(weekday - today.weekday()) % 7)
+    first, last = sitting + timedelta(days=1), sitting + timedelta(days=7)
+    start = today + timedelta(days=1)
+    days = [number for number in sorted(calendar) if start <= window.day_1 + timedelta(days=number - 1) <= last]
+    tense = "began" if window.day_1 <= today else "begins"
+    week = f"the week after the sitting on {sitting:%A %Y-%m-%d} ({first:%Y-%m-%d} to {last:%Y-%m-%d})"
+    if start < first:
+        week += f", and the days from tomorrow, {start:%Y-%m-%d}, up to that week"
+    if not days:
+        return days, f"Window {window.number} {tense} on {window.day_1:%A %Y-%m-%d}; no calendar day falls in {week}."
+    span = f"days {days[0]} to {days[-1]}" if len(days) > 1 else f"day {days[0]}"
+    return days, f"Window {window.number} {tense} on {window.day_1:%A %Y-%m-%d}; this run prepares {span}: {week}."
+
+
+def unchecked(plan: Plan) -> list[str]:
+    """Why no Draft can be checked this run at all, whatever it says: a kit file, the brand rules, the platform facts,
+    or the code could not be used."""
+    paths = plan.context.paths
+    reasons = [f"`{paths.get(role, role)}` could not be used" for role in sorted(plan.context.kit.problems)]
+    if plan.context.rules is None:
+        reasons.append("brand-rules.json could not be used")
+    if plan.code.problem:
+        reasons.append(f"{plan.code.name}'s code could not be read")
+    return reasons
+
+
+def slot_for(window: Window, number: int) -> str | None:
+    if window.day_1 is None or window.slot is None:
+        return None
+    moment = datetime.combine(window.day_1 + timedelta(days=number - 1), window.slot).astimezone()
+    return moment.isoformat(timespec="minutes")
+
+
+def read_kit(mandu: Path, roles: Mapping[str, str]) -> tuple[kit.Kit, dict[str, tuple[str, str | None]], object, str]:
+    """Parse every kit file now, once, so the Drafts are checked against what the agent was told.
+
+    Returns the kit, each role's file with its fingerprint, brand-rules.json's data, and why that could not be read.
+    A file that cannot be read or parsed is a problem for its role, and every Draft is blocked while it lasts.
+    """
+    parsed = kit.Kit()
+    files: dict[str, tuple[str, str | None]] = {}
+    texts: dict[str, str] = {}
+    for role in ROLES:
+        relative = roles[role]
+        files[role] = (relative, None)
+        try:
+            if role == "competitors":
+                folder = mandu / relative
+                names = sorted(path.name for path in folder.iterdir() if path.name.startswith("competitor"))
+                found = {name: (folder / name).read_text(encoding="utf-8") for name in names}
+                data = json.dumps(found, sort_keys=True).encode("utf-8")
+                parsed.competitors = kit.parse_competitors(found)
+            else:
+                data = (mandu / relative).read_bytes()
+                texts[role] = data.decode("utf-8")
+            files[role] = (relative, hashlib.sha256(data).hexdigest())
+        except (OSError, UnicodeDecodeError, kit.KitError) as error:
+            parsed.problems[role] = getattr(error, "strerror", None) or str(error)
+    parsers = {
+        "calendar": ("days", kit.parse_calendar),
+        "angles": ("angles", kit.parse_angles),
+        "pairs": ("pairs", kit.parse_pairs),
+        "platforms": ("platforms", kit.parse_platforms),
+        "checklist": ("checklist", kit.parse_checklist),
+    }
+    for role, (attribute, parser) in parsers.items():
+        if role in texts:
+            try:
+                setattr(parsed, attribute, parser(texts[role]))
+            except kit.KitError as error:
+                parsed.problems[role] = str(error)
+    rules_problem = parsed.problems.pop("brand_rules", "")
+    rules_data: object = None
+    if "brand_rules" in texts:
+        try:
+            rules_data = json.loads(texts["brand_rules"])
+        except ValueError as error:
+            rules_problem = f"not JSON: {error}"
+    return parsed, files, rules_data, rules_problem
+
+
+def day_entries(ledger: Ledger, product: str, window: int, number: int) -> list[dict[str, object]]:
+    return [
+        entry
+        for entry in ledger.entries.values()
+        if entry["kind"] == "post"
+        and entry.get("product") == product
+        and entry.get("window") == window
+        and entry.get("day") == number
+    ]
+
+
+def prepare(
+    repo_root: Path,
+    config: Settings,
+    registry: Mapping,
+    boundary: Boundary,
+    ledger: Ledger,
+    now: datetime,
+    env: Mapping[str, str],
+) -> Plan | None:
+    """The run's post-Draft plan, or None when no active Product has a kit."""
+    found = kit_config(registry)
+    if found is None:
+        return None
+    product, roles = found
+    mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
+    parsed, files, rules_data, rules_problem = read_kit(mandu, roles)
+    rules = None
+    if rules_data is not None:
+        try:
+            rules = lint.Rules(rules_data)
+        except lint.RulesError as error:
+            rules_problem = str(error)
+    try:
+        platforms = lint.load_platforms(load_json(repo_root / PLATFORMS_CONFIG))
+    except (ConfigError, lint.PlatformError, AttributeError, TypeError) as error:
+        platforms = {}
+        parsed.problems["platform facts"] = str(error)
+    entry = next(item for item in registry["products"] if item["name"] == product)
+    location = next((loc.path for loc in boundary.locations if loc.label == product), None)
+    branch = str((entry.get("repository") or {}).get("branch") or "main")
+    code = open_code(product, location, branch, env) if location else Code(product, Path("."), branch)
+    if location is None:
+        code.problem = f"the Product registry names no {product} checkout"
+    context = Context(product, config.window.number, parsed, rules, rules_problem, platforms, code, dict(roles))
+    plan = Plan(
+        product,
+        config.window,
+        "",
+        [],
+        [],
+        context,
+        files,
+        Path(boundary.repo_root) / "workspace" / "drafts" / DRAFTS / f"window-{config.window.number}",
+        # The Waitlist view is a connected source now, and whether the Waitlist is live is never read off that.
+        waitlist_live=False,
+    )
+    if "calendar" in parsed.problems:
+        plan.reason = f"The calendar could not be read ({parsed.problems['calendar']}), so no day can be prepared."
+        return plan
+    numbers, plan.reason = target_days(config.window, list(parsed.days), now.astimezone().date(), config.weekly[0])
+    for number in numbers:
+        day = parsed.days[number]
+        hook, why = kit.frozen_hook(day, parsed) if not parsed.problems.keys() & {"angles", "pairs"} else (None, "")
+        if day.angle is None:
+            plan.skipped.append((number, why))
+            continue
+        entries = day_entries(ledger, product, config.window.number, number)
+        plan.days.append(
+            DayPlan(
+                day,
+                hook,
+                slot_for(config.window, number),
+                next((item for item in entries if item["status"] == OPEN), None),
+                next((item for item in entries if item["status"] == APPROVED), None),
+                [item for item in entries if item["status"] == REJECTED],
+            )
+        )
+    return plan
+
+
+# After the agent.
+
+
+def read_draft(areas: Areas, path: Path) -> tuple[PostDraft | None, str]:
+    """A Draft file the agent wrote, read without following links; None with the reason when there is none."""
+    if not path.exists() and not path.is_symlink():
+        return None, ""
+    folder = areas.check(path.parent)
+    if not areas.real_folder(folder):
+        return None, f"`{areas.relative(folder)}` is not a real folder, so its Drafts were not read"
+    try:
+        text = read_plain(path).decode("utf-8")
+    except (UnsafeFile, OSError, UnicodeDecodeError) as error:
+        return None, f"`{areas.relative(path)}` could not be read ({error})"
+    return parse(text, areas.relative(path)), ""
+
+
+def take(
+    plan: Plan,
+    areas: Areas,
+    store: Store,
+    ledger: Ledger,
+    run_id: str,
+    now: datetime,
+    seen: dict[str, str],
+    products: Sequence[str],
+) -> Outcome:
+    """Check every Draft of the run's days and queue each that passes; nothing else ever becomes a post item."""
+    outcome = Outcome()
+    for number, why in plan.skipped:
+        outcome.results.append(DayResult(number, NOT_PREPARED, why))
+    for day_plan in plan.days:
+        outcome.results.append(take_day(plan, day_plan, areas, store, ledger, run_id, now, seen, products, outcome))
+    outcome.results.sort(key=lambda result: result.day)
+    return outcome
+
+
+def take_day(
+    plan: Plan,
+    day_plan: DayPlan,
+    areas: Areas,
+    store: Store,
+    ledger: Ledger,
+    run_id: str,
+    now: datetime,
+    seen: dict[str, str],
+    products: Sequence[str],
+    outcome: Outcome,
+) -> DayResult:
+    number = day_plan.day.day
+    if day_plan.approved:
+        return DayResult(
+            number, APPROVED_BEFORE, "the Founder approved it, so it is not asked again", str(day_plan.approved["id"])
+        )
+    draft, problem = read_draft(areas, plan.draft_path(number))
+    if draft is None:
+        if problem:
+            return DayResult(number, BLOCKED, problem)
+        if day_plan.open:
+            return DayResult(number, KEPT, "no new Draft; the open item stands", str(day_plan.open["id"]))
+        return DayResult(number, MISSING, f"no Draft at `{areas.relative(plan.draft_path(number))}`")
+    other = plan.other_leg(day_plan.day)
+    other_draft = read_draft(areas, plan.draft_path(other.day))[0] if other else None
+    verdict = evaluate(draft, plan.context, other_draft)
+    result = DayResult(number, BLOCKED, "", None, draft.path, draft.sha256, verdict)
+    if day_plan.open and unchecked(plan):
+        # The open item passed when it was queued; a source that cannot be read now does not withdraw it.
+        result.status, result.item = KEPT, str(day_plan.open["id"])
+        result.detail = f"not checked again, since {'; '.join(unchecked(plan))}; the open item stands"
+        return result
+    if verdict.passed:
+        item = render(plan, day_plan, draft, verdict)
+        check = exchange.check_item(
+            exchange.render_item(item.fields, item.ask, item.body, item.touches, item.evidence), products
+        )
+        if check.item is None:
+            verdict.block("item", "; ".join(check.problems))
+    if not verdict.passed:
+        if day_plan.open:
+            result.withdrawn = str(day_plan.open["id"])
+        return result
+    key = {"draft": draft.path, "draft_sha256": draft.sha256, "slot": day_plan.slot}
+    if day_plan.open and all(day_plan.open.get(name) == value for name, value in key.items() if value):
+        result.status, result.item, result.detail = KEPT, str(day_plan.open["id"]), "its Draft is unchanged and passes"
+        return result
+    fingerprint = exchange.item_hash(item)
+    if fingerprint in seen:
+        earlier = ledger.entries.get(seen[fingerprint])
+        result.status, result.item = REPEATED, seen[fingerprint]
+        result.detail = (
+            f"it asks the same as `{seen[fingerprint]}`, which is {earlier['status'] if earlier else 'queued'}"
+        )
+        return result
+    if day_plan.open:
+        item = exchange.Item(
+            dict(item.fields, supersedes=str(day_plan.open["id"])), item.ask, item.body, item.touches, item.evidence
+        )
+    slug = f"post-w{plan.window.number}-day-{number:02d}"
+    extra = {"draft": draft.path, "draft_sha256": draft.sha256}
+    identifier = ledger.publish(store, item, slug, run_id, now, extra)
+    if day_plan.open:
+        ledger.close(ledger.entries[str(day_plan.open["id"])], "superseded", run_id, now, superseded_by=identifier)
+    seen[fingerprint] = identifier
+    outcome.published.append(identifier)
+    result.status, result.item = QUEUED, identifier
+    result.detail = f"replaces `{day_plan.open['id']}`" if day_plan.open else ""
+    return result
+
+
+def withdraw(ledger: Ledger, outcome: Outcome, notice: str | None, run_id: str, now: datetime) -> None:
+    """Take each open post whose Draft no longer passes off the queue, as replaced by the notice that says why."""
+    for result in outcome.results:
+        entry = ledger.entries.get(result.withdrawn or "")
+        if entry and entry["status"] == OPEN:
+            ledger.close(entry, "superseded", run_id, now, superseded_by=notice or "", withdrawn=True)
+
+
+# The post item.
+
+
+def short(text: str, limit: int = 70) -> str:
+    text = " ".join(text.split())
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def cell(text: str) -> str:
+    return " ".join(text.split()).replace("|", "\\|")
+
+
+def quoted(text: str) -> list[str]:
+    return ["  > " + line if line.strip() else "  >" for line in text.splitlines()]
+
+
+def lint_line(plan: Plan, verdict: Verdict) -> str:
+    rules = plan.context.rules
+    warnings = sorted({finding.line() for finding in verdict.warnings})
+    pending = rules.pending() if rules else []
+    line = "- Brand lint (`brand-rules.json`, from Mandu) and platform limits (`config/platforms.json`): passed"
+    if warnings:
+        line += "; warnings: " + "; ".join(warnings)
+    if pending:
+        line += f"; rule types still waiting for their lists in Mandu: {', '.join(pending)}"
+    return line + "."
+
+
+def checklist_lines(verdict: Verdict) -> list[str]:
+    done = [
+        f"line {line.item.line} ({short(line.item.title, 50)})" for line in verdict.checklist if line.status == DONE
+    ]
+    open_lines = [line for line in verdict.checklist if line.status not in (DONE, BLOCKS)]
+    lines = ["- Pre-publication checklist (`pre-publication-checklist.md`): no open line blocks this post."]
+    if done:
+        lines.append("  Done: " + "; ".join(done) + ".")
+    if open_lines:
+        lines.append(
+            "  Open, not gating a social post: "
+            + "; ".join(f"line {line.item.line} ({short(line.item.title, 50)}: {line.note})" for line in open_lines)
+            + "."
+        )
+    return lines
+
+
+def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict) -> exchange.Item:
+    """The Review Queue item for a Draft that passed: the Draft itself, its checks, and its citations."""
+    day, hook, angle = day_plan.day, verdict.hook, verdict.angle
+    roles = plan.context.paths
+    leg = f", {day.pair} leg {day.leg}" if day.pair else ""
+    others = [name for name in plan.context.kit.platforms if name != day.primary]
+    slot = (
+        f"Slot: {datetime.fromisoformat(day_plan.slot):%A %Y-%m-%d %H:%M} ({day_plan.slot[-6:]})."
+        if day_plan.slot
+        else "Slot: not set yet; the window's day 1 and its posting slot are the Founder's call."
+    )
+    body = [
+        f"Day {day.day} of {plan.product} window {plan.window.number}: Angle {angle.id} ({angle.name}){leg}."
+        f" Primary platform {day.primary}; the same video and text post to {', '.join(others) or 'no other platform'}"
+        " the same day.",
+        slot,
+        f"Nothing can be published until the {plan.product} Waitlist is live."
+        if not plan.waitlist_live
+        else "The Waitlist is live.",
+        "",
+        f"**Hook**, frozen in `{roles[hook.source]}` line {hook.line}: {hook.text}",
+        "",
+        "**Video**",
+        "",
+        "| Beat | Time | Visual action | Spoken line | On-screen text |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for beat in draft.beats:
+        label = f"{beat.number} (hook)" if beat.hook else str(beat.number)
+        body.append(
+            f"| {label} | {beat.start:g}-{beat.end:g}s | {cell(beat.visual)} | {cell(beat.spoken)}"
+            f" | {cell(beat.on_screen)} |"
+        )
+    first = None
+    for platform in plan.context.kit.platforms:
+        facts = plan.context.platforms[platform]
+        values = draft.platforms[platform]
+        body += ["", f"**{platform}**", ""]
+        for limit in facts.fields:
+            text = values[limit.name]
+            if first is not None and not limit.title:
+                continue
+            if "\n" in text.strip():
+                body += [f"- {limit.name}:"] + quoted(text)
+            else:
+                body.append(f"- {limit.name}: {text.strip()}")
+        if first is not None:
+            body.append(f"- The rest is identical to {first}'s: the same text, hashtags, and alt text.")
+        first = first or platform
+    commit = plan.code.short
+    body += ["", f"**Claims, checked against {plan.product} `{plan.code.branch}` at `{commit}`**", ""]
+    body += [f"- {claim.text} `{claim.location}` shows `{claim.excerpt}`" for claim in draft.claims]
+    body += ["", "**Checks**", "", lint_line(plan, verdict)] + checklist_lines(verdict)
+    touches = [
+        f"- The day {day.day} post on {', '.join(plan.context.kit.platforms)},"
+        f" {plan.product} window {plan.window.number}",
+        f"- Its Draft: `{draft.path}`, in gr0wthlab's workspace",
+    ]
+    evidence = [
+        f"- Calendar: day {day.day}, {day.asset}, {day.cell}, primary {day.primary}:"
+        f" `{roles['calendar']}` line {day.line}",
+        f"- Angle {angle.id}, {angle.name}: `{roles['angles']}` line {angle.line}",
+        f"- Sourced pain: {short(angle.pain, 400)}",
+        f"- Pre-registered signal: {short(angle.signal, 200)}: `{roles['angles']}` line {angle.line}",
+        f"- Kill criterion: {short(angle.kill, 200)}: `{roles['angles']}` line {angle.line}",
+        f"- Frozen Hook: `{roles[hook.source]}` line {hook.line}",
+    ]
+    fields = {"kind": "post", "product": plan.product, "window": str(plan.window.number), "day": str(day.day)}
+    if day_plan.slot:
+        fields["slot"] = day_plan.slot
+    asset = day.asset if day.asset[1:2].isupper() else day.asset[:1].lower() + day.asset[1:]
+    ask = f"Approve day {day.day} post: {asset}"
+    return exchange.Item(fields, ask[: exchange.MAX_TITLE], "\n".join(body), "\n".join(touches), "\n".join(evidence))
+
+
+# Records.
+
+
+def findings_json(verdict: Verdict | None) -> dict[str, object]:
+    if verdict is None:
+        return {}
+    return {
+        "blocks": [finding.__dict__ for finding in verdict.blocks],
+        "warnings": [finding.__dict__ for finding in verdict.warnings],
+        "checklist": [
+            {"line": line.item.line, "title": line.item.title, "status": line.status, "note": line.note}
+            for line in verdict.checklist
+        ],
+        "claims": [
+            {
+                "claim": result.claim.text,
+                "code": result.claim.location,
+                "shows": result.claim.excerpt,
+                "problem": result.problem,
+            }
+            for result in verdict.claims
+        ],
+    }
+
+
+def record(plan: Plan, outcome: Outcome, store: Store, run_id: str, now: datetime) -> str:
+    """The run's account of every day it prepared, kept in ledger/evidence/post-drafts/<run id>.json."""
+    rules = plan.context.rules
+    data = {
+        "run": run_id,
+        "at": now.isoformat(),
+        "product": plan.product,
+        "window": {
+            "number": plan.window.number,
+            "day_1": plan.window.day_1.isoformat() if plan.window.day_1 else None,
+            "slot": plan.window.slot.strftime("%H:%M") if plan.window.slot else None,
+        },
+        "plan": plan.reason,
+        "kit": {role: {"path": path, "sha256": digest} for role, (path, digest) in plan.files.items()},
+        "kit_problems": dict(plan.context.kit.problems),
+        "competitors": [competitor.name for competitor in plan.context.kit.competitors],
+        "code": {
+            "checkout": str(plan.code.checkout),
+            "branch": plan.code.branch,
+            "commit": plan.code.commit,
+            "problem": plan.code.problem,
+        },
+        "lint": [row.__dict__ for row in rules.statuses()] if rules else plan.context.rules_problem,
+        "days": [
+            {
+                "day": result.day,
+                "status": result.status,
+                "detail": result.detail,
+                "item": result.item,
+                "withdrawn": result.withdrawn,
+                "draft": result.draft,
+                "draft_sha256": result.sha256,
+                **findings_json(result.verdict),
+            }
+            for result in outcome.results
+        ],
+    }
+    path = store.path("evidence", EVIDENCE, f"{run_id}.json")
+    store.write_json(path, data)
+    outcome.record = store.relative(path)
+    return outcome.record
+
+
+def grouped(findings: Sequence[lint.Finding]) -> list[str]:
+    """Findings with the same rule and detail on one line, naming every field they were found in."""
+    lines: dict[tuple[str, str], list[str]] = {}
+    for finding in findings:
+        fields = lines.setdefault((finding.rule, finding.detail), [])
+        if finding.field and finding.field not in fields:
+            fields.append(finding.field)
+    return [
+        f"{rule}: {detail}" + (f" ({', '.join(fields)})" if fields else "") for (rule, detail), fields in lines.items()
+    ]
+
+
+# What the agent, the run report, and the Founder are told.
+
+
+def leg_label(day: kit.KitDay) -> str:
+    return f"{day.angle} / {day.pair} leg {day.leg}" if day.pair else str(day.angle or day.cell)
+
+
+def standing(day_plan: DayPlan) -> str:
+    if day_plan.approved:
+        return f"approved as `{day_plan.approved['id']}`; do not draft it again"
+    if day_plan.open:
+        return f"open as `{day_plan.open['id']}` from its Draft; rewrite the Draft only to change it"
+    if day_plan.rejected:
+        latest = day_plan.rejected[-1]
+        return f"rejected as `{latest['id']}`: {latest.get('reason', 'no reason recorded')}"
+    return "nothing yet"
+
+
+def rule_summary(plan: Plan) -> list[str]:
+    rules = plan.context.rules
+    if rules is None:
+        return [
+            f"- Brand rules: `brand-rules.json` could not be used ({plan.context.rules_problem}),"
+            " so every Draft is blocked."
+        ]
+    statuses = rules.statuses()
+    by = {
+        status: [row.rule for row in statuses if row.status == status] for status in ("applied", "pending", "unknown")
+    }
+    lines = [
+        f"- Brand rules from `{plan.context.paths['brand_rules']}`, run on every field: {', '.join(by['applied'])}."
+    ]
+    if by["pending"]:
+        lines.append(f"  Pending, until Mandu adds their lists: {', '.join(by['pending'])}.")
+    if by["unknown"]:
+        lines.append(f"  Unknown to gr0wthlab, so they block every Draft: {', '.join(by['unknown'])}.")
+    return lines
+
+
+def checklist_summary(plan: Plan) -> list[str]:
+    items = plan.context.kit.checklist
+    every = [item for item in items if not item.checked and item.gates_social and not item.claim]
+    claims = [item for item in items if not item.checked and item.gates_social and item.claim]
+    lines = []
+    if every:
+        lines.append(
+            "- Open checklist lines that block every post until Mandu checks them: "
+            + "; ".join(f"line {item.line} ({short(item.title, 60)})" for item in every)
+            + "."
+        )
+    if claims:
+        lines.append(
+            "- Open checklist lines that block a post using their claim, or whose Angle depends on it: "
+            + "; ".join(f"line {item.line} (the {item.claim!r} claim)" for item in claims)
+            + "."
+        )
+    return lines
+
+
+def brief_lines(plan: Plan, repo_root: Path) -> list[str]:
+    roles = plan.context.paths
+    lines = ["## Post Drafts", "", plan.reason]
+    if not plan.waitlist_live:
+        lines.append(
+            f"The {plan.product} Waitlist is not live, so nothing can be published yet; prepare the Drafts as normal."
+        )
+    lines += [
+        "",
+        f"Write each day's Draft as `{plan.folder}/day-NN.md`, such as `day-03.md`, with your file-editing tool, in the"
+        " format the task definition gives. Check them before you finish:"
+        f" `/usr/bin/python3 {repo_root / 'src/bin/gr0wthlab'} check-drafts`. The launcher queues a post only from a"
+        " Draft that passes every check, and blocks any other, naming the rule.",
+        "",
+        "| Day | Asset | Angle / pair leg | Primary | Frozen Hook | In the Review Queue |",
+        "| --- | --- | --- | --- | --- | --- |",
+    ]
+    for day_plan in plan.days:
+        day, hook = day_plan.day, day_plan.hook
+        frozen = f"{cell(hook.text)} (`{roles[hook.source]}` line {hook.line})" if hook else "could not be read"
+        lines.append(
+            f"| {day.day} | {cell(day.asset)} | {leg_label(day)} | {day.primary} | {frozen}"
+            f" | {cell(standing(day_plan))} |"
+        )
+    if not plan.days:
+        lines.append("| - | - | - | - | - | No calendar day is due this run. |")
+    lines.append("")
+    lines += [f"- Not prepared: day {number}: {why}." for number, why in plan.skipped]
+    code = plan.code
+    if code.problem:
+        lines.append(
+            f"- {plan.product}'s code could not be read ({code.problem}), so every Draft is blocked:"
+            " no claim can be checked."
+        )
+    else:
+        lines.append(
+            f"- {plan.product}'s code: branch `{code.branch}` of `{code.checkout}` is commit `{code.commit}`."
+            f" Read it at that commit only, with `{GIT} -C {code.checkout} show {code.commit}:<path>`, and find line"
+            f" numbers with `{GIT} -C {code.checkout} grep -n '<text>' {code.commit} -- <path>`; the working tree"
+            " may differ, and every claim is checked at that commit."
+        )
+    for platform in plan.context.kit.platforms:
+        facts = plan.context.platforms.get(platform)
+        if facts is None:
+            lines.append(f"- `config/platforms.json` has no facts for {platform}, so every Draft is blocked.")
+            continue
+        fields = []
+        for limit in facts.fields:
+            notes = [
+                "the Hook" if limit.title else "",
+                "starts with the Hook, identical on every platform" if limit.body else "",
+                f"at most {limit.max_chars} characters" + (" with the hashtags" if limit.body else "")
+                if limit.max_chars
+                else "",
+                f"about {limit.visible_chars} show" if limit.visible_chars else "",
+                f"at most {facts.max_hashtags}" if limit.hashtags and facts.max_hashtags else "",
+                f"more than {facts.hashtags_void_above} voids them all"
+                if limit.hashtags and facts.hashtags_void_above
+                else "",
+            ]
+            detail = "; ".join(note for note in notes if note)
+            fields.append(f"### {limit.name}" + (f" ({detail})" if detail else ""))
+        lines.append(f"- `## {platform}` holds exactly: {', '.join(fields)}.")
+    names = ", ".join(competitor.name for competitor in plan.context.kit.competitors)
+    if names:
+        lines.append(f"- Competitors the research names, which no Draft may name: {names}.")
+    lines += rule_summary(plan) + checklist_summary(plan)
+    for role, problem in sorted(plan.context.kit.problems.items()):
+        lines.append(
+            f"- `{roles.get(role, role)}` could not be used ({problem}), so every Draft is blocked until it can."
+        )
+    return lines + [""]
+
+
+def result_detail(result: DayResult) -> str:
+    parts = [result.detail] if result.detail else []
+    if result.item and result.status in (QUEUED, KEPT, APPROVED_BEFORE, REPEATED):
+        parts.insert(0, f"`{result.item}`")
+    if result.verdict and result.status == BLOCKED:
+        parts.append(f"{len(grouped(result.verdict.blocks))} failing checks, listed below")
+    if result.withdrawn:
+        parts.append(f"the open `{result.withdrawn}` was withdrawn")
+    return "; ".join(parts)
+
+
+def report_lines(plan: Plan | None, outcome: Outcome | None, filing: str, problem: str = "") -> list[str]:
+    lines = ["## Post Drafts", ""]
+    if plan is None:
+        return lines + [problem or "No active Product has a 14-day kit, so no post Draft was prepared."]
+    lines.append(plan.reason)
+    code = plan.code
+    lines.append("")
+    lines.append(
+        f"- Claims checked against {plan.product} `{code.branch}` at `{code.short}` (`{code.checkout}`)."
+        if not code.problem
+        else f"- {plan.product}'s code could not be read: {code.problem}; every Draft was blocked."
+    )
+    if not plan.waitlist_live:
+        lines.append(f"- Nothing can be published until the {plan.product} Waitlist is live; every post item says so.")
+    lines += rule_summary(plan)
+    if filing:
+        lines.append(f"- Proposed brand-rules lists: {filing}")
+    competitors = plan.context.kit.competitors
+    lines.append(
+        f"- Competitors read from the research: {len(competitors)} ({', '.join(c.name for c in competitors)})."
+    )
+    lines += checklist_summary(plan)
+    if outcome is None:
+        return lines + ["", problem or "The Drafts were not taken in this run."]
+    if outcome.record:
+        lines.append(f"- Every check of every Draft: `{outcome.record}`.")
+    days = {day_plan.day.day: day_plan.day for day_plan in plan.days}
+    if not outcome.results:
+        return lines + ["", "No calendar day was due this run."]
+    lines += ["", "| Day | Angle / pair leg | Result | Detail |", "| --- | --- | --- | --- |"]
+    for result in outcome.results:
+        label = leg_label(days[result.day]) if result.day in days else "-"
+        lines.append(f"| {result.day} | {label} | {result.status} | {cell(result_detail(result))} |")
+    for result in outcome.results:
+        if result.verdict and result.status == BLOCKED:
+            lines += ["", f"Day {result.day} blocked (`{result.draft}`):", ""]
+            lines += [f"- {line}" for line in grouped(result.verdict.blocks)]
+    warned = [result for result in outcome.results if result.verdict and result.verdict.warnings]
+    for result in warned:
+        lines += ["", f"Day {result.day} warnings, which do not block:", ""]
+        lines += [f"- {line}" for line in grouped(result.verdict.warnings)]
+    return lines
+
+
+def notice_section(outcome: Outcome | None, day_text: str) -> tuple[int, str, str] | None:
+    """The blocked Drafts, any day with no Draft, and any post withdrawn, for the run's notice; None if nothing."""
+    if outcome is None:
+        return None
+    blocked = outcome.blocked
+    missing = [result for result in outcome.results if result.status == MISSING]
+    if not blocked and not missing:
+        return None
+    lines = []
+    if blocked:
+        lines.append(
+            "These post Drafts were not offered for approval; each line names the rule or checklist line that"
+            " blocked it:"
+        )
+        for result in blocked:
+            failing = "; ".join(grouped(result.verdict.blocks)) if result.verdict else result.detail
+            where = f" (`{result.draft}`)" if result.draft else ""
+            lines.append(f"- Day {result.day}{where}: {failing}")
+            if result.withdrawn:
+                lines.append(
+                    f"- The open post `{result.withdrawn}` for day {result.day} is withdrawn, since its Draft no"
+                    " longer passes."
+                )
+    for result in missing:
+        lines.append(f"- Day {result.day} has no Draft, so it has no post this run.")
+    count = len(blocked) + len(missing)
+    title = f"{count} post Draft{'s' if count != 1 else ''} not offered on {day_text}"
+    return count, title, "\n".join(lines)

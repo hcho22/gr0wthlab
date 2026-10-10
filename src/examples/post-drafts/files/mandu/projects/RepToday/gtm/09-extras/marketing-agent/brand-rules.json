@@ -1,0 +1,23 @@
+{
+  "comment": "Synthetic fixture in the format of a Product's brand-rules.json, with the F1 rule types' keys, for gr0wthlab's tests and example set; not any Product's rules.",
+  "hook_max_words": 12,
+  "hook_must_not_be_question": true,
+  "banned_words_in_hook": ["grind", "beast mode", "no excuses", "crush", "transform", "calories"],
+  "banned_social_proof_in_hook": ["stars", "rated", "testimonial", "users love"],
+  "banned_characters_anywhere": ["—"],
+  "no_emoji_in_hook": true,
+  "no_all_caps_words_in_hook": true,
+  "all_caps_allowlist": ["100"],
+  "required_sections": ["Pain state", "Hook"],
+  "required_disclosure": "Screen images simulated. App is pre-release.",
+  "pain_source_url_must_start_with": "https://",
+  "stock_phrases": ["join thousands of", "studies show", "say goodbye to", "game-changer", "effortless"],
+  "capped_words": ["seamless", "robust", "simply", "really", "just"],
+  "capped_words_per_paragraph": 1,
+  "long_sentence_words": 20,
+  "long_sentence_commas": 2,
+  "invented_proof_terms": ["user", "download", "review", "rating", "people"],
+  "fake_scarcity": ["limited spots", "only {n} left", "last chance"],
+  "lint_allow_phrases": ["no card required"],
+  "notes": ["Synthetic."]
+}

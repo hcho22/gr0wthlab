@@ -14,6 +14,9 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 AREAS = ("evidence", "drafts", "review-queue", "weekly-reads", "run-reports", "instructions")
+EXAMPLES = REPO / "src" / "examples" / "post-drafts"
+# A window whose days all fall far in the future, so a run that is not about post Drafts has none due.
+QUIET_WINDOW = {"number": 1, "day_1": "2099-01-05", "slot": "19:00"}
 
 # Stands in for codex. `codex sandbox` answers the preflight as an enforcing sandbox would, without running anything;
 # `codex exec` plays the agent from behavior.json beside it, writing straight into the workspace.
@@ -70,10 +73,21 @@ def git_env(root: Path) -> dict[str, str]:
     return dict(os.environ, GIT_CONFIG_GLOBAL=str(config), GIT_CONFIG_NOSYSTEM="1")
 
 
-def make_repo(path: Path, env: dict[str, str]) -> Path:
-    """A gr0wthlab checkout with the real configuration, task definition, and area READMEs, committed on main."""
+def set_window(repo: Path, window: dict) -> None:
+    """config/run.json's window in a throwaway checkout."""
+    path = repo / "config" / "run.json"
+    data = json.loads(path.read_text(encoding="utf-8"))
+    data["window"] = dict(data["window"], **window)
+    path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+
+
+def make_repo(path: Path, env: dict[str, str], window: dict | None = None) -> Path:
+    """A gr0wthlab checkout with the real configuration, task definition, proposals, and area READMEs, committed on
+    main; its window is QUIET_WINDOW unless a test gives another."""
     shutil.copytree(str(REPO / "config"), str(path / "config"))
+    set_window(path, QUIET_WINDOW if window is None else window)
     shutil.copytree(str(REPO / "src" / "instructions"), str(path / "src" / "instructions"))
+    shutil.copytree(str(REPO / "src" / "proposals"), str(path / "src" / "proposals"))
     shutil.copy(str(REPO / ".gitignore"), str(path / ".gitignore"))
     (path / "ledger").mkdir()
     (path / "ledger" / "README.md").write_text("# ledger\n")
@@ -86,16 +100,30 @@ def make_repo(path: Path, env: dict[str, str]) -> Path:
     return path
 
 
-def make_mandu(path: Path) -> Path:
-    """A Mandu checkout holding every package source the real Product registry names."""
+def make_mandu(path: Path, kit: bool = True) -> Path:
+    """A Mandu checkout holding every package source the real Product registry names; with kit, the 14-day kit
+    files are the example set's synthetic kit, whose brand rules already hold every list the F1 proposal adds."""
     registry = json.loads((REPO / "config" / "products.json").read_text(encoding="utf-8"))
     for product in registry["products"]:
         for source in (product.get("go_to_market_package") or {}).get("sources", []):
             target = path / source["path"]
             if source["path"].endswith("/"):
-                target = target / "plan.md"
+                if kit and source.get("files_starting_with"):
+                    continue  # the kit holds the files it covers
+                target = target / f"{source.get('files_starting_with', '')}plan.md"
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(f"{source['path']}\n", encoding="utf-8")
+    if kit:
+        shutil.copytree(str(EXAMPLES / "files" / "mandu"), str(path), dirs_exist_ok=True)
+    return path
+
+
+def make_code(path: Path, env: dict[str, str]) -> Path:
+    """A Product checkout on main holding the example set's code, for claim checks."""
+    shutil.copytree(str(EXAMPLES / "files" / "code"), str(path))
+    git(path, "init", "--quiet", env=env)
+    git(path, "add", "--all", env=env)
+    git(path, "commit", "--quiet", "-m", "code", env=env)
     return path
 
 
@@ -228,3 +256,61 @@ def add_dispatches(repo: Path, env: dict[str, str]) -> None:
     shutil.copytree(str(REPO / "src" / "dispatches"), str(repo / "src" / "dispatches"))
     git(repo, "add", "--all", env=env)
     git(repo, "commit", "--quiet", "-m", "dispatches", env=env)
+
+
+# Post Drafts for the synthetic kit in src/examples/post-drafts/files/mandu.
+
+# Each calendar day's Angle, pair leg, and frozen Hook in the synthetic kit.
+KIT_DAYS = {
+    1: ("P01", "AB-1", "A", "Open it and the session is already waiting."),
+    2: ("P02", None, None, "I missed five days and the app welcomed me back."),
+    3: ("P03", "AB-2", "A", "Skip a day and the score dips. It never resets."),
+    4: ("P04", None, None, "Airplane mode on. The session still appears."),
+    5: ("P05", None, None, "The session builds before the screen settles."),
+    6: ("P06", None, None, "A hallway is enough room for today."),
+    7: ("P07", None, None, "Five minutes still counts as showing up."),
+    8: ("P01", "AB-1", "B", "The session is on screen before you decide."),
+    9: ("P02", None, None, "I missed five days and the app welcomed me back."),
+    10: ("P03", "AB-2", "B", "A skipped day never takes you back to zero."),
+    11: ("P04", None, None, "Airplane mode on. The session still appears."),
+    12: ("P06", None, None, "A hallway is enough room for today."),
+    13: ("P07", None, None, "Five minutes still counts as showing up."),
+}
+CLEAN_DRAFT = EXAMPLES / "files" / "drafts" / "day-03-clean.md"
+
+
+def draft(day: int, caption: str = "This is the history view after three missed days this month.") -> str:
+    """A Draft for a calendar day of the synthetic kit that passes every check, built from the example set's clean
+    day 3 Draft; caption replaces its second caption line on both platforms."""
+    angle, pair, leg, hook = KIT_DAYS[day]
+    text = CLEAN_DRAFT.read_text(encoding="utf-8")
+    text = text.replace("This is the history view after three missed days this month.", caption)
+    text = text.replace("Skip a day and the score dips. It never resets.", hook)
+    legs = f"pair: {pair}\nleg: {leg}\n" if pair else ""
+    return text.replace("day: 3\nangle: P03\npair: AB-2\nleg: A\n", f"day: {day}\nangle: {angle}\n{legs}")
+
+
+def draft_path(day: int, window: int = 1) -> str:
+    """Where the agent writes a day's Draft, relative to workspace/."""
+    return f"drafts/posts/window-{window}/day-{day:02d}.md"
+
+
+def window_due(last: int) -> dict:
+    """A window in which the run at SUNDAY_RUN prepares days 1 to last (at most 7): its day last falls on the last
+    date of the week after that Sunday's sitting."""
+    assert 1 <= last <= 7
+    day_1 = SUNDAY_RUN.astimezone().date() + timedelta(days=7 - (last - 1))
+    return {"number": 1, "day_1": day_1.isoformat(), "slot": "19:00"}
+
+
+def kit_context(code_checkout: Path, env: dict[str, str], mandu: Path | None = None):
+    """The post-Draft checks' context for the synthetic kit, as a run builds it, with the given code checkout."""
+    from gr0wthlab import codebase, drafts, lint, posts
+
+    registry = json.loads((REPO / "config" / "products.json").read_text(encoding="utf-8"))
+    product, roles = posts.kit_config(registry)
+    parsed, _, data, problem = posts.read_kit(mandu or EXAMPLES / "files" / "mandu", roles)
+    rules = lint.Rules(data) if data is not None else None
+    platforms = lint.load_platforms(json.loads((REPO / "config" / "platforms.json").read_text(encoding="utf-8")))
+    code = codebase.open_code(product, code_checkout, "main", env)
+    return drafts.Context(product, 1, parsed, rules, problem, platforms, code, dict(roles))

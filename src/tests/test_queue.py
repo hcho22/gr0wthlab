@@ -202,11 +202,21 @@ class DecisionsTest(LedgerTestCase):
 
 
 class OrderAndPersistenceTest(LedgerTestCase):
-    def test_posts_by_nearest_slot_then_each_kind_oldest_first(self):
+    def post(self, slug, day, slot=None, now=NOW):
+        """A post as the launcher queues it from a Draft that passed."""
+        fields = {"kind": "post", "product": "RepToday", "window": "1", "day": str(day)}
+        if slot:
+            fields["slot"] = slot
+        item = exchange.Item(fields, f"Approve day {day} post: {slug}", "The Draft.", "- The post", "- `a/b.md` line 1")
+        return self.ledger.publish(self.store, item, slug, "RUN1", now, {"draft": f"day-{day:02d}.md"})
+
+    def test_posts_by_nearest_slot_then_by_day_then_each_kind_oldest_first(self):
         self.drop("notice.md", fakes.proposal("notice"))
-        self.drop("later-post.md", fakes.proposal("post", "slot: 2026-10-16T19:00-07:00\n", title="day 6"))
+        self.post("later-post", 6, "2026-10-16T19:00-07:00")
         self.drop("proposal.md", fakes.PROPOSAL)
-        self.drop("sooner-post.md", fakes.proposal("post", "slot: 2026-10-15T02:00Z\n", title="day 5"))
+        self.post("unslotted-day-2", 2)
+        self.post("sooner-post", 5, "2026-10-15T02:00Z")
+        self.post("unslotted-day-1", 1, now=NOW + timedelta(minutes=5))
         self.drop("message.md", fakes.proposal("message"))
         self.take()
         self.drop("old-request.md", fakes.proposal("dispatch-request"))
@@ -214,7 +224,30 @@ class OrderAndPersistenceTest(LedgerTestCase):
         self.take("RUN2", NOW + timedelta(days=7))
         order = [entry["id"][9:] for entry in self.ledger.ordered()]
         self.assertEqual(
-            order, ["sooner-post", "later-post", "message", "decision", "old-request", "proposal", "notice"]
+            order,
+            [
+                "sooner-post",
+                "later-post",
+                "unslotted-day-1",
+                "unslotted-day-2",
+                "message",
+                "decision",
+                "old-request",
+                "proposal",
+                "notice",
+            ],
+        )
+        entry = self.ledger.entries["20261011-later-post"]
+        self.assertEqual((entry["window"], entry["day"], entry["draft"]), (1, 6, "day-06.md"))
+
+    def test_a_post_is_never_taken_from_incoming(self):
+        post = fakes.proposal("post", "window: 1\nday: 3\n", title="day 3")
+        self.drop("day-3.md", post)
+        published, set_aside = self.take()
+        self.assertEqual(published, [])
+        self.assertIn(
+            "a post is queued only from its Draft in drafts/posts/, after the launcher's checks; never write one here",
+            set_aside[0].problems,
         )
 
     def test_an_item_carries_over_only_once_a_sitting_has_left_it_undecided(self):

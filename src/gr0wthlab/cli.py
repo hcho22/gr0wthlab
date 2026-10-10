@@ -6,11 +6,13 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
-from . import codex, cycle, exchange, launcher, probe, schedule, settings
+from . import codex, cycle, drafts, exchange, launcher, posts, probe, schedule, settings
 from . import state as run_state
-from .boundary import LEDGER, PRODUCT_REGISTRY, ConfigError, load_json
+from .areas import Areas
+from .boundary import LEDGER, PRODUCT_REGISTRY, ConfigError, load_boundary, load_json
 from .queue import QUEUE_FILE, REVIEW_QUEUE, Ledger, QueueError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -31,6 +33,7 @@ def parser() -> argparse.ArgumentParser:
     commands.add_parser("show-config", help="print the resolved run configuration and its fingerprint")
     commands.add_parser("preflight", help="prove the write boundary in the sandbox, with no model")
     commands.add_parser("check-incoming", help="check the Review Queue items waiting in review-queue/incoming/")
+    commands.add_parser("check-drafts", help="check this run's post Drafts in drafts/posts/ as the launcher will")
 
     agent = commands.add_parser("launch-agent", help="print a LaunchAgent plist that runs the launcher on a schedule")
     agent.add_argument(
@@ -97,6 +100,56 @@ def check_incoming(out=sys.stdout) -> int:
     return 1 if failed else 0
 
 
+def check_drafts(out=sys.stdout, now: datetime | None = None) -> int:
+    """The launcher's own checks of each post Draft due this run, for the agent to use before it finishes."""
+    env = dict(os.environ)
+    home = Path.home()
+    config = settings.load(REPO_ROOT, env, home)
+    _, boundary = load_boundary(REPO_ROOT, env, home)
+    registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
+    products = [product["name"] for product in registry.get("products", [])]
+    ledger, _, warning = queued(products)
+    if warning:
+        print(warning, file=out)
+    plan = posts.prepare(REPO_ROOT, config, registry, boundary, ledger, now or datetime.now(timezone.utc), env)
+    if plan is None:
+        print("No active Product has a 14-day kit, so there is no post Draft to check.", file=out)
+        return 0
+    print(plan.reason, file=out)
+    if plan.code.problem:
+        print(f"PROBLEM {plan.product}'s code could not be read: {plan.code.problem}", file=out)
+    areas = Areas(boundary)
+    failed = 0
+    for day_plan in plan.days:
+        number = day_plan.day.day
+        path = plan.draft_path(number)
+        if day_plan.approved:
+            print(f"SKIP day {number}: approved as {day_plan.approved['id']}; it is not asked again", file=out)
+            continue
+        draft, problem = posts.read_draft(areas, path)
+        if draft is None:
+            failed += bool(problem) or not day_plan.open
+            standing = f"; the open {day_plan.open['id']} stands" if day_plan.open and not problem else ""
+            print(
+                f"{'PROBLEM' if problem or not standing else 'OK'} day {number}: {problem or 'no Draft'}{standing}",
+                file=out,
+            )
+            continue
+        other = plan.other_leg(day_plan.day)
+        other_draft = posts.read_draft(areas, plan.draft_path(other.day))[0] if other else None
+        verdict = drafts.evaluate(draft, plan.context, other_draft)
+        failed += not verdict.passed
+        print(f"{'OK' if verdict.passed else 'BLOCKED'} day {number}: {draft.path}", file=out)
+        for line in posts.grouped(verdict.blocks):
+            print(f"  - {line}", file=out)
+        for line in posts.grouped(verdict.warnings):
+            print(f"  - warning, which does not block: {line}", file=out)
+    for number, why in plan.skipped:
+        print(f"SKIP day {number}: {why}", file=out)
+    print(f"{len(plan.days)} day{'' if len(plan.days) == 1 else 's'} due, {failed} with problems", file=out)
+    return 1 if failed else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = sys.argv[1:] if argv is None else argv
     args = parser().parse_args(arguments)
@@ -118,6 +171,8 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if result.ok else launcher.EXIT_BOUNDARY
         if args.command == "check-incoming":
             return check_incoming()
+        if args.command == "check-drafts":
+            return check_drafts()
         if args.command == "launch-agent":
             config = settings.load(REPO_ROOT, env, home)
             if args.boundary_check:

@@ -27,15 +27,23 @@ FAILED = "failed"
 
 @dataclass(frozen=True)
 class Source:
-    """One configured package source: a Mandu-relative file, or a directory ending in / that covers its files."""
+    """One configured package source: a Mandu-relative file, or a directory ending in / that covers its files, or
+    only those whose names start with prefix."""
 
     product: str
     path: str
     needed_by: tuple[str, ...]
+    prefix: str = ""
 
     @property
     def is_directory(self) -> bool:
         return self.path.endswith("/")
+
+    def covers(self, relative: str) -> bool:
+        """Whether a Mandu-relative file is one this source reads."""
+        if not self.is_directory:
+            return relative == self.path
+        return relative.startswith(self.path) and Path(relative).name.startswith(self.prefix)
 
 
 @dataclass
@@ -90,7 +98,12 @@ def package_sources(registry: Mapping) -> list[Source]:
             path = entry.get("path") if isinstance(entry, dict) else None
             if not isinstance(path, str) or not path or path.startswith("/") or ".." in path.split("/"):
                 raise ConfigError(f"{product['name']} package source {path!r} must be a Mandu-relative path")
-            sources.append(Source(product["name"], path, tuple(entry.get("needed_by") or ())))
+            prefix = entry.get("files_starting_with", "")
+            if not isinstance(prefix, str) or "/" in prefix or (prefix and not path.endswith("/")):
+                raise ConfigError(
+                    f"{product['name']} package source {path!r}: files_starting_with names a folder's files"
+                )
+            sources.append(Source(product["name"], path, tuple(entry.get("needed_by") or ()), prefix))
     return sources
 
 
@@ -118,8 +131,9 @@ def raise_error(error: OSError) -> None:
     raise error
 
 
-def directory_files(root: Path, relative: str) -> list[str]:
-    """Mandu-relative paths of every regular file under a directory, skipping hidden files such as .DS_Store.
+def directory_files(root: Path, relative: str, prefix: str = "") -> list[str]:
+    """Mandu-relative paths of every regular file under a directory whose name starts with prefix, skipping hidden
+    files such as .DS_Store.
 
     A folder that cannot be listed raises, so the source fails with the real reason.
     """
@@ -127,7 +141,7 @@ def directory_files(root: Path, relative: str) -> list[str]:
     for directory, subdirs, files in os.walk(str(root / relative), onerror=raise_error):
         subdirs[:] = sorted(name for name in subdirs if not name.startswith("."))
         for name in sorted(files):
-            if not name.startswith("."):
+            if not name.startswith(".") and name.startswith(prefix):
                 found.append(str(Path(directory, name).relative_to(root)))
     return found
 
@@ -179,11 +193,12 @@ def take(
                 if kind != stat.S_IFDIR:
                     result.reason = "missing" if kind is None else "not a directory"
                 else:
-                    names = directory_files(mandu, source.path)
-                    result.reason = None if names else "holds no files"
+                    names = directory_files(mandu, source.path, source.prefix)
+                    what = f"files starting with {source.prefix}" if source.prefix else "files"
+                    result.reason = None if names else f"holds no {what}"
             except OSError as error:
                 result.reason = error.strerror or str(error)
-            known = sorted(name for name in previous if name.startswith(source.path))
+            known = sorted(name for name in previous if source.covers(name))
             if result.reason:
                 result.carried = [
                     FileResult(name, source.path, FAILED, previous_sha256=previous[name] or None, reason=result.reason)
@@ -235,6 +250,7 @@ def record(
         product["sources"].append(
             {
                 "path": result.source.path,
+                **({"files_starting_with": result.source.prefix} if result.source.prefix else {}),
                 "needed_by": list(result.source.needed_by),
                 "status": result.status,
                 **({"reason": result.failure()} if result.status == FAILED else {}),

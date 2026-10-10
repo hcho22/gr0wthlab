@@ -125,9 +125,17 @@ class Ledger:
         return candidate
 
     def publish(
-        self, store: Store, item: exchange.Item, slug: str, run_id: str, now: datetime, origin: str | None = None
+        self,
+        store: Store,
+        item: exchange.Item,
+        slug: str,
+        run_id: str,
+        now: datetime,
+        extra: Mapping[str, object] | None = None,
+        origin: str | None = None,
     ) -> str:
-        """Queue an item under a new identifier, writing its canonical text to review-queue/items/<id>.md.
+        """Queue an item under a new identifier, writing its canonical text to review-queue/items/<id>.md; extra holds
+        the launcher's own fields for the ledger entry, such as a post's Draft.
 
         origin marks an item the launcher files from reviewed text, such as a Dispatch request, so later runs find it.
         """
@@ -148,6 +156,10 @@ class Ledger:
         for key in ("product", "slot", "supersedes"):
             if item.fields.get(key):
                 entry[key] = item.fields[key]
+        for key in ("window", "day"):
+            if item.fields.get(key):
+                entry[key] = int(item.fields[key])
+        entry.update(extra or {})
         if origin:
             entry["origin"] = origin
         self.entries[identifier] = entry
@@ -218,6 +230,11 @@ class Ledger:
         item = check.item
         if item is None:
             return None, problems
+        if item.kind == "post":
+            problems.append(
+                "a post is queued only from its Draft in drafts/posts/, after the launcher's checks; never write one"
+                " here"
+            )
         target = item.fields.get("supersedes")
         replaced = self.entries.get(target, {}) if target else {}
         if target and replaced.get("status") != OPEN:
@@ -248,14 +265,18 @@ class Ledger:
         return SetAside(name, store.relative(target) if target else "", tuple(problems))
 
     def ordered(self) -> list[dict[str, object]]:
-        """Open items in presentation order: posts by nearest slot, then each kind in turn, oldest first."""
+        """Open items in presentation order: posts by nearest slot, then posts with no slot yet by window and day, then
+        each other kind in turn, oldest first."""
         kinds = list(exchange.KINDS)
 
         def key(entry: Mapping[str, object]) -> tuple:
-            slot = exchange.parse_datetime(str(entry.get("slot", ""))) if entry["kind"] == "post" else None
+            post = entry["kind"] == "post"
+            slot = exchange.parse_datetime(str(entry.get("slot", ""))) if post else None
             return (
                 kinds.index(str(entry["kind"])),
-                slot.timestamp() if slot else 0.0,
+                slot.timestamp() if slot else float("inf") if post else 0.0,
+                int(entry.get("window") or 0),
+                int(entry.get("day") or 0),
                 str(entry["published_at"]),
                 str(entry["id"]),
             )

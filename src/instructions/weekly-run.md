@@ -10,19 +10,23 @@ The launcher has already done the deterministic work before you start, and does 
 - It took in the Founder's decisions from Mandu and kept every rejection reason as Evidence.
 - It read the Waitlist's anonymous view, if RepToday's build has made one, and kept only its counts by Source, Fit answer, and opt-in, with the entry identifiers, as Evidence; the view itself is outside what you can read.
 - It filed the Dispatch requests the Founder must approve from their reviewed text, such as the RepToday Waitlist request, each once.
-- After you finish, it checks every item you wrote, queues the valid ones, orders the Review Queue, writes the run report, and saves the records.
+- It read the 14-day kit from Mandu, worked out which calendar days this run prepares post Drafts for, and fixed the Product's code to one commit for claim checks.
+- After you finish, it checks every item you wrote, queues the valid ones, checks every post Draft and queues a post only for one that passes, orders the Review Queue, writes the run report, and saves the records.
 
 ## Steps
 
 1. Read the run brief named in the header above, before anything else.
    It lists the package files with their results, what changed, failed sources and what they block, the decisions taken in this run, the open Review Queue with any decision the Founder took on an item an open one replaced, the package-change proposals already decided, and where this run's Waitlist counts are.
-2. Read your working guidance in `workspace/instructions/` (start with `package-review.md`).
+2. Read your working guidance in `workspace/instructions/`: `package-review.md` for step 3 and `post-drafts.md` for step 5.
 3. Review the Go-To-Market Package for contradictions, doing every pass in the guidance's "How to review"; the review is finished when every pass is, not when you find a contradiction.
    Read every package file the brief lists, and any other file in the same package folders that you need to find every place a contradiction appears.
 4. Write one package-change proposal for each contradiction you find that is not already open or decided in the brief.
    Where the brief shows the Founder decided an item that an open one replaced, make sure the open one answers that decision; if it does not, write a new item that supersedes it and does.
-5. Check your items with the command the brief gives, and fix every problem it reports.
-6. Finish with a short summary as your final message: what you checked (including each recorded outcome you traced), what you found, what you queued, and anything you skipped or could not do, with the reason.
+5. Prepare the post Drafts the brief's Post Drafts section lists, one per calendar day that has no open or approved item, as "Writing a post Draft" describes.
+   Read the kit files the brief names, the brand guidelines, and the Product's code at the commit the brief gives.
+6. Check your items with the brief's check-incoming command and your Drafts with its check-drafts command, and fix every problem either reports that the Draft can fix.
+   A Draft blocked by the package itself (a frozen Hook that fails a brand rule, or an open checklist line) stays as the package requires: never change a Hook, signal, or kill criterion to pass a check; write a package-change proposal that cites both sides instead, unless one is already open or decided.
+7. Finish with a short summary as your final message: what you checked (including each recorded outcome you traced), what you found, what you queued, which Drafts you wrote and what check-drafts said of each, and anything you skipped or could not do, with the reason.
    The launcher puts that summary in the run report as your account.
    End it with exactly one of these lines, as plain text on its own line with nothing after it:
    `Review: complete` when you finished every pass of step 3, or `Review: incomplete: <the passes you did not finish, and why>` otherwise.
@@ -66,6 +70,87 @@ The `# ` title is the one-line ask the Founder decides on, under 120 characters.
 Leave out `id` and `exchange`; the launcher assigns both when it queues the item.
 Every Evidence line names its source as a path in backticks or a URL.
 
+## Writing a post Draft
+
+Write each day's Draft as the file `day-NN.md` (such as `day-03.md`) in the Drafts folder the brief names, with your file-editing tool, holding exactly these parts in this order:
+
+```markdown
+---
+draft: post
+product: RepToday
+window: 1
+day: 3
+angle: P03
+pair: AB-2
+leg: A
+---
+
+# <the day's asset, as the calendar names it>
+
+## Hook
+
+<the frozen Hook from the brief, word for word>
+
+## Beats
+
+### Beat 1 (hook): 0-3s
+
+- Visual action: <what the viewer sees happen>
+- Spoken line: <what is said aloud, or none>
+- On-screen text: <the frozen Hook, word for word>
+
+### Beat 2: 3-9s
+
+- Visual action: <...>
+- Spoken line: <... or none>
+- On-screen text: <... or none>
+
+## TikTok
+
+### Caption
+
+<the frozen Hook as the first line, then the rest of the caption>
+
+### Hashtags
+
+<#tags separated by spaces, or none>
+
+### Alt text
+
+<a plain description of what the video shows>
+
+## YouTube Shorts
+
+### Title
+
+<the frozen Hook>
+
+### Description
+
+<the same text as the TikTok caption>
+
+### Hashtags
+
+<the same as TikTok's>
+
+### Alt text
+
+<the same as TikTok's>
+
+## Claims
+
+- Claim: <a behavioral claim the Draft makes, in plain words>
+  Code: `<path in the Product's repository>:<line>`, or `:<first>-<last>` for at most 40 lines
+  Shows: `<code copied from those lines that supports the claim>`
+```
+
+- Leave out `pair` and `leg` for a day that is not an A/B pair leg.
+- Number the beats from 1 with times that follow on; only beat 1 is the hook beat, starting at 0s.
+- Each test platform the brief names gets one `##` section with exactly the `###` fields the brief lists for it; both carry identical content.
+- An A/B leg differs from its other leg only in the Hook: when the other leg's Draft exists, copy it and change only the Hook's lines.
+- Give each behavioral claim (anything the video or copy says the app does) its own item under Claims, with the lines of code at the brief's commit that support it; cut a claim no code supports.
+- Rewrite an open day's Draft only to change it for a reason, such as a package change or the Founder's decision; an unchanged Draft keeps its item.
+
 ## Rules
 
 - Never guess what a failed source says.
@@ -80,5 +165,6 @@ Every Evidence line names its source as a path in backticks or a URL.
   The launcher's records (the Review Queue, queued items, its own Evidence, run reports and briefs, and run state) are in `ledger/` at the repository root, which you can read and cannot write.
   The README files in `workspace/` are documentation; a change to one is never saved.
 - Do not change `workspace/instructions/` in this run; refining your guidance arrives with a later story.
-- Do not produce Drafts, Dispatch requests, or Weekly Read items in this run; later stories add them to this task, and the launcher files the reviewed Dispatch requests itself.
+- Write post Drafts only in the Drafts folder the brief names, and never write a post item yourself: the launcher queues a post only from a Draft that passes its checks.
+- Do not produce message Drafts, Dispatch requests, or Weekly Read items in this run; later stories add them to this task, and the launcher files the reviewed Dispatch requests itself.
 - Never look for the Waitlist's sign-ups or an email address; the Waitlist reaches you only as the counts the brief names.
