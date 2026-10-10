@@ -136,6 +136,21 @@ class NewRuleTypesTest(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertEqual(rules_hit(rules, text), [("invented_proof_terms", True)])
 
+    def test_a_number_ends_on_a_digit_and_never_takes_in_the_punctuation_after_it(self):
+        rules = full_rules()
+        for text in (
+            "Day 3 of 14. People keep asking.",
+            "Pick 5, 10, or 20. Reviews vary.",
+            "In 2026, people still open apps.",
+            "Only 3. Left behind.",
+        ):
+            with self.subTest(text=text):
+                self.assertEqual(rules_hit(rules, text), [])
+        for text in ("Join 10,000 users.", "Loved by 2k+ people.", "A 1.5k user beta."):
+            with self.subTest(text=text):
+                self.assertEqual(rules_hit(rules, text), [("invented_proof_terms", True)])
+        self.assertEqual(rules_hit(rules, "Only 3 left."), [("fake_scarcity", True)])
+
     def test_the_quantity_words_come_from_brand_rules_and_wait_for_them(self):
         data = json.loads(KIT_RULES.read_text(encoding="utf-8"))
         del data["invented_proof_quantities"]
@@ -195,14 +210,23 @@ class NewRuleTypesTest(unittest.TestCase):
         self.assertEqual(rules_hit(rules, "Beastmode is one word here, and so is levelup."), [])
         self.assertEqual(rules_hit(rules, "#buildinpublic #homeworkout", field="TikTok hashtags"), [])
 
-    def test_an_allowed_phrase_inside_a_hashtag_hides_only_itself(self):
+    def test_an_allowed_phrase_is_blanked_in_a_hashtag_only_when_it_is_the_whole_hashtag(self):
         data = json.loads(KIT_RULES.read_text(encoding="utf-8"))
-        rules = lint.Rules(dict(data, banned_words_in_hook=["grind", "card"]))
+        rules = lint.Rules(dict(data, banned_words_in_hook=["weight loss", "grind", "card"]))
+        self.assertEqual(rules_hit(rules, "No card required."), [])
         self.assertEqual(rules_hit(rules, "#nocardrequired #no_card_required", field="TikTok hashtags"), [])
-        [finding] = rules.check([lint.Copy("TikTok hashtags", "#grindnocardrequired")])
-        self.assertEqual(finding.detail, "banned word 'grind'")
-        [finding] = rules.check([lint.Copy("TikTok hashtags", "#nocardrequiredcard")])
-        self.assertEqual(finding.detail, "banned word 'card'")
+        # A longer hashtag is checked in full, the allowed phrase's own words included.
+        longer = {
+            "#nocardrequireddailygrind": ["banned word 'grind'", "banned word 'card'"],
+            "#nocardrequiredweightloss": ["banned word 'weight loss'", "banned word 'card'"],
+            "#nocardrequired10kusers": ["banned word 'card'", "unsourced proof '#nocardrequired10kusers'"],
+            "#no_card_required_dailygrind": ["banned word 'grind'", "banned word 'card'"],
+            "#dailygrindnocardrequired": ["banned word 'grind'", "banned word 'card'"],
+        }
+        for text, details in longer.items():
+            with self.subTest(text=text):
+                found = rules.check([lint.Copy("TikTok hashtags", text)])
+                self.assertEqual([finding.detail for finding in found], details)
 
     def test_a_term_s_words_match_whatever_sets_them_apart(self):
         data = json.loads(KIT_RULES.read_text(encoding="utf-8"))

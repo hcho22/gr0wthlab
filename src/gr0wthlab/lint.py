@@ -10,7 +10,8 @@ so no rule in Mandu is ever skipped silently.
 
 A listed word or phrase matches as whole words, whatever sets its words apart in the rule or in the text (spaces,
 hyphens, dashes, or underscores). A hashtag runs words together, so there it matches anywhere inside the tag, which
-is stricter: a false hit costs another hashtag, and a miss puts banned language in a public post.
+is stricter: a false hit costs another hashtag, and a miss puts banned language in a public post. An allowed
+phrase is blanked in a hashtag only when it is the whole tag, so a longer tag is always checked in full.
 """
 
 from __future__ import annotations
@@ -24,7 +25,7 @@ PENDING = "pending"
 NOT_APPLICABLE = "not applicable"
 DOCUMENTATION = ("comment", "notes")
 EMOJI_ABOVE = 0x2100  # the package's own lint treats any character above U+2100 as a non-text symbol
-NUMBER = r"\d[\d,.]*\s*(?:k|m|million|thousand)?\+?"
+NUMBER = r"\d(?:[\d,.]*\d)?\s*(?:k|m|million|thousand)?\+?"
 SEPARATOR = r"[\s_\-\u2010-\u2015]+"  # what sets words apart: spaces, hyphens, dashes, and underscores
 LETTER = r"[^\W_]"  # a letter or digit, so a word ends at an underscore as at any other separator
 BEFORE, AFTER = f"(?<!{LETTER})", f"(?!{LETTER})"
@@ -118,16 +119,15 @@ def phrase(term: str, tag: bool = False) -> str:
 
 
 def words_pattern(term: str, plural: bool = True) -> re.Pattern:
-    """A term in any case: as whole words, with a plural ending when plural is set, or anywhere inside a hashtag,
-    whose start, up to the term, is the tag group."""
+    """A term in any case: as whole words, with a plural ending when plural is set, or anywhere inside a hashtag."""
     ending = "(?:s|es)?" if plural else ""
-    return re.compile(rf"{BEFORE}{phrase(term)}{ending}{AFTER}|(?P<tag>#\w*?){phrase(term, tag=True)}", re.IGNORECASE)
+    return re.compile(rf"{BEFORE}{phrase(term)}{ending}{AFTER}|#\w*?{phrase(term, tag=True)}", re.IGNORECASE)
 
 
-def blank(match: re.Match) -> str:
-    """Spaces in place of a term words_pattern found, keeping the start of a hashtag that holds it."""
-    kept = match.group("tag") or ""
-    return kept + " " * (len(match.group(0)) - len(kept))
+def allowed_pattern(term: str) -> re.Pattern:
+    """An allowed phrase in any case: as whole words outside every hashtag, or as one whole hashtag, so blanking it
+    never takes a part out of a longer hashtag."""
+    return re.compile(rf"(?<![\w#]){phrase(term)}{AFTER}|(?<=#){phrase(term, tag=True)}(?!\w)", re.IGNORECASE)
 
 
 def string_list(data: Mapping, key: str, words: bool = True) -> tuple[str, ...]:
@@ -197,7 +197,7 @@ class Rules:
         if prefix is not None and not (isinstance(prefix, str) and prefix):
             raise RulesError("brand-rules.json pain_source_url_must_start_with must be text")
         self.pain_prefix: str | None = prefix
-        self.allow = [words_pattern(term, plural=False) for term in self.lists.get("lint_allow_phrases", ())]
+        self.allow = [allowed_pattern(term) for term in self.lists.get("lint_allow_phrases", ())]
 
     def has(self, *keys: str) -> bool:
         return all(key in self.data for key in keys)
@@ -228,7 +228,7 @@ class Rules:
     def masked(self, text: str) -> str:
         """The text with every allowed phrase blanked out, so no word or phrase rule counts inside one."""
         for pattern in self.allow:
-            text = pattern.sub(blank, text)
+            text = pattern.sub(lambda match: " " * len(match.group(0)), text)
         return text
 
     def check(self, copies: Sequence[Copy]) -> list[Finding]:
