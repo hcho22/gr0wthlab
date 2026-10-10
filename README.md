@@ -59,7 +59,7 @@ The PRD's Guardrails section says what enforces each one.
 | [`workspace/weekly-reads/`](workspace/weekly-reads/) | Weekly Read memos | Yes |
 | [`workspace/run-reports/`](workspace/run-reports/) | Notes the agent writes during a run | Yes |
 | [`workspace/instructions/`](workspace/instructions/) | The Marketing Engineer's Instructions | Yes |
-| [`ledger/`](ledger/) | The launcher's records: the published Review Queue, decision and sitting Evidence, package snapshots, run reports, and run state | No |
+| [`ledger/`](ledger/) | The launcher's records: the published Review Queue, the launcher's own Evidence, run reports, and run state | No |
 | [`src/`](src/) | Code | No |
 | [`config/`](config/) | Guardrail configuration, the Product registry, and the run's settings | No |
 | `docs/`, `CONTEXT.md`, this README | Specification and decision records | No |

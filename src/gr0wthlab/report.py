@@ -603,7 +603,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
 
 
 def waitlist_progress(reading: waitlist.Reading) -> str:
-    """Good-Fit opt-ins against the Beta Cohort bar of about 50 sign-ups."""
+    """Good-Fit opt-ins against the Product's Beta Cohort bar."""
     bar = reading.rules.bar
     have = reading.good_fit_opt_ins
     where = "the bar is reached" if have >= bar else f"{round(100 * have / bar)}% of the way"
