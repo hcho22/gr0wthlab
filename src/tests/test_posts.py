@@ -66,6 +66,17 @@ class KitConfigTest(unittest.TestCase):
         with self.assertRaisesRegex(ConfigError, "angles must be one of its package sources"):
             posts.kit_config(registry)
 
+    def test_the_competitor_files_must_be_the_ones_the_snapshot_covers(self):
+        registry = self.registry()
+        source = next(
+            entry
+            for entry in registry["products"][0]["go_to_market_package"]["sources"]
+            if entry.get("files_starting_with")
+        )
+        source["files_starting_with"] = "teardown"
+        with self.assertRaisesRegex(ConfigError, "reads the files starting with competitor"):
+            posts.kit_config(registry)
+
     def test_a_product_with_no_kit_has_no_post_drafts(self):
         registry = self.registry()
         del registry["products"][0]["go_to_market_package"]["post_drafts"]

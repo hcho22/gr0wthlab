@@ -41,6 +41,7 @@ MISSING = "no Draft"
 APPROVED_BEFORE = "approved earlier"
 REPEATED = "not queued again"
 NOT_PREPARED = "not prepared"
+STATUSES = (QUEUED, KEPT, BLOCKED, MISSING, APPROVED_BEFORE, REPEATED, NOT_PREPARED)
 
 
 @dataclass
@@ -104,6 +105,10 @@ class Outcome:
 
     def count(self, status: str) -> int:
         return sum(1 for result in self.results if result.status == status)
+
+    def counts(self) -> list[str]:
+        """How many days ended each way, such as "6 queued", in a fixed order, leaving out the ways none did."""
+        return [f"{self.count(status)} {status}" for status in STATUSES if self.count(status)]
 
     @property
     def blocked(self) -> list[DayResult]:
@@ -773,7 +778,8 @@ def result_detail(result: DayResult) -> str:
     if result.item and result.status in (QUEUED, KEPT, APPROVED_BEFORE, REPEATED):
         parts.insert(0, f"`{result.item}`")
     if result.verdict and result.status == BLOCKED:
-        parts.append(f"{len(grouped(result.verdict.blocks))} failing checks, listed below")
+        count = len(grouped(result.verdict.blocks))
+        parts.append(f"{count} failing check{'' if count == 1 else 's'}, listed below")
     if result.withdrawn:
         parts.append(f"the open `{result.withdrawn}` was withdrawn")
     return "; ".join(parts)

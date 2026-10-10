@@ -436,18 +436,7 @@ def summary_lines(state: RunState) -> list[str]:
     )
     outcome = state.post_outcome
     if outcome is not None:
-        counts = [
-            f"{outcome.count(status)} {status}"
-            for status in (
-                posts.QUEUED,
-                posts.KEPT,
-                posts.BLOCKED,
-                posts.MISSING,
-                posts.APPROVED_BEFORE,
-                posts.REPEATED,
-            )
-            if outcome.count(status)
-        ]
+        counts = outcome.counts()
         lines.append(f"- Post Drafts: {', '.join(counts) or 'no calendar day was due'}.")
     elif state.posts_problem:
         lines.append(f"- Post Drafts: {state.posts_problem}")

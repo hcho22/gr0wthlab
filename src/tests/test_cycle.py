@@ -1283,6 +1283,19 @@ class PostDraftsTest(CycleTestCase):
         )
         self.assertIn("this run prepares days 1 to 2", self.report())
 
+    def test_the_flex_day_is_named_as_not_prepared_with_its_reason(self):
+        sunday = fakes.SUNDAY_RUN.astimezone().date()
+        fakes.set_window(self.repo, {"day_1": (sunday - timedelta(days=11)).isoformat(), "slot": "19:00"})
+        fakes.behave(self.codex_dir, {"write": {fakes.draft_path(13): fakes.draft(13)}})
+        self.run_cycle()
+        report = self.report()
+        self.assertIn("this run prepares days 13 to 14", report)
+        self.assertIn(
+            "| 14 | - | not prepared | the calendar decides its Angle later (Re-cut of the day-7 review's", report
+        )
+        self.assertEqual([entry["day"] for entry in self.queue()["open"] if entry["kind"] == "post"], [13])
+        self.assertIn("- Not prepared: day 14: the calendar decides its Angle later", self.brief())
+
     def test_check_drafts_gives_the_agent_the_launcher_s_verdict(self):
         fakes.set_window(self.repo, fakes.window_due(2))
         draft_dir = self.workspace() / "drafts/posts/window-1"

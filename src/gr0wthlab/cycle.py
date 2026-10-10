@@ -462,18 +462,7 @@ class Cycle:
                 "post-drafts", 0, 0, state.posts_problem or "no calendar day was prepared", "; ".join(gaps)
             )
         acted = len(outcome.published) + len(outcome.withdrawn) + bool(state.filed)
-        counts = [
-            f"{outcome.count(status)} {status}"
-            for status in (
-                posts.QUEUED,
-                posts.KEPT,
-                posts.BLOCKED,
-                posts.MISSING,
-                posts.APPROVED_BEFORE,
-                posts.REPEATED,
-            )
-            if outcome.count(status)
-        ]
+        counts = outcome.counts()
         note = f"{report.plural(len(outcome.results), 'day')}: {', '.join(counts) or 'none due'}"
         if outcome.withdrawn:
             note += f"; {len(outcome.withdrawn)} withdrawn"
