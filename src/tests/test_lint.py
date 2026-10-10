@@ -160,6 +160,28 @@ class NewRuleTypesTest(unittest.TestCase):
         self.assertEqual(rules_hit(rules, "You can\u2019t stop."), [("banned_words_in_hook", True)])
         self.assertEqual(rules_hit(rules, "It's simply there, and really."), [])
 
+    def test_a_term_written_as_one_hashtag_is_caught_like_its_spaced_words(self):
+        data = json.loads(KIT_RULES.read_text(encoding="utf-8"))
+        rules = lint.Rules(dict(data, capped_words=["in order to", "cutting-edge"], stock_phrases=["...", "level up"]))
+        cases = {
+            "#beastmode #NoExcuses": [("banned_words_in_hook", True)] * 2,
+            "#userslove": [("banned_social_proof_in_hook", True)],
+            "#levelup": [("stock_phrases", True)],
+            "#inorderto #cuttingedge": [("capped_words", True)],
+            "#lastchance #only3left": [("fake_scarcity", True)] * 2,
+            "#10kusers": [("invented_proof_terms", True)],
+            "#thousandsofreviews": [("invented_proof_terms", True)],
+        }
+        for text, hits in cases.items():
+            with self.subTest(text=text):
+                self.assertEqual(sorted(rules_hit(rules, text, field="TikTok hashtags")), sorted(hits))
+        [finding] = rules.check([lint.Copy("TikTok hashtags", "#buildinpublic #beastmodes")])
+        self.assertEqual(finding.line(), "banned_words_in_hook: banned word 'beast mode' (TikTok hashtags)")
+        # A hashtag is caught as a whole, and only a hashtag runs a term's words together.
+        self.assertEqual(rules_hit(rules, "#buildinpublic #nobeastmode #beastmodeoff", field="TikTok hashtags"), [])
+        self.assertEqual(rules_hit(rules, "Beastmode is one word here, and so is levelup."), [])
+        self.assertEqual(rules_hit(rules, "Press the # key, then 3."), [])
+
     def test_a_need_marker_blocks_since_a_draft_never_fills_in_proof(self):
         self.assertIn(("need-marker", True), rules_hit(lint.Rules(HOOK_RULES), "Used by [NEED: source] people."))
 

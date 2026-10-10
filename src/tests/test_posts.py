@@ -196,6 +196,24 @@ class TakeTest(TakeTestCase):
         new_text = (self.store.root / self.ledger.entries[second.item]["file"]).read_text(encoding="utf-8")
         self.assertIn(f"supersedes: {first.item}", new_text)
 
+    def test_an_open_post_is_replaced_when_its_slot_is_set_or_taken_away(self):
+        slot = "2026-10-14T19:00-07:00"
+        self.write(3, fakes.draft(3))
+        [unslotted] = self.take(3).results
+        [slotted] = self.take(3, run="RUN2", slot=slot).results
+        self.assertEqual((slotted.status, self.ledger.entries[slotted.item]["slot"]), (posts.QUEUED, slot))
+        [kept] = self.take(3, run="RUN3", slot=slot).results
+        self.assertEqual((kept.status, kept.item), (posts.KEPT, slotted.item))
+        # The window's first sitting or slot was set back to none in config/run.json.
+        [again] = self.take(3, run="RUN4").results
+        self.assertEqual(again.status, posts.QUEUED)
+        self.assertNotIn("slot", self.ledger.entries[again.item])
+        old = self.ledger.entries[slotted.item]
+        self.assertEqual((old["status"], old["superseded_by"]), (SUPERSEDED, again.item))
+        self.assertEqual([entry["id"] for entry in self.ledger.ordered()], [again.item])
+        self.assertIn("Slot: not set yet", (self.store.root / self.ledger.entries[again.item]["file"]).read_text())
+        self.assertEqual(self.ledger.entries[unslotted.item]["superseded_by"], slotted.item)
+
     def test_a_blocked_draft_is_never_queued_and_withdraws_an_open_item_for_its_day(self):
         self.write(3, fakes.draft(3))
         [first] = self.take(3).results

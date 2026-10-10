@@ -406,7 +406,9 @@ class Cycle:
         superseded = sum(
             1
             for entry in ledger.entries.values()
-            if entry["status"] == SUPERSEDED and entry.get("closed_by_run") == state.run_id
+            if entry["status"] == SUPERSEDED
+            and entry.get("closed_by_run") == state.run_id
+            and not entry.get("withdrawn")
         )
         carried = sum(1 for entry in state.queue_after if entry.get("carried_over"))
         records = len(state.decisions) + len(state.unusable)
@@ -813,17 +815,15 @@ class Cycle:
                     " report is the only place it is told"
                 )
         state.queue_after = ledger.ordered()
-        self.outputs(state, config, ledger_ok)
         notice = report.problems_notice(state, self.store.relative(report_path))
         if notice and ledger_ok:
             state.notice = self.queue_notice(
                 state, ledger, seen, notice, "notice-run-problems", "the notice of this run's problems"
             )
-            state.queue_after = ledger.ordered()
-            self.outputs(state, config, ledger_ok)
         if ledger_ok and state.post_outcome is not None and state.post_outcome.withdrawn:
             posts.withdraw(ledger, state.post_outcome, state.notice, run_id, now)
-            state.queue_after = ledger.ordered()
+        state.queue_after = ledger.ordered()
+        self.outputs(state, config, ledger_ok)
         if ledger_ok:
             ledger.mark_carried_over(sittings)
             next_run = report.next_due(now, config.weekly)

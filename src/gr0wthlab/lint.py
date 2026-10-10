@@ -100,15 +100,23 @@ def plain(text: str) -> str:
     return text.translate(QUOTES)
 
 
-def phrase(term: str) -> str:
-    """A term's words as a pattern, spacing free and quotes plain; {n} is any number."""
-    return r"\s+".join(NUMBER if word == "{n}" else re.escape(word) for word in plain(term).split())
+def phrase(term: str, joined: bool = False) -> str:
+    """A term's words as a pattern, spacing free and quotes plain; {n} is any number. joined is the term as a hashtag
+    writes it: its words run together, each down to its letters, digits, and underscores, and empty when the term
+    has none."""
+    words = plain(term).split()
+    if joined:
+        words = [word if word == "{n}" else re.sub(r"\W", "", word) for word in words]
+    return ("" if joined else r"\s+").join(NUMBER if word == "{n}" else re.escape(word) for word in words)
 
 
 def words_pattern(term: str, plural: bool = True) -> re.Pattern:
-    """A term as whole words, any case, with a plural ending when plural is set."""
+    """A term as whole words, any case, with a plural ending when plural is set, or as one whole hashtag, which
+    cannot space its words."""
     ending = "(?:s|es)?" if plural else ""
-    return re.compile(r"(?<!\w)" + phrase(term) + ending + r"(?!\w)", re.IGNORECASE)
+    tag = phrase(term, joined=True)
+    forms = r"(?<!\w)" + phrase(term) + (f"|(?<=#){tag}" if tag else "")
+    return re.compile(f"(?:{forms}){ending}" + r"(?!\w)", re.IGNORECASE)
 
 
 def string_list(data: Mapping, key: str) -> tuple[str, ...]:
@@ -285,13 +293,20 @@ class Rules:
         return found
 
     def invented_proof(self, copy: Copy, text: str) -> list[Finding]:
-        """Numbers and quantities of people, reviews, or results: the product has none, so none may be implied."""
+        """Numbers and quantities of people, reviews, or results: the product has none, so none may be implied. An
+        amount counts next to a term as words, with up to two words between them, and as one hashtag that opens with
+        the amount and ends with the term."""
         found = []
-        terms = "|".join(phrase(term) for term in self.lists["invented_proof_terms"])
-        amounts = "|".join([NUMBER] + [phrase(term) for term in self.lists.get("invented_proof_quantities", ())])
-        if terms:
+        for start, between, joined in ((r"(?<!\w)", r"[\s-]+(?:\w+[\s-]+){0,2}", False), (r"(?<=#)", r"\w*?", True)):
+            terms, quantities = (
+                [pattern for pattern in (phrase(term, joined) for term in self.lists.get(key, ())) if pattern]
+                for key in ("invented_proof_terms", "invented_proof_quantities")
+            )
+            if not terms:
+                continue
             near = re.compile(
-                rf"(?<!\w)(?:{amounts})[\s-]+(?:\w+[\s-]+){{0,2}}(?:{terms})(?:s|es)?(?!\w)", re.IGNORECASE
+                rf"{start}(?:{'|'.join([NUMBER] + quantities)}){between}(?:{'|'.join(terms)})(?:s|es)?(?!\w)",
+                re.IGNORECASE,
             )
             for match in near.finditer(text):
                 found.append(Finding("invented_proof_terms", copy.field, f"unsourced proof {match.group(0)!r}"))

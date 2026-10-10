@@ -1261,6 +1261,22 @@ class PostDraftsTest(CycleTestCase):
         self.assertIn("| 3 | P03 / AB-2 leg A | blocked |", report)
         self.assertIn("| 1 | P01 / AB-1 leg A | kept |", report)
 
+    def test_a_withdrawn_post_is_counted_once_and_leaves_the_report_s_count_of_open_items(self):
+        self.first_batch()
+        self.exchange.mkdir()
+        caption = "No grind here, only a score that forgives."
+        fakes.behave(self.codex_dir, {"write": {fakes.draft_path(3): fakes.draft(3, caption=caption)}})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))
+        self.assertEqual(code, 0, out)
+        # Five posts stand, with the first run's notice and this run's.
+        self.assertEqual(len(self.queue()["open"]), 7)
+        report = self.report()
+        self.assertIn("- Review Queue: 7 items open for the next sitting", report)
+        self.assertIn("| Review Queue | complete | 7 open items |", report)
+        self.assertRegex(report, r"- review-queue: checked=\d+ acted=1 note=.* 1 other item queued, 0 superseded,")
+        self.assertIn("- post-drafts: checked=7 acted=1 note=7 days: 5 kept, 2 blocked; 1 withdrawn\n", report)
+        self.assertRegex(report, r"## Summary\n\n- checked=\d+ acted=2 note=")
+
     def test_a_draft_restored_after_its_post_was_withdrawn_is_offered_again(self):
         first = self.first_batch()
         day_3 = next(entry["id"] for entry in first["open"] if entry.get("day") == 3)

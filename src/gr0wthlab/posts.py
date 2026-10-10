@@ -548,7 +548,7 @@ def take_day(
             result.withdrawn = str(day_plan.open["id"])
         return result
     key = {"draft": draft.path, "draft_sha256": draft.sha256, "slot": day_plan.slot}
-    if day_plan.open and all(day_plan.open.get(name) == value for name, value in key.items() if value):
+    if day_plan.open and all(day_plan.open.get(name) == value for name, value in key.items()):
         result.status, result.item, result.detail = KEPT, str(day_plan.open["id"]), "its Draft is unchanged and passes"
         return result
     rejected = rejected_as(day_plan, draft)
