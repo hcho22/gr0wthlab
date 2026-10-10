@@ -276,6 +276,7 @@ The runs below used Mandu as it is, network off; the view runs set `GR0WTHLAB_WA
 A search of every output of these runs, the ledger records, the agent's areas, the launcher logs, Codex's event streams, and the agent's summaries, found the seeded address in no form, plain, base64, hex, or percent-encoded.
 Mandu's, the RepToday checkout's, and the Immerse checkout's HEAD, git status, index, and every file digest were the same after the last run as before the preflight.
 The same checks and runs were first made earlier that day, before the review, on the code as it then was: the boundary check as `20261009T234224Z-on-demand-67b6`, and the four runs as `20261009T234719Z-on-demand-e4ad`, `20261009T234857Z-on-demand-c3e4`, `20261009T234937Z-on-demand-2abd`, and `20261009T235032Z-on-demand-3413`, with the same outcomes.
+The last review round then changed only how the launcher compares a reviewed request with the items it queued from it, by the whole text and no longer by the ask and Request section alone; nothing the preflight or the boundary check exercises depends on that comparison, so the checks and runs above were not made again, and the launcher's unit tests cover it.
 
 ## Scheduled and on-demand runs share one configuration
 

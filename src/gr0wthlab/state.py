@@ -313,6 +313,17 @@ def save(store: Store, states: States, run_id: str, at: str) -> None:
         store.write_json(state_path(store, workflow), record)
 
 
+def queued_item(root: Path, entry: Mapping[str, object], products: Sequence[str]) -> exchange.Item:
+    """A queued item, read from its item file; a file that cannot be read as one raises."""
+    relative = Path(str(entry["file"]))
+    if relative.is_absolute() or ".." in relative.parts:
+        raise StateError(f"its path leaves {root.name}/")
+    check = exchange.check_item(read_plain(root / relative).decode("utf-8"), products, published=True)
+    if check.item is None:
+        raise StateError("; ".join(check.problems))
+    return check.item
+
+
 def item_hashes(
     root: Path,
     ledger_entries: Mapping[str, Mapping[str, object]],
@@ -323,14 +334,7 @@ def item_hashes(
     hashes, problems = {}, []
     for identifier, entry in ledger_entries.items():
         try:
-            relative = Path(str(entry["file"]))
-            if relative.is_absolute() or ".." in relative.parts:
-                raise StateError(f"its path leaves {root.name}/")
-            text = read_plain(root / relative).decode("utf-8")
-            check = exchange.check_item(text, products, published=True)
-            if check.item is None:
-                raise StateError("; ".join(check.problems))
-            hashes[identifier] = exchange.item_hash(check.item)
+            hashes[identifier] = exchange.item_hash(queued_item(root, entry, products))
         except (OSError, ValueError, UnsafeFile) as error:
             known = (previous.handled.get(identifier) or previous.carried.get(identifier) or {}).get("hash")
             if known:

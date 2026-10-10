@@ -23,6 +23,7 @@ REPO = Path(__file__).resolve().parents[2]
 PRODUCTS = ["RepToday", "Immerse"]
 NOW = datetime(2026, 10, 11, 23, 0, tzinfo=timezone.utc)
 VIEW_SECTION = "The anonymous view gr0wthlab reads"
+ADDED_TOUCH = "- RepToday `gtm/03-site/thanks.html`: the page shown after a sign-up"
 SOURCE_SECTION = "Source, from the link"
 
 
@@ -122,18 +123,27 @@ class FilingTest(unittest.TestCase):
     def file(self, days=0, run="RUN1"):
         requests, problems = dispatch.load(self.repo, PRODUCTS)
         self.assertEqual(problems, [])
-        hashes = {}
-        for identifier, entry in self.ledger.entries.items():
-            text = (self.store.root / str(entry["file"])).read_text(encoding="utf-8")
-            hashes[identifier] = exchange.item_hash(exchange.check_item(text, PRODUCTS, published=True).item)
-        seen = {fingerprint: identifier for identifier, fingerprint in hashes.items()}
-        return dispatch.file(self.ledger, self.store, requests, hashes, seen, run, NOW + timedelta(days=days))
+        seen = {}
+        for identifier in self.ledger.entries:
+            item = exchange.check_item(self.published(identifier), PRODUCTS, published=True).item
+            seen[exchange.item_hash(item)] = identifier
+        return dispatch.file(self.ledger, self.store, requests, PRODUCTS, seen, run, NOW + timedelta(days=days))
+
+    def published(self, identifier):
+        """A queued item as Mandu reads it, and hands it to firstmate once the Founder approves it."""
+        return (self.store.root / str(self.ledger.entries[identifier]["file"])).read_text(encoding="utf-8")
 
     def revise(self):
         """A reviewed change to what the request asks."""
         path = self.repo / "src/dispatches/reptoday-waitlist.md"
         text = path.read_text(encoding="utf-8")
         path.write_text(text.replace("\n## Touches\n", "\nA revised ask.\n\n## Touches\n"), encoding="utf-8")
+
+    def retouch(self):
+        """A reviewed change to the request's Touches alone."""
+        path = self.repo / "src/dispatches/reptoday-waitlist.md"
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text.replace("\n## Evidence\n", f"{ADDED_TOUCH}\n\n## Evidence\n"), encoding="utf-8")
 
     def revert(self):
         """A reviewed change that puts the request's first text back."""
@@ -150,8 +160,7 @@ class FilingTest(unittest.TestCase):
         self.assertEqual(
             (entry["kind"], entry["origin"], entry["status"]), ("dispatch-request", "dispatch/reptoday-waitlist", OPEN)
         )
-        published = (self.store.root / str(entry["file"])).read_text(encoding="utf-8")
-        self.assertEqual(exchange.check_item(published, PRODUCTS, published=True).problems, [])
+        self.assertEqual(exchange.check_item(self.published(identifier), PRODUCTS, published=True).problems, [])
         self.assertEqual(identifier, f"{NOW.astimezone().date():%Y%m%d}-reptoday-waitlist")
         for later in (7, 14):
             self.assertEqual([(f.status, f.identifier) for f in self.file(later)], [(dispatch.WAITING, identifier)])
@@ -166,6 +175,26 @@ class FilingTest(unittest.TestCase):
         self.assertEqual((old["status"], old["superseded_by"]), (SUPERSEDED, second.identifier))
         self.assertEqual((new["status"], new["supersedes"]), (OPEN, first.identifier))
         self.assertEqual(self.file(14)[0].status, dispatch.WAITING)
+
+    def test_a_change_to_touches_alone_supersedes_the_open_request(self):
+        (first,) = self.file()
+        self.retouch()
+        (second,) = self.file(7)
+        self.assertEqual((second.status, second.replaced), (dispatch.REPLACED, first.identifier))
+        self.assertEqual(self.ledger.entries[first.identifier]["status"], SUPERSEDED)
+        self.assertNotIn(ADDED_TOUCH, self.published(first.identifier))
+        self.assertIn(ADDED_TOUCH, self.published(second.identifier))
+        self.assertEqual([(f.status, f.identifier) for f in self.file(14)], [(dispatch.WAITING, second.identifier)])
+
+    def test_a_change_to_touches_alone_is_asked_anew_after_a_rejection(self):
+        (first,) = self.file()
+        self.decide(first.identifier, REJECTED)
+        self.retouch()
+        (again,) = self.file(7)
+        self.assertEqual(again.status, dispatch.FILED)
+        self.assertNotEqual(again.identifier, first.identifier)
+        self.assertIn(ADDED_TOUCH, self.published(again.identifier))
+        self.assertEqual([(f.status, f.identifier) for f in self.file(14)], [(dispatch.WAITING, again.identifier)])
 
     def test_never_filed_again_once_approved_even_after_a_change(self):
         (first,) = self.file()
@@ -204,7 +233,7 @@ class FilingTest(unittest.TestCase):
     def test_a_request_already_asked_by_another_item_is_not_filed(self):
         requests, _ = dispatch.load(self.repo, PRODUCTS)
         seen = {exchange.item_hash(requests[0].item): "20261004-agent-waitlist"}
-        (filing,) = dispatch.file(self.ledger, self.store, requests, {}, seen, "RUN", NOW)
+        (filing,) = dispatch.file(self.ledger, self.store, requests, PRODUCTS, seen, "RUN", NOW)
         self.assertEqual((filing.status, filing.identifier), (dispatch.ASKED, "20261004-agent-waitlist"))
         self.assertEqual(self.ledger.entries, {})
 

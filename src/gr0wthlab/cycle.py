@@ -315,13 +315,11 @@ class Cycle:
             self.store.write_json(path, waitlist.evidence(reading, state.run_id, self.now()))
             state.waitlist_file = self.store.relative(path)
 
-    def file_dispatches(
-        self, state: RunState, ledger: Ledger, products: Sequence[str], hashes: Mapping[str, str], seen: dict[str, str]
-    ) -> None:
+    def file_dispatches(self, state: RunState, ledger: Ledger, products: Sequence[str], seen: dict[str, str]) -> None:
         """File each reviewed Dispatch request that needs filing, before the agent starts, so its brief lists it."""
         requests, problems = dispatch.load(self.repo_root, products)
         state.problems += problems
-        state.dispatches = dispatch.file(ledger, self.store, requests, hashes, seen, state.run_id, self.now())
+        state.dispatches = dispatch.file(ledger, self.store, requests, products, seen, state.run_id, self.now())
         state.published += [str(filing.identifier) for filing in state.dispatches if filing.acted]
 
     def queue_notice(
@@ -635,7 +633,7 @@ class Cycle:
             )
         self.read_waitlist(state, config, rules)
         if ledger_ok:
-            self.file_dispatches(state, ledger, products, hashes, seen)
+            self.file_dispatches(state, ledger, products, seen)
         state.queue_before = ledger.ordered()
         state.replaced = {str(entry["id"]): ledger.decided_replaced(entry) for entry in state.queue_before}
         state.closed_proposals = [

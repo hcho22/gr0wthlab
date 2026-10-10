@@ -5,13 +5,16 @@ approves it, and gr0wthlab never sends it anywhere itself. Each file in src/disp
 Queue item format, named <key>.md, and changes only through a reviewed pull request. The launcher queues it under an
 identifier that never changes and marks its queue entry with the key, then, run after run:
 
-- leaves it open while its text is unchanged, and files the new text in its place, superseding it, once a reviewed
-  change alters the text; no item the agent writes can supersede it (queue.check_incoming), so it stays open until
-  the Founder decides it;
+- leaves it open while its whole text is unchanged, and files the new text in its place, superseding it, once a
+  reviewed change alters any of it; no item the agent writes can supersede it (queue.check_incoming), so it stays
+  open until the Founder decides it;
 - never files it again once the Founder approved it;
-- never asks the Founder the same text again once the Founder rejected it, so after a rejection only a reviewed change
-  that alters the text files it anew; a text replaced before the Founder decided it was never decided, and is filed
-  again if a reviewed change brings it back.
+- never asks the Founder the same whole text again once the Founder rejected it, so after a rejection only a reviewed
+  change that alters the text files it anew; a text replaced before the Founder decided it was never decided, and is
+  filed again if a reviewed change brings it back.
+
+The whole text is the ask and all four sections, Touches and Evidence included: the Founder approves exactly the text
+firstmate receives.
 """
 
 from __future__ import annotations
@@ -22,8 +25,9 @@ from datetime import datetime
 from pathlib import Path, PurePosixPath
 
 from . import exchange
-from .areas import Store
+from .areas import Store, UnsafeFile
 from .queue import APPROVED, MAX_SLUG, OPEN, REJECTED, SUPERSEDED, Ledger
+from .state import queued_item
 
 DISPATCHES = PurePosixPath("src/dispatches")
 KIND = "dispatch-request"
@@ -64,10 +68,12 @@ class Filing:
     def account(self) -> str:
         return {
             FILED: f"{self.key} filed as `{self.identifier}`",
-            REPLACED: f"{self.key} filed as `{self.identifier}` in place of `{self.replaced}`, as its text changed",
+            REPLACED: f"{self.key} filed as `{self.identifier}` in place of `{self.replaced}`, as its reviewed text"
+            " changed",
             WAITING: f"{self.key} open as `{self.identifier}`",
             DONE: f"{self.key} approved as `{self.identifier}`; never filed again",
-            DECIDED: f"{self.key} rejected as `{self.identifier}`; not asked again unless its reviewed text changes",
+            DECIDED: f"{self.key} rejected as `{self.identifier}`; not asked again unless any part of its reviewed"
+            " text changes",
             ASKED: f"{self.key} asks the same as `{self.identifier}`, already queued; not filed",
         }[self.status]
 
@@ -103,22 +109,36 @@ def load(repo_root: Path, products: Sequence[str]) -> tuple[list[Request], list[
     return requests, problems
 
 
+def whole_text(item: exchange.Item) -> str:
+    """Everything the Founder reads in an item: its ask and all four sections."""
+    return exchange.render_content(item.kind, item.ask, item.body, item.touches, item.evidence)
+
+
+def queued_text(store: Store, entry: Mapping[str, object], products: Sequence[str]) -> str | None:
+    """The whole text of a queued item, or None when its item file cannot be read as one."""
+    try:
+        return whole_text(queued_item(store.root, entry, products))
+    except (OSError, ValueError, UnsafeFile):
+        return None
+
+
 def file(
     ledger: Ledger,
     store: Store,
     requests: Sequence[Request],
-    hashes: Mapping[str, str],
+    products: Sequence[str],
     seen: dict[str, str],
     run_id: str,
     now: datetime,
 ) -> list[Filing]:
     """Queue each reviewed request that needs it, following the rules above.
 
-    hashes maps each queued item to its fingerprint; seen maps each fingerprint to an item that asks it, and comes to
-    name every item filed here.
+    A request is compared with its own queued items by whole text; seen maps each fingerprint to an item that asks
+    it, which stops a request another item already asks, and comes to name every item filed here.
     """
     filings = []
     for request in requests:
+        text = whole_text(request.item)
         fingerprint = exchange.item_hash(request.item)
         mine = sorted(
             (entry for entry in ledger.entries.values() if entry.get("origin") == request.origin),
@@ -129,12 +149,12 @@ def file(
         if approved:
             filings.append(Filing(request.key, DONE, str(approved[-1]["id"])))
             continue
-        if current is not None and hashes.get(str(current["id"])) == fingerprint:
+        if current is not None and queued_text(store, current, products) == text:
             filings.append(Filing(request.key, WAITING, str(current["id"])))
             continue
         if current is None:
             rejected = (entry for entry in reversed(mine) if REJECTED in (entry["status"], entry.get("decided")))
-            asked = next((entry for entry in rejected if hashes.get(str(entry["id"])) == fingerprint), None)
+            asked = next((entry for entry in rejected if queued_text(store, entry, products) == text), None)
             if asked is not None:
                 filings.append(Filing(request.key, DECIDED, str(asked["id"])))
                 continue
