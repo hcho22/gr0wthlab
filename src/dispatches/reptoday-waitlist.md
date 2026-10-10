@@ -18,18 +18,18 @@ Every quoted wording is for your approval, and an approval note can change any o
 - Three fields and no others:
   1. Email, required.
   2. One Fit question, "Which sounds most like you?", with no answer pre-selected: "I used to work out and lost the routine" (`lost-the-routine`), "I work out regularly" (`exercises-regularly`), or "I've never had a routine" (`never-had-a-routine`).
-     Answering is optional, so the form stays low-pressure; a sign-up with no answer counts as unknown Fit, never as not a fit.
+     An answer is required to sign up.
   3. A box, unticked until the person ticks it: "Invite me to the beta before launch".
 - The page now promises "one message"; since an opted-in person may also get a beta invitation, it should say "one launch email, plus a beta invitation only if you ask for one".
 - No "how did you hear about us" field: the Source comes from the link.
 
 ### Source, from the link
 
-- One link per Source, each with one lowercase tag: `tiktok`, `youtube`, `reddit`, and `network` (your personal network).
-  Each link is `https://reptoday.app/?utm_source=<tag>`, such as `https://reptoday.app/?utm_source=tiktok`.
-- TikTok may not give a new account a clickable profile link, so each Source also gets a short path to say aloud, type, or put in a profile: `reptoday.app/tiktok`, `reptoday.app/youtube`, `reptoday.app/reddit`, and `reptoday.app/network`, each opening the sign-up page with its tag.
+- One link per Source: `reptoday.app/tiktok`, `reptoday.app/youtube`, `reptoday.app/reddit`, and `reptoday.app/network` (your personal network).
+  Each opens the sign-up page, and the word after the slash is that Source's lowercase tag.
+  TikTok may not give a new account a clickable profile link, so each link is short enough to say aloud, type, or put in a profile.
 - A sign-up keeps the Source of the link its visitor arrived by, even after they look around the site.
-  A visit with no tag, or with a tag not listed here, is Source `unknown`; tags match in any letter case.
+  A sign-up reached any other way, such as by plain `reptoday.app`, is Source `unknown`; the links work in any letter case.
 - A new Source later is a new Dispatch request plus a reviewed gr0wthlab change.
 
 ### Web events
@@ -41,7 +41,7 @@ Neither event carries the email address or the entry identifier.
 
 `reptoday.app/privacy` gains a Waitlist section, in place of the waitlist sentences in section 10, that says in the policy's plain voice:
 
-- What is collected: the email address; the answer to the routine question, if given; whether you asked for a beta invitation; which Rep Today link brought you, if any; and the sign-up date.
+- What is collected: the email address; the answer to the routine question; whether you asked for a beta invitation; which Rep Today link brought you, if any; and the sign-up date.
 - Why: to email you when Rep Today launches; to invite you to the beta, only if you asked; and to count, without your address, which links and which routines bring people.
 - How long it is kept: until 30 days after the launch email goes out, or until you ask to be removed, whichever comes first.
 - How to be removed: the unsubscribe link in any waitlist email, or a message to reptoday.app@gmail.com; your sign-up and answers are then deleted within 7 days.
@@ -51,7 +51,6 @@ Neither event carries the email address or the entry identifier.
 
 - RepToday keeps one file on your Mac that gr0wthlab's launcher reads, read-only, at each weekly run, with no network.
 - The file sits outside the gr0wthlab, Mandu, and RepToday checkouts, where the sandboxed Marketing Engineer can never open it; once the build lands, a reviewed gr0wthlab change records its path.
-- RepToday rewrites it whole (a temporary file renamed into place) at least once a day; gr0wthlab counts a file more than 48 hours old as failed, so a stalled copy never reads as a quiet week.
 - It is UTF-8 JSON in exactly this shape:
 
 ```json
@@ -61,11 +60,11 @@ Neither event carries the email address or the entry identifier.
 ```
 
 - `entry`: a random identifier of 1 to 64 letters, digits, `-` or `_`; unique; stable while the sign-up exists; never derived from the address, so never a hash or an encoding of it.
-- `source`: one of the four tags, or `unknown`.
-- `fit`: `lost-the-routine`, `exercises-regularly`, `never-had-a-routine`, or `null` when unanswered.
+- `source`: `tiktok`, `youtube`, `reddit`, `network`, or `unknown`.
+- `fit`: `lost-the-routine`, `exercises-regularly`, or `never-had-a-routine`; `null` only for a sign-up that holds no answer, which gr0wthlab counts as unknown Fit, never as not a fit.
 - `beta_opt_in`: `true` or `false`.
 - `signed_up_on`: the sign-up's date in UTC, `YYYY-MM-DD`.
-- `generated_at`: when the file was written, with its UTC offset.
+- `generated_at`: when the file was written, with its UTC offset; each run report says how long before the run that was.
 - Nothing else: no address, name, or other field. A removed sign-up leaves the file.
 
 If any value in the file looks like an email address, gr0wthlab discards the whole read, records no Waitlist Evidence that week, and reports a Guardrail breach to you.
@@ -78,11 +77,11 @@ If any value in the file looks like an email address, gr0wthlab discards the who
 
 ### Left to RepToday
 
-Storage (including whether Kit stays), hosting, how the view is produced, whether sign-ups confirm their email, and every other implementation choice are RepToday's design under firstmate.
+Storage (including whether Kit stays), hosting, how a link's Source reaches its sign-up, how and how often the view is produced, whether sign-ups confirm their email, and every other implementation choice are RepToday's design under firstmate.
 
 ## Touches
 
-- RepToday `gtm/03-site/index.html`, and `gtm/03-site/index-b.html` while it is served: the form, Source capture, short paths, and web events
+- RepToday `gtm/03-site/index.html`, and `gtm/03-site/index-b.html` while it is served: the form, the Source links, and web events
 - RepToday `gtm/03-site/privacy.html`: the Waitlist section
 - RepToday: the anonymous view and the send-time lookup, wherever RepToday's design puts them
 - gr0wthlab `config/products.json`: the view's path, in a reviewed change once the build lands

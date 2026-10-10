@@ -131,8 +131,7 @@
         "fit_answers": ["lost-the-routine", "exercises-regularly", "never-had-a-routine"],
         "good_fit": ["lost-the-routine"],
         "beta_cohort_bar": 50,
-        "stale_after_hours": 48,
-        "note": "How each run counts the view (US-ME06): the Source tags and Fit answers the Dispatch request defines, unknown for a sign-up with no tag or no answer; good Fit is the 'used to exercise and lost the routine' answer unless the Founder approves another definition, which is one reviewed edit to good_fit; progress is good-Fit opt-ins toward the Beta Cohort bar of about 50; a view older than stale_after_hours fails the read."
+        "note": "How each run counts the view (US-ME06): the Source tags and Fit answers the Dispatch request defines, unknown for a sign-up with no tag or no answer; good Fit is the 'used to exercise and lost the routine' answer unless the Founder approves another definition, which is one reviewed edit to good_fit; progress is good-Fit opt-ins toward the Beta Cohort bar of about 50."
       }
     },
     {

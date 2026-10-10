@@ -3,8 +3,9 @@ format, then counts by Source, Fit answer, and opt-in, per week and cumulative, 
 
 The view is RepToday's: one JSON file on the Founder's Mac, outside everything the sandbox can read, in the format the
 Waitlist Dispatch request specifies (src/dispatches/reptoday-waitlist.md). The agent never reads it.
-Guardrail G6 says no email address is ever readable: if any value in the file looks like one, plainly or in an
-encoding, the whole read is discarded, nothing from it is kept, and the run reports a breach to the Founder.
+Guardrail G6 says no email address is ever readable: if anything in the file looks like one, or an entry identifier
+holds one in an encoding, the whole read is discarded, nothing from it is kept, and the run reports a breach to the
+Founder.
 No message, report, or record ever repeats what the view holds, except entry identifiers, dates, and the approved
 Source tags and Fit answers; Waitlist Evidence holds entry identifiers and counts only.
 """
@@ -12,12 +13,9 @@ Source tags and Fit answers; Waitlist Evidence holds entry identifiers and count
 from __future__ import annotations
 
 import base64
-import binascii
 import hashlib
-import html
 import json
 import re
-import unicodedata
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
@@ -37,62 +35,48 @@ MAX_VIEW_BYTES = 10_000_000
 TOP_KEYS = ("view", "generated_at", "entries")
 ENTRY_KEYS = ("entry", "source", "fit", "beta_opt_in", "signed_up_on")
 ENTRY_PATTERN = re.compile(r"[A-Za-z0-9_-]{1,64}")
-FUTURE_SLACK = timedelta(days=1)
 MAX_LISTED = 5
 COUNTS = ("sign_ups", "good_fit", "opted_in", "good_fit_opt_ins")
 
 # A value looks like an email address when anything but a space or a delimiter stands on both sides of an @.
-ADDRESS = re.compile(r"[^\s@\"'<>()\[\]{},;:\\]+@[^\s@\"'<>()\[\]{},;:\\]+")
-# Text decoded from base64 or hex counts only when it holds a whole address, so a random identifier never does.
-ENCODED_ADDRESS = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
-BASE64_TOKEN = re.compile(r"[A-Za-z0-9+/_-]{8,}={0,2}")
-HEX_TOKEN = re.compile(r"(?:[0-9A-Fa-f]{2}){4,}")
-JSON_ESCAPE = re.compile(r"\\u([0-9A-Fa-f]{4})")
+ADDRESS = re.compile(r"[^\s@\"'<>()\[\]{},;:\\]@[^\s@\"'<>()\[\]{},;:\\]")
+# An identifier decoded from base64 or hex counts only when it holds a whole address, so a random identifier never does.
+ENCODED_ADDRESS = re.compile(r"[A-Za-z0-9._%+-]@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}")
 
 
 # The address check.
 
 
-def readable_forms(text: str) -> Iterator[str]:
-    """The text, then each form it takes as its escapes and encodings are undone one after another."""
-    yield text
-    current = unicodedata.normalize("NFKC", text)
-    yield current
-    current = JSON_ESCAPE.sub(lambda match: chr(int(match.group(1), 16)), current)
-    yield current
-    current = html.unescape(current)
-    yield current
-    for _ in range(3):
-        current = unquote(current)
-        yield current
-    yield unicodedata.normalize("NFKC", current)
+def looks_like_address(text: str) -> bool:
+    """Whether anything in the text looks like an email address."""
+    return ADDRESS.search(text) is not None
 
 
-def decoded_tokens(text: str) -> Iterator[str]:
-    """Every run of base64 or hex characters in the text that decodes to printable text."""
+def decoded(identifier: str) -> Iterator[str]:
+    """The printable text an entry identifier holds when it is read as base64, in either alphabet, or as hex."""
     candidates = []
-    for token in BASE64_TOKEN.findall(text):
-        plain = token.rstrip("=").replace("-", "+").replace("_", "/")
-        try:
-            candidates.append(base64.b64decode(plain + "=" * (-len(plain) % 4), validate=True))
-        except (binascii.Error, ValueError):
-            continue
-    candidates += [bytes.fromhex(token) for token in HEX_TOKEN.findall(text)]
+    plain = identifier.rstrip("=").replace("-", "+").replace("_", "/")
+    try:
+        candidates.append(base64.b64decode(plain + "=" * (-len(plain) % 4), validate=True))
+    except ValueError:
+        pass
+    try:
+        candidates.append(bytes.fromhex(identifier))
+    except ValueError:
+        pass
     for data in candidates:
         try:
-            decoded = data.decode("utf-8")
+            text = data.decode("utf-8")
         except UnicodeDecodeError:
             continue
-        if decoded.isprintable():
-            yield decoded
+        if text.isprintable():
+            yield text
 
 
-def looks_like_address(text: str) -> bool:
-    """Whether any form of the text, plain, escaped, or encoded, looks like an email address."""
-    for form in readable_forms(text):
-        if ADDRESS.search(form) or any(ENCODED_ADDRESS.search(decoded) for decoded in decoded_tokens(form)):
-            return True
-    return False
+def encodes_address(identifier: str) -> bool:
+    """Whether an entry identifier is an email address in percent-encoding, base64, or hex. The identifier is the
+    view's one free-form value; every other value must be one the format lists, so it is checked as written."""
+    return looks_like_address(unquote(identifier)) or any(ENCODED_ADDRESS.search(text) for text in decoded(identifier))
 
 
 def address_places(value: object) -> list[str]:
@@ -103,9 +87,9 @@ def address_places(value: object) -> list[str]:
     def field_name(key: object, known: Sequence[str]) -> str:
         return f"`{key}`" if key in known else "a field outside the format"
 
-    def check(item: object, where: str) -> None:
+    def check(item: object, where: str, identifier: bool = False) -> None:
         if isinstance(item, str):
-            if looks_like_address(item):
+            if looks_like_address(item) or (identifier and encodes_address(item)):
                 places.append(where)
         elif isinstance(item, dict):
             for key, inner in item.items():
@@ -131,7 +115,7 @@ def address_places(value: object) -> list[str]:
                     where = f"entry {number}, {field_name(entry_key, ENTRY_KEYS)}"
                     if looks_like_address(str(entry_key)):
                         places.append(f"entry {number}, a field name")
-                    check(entry_value, where)
+                    check(entry_value, where, entry_key == "entry")
         else:
             check(inner, f"the top of the file, {field_name(key, TOP_KEYS)}")
     return places
@@ -155,7 +139,7 @@ class View:
     entries: tuple[Entry, ...]
 
 
-def check_view(data: object, rules: Waitlist, now: datetime) -> tuple[View | None, list[str]]:
+def check_view(data: object, rules: Waitlist) -> tuple[View | None, list[str]]:
     """The view's entries, or every way the file departs from its format, without repeating a value it holds."""
     if not isinstance(data, dict):
         return None, ["the file is not a JSON object"]
@@ -171,8 +155,6 @@ def check_view(data: object, rules: Waitlist, now: datetime) -> tuple[View | Non
     generated_at = exchange.parse_datetime(generated) if isinstance(generated, str) else None
     if generated_at is None:
         problems.append("generated_at must be an ISO 8601 time with its UTC offset")
-    elif generated_at > now + FUTURE_SLACK:
-        problems.append("generated_at is more than a day after this run started")
     raw = data.get("entries")
     if not isinstance(raw, list):
         return None, problems + ["entries must be a list"]
@@ -206,15 +188,8 @@ def check_view(data: object, rules: Waitlist, now: datetime) -> tuple[View | Non
         if len(problems) == before:
             seen.add(identifier)
             entries.append(Entry(identifier, source, fit or UNKNOWN, opted_in, date.fromisoformat(day)))
-    if problems or generated_at is None:
+    if problems:
         return None, problems
-    age = now - generated_at
-    if age > rules.stale_after:
-        hours = int(age.total_seconds() // 3600)
-        return None, [
-            f"the view was generated at {generated_at.isoformat()}, {hours} hours before this run, so it has stopped"
-            " being refreshed; its counts would read as a quiet week"
-        ]
     return View(generated_at, tuple(entries)), []
 
 
@@ -248,14 +223,16 @@ def count(entries: Sequence[Entry], rules: Waitlist) -> dict[str, object]:
     return {**totals, "by_source": by_source, "by_fit": by_fit}
 
 
-def weekly(entries: Sequence[Entry], rules: Waitlist, through: date) -> list[dict[str, object]]:
-    """Counts for every week from the first sign-up's through the week the view was generated in, empty weeks too."""
-    last = week_of(through)
-    week = min((week_of(entry.day) for entry in entries), default=last)
+def weekly(entries: Sequence[Entry], rules: Waitlist, run_week: date) -> list[dict[str, object]]:
+    """Counts for every week from the first sign-up's through the run's own, empty weeks too. A sign-up dated after
+    the run's week, as its UTC date is late on a Sunday evening on the Mac, adds a week and never moves the run's."""
+    by_week: dict[date, list[Entry]] = {run_week: []}
+    for entry in entries:
+        by_week.setdefault(week_of(entry.day), []).append(entry)
+    week, last = min(by_week), max(by_week)
     weeks = []
     while week <= last:
-        inside = [entry for entry in entries if week_of(entry.day) == week]
-        weeks.append({"week_of": week.isoformat(), **count(inside, rules)})
+        weeks.append({"week_of": week.isoformat(), **count(by_week.get(week, ()), rules)})
         week += timedelta(days=7)
     return weeks
 
@@ -266,7 +243,10 @@ def weekly(entries: Sequence[Entry], rules: Waitlist, through: date) -> list[dic
 @dataclass
 class Reading:
     """What one run learned from the view: its status and the plain-language detail for the run report, and, when the
-    view was read, its counts; places says where address-like values were, never what they were."""
+    view was read, its counts; places says where address-like values were, never what they were.
+
+    this_week is the run's own week, the one that ends at the Founder's Sunday sitting; age is how long before the run
+    started the view was generated."""
 
     status: str
     detail: str
@@ -278,10 +258,8 @@ class Reading:
     weeks: list[dict[str, object]] = field(default_factory=list)
     cumulative: dict[str, object] = field(default_factory=dict)
     places: tuple[str, ...] = ()
-
-    @property
-    def this_week(self) -> dict[str, object]:
-        return self.weeks[-1] if self.weeks else {}
+    this_week: dict[str, object] = field(default_factory=dict)
+    age: timedelta | None = None
 
     @property
     def good_fit_opt_ins(self) -> int:
@@ -303,9 +281,9 @@ def not_configured(rules: Waitlist | None) -> Reading:
     )
 
 
-def read(rules: Waitlist | None, now: datetime) -> Reading:
-    """Read the view once. The address check runs over the whole file and every value in it before anything else, and
-    a hit discards the read; then the format; then the counts."""
+def read(rules: Waitlist | None, started: datetime) -> Reading:
+    """Read the view once, for the run that started then. The address check runs over the whole file and every value
+    in it before anything else, and a hit discards the read; then the format; then the counts."""
     if rules is None or rules.view is None:
         return not_configured(rules)
     path = rules.view
@@ -326,17 +304,20 @@ def read(rules: Waitlist | None, now: datetime) -> Reading:
     text = data.decode("utf-8", errors="replace")
     whole_file = looks_like_address(text)
     parsed: object = None
+    places: list[str] = []
     problem = None
     if len(data) > MAX_VIEW_BYTES:
         problem = f"is larger than {MAX_VIEW_BYTES // 1_000_000} MB"
     else:
         try:
             parsed = json.loads(data.decode("utf-8"))
+            places = address_places(parsed)
         except UnicodeDecodeError:
             problem = "is not UTF-8 text"
+        except RecursionError:
+            problem = "is nested too deeply to be the view"
         except ValueError as error:
             problem = f"is not valid JSON (line {getattr(error, 'lineno', '?')})"
-    places = address_places(parsed) if problem is None else []
     if whole_file or places:
         where = places or ["the file's text, outside any value the format names"]
         return Reading(
@@ -349,11 +330,13 @@ def read(rules: Waitlist | None, now: datetime) -> Reading:
         )
     if problem:
         return failed(problem)
-    view, problems = check_view(parsed, rules, now)
+    view, problems = check_view(parsed, rules)
     if view is None:
         return failed(f"does not follow the view's format: {listed(problems)}")
     entries = view.entries
     cumulative = count(entries, rules)
+    run_week = week_of(started.astimezone().date())
+    weeks = weekly(entries, rules, run_week)
     return Reading(
         READ,
         f"generated {view.generated_at.isoformat()}: sign-ups {len(entries)}, good-Fit opt-ins"
@@ -363,8 +346,10 @@ def read(rules: Waitlist | None, now: datetime) -> Reading:
         hashlib.sha256(data).hexdigest(),
         view.generated_at,
         tuple(sorted(entry.entry for entry in entries)),
-        weekly(entries, rules, view.generated_at.astimezone(timezone.utc).date()),
+        weeks,
         cumulative,
+        this_week=next(week for week in weeks if week["week_of"] == run_week.isoformat()),
+        age=started - view.generated_at,
     )
 
 

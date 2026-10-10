@@ -121,7 +121,6 @@ class WaitlistSettingsTest(unittest.TestCase):
             "source_tags": ["tiktok", "unknown"],
             "fit_answers": ["Lost The Routine"],
             "beta_cohort_bar": 0,
-            "stale_after_hours": True,
         }
         for key, value in breaks.items():
             registry = copy.deepcopy(self.registry)

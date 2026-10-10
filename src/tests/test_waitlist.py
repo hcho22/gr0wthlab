@@ -5,6 +5,8 @@ import json
 import os
 import random
 import string
+import subprocess
+import sys
 import tempfile
 import unittest
 from dataclasses import replace
@@ -24,8 +26,18 @@ RULES = settings.Waitlist(
     ("lost-the-routine", "exercises-regularly", "never-had-a-routine"),
     ("lost-the-routine",),
     50,
-    timedelta(hours=48),
 )
+# One read in another process, which the test stops if the read takes too long; it prints the read's status.
+READ_ONCE = """
+import sys
+from dataclasses import replace
+from pathlib import Path
+
+from gr0wthlab import waitlist
+from tests.test_waitlist import NOW, RULES
+
+print(waitlist.read(replace(RULES, view=Path(sys.argv[1])), NOW).status)
+"""
 
 
 def strings(value):
@@ -42,24 +54,16 @@ def strings(value):
 
 
 class AddressCheckTest(unittest.TestCase):
-    def test_an_address_in_any_form_looks_like_one(self):
-        address = fakes.ADDRESS.encode()
-        for form in (
+    def test_an_address_anywhere_in_a_text_looks_like_one(self):
+        for text in (
             fakes.ADDRESS,
             "Jane.Doe+waitlist@mail.example.co.uk",
             "jane@localhost",
             "write to jane@example.com please",
-            "jane%40example.com",
-            "jane%2540example.com",
-            "jane&#64;example.com",
-            "jane＠example.com",
-            "jane\\u0040example.com",
-            base64.b64encode(address).decode(),
-            base64.urlsafe_b64encode(address).decode().rstrip("="),
-            address.hex(),
+            json.dumps(fakes.address_variant()),
         ):
-            with self.subTest(form=form):
-                self.assertTrue(waitlist.looks_like_address(form))
+            with self.subTest(text=text):
+                self.assertTrue(waitlist.looks_like_address(text))
 
     def test_the_view_s_own_values_do_not(self):
         for value in (
@@ -82,6 +86,7 @@ class AddressCheckTest(unittest.TestCase):
         for _ in range(5000):
             identifier = "".join(generator.choice(alphabet) for _ in range(generator.randint(8, 64)))
             self.assertFalse(waitlist.looks_like_address(identifier), identifier)
+            self.assertFalse(waitlist.encodes_address(identifier), identifier)
 
 
 class ReadTestCase(unittest.TestCase):
@@ -89,6 +94,7 @@ class ReadTestCase(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.path = Path(os.path.realpath(self.tmp.name)) / "view" / "waitlist-view.json"
         self.rules = replace(RULES, view=self.path)
+        fakes.mac_time_zone(self)
 
     def tearDown(self):
         if self.path.is_file():
@@ -171,6 +177,35 @@ class CountsTest(ReadTestCase):
         self.assertEqual([(week["week_of"], week["sign_ups"]) for week in reading.weeks], [("2026-10-05", 0)])
         self.assertEqual(reading.cumulative["sign_ups"], 0)
 
+    def test_the_run_s_week_ends_at_the_sunday_sitting_on_the_mac_s_clock(self):
+        """In winter the Sunday 16:00 run starts at 00:00 UTC on Monday, and it still reports the week then ending."""
+        entries = [(f"Entry{n:02d}", "tiktok", "lost-the-routine", True, f"2026-11-0{2 + n % 7}") for n in range(30)]
+        sunday_run = datetime(2026, 11, 9, 0, 0, tzinfo=timezone.utc)
+        for generated in ("2026-11-08T23:55:00+00:00", "2026-11-09T00:00:05+00:00"):
+            with self.subTest(generated=generated):
+                reading = self.read(fakes.waitlist_view(generated, entries), now=sunday_run)
+                week = reading.this_week
+                self.assertEqual((week["week_of"], week["sign_ups"]), ("2026-11-02", 30))
+                self.assertEqual([week["week_of"] for week in reading.weeks], ["2026-11-02"])
+
+    def test_a_sign_up_dated_after_the_run_s_week_adds_a_week_and_never_moves_the_run_s(self):
+        """Late on a Sunday evening on the Mac a sign-up's UTC date is already Monday's."""
+        entries = [("Qm7tLx2a", "tiktok", None, True, "2026-11-06"), ("Vb3kPz9w", "reddit", None, False, "2026-11-09")]
+        sunday_evening = datetime(2026, 11, 9, 3, 0, tzinfo=timezone.utc)
+        reading = self.read(fakes.waitlist_view("2026-11-09T02:55:00+00:00", entries), now=sunday_evening)
+        self.assertEqual(
+            [(week["week_of"], week["sign_ups"]) for week in reading.weeks], [("2026-11-02", 1), ("2026-11-09", 1)]
+        )
+        self.assertEqual((reading.this_week["week_of"], reading.cumulative["sign_ups"]), ("2026-11-02", 2))
+
+    def test_a_view_of_any_age_is_read_and_its_age_kept(self):
+        old = self.read(fakes.waitlist_view(), now=NOW + timedelta(days=3))
+        self.assertEqual((old.status, old.age), (waitlist.READ, timedelta(days=3, hours=1)))
+        self.assertEqual((old.this_week["week_of"], old.this_week["sign_ups"]), ("2026-10-12", 0))
+        self.assertEqual(waitlist.evidence(old, "RUN", NOW)["source"]["generated_at"], "2026-10-11T22:00:00+00:00")
+        ahead = self.read(fakes.waitlist_view("2026-10-13T22:00:00+00:00"))
+        self.assertEqual((ahead.status, ahead.age), (waitlist.READ, -timedelta(days=1, hours=23)))
+
     def test_evidence_holds_entry_identifiers_and_counts_only(self):
         reading = self.read(fakes.waitlist_view())
         record = waitlist.evidence(reading, "20261011T230000Z-on-demand-abcd", NOW)
@@ -228,8 +263,8 @@ class NoViewTest(ReadTestCase):
 
 
 class FormatTest(ReadTestCase):
-    def failure(self, view=None, raw=None, now=NOW):
-        reading = self.read(view, raw, now=now)
+    def failure(self, view=None, raw=None):
+        reading = self.read(view, raw)
         self.assertEqual(reading.status, waitlist.FAILED, reading.detail)
         return reading.detail
 
@@ -237,6 +272,7 @@ class FormatTest(ReadTestCase):
         self.assertIn("is not valid JSON (line 1)", self.failure(raw=b"{not json"))
         self.assertIn("is not UTF-8 text", self.failure(raw=b'{"view": "\xff"}'))
         self.assertIn("the file is not a JSON object", self.failure(raw=b"[]"))
+        self.assertIn("is nested too deeply to be the view", self.failure(raw=b"[" * 100_000))
         with mock.patch.object(waitlist, "MAX_VIEW_BYTES", 10):
             self.assertIn("is larger than", self.failure(fakes.waitlist_view()))
 
@@ -277,16 +313,6 @@ class FormatTest(ReadTestCase):
             "view format 2 is newer than gr0wthlab reads (up to 1)", self.failure(dict(fakes.waitlist_view(), view=2))
         )
 
-    def test_a_stalled_view_fails_so_it_never_reads_as_a_quiet_week(self):
-        detail = self.failure(now=NOW + timedelta(days=3), view=fakes.waitlist_view())
-        self.assertIn("73 hours before this run, so it has stopped being refreshed", detail)
-        self.assertEqual(self.read(fakes.waitlist_view(), now=NOW + timedelta(hours=47)).status, waitlist.READ)
-
-    def test_a_view_from_the_future_fails(self):
-        self.assertIn(
-            "more than a day after this run started", self.failure(fakes.waitlist_view("2026-10-13T22:00:00+00:00"))
-        )
-
 
 class BreachTest(ReadTestCase):
     def refused(self, view=None, raw=None):
@@ -309,9 +335,8 @@ class BreachTest(ReadTestCase):
             view["entries"][4].update(changes)
             return view
 
-        encoded = base64.b64encode(fakes.ADDRESS.encode()).decode()
         self.assertEqual(self.refused(view_with(source=fakes.ADDRESS)).places, ("entry 5, `source`",))
-        self.assertEqual(self.refused(view_with(entry=encoded)).places, ("entry 5, `entry`",))
+        self.assertEqual(self.refused(view_with(entry=fakes.ADDRESS)).places, ("entry 5, `entry`",))
         self.assertEqual(self.refused(view_with(fit=fakes.ADDRESS.upper())).places, ("entry 5, `fit`",))
         keyed = fakes.waitlist_view()
         keyed["entries"][0][fakes.ADDRESS] = True
@@ -320,6 +345,28 @@ class BreachTest(ReadTestCase):
             self.refused(dict(fakes.waitlist_view(), generated_at=fakes.ADDRESS)).places,
             ("the top of the file, `generated_at`",),
         )
+
+    def test_an_entry_identifier_that_encodes_an_address_is_refused(self):
+        address = fakes.ADDRESS.encode()
+        for identifier in (
+            "jane%40example.com",
+            base64.b64encode(address).decode(),
+            base64.urlsafe_b64encode(address).decode().rstrip("="),
+            address.hex(),
+            address.hex().upper(),
+        ):
+            with self.subTest(identifier=identifier):
+                view = fakes.waitlist_view()
+                view["entries"][4]["entry"] = identifier
+                self.assertEqual(self.refused(view).places, ("entry 5, `entry`",))
+
+    def test_only_the_entry_identifier_is_decoded(self):
+        """Every other value must be one the format lists, so an encoded one fails the format and is kept nowhere."""
+        view = fakes.waitlist_view()
+        view["entries"][4]["source"] = base64.b64encode(fakes.ADDRESS.encode()).decode()
+        reading = self.read(view)
+        self.assertEqual((reading.status, reading.entries), (waitlist.FAILED, ()))
+        self.assertIn("entry 5: source is not one of", reading.detail)
 
     def test_an_address_the_parsed_view_would_hide_is_still_found(self):
         hidden = b'{"view": 1, "generated_at": "2026-10-11T22:00:00+00:00", "entries": [], "entries": []'
@@ -335,6 +382,33 @@ class BreachTest(ReadTestCase):
             self.refused(raw=b"jane.doe@example.com" + b" " * 100)
 
 
+class SpeedTest(ReadTestCase):
+    """The address check runs over the whole file before its size or format can fail the read, so it takes time in
+    proportion to the file: a check that slowed with the square of a run of characters would hold the run, and its
+    lock, for hours."""
+
+    def status_in_time(self, raw):
+        self.path.parent.mkdir(parents=True)
+        self.path.write_bytes(raw)
+        done = subprocess.run(
+            [sys.executable, "-c", READ_ONCE, str(self.path)],
+            cwd=str(REPO / "src"),
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        self.assertEqual(done.returncode, 0, done.stderr)
+        return done.stdout.strip()
+
+    def test_a_multi_megabyte_run_with_no_delimiter_is_checked_quickly(self):
+        self.assertEqual(self.status_in_time(b"a" * 4_000_000), waitlist.FAILED)
+
+    def test_a_multi_megabyte_entry_identifier_is_checked_quickly(self):
+        view = fakes.waitlist_view()
+        view["entries"][0]["entry"] = base64.b64encode(b"a" * 3_000_000).decode()
+        self.assertEqual(self.status_in_time(json.dumps(view).encode()), waitlist.FAILED)
+
+
 class CommittedRulesTest(unittest.TestCase):
     def test_the_seed_reads_under_the_committed_configuration(self):
         registry = json.loads((REPO / "config/products.json").read_text(encoding="utf-8"))
@@ -342,7 +416,7 @@ class CommittedRulesTest(unittest.TestCase):
         self.assertEqual(tuple(block["source_tags"]), RULES.source_tags)
         self.assertEqual(tuple(block["fit_answers"]), RULES.fit_answers)
         self.assertEqual(tuple(block["good_fit"]), RULES.good_fit)
-        self.assertEqual((block["beta_cohort_bar"], block["stale_after_hours"]), (50, 48))
+        self.assertEqual(block["beta_cohort_bar"], 50)
 
 
 if __name__ == "__main__":

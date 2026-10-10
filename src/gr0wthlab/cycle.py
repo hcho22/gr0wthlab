@@ -307,7 +307,7 @@ class Cycle:
     def read_waitlist(self, state: RunState, config: settings.Settings, rules: settings.Waitlist | None) -> None:
         """Read the Waitlist's anonymous view before the agent starts and keep its counts as Evidence when it is usable;
         the agent reads only those counts, never the view, which lies outside everything the sandbox can read."""
-        reading = state.waitlist = waitlist.read(rules, self.now())
+        reading = state.waitlist = waitlist.read(rules, state.started)
         needs = output_titles(config, WAITLIST_NEEDS)
         state.sources.append(SourceLine(waitlist.SOURCE_NAME, reading.status, reading.detail, needs))
         if reading.status == package.READ:

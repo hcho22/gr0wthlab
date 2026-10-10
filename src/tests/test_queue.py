@@ -146,6 +146,15 @@ class IncomingTest(LedgerTestCase):
         self.assertEqual(published, [])
         self.assertIn("not an open item", set_aside[0].problems[0])
 
+    def test_an_item_the_launcher_filed_from_reviewed_text_is_never_superseded(self):
+        request = exchange.check_item(fakes.proposal("dispatch-request"), PRODUCTS).item
+        filed = self.ledger.publish(self.store, request, "waitlist", "RUN1", NOW, origin="dispatch/waitlist")
+        self.drop("smaller.md", fakes.proposal("dispatch-request", f"supersedes: {filed}\n", "build less"))
+        published, set_aside = self.take("RUN2")
+        self.assertEqual(published, [])
+        self.assertIn(f"supersedes {filed}, which the launcher filed from reviewed text", set_aside[0].problems[0])
+        self.assertEqual(self.ledger.entries[filed]["status"], OPEN)
+
 
 class DecisionsTest(LedgerTestCase):
     def setUp(self):

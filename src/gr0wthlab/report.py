@@ -356,9 +356,14 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
     lines += decision_lines(state, taken_only=True) or ["None."]
     lines += ["", "## Open Review Queue items", ""]
     if state.queue_before:
-        lines.append("Do not queue these again; to change one, write a new item with `supersedes: <id>`.")
+        lines += [
+            "Do not queue these again; to change one, write a new item with `supersedes: <id>`.",
+            "An item filed by the launcher changes only through a reviewed change to its source text, so an item that"
+            " supersedes it is refused.",
+        ]
         for entry in state.queue_before:
-            line = f"- `{entry['id']}` ({entry['kind']}): {entry['ask']}"
+            filed = ", filed by the launcher" if entry.get("origin") else ""
+            line = f"- `{entry['id']}` ({entry['kind']}{filed}): {entry['ask']}"
             for earlier in state.replaced.get(str(entry["id"]), ()):
                 line += (
                     f". It replaces `{earlier['id']}`, which the Founder {earlier['decided']}: {earlier['ask']}."
@@ -605,6 +610,14 @@ def waitlist_progress(reading: waitlist.Reading) -> str:
     return f"{plural(have, 'good-Fit opt-in')} of about {bar}, {where}"
 
 
+def waitlist_age(reading: waitlist.Reading) -> str:
+    """How old the view was when the run started, so counts from a copy that stopped changing never pass for a quiet
+    week."""
+    if reading.age < timedelta(0):
+        return "after this run started"
+    return f"{duration(reading.age)} before this run started"
+
+
 def waitlist_outcome(reading: waitlist.Reading, notice: str | None) -> str:
     """What became of the view this run, in one sentence that opens with its status unless it was read."""
     if reading.status == package.READ:
@@ -636,7 +649,8 @@ def waitlist_lines(reading: waitlist.Reading, evidence_file: str, notice: str | 
     week = reading.this_week
     good_fit = " or ".join(f"`{answer}`" for answer in reading.rules.good_fit)
     lines = [
-        f"Read the view generated {reading.generated_at.isoformat()}; Waitlist Evidence: `{evidence_file}`.",
+        f"Read the view generated {reading.generated_at.isoformat()}, {waitlist_age(reading)}; Waitlist Evidence:"
+        f" `{evidence_file}`.",
         f"Progress toward the Beta Cohort bar: {waitlist_progress(reading)}; good Fit is the {good_fit} answer.",
         "",
     ]

@@ -5,7 +5,7 @@ The launcher writes them outside the sandbox; a run can read them and can never 
 Each run's records step commits this folder to `main` together with `workspace/` (US-ME17).
 
 - `review-queue/queue.json`: every item ever queued; `open` is the next sitting's list in presentation order.
-  An item the launcher filed from reviewed text, such as a Dispatch request from `src/dispatches/`, carries `origin`, so later runs file it only once.
+  An item the launcher filed from reviewed text, such as a Dispatch request from `src/dispatches/`, carries `origin`, so later runs file it only once and no item the agent writes can supersede it.
 - `review-queue/items/<id>.md`: each queued item, under an identifier that never changes.
 - `review-queue/set-aside/<run id>/`: what the launcher refused to queue that run, kept for the record and named in that run's notice.
 - `evidence/package-snapshots/<run id>.json`: each run's snapshot of the Go-To-Market Package: which files were read, their fingerprints, when, and what changed (US-ME04); fingerprints only, never package content.

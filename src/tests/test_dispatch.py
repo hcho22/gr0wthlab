@@ -1,23 +1,60 @@
 """Reviewed Dispatch requests: each is a valid item, the Waitlist request specifies what the reader reads, and the
 launcher files each once and never re-asks one the Founder decided."""
 
+import itertools
 import json
 import os
 import re
 import shutil
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from gr0wthlab import dispatch, exchange, settings, waitlist
+from gr0wthlab import boundary, dispatch, exchange, settings, waitlist
 from gr0wthlab.areas import Store
 from gr0wthlab.queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger
+from tests import fakes
+from tests.test_boundary import CONFIG
 from tests.test_waitlist import RULES
 
 REPO = Path(__file__).resolve().parents[2]
 PRODUCTS = ["RepToday", "Immerse"]
 NOW = datetime(2026, 10, 11, 23, 0, tzinfo=timezone.utc)
+VIEW_SECTION = "The anonymous view gr0wthlab reads"
+SOURCE_SECTION = "Source, from the link"
+
+
+def committed_rules() -> settings.Waitlist:
+    """RepToday's Waitlist as config/products.json has it."""
+    registry = json.loads((REPO / "config/products.json").read_text(encoding="utf-8"))
+    home = Path("/srv/home")
+    resolved = boundary.resolve_boundary(home / "gr0wthlab", CONFIG, registry, {}, home, git=[])
+    return settings.waitlist(registry, resolved, {}, home)
+
+
+def subsections(body: str) -> dict[str, str]:
+    """Each ### part of a request's body, by its heading."""
+    found: dict[str, list[str]] = {}
+    lines: list[str] = []
+    for line in body.splitlines():
+        if line.startswith("### "):
+            lines = found.setdefault(line[4:].strip(), [])
+        else:
+            lines.append(line)
+    return {heading: "\n".join(lines) for heading, lines in found.items()}
+
+
+def quoted(text: str) -> list[str]:
+    """Every value a text puts in backticks."""
+    return re.findall(r"`([^`]+)`", text)
+
+
+def documented_fields(section: str) -> dict[str, list[str]]:
+    """Each field a section defines as a list item, with the values its definition puts in backticks."""
+    definitions = (re.fullmatch(r"- `(\w+)`: (.*)", line) for line in section.splitlines())
+    return {match.group(1): quoted(match.group(2)) for match in definitions if match}
 
 
 class ReviewedRequestsTest(unittest.TestCase):
@@ -30,59 +67,44 @@ class ReviewedRequestsTest(unittest.TestCase):
 
 
 class WaitlistRequestTest(unittest.TestCase):
-    """The request is the contract RepToday's build implements and the launcher reads; they must never drift."""
+    """The request is the view's format, the contract RepToday's build implements and the launcher reads, so it is
+    read here as the build would read it and checked through the launcher's own reader under the committed rules."""
 
     def setUp(self):
-        self.text = (REPO / "src/dispatches/reptoday-waitlist.md").read_text(encoding="utf-8")
-        registry = json.loads((REPO / "config/products.json").read_text(encoding="utf-8"))
-        self.block = next(product for product in registry["products"] if product["name"] == "RepToday")["waitlist"]
+        (request,), _ = dispatch.load(REPO, PRODUCTS)
+        self.parts = subsections(request.item.body)
+        self.fields = documented_fields(self.parts[VIEW_SECTION])
+        self.example = json.loads(re.search(r"```json\n(.*?)\n```", self.parts[VIEW_SECTION], re.S).group(1))
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.rules = replace(committed_rules(), view=Path(os.path.realpath(self.tmp.name)) / "waitlist-view.json")
+
+    def read(self, view):
+        fakes.write_view(self.rules.view, view)
+        return waitlist.read(self.rules, NOW)
 
     def test_its_example_is_a_view_the_launcher_reads(self):
-        example = re.search(r"```json\n(.*?)\n```", self.text, re.S).group(1)
-        view = json.loads(example)
-        self.assertEqual(sorted(view), sorted(waitlist.TOP_KEYS))
-        self.assertEqual(sorted(view["entries"][0]), sorted(waitlist.ENTRY_KEYS))
-        checked, problems = waitlist.check_view(view, RULES, datetime(2026, 10, 11, 23, 0, tzinfo=timezone.utc))
-        self.assertEqual(problems, [])
-        self.assertEqual(len(checked.entries), 1)
+        reading = self.read(self.example)
+        self.assertEqual((reading.status, len(reading.entries)), (waitlist.READ, 1), reading.detail)
 
-    def test_it_names_every_field_tag_and_answer_the_reader_accepts(self):
-        self.assertIn('"view": 1', self.text)
-        for key in ("generated_at", *waitlist.ENTRY_KEYS):
-            self.assertIn(f"- `{key}`:", self.text)
-        for tag in self.block["source_tags"]:
-            self.assertIn(f"`{tag}`", self.text)
-            self.assertIn(f"`reptoday.app/{tag}`", self.text)
-        self.assertIn("`https://reptoday.app/?utm_source=<tag>`", self.text)
-        self.assertIn("Source `unknown`", self.text)
-        for answer in self.block["fit_answers"]:
-            self.assertIn(f"`{answer}`", self.text)
-        self.assertIn(f"more than {self.block['stale_after_hours']} hours old", self.text)
+    def test_it_defines_every_field_of_the_view_and_no_other(self):
+        (entry,) = self.example["entries"]
+        self.assertEqual((set(self.example), set(entry)), (set(waitlist.TOP_KEYS), set(waitlist.ENTRY_KEYS)))
+        self.assertEqual(set(self.fields), (set(self.example) | set(entry)) - {"view", "entries"})
 
-    def test_it_carries_every_us_me05_criterion(self):
-        for words in (
-            "Exactly one low-pressure call to action",
-            "Three fields and no others",
-            '"I used to work out and lost the routine"',
-            '"I work out regularly"',
-            '''"I've never had a routine"''',
-            '"Invite me to the beta before launch"',
-            'No "how did you hear about us" field',
-            "`landing_page_view`",
-            "`waitlist_signup`",
-            "`referrer_source`",
-            "`reptoday.app/privacy` gains a Waitlist section",
-            "What is collected",
-            "Why:",
-            "How long it is kept",
-            "How to be removed",
-            "Nothing else: no address",
-            "Addresses are resolved only on your side, at send time",
-            "No email-service credential",
-            "Storage (including whether Kit stays), hosting, how the view is produced",
-            "Once you approve, Mandu hands this request to firstmate",
-        ):
-            self.assertIn(words, self.text)
+    def test_the_reader_counts_exactly_the_sources_and_fit_answers_it_lists(self):
+        fits = [None if answer == "null" else answer for answer in self.fields["fit"]]
+        pairs = itertools.product(self.fields["source"], fits)
+        entries = [(f"entry{n}", source, fit, True, "2026-10-05") for n, (source, fit) in enumerate(pairs)]
+        reading = self.read(fakes.waitlist_view(entries=entries))
+        self.assertEqual(reading.status, waitlist.READ, reading.detail)
+        self.assertEqual(sorted(reading.cumulative["by_source"]), sorted(self.fields["source"]))
+        self.assertEqual(sorted(reading.cumulative["by_fit"]), sorted(fit or settings.UNKNOWN for fit in fits))
+
+    def test_it_gives_one_link_per_source_whose_path_is_the_source_s_tag(self):
+        mentions = [text for text in quoted(self.parts[SOURCE_SECTION]) if "reptoday.app" in text]
+        links = [text for text in mentions if text != "reptoday.app"]
+        self.assertEqual(sorted(links), sorted(f"reptoday.app/{tag}" for tag in self.rules.source_tags))
 
 
 class FilingTest(unittest.TestCase):
@@ -107,9 +129,11 @@ class FilingTest(unittest.TestCase):
         seen = {fingerprint: identifier for identifier, fingerprint in hashes.items()}
         return dispatch.file(self.ledger, self.store, requests, hashes, seen, run, NOW + timedelta(days=days))
 
-    def edit(self, old, new):
+    def revise(self):
+        """A reviewed change to what the request asks."""
         path = self.repo / "src/dispatches/reptoday-waitlist.md"
-        path.write_text(path.read_text(encoding="utf-8").replace(old, new), encoding="utf-8")
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text.replace("\n## Touches\n", "\nA revised ask.\n\n## Touches\n"), encoding="utf-8")
 
     def decide(self, identifier, status):
         self.ledger.close(self.ledger.entries[identifier], status, "RUN", NOW, decided_at="2026-10-11T19:00:00-07:00")
@@ -131,7 +155,7 @@ class FilingTest(unittest.TestCase):
 
     def test_a_reviewed_change_supersedes_the_open_request(self):
         (first,) = self.file()
-        self.edit("at least once a day", "at least twice a day")
+        self.revise()
         (second,) = self.file(7)
         self.assertEqual((second.status, second.replaced), (dispatch.REPLACED, first.identifier))
         old, new = self.ledger.entries[first.identifier], self.ledger.entries[second.identifier]
@@ -142,7 +166,7 @@ class FilingTest(unittest.TestCase):
     def test_never_filed_again_once_approved_even_after_a_change(self):
         (first,) = self.file()
         self.decide(first.identifier, APPROVED)
-        self.edit("at least once a day", "at least twice a day")
+        self.revise()
         self.assertEqual([(f.status, f.identifier) for f in self.file(7)], [(dispatch.DONE, first.identifier)])
         self.assertEqual(len(self.ledger.entries), 1)
 
@@ -151,7 +175,7 @@ class FilingTest(unittest.TestCase):
         self.decide(first.identifier, REJECTED)
         self.assertEqual([(f.status, f.identifier) for f in self.file(7)], [(dispatch.DECIDED, first.identifier)])
         self.assertEqual(len(self.ledger.entries), 1)
-        self.edit("at least once a day", "at least twice a day")
+        self.revise()
         (again,) = self.file(14)
         self.assertEqual(again.status, dispatch.FILED)
         self.assertNotEqual(again.identifier, first.identifier)
@@ -186,14 +210,7 @@ class FilingTest(unittest.TestCase):
 
 class SettingsAgreeTest(unittest.TestCase):
     def test_the_committed_waitlist_has_no_view_until_the_build_lands(self):
-        from gr0wthlab import boundary
-        from tests.test_boundary import CONFIG
-
-        registry = json.loads((REPO / "config/products.json").read_text(encoding="utf-8"))
-        home = Path("/srv/home")
-        resolved = boundary.resolve_boundary(home / "gr0wthlab", CONFIG, registry, {}, home, git=[])
-        rules = settings.waitlist(registry, resolved, {}, home)
-        self.assertEqual(rules, RULES)
+        self.assertEqual(committed_rules(), RULES)
 
 
 if __name__ == "__main__":

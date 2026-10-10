@@ -7,7 +7,6 @@ import os
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import timedelta
 from pathlib import Path, PurePosixPath
 
 from . import schedule
@@ -126,7 +125,6 @@ class Waitlist:
     fit_answers: tuple[str, ...]
     good_fit: tuple[str, ...]
     bar: int
-    stale_after: timedelta
 
 
 def tags(value: object, name: str) -> tuple[str, ...]:
@@ -172,14 +170,13 @@ def waitlist(registry: Mapping, boundary: Boundary, env: Mapping[str, str], home
         source_tags = tags(block["source_tags"], f"{name}.waitlist.source_tags")
         fit_answers = tags(block["fit_answers"], f"{name}.waitlist.fit_answers")
         good_fit = tags(block["good_fit"], f"{name}.waitlist.good_fit")
-        bar, hours = block["beta_cohort_bar"], block["stale_after_hours"]
+        bar = block["beta_cohort_bar"]
     except (KeyError, TypeError) as error:
         raise ConfigError(f"{name}'s Waitlist in the Product registry is incomplete: {error}") from error
     if not set(good_fit) <= set(fit_answers):
         raise ConfigError(f"{name}.waitlist.good_fit must name answers from fit_answers")
-    for value, field in ((bar, "beta_cohort_bar"), (hours, "stale_after_hours")):
-        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
-            raise ConfigError(f"{name}.waitlist.{field} must be a whole number above zero")
+    if isinstance(bar, bool) or not isinstance(bar, int) or bar < 1:
+        raise ConfigError(f"{name}.waitlist.beta_cohort_bar must be a whole number above zero")
     if path is not None:
         for place in sandbox_readable(boundary):
             if is_within(path, place) or is_within(place, path):
@@ -187,4 +184,4 @@ def waitlist(registry: Mapping, boundary: Boundary, env: Mapping[str, str], home
                     f"{name}'s Waitlist view {path} overlaps {place}, which the sandboxed agent can read;"
                     " it must be outside every location the run reads"
                 )
-    return Waitlist(name, path, source_tags, fit_answers, good_fit, bar, timedelta(hours=hours))
+    return Waitlist(name, path, source_tags, fit_answers, good_fit, bar)

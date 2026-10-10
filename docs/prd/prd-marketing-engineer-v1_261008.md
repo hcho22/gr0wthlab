@@ -191,16 +191,16 @@ Immerse joins as Listening only, after RepToday's first 14-day window has run cl
 **Acceptance Criteria:**
 
 - [ ] The Dispatch request is a Review Queue item and reaches firstmate only after the Founder approves it.
-- [x] The request specifies a sign-up on `reptoday.app` with exactly one low-pressure call to action and three fields: email, one Fit question, and an opt-in to a Beta Build invitation.
-- [x] The Fit question offers three answers, worded for Founder approval in the request: used to exercise and lost the routine; exercises regularly; never had a routine.
+- [ ] The request specifies a sign-up on `reptoday.app` with exactly one low-pressure call to action and three fields: email, one Fit question, and an opt-in to a Beta Build invitation.
+- [ ] The Fit question offers three answers, worded for Founder approval in the request: used to exercise and lost the routine; exercises regularly; never had a routine.
 - [ ] Source is captured from the link with no extra field, using one link per Source (at least TikTok, YouTube, Reddit, and the Founder's personal network), with a sign-up reached without a tagged link recorded as unknown Source.
 - [ ] The web events `landing_page_view` and `waitlist_signup` with `referrer_source` are emitted as defined in `gtm/06-channels/event-metric-schema.md`.
 - [ ] The privacy policy at `reptoday.app/privacy` gains a Waitlist section covering what is collected, why, how long it is kept, and how to be removed.
 - [ ] The Marketing Engineer gets a read-only, anonymous view of sign-ups (entry identifier, Source, Fit answer, opt-in, sign-up date) that contains no email address.
 - [ ] Email addresses can be resolved only on the Founder's side, at send time.
-- [x] The request leaves storage, hosting, and implementation choices to RepToday's own design under firstmate.
+- [ ] The request leaves storage, hosting, and implementation choices to RepToday's own design under firstmate.
 
-The checked criteria are the request's own, filed from `src/dispatches/reptoday-waitlist.md`; the rest wait for the approved RepToday build to land and pass this story's Validation Test, and the first also for Mandu to hand approved Dispatch requests to firstmate.
+gr0wthlab's side is in place, with the request filed from `src/dispatches/reptoday-waitlist.md`; every box waits for the approved RepToday build to land and pass this story's Validation Test.
 
 **Validation Test:**
 

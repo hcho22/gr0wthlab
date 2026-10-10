@@ -865,6 +865,7 @@ class WaitlistRunTest(CycleTestCase):
         self.view = self.root / "RepToday-exports" / "waitlist-view.json"
         self.env["GR0WTHLAB_WAITLIST_VIEW"] = str(self.view)
         self.exchange.mkdir()
+        fakes.mac_time_zone(self)
 
     def assert_no_address_anywhere(self):
         """Every output of every run so far: the records, the agent's areas, the logs, and what the agent was told."""
@@ -898,6 +899,8 @@ class WaitlistRunTest(CycleTestCase):
             "| unknown | 1 | 1 | 0 | 1 | 0 |",
             "| lost-the-routine | 3 | 6 | 5 |",
             "| unknown | 2 | 2 | 1 |",
+            "Read the view generated 2026-10-11T22:00:00+00:00, 1 h 0 min before this run started; Waitlist Evidence:"
+            f" `evidence/waitlist/{evidence.name}`.",
             f"| Waitlist counts | complete | `evidence/waitlist/{evidence.name}` |",
             "- waitlist: checked=12 acted=0 note=12 sign-ups counted; 5 good-Fit opt-ins of about 50, 10% of the way",
         ):
@@ -962,10 +965,26 @@ class WaitlistRunTest(CycleTestCase):
         self.assertIn("Incomplete: Waitlist counts, Weekly Read memo, Beta Cohort recruiting.", text)
         self.assertFalse((self.ledger() / "evidence/waitlist").exists())
 
+    def test_an_old_view_is_counted_and_the_report_says_how_old_it_is(self):
         early = [entry for entry in fakes.WAITLIST_ENTRIES if entry[4] <= "2026-10-08"]
         fakes.write_view(self.view, fakes.waitlist_view("2026-10-08T22:00:00+00:00", early))
-        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))
-        self.assertIn("74 hours before this run, so it has stopped being refreshed", self.report())
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        report = self.report()
+        self.assertIn("- Waitlist: 9 sign-ups, 4 of them in the week of 2026-10-05;", report)
+        self.assertIn("generated 2026-10-08T22:00:00+00:00, 3 d 1 h 0 min before this run started;", report)
+        self.assertEqual(len(list((self.ledger() / "evidence/waitlist").glob("*.json"))), 1)
+
+    def test_a_winter_sunday_run_reports_the_week_ending_at_that_sitting(self):
+        """From November the Sunday 16:00 run starts at 00:00 UTC on Monday, and so may the view it reads."""
+        entries = [(f"Entry{n:02d}", "tiktok", "lost-the-routine", True, f"2026-11-0{2 + n % 7}") for n in range(30)]
+        fakes.write_view(self.view, fakes.waitlist_view("2026-11-09T00:00:05+00:00", entries))
+        code, out = self.run_cycle(at=datetime(2026, 11, 9, 0, 0, 10, tzinfo=timezone.utc))
+        self.assertEqual(code, 0, out)
+        report = self.report()
+        self.assertIn("- Waitlist: 30 sign-ups, 30 of them in the week of 2026-11-02;", report)
+        self.assertIn("| Source | Week of 2026-11-02 | All weeks | Good Fit | Opted in | Good-Fit opt-ins |", report)
+        self.assertIn("| tiktok | 30 | 30 | 30 | 30 | 30 |", report)
 
     def test_a_view_the_sandbox_could_read_stops_the_run_before_it_starts(self):
         self.env["GR0WTHLAB_WAITLIST_VIEW"] = str(self.mandu / "exports/waitlist-view.json")
@@ -984,14 +1003,17 @@ class DispatchRunTest(CycleTestCase):
         code, out = self.run_cycle()
         self.assertEqual(code, 0, out)
         (entry,) = self.queue()["open"]
-        identifier = "20261011-reptoday-waitlist"
+        identifier = f"{fakes.SUNDAY_RUN.astimezone():%Y%m%d}-reptoday-waitlist"
         self.assertEqual(
             (entry["id"], entry["kind"], entry["origin"], entry["product"]),
             (identifier, "dispatch-request", "dispatch/reptoday-waitlist", "RepToday"),
         )
         text = (self.ledger() / entry["file"]).read_text(encoding="utf-8")
         self.assertEqual(exchange.check_item(text, ["RepToday", "Immerse"], published=True).problems, [])
-        self.assertIn(f"- `{identifier}` (dispatch-request): Approve Dispatch: build RepToday's Waitlist", self.brief())
+        self.assertIn(
+            f"- `{identifier}` (dispatch-request, filed by the launcher): Approve Dispatch: build RepToday's Waitlist",
+            self.brief(),
+        )
         report = self.report()
         self.assertIn(f"- dispatch-requests: checked=1 acted=1 note=reptoday-waitlist filed as `{identifier}`", report)
         self.assertIn("1 item open for the next sitting (1 new this run, 0 carried over)", report)
@@ -1015,6 +1037,23 @@ class DispatchRunTest(CycleTestCase):
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=21))
         ids = [entry["id"] for entry in self.queue()["open"] + self.queue()["closed"] if "waitlist" in entry["id"]]
         self.assertEqual(ids, [identifier])
+
+    def test_an_item_the_agent_writes_never_withdraws_the_request(self):
+        self.run_cycle()
+        (entry,) = self.queue()["open"]
+        identifier = entry["id"]
+        smaller = fakes.proposal("dispatch-request", f"supersedes: {identifier}\n", "build a smaller Waitlist")
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/waitlist-smaller.md": smaller}})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertIn(
+            f"- Set aside, not queued: `waitlist-smaller.md`: supersedes {identifier}, which the launcher filed from"
+            " reviewed text; only a reviewed change to that text replaces it",
+            self.report(),
+        )
+        fakes.behave(self.codex_dir, {})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
+        self.assertEqual([e["id"] for e in self.queue()["open"] if e["kind"] == "dispatch-request"], [identifier])
+        self.assertIn(f"note=reptoday-waitlist open as `{identifier}`", self.report())
 
 
 class ProductionCloneTest(CycleTestCase):

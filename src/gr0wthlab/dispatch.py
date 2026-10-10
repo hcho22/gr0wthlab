@@ -6,7 +6,8 @@ Queue item format, named <key>.md, and changes only through a reviewed pull requ
 identifier that never changes and marks its queue entry with the key, then, run after run:
 
 - leaves it open while its text is unchanged, and files the new text in its place, superseding it, once a reviewed
-  change alters the text;
+  change alters the text; no item the agent writes can supersede it (queue.check_incoming), so it stays open until
+  the Founder decides it;
 - never files it again once the Founder approved it;
 - never asks the Founder the same text again once decided, so after a rejection only a reviewed change that alters the
   text files it anew.

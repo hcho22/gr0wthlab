@@ -72,6 +72,7 @@ Every Evidence line names its source as a path in backticks or a URL.
   Work that needs it is incomplete this run; say so in your summary and do everything else.
 - Never assume a file is unreadable: read it, and if the read fails, report the exact error.
 - Do not queue an item that is already open; to replace one, write a new item with `supersedes: <id>` in its front matter.
+  An item the brief marks as filed by the launcher, such as a Dispatch request, cannot be superseded: only a reviewed change to its source text replaces it.
 - Do not propose again what the Founder already rejected unless new Evidence answers the reason.
   The launcher refuses an item that asks the same as an open or decided one, and rewording an ask does not make it new.
 - Quote only the specific package text a proposal uses or replaces, citing its file; never copy a package file or a large part of one.
