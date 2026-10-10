@@ -15,6 +15,7 @@ from tests import fakes
 NOW = datetime(2026, 10, 11, 23, 0, tzinfo=timezone.utc)
 PRODUCTS = ["RepToday", "Immerse"]
 SOURCE = fakes.REPO / proposals.BRAND_RULES
+COMMIT = "1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff"
 
 
 class BrandRulesProposalTest(unittest.TestCase):
@@ -41,10 +42,20 @@ class BrandRulesProposalTest(unittest.TestCase):
         self.assertEqual(sorted(keys), sorted({key for needed in lint.NEW_RULE_TYPES.values() for key in needed}))
         block = check.item.body.split("```json\n")[1].split("\n```")[0]
         lint.Rules(json.loads(block))  # the lists it proposes are rules the lint accepts
-        self.assertIn("Copyright (c) 2025 Corey Haines", check.item.body)
-        self.assertIn("Permission is hereby granted, free of charge", check.item.body)
-        self.assertIn("1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff", check.item.body)
-        self.assertTrue(SOURCE.read_text(encoding="utf-8").startswith("<!-- Adapted from skills/copywriting"))
+
+    def test_the_source_names_what_it_was_adapted_from_and_the_queued_item_carries_the_mit_notice(self):
+        """THIRD_PARTY_NOTICES.md's contract for adapted text: the file's one-line header names each source path and
+        the commit, and what reaches Mandu holds the notice itself, since the header is not part of the item."""
+        source = SOURCE.read_text(encoding="utf-8")
+        header = source.splitlines()[0]
+        for named in ("skills/copywriting/references/ai-tells.md", COMMIT, "THIRD_PARTY_NOTICES.md"):
+            self.assertIn(named, header)
+        self.assertEqual(proposals.item_text(source), source[len(header) + 1 :])
+        filed = self.file()
+        queued = (self.store.root / self.ledger.entries[filed.item]["file"]).read_text(encoding="utf-8")
+        self.assertNotIn(header, queued)
+        for notice in ("Copyright (c) 2025 Corey Haines", "Permission is hereby granted, free of charge", COMMIT):
+            self.assertIn(notice, queued)
 
     def test_it_is_filed_once_and_never_asked_again_whatever_the_founder_decides(self):
         filed = self.file()

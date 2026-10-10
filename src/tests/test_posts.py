@@ -10,7 +10,7 @@ from pathlib import Path
 from gr0wthlab import boundary, exchange, posts
 from gr0wthlab.areas import Areas, Store
 from gr0wthlab.boundary import ConfigError
-from gr0wthlab.queue import APPROVED, OPEN, SUPERSEDED, Ledger
+from gr0wthlab.queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger
 from gr0wthlab.settings import Window
 from tests import fakes
 from tests.test_boundary import CONFIG, REGISTRY
@@ -23,31 +23,34 @@ SUNDAY = date(2026, 10, 11)
 class TargetDaysTest(unittest.TestCase):
     CALENDAR = list(range(1, 15))
 
-    def test_until_day_1_is_set_the_first_batch_is_days_1_to_7(self):
+    def test_until_the_first_sitting_is_set_the_first_batch_is_days_1_to_7(self):
         days, reason = posts.target_days(Window(1, None, None), self.CALENDAR, SUNDAY, "sunday")
         self.assertEqual(days, [1, 2, 3, 4, 5, 6, 7])
-        self.assertIn("day 1 is not set in config/run.json", reason)
+        self.assertIn("first sitting is not set in config/run.json", reason)
 
-    def test_a_sunday_run_prepares_the_week_after_that_evening_s_sitting(self):
-        window = Window(1, date(2026, 10, 12), time(19, 0))
-        self.assertEqual(posts.target_days(window, self.CALENDAR, SUNDAY, "sunday")[0], [1, 2, 3, 4, 5, 6, 7])
+    def test_day_1_is_the_day_after_the_first_sitting_and_its_run_prepares_the_week_after_it(self):
+        window = Window(1, SUNDAY, time(19, 0))
+        first = posts.target_days(window, self.CALENDAR, SUNDAY, "sunday")
+        self.assertEqual(first[0], [1, 2, 3, 4, 5, 6, 7])
+        self.assertIn("Window 1 begins on Monday 2026-10-12, the day after its first sitting", first[1])
         later = posts.target_days(window, self.CALENDAR, date(2026, 10, 18), "sunday")
         self.assertEqual(later[0], [8, 9, 10, 11, 12, 13, 14])
         self.assertIn("the week after the sitting on Sunday 2026-10-18", later[1])
         self.assertEqual(posts.target_days(window, self.CALENDAR, date(2026, 10, 25), "sunday")[0], [])
+        self.assertEqual(posts.target_days(window, self.CALENDAR, date(2026, 10, 4), "sunday")[0], [])
 
     def test_a_late_or_mid_week_run_also_prepares_the_days_left_before_that_week(self):
-        window = Window(1, date(2026, 10, 12), time(19, 0))
+        window = Window(1, SUNDAY, time(19, 0))
         days, reason = posts.target_days(window, self.CALENDAR, date(2026, 10, 14), "sunday")
         self.assertEqual(days, list(range(4, 15)))
         self.assertIn("the days from tomorrow, 2026-10-15, up to that week", reason)
 
     def test_the_slot_is_the_day_s_date_at_the_window_s_time(self):
-        window = Window(1, date(2026, 10, 12), time(19, 0))
+        window = Window(1, SUNDAY, time(19, 0))
         slot = posts.slot_for(window, 3)
         self.assertTrue(slot.startswith("2026-10-14T19:00"))
         self.assertIsNotNone(exchange.parse_datetime(slot))
-        self.assertIsNone(posts.slot_for(Window(1, date(2026, 10, 12), None), 3))
+        self.assertIsNone(posts.slot_for(Window(1, SUNDAY, None), 3))
         self.assertIsNone(posts.slot_for(Window(1, None, time(19, 0)), 3))
 
 
@@ -128,6 +131,7 @@ class TakeTestCase(unittest.TestCase):
                     slot,
                     next((e for e in entries if e["status"] == OPEN), None),
                     next((e for e in entries if e["status"] == APPROVED), None),
+                    [e for e in entries if e["status"] == REJECTED],
                 )
             )
         folder = self.repo / "workspace/drafts/posts/window-1"
@@ -138,10 +142,11 @@ class TakeTestCase(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
 
-    def take(self, *days, run="RUN1", seen=None):
-        return posts.take(
-            self.plan(*days), self.areas, self.store, self.ledger, run, NOW, {} if seen is None else seen, PRODUCTS
-        )
+    def take(self, *days, run="RUN1", slot=None):
+        return posts.take(self.plan(*days, slot=slot), self.areas, self.store, self.ledger, run, NOW, PRODUCTS)
+
+    def withdraw(self, outcome, run):
+        posts.withdraw(self.ledger, outcome, "20261011-notice", run, NOW)
 
 
 class TakeTest(TakeTestCase):
@@ -168,6 +173,11 @@ class TakeTest(TakeTestCase):
         self.assertIn(
             "  Open, gating only assets that use the 'under 100 milliseconds' claim, which this post does not:"
             " line 12.",
+            text,
+        )
+        self.assertIn(
+            "- The kit's checklist for every asset (`projects/RepToday/gtm/05-social-pmf/cadence-14-day.md`), each"
+            " line yours to judge on this post:\n  Line 26: Founder is on camera for every first-person line.\n",
             text,
         )
 
@@ -225,13 +235,72 @@ class TakeTest(TakeTestCase):
         _, title, text = posts.notice_section(outcome, "2026-10-11")
         self.assertIn("- Day 6 has no Draft, so it has no post this run.", text)
 
-    def test_the_same_ask_as_a_decided_item_is_not_queued_again(self):
-        self.write(3, fakes.draft(3))
-        seen = {}
-        [first] = self.take(3, seen=seen).results
-        self.ledger.close(self.ledger.entries[first.item], "rejected", "RUN2", NOW, reason="Too flat.")
-        [again] = self.take(3, run="RUN3", seen=seen).results
+    def test_a_rejected_draft_is_not_asked_again_until_it_changes(self):
+        self.write(4, fakes.draft(4))
+        [first] = self.take(4).results
+        self.ledger.close(self.ledger.entries[first.item], REJECTED, "RUN2", NOW, reason="Too flat.")
+        # Its slot, like the Product's commit, changes the item's text and never the Draft the Founder rejected.
+        outcome = self.take(4, run="RUN3", slot="2026-10-15T19:00-07:00")
+        [again] = outcome.results
         self.assertEqual((again.status, again.item), (posts.REPEATED, first.item))
+        self.assertEqual(outcome.published, [])
+        self.write(4, fakes.draft(4, caption="The session was built on the phone before the signal went."))
+        [rewritten] = self.take(4, run="RUN4").results
+        self.assertEqual((rewritten.status, rewritten.item), (posts.QUEUED, "20261011-post-w1-day-04-2"))
+
+    def test_a_draft_that_passes_again_after_its_post_was_withdrawn_is_queued_again(self):
+        self.write(3, fakes.draft(3))
+        [first] = self.take(3).results
+        self.write(3, fakes.draft(3, caption="No grind here, only a score that forgives."))
+        self.withdraw(self.take(3, run="RUN2"), "RUN2")
+        self.write(3, fakes.draft(3))
+        [restored] = self.take(3, run="RUN3").results
+        self.assertEqual((restored.status, restored.item), (posts.QUEUED, "20261011-post-w1-day-03-2"))
+        self.assertEqual(self.ledger.entries[first.item]["status"], SUPERSEDED)
+        self.assertEqual(self.ledger.entries[restored.item]["status"], OPEN)
+
+    def test_a_leg_s_open_post_is_the_reference_and_only_the_newer_leg_is_blocked(self):
+        self.write(1, fakes.draft(1))
+        [first] = self.take(1).results
+        self.write(8, fakes.draft(8, caption="A different second line."))
+        outcome = self.take(1, 8, run="RUN2")
+        reference, newer = outcome.results
+        self.assertEqual((reference.status, reference.item, reference.withdrawn), (posts.KEPT, first.item, None))
+        self.assertEqual((newer.status, outcome.withdrawn, outcome.published), (posts.BLOCKED, [], []))
+        self.assertEqual(
+            posts.grouped(newer.verdict.blocks),
+            [
+                "pair-legs: differs from day 1's leg beyond the Hook (`drafts/posts/window-1/day-01.md`)"
+                " (TikTok caption, YouTube Shorts description)"
+            ],
+        )
+        self.write(8, fakes.draft(8))
+        [matched] = self.take(8, run="RUN3").results
+        self.assertEqual(matched.status, posts.QUEUED)
+        # Both legs are open now; a change to one is checked against the other, which stands.
+        self.write(1, fakes.draft(1).replace("Real phone, real time.", "Real phone."))
+        outcome = self.take(1, 8, run="RUN4")
+        changed, standing = outcome.results
+        self.assertEqual((changed.status, changed.withdrawn), (posts.BLOCKED, first.item))
+        self.assertIn("beat 3 on-screen text", posts.grouped(changed.verdict.blocks)[0])
+        self.assertEqual((standing.status, standing.item, standing.withdrawn), (posts.KEPT, matched.item, None))
+
+    def test_a_newer_leg_cannot_pass_against_a_reference_draft_that_is_not_the_one_posted(self):
+        self.write(1, fakes.draft(1))
+        [first] = self.take(1).results
+        self.ledger.close(self.ledger.entries[first.item], APPROVED, "RUN2", NOW)
+        rewritten = "A second line the Founder never approved."
+        self.write(1, fakes.draft(1, caption=rewritten))
+        self.write(8, fakes.draft(8, caption=rewritten))
+        [newer] = self.take(8, run="RUN3").results
+        self.assertEqual(newer.status, posts.BLOCKED)
+        self.assertEqual(
+            posts.grouped(newer.verdict.blocks),
+            [
+                f"pair-legs: day 1's Draft is no longer the one `{first.item}` was queued from, so this leg cannot be"
+                " compared with it"
+            ],
+        )
 
     def test_a_draft_must_be_for_the_day_its_file_names(self):
         self.write(3, fakes.draft(4))
@@ -263,7 +332,7 @@ class TakeTest(TakeTestCase):
         self.write(3, fakes.draft(3))
         self.write(1, fakes.draft(1, caption="Join 10,000 people who stopped quitting."))
         plan = self.plan(1, 3)
-        outcome = posts.take(plan, self.areas, self.store, self.ledger, "RUN1", NOW, {}, PRODUCTS)
+        outcome = posts.take(plan, self.areas, self.store, self.ledger, "RUN1", NOW, PRODUCTS)
         relative = posts.record(plan, outcome, self.store, "RUN1", NOW)
         data = json.loads((self.store.root / relative).read_text(encoding="utf-8"))
         days = {day["day"]: day for day in data["days"]}

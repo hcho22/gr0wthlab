@@ -53,7 +53,8 @@ class Code:
         return subprocess.run(
             [git, "--no-optional-locks", "-C", str(self.checkout), *args],
             capture_output=True,
-            text=True,
+            encoding="utf-8",
+            errors="replace",
             env=environment(self.env),
             timeout=TIMEOUT,
         )
@@ -67,7 +68,7 @@ class Code:
             else:
                 try:
                     completed = self.git("cat-file", "blob", f"{self.commit}:{pure}")
-                except (OSError, subprocess.SubprocessError) as error:
+                except (OSError, ValueError, subprocess.SubprocessError) as error:
                     completed = None
                     self.files[path] = f"git could not read it ({error})"
                 if completed is not None:

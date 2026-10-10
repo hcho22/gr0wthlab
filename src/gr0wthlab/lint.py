@@ -21,7 +21,7 @@ NOT_APPLICABLE = "not applicable"
 DOCUMENTATION = ("comment", "notes")
 EMOJI_ABOVE = 0x2100  # the package's own lint treats any character above U+2100 as a non-text symbol
 NUMBER = r"\d[\d,.]*\s*(?:k|m|million|thousand)?\+?"
-QUANTIFIER = r"(?:thousands|millions|hundreds|dozens|countless)\s+of"
+QUOTES = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'})
 NEED_MARKER = re.compile(r"\[NEED:[^\]]*\]", re.IGNORECASE)
 
 # What each key of brand-rules.json makes the lint do. The F1 rule types are listed with the keys they read.
@@ -43,6 +43,7 @@ KNOWN_RULES = {
     "long_sentence_words": "a sentence with more words is flagged",
     "long_sentence_commas": "a sentence with more commas is flagged",
     "invented_proof_terms": "no number or quantity of people, reviews, or results that does not exist",
+    "invented_proof_quantities": "quantity words the invented-proof rule reads before a term, such as thousands of",
     "fake_scarcity": "no scarcity or urgency phrase",
     "lint_allow_phrases": "phrases no word or phrase rule counts",
 }
@@ -51,7 +52,7 @@ NEW_RULE_TYPES = {
     "stock phrases": ("stock_phrases",),
     "capped words per paragraph": ("capped_words", "capped_words_per_paragraph"),
     "long sentences (warning)": ("long_sentence_words", "long_sentence_commas"),
-    "invented proof": ("invented_proof_terms",),
+    "invented proof": ("invented_proof_terms", "invented_proof_quantities"),
     "fake scarcity": ("fake_scarcity",),
     "allowed phrases": ("lint_allow_phrases",),
 }
@@ -94,11 +95,20 @@ class RuleStatus:
     detail: str
 
 
+def plain(text: str) -> str:
+    """Typographic quotes made plain, so a word reads the same however its apostrophe was typed."""
+    return text.translate(QUOTES)
+
+
+def phrase(term: str) -> str:
+    """A term's words as a pattern, spacing free and quotes plain; {n} is any number."""
+    return r"\s+".join(NUMBER if word == "{n}" else re.escape(word) for word in plain(term).split())
+
+
 def words_pattern(term: str, plural: bool = True) -> re.Pattern:
-    """A term as whole words, any case, spacing free, with a plural ending when plural is set; {n} is any number."""
-    parts = [NUMBER if word == "{n}" else re.escape(word) for word in term.split()]
+    """A term as whole words, any case, with a plural ending when plural is set."""
     ending = "(?:s|es)?" if plural else ""
-    return re.compile(r"(?<!\w)" + r"\s+".join(parts) + ending + r"(?!\w)", re.IGNORECASE)
+    return re.compile(r"(?<!\w)" + phrase(term) + ending + r"(?!\w)", re.IGNORECASE)
 
 
 def string_list(data: Mapping, key: str) -> tuple[str, ...]:
@@ -149,6 +159,7 @@ class Rules:
             "stock_phrases",
             "capped_words",
             "invented_proof_terms",
+            "invented_proof_quantities",
             "fake_scarcity",
             "lint_allow_phrases",
         ):
@@ -208,7 +219,7 @@ class Rules:
     def check_one(self, copy: Copy) -> list[Finding]:
         found: list[Finding] = []
         text = copy.text
-        words_text = self.masked(text)
+        words_text = self.masked(plain(text))
 
         def block(rule: str, detail: str) -> None:
             found.append(Finding(rule, copy.field, detail))
@@ -242,7 +253,7 @@ class Rules:
         if self.has("capped_words", "capped_words_per_paragraph"):
             cap = self.numbers["capped_words_per_paragraph"]
             for paragraph in paragraphs(words_text):
-                hits = [term for term in self.lists["capped_words"] if words_pattern(term).search(paragraph)]
+                hits = [term for term in self.lists["capped_words"] for _ in words_pattern(term).finditer(paragraph)]
                 if len(hits) > cap:
                     block(
                         "capped_words", f"{len(hits)} capped words in one paragraph ({', '.join(hits)}); at most {cap}"
@@ -276,10 +287,11 @@ class Rules:
     def invented_proof(self, copy: Copy, text: str) -> list[Finding]:
         """Numbers and quantities of people, reviews, or results: the product has none, so none may be implied."""
         found = []
-        terms = "|".join(re.escape(term) for term in self.lists["invented_proof_terms"])
+        terms = "|".join(phrase(term) for term in self.lists["invented_proof_terms"])
+        amounts = "|".join([NUMBER] + [phrase(term) for term in self.lists.get("invented_proof_quantities", ())])
         if terms:
             near = re.compile(
-                rf"(?<!\w)(?:{NUMBER}|{QUANTIFIER})\s+(?:\w+\s+){{0,2}}(?:{terms})(?:s|es)?(?!\w)", re.IGNORECASE
+                rf"(?<!\w)(?:{amounts})[\s-]+(?:\w+[\s-]+){{0,2}}(?:{terms})(?:s|es)?(?!\w)", re.IGNORECASE
             )
             for match in near.finditer(text):
                 found.append(Finding("invented_proof_terms", copy.field, f"unsourced proof {match.group(0)!r}"))

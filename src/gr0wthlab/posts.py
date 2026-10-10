@@ -5,7 +5,8 @@ The agent writes one Draft per calendar day under workspace/drafts/posts/window-
 the sandbox, checks each against the kit it read from Mandu before the agent started (drafts.evaluate) and queues a
 post item only for a Draft that passes, so a post never reaches the Review Queue any other way. A Draft that fails
 is blocked with every failing rule or checklist line named in the run report and a notice; an open post whose Draft
-no longer passes is withdrawn the same way. A day already approved is never asked again.
+no longer passes is withdrawn the same way. A day already approved is never asked again, and neither is a Draft the
+Founder rejected, until it changes.
 """
 
 from __future__ import annotations
@@ -154,28 +155,29 @@ def kit_config(registry: Mapping) -> tuple[str, Mapping[str, str]] | None:
 
 
 def target_days(window: Window, calendar: Sequence[int], today: date, sitting_day: str) -> tuple[list[int], str]:
-    """The calendar days this run prepares: days 1 to 7 until day 1 is set; then the days in the week after the coming
-    sitting (today, when today is the sitting's weekday), and any day before that week from tomorrow on, which a run
-    that started late or on demand mid-week would otherwise leave unprepared."""
+    """The calendar days this run prepares: days 1 to 7 until the window's first sitting is set; then, with day 1
+    the day after that sitting, the days in the week after the coming sitting (today, when today is the sitting's
+    weekday), and any day before that week from tomorrow on, which a run that started late or on demand mid-week
+    would otherwise leave unprepared."""
     if window.day_1 is None:
         return (
             [number for number in sorted(calendar) if number <= FIRST_BATCH],
-            f"Window {window.number}'s day 1 is not set in config/run.json, so this run prepares days 1 to"
+            f"Window {window.number}'s first sitting is not set in config/run.json, so this run prepares days 1 to"
             f" {FIRST_BATCH} as the first batch, with no posting slot yet.",
         )
-    weekday = (schedule.WEEKDAYS.index(sitting_day.lower()) - 1) % 7
-    sitting = today + timedelta(days=(weekday - today.weekday()) % 7)
+    sitting = today + timedelta(days=(schedule.weekday(sitting_day) - today.weekday()) % 7)
     first, last = sitting + timedelta(days=1), sitting + timedelta(days=7)
     start = today + timedelta(days=1)
     days = [number for number in sorted(calendar) if start <= window.day_1 + timedelta(days=number - 1) <= last]
     tense = "began" if window.day_1 <= today else "begins"
+    began = f"Window {window.number} {tense} on {window.day_1:%A %Y-%m-%d}, the day after its first sitting"
     week = f"the week after the sitting on {sitting:%A %Y-%m-%d} ({first:%Y-%m-%d} to {last:%Y-%m-%d})"
     if start < first:
         week += f", and the days from tomorrow, {start:%Y-%m-%d}, up to that week"
     if not days:
-        return days, f"Window {window.number} {tense} on {window.day_1:%A %Y-%m-%d}; no calendar day falls in {week}."
+        return days, f"{began}; no calendar day falls in {week}."
     span = f"days {days[0]} to {days[-1]}" if len(days) > 1 else f"day {days[0]}"
-    return days, f"Window {window.number} {tense} on {window.day_1:%A %Y-%m-%d}; this run prepares {span}: {week}."
+    return days, f"{began}; this run prepares {span}: {week}."
 
 
 def unchecked(plan: Plan) -> list[str]:
@@ -222,14 +224,15 @@ def read_kit(mandu: Path, roles: Mapping[str, str]) -> tuple[kit.Kit, dict[str, 
             files[role] = (relative, hashlib.sha256(data).hexdigest())
         except (OSError, UnicodeDecodeError, kit.KitError) as error:
             parsed.problems[role] = getattr(error, "strerror", None) or str(error)
-    parsers = {
-        "calendar": ("days", kit.parse_calendar),
-        "angles": ("angles", kit.parse_angles),
-        "pairs": ("pairs", kit.parse_pairs),
-        "platforms": ("platforms", kit.parse_platforms),
-        "checklist": ("checklist", kit.parse_checklist),
-    }
-    for role, (attribute, parser) in parsers.items():
+    parsers = (
+        ("calendar", "days", kit.parse_calendar),
+        ("calendar", "asset_checks", kit.parse_asset_checks),
+        ("angles", "angles", kit.parse_angles),
+        ("pairs", "pairs", kit.parse_pairs),
+        ("platforms", "platforms", kit.parse_platforms),
+        ("checklist", "checklist", kit.parse_checklist),
+    )
+    for role, attribute, parser in parsers:
         if role in texts:
             try:
                 setattr(parsed, attribute, parser(texts[role]))
@@ -347,6 +350,40 @@ def read_draft(areas: Areas, path: Path) -> tuple[PostDraft | None, str]:
     return parse(text, areas.relative(path)), ""
 
 
+def reference_leg(
+    plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas, ledger: Ledger
+) -> tuple[PostDraft | None, str]:
+    """The Draft an A/B leg must match beyond the Hook, or why it cannot be compared with it.
+
+    The leg that already has an open or approved post is the reference, and only the other, newer leg is checked
+    against the Draft that post was queued from. A leg whose own open post came from this very Draft is not checked
+    again, so a deviation in the newer leg never blocks or withdraws the reference.
+    """
+    other = plan.other_leg(day_plan.day)
+    if other is None or (day_plan.open and day_plan.open.get("draft_sha256") == draft.sha256):
+        return None, ""
+    entries = day_entries(ledger, plan.product, plan.window.number, other.day)
+    posted = next((entry for entry in entries if entry["status"] in (OPEN, APPROVED)), None)
+    if posted is None:
+        return None, ""
+    reference = read_draft(areas, plan.draft_path(other.day))[0]
+    if reference is None or reference.sha256 != posted.get("draft_sha256"):
+        return None, (
+            f"day {other.day}'s Draft is no longer the one `{posted['id']}` was queued from, so this leg cannot be"
+            " compared with it"
+        )
+    return reference, ""
+
+
+def check_day(plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas, ledger: Ledger) -> Verdict:
+    """Every check of one day's Draft, as the launcher and check-drafts both run them."""
+    reference, problem = reference_leg(plan, day_plan, draft, areas, ledger)
+    verdict = evaluate(draft, plan.context, reference, day_plan.day.day)
+    if problem:
+        verdict.block("pair-legs", problem)
+    return verdict
+
+
 def take(
     plan: Plan,
     areas: Areas,
@@ -354,7 +391,6 @@ def take(
     ledger: Ledger,
     run_id: str,
     now: datetime,
-    seen: dict[str, str],
     products: Sequence[str],
 ) -> Outcome:
     """Check every Draft of the run's days and queue each that passes; nothing else ever becomes a post item."""
@@ -362,7 +398,7 @@ def take(
     for number, why in plan.skipped:
         outcome.results.append(DayResult(number, NOT_PREPARED, why))
     for day_plan in plan.days:
-        outcome.results.append(take_day(plan, day_plan, areas, store, ledger, run_id, now, seen, products, outcome))
+        outcome.results.append(take_day(plan, day_plan, areas, store, ledger, run_id, now, products, outcome))
     outcome.results.sort(key=lambda result: result.day)
     return outcome
 
@@ -375,7 +411,6 @@ def take_day(
     ledger: Ledger,
     run_id: str,
     now: datetime,
-    seen: dict[str, str],
     products: Sequence[str],
     outcome: Outcome,
 ) -> DayResult:
@@ -392,9 +427,7 @@ def take_day(
         if day_plan.open:
             return DayResult(number, KEPT, "no new Draft; the open item stands", str(day_plan.open["id"]))
         return DayResult(number, MISSING, f"no Draft at `{areas.relative(plan.draft_path(number))}`")
-    other = plan.other_leg(day_plan.day)
-    other_draft = read_draft(areas, plan.draft_path(other.day))[0] if other else None
-    verdict = evaluate(draft, plan.context, other_draft, number)
+    verdict = check_day(plan, day_plan, draft, areas, ledger)
     result = DayResult(number, BLOCKED, "", None, draft.path, draft.sha256, verdict)
     if day_plan.open and unchecked(plan):
         # The open item passed when it was queued; a source that cannot be read now does not withdraw it.
@@ -416,13 +449,10 @@ def take_day(
     if day_plan.open and all(day_plan.open.get(name) == value for name, value in key.items() if value):
         result.status, result.item, result.detail = KEPT, str(day_plan.open["id"]), "its Draft is unchanged and passes"
         return result
-    fingerprint = exchange.item_hash(item)
-    if fingerprint in seen:
-        earlier = ledger.entries.get(seen[fingerprint])
-        result.status, result.item = REPEATED, seen[fingerprint]
-        result.detail = (
-            f"it asks the same as `{seen[fingerprint]}`, which is {earlier['status'] if earlier else 'queued'}"
-        )
+    rejected = next((entry for entry in day_plan.rejected if entry.get("draft_sha256") == draft.sha256), None)
+    if rejected:
+        result.status, result.item = REPEATED, str(rejected["id"])
+        result.detail = "the Founder rejected this Draft, so it is not asked again until it changes"
         return result
     if day_plan.open:
         item = exchange.Item(
@@ -433,7 +463,6 @@ def take_day(
     identifier = ledger.publish(store, item, slug, run_id, now, extra)
     if day_plan.open:
         ledger.close(ledger.entries[str(day_plan.open["id"])], "superseded", run_id, now, superseded_by=identifier)
-    seen[fingerprint] = identifier
     outcome.published.append(identifier)
     result.status, result.item = QUEUED, identifier
     result.detail = f"replaces `{day_plan.open['id']}`" if day_plan.open else ""
@@ -476,9 +505,10 @@ def lint_line(plan: Plan, verdict: Verdict) -> str:
     return line + "."
 
 
-def checklist_lines(verdict: Verdict) -> list[str]:
+def checklist_lines(plan: Plan, verdict: Verdict) -> list[str]:
     """The post's status against every checklist line, short enough to read at a glance: the lines done, the open
-    lines that gate only other assets, and each open line about a claim this post does not use."""
+    lines that gate only other assets, each open line about a claim this post does not use, and the calendar's own
+    lines for every asset, which hold no state a check could read and so are the Founder's to judge."""
     done = [str(line.item.line) for line in verdict.checklist if line.status == DONE]
     waiting = [line for line in verdict.checklist if line.status not in (DONE, BLOCKS)]
     others = [str(line.item.line) for line in waiting if not line.item.claim]
@@ -495,6 +525,11 @@ def checklist_lines(verdict: Verdict) -> list[str]:
                 f"  Open, gating only assets that use the {line.item.claim!r} claim, which this post does not:"
                 f" line {line.item.line}."
             )
+    checks = plan.context.kit.asset_checks
+    if checks:
+        calendar = plan.context.paths.get("calendar", "the calendar")
+        lines.append(f"- The kit's checklist for every asset (`{calendar}`), each line yours to judge on this post:")
+        lines += [f"  Line {check.line}: {short(check.text, 240)}" for check in checks]
     return lines
 
 
@@ -507,7 +542,7 @@ def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict) ->
     slot = (
         f"Slot: {datetime.fromisoformat(day_plan.slot):%A %Y-%m-%d %H:%M} ({day_plan.slot[-6:]})."
         if day_plan.slot
-        else "Slot: not set yet; the window's day 1 and its posting slot are the Founder's call."
+        else "Slot: not set yet; the window's first sitting and its posting slot are the Founder's call."
     )
     body = [
         f"Day {day.day} of {plan.product} window {plan.window.number}: Angle {angle.id} ({angle.name}){leg}."
@@ -550,7 +585,7 @@ def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict) ->
     commit = plan.code.short
     body += ["", f"**Claims, checked against {plan.product} `{plan.code.branch}` at `{commit}`**", ""]
     body += [f"- {claim.text} `{claim.location}` shows `{claim.excerpt}`" for claim in draft.claims]
-    body += ["", "**Checks**", "", lint_line(plan, verdict)] + checklist_lines(verdict)
+    body += ["", "**Checks**", "", lint_line(plan, verdict)] + checklist_lines(plan, verdict)
     touches = [
         f"- The day {day.day} post on {', '.join(plan.context.kit.platforms)},"
         f" {plan.product} window {plan.window.number}",
@@ -607,6 +642,7 @@ def record(plan: Plan, outcome: Outcome, store: Store, run_id: str, now: datetim
         "product": plan.product,
         "window": {
             "number": plan.window.number,
+            "first_sitting": plan.window.first_sitting.isoformat() if plan.window.first_sitting else None,
             "day_1": plan.window.day_1.isoformat() if plan.window.day_1 else None,
             "slot": plan.window.slot.strftime("%H:%M") if plan.window.slot else None,
         },

@@ -52,12 +52,22 @@ class CodeTest(unittest.TestCase):
             ("Engine/ConsistencyScore.swift:7", "max"): "at least 4 characters",
             ("Engine/Missing.swift:1", "struct"): "there is no file Engine/Missing.swift at",
             ("../outside.swift:1", "struct"): "relative to the repository root",
+            ("Engine/\x00.swift:1", "struct"): "git could not read it",
             ("Engine/ConsistencyScore.swift:90", "struct"): "has 9 lines at",
             ("Engine/ConsistencyScore.swift:2-3", "max(floorValue"): "do not contain 'max(floorValue'",
         }
         for (location, excerpt), why in cases.items():
             with self.subTest(location=location):
                 self.assertIn(why, code.verify(location, excerpt))
+
+    def test_a_file_that_is_not_text_gives_a_reason_and_never_an_error(self):
+        (self.checkout / "App/Icon.png").write_bytes(b"\x89PNG\r\n\xff\xfe\x00s\x00t\x00r\x00u\x00c\x00t\n")
+        (self.checkout / "App/Notes.swift").write_bytes("// caf\u00e9 \u2019 struct Notes {}\n".encode("utf-8"))
+        fakes.git(self.checkout, "add", "--all", env=self.env)
+        fakes.git(self.checkout, "commit", "--quiet", "-m", "assets", env=self.env)
+        code = codebase.open_code("RepToday", self.checkout, "main", self.env)
+        self.assertIn("do not contain 'struct Icon'", code.verify("App/Icon.png:1-2", "struct Icon"))
+        self.assertIsNone(code.verify("App/Notes.swift:1", "caf\u00e9 \u2019 struct Notes {}"))
 
     def test_a_checkout_that_cannot_be_read_blocks_every_claim(self):
         missing = codebase.open_code("RepToday", self.root / "absent", "main", self.env)

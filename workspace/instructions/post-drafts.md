@@ -64,6 +64,7 @@ Leave alone: a single absence next to the point it supports, a list of three whe
 
 ## Pair legs and re-drafts
 
-- For an A/B leg whose other leg already has a Draft, copy that Draft and change only the Hook's lines: the hook beat's on-screen text, the first caption line, and the YouTube title.
+- For an A/B leg whose other leg already has an open or approved post, copy that leg's Draft and change only the Hook's lines: the hook beat's on-screen text, the first caption line, and the YouTube title.
+  The hook beat may be re-cut when the pair says so; every later beat, the rest of each caption, the hashtags, and the alt text stay word for word.
 - A day with an open item keeps it; rewrite its Draft only when the package or the Founder's decision gives a reason, and say why in your summary.
 - A day the Founder approved is never drafted again.

@@ -1,7 +1,7 @@
 {
   "adapted_from": "the evals.json shape of github.com/coreyhaines31/marketingskills skills/*/evals/evals.json at commit 1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff (MIT; see THIRD_PARTY_NOTICES.md)",
   "skill_name": "post-drafts",
-  "description": "The post-Draft workflow's example set (US-ME08, F5), in the marketingskills evals.json shape: each example's prompt, the output expected, its assertions, and its files. A deterministic assertion is checked by the unit tests (src/tests/test_examples.py) against the synthetic kit in files/mandu and the code in files/code; a judged assertion waits for US-ME16's re-run on every Instructions change.",
+  "description": "The post-Draft workflow's example set (US-ME08, F5), in the marketingskills evals.json shape: each example's prompt, the output expected, its assertions, and its files. A deterministic assertion is checked by the unit tests (src/tests/test_examples.py) against the synthetic kit in files/mandu and the code in files/code; a judged assertion waits for US-ME16's re-run on every Instructions change. An example's first file is its candidate Draft; a second file is the Draft of its A/B pair's reference leg.",
   "kit": "files/mandu",
   "code": "files/code",
   "assertion_kinds": {
@@ -124,8 +124,8 @@
     },
     {
       "id": 12,
-      "prompt": "Prepare the Draft for day 8 (P01 / AB-1 leg B) after day 1's Draft, changing only the Hook; the candidate below also reworded the second caption line.",
-      "expected_output": "The launcher blocks the Draft: A/B legs differ only in the Hook.",
+      "prompt": "Prepare the Draft for day 8 (P01 / AB-1 leg B), whose other leg, day 1, already has an open post from the second file; the candidate below also reworded the second caption line.",
+      "expected_output": "The launcher blocks day 8's Draft and names the field that differs: an A/B leg matches its reference leg in everything but the Hook. Day 1's open post stands.",
       "assertions": [
         {"kind": "deterministic", "check": "blocked_by", "rule": "pair-legs"}
       ],
@@ -151,15 +151,6 @@
     },
     {
       "id": 15,
-      "prompt": "Prepare the Draft for day 3; the candidate below has a first-person on-screen line in a screen-record-only Angle.",
-      "expected_output": "The launcher blocks the Draft: a first-person line needs the founder on camera, which the Angle's format does not have.",
-      "assertions": [
-        {"kind": "deterministic", "check": "blocked_by", "rule": "founder-on-camera"}
-      ],
-      "files": ["files/drafts/day-03-founder.md"]
-    },
-    {
-      "id": 16,
       "prompt": "Prepare the Draft for day 3; the candidate below runs one caption sentence long.",
       "expected_output": "The Draft passes, with long-sentence warnings shown to the Founder; a warning never blocks.",
       "assertions": [

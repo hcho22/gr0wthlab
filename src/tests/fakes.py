@@ -4,19 +4,20 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 AREAS = ("evidence", "drafts", "review-queue", "weekly-reads", "run-reports", "instructions")
 EXAMPLES = REPO / "src" / "examples" / "post-drafts"
 # A window whose days all fall far in the future, so a run that is not about post Drafts has none due.
-QUIET_WINDOW = {"number": 1, "day_1": "2099-01-05", "slot": "19:00"}
+QUIET_WINDOW = {"number": 1, "first_sitting": "2099-01-04", "slot": "19:00"}
 
 # Stands in for codex. `codex sandbox` answers the preflight as an enforcing sandbox would, without running anything;
 # `codex exec` plays the agent from behavior.json beside it, writing straight into the workspace.
@@ -295,12 +296,17 @@ def draft_path(day: int, window: int = 1) -> str:
     return f"drafts/posts/window-{window}/day-{day:02d}.md"
 
 
-def window_due(last: int) -> dict:
-    """A window in which the run at SUNDAY_RUN prepares days 1 to last (at most 7): its day last falls on the last
-    date of the week after that Sunday's sitting."""
-    assert 1 <= last <= 7
-    day_1 = SUNDAY_RUN.astimezone().date() + timedelta(days=7 - (last - 1))
-    return {"number": 1, "day_1": day_1.isoformat(), "slot": "19:00"}
+def window_from(first_sitting: date) -> dict:
+    """A window whose first sitting is that Sunday, so its day 1 is the Monday after, with a 19:00 slot."""
+    return {"number": 1, "first_sitting": first_sitting.isoformat(), "slot": "19:00"}
+
+
+def keep_days(mandu: Path, *days: int) -> None:
+    """Cut the synthetic calendar in a throwaway Mandu down to the given days, for a run that needs few due."""
+    path = mandu / "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md"
+    rows = [(re.match(r"\| (\d+) \|", line), line) for line in path.read_text(encoding="utf-8").splitlines()]
+    kept = [line for row, line in rows if row is None or int(row.group(1)) in days]
+    path.write_text("\n".join(kept) + "\n", encoding="utf-8")
 
 
 def kit_context(code_checkout: Path, env: dict[str, str], mandu: Path | None = None):

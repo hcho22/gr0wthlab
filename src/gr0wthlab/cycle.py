@@ -567,7 +567,7 @@ class Cycle:
         """Queue each Draft that passes, record every check, and file the brand-rules proposal unless it ever was."""
         if state.posts is not None:
             try:
-                state.post_outcome = posts.take(state.posts, areas, self.store, ledger, run_id, now, seen, products)
+                state.post_outcome = posts.take(state.posts, areas, self.store, ledger, run_id, now, products)
                 state.published += state.post_outcome.published
                 posts.record(state.posts, state.post_outcome, self.store, run_id, now)
             except (OSError, ConfigError) as error:

@@ -63,18 +63,21 @@ launchctl print gui/$(id -u)/gr0wthlab.weekly-run | grep -E 'state|path'
 
 The schedule lives only in `config/run.json`: the LaunchAgent takes its time from there, and each run reads the same entry to tell whether it started late and when the next run is due (`next_run` in the Review Queue).
 To change the sitting day or time, change `schedule` in `config/run.json` through a reviewed pull request, then reinstall the LaunchAgent as above once the change has reached the production clone.
+A window's `first_sitting`, once set, must fall on the sitting's day, so a change of day changes it in the same pull request; a run refuses to start otherwise.
 If the Mac is asleep at that time, launchd starts the run when it wakes, and the run report says how late it started.
 
 ## Set the 14-day window
 
-Day 1 of the window and its one fixed posting slot are the Founder's call, set in `window` in [`config/run.json`](../config/run.json) through a reviewed pull request and never inferred:
+Day 1 of the window follows from the Founder's sitting: it is the day after the sitting that approves the window's first batch.
+Which sitting that is, and the window's one fixed posting slot, are the Founder's call, set in `window` in [`config/run.json`](../config/run.json) through a reviewed pull request and never inferred, since nothing posts before the Waitlist is live:
 
 ```json
-"window": {"number": 1, "day_1": "2026-10-19", "slot": "19:00"}
+"window": {"number": 1, "first_sitting": "2026-10-18", "slot": "19:00"}
 ```
 
-`slot` is the Mac's local time.
-Until `day_1` is set, every run prepares calendar days 1 to 7 as the first batch, with no slot on the posts.
+`first_sitting` is that sitting's date, which must fall on the schedule's day (a Sunday today); day 1 is then Monday 2026-10-19, and every calendar day follows from it.
+`slot` is the Mac's local time; the kit's posting-slot rule in the calendar names no time, so it is set here.
+Until `first_sitting` is set, every run prepares calendar days 1 to 7 as the first batch, with no slot on the posts.
 Once it is set, each run prepares the calendar days from the next day through the end of the week after the coming sitting (on the sitting's own day, exactly that week), skipping any day already approved, and each post's slot is its date at `slot`.
 A changed slot reaches an open post at the next run, which replaces the post with one that carries it.
 

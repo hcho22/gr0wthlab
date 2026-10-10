@@ -21,6 +21,11 @@ class ScheduleError(ValueError):
     pass
 
 
+def weekday(day: str) -> int:
+    """A day's number as datetime counts weekdays, Monday 0."""
+    return (WEEKDAYS.index(day.lower()) - 1) % 7
+
+
 def parse_time(text: str) -> dict[str, int]:
     match = re.fullmatch(r"([01]?\d|2[0-3]):([0-5]\d)", text)
     if not match:

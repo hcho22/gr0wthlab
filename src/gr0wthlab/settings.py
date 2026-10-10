@@ -7,7 +7,7 @@ import os
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
-from datetime import date, time
+from datetime import date, time, timedelta
 from pathlib import Path, PurePosixPath
 
 from . import schedule
@@ -32,11 +32,16 @@ class Records:
 
 @dataclass(frozen=True)
 class Window:
-    """The 14-day window: its number, its day 1, and its one fixed posting slot, each set only by the Founder."""
+    """The 14-day window: its number, the Founder's sitting that approves its first batch, and its one fixed posting
+    slot, each set only by the Founder. Day 1 follows from that sitting: it is the next day."""
 
     number: int
-    day_1: date | None
+    first_sitting: date | None
     slot: time | None
+
+    @property
+    def day_1(self) -> date | None:
+        return self.first_sitting + timedelta(days=1) if self.first_sitting else None
 
 
 @dataclass(frozen=True)
@@ -75,28 +80,32 @@ def instruction_path(repo_root: Path, path: Path) -> Path:
     return resolved
 
 
-def load_window(data: object) -> Window:
-    """config/run.json's window; day 1 and the slot stay unset until the Founder sets them, and are never inferred."""
+def load_window(data: object, sitting_day: str) -> Window:
+    """config/run.json's window; its first sitting, on the schedule's day, and its slot stay unset until the Founder
+    sets them, and are never inferred."""
     if not isinstance(data, dict):
         raise ConfigError(f"{RUN_CONFIG}: window must be an object")
     number = data.get("number")
     if isinstance(number, bool) or not isinstance(number, int) or number < 1:
         raise ConfigError(f"{RUN_CONFIG}: window.number must be a whole number from 1")
-    day_1 = data.get("day_1")
-    if day_1 is not None:
+    first = data.get("first_sitting")
+    if first is not None:
         try:
-            day_1 = date.fromisoformat(day_1) if isinstance(day_1, str) and len(day_1) == 10 else None
+            first = date.fromisoformat(first) if isinstance(first, str) and len(first) == 10 else None
         except ValueError:
-            day_1 = None
-        if day_1 is None:
-            raise ConfigError(f"{RUN_CONFIG}: window.day_1 must be null or a YYYY-MM-DD date")
+            first = None
+        if first is None or first.weekday() != schedule.weekday(sitting_day):
+            raise ConfigError(
+                f"{RUN_CONFIG}: window.first_sitting must be null or the YYYY-MM-DD date of a sitting, which falls on"
+                f" a {sitting_day.capitalize()}"
+            )
     slot = data.get("slot")
     if slot is not None:
         match = re.fullmatch(r"([01]\d|2[0-3]):([0-5]\d)", slot) if isinstance(slot, str) else None
         if not match:
             raise ConfigError(f"{RUN_CONFIG}: window.slot must be null or HH:MM, the Mac's local time")
         slot = time(int(match.group(1)), int(match.group(2)))
-    return Window(number, day_1, slot)
+    return Window(number, first, slot)
 
 
 def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
@@ -120,7 +129,7 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
         outputs = dict(data["outputs"])
         not_connected = tuple(data.get("sources_not_connected") or ())
         instruction = instruction_path(repo_root, Path(data["instruction"]))
-        window = load_window(data["window"])
+        window = load_window(data["window"], weekly[0])
     except (KeyError, TypeError, ValueError, schedule.ScheduleError) as error:
         raise ConfigError(f"{RUN_CONFIG} is incomplete or malformed: {error}") from error
     for source in not_connected:

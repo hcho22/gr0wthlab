@@ -31,6 +31,13 @@ class CalendarTest(unittest.TestCase):
         self.assertEqual((days[2].angle, days[2].pair, days[2].leg), ("P02", None, None))
         self.assertEqual(days[3].primary, "YouTube Shorts")
 
+    def test_the_calendar_s_own_checklist_for_every_asset_is_read_line_by_line(self):
+        checks = kit.parse_asset_checks(read("05-social-pmf/cadence-14-day.md"))
+        self.assertEqual(
+            [(check.line, check.text) for check in checks], [(26, "Founder is on camera for every first-person line.")]
+        )
+        self.assertEqual(kit.parse_asset_checks("## The calendar\n\n- Not a checklist line.\n"), ())
+
     def test_a_day_whose_angle_is_decided_later_has_none(self):
         flex = kit.parse_calendar(read("05-social-pmf/cadence-14-day.md"))[14]
         self.assertIsNone(flex.angle)
@@ -46,6 +53,7 @@ class CalendarTest(unittest.TestCase):
         for text, why in (
             ("No table here.", "no table with the columns"),
             ("| Day | Asset | Angle | Platform |\n|---|---|---|---|\n| one | x | P01 | TikTok |\n", "is not a number"),
+            ("| Day | Asset | Angle | Platform |\n|---|---|---|---|\n| \u00b2 | x | P01 | A |\n", "is not a number"),
             ("| Day | Asset | Angle | Platform |\n|---|---|---|---|\n| 1 | x | P01 |\n", "has 3 cells"),
             ("| Day | Asset | Angle | Platform |\n|---|---|---|---|\n", "has no days"),
         ):

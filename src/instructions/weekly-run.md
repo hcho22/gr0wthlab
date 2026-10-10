@@ -149,9 +149,11 @@ leg: A
 - Leave out `pair` and `leg` for a day that is not an A/B pair leg.
 - Number the beats from 1 with times that follow on; only beat 1 is the hook beat, starting at 0s.
 - Each test platform the brief names gets one `##` section with exactly the `###` fields the brief lists for it; both carry identical content.
-- An A/B leg differs from its other leg only in the Hook: when the other leg's Draft exists, copy it and change only the Hook's lines.
+- An A/B leg differs from its other leg only in the Hook: when the other leg already has an open or approved post, copy its Draft and change only the Hook's lines and, if the opening is re-cut, the hook beat.
+  The launcher checks the newer leg against that Draft field by field and blocks it on any other difference; it never changes the leg already posted.
 - Give each behavioral claim (anything the video or copy says the app does) its own item under Claims, with the lines of code at the brief's commit that support it; cut a claim no code supports.
 - Rewrite an open day's Draft only to change it for a reason, such as a package change or the Founder's decision; an unchanged Draft keeps its item.
+- A Draft the Founder rejected is not asked again until it changes: rewrite it to answer the reason the brief gives.
 
 ## Rules
 

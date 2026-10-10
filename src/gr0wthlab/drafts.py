@@ -18,19 +18,17 @@ from dataclasses import dataclass, field
 
 from .codebase import Code
 from .kit import Angle, ChecklistItem, FrozenHook, Kit, all_hooks, frozen_hook
-from .lint import Copy, Finding, Platform, Rules, check_platform, hashtags
+from .lint import Copy, Finding, Platform, Rules, check_platform, hashtags, plain
 
 FRONT_KEYS = ("draft", "product", "window", "day", "angle", "pair", "leg")
 BEAT_HEADING = re.compile(r"Beat (\d+)( \(hook\))?: (\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)s")
 BEAT_LINES = {"Visual action": "visual", "Spoken line": "spoken", "On-screen text": "on_screen"}
 CLAIM_LINES = ("Claim", "Code", "Shows")
-FIRST_PERSON = re.compile(r"(?<![\w'’])I(?![\w])|(?i:(?<![\w'’])(?:me|my|mine|myself)(?![\w]))")
 UNITS = (
     (r"milliseconds?|ms|msecs?", r"(?:ms|msecs?|milliseconds?)"),
     (r"seconds?|secs?", r"(?:s|secs?|seconds?)"),
     (r"minutes?|mins?", r"(?:mins?|minutes?)"),
 )
-HOOK_SECONDS = 3.0  # the Hook is the first 3 seconds of on-screen text plus the first caption line (the A/B pairs)
 DONE = "done"
 OPEN = "open"
 BLOCKS = "blocks"
@@ -38,8 +36,7 @@ BLOCKS = "blocks"
 
 def norm(text: str) -> str:
     """Text compared as written: typographic quotes made plain and spacing collapsed, case kept."""
-    text = text.replace("’", "'").replace("‘", "'").replace("“", '"').replace("”", '"')
-    return " ".join(text.split())
+    return " ".join(plain(text).split())
 
 
 def none(text: str) -> bool:
@@ -78,7 +75,7 @@ class PostDraft:
 
     def number(self, key: str) -> int | None:
         value = self.fields.get(key, "")
-        return int(value) if value.isdigit() else None
+        return int(value) if re.fullmatch(r"[0-9]+", value) else None
 
     @property
     def day(self) -> int | None:
@@ -327,11 +324,12 @@ def checklist_status(draft: PostDraft, context: Context, angle: Angle | None) ->
 
 
 def evaluate(
-    draft: PostDraft, context: Context, other_leg: PostDraft | None = None, file_day: int | None = None
+    draft: PostDraft, context: Context, reference: PostDraft | None = None, file_day: int | None = None
 ) -> Verdict:
     """Every deterministic check of one Draft; the Draft is offered for approval only when nothing blocks it.
 
-    file_day is the day its file name gives, which its front matter must name too.
+    reference is the Draft of its A/B pair's other leg, when that leg is the one this Draft must match beyond the
+    Hook; file_day is the day its file name gives, which its front matter must name too.
     """
     verdict = Verdict()
     kit = context.kit
@@ -366,10 +364,8 @@ def evaluate(
     check_isolation(draft, kit, verdict)
     check_beats(draft, verdict)
     check_platforms(draft, context, verdict)
-    if other_leg is not None and not other_leg.problems and verdict.hook is not None:
-        check_pair(draft, other_leg, verdict)
-    if verdict.angle is not None:
-        check_founder(draft, verdict.angle, context, verdict)
+    if reference is not None and verdict.hook is not None:
+        check_pair(draft, reference, context, verdict)
     if context.rules is not None:
         verdict.add(context.rules.check(draft.copies()))
         check_pain(verdict.angle, context, verdict)
@@ -469,48 +465,36 @@ def check_platforms(draft: PostDraft, context: Context, verdict: Verdict) -> Non
             )
 
 
-def check_pair(draft: PostDraft, other: PostDraft, verdict: Verdict) -> None:
-    """An A/B leg differs from its other leg only in the Hook: the same captions after the first line and the same
-    hashtags; the on-screen text after the first 3 seconds should match too, which only warns, since a pair may
-    re-cut its opening order."""
+def beyond_hook(draft: PostDraft, context: Context) -> dict[str, object]:
+    """Everything in a Draft outside its Hook, by field: each beat after the hook beat, and each platform's text
+    after its first line, its hashtags, and its alt text. The hook beat and a title are the Hook's own."""
+    parts: dict[str, object] = {}
+    for beat in draft.beats[1:]:
+        for label, key in BEAT_LINES.items():
+            parts[f"beat {beat.number} {label.lower()}"] = norm(getattr(beat, key))
     for platform, values in draft.platforms.items():
-        theirs = other.platforms.get(platform, {})
-        for name, text in values.items():
-            if name == "Alt text" or name not in theirs:
+        facts = context.platforms.get(platform)
+        for limit in facts.fields if facts else ():
+            text = values.get(limit.name, "")
+            if limit.title:
                 continue
-            mine_rest = [norm(line) for line in text.splitlines()[1:]]
-            their_rest = [norm(line) for line in theirs[name].splitlines()[1:]]
-            if name == "Hashtags":
-                mine_rest, their_rest = hashtags(text), hashtags(theirs[name])
-            if mine_rest != their_rest:
-                verdict.block(
-                    "pair-legs",
-                    f"differs from day {other.day}'s leg beyond the Hook (`{other.path}`)",
-                    f"{platform} {name.lower()}",
-                )
-    after = [norm(beat.on_screen) for beat in draft.beats if beat.start >= HOOK_SECONDS]
-    theirs = [norm(beat.on_screen) for beat in other.beats if beat.start >= HOOK_SECONDS]
-    if after != theirs:
-        verdict.warnings.append(
-            Finding(
-                "pair-legs", "beats", f"on-screen text after the first 3 seconds differs from day {other.day}'s", False
+            if limit.hashtags:
+                parts[f"{platform} {limit.name.lower()}"] = hashtags(text)
+            elif limit.body:
+                parts[f"{platform} {limit.name.lower()}"] = [norm(line) for line in text.splitlines()[1:]]
+            else:
+                parts[f"{platform} {limit.name.lower()}"] = norm(text)
+    return parts
+
+
+def check_pair(draft: PostDraft, reference: PostDraft, context: Context, verdict: Verdict) -> None:
+    """An A/B leg differs from its reference leg only in the Hook, so every field outside the Hook matches."""
+    mine, theirs = beyond_hook(draft, context), beyond_hook(reference, context)
+    for where in list(mine) + [key for key in theirs if key not in mine]:
+        if mine.get(where) != theirs.get(where):
+            verdict.block(
+                "pair-legs", f"differs from day {reference.day}'s leg beyond the Hook (`{reference.path}`)", where
             )
-        )
-
-
-def check_founder(draft: PostDraft, angle: Angle, context: Context, verdict: Verdict) -> None:
-    """A first-person line in the video needs the founder on camera, which the Angle's format must name."""
-    if "founder" in angle.format.casefold():
-        return
-    for beat in draft.beats:
-        for text, label in ((beat.spoken, "spoken line"), (beat.on_screen, "on-screen text")):
-            if not none(text) and FIRST_PERSON.search(text):
-                verdict.block(
-                    "founder-on-camera",
-                    f"a first-person line, but Angle {angle.id}'s format has no founder on camera"
-                    f" ({context.paths.get('angles', 'the Angle bank')} line {angle.line})",
-                    f"beat {beat.number} {label}",
-                )
 
 
 def check_pain(angle: Angle | None, context: Context, verdict: Verdict) -> None:
@@ -522,8 +506,11 @@ def check_pain(angle: Angle | None, context: Context, verdict: Verdict) -> None:
 
 
 def check_competitors(draft: PostDraft, kit: Kit, context: Context, verdict: Verdict) -> None:
+    """No field names a competitor, a beat's visual action included. A name is matched as the research writes it,
+    case kept, since some names are common words; the Founder reads every post."""
     research = context.paths.get("competitors", "the research")
-    for copy in draft.copies():
+    visuals = [Copy(f"beat {beat.number} visual action", beat.visual) for beat in draft.beats]
+    for copy in draft.copies() + visuals:
         tags = copy.field.endswith(" hashtags")
         for competitor in kit.competitors:
             if tags:

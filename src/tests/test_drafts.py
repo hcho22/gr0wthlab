@@ -24,8 +24,8 @@ class DraftTestCase(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def check(self, text, other=None):
-        return drafts.evaluate(drafts.parse(text, "drafts/posts/window-1/day.md"), self.context, other)
+    def check(self, text, reference=None):
+        return drafts.evaluate(drafts.parse(text, "drafts/posts/window-1/day.md"), self.context, reference)
 
 
 class FormatTest(DraftTestCase):
@@ -45,6 +45,7 @@ class FormatTest(DraftTestCase):
         cases = {
             clean.replace("draft: post\n", ""): "front matter needs draft: post",
             clean.replace("window: 1\n", "window: one\n"): "window must be a whole number",
+            clean.replace("day: 3\n", "day: \u00b3\n"): "day must be a whole number",
             clean.replace("leg: A\n", ""): "a pair leg names both pair and leg",
             clean.replace("### Beat 1 (hook): 0-3s", "### Beat 1: 0-3s"): "beat 1 is the hook beat",
             clean.replace("### Beat 2: 3-9s", "### Beat 2: 1-9s"): "beat 2's time must follow beat 1's",
@@ -95,11 +96,50 @@ class EvaluateTest(DraftTestCase):
         missing = clean.split("## YouTube Shorts")[0] + "## Claims" + clean.split("## Claims")[1]
         self.assertIn("platforms", rules_of(self.check(missing)))
 
-    def test_a_leg_matches_its_other_leg_beyond_the_hook(self):
-        day_1 = drafts.parse(fakes.draft(1), "day-01.md")
-        self.assertTrue(self.check(fakes.draft(8), other=day_1).passed)
-        changed = drafts.parse(fakes.draft(1, caption="A different second line."), "day-01.md")
-        self.assertEqual(rules_of(self.check(fakes.draft(8), other=changed)), ["pair-legs"])
+    def test_a_leg_matches_its_reference_leg_in_every_field_beyond_the_hook(self):
+        reference = drafts.parse(fakes.draft(1), "day-01.md")
+        clean = fakes.draft(8)
+        self.assertTrue(self.check(clean, reference).passed)
+        recut = clean.replace("The history view with yesterday unmarked", "A cold open on the home screen")
+        self.assertTrue(self.check(recut, reference).passed)  # the hook beat is the Hook's own
+        cases = (
+            (
+                "This is the history view after three missed days this month.",
+                "A different second line.",
+                ("TikTok caption", "YouTube Shorts description"),
+            ),
+            ("#buildinpublic", "#fitness", ("TikTok hashtags", "YouTube Shorts hashtags")),
+            (
+                "Screen recording of a workout app's history view",
+                "A recording of the history view",
+                ("TikTok alt text", "YouTube Shorts alt text"),
+            ),
+            ("Three gaps this month. Still climbing.", "Three gaps. Still climbing.", ("beat 2 on-screen text",)),
+            (
+                "- Spoken line: none\n- On-screen text: Real phone",
+                "- Spoken line: Start here.\n- On-screen text: Real phone",
+                ("beat 3 spoken line",),
+            ),
+            ("Open today's session and tap Start.", "Open today's session.", ("beat 3 visual action",)),
+        )
+        for old, new, fields in cases:
+            with self.subTest(fields=fields):
+                verdict = self.check(clean.replace(old, new), reference)
+                self.assertEqual(rules_of(verdict), ["pair-legs"])
+                self.assertEqual(tuple(finding.field for finding in verdict.blocks), fields)
+        shorter = clean.split("### Beat 3")[0] + "## TikTok" + clean.split("## TikTok")[1]
+        self.assertEqual(
+            [finding.field for finding in self.check(shorter, reference).blocks],
+            ["beat 3 visual action", "beat 3 spoken line", "beat 3 on-screen text"],
+        )
+
+    def test_no_field_names_a_competitor_and_a_visual_action_is_a_field(self):
+        shown = fakes.draft(3).replace("Open today's session and tap Start.", "IronFit's history view, then ours.")
+        verdict = self.check(shown)
+        self.assertEqual(rules_of(verdict), ["competitor-name"])
+        self.assertEqual([finding.field for finding in verdict.blocks], ["beat 3 visual action"])
+        tagged = fakes.draft(3).replace("#buildinpublic", "#ironfit")
+        self.assertEqual(rules_of(self.check(tagged)), ["competitor-name"])
 
     def test_the_hook_beat_s_channels_should_not_repeat_each_other(self):
         text = fakes.draft(2).replace(

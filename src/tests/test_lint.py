@@ -118,6 +118,48 @@ class NewRuleTypesTest(unittest.TestCase):
                 self.assertIn(("invented_proof_terms", True), rules_hit(rules, text))
         self.assertEqual(rules_hit(rules, "Five minutes counts. 5 to 60 minutes."), [])
 
+    def test_a_capped_word_counts_every_time_it_is_used(self):
+        rules = full_rules()
+        self.assertEqual(rules_hit(rules, "It just works."), [])
+        [finding] = rules.check([lint.Copy("TikTok caption", "It just works. You just open it. Just start.")])
+        self.assertEqual(
+            (finding.rule, finding.detail),
+            ("capped_words", "3 capped words in one paragraph (just, just, just); at most 1"),
+        )
+
+    def test_a_number_joined_to_its_term_by_a_hyphen_is_invented_proof(self):
+        rules = full_rules()
+        for text in ("A 4.8-star rating.", "A 10k-user beta.", "Countless reviews."):
+            with self.subTest(text=text):
+                self.assertEqual(rules_hit(rules, text), [("invented_proof_terms", True)])
+
+    def test_the_quantity_words_come_from_brand_rules_and_wait_for_them(self):
+        data = json.loads(KIT_RULES.read_text(encoding="utf-8"))
+        del data["invented_proof_quantities"]
+        rules = lint.Rules(data)
+        self.assertEqual(rules.pending(), ["invented proof"])
+        self.assertEqual(rules_hit(rules, "Thousands of reviews agree."), [])
+        self.assertEqual(rules_hit(rules, "Join 10,000 users."), [("invented_proof_terms", True)])
+        rules = lint.Rules(dict(data, invented_proof_quantities=["a wave of"]))
+        self.assertEqual(rules_hit(rules, "A wave of reviews."), [("invented_proof_terms", True)])
+
+    def test_a_typographic_apostrophe_reads_as_a_plain_one_in_the_copy_and_in_the_rules(self):
+        data = json.loads(KIT_RULES.read_text(encoding="utf-8"))
+        rules = lint.Rules(
+            dict(
+                data,
+                fake_scarcity=["don't miss out"],
+                stock_phrases=["here\u2019s the thing"],
+                banned_words_in_hook=["can't stop"],
+                lint_allow_phrases=["it\u2019s simply there"],
+            )
+        )
+        self.assertEqual(rules_hit(rules, "Don\u2019t miss out."), [("fake_scarcity", True)])
+        self.assertEqual(rules_hit(rules, "Here's the thing."), [("stock_phrases", True)])
+        self.assertEqual(rules_hit(rules, "Here\u2019s the thing."), [("stock_phrases", True)])
+        self.assertEqual(rules_hit(rules, "You can\u2019t stop."), [("banned_words_in_hook", True)])
+        self.assertEqual(rules_hit(rules, "It's simply there, and really."), [])
+
     def test_a_need_marker_blocks_since_a_draft_never_fills_in_proof(self):
         self.assertIn(("need-marker", True), rules_hit(lint.Rules(HOOK_RULES), "Used by [NEED: source] people."))
 

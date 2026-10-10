@@ -72,7 +72,7 @@ The Draft or proposal itself.
 - Touches says which posts, messages, or package files change; Evidence lists what the item rests on, each line with its source as a link or a path.
 - `product` names the Product, when the item is about one.
 - A post also has `window` and `day`: the number of the 14-day window and the calendar day it posts on, such as `window: 1` and `day: 3`.
-  It has `slot`, its publishing time with its UTC offset, such as `2026-10-14T19:00-07:00`, once the Founder has set the window's day 1 and its posting slot; until then it has no slot, and its `## Draft` says so.
+  It has `slot`, its publishing time with its UTC offset, such as `2026-10-14T19:00-07:00`, once the Founder has set the window's first sitting, which its day 1 follows, and its posting slot; until then it has no slot, and its `## Draft` says so.
   A version 2 post always had a slot and no window or day.
 - `supersedes` names an earlier item this one replaces; the earlier one has left `open` and is never presented again.
 
@@ -87,7 +87,7 @@ The Draft or proposal itself.
 
 A notice is informational, such as a failed source or a change to the Marketing Engineer's Instructions; acknowledging it records `approve`.
 
-A post's `## Draft` is everything the Founder needs to judge it in under a minute: the day, its Angle and pair leg, the primary platform, the slot or that none is set yet, and whether anything can be published yet (nothing can until the Waitlist is live); the frozen Hook; the video beat by beat; each platform's text, hashtags, and alt text; each behavioral claim with the code that supports it; and the checks it passed, with any warnings and its status against the pre-publication checklist.
+A post's `## Draft` is everything the Founder needs to judge it in under a minute: the day, its Angle and pair leg, the primary platform, the slot or that none is set yet, and whether anything can be published yet (nothing can until the Waitlist is live); the frozen Hook; the video beat by beat; each platform's text, hashtags, and alt text; each behavioral claim with the code that supports it; and the checks it passed, with any warnings, its status against the pre-publication checklist, and the kit's own checklist lines for every asset, which are the Founder's to judge.
 Its Evidence cites the calendar row, the Angle, its sourced pain, and its pre-registered signal and kill criterion in the package.
 gr0wthlab queues a post only from a Draft that passed every check; a Draft that did not is never an item, and a notice names it with the rule that blocked it.
 
@@ -193,7 +193,7 @@ Write it when the sitting ends: gr0wthlab counts an item as left undecided at th
 - A record of a newer version than the reader knows is reported as unreadable and never guessed at.
 - A change that is not additive needs a migration story of its own, not a version bump.
 - Version 2 added `next_run` and `carried_over_from` to the queue.
-- Version 3 added a post's `window` and `day`, made its `slot` wait until the window's day 1 and posting slot are set, and added `withdrawn` to the queue.
+- Version 3 added a post's `window` and `day`, made its `slot` wait until the window's first sitting and posting slot are set, and added `withdrawn` to the queue.
   Mandu's own records change nothing: a decision or sitting record of version 2 reads as it is.
 - Times carry their UTC offset; dates are `YYYY-MM-DD`.
 - Write each file whole: write a temporary file whose name starts with `.` in the same folder, then rename it; both sides ignore files whose names start with `.`.

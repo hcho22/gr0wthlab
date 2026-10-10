@@ -17,6 +17,7 @@
   "long_sentence_words": 20,
   "long_sentence_commas": 2,
   "invented_proof_terms": ["user", "download", "review", "rating", "people"],
+  "invented_proof_quantities": ["thousands of", "millions of", "hundreds of", "dozens of", "countless"],
   "fake_scarcity": ["limited spots", "only {n} left", "last chance"],
   "lint_allow_phrases": ["no card required"],
   "notes": ["Synthetic."]

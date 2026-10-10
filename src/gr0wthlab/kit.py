@@ -98,6 +98,14 @@ class ChecklistItem:
 
 
 @dataclass(frozen=True)
+class AssetCheck:
+    """One line of the calendar's own checklist for every asset; it holds no state a check could read."""
+
+    line: int
+    text: str
+
+
+@dataclass(frozen=True)
 class Competitor:
     name: str
     source: str
@@ -113,6 +121,7 @@ class Kit:
     pairs: dict[str, Pair] = field(default_factory=dict)
     platforms: tuple[str, ...] = ()
     checklist: tuple[ChecklistItem, ...] = ()
+    asset_checks: tuple[AssetCheck, ...] = ()
     competitors: tuple[Competitor, ...] = ()
     problems: dict[str, str] = field(default_factory=dict)
 
@@ -176,7 +185,7 @@ def parse_calendar(text: str) -> dict[int, KitDay]:
         if len(row) != len(header):
             raise KitError(f"calendar line {line} has {len(row)} cells; the header has {len(header)}")
         day_text = cell(row, header, "Day")
-        if not day_text.isdigit():
+        if not re.fullmatch(r"[0-9]+", day_text):
             raise KitError(f"calendar line {line}: day {day_text!r} is not a number")
         day = int(day_text)
         if day in days:
@@ -197,6 +206,18 @@ def parse_calendar(text: str) -> dict[int, KitDay]:
     if not days:
         raise KitError("the calendar has no days")
     return days
+
+
+def parse_asset_checks(text: str) -> tuple[AssetCheck, ...]:
+    """The list items under the calendar's own checklist section, if it has one."""
+    checks: list[AssetCheck] = []
+    inside = False
+    for number, line in enumerate(text.splitlines(), start=1):
+        if line.startswith("## "):
+            inside = "checklist" in line.casefold()
+        elif inside and line.startswith("- "):
+            checks.append(AssetCheck(number, line[2:].strip()))
+    return tuple(checks)
 
 
 # The Angle bank.

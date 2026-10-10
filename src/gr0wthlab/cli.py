@@ -9,7 +9,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import codex, cycle, drafts, exchange, launcher, posts, probe, schedule, settings
+from . import codex, cycle, exchange, launcher, posts, probe, schedule, settings
 from . import state as run_state
 from .areas import Areas
 from .boundary import LEDGER, PRODUCT_REGISTRY, ConfigError, load_json, load_runtime_config, resolve_boundary
@@ -137,9 +137,7 @@ def check_drafts(out=sys.stdout, now: datetime | None = None) -> int:
                 file=out,
             )
             continue
-        other = plan.other_leg(day_plan.day)
-        other_draft = posts.read_draft(areas, plan.draft_path(other.day))[0] if other else None
-        verdict = drafts.evaluate(draft, plan.context, other_draft, number)
+        verdict = posts.check_day(plan, day_plan, draft, areas, ledger)
         failed += not verdict.passed
         print(f"{'OK' if verdict.passed else 'BLOCKED'} day {number}: {draft.path}", file=out)
         for line in posts.grouped(verdict.blocks):
