@@ -91,7 +91,8 @@ That is a fact only the Founder sets, in `waitlist` in [`config/run.json`](../co
 ```
 
 It is never inferred from whether a source is connected or what a source is called.
-While `live_since` is `null`, or a date still ahead, every post item, the run brief, and the run report say that nothing can be published until the Waitlist is live; from that date on, each post item says the Waitlist is live.
+While `live_since` is `null`, or a date still ahead, every post item, the run brief, and the run report say that nothing can be published until the Waitlist is live.
+A post queued from that date on says the Waitlist is live; an open post keeps the line it was queued with until its Draft or slot changes and the launcher replaces it.
 
 ## Run on demand
 

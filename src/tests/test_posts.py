@@ -386,6 +386,24 @@ class TakeTest(TakeTestCase):
         differs = f"pair-legs: differs from day 1's leg beyond the Hook (`drafts/posts/window-1/day-01.md`) {fields}"
         self.assertEqual(posts.grouped(reworded.verdict.blocks), [differs, unresolved])
 
+    def test_a_rule_failing_text_both_drafts_can_still_change_is_not_called_the_founder_s_to_resolve(self):
+        caption = "It is really just simply a list."
+        self.write(1, fakes.draft(1, caption=caption))
+        self.write(8, fakes.draft(8, caption=caption))
+        for result in self.take(1, 8).results:
+            self.assertEqual({finding.rule for finding in result.verdict.blocks}, {"capped_words"}, result.day)
+        self.write(1, fakes.draft(1))
+        self.write(8, fakes.draft(8))
+        [first, _] = self.take(1, 8, run="RUN2").results
+        data = dict(self.context.rules.data)
+        data["banned_words_in_hook"] = [*data["banned_words_in_hook"], "history"]
+        self.context.rules = lint.Rules(data)
+        self.write(8, fakes.draft(8, caption="This is the history view, again."))
+        open_leg, newer = self.take(1, 8, run="RUN3").results
+        self.assertEqual((open_leg.status, open_leg.withdrawn), (posts.BLOCKED, first.item))
+        self.assertEqual({finding.rule for finding in newer.verdict.blocks}, {"banned_words_in_hook", "pair-legs"})
+        self.assertNotIn("cannot both pass", " ".join(posts.grouped(newer.verdict.blocks)))
+
     def test_a_pair_leg_whose_angle_is_missing_from_the_bank_is_blocked_and_never_rendered(self):
         del self.context.kit.angles["P03"]
         self.write(3, fakes.draft(3))

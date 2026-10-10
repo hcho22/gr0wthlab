@@ -6,12 +6,11 @@ import argparse
 import json
 import os
 import sys
-from datetime import datetime, timezone
 from pathlib import Path
 
 from . import codex, cycle, exchange, launcher, posts, probe, schedule, settings
 from . import state as run_state
-from .areas import Areas
+from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import LEDGER, PRODUCT_REGISTRY, ConfigError, load_json, load_runtime_config, resolve_boundary
 from .queue import QUEUE_FILE, REVIEW_QUEUE, Ledger, QueueError
 
@@ -33,7 +32,13 @@ def parser() -> argparse.ArgumentParser:
     commands.add_parser("show-config", help="print the resolved run configuration and its fingerprint")
     commands.add_parser("preflight", help="prove the write boundary in the sandbox, with no model")
     commands.add_parser("check-incoming", help="check the Review Queue items waiting in review-queue/incoming/")
-    commands.add_parser("check-drafts", help="check this run's post Drafts in drafts/posts/ as the launcher will")
+    drafts = commands.add_parser("check-drafts", help="check a run's post Drafts in drafts/posts/ as the launcher will")
+    drafts.add_argument(
+        "--run",
+        required=True,
+        metavar="RUN_ID",
+        help="the run in progress, as its brief's check-drafts command names it",
+    )
 
     agent = commands.add_parser("launch-agent", help="print a LaunchAgent plist that runs the launcher on a schedule")
     agent.add_argument(
@@ -100,8 +105,13 @@ def check_incoming(out=sys.stdout) -> int:
     return 1 if failed else 0
 
 
-def check_drafts(out=sys.stdout, now: datetime | None = None) -> int:
-    """The launcher's own checks of each post Draft due this run, for the agent to use before it finishes."""
+def check_drafts(run_id: str, out=sys.stdout) -> int:
+    """The launcher's own checks of each post Draft due in a run, for the agent to use before it finishes.
+
+    Each day's standing is read from the record the launcher wrote for that run before the agent started, never
+    worked out again here: the queue it comes from is saved only when the run ends. Without that record no Draft is
+    checked, and the output says so.
+    """
     env = dict(os.environ)
     home = Path.home()
     config = settings.load(REPO_ROOT, env, home)
@@ -110,13 +120,20 @@ def check_drafts(out=sys.stdout, now: datetime | None = None) -> int:
     # cache warnings.
     boundary = resolve_boundary(REPO_ROOT, load_runtime_config(REPO_ROOT), registry, env, home, git=[])
     products = [product["name"] for product in registry.get("products", [])]
-    ledger, _, warning = queued(products)
-    if warning:
-        print(warning, file=out)
-    plan = posts.prepare(REPO_ROOT, config, registry, boundary, ledger, now or datetime.now(timezone.utc), env)
+    plan = posts.context_plan(REPO_ROOT, config, registry, boundary, env)
     if plan is None:
         print("No active Product has a 14-day kit, so there is no post Draft to check.", file=out)
         return 0
+    try:
+        record = Store(LEDGER_DIR).path(cycle.RUN_REPORTS, posts.plan_file(run_id))
+        posts.restore(plan, json.loads(read_plain(record).decode("utf-8")))
+    except (ConfigError, OSError, UnsafeFile, ValueError) as error:
+        print(
+            f"PROBLEM the post plan of run {run_id} could not be read ({error}), so no Draft was checked; the"
+            " launcher checks every Draft once you finish.",
+            file=out,
+        )
+        return 1
     print(plan.reason, file=out)
     if plan.code.problem:
         print(f"PROBLEM {plan.product}'s code could not be read: {plan.code.problem}", file=out)
@@ -138,7 +155,15 @@ def check_drafts(out=sys.stdout, now: datetime | None = None) -> int:
             )
             continue
         verdict = posts.check_day(plan, day_plan, draft, areas, products)[0]
-        failed += not verdict.passed
+        rejected = posts.rejected_as(day_plan, draft) if verdict.passed else None
+        failed += not verdict.passed or bool(rejected)
+        if rejected:
+            print(
+                f"REJECTED day {number}: {draft.path}: the Founder rejected this Draft as {rejected['id']}, so it is"
+                " not asked again until it changes",
+                file=out,
+            )
+            continue
         print(f"{'OK' if verdict.passed else 'BLOCKED'} day {number}: {draft.path}", file=out)
         for line in posts.grouped(verdict.blocks):
             print(f"  - {line}", file=out)
@@ -172,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "check-incoming":
             return check_incoming()
         if args.command == "check-drafts":
-            return check_drafts()
+            return check_drafts(args.run)
         if args.command == "launch-agent":
             config = settings.load(REPO_ROOT, env, home)
             if args.boundary_check:

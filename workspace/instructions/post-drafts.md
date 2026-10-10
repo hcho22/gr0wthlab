@@ -70,7 +70,9 @@ Leave alone: a single absence next to the point it supports, a list of three whe
 - A re-cut pair is one the kit marks as a re-cut, in its section of the A/B pairs or in either leg's calendar row.
   Plan its opening for both legs before you write either: each leg opens on its own Hook in the hook beat, and the pair's other Hook, where the opening order calls for it, sits in one later beat as its on-screen text or spoken line.
   Write every other beat once and use it in both legs unchanged; the re-cut may put those beats in a different order, and never changes what one says or shows.
-- When a brand rule fails text the two legs share, do not reword one leg to pass: leave it as the other leg has it, let the launcher block it naming the rule, and say so in your summary.
-  Only a package change or a re-cut of both legs, which is the Founder's call, lets the pair pass.
+- When a brand rule fails text the two legs share, do not reword one leg alone to pass.
+  If the other leg is not approved and the brief lists both days, reword both Drafts together, word for word the same beyond the Hook.
+  If the other leg is approved, its text is settled: leave yours as that leg has it, let the launcher block it naming the rule, and say so in your summary.
+  Only a package change or a re-cut of both legs, which is the Founder's call, lets that pair pass.
 - A day with an open item keeps it; rewrite its Draft only when the package or the Founder's decision gives a reason, and say why in your summary.
 - A day the Founder approved is never drafted again.

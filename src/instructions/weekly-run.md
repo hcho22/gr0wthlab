@@ -156,8 +156,10 @@ leg: A
   Each leg of a re-cut pair opens on its own Hook in the hook beat and may show the pair's other Hook in a later beat, as the pair's opening order says.
   Every beat that shows neither Hook is the same in both legs, word for word, in whatever order the re-cut puts them.
   In any other pair, and on a day that is not a pair leg, no beat shows another Hook.
-- When text a leg must share with its other leg fails a brand rule, leave it as the other leg has it and never reword one leg alone.
-  The launcher blocks the Draft naming the rule and tells the Founder that the pair cannot both pass until a package change or a re-cut of both legs resolves it.
+- When text a leg must share with its other leg fails a brand rule, never reword one leg alone.
+  If the other leg is not approved and the brief lists both days, reword both Drafts together, so they still match beyond the Hook.
+  If the other leg is approved, leave the text as that leg has it: the launcher blocks the Draft naming the rule and tells the Founder that the pair cannot both pass until a package change or a re-cut of both legs resolves it.
+  Otherwise leave the text as it is and say so in your summary.
 - Give each behavioral claim (anything the video or copy says the app does) its own item under Claims, with the lines of code at the brief's commit that support it; cut a claim no code supports.
 - Rewrite an open day's Draft only to change it for a reason, such as a package change or the Founder's decision; an unchanged Draft keeps its item.
 - A Draft the Founder rejected is not asked again until it changes: rewrite it to answer the reason the brief gives.

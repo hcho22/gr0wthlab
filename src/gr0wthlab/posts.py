@@ -68,13 +68,15 @@ class Plan:
     context: Context
     files: dict[str, tuple[str, str | None]]  # role: (Mandu-relative path, sha256 when read)
     folder: Path  # workspace/drafts/posts/window-<n>/
-    waitlist_live: bool
-    # Each calendar day's open or approved post as the queue stood before the agent started.
+    waitlist_live: bool = False
+    # Each calendar day's open or approved post, once the Founder's decisions were taken in and before the agent
+    # started.
     posted: dict[int, dict[str, object]] = field(default_factory=dict)
     problems: list[str] = field(default_factory=list)
     # The location overrides the run resolved, so check-drafts, in an environment built from scratch, reads the same
     # Mandu and code checkouts as the launcher.
     locations: list[tuple[str, str]] = field(default_factory=list)
+    run: str = ""  # the run whose record of this plan's standing check-drafts reads
 
     @property
     def code(self) -> Code:
@@ -272,16 +274,11 @@ def posted_days(ledger: Ledger, product: str, window: int, days: Sequence[int]) 
     return found
 
 
-def prepare(
-    repo_root: Path,
-    config: Settings,
-    registry: Mapping,
-    boundary: Boundary,
-    ledger: Ledger,
-    now: datetime,
-    env: Mapping[str, str],
+def context_plan(
+    repo_root: Path, config: Settings, registry: Mapping, boundary: Boundary, env: Mapping[str, str]
 ) -> Plan | None:
-    """The run's post-Draft plan, or None when no active Product has a kit."""
+    """A plan with no day in it yet, or None when no active Product has a kit: the kit, brand rules, platform facts,
+    and Product code every Draft is checked against, which the launcher and check-drafts read alike."""
     found = kit_config(registry)
     if found is None:
         return None
@@ -315,35 +312,110 @@ def prepare(
         context,
         files,
         Path(boundary.repo_root) / "workspace" / "drafts" / DRAFTS / f"window-{config.window.number}",
-        waitlist_live=config.waitlist_live(now.astimezone().date()),
-        posted=posted_days(ledger, product, config.window.number, list(parsed.days)),
     )
     names = {"Mandu": (registry.get("mandu") or {}).get("env"), product: (entry.get("repository") or {}).get("env")}
     plan.locations = [
         (str(names[location.label]), str(location.path)) for location in boundary.locations if names.get(location.label)
     ]
+    return plan
+
+
+def due_day(
+    plan: Plan,
+    number: int,
+    slot: str | None,
+    open_post: dict[str, object] | None,
+    approved: dict[str, object] | None,
+    rejected: list[dict[str, object]],
+) -> DayPlan:
+    parsed = plan.context.kit
+    day = parsed.days[number]
+    hook = kit.frozen_hook(day, parsed)[0] if not parsed.problems.keys() & {"angles", "pairs"} else None
+    return DayPlan(day, hook, slot, open_post, approved, rejected)
+
+
+def prepare(
+    repo_root: Path,
+    config: Settings,
+    registry: Mapping,
+    boundary: Boundary,
+    ledger: Ledger,
+    now: datetime,
+    env: Mapping[str, str],
+    run_id: str,
+) -> Plan | None:
+    """The run's post-Draft plan, or None when no active Product has a kit: the checks' context, and each day's
+    standing in the queue the launcher holds once it has taken in the Founder's decisions."""
+    plan = context_plan(repo_root, config, registry, boundary, env)
+    if plan is None:
+        return None
+    parsed, window, today = plan.context.kit, config.window, now.astimezone().date()
+    plan.run = run_id
+    plan.waitlist_live = config.waitlist_live(today)
+    plan.posted = posted_days(ledger, plan.product, window.number, list(parsed.days))
     if "calendar" in parsed.problems:
         plan.reason = f"The calendar could not be read ({parsed.problems['calendar']}), so no day can be prepared."
         return plan
-    numbers, plan.reason = target_days(config.window, list(parsed.days), now.astimezone().date(), config.weekly[0])
+    numbers, plan.reason = target_days(window, list(parsed.days), today, config.weekly[0])
     for number in numbers:
-        day = parsed.days[number]
-        if day.angle is None:
-            plan.skipped.append((number, f"the calendar decides its Angle later ({day.cell})"))
+        if parsed.days[number].angle is None:
+            plan.skipped.append((number, f"the calendar decides its Angle later ({parsed.days[number].cell})"))
             continue
-        hook = kit.frozen_hook(day, parsed)[0] if not parsed.problems.keys() & {"angles", "pairs"} else None
-        entries = day_entries(ledger, product, config.window.number, number)
+        entries = day_entries(ledger, plan.product, window.number, number)
         plan.days.append(
-            DayPlan(
-                day,
-                hook,
-                slot_for(config.window, number),
+            due_day(
+                plan,
+                number,
+                slot_for(window, number),
                 next((item for item in entries if item["status"] == OPEN), None),
                 next((item for item in entries if item["status"] == APPROVED), None),
                 [item for item in entries if item["status"] == REJECTED],
             )
         )
     return plan
+
+
+class PlanError(ValueError):
+    """A record that does not hold a run's post plan."""
+
+
+def plan_file(run_id: str) -> str:
+    """The name, among the run reports, of a run's record of its plan's standing."""
+    return f"{run_id}.post-plan.json"
+
+
+def plan_record(plan: Plan) -> dict[str, object]:
+    """Each day's standing as the launcher worked it out, once, after taking in the Founder's decisions and before
+    the agent started: the days due and skipped, and each day's open, approved, and rejected posts. The launcher
+    records it for check-drafts, since the queue it comes from is saved only when the run ends."""
+    return {
+        "run": plan.run,
+        "product": plan.product,
+        "window": plan.window.number,
+        "reason": plan.reason,
+        "waitlist_live": plan.waitlist_live,
+        "posted": {str(number): post for number, post in plan.posted.items()},
+        "due": [
+            {"day": due.day.day, "slot": due.slot, "open": due.open, "approved": due.approved, "rejected": due.rejected}
+            for due in plan.days
+        ],
+        "skipped": [{"day": number, "why": why} for number, why in plan.skipped],
+    }
+
+
+def restore(plan: Plan, record: object) -> None:
+    """Give a plan the standing the launcher recorded for its run, in place of working one out."""
+    try:
+        plan.run, plan.reason = str(record["run"]), str(record["reason"])
+        plan.waitlist_live = record["waitlist_live"] is True
+        plan.posted = {int(number): dict(post) for number, post in record["posted"].items()}
+        plan.skipped = [(int(entry["day"]), str(entry["why"])) for entry in record["skipped"]]
+        plan.days = [
+            due_day(plan, int(entry["day"]), entry["slot"], entry["open"], entry["approved"], list(entry["rejected"]))
+            for entry in record["due"]
+        ]
+    except (AttributeError, KeyError, TypeError, ValueError) as error:
+        raise PlanError(f"it does not hold a run's post plan ({type(error).__name__}: {error})") from error
 
 
 # After the agent.
@@ -363,31 +435,42 @@ def read_draft(areas: Areas, path: Path) -> tuple[PostDraft | None, str]:
     return parse(text, areas.relative(path)), ""
 
 
-def reference_leg(plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas) -> tuple[PostDraft | None, str]:
-    """The Draft an A/B leg must match beyond the Hook, or why it cannot be compared with it.
+def reference_leg(plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas) -> tuple[PostDraft | None, bool, str]:
+    """The Draft an A/B leg must match beyond the Hook, whether the Founder approved the post it was queued from, and
+    why the leg cannot be compared with it when it cannot.
 
-    Decided from the queue as it stood before the agent started and the Drafts as they are now, so the launcher and
-    check-drafts agree. A leg whose own open post came from this very Draft is not checked again. A leg whose post
+    Decided from the plan's standing and the Drafts as they are now. The launcher works that standing out once, after
+    taking in the Founder's decisions and before the agent starts, and check-drafts reads its record of it, so both
+    give one verdict. A leg whose own open post came from this very Draft is not checked again. A leg whose post
     stands is the reference for the other, newer leg, in the Draft that post was queued from, so a deviation never
     blocks or withdraws the reference. When this run takes a new Draft of both legs, the earlier day is checked on its
     own and the later day against the earlier day's Draft.
     """
     other = plan.other_leg(day_plan.day)
     if other is None or (day_plan.open and day_plan.open.get("draft_sha256") == draft.sha256):
-        return None, ""
+        return None, False, ""
     posted = plan.posted.get(other.day)
     current = read_draft(areas, plan.draft_path(other.day))[0]
     taken = any(due.day.day == other.day and not due.approved for due in plan.days)
     if taken and current is not None and current.sha256 != (posted or {}).get("draft_sha256"):
-        return (current if other.day < day_plan.day.day else None), ""
+        return (current if other.day < day_plan.day.day else None), False, ""
     if posted is None:
-        return None, ""
+        return None, False, ""
     if current is None or current.sha256 != posted.get("draft_sha256"):
-        return None, (
-            f"day {other.day}'s Draft is no longer the one `{posted['id']}` was queued from, so this leg cannot be"
-            " compared with it"
+        return (
+            None,
+            False,
+            (
+                f"day {other.day}'s Draft is no longer the one `{posted['id']}` was queued from, so this leg cannot be"
+                " compared with it"
+            ),
         )
-    return current, ""
+    return current, posted["status"] == APPROVED, ""
+
+
+def rejected_as(day_plan: DayPlan, draft: PostDraft) -> dict[str, object] | None:
+    """The post the Founder rejected that was queued from this very Draft, which is not asked again until it changes."""
+    return next((entry for entry in day_plan.rejected if entry.get("draft_sha256") == draft.sha256), None)
 
 
 def check_day(
@@ -395,8 +478,8 @@ def check_day(
 ) -> tuple[Verdict, exchange.Item | None]:
     """Every check of one day's Draft, as the launcher and check-drafts both run them, and the post item a Draft that
     passes becomes."""
-    reference, problem = reference_leg(plan, day_plan, draft, areas)
-    verdict = evaluate(draft, plan.context, reference, day_plan.day.day)
+    reference, approved, problem = reference_leg(plan, day_plan, draft, areas)
+    verdict = evaluate(draft, plan.context, reference, day_plan.day.day, approved)
     if problem:
         verdict.block("pair-legs", problem)
     if not verdict.passed:
@@ -468,7 +551,7 @@ def take_day(
     if day_plan.open and all(day_plan.open.get(name) == value for name, value in key.items() if value):
         result.status, result.item, result.detail = KEPT, str(day_plan.open["id"]), "its Draft is unchanged and passes"
         return result
-    rejected = next((entry for entry in day_plan.rejected if entry.get("draft_sha256") == draft.sha256), None)
+    rejected = rejected_as(day_plan, draft)
     if rejected:
         result.status, result.item = REPEATED, str(rejected["id"])
         result.detail = "the Founder rejected this Draft, so it is not asked again until it changes"
@@ -764,9 +847,10 @@ def checklist_summary(plan: Plan) -> list[str]:
 
 
 def check_command(plan: Plan, repo_root: Path) -> str:
-    """check-drafts as the agent runs it, reading the same Mandu and code checkouts as this run."""
+    """check-drafts as the agent runs it, reading the same Mandu and code checkouts as this run, and this run's
+    record of each day's standing."""
     overrides = " ".join(f"{name}={shlex.quote(path)}" for name, path in plan.locations)
-    return f"{overrides} /usr/bin/python3 {repo_root / 'src/bin/gr0wthlab'} check-drafts".strip()
+    return f"{overrides} /usr/bin/python3 {repo_root / 'src/bin/gr0wthlab'} check-drafts --run {plan.run}".strip()
 
 
 def brief_lines(plan: Plan, repo_root: Path) -> list[str]:

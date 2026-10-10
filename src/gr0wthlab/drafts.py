@@ -325,12 +325,17 @@ def checklist_status(draft: PostDraft, context: Context, angle: Angle | None) ->
 
 
 def evaluate(
-    draft: PostDraft, context: Context, reference: PostDraft | None = None, file_day: int | None = None
+    draft: PostDraft,
+    context: Context,
+    reference: PostDraft | None = None,
+    file_day: int | None = None,
+    reference_approved: bool = False,
 ) -> Verdict:
     """Every deterministic check of one Draft; the Draft is offered for approval only when nothing blocks it.
 
     reference is the Draft of its A/B pair's other leg, when that leg is the one this Draft must match beyond the
-    Hook; file_day is the day its file name gives, which its front matter must name too.
+    Hook, and reference_approved says the Founder approved the post queued from it; file_day is the day its file
+    name gives, which its front matter must name too.
     """
     verdict = Verdict()
     kit = context.kit
@@ -370,7 +375,7 @@ def evaluate(
     check_beats(draft, verdict)
     check_platforms(draft, context, verdict)
     if reference is not None and verdict.hook is not None:
-        check_pair(draft, reference, context, opening, verdict)
+        check_pair(draft, reference, reference_approved, context, opening, verdict)
     if context.rules is not None:
         verdict.add(context.rules.check(draft.copies()))
         check_pain(verdict.angle, context, verdict)
@@ -491,12 +496,17 @@ def beyond_hook(draft: PostDraft, context: Context, opening: Collection[str]) ->
 
 
 def check_pair(
-    draft: PostDraft, reference: PostDraft, context: Context, opening: Collection[str], verdict: Verdict
+    draft: PostDraft,
+    reference: PostDraft,
+    approved: bool,
+    context: Context,
+    opening: Collection[str],
+    verdict: Verdict,
 ) -> None:
     """An A/B leg differs from its reference leg only in the Hook, so every field outside the Hook matches: beat by
-    beat in order, or, in a re-cut pair, as the same set of beats in any order. Text the reference no longer passes
-    a brand rule with is never inherited or waived: this leg stays blocked, naming the rule, until the Founder
-    resolves it."""
+    beat in order, or, in a re-cut pair, as the same set of beats in any order. Text an approved reference no longer
+    passes a brand rule with is never inherited or waived, and no Draft can change it: this leg stays blocked,
+    naming the rule, until the Founder resolves it."""
     mine, theirs = beyond_hook(draft, context, opening), beyond_hook(reference, context, opening)
 
     def differs(where: str) -> None:
@@ -523,7 +533,7 @@ def check_pair(
         for name, expected in values.items():
             if lines(mine.platforms.get(platform, {}).get(name, "")) != lines(expected):
                 differs(f"{platform} {name.lower()}")
-    failing = context.rules.check(theirs.copies()) if context.rules else []
+    failing = context.rules.check(theirs.copies()) if approved and context.rules else []
     rules = sorted({finding.rule for finding in failing if finding.blocks and finding.field})
     if rules:
         verdict.block(

@@ -532,15 +532,20 @@ class Cycle:
     def prepare_posts(
         self, state: RunState, config: settings.Settings, registry, boundary: Boundary, ledger: Ledger
     ) -> None:
-        """The run's post-Draft plan, and the Product code it checks claims against as one of the run's sources."""
+        """The run's post-Draft plan, with its record of each day's standing for check-drafts, and the Product code it
+        checks claims against as one of the run's sources."""
         try:
-            state.posts = posts.prepare(self.repo_root, config, registry, boundary, ledger, self.now(), self.env)
+            plan = posts.prepare(self.repo_root, config, registry, boundary, ledger, self.now(), self.env, state.run_id)
+            if plan is not None:
+                record = self.store.path(RUN_REPORTS, posts.plan_file(state.run_id))
+                self.store.write_json(record, posts.plan_record(plan))
         except (ConfigError, OSError) as error:
             state.posts_problem = f"not prepared: {error}"
             state.problems.append(f"the post Drafts could not be prepared ({error})")
             return
-        if state.posts is None:
+        if plan is None:
             return
+        state.posts = plan
         code = state.posts.code
         needs = output_titles(config, ("post-drafts",))
         if code.problem:

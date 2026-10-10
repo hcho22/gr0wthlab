@@ -1160,6 +1160,30 @@ class PostDraftsTest(CycleTestCase):
     """US-ME08's Validation Test, on the synthetic kit: the first batch matches the calendar, and a banned word put
     into one caption blocks that Draft, naming the rule, so it never reaches the Review Queue."""
 
+    def check_drafts(self, run_id):
+        out = io.StringIO()
+        with (
+            mock.patch.object(cli, "REPO_ROOT", self.repo),
+            mock.patch.object(cli, "LEDGER_DIR", self.repo / "ledger"),
+            mock.patch.dict(os.environ, self.env),
+        ):
+            return cli.check_drafts(run_id, out), out.getvalue()
+
+    def run_with_check_drafts(self, at=None):
+        """Run a cycle whose agent, once it has written its files, runs check-drafts for its run while the run is
+        still in progress, as the brief tells it to; returns check-drafts's exit code and its output."""
+        launch, seen = cycle.launcher.run, []
+
+        def agent(*args, **kwargs):
+            result = launch(*args, **kwargs)
+            seen.append(self.check_drafts(kwargs["run_id"]))
+            return result
+
+        with mock.patch.object(cycle.launcher, "run", agent):
+            code, out = self.run_cycle(at=at)
+        self.assertEqual(code, 0, out)
+        return seen[0]
+
     def first_batch(self):
         fakes.set_window(self.repo, {"first_sitting": None, "slot": None})
         writes = {fakes.draft_path(day): fakes.draft(day) for day in range(1, 8)}
@@ -1209,7 +1233,7 @@ class PostDraftsTest(CycleTestCase):
         self.assertIn("- Competitors the research names, which no Draft may name: IronFit, Pulseday, Stretchly.", brief)
         self.assertIn(
             f"`GR0WTHLAB_MANDU_DIR={self.mandu} GR0WTHLAB_REPTODAY_DIR={self.code} /usr/bin/python3"
-            f" {self.repo}/src/bin/gr0wthlab check-drafts`",
+            f" {self.repo}/src/bin/gr0wthlab check-drafts --run {queue['updated_by_run']}`",
             brief,
         )
 
@@ -1295,23 +1319,86 @@ class PostDraftsTest(CycleTestCase):
     def test_check_drafts_checks_two_legs_drafted_in_one_run_as_the_launcher_will(self):
         fakes.set_window(self.repo, fakes.window_from(fakes.SUNDAY_RUN.date()))
         fakes.keep_days(self.mandu, 3, 10)
-        draft_dir = self.workspace() / "drafts/posts/window-1"
-        draft_dir.mkdir(parents=True)
-        (draft_dir / "day-03.md").write_text(fakes.draft(3), encoding="utf-8")
-        (draft_dir / "day-10.md").write_text(fakes.draft(10, caption="A different second line."), encoding="utf-8")
-        out = io.StringIO()
-        with (
-            mock.patch.object(cli, "REPO_ROOT", self.repo),
-            mock.patch.object(cli, "LEDGER_DIR", self.repo / "ledger"),
-            mock.patch.dict(os.environ, self.env),
-        ):
-            code = cli.check_drafts(out, now=fakes.SUNDAY_RUN + timedelta(days=1))  # a Monday run has both legs due
-        text = out.getvalue()
+        writes = {
+            fakes.draft_path(3): fakes.draft(3),
+            fakes.draft_path(10): fakes.draft(10, caption="A different second line."),
+        }
+        fakes.behave(self.codex_dir, {"write": writes})
+        # A Monday run has both legs due.
+        code, text = self.run_with_check_drafts(at=fakes.SUNDAY_RUN + timedelta(days=1))
         self.assertEqual(code, 1, text)
         self.assertIn("OK day 3: drafts/posts/window-1/day-03.md", text)
         self.assertIn("BLOCKED day 10: drafts/posts/window-1/day-10.md", text)
         self.assertIn("  - pair-legs: differs from day 3's leg beyond the Hook", text)
         self.assertIn("2 days due, 1 with problems", text)
+        report = self.report()
+        self.assertIn("| 3 | P03 / AB-2 leg A | queued |", report)
+        self.assertIn("| 10 | P03 / AB-2 leg B | blocked |", report)
+
+    def test_check_drafts_reads_the_standing_the_launcher_recorded_after_taking_in_decisions(self):
+        fakes.set_window(self.repo, fakes.window_from(fakes.SUNDAY_RUN.date()))
+        fakes.keep_days(self.mandu, 1, 8)
+        fakes.behave(self.codex_dir, {"write": {fakes.draft_path(1): fakes.draft(1)}})
+        self.run_cycle()
+        [day_1] = [entry["id"] for entry in self.queue()["open"] if entry["kind"] == "post"]
+        self.decide(day_1, "reject", reason="The second line is flat.")
+        answer = fakes.draft(8, caption="One tap, and the first movement is on screen.")
+        fakes.behave(self.codex_dir, {"write": {fakes.draft_path(8): answer}})
+        # The queue saved by the last run still holds day 1 as open while this run's agent works.
+        code, text = self.run_with_check_drafts(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(
+            (code, text.splitlines()[1:]),
+            (0, ["OK day 8: drafts/posts/window-1/day-08.md", "1 day due, 0 with problems"]),
+        )
+        queue = self.queue()
+        self.assertEqual([entry["day"] for entry in queue["open"] if entry["kind"] == "post"], [8])
+        record = json.loads((self.ledger() / f"run-reports/{queue['updated_by_run']}.post-plan.json").read_text())
+        self.assertEqual((record["run"], record["posted"]), (queue["updated_by_run"], {}))
+        self.assertEqual([(due["day"], due["open"], due["rejected"]) for due in record["due"]], [(8, None, [])])
+        self.assertIn(f"check-drafts --run {queue['updated_by_run']}`", self.brief())
+
+    def test_check_drafts_names_a_draft_the_founder_rejected_and_skips_a_day_the_founder_approved(self):
+        first = self.first_batch()
+        ids = {entry["day"]: entry["id"] for entry in first["open"] if entry["kind"] == "post"}
+        self.decide(ids[4], "reject", reason="Too flat.")
+        self.decide(ids[6], "approve")
+        fakes.behave(self.codex_dir, {})
+        code, text = self.run_with_check_drafts(at=fakes.SUNDAY_RUN + timedelta(hours=1))
+        self.assertEqual(code, 1, text)
+        self.assertIn(
+            f"REJECTED day 4: drafts/posts/window-1/day-04.md: the Founder rejected this Draft as {ids[4]}, so it is"
+            " not asked again until it changes",
+            text,
+        )
+        self.assertIn(f"SKIP day 6: approved as {ids[6]}; it is not asked again", text)
+        self.assertIn("OK day 1: drafts/posts/window-1/day-01.md", text)
+        report = self.report()
+        self.assertIn(f"| 4 | P04 | not queued again | `{ids[4]}`;", report)
+        self.assertIn(f"| 6 | P06 | approved earlier | `{ids[6]}`;", report)
+
+    def test_check_drafts_checks_no_draft_without_the_run_s_recorded_plan(self):
+        run_id = "20261011T230001Z-on-demand-0000"
+        record = self.ledger() / "run-reports" / f"{run_id}.post-plan.json"
+        record.parent.mkdir(parents=True, exist_ok=True)
+        cases = {
+            None: "No such file or directory",
+            "{not json": "Expecting property name",
+            json.dumps({"run": run_id, "reason": ""}): "it does not hold a run's post plan (KeyError: 'waitlist_live')",
+            '["a list"]': "it does not hold a run's post plan (TypeError:",
+        }
+        for content, why in cases.items():
+            with self.subTest(record=content):
+                if content is not None:
+                    record.write_text(content, encoding="utf-8")
+                code, text = self.check_drafts(run_id)
+                self.assertEqual(code, 1, text)
+                self.assertIn(f"PROBLEM the post plan of run {run_id} could not be read (", text)
+                self.assertIn(why, text)
+                self.assertIn("so no Draft was checked; the launcher checks every Draft once you finish.", text)
+                self.assertEqual(len(text.splitlines()), 1)
+        code, text = self.check_drafts("../../workspace/drafts/posts")
+        self.assertEqual(code, 1, text)
+        self.assertIn("could not be read (refusing to touch", text)
 
     def test_the_brand_rules_proposal_is_filed_once_and_its_lists_are_pending_until_mandu_has_them(self):
         rules = self.mandu / "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json"
@@ -1373,18 +1460,12 @@ class PostDraftsTest(CycleTestCase):
 
     def test_check_drafts_gives_the_agent_the_launcher_s_verdict(self):
         fakes.set_window(self.repo, fakes.window_from(fakes.SUNDAY_RUN.date()))
-        draft_dir = self.workspace() / "drafts/posts/window-1"
-        draft_dir.mkdir(parents=True)
-        (draft_dir / "day-01.md").write_text(fakes.draft(1), encoding="utf-8")
-        (draft_dir / "day-02.md").write_text(fakes.draft(2, caption="Join 10,000 people."), encoding="utf-8")
-        out = io.StringIO()
-        with (
-            mock.patch.object(cli, "REPO_ROOT", self.repo),
-            mock.patch.object(cli, "LEDGER_DIR", self.repo / "ledger"),
-            mock.patch.dict(os.environ, self.env),
-        ):
-            code = cli.check_drafts(out, now=fakes.SUNDAY_RUN)
-        text = out.getvalue()
+        writes = {
+            fakes.draft_path(1): fakes.draft(1),
+            fakes.draft_path(2): fakes.draft(2, caption="Join 10,000 people."),
+        }
+        fakes.behave(self.codex_dir, {"write": writes})
+        code, text = self.run_with_check_drafts()
         self.assertEqual(code, 1, text)
         self.assertIn("OK day 1: drafts/posts/window-1/day-01.md", text)
         self.assertIn("BLOCKED day 2: drafts/posts/window-1/day-02.md", text)
