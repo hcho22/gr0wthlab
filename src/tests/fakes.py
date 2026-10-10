@@ -8,6 +8,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -126,6 +127,25 @@ class Clock:
 
 
 SUNDAY_RUN = datetime(2026, 10, 11, 23, 0, tzinfo=timezone.utc)
+# US Pacific time, where SUNDAY_RUN is Sunday 16:00, spelled out so that no time zone database is needed.
+PACIFIC = "PST8PDT,M3.2.0,M11.1.0"
+
+
+def mac_time_zone(test, zone: str = PACIFIC) -> None:
+    """Run one test with the Mac's clock in a time zone, and put the real one back after it."""
+    previous = os.environ.get("TZ")
+
+    def restore() -> None:
+        if previous is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = previous
+        time.tzset()
+
+    os.environ["TZ"] = zone
+    time.tzset()
+    test.addCleanup(restore)
+
 
 PROPOSAL = """---
 kind: package-change-proposal
@@ -164,3 +184,47 @@ def proposal(kind: str = "package-change-proposal", extra: str = "", title: str 
         "- Approve, optionally with a note\n- Reject, with a one-line reason\n",
         "".join(f"- {option}\n" for option in exchange.options(kind)),
     )
+
+
+# The Waitlist's anonymous view, as RepToday's build would write it: twelve sign-ups across every Source and Fit
+# answer over two weeks (the weeks of 2026-09-28 and 2026-10-05), generated an hour before SUNDAY_RUN.
+WAITLIST_ENTRIES = [
+    ("Qm7tLx2a", "tiktok", "lost-the-routine", True, "2026-09-29"),
+    ("Vb3kPz9w", "tiktok", "lost-the-routine", False, "2026-10-01"),
+    ("Hc8nRy4e", "tiktok", "exercises-regularly", True, "2026-10-06"),
+    ("Jd2wGs6u", "tiktok", "lost-the-routine", True, "2026-10-08"),
+    ("Ne5qTb1o", "youtube", "never-had-a-routine", True, "2026-09-30"),
+    ("Xf9mKa3i", "youtube", "lost-the-routine", True, "2026-10-07"),
+    ("Ug4vWc7y", "youtube", None, False, "2026-10-09"),
+    ("Ps1hDe8t", "reddit", "exercises-regularly", False, "2026-10-02"),
+    ("Lr6jFq5s", "reddit", "lost-the-routine", True, "2026-10-10"),
+    ("Ka0zMn2p", "network", "lost-the-routine", True, "2026-10-03"),
+    ("Yt3bHv9r", "network", "never-had-a-routine", False, "2026-10-11"),
+    ("Wi7cJx4l", "unknown", None, True, "2026-10-05"),
+]
+ADDRESS = "jane.doe@example.com"
+
+
+def waitlist_view(generated_at: str = "2026-10-11T22:00:00+00:00", entries=WAITLIST_ENTRIES) -> dict:
+    keys = ("entry", "source", "fit", "beta_opt_in", "signed_up_on")
+    return {"view": 1, "generated_at": generated_at, "entries": [dict(zip(keys, entry)) for entry in entries]}
+
+
+def address_variant() -> dict:
+    """The seed with an address-bearing field on one sign-up."""
+    view = waitlist_view()
+    view["entries"][2]["email"] = ADDRESS
+    return view
+
+
+def write_view(path: Path, view: dict) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(view, indent=1), encoding="utf-8")
+    return path
+
+
+def add_dispatches(repo: Path, env: dict[str, str]) -> None:
+    """The reviewed Dispatch requests, committed in a throwaway checkout as they are in this repository."""
+    shutil.copytree(str(REPO / "src" / "dispatches"), str(repo / "src" / "dispatches"))
+    git(repo, "add", "--all", env=env)
+    git(repo, "commit", "--quiet", "-m", "dispatches", env=env)

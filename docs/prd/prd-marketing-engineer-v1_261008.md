@@ -200,6 +200,8 @@ Immerse joins as Listening only, after RepToday's first 14-day window has run cl
 - [ ] Email addresses can be resolved only on the Founder's side, at send time.
 - [ ] The request leaves storage, hosting, and implementation choices to RepToday's own design under firstmate.
 
+gr0wthlab's side is in place, with the request filed from `src/dispatches/reptoday-waitlist.md`; every box waits for the approved RepToday build to land and pass this story's Validation Test.
+
 **Validation Test:**
 
 - **Setup:** The Waitlist deployed to `reptoday.app` after firstmate's reviewed change lands.
@@ -218,10 +220,10 @@ Immerse joins as Listening only, after RepToday's first 14-day window has run cl
 
 **Acceptance Criteria:**
 
-- [ ] Each run reads the anonymous view from US-ME05 and records counts by Source, Fit answer, and opt-in, per week and cumulative.
-- [ ] Each run reports progress toward the bar of about 50 good-Fit opt-ins, where good Fit means the "used to exercise and lost the routine" answer unless the Founder approves a different definition.
-- [ ] If any value read from the view looks like an email address, the run discards the read, records no Waitlist Evidence that week, and reports a Guardrail breach to the Founder.
-- [ ] Waitlist Evidence stores entry identifiers and counts only.
+- [x] Each run reads the anonymous view from US-ME05 and records counts by Source, Fit answer, and opt-in, per week and cumulative.
+- [x] Each run reports progress toward the bar of about 50 good-Fit opt-ins, where good Fit means the "used to exercise and lost the routine" answer unless the Founder approves a different definition.
+- [x] If any value read from the view looks like an email address, the run discards the read, records no Waitlist Evidence that week, and reports a Guardrail breach to the Founder.
+- [x] Waitlist Evidence stores entry identifiers and counts only.
 
 **Validation Test:**
 

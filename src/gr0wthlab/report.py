@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import exchange, package, schedule
+from . import exchange, package, schedule, waitlist
 from .state import Tally, run_tally
 
 SKIPPED = "skipped"
@@ -82,6 +82,10 @@ class RunState:
     outputs: list[tuple[str, str, str]] = field(default_factory=list)  # title, status, detail
     problems: list[str] = field(default_factory=list)
     notice: str | None = None
+    waitlist: waitlist.Reading | None = None
+    waitlist_file: str = ""  # the Waitlist Evidence this run wrote, relative to ledger/
+    breach_notice: str | None = None
+    dispatches: list = field(default_factory=list)  # dispatch.Filing, one per reviewed Dispatch request
     tallies: list[Tally] = field(default_factory=list)
     state_notes: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
@@ -352,9 +356,14 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
     lines += decision_lines(state, taken_only=True) or ["None."]
     lines += ["", "## Open Review Queue items", ""]
     if state.queue_before:
-        lines.append("Do not queue these again; to change one, write a new item with `supersedes: <id>`.")
+        lines += [
+            "Do not queue these again; to change one, write a new item with `supersedes: <id>`.",
+            "An item filed by the launcher changes only through a reviewed change to its source text, so an item that"
+            " supersedes it is refused.",
+        ]
         for entry in state.queue_before:
-            line = f"- `{entry['id']}` ({entry['kind']}): {entry['ask']}"
+            filed = ", filed by the launcher" if entry.get("origin") else ""
+            line = f"- `{entry['id']}` ({entry['kind']}{filed}): {entry['ask']}"
             for earlier in state.replaced.get(str(entry["id"]), ()):
                 line += (
                     f". It replaces `{earlier['id']}`, which the Founder {earlier['decided']}: {earlier['ask']}."
@@ -371,6 +380,10 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
             lines.append(f"- `{entry['id']}` {status}: {entry['ask']}.{founder_words(entry)}")
     else:
         lines.append("None.")
+    lines += ["", "## Waitlist", ""]
+    if state.waitlist is not None:
+        evidence = ledger / state.waitlist_file if state.waitlist_file else None
+        lines += waitlist_brief(state.waitlist, evidence)
     lines += [
         "",
         "## Where to write",
@@ -398,13 +411,17 @@ def summary_lines(state: RunState) -> list[str]:
         lines.append("- The agent did not start; see Agent below. Everything the launcher does alone still ran.")
     else:
         lines.append(f"- The agent stopped with exit code {agent}; its work this run may be incomplete.")
+    refused = sum(1 for line in state.sources if line.status == waitlist.REFUSED)
     lines.append(
         f"- Sources: {len(failed)} failed"
         + (f" ({', '.join(line.name for line in failed)})" if failed else "")
         + f", {sum(1 for line in state.sources if line.status == package.CHANGED)} changed,"
         + f" {sum(1 for line in state.sources if line.status == package.READ)} read,"
-        + f" {sum(1 for line in state.sources if line.status == SKIPPED)} skipped."
+        + f" {sum(1 for line in state.sources if line.status == SKIPPED)} skipped"
+        + (f", {refused} refused." if refused else ".")
     )
+    if state.waitlist is not None:
+        lines.append(f"- {waitlist_summary(state.waitlist, state.breach_notice)}")
     taken = [outcome for outcome in state.decisions if outcome.status == "taken"]
     lines.append(
         f"- Review Queue: {plural(len(open_items), 'item')} open for the next sitting ({len(state.published)} new"
@@ -421,6 +438,8 @@ def render_report(state: RunState) -> str:
     lines += ["", "## Sources", ""]
     lines += table(["Source", "Result", "Detail"], [[line.name, line.status, line.detail] for line in state.sources])
     lines += ["", "## Package changes since the previous run", ""] + package_changes(state)
+    if state.waitlist is not None:
+        lines += ["", "## Waitlist", ""] + waitlist_lines(state.waitlist, state.waitlist_file, state.breach_notice)
     lines += ["", "## Founder decisions", ""] + (decision_lines(state) or ["No new decisions."])
     if state.sittings:
         lines += [""] + [f"- Sitting {sitting.day}: {sitting.minutes} minutes." for sitting in state.sittings]
@@ -578,3 +597,130 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     touches = "- Nothing changes; this notice is for your information."
     evidence = f"- The run report: `{report_path}`"
     return title, body, touches, evidence
+
+
+# The Waitlist.
+
+
+def waitlist_progress(reading: waitlist.Reading) -> str:
+    """Good-Fit opt-ins against the Product's Beta Cohort bar."""
+    bar = reading.rules.bar
+    have = reading.good_fit_opt_ins
+    where = "the bar is reached" if have >= bar else f"{round(100 * have / bar)}% of the way"
+    return f"{plural(have, 'good-Fit opt-in')} of about {bar}, {where}"
+
+
+def waitlist_age(reading: waitlist.Reading) -> str:
+    """How old the view was when the run started, so counts from a copy that stopped changing never pass for a quiet
+    week."""
+    if reading.age < timedelta(0):
+        return "after this run started"
+    return f"{duration(reading.age)} before this run started"
+
+
+def waitlist_outcome(reading: waitlist.Reading, notice: str | None) -> str:
+    """What became of the view this run, in one sentence that opens with its status unless it was read."""
+    if reading.status == package.READ:
+        week = reading.this_week
+        return (
+            f"{plural(int(reading.cumulative['sign_ups']), 'sign-up')}, {week['sign_ups']} of them in the week of"
+            f" {week['week_of']}; {waitlist_progress(reading)}."
+        )
+    if reading.status == waitlist.REFUSED:
+        return (
+            "refused, a Guardrail breach (G6): the view held something that looks like an email address, so the whole"
+            " read was discarded and nothing from it was kept; this run recorded no Waitlist Evidence"
+            + (f"; see the notice `{notice}`." if notice else ".")
+        )
+    return f"{reading.status}: {reading.detail.rstrip('.')}."
+
+
+def waitlist_summary(reading: waitlist.Reading, notice: str | None) -> str:
+    separator = ": " if reading.status == package.READ else " "
+    return f"Waitlist{separator}{waitlist_outcome(reading, notice)}"
+
+
+def waitlist_lines(reading: waitlist.Reading, evidence_file: str, notice: str | None) -> list[str]:
+    """The run report's Waitlist section: progress, then counts by week, by Source, and by Fit answer."""
+    if reading.status != package.READ:
+        outcome = waitlist_outcome(reading, notice)
+        return [outcome[:1].upper() + outcome[1:]]
+    counts = waitlist.COUNTS
+    week = reading.this_week
+    good_fit = " or ".join(f"`{answer}`" for answer in reading.rules.good_fit)
+    lines = [
+        f"Read the view generated {reading.generated_at.isoformat()}, {waitlist_age(reading)}; Waitlist Evidence:"
+        f" `{evidence_file}`.",
+        f"Progress toward the Beta Cohort bar: {waitlist_progress(reading)}; good Fit is the {good_fit} answer.",
+        "",
+    ]
+    lines += table(
+        ["Week of", "Sign-ups", "Good Fit", "Opted in", "Good-Fit opt-ins"],
+        [[str(row["week_of"]), *(str(row[key]) for key in counts)] for row in reading.weeks]
+        + [["All weeks", *(str(reading.cumulative[key]) for key in counts)]],
+    )
+    lines += [""] + table(
+        ["Source", f"Week of {week['week_of']}", "All weeks", "Good Fit", "Opted in", "Good-Fit opt-ins"],
+        [
+            [tag, str(week["by_source"][tag]["sign_ups"]), *(str(row[key]) for key in counts)]
+            for tag, row in reading.cumulative["by_source"].items()
+        ],
+    )
+    lines += [""] + table(
+        ["Fit answer", f"Week of {week['week_of']}", "All weeks", "Opted in"],
+        [
+            [answer, str(week["by_fit"][answer]["sign_ups"]), str(row["sign_ups"]), str(row["opted_in"])]
+            for answer, row in reading.cumulative["by_fit"].items()
+        ],
+    )
+    unknown = waitlist.UNKNOWN
+    lines += [
+        "",
+        f"An `{unknown}` Source is a sign-up that arrived without a listed tag; an `{unknown}` Fit answer is a sign-up"
+        " that gave none, never one that is not a fit.",
+    ]
+    return lines
+
+
+def waitlist_brief(reading: waitlist.Reading, evidence: Path | None) -> list[str]:
+    """What the agent learns about the Waitlist: where the counts are; the view itself is beyond the sandbox's reach."""
+    if reading.status == package.READ:
+        return [
+            f"- Read: the view {reading.detail}.",
+            "- Counts by Source, Fit answer, and opt-in, per week and cumulative, with the entry identifiers:"
+            f" `{evidence}`.",
+            "- The view itself is outside what the sandbox can read; work only from these counts.",
+        ]
+    if reading.status == waitlist.REFUSED:
+        return ["- Refused: the view held something that looks like an email address, so there are no counts."]
+    if reading.status == package.FAILED:
+        return ["- Failed: the view could not be used this run, so there are no counts; never guess them."]
+    return [f"- Skipped: {reading.detail}; there are no counts yet."]
+
+
+def breach_notice(state: RunState, report_path: str) -> tuple[str, str, str, str]:
+    """The Guardrail breach notice, in plain outcome language: what happened, that nothing was kept, where in the view
+    it was found without ever repeating it, and what fixes it."""
+    reading = state.waitlist
+    day = wall_clock(state.started).strftime("%Y-%m-%d")
+    places = list(reading.places)
+    shown = [bullet(place) for place in places[: waitlist.MAX_LISTED]]
+    if len(places) > waitlist.MAX_LISTED:
+        shown.append(bullet(f"and {len(places) - waitlist.MAX_LISTED} more"))
+    body = "\n".join(
+        [
+            "The Waitlist's anonymous view must never hold an email address (Guardrail G6), and this run found"
+            " something in it that looks like one.",
+            "The run discarded the whole read: it recorded no Waitlist count or other Waitlist Evidence, and no address"
+            " was stored or shown anywhere.",
+            "",
+            "Where it was found, without the values:",
+            *shown,
+            "",
+            "Each run refuses the view the same way until it holds no address; fixing how RepToday produces it is a"
+            " change in RepToday, through firstmate.",
+        ]
+    )
+    title = f"Notice: Guardrail breach, the Waitlist view held an email address on {day}"
+    touches = f"- {reading.rules.product}'s Waitlist anonymous view, which its Waitlist build produces"
+    return title, body, touches, f"- The run report: `{report_path}`"

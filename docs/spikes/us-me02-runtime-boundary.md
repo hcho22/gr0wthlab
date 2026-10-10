@@ -251,6 +251,33 @@ Everything was re-run on 2026-10-09 with Codex CLI 0.160.0 from a linked worktre
 
 Mandu's HEAD, git status, index, and every package file digest were unchanged after every run, and no run left anything in `workspace/` beyond what the agent wrote there.
 
+### Re-check after the Waitlist (US-ME05, US-ME06)
+
+The Waitlist work added two launcher steps to the cycle, reading the anonymous Waitlist view and filing the reviewed Dispatch requests in `src/dispatches/`, and added RepToday's Waitlist view location and counting rules to `config/products.json`.
+None of them changes the permission profile, the Codex flags, or the environment: `codex.py`, `boundary.py`, `launcher.py`, the probe, and `runtime.json` are unchanged, and the view is never one of the registry locations the sandbox reads.
+`src/bin/gr0wthlab show-config` resolved the same command, environment, policy, and fingerprint with the Product registry as it was at the commit before this work and as it is now, from the same worktree.
+The view must lie outside the repository, its git directories, and every registry location, or the launcher refuses to start (`settings.waitlist`), so the agent can never open it.
+
+The review of this work then changed the launcher and the registry again: the address check, the week the report leads with, the freshness rule and its option in `config/products.json`, which were removed, the rules for superseding and re-filing a reviewed request, and the request's text.
+Both checks and all four runs below were therefore made again on the code as it stands after those changes, on 2026-10-09, Mac local time, with Codex CLI 0.160.0 from a linked worktree; their run identifiers carry the UTC date.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261010T004907Z-on-demand-87b2`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+
+The runs below used Mandu as it is, network off; the view runs set `GR0WTHLAB_WAITLIST_VIEW` to a file in a temporary folder outside every checkout, holding the seed generated as each run started.
+
+| Run | What it showed |
+| --- | --- |
+| `20261010T005036Z-on-demand-a45d` | US-ME05 with no view configured: the Waitlist Dispatch request queued once, as `20261009-reptoday-waitlist`, its published item passing the item check and holding the reviewed text as it now is, and the view reported skipped because RepToday's Waitlist build has not landed |
+| `20261010T005150Z-on-demand-5cb4` | US-ME06 step 1, a twelve-entry seed across every Source and Fit answer: 12 sign-ups, 5 and 7 in the weeks of 2026-09-28 and 2026-10-05, counted by Source, Fit answer, and opt-in, with 5 good-Fit opt-ins of about 50, kept as Evidence of entry identifiers and counts only; the report led with the week of 2026-10-05 and said how old the view was; the Dispatch request stayed open and was not filed again |
+| `20261010T005309Z-on-demand-4213` | US-ME06 step 2, the same seed with an `email` field on one sign-up: the read was refused at entry 3, no Waitlist Evidence was written, and a Guardrail breach notice was queued that names where, never what |
+| `20261010T005352Z-on-demand-7c0b` | The view made unreadable: reported failed with `Permission denied`, with a notice naming the outputs it leaves incomplete, and no Waitlist Evidence |
+
+A search of every output of these runs, the ledger records, the agent's areas, the launcher logs, Codex's event streams, and the agent's summaries, found the seeded address in no form, plain, base64, hex, or percent-encoded.
+Mandu's, the RepToday checkout's, and the Immerse checkout's HEAD, git status, index, and every file digest were the same after the last run as before the preflight.
+The same checks and runs were first made earlier that day, before the review, on the code as it then was: the boundary check as `20261009T234224Z-on-demand-67b6`, and the four runs as `20261009T234719Z-on-demand-e4ad`, `20261009T234857Z-on-demand-c3e4`, `20261009T234937Z-on-demand-2abd`, and `20261009T235032Z-on-demand-3413`, with the same outcomes.
+The review rounds after that changed only how the launcher compares a reviewed request with the items it queued from it, by the whole text and no longer by the ask and Request section alone, and what its report says when an approval is taken in for an item already replaced; nothing the preflight or the boundary check exercises depends on either, so the checks and runs above were not made again, and the launcher's unit tests cover both.
+
 ## Scheduled and on-demand runs share one configuration
 
 The scheduled path was tested with a temporary LaunchAgent, `gr0wthlab.us-me02-schedule-test`, generated by `src/bin/gr0wthlab launch-agent --once <time> --label gr0wthlab.us-me02-schedule-test --instruction src/checks/boundary-probe.md`.

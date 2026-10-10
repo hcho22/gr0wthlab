@@ -33,7 +33,7 @@
     "package-review": {"title": "Package review (contradictions)", "story": "US-ME04", "built": true},
     "decisions": {"title": "Founder decisions taken in", "story": "US-ME07", "built": true},
     "review-queue": {"title": "Review Queue", "story": "US-ME07", "built": true},
-    "waitlist-counts": {"title": "Waitlist counts", "story": "US-ME06", "built": false},
+    "waitlist-counts": {"title": "Waitlist counts", "story": "US-ME06", "built": true},
     "post-drafts": {"title": "Post Drafts", "story": "US-ME08", "built": false},
     "filming-plan": {"title": "Filming plan", "story": "US-ME09", "built": false},
     "scheduler-drafts": {"title": "Scheduling-service drafts", "story": "US-ME10", "built": false},
@@ -45,7 +45,6 @@
   },
   "sources_not_connected": [
     {"name": "RepToday repository", "story": "US-ME08", "needed_by": ["post-drafts"]},
-    {"name": "Waitlist anonymous view", "story": "US-ME06", "needed_by": ["waitlist-counts", "weekly-read", "beta-recruiting"]},
     {"name": "Scheduling service", "story": "US-ME10", "needed_by": ["scheduler-drafts"]},
     {"name": "YouTube results", "story": "US-ME11", "needed_by": ["results", "weekly-read"]},
     {"name": "TikTok export in Mandu", "story": "US-ME11", "needed_by": ["results", "weekly-read"]},

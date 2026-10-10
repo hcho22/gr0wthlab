@@ -5,11 +5,14 @@ The launcher writes them outside the sandbox; a run can read them and can never 
 Each run's records step commits this folder to `main` together with `workspace/` (US-ME17).
 
 - `review-queue/queue.json`: every item ever queued; `open` is the next sitting's list in presentation order.
+  An item the launcher filed from reviewed text, such as a Dispatch request from `src/dispatches/`, carries `origin`, so later runs file it only once and no item the agent writes can supersede it.
 - `review-queue/items/<id>.md`: each queued item, under an identifier that never changes.
 - `review-queue/set-aside/<run id>/`: what the launcher refused to queue that run, kept for the record and named in that run's notice.
 - `evidence/package-snapshots/<run id>.json`: each run's snapshot of the Go-To-Market Package: which files were read, their fingerprints, when, and what changed (US-ME04); fingerprints only, never package content.
 - `evidence/decisions/<item id>.json`: each Founder decision taken in from Mandu, with its reason or note, its Mandu source, and the newer item that had already superseded the decided one, if any (US-ME07).
 - `evidence/sittings/<date>.json`: how long each sitting took, from Mandu, and the run that first took it in.
+- `evidence/waitlist/<run id>.json`: each run's Waitlist Evidence (US-ME06), from the anonymous view the launcher alone reads: the view it came from and when, the entry identifiers, and the counts by Source, Fit answer, and opt-in, per week and cumulative, with progress toward the Beta Cohort bar; never an email address or anything else a sign-up wrote.
+  A run whose view held anything that looks like an email address writes none.
 - `run-reports/<run id>.md`: the run report: every source checked with its result, every failure and skip with its reason, whether a scheduled run started late, and the run's approximate cost; its first line counts what the run checked and acted on (`checked=N acted=N note=...`).
 - `run-reports/<run id>.brief.md`: the facts the launcher gave the agent before it started.
 - `run-reports/state/<workflow>.json`: each workflow's run state - Review Queue items decided, those carried over with the sitting they were left undecided at, and the Mandu records already reported as unusable; Listening threads already read; outreach targets and their follow-up waits - by identifier and hash only, never a name, address, or URL.

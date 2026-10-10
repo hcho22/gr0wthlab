@@ -1,8 +1,10 @@
-"""config/run.json, and the Mandu exchange folder from config/products.json, validated before a run starts."""
+"""config/run.json, and the Mandu exchange folder and the Waitlist view from config/products.json, validated before a
+run starts."""
 
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -12,6 +14,9 @@ from .boundary import Boundary, ConfigError, canonical, is_within, load_json
 
 RUN_CONFIG = Path("config/run.json")
 INSTRUCTIONS = PurePosixPath("src/instructions")
+TAG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+# The Source and Fit answer of a sign-up the view cannot place; no configured tag or answer may take it.
+UNKNOWN = "unknown"
 
 
 @dataclass(frozen=True)
@@ -108,3 +113,75 @@ def exchange_dir(registry: Mapping, boundary: Boundary, env: Mapping[str, str], 
     if is_within(path, boundary.repo_root) or is_within(boundary.repo_root, path):
         raise ConfigError(f"the exchange folder {path} overlaps the repository; the agent could write in it")
     return path
+
+
+@dataclass(frozen=True)
+class Waitlist:
+    """A Product's Waitlist: where its anonymous view is, if RepToday's build has made one, and how it is counted."""
+
+    product: str
+    view: Path | None
+    source_tags: tuple[str, ...]
+    fit_answers: tuple[str, ...]
+    good_fit: tuple[str, ...]
+    bar: int
+
+
+def tags(value: object, name: str) -> tuple[str, ...]:
+    if not isinstance(value, list) or not value or len(set(value)) != len(value):
+        raise ConfigError(f"{name} must list distinct values")
+    for tag in value:
+        if not isinstance(tag, str) or not TAG_PATTERN.fullmatch(tag) or tag == UNKNOWN:
+            raise ConfigError(f"{name} holds lowercase-with-hyphens values other than {UNKNOWN!r}")
+    return tuple(value)
+
+
+def sandbox_readable(boundary: Boundary) -> list[Path]:
+    """Every place the run's sandbox may read besides the system files a shell needs."""
+    system = [Path(entry) for entry in boundary.read_system if not entry.startswith(":")]
+    return [boundary.repo_root, *boundary.git_dirs, *(location.path for location in boundary.locations), *system]
+
+
+def waitlist(registry: Mapping, boundary: Boundary, env: Mapping[str, str], home: Path) -> Waitlist | None:
+    """The Waitlist of the one Product that has one, or None.
+
+    Only the launcher reads the view, outside the sandbox, so the agent never sees it (Guardrail G6): a view anywhere
+    the sandbox can read would let the agent open it, so such a location stops the run before it starts.
+    """
+    found = [product for product in registry.get("products", []) if product.get("waitlist")]
+    if not found:
+        return None
+    if len(found) > 1:
+        raise ConfigError("only one Product may have a Waitlist until the run reads more than one view")
+    product = found[0]
+    name = str(product.get("name"))
+    try:
+        block = product["waitlist"]
+        view = block["view"]
+        if not isinstance(view, dict) or view.get("access") != "read-only":
+            raise ConfigError(f"{name}'s Waitlist view must be declared read-only")
+        env_name = view.get("env")
+        if not isinstance(env_name, str) or not env_name:
+            raise ConfigError(f"{name}'s Waitlist view needs an env override name")
+        if env.get(env_name) or view["local_path"] is not None:
+            path = resolve_home_path(view["local_path"], f"{name}.waitlist.view.local_path", env_name, env, home)
+        else:
+            path = None
+        source_tags = tags(block["source_tags"], f"{name}.waitlist.source_tags")
+        fit_answers = tags(block["fit_answers"], f"{name}.waitlist.fit_answers")
+        good_fit = tags(block["good_fit"], f"{name}.waitlist.good_fit")
+        bar = block["beta_cohort_bar"]
+    except (KeyError, TypeError) as error:
+        raise ConfigError(f"{name}'s Waitlist in the Product registry is incomplete: {error}") from error
+    if not set(good_fit) <= set(fit_answers):
+        raise ConfigError(f"{name}.waitlist.good_fit must name answers from fit_answers")
+    if isinstance(bar, bool) or not isinstance(bar, int) or bar < 1:
+        raise ConfigError(f"{name}.waitlist.beta_cohort_bar must be a whole number above zero")
+    if path is not None:
+        for place in sandbox_readable(boundary):
+            if is_within(path, place) or is_within(place, path):
+                raise ConfigError(
+                    f"{name}'s Waitlist view {path} overlaps {place}, which the sandboxed agent can read;"
+                    " it must be outside every location the run reads"
+                )
+    return Waitlist(name, path, source_tags, fit_answers, good_fit, bar)

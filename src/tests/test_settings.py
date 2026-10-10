@@ -74,6 +74,72 @@ class ExchangeFolderTest(unittest.TestCase):
             settings.exchange_dir(registry, self.boundary, {}, Path("/srv/home"))
 
 
+class WaitlistSettingsTest(unittest.TestCase):
+    HOME = Path("/srv/home")
+
+    def setUp(self):
+        self.registry = json.loads((REPO / "config/products.json").read_text(encoding="utf-8"))
+        config = dict(CONFIG, filesystem=dict(CONFIG["filesystem"], read_system=[":minimal", "/opt/tools"]))
+        self.boundary = boundary.resolve_boundary(
+            self.HOME / "gr0wthlab", config, self.registry, {}, self.HOME, git=[Path("/srv/git/gr0wthlab.git")]
+        )
+
+    def rules(self, env=None, registry=None):
+        return settings.waitlist(registry or self.registry, self.boundary, env or {}, self.HOME)
+
+    def block(self, registry):
+        return next(product for product in registry["products"] if product["name"] == "RepToday")["waitlist"]
+
+    def test_no_view_until_the_build_lands_then_the_reviewed_path_or_an_override(self):
+        self.assertIsNone(self.rules().view)
+        registry = copy.deepcopy(self.registry)
+        self.block(registry)["view"]["local_path"] = "~/Library/RepToday/waitlist-view.json"
+        self.assertEqual(self.rules(registry=registry).view, self.HOME / "Library/RepToday/waitlist-view.json")
+        env = {"GR0WTHLAB_WAITLIST_VIEW": "/srv/exports/waitlist-view.json"}
+        self.assertEqual(self.rules(env).view, Path("/srv/exports/waitlist-view.json"))
+        with self.assertRaises(ConfigError):
+            self.rules({"GR0WTHLAB_WAITLIST_VIEW": "relative/view.json"})
+
+    def test_a_view_the_sandbox_could_read_stops_the_run(self):
+        for inside in (
+            "/srv/home/gr0wthlab/ledger/view.json",
+            "/srv/home/gr0wthlab/workspace/evidence/view.json",
+            "/srv/home/Mandu/projects/RepToday/view.json",
+            "/srv/home/Developer/FM_Private/firstmate-private/projects/RepToday/view.json",
+            "/srv/home/Developer/FM_Private/firstmate-private/projects/Immerse/view.json",
+            "/srv/git/gr0wthlab.git/view.json",
+            "/opt/tools/view.json",
+            "/srv/home",
+        ):
+            with self.subTest(inside=inside), self.assertRaises(ConfigError) as caught:
+                self.rules({"GR0WTHLAB_WAITLIST_VIEW": inside})
+            self.assertIn("which the sandboxed agent can read", str(caught.exception))
+
+    def test_counting_rules_are_validated(self):
+        breaks = {
+            "good_fit": ["not-an-answer"],
+            "source_tags": ["tiktok", "unknown"],
+            "fit_answers": ["Lost The Routine"],
+            "beta_cohort_bar": 0,
+        }
+        for key, value in breaks.items():
+            registry = copy.deepcopy(self.registry)
+            self.block(registry)[key] = value
+            with self.subTest(key=key), self.assertRaises(ConfigError):
+                self.rules(registry=registry)
+        registry = copy.deepcopy(self.registry)
+        del self.block(registry)["view"]["access"]
+        with self.assertRaises(ConfigError):
+            self.rules(registry=registry)
+        registry = copy.deepcopy(self.registry)
+        registry["products"][1]["waitlist"] = self.block(registry)
+        with self.assertRaises(ConfigError):
+            self.rules(registry=registry)
+        registry = copy.deepcopy(self.registry)
+        del registry["products"][0]["waitlist"]
+        self.assertIsNone(self.rules(registry=registry))
+
+
 class AreasTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

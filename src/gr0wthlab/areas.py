@@ -125,8 +125,8 @@ class Areas:
 
 
 class Store:
-    """The launcher's records in ledger/: the Review Queue, decision and sitting Evidence, package snapshots, run
-    reports and briefs, run state, and notes for the next report. The run can read them and never write them."""
+    """The launcher's records in ledger/: the Review Queue, the launcher's own Evidence, run reports and briefs, run
+    state, and notes for the next report. The run can read them and never write them."""
 
     def __init__(self, root: Path):
         self.root = root
