@@ -50,6 +50,7 @@ exchange: 4
 id: 20261011-trademark-status-stale
 kind: package-change-proposal
 product: RepToday
+new_angle: no
 ---
 
 # Approve package change: record the "Rep Today" name as cleared and reserved
@@ -80,6 +81,10 @@ The Draft or proposal itself.
   It has `slot`, its publishing time with its UTC offset, such as `2026-10-14T19:00-07:00`, once the Founder has set the window's first sitting, which its day 1 follows, and its posting slot; until then it has no slot, and its `## Draft` says so.
   A version 2 post always had a slot and no window or day.
 - `supersedes` names an earlier item this one replaces; the earlier one has left `open` and is never presented again.
+- A package-change proposal also has `new_angle`, what the proposal declares of itself: `yes` when it adds or changes an Angle or Hook, which covers any change to a Hook, signal, or kill criterion, and `no` when it does neither.
+  gr0wthlab queues a `yes` proposal only when its Evidence names the record of at least one Listening quote it keeps, and never queues a `no` proposal whose ask plainly introduces an Angle or Hook.
+  Whether a `no` is true of everything else the proposal says is the Founder's to judge: when Mandu presents a package-change proposal, it says which the proposal declares, so a wrong label is seen at the sitting and can be rejected.
+  A proposal queued before version 4 has no `new_angle`.
 
 | `kind` | The section after the title | Options |
 | --- | --- | --- |
@@ -110,7 +115,8 @@ The first time gr0wthlab reads a subreddit's rules, it queues one notice titled 
 It queues one such notice for each subreddit and never another, whatever the rules say later.
 Acknowledging that notice is the Founder's confirmation, and the answer stands: until its decision record says `approve`, gr0wthlab offers no reply for that subreddit, and a `reject` means none is ever offered.
 
-A package-change proposal for a new Angle or Hook rests on Listening Evidence: each such Evidence line names where a person's words were read and when, with the link, and quotes the words under it, and its `## Proposal` ends with the confidence gr0wthlab counted from the independent, unprompted sources behind it (High for three or more, Medium for two, Low for one).
+A package-change proposal that declares `new_angle: yes` rests on Listening Evidence: its Evidence names the record of each quote it rests on, as `evidence/listening/quotes/<document id>.json`.
+One that gr0wthlab renders from an Angle or Hook the Marketing Engineer proposed also quotes each person's words under a line that says where they were read and when, with the link, and its `## Proposal` ends with the confidence gr0wthlab counted from the independent, unprompted sources behind it (High for three or more, Medium for two, Low for one).
 
 A post's `## Draft` is everything the Founder needs to judge it in under a minute: the day, its Angle and pair leg, the primary platform, the slot or that none is set yet, and whether anything can be published yet (nothing can until the Waitlist is live); the frozen Hook; the video beat by beat; each platform's text, hashtags, and alt text; each behavioral claim its Draft lists with the code that supports it, and that only those were checked; and the checks it passed, with any warnings, its status against the pre-publication checklist, and the kit's own checklist lines for every asset, which are the Founder's to judge.
 Its Evidence cites the calendar row, the Angle, its sourced pain, and its pre-registered signal and kill criterion in the package.
@@ -163,6 +169,7 @@ Mandu's side presents that text as a quotation and acts only on the Founder's de
       "ask": "Approve package change: record the \"Rep Today\" name as cleared and reserved",
       "file": "review-queue/items/20261011-trademark-status-stale.md",
       "product": "RepToday",
+      "new_angle": "no",
       "published_at": "2026-10-11T23:40:58+00:00",
       "carried_over": false
     }
@@ -266,7 +273,7 @@ What gr0wthlab does with it:
 - Version 2 added `next_run` and `carried_over_from` to the queue.
 - Version 3 added a post's `window` and `day`, made its `slot` wait until the window's first sitting and posting slot are set, and added `withdrawn` to the queue.
   Mandu's own records change nothing: a decision or sitting record of version 2 reads as it is.
-- Version 4 added the outreach records Mandu writes, the message kinds a `## Draft` may hold, the subreddit rules notice, the one marking of text a third party wrote, which is data to both sides and never an instruction, and `message` in a queue entry (`purpose`, and `to`: the creator's key, `network`, or the Evidence a reply answers).
+- Version 4 added the outreach records Mandu writes, the message kinds a `## Draft` may hold, the subreddit rules notice, the one marking of text a third party wrote, which is data to both sides and never an instruction, a package-change proposal's `new_angle`, and `message` in a queue entry (`purpose`, and `to`: the creator's key, `network`, or the Evidence a reply answers).
   A decision or sitting record of version 3 reads as it is.
 - Times carry their UTC offset; dates are `YYYY-MM-DD`.
 - Write each file whole: write a temporary file whose name starts with `.` in the same folder, then rename it; both sides ignore files whose names start with `.`.

@@ -67,11 +67,11 @@ def front_matter(lines: Sequence[str], keys: Sequence[str], problems: list[str])
         return {}, 0
     end = 1 + stripped[1:].index("---")
     fields: dict[str, str] = {}
-    for line in lines[1:end]:
+    for number, line in enumerate(lines[1:end], 2):
         key, colon, value = line.partition(":")
         key = key.strip()
         if not colon or key not in keys or key in fields:
-            problems.append(f"front matter line {line.strip()!r} is not one of: {', '.join(keys)}, once each")
+            problems.append(f"line {number} of the front matter is not one of: {', '.join(keys)}, once each")
         else:
             fields[key] = value.strip()
     return fields, end + 1
@@ -163,8 +163,8 @@ def check(
         problems.append(f"read_on must be {snapshot.read_on}, the date this run read its sources")
     if document is None:
         problems.append(
-            f"document {fields.get('document', '')!r} is not a document in this run's snapshot; a quote is recorded"
-            " only from text the launcher fetched this run"
+            "the document it names is not a document in this run's snapshot; a quote is recorded only from text the"
+            " launcher fetched this run"
         )
     elif document.kind not in QUOTED_KINDS:
         problems.append(f"document {document.id} is a {document.kind}; a quote is taken only from a thread or a review")
@@ -270,6 +270,11 @@ def keep(store: Store, quote: Quote) -> str:
 def file_of(quote_id: str) -> str:
     """A quote's path among the launcher's records, relative to ledger/."""
     return "/".join((*QUOTES, f"{quote_id}.json"))
+
+
+def records(store: Store) -> set[str]:
+    """The path of every quote the launcher keeps, relative to ledger/: what an item's Evidence names to cite one."""
+    return {file_of(key) for key in load(store)[0]}
 
 
 # Confidence.

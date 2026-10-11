@@ -33,13 +33,12 @@ from .boundary import ConfigError
 from .drafts import Context
 from .exchange import plural
 from .package import FAILED, READ, SKIPPED
-from .queue import APPROVED, REJECTED, REVIEW_QUEUE, SET_ASIDE, Ledger, SourcedPain
+from .queue import APPROVED, REJECTED, REVIEW_QUEUE, SET_ASIDE, Ledger
 from .sources import App, Document, Snapshot
 from .state import ListeningState, Tally
 
 WORKFLOW = "listening"
 RUNS = (*evidence.FOLDER, "runs")
-QUOTE_SET_ASIDE = (*evidence.FOLDER, "set-aside")
 QUOTES_IN = ("listening",)  # under workspace/evidence/
 ANGLES_IN = ("angles",)  # under workspace/review-queue/
 REPLIES_IN = (*messages.DRAFTS, "replies")  # under workspace/drafts/
@@ -67,19 +66,6 @@ def package_role(registry: Mapping) -> tuple[str, str] | None:
             raise ConfigError(f"{product['name']} listening.fit must be one of its package sources")
         return str(product["name"]), path
     return None
-
-
-def sourced_pain(registry: Mapping, store: Store) -> SourcedPain:
-    """What holds a proposed Angle or Hook in the incoming folder to its sourced pain: each Product's Angle bank and
-    A/B pairs file, which the kit reader takes Angles and frozen Hooks from, and every quote the launcher keeps."""
-    files = [
-        roles[role]
-        for product in registry.get("products", [])
-        for roles in [(product.get("go_to_market_package") or {}).get("post_drafts") or {}]
-        for role in ("angles", "pairs")
-        if isinstance(roles.get(role), str)
-    ]
-    return SourcedPain(tuple(files), tuple(evidence.file_of(key) for key in evidence.load(store)[0]))
 
 
 # Reading the sources.
@@ -370,7 +356,7 @@ def check_proposal(
     if len(found) > MAX_CITED:
         lines.append(f"- And {plural(len(found) - MAX_CITED, 'more record')}: `{'/'.join(evidence.QUOTES)}/`")
     lines += [f"- The Listening Evidence record: `{evidence.file_of(quote.id)}`" for quote in found[:MAX_CITED]]
-    fields = {"kind": "package-change-proposal", "product": product}
+    fields = {"kind": "package-change-proposal", "product": product, "new_angle": "yes"}
     item = exchange.Item(fields, proposal.title, body, proposal.touches.strip(), "\n".join(lines))
     checked = exchange.check_item(
         exchange.render_item(item.fields, item.ask, item.body, item.touches, item.evidence), products
@@ -407,19 +393,9 @@ def read_text(path: Path) -> tuple[str | None, str]:
         return None, f"unreadable: {error}"
 
 
-def set_aside(areas: Areas, store: Store, path: Path, target: Path, publish: bool) -> None:
-    """Take a file the launcher did not keep out of the agent's folder, into the launcher's records."""
-    if not publish:
-        return
-    try:
-        store.write_bytes(target, read_plain(path))
-    except (UnsafeFile, OSError):
-        pass
-    areas.remove(path)
-
-
 def take_quotes(plan: Plan, areas: Areas, store: Store, run_id: str, result: Result, publish: bool) -> dict:
-    """Keep each quote record that passes; every other file there is set aside with its reasons."""
+    """Keep each quote record that passes. Every other file there is removed, and nothing of it is kept but its
+    name and the reasons: a record the launcher did not validate may hold any text the run fetched."""
     quotes = dict(plan.quotes)
     for path, name in md_files(areas, areas.path("evidence", *QUOTES_IN)):
         problems: list[str] = []
@@ -435,7 +411,8 @@ def take_quotes(plan: Plan, areas: Areas, store: Store, run_id: str, result: Res
             problems += found
         if problems or quote is None:
             result.rejected.append((name, problems))
-            set_aside(areas, store, path, store.path(*QUOTE_SET_ASIDE, run_id, name.replace("/", "--")), publish)
+            if publish:
+                areas.remove(path)
             continue
         quotes[quote.id] = quote
         result.accepted.append(quote)
@@ -479,8 +456,13 @@ def take_proposals(
             problems.append(f"asks the same as {seen[exchange.item_hash(item)]}, which is {status}")
         if problems or item is None:
             result.discarded.append((name, problems))
-            target = store.path(REVIEW_QUEUE, SET_ASIDE, run_id, f"angles--{name.replace('/', '--')}")
-            set_aside(areas, store, path, target, publish)
+            if publish:
+                target = store.path(REVIEW_QUEUE, SET_ASIDE, run_id, f"angles--{name.replace('/', '--')}")
+                try:
+                    store.write_bytes(target, read_plain(path))
+                except (UnsafeFile, OSError):
+                    pass
+                areas.remove(path)
             continue
         identifier = name
         if publish:
@@ -699,9 +681,9 @@ def brief_lines(plan: Plan | None, workspace: Path, ledger_root: Path, mandu: Pa
         f"- Record a quote as `{workspace / 'evidence' / QUOTES_IN[0]}/<document id>.md`, one record for each"
         f" document at most, with `read_on: {plan.snapshot.read_on}`; the launcher keeps a record only if its quote"
         " stands in that document's text word for word.",
-        f"- Propose a new Angle or Hook only as `{workspace / 'review-queue' / ANGLES_IN[0]}/<slug>.md`, citing"
-        " quote records by document id: ones you write this run, or ones already kept. The launcher counts the"
-        " confidence; never state one.",
+        "- Propose a new Angle or Hook from what you heard as"
+        f" `{workspace / 'review-queue' / ANGLES_IN[0]}/<slug>.md`, citing quote records by document id: ones you write"
+        " this run, or ones already kept. The launcher counts the confidence; never state one.",
         f"- A reply Draft goes in `{workspace / 'drafts' / '/'.join(REPLIES_IN)}/<document id>.md`, only for a"
         " thread whose record says `answerable: yes`, and carries no link of any kind.",
         f"- Check all of it before you finish: `{check}`.",

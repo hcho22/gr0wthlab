@@ -727,8 +727,3 @@ def describe_rules(context: Context, creator: bool) -> list[str]:
     if pending:
         lines.append(f"  Pending until Mandu adds their lists, so yours to keep by judgment: {', '.join(pending)}.")
     return lines
-
-
-def standing_rows(slots: Sequence[Slot]) -> list[str]:
-    """One table row for each message a run may offer: who it is for, where its Draft goes, and how it stands."""
-    return [f"| {slot.target.label} | `{slot.path}` | {slot.standing()} |" for slot in slots]

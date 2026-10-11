@@ -191,6 +191,7 @@ SUNDAY_RUN = datetime(2026, 10, 11, 23, 0, tzinfo=timezone.utc)
 PROPOSAL = """---
 kind: package-change-proposal
 product: RepToday
+new_angle: no
 ---
 
 # Approve package change: record the name as cleared
@@ -215,10 +216,19 @@ Replace the stale caveat with the cleared status.
 """
 
 
-def proposal(kind: str = "package-change-proposal", extra: str = "", title: str = "record the name as cleared") -> str:
+def proposal(
+    kind: str = "package-change-proposal",
+    extra: str = "",
+    title: str = "record the name as cleared",
+    new_angle: str | None = "no",
+) -> str:
+    """PROPOSAL as an item of another kind, with more front matter, another ask, or another declaration; only a
+    package-change proposal declares new_angle, and None leaves the declaration out."""
     from gr0wthlab import exchange
 
     text = PROPOSAL.replace("kind: package-change-proposal", f"kind: {kind}\n{extra}".rstrip("\n"))
+    declared = f"new_angle: {new_angle}\n" if kind == "package-change-proposal" and new_angle else ""
+    text = text.replace("new_angle: no\n", declared)
     text = text.replace("record the name as cleared", title)
     text = text.replace("## Proposal", f"## {exchange.KINDS[kind]}")
     return text.replace(

@@ -2,6 +2,7 @@
 ---
 kind: package-change-proposal
 product: RepToday
+new_angle: no
 ---
 
 # Approve package change: add AI-tell, invented-proof, and scarcity lists to the brand lint

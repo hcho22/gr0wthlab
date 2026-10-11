@@ -49,6 +49,7 @@ The formats are in the task definition, and the launcher's checks decide what is
   The launcher counts the independent, unprompted sources and writes the confidence into the item.
 - One source is a reason to keep listening, rarely a reason to propose.
 - Leave the Hook's exact wording, the format, the signal, and the kill criterion to the Founder: say what the quotes suggest, and stop.
+- A proposal you write in the angles folder reaches the Founder labeled as one that adds or changes an Angle or Hook, with the quotes it rests on.
 - An idea you cannot source is not a proposal.
   Say in your summary that you had it and what Evidence would support it.
 

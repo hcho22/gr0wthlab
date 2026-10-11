@@ -37,12 +37,13 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
    The agent writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records, and never write there.
 7. Once the agent finishes, it restores its owner's read and write access to anything under `workspace/` the agent left without it, and the run report names every entry it fixed, before or after the agent.
    It queues the items the agent wrote to `workspace/review-queue/incoming/` that pass the format, sets the rest aside, and turns every problem into one notice.
-   A package-change proposal there that touches the Angle bank or the A/B pairs file, or whose ask adds an Angle or Hook, proposes an Angle or Hook: it is set aside, with what to add, unless its Evidence cites a Listening quote the launcher already keeps.
+   Every package-change proposal there declares whether it adds or changes an Angle or Hook (`new_angle`), and the Founder sees the declaration on the item.
+   One that declares it does is set aside, with what to add, unless its Evidence names the record of a Listening quote the launcher already keeps; one that declares it does not is queued whatever files it touches, unless its ask itself introduces an Angle or Hook.
    The package review counts as complete only when the agent's summary ends with the line `Review: complete`; otherwise the run report marks it incomplete and the notice says so.
    It checks each post Draft the agent wrote in `workspace/drafts/posts/` and queues a post only for one that passes; a blocked Draft is named in the run report and the notice with every failing rule or checklist line, and every check is kept in `ledger/evidence/post-drafts/`.
    It files the brand lint's word-list proposal once, and never again whatever the Founder decides.
    It puts back any change the run made in `workspace/instructions/`, and names it in the run report.
-   It keeps each quote record whose words stand in the text it fetched from that record's link (`ledger/evidence/listening/quotes/`), and refuses every other.
+   It keeps each quote record whose words stand in the text it fetched from that record's link (`ledger/evidence/listening/quotes/`), and refuses every other: a refused record is removed, and only its file name and the reasons are kept.
    Once the agent's work is taken in and the run ends, it removes the snapshot.
    It queues a proposed Angle or Hook only when every source it cites is a kept quote, with the confidence it counts itself, and discards an unsourced one with a note.
    It checks each message Draft in `workspace/drafts/messages/` and queues a message only for one that passes; an open message that may no longer be offered, such as a follow-up to a creator who has since replied, is withdrawn.
@@ -61,7 +62,8 @@ It lives in `ledger/working/`, where the agent can read it while the run is in p
 Git ignores that folder, so the records step never saves it, and the launcher removes it when the run ends, however the run ends.
 Anything a killed run left there is removed before the next run reads its sources, so no agent ever reads an earlier run's snapshot.
 What is committed is only the Evidence the agent actually quoted and the launcher validated: each kept quote with its link, the date read, and a hash of the document it came from (`ledger/evidence/listening/quotes/`).
-Besides those quotes, a run's records say only where it read and what became of each source: the request log holds addresses and outcomes, a subreddit's rules notice quotes that subreddit's rules for the Founder, and a quote record the launcher refused is set aside as the agent wrote it.
+A quote record the launcher refuses is removed from `workspace/` and copied nowhere: the run's Listening record keeps its file name and the reasons, which never repeat its text.
+Besides the kept quotes, a run's records say only where it read and what became of each source: the request log holds addresses and outcomes, and a subreddit's rules notice quotes that subreddit's rules for the Founder.
 `check-work --run <run id>` checks quotes against the snapshot, so it answers only while that run is in progress.
 
 ## Set up the production clone (once, after merge)

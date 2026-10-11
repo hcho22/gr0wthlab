@@ -151,7 +151,11 @@ class ListeningExamplesTest(ExampleSet, unittest.TestCase):
         if check == "refused":
             return outcome["quote"] is None and any(said.startswith(assertion["problem"]) for said in outcome["said"])
         if check == "queued":
-            return outcome["proposal"] is not None and outcome["proposal"].kind == "package-change-proposal"
+            proposal = outcome["proposal"]
+            return proposal is not None and (proposal.kind, proposal.fields["new_angle"]) == (
+                "package-change-proposal",
+                "yes",
+            )
         if check == "discarded":
             return outcome["proposal"] is None and any(
                 said.startswith(assertion["problem"]) for said in outcome["said"]

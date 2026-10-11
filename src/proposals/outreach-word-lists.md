@@ -1,6 +1,7 @@
 ---
 kind: package-change-proposal
 product: RepToday
+new_angle: no
 ---
 
 # Approve package change: add loss-framing and sponsorship-ask lists to the brand lint

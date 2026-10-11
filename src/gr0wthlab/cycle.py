@@ -36,6 +36,7 @@ from typing import TextIO
 
 from . import (
     dispatch,
+    evidence,
     exchange,
     fetch,
     launcher,
@@ -681,7 +682,6 @@ class Cycle:
         source_config: sources.Config,
         mandu: Path,
         seen: run_state.ListeningState,
-        plan: listening.Plan | None = None,
     ) -> tuple[sources.Snapshot, list[tuple[str, str]], str]:
         """Read the fixed list of network sources, outside the sandbox, into this run's snapshot, and keep the
         request log; every source's result goes into the run report, read or not."""
@@ -1105,8 +1105,8 @@ class Cycle:
         now = self.now()
         published: list[str] = []
         if ledger_ok:
-            sourced = listening.sourced_pain(registry, self.store)
-            published, state.set_aside = ledger.take_incoming(areas, self.store, products, run_id, now, seen, sourced)
+            kept = evidence.records(self.store)
+            published, state.set_aside = ledger.take_incoming(areas, self.store, products, run_id, now, seen, kept)
             state.published += published
         incoming = len(published) + len(state.set_aside)
         if ledger_ok:

@@ -231,6 +231,8 @@ class ListeningCycleTest(WorkCycleTestCase):
         )
         self.assertEqual(exchange.check_item(text, ["RepToday", "Immerse"], published=True).problems, [])
         self.assertIn(f"- The Listening Evidence record: `evidence/listening/quotes/{OTHER}.json`", text)
+        self.assertIn("\nnew_angle: yes\n---\n", text, "a proposed Angle says on its item that it is one")
+        self.assertEqual(proposals[0]["new_angle"], "yes")
         self.assertIn(
             "- Angle or Hook proposal discarded, not queued: `lunch-breaks.md`: it cites no sourced pain: an Angle or"
             " Hook is proposed only with at least one validated Listening Evidence record under ## Sourced pain",
@@ -243,6 +245,33 @@ class ListeningCycleTest(WorkCycleTestCase):
         self.assertTrue(list((self.ledger() / "review-queue/set-aside").glob("*/angles--lunch-breaks.md")))
         self.assertIn("2 quotes kept, 0 refused; 1 Angle or Hook proposal queued, 2 discarded;", report)
 
+    def test_an_incoming_proposal_that_declares_a_new_hook_rests_on_a_quote_the_ledger_holds(self):
+        self.agent(quote_file())
+        self.go()
+
+        def hook(title, document):
+            return fakes.proposal(title=title, new_angle="yes").replace(
+                "- Cleared and reserved:",
+                f"- Sourced pain: `evidence/listening/quotes/{document}.json`\n- Cleared and reserved:",
+            )
+
+        self.agent(
+            {
+                "review-queue/incoming/second-hook.md": hook("give P03 a second Hook on setup", POST),
+                "review-queue/incoming/third-hook.md": hook("give P03 a third Hook on resets", OTHER),
+            }
+        )
+        report = self.go(weeks=1)
+        (queued,) = self.items("package-change-proposal")
+        self.assertEqual((queued["id"], queued["new_angle"]), ("20261018-second-hook", "yes"))
+        self.assertIn("\nnew_angle: yes\n---\n", self.item_text("20261018-second-hook"))
+        self.assertIn(
+            "- Set aside, not queued: `third-hook.md`: it declares new_angle: yes, and a proposal that adds or changes"
+            " an Angle or Hook, any Hook, signal, or kill criterion included (FR-7), is queued only with sourced pain:"
+            " no record its Evidence names is a Listening quote the launcher keeps.",
+            report,
+        )
+
     def test_a_quote_without_its_link_or_not_in_its_source_is_never_kept(self):
         writes = quote_file(words="Every fitness app makes me fill in a long quiz first.")
         writes.update(quote_file(OTHER, None, "One missed day and the app put me back to zero."))
@@ -254,7 +283,12 @@ class ListeningCycleTest(WorkCycleTestCase):
         self.assertIn(
             "2 pieces of Listening work not kept on 2026-10-11", self.item_text(self.items("notice")[-1]["id"])
         )
-        self.assertEqual(len(list((self.ledger() / "evidence/listening/set-aside").glob("*/*.md"))), 2)
+        self.assertFalse(
+            (self.ledger() / "evidence/listening/set-aside").exists(), "a refused record is copied nowhere"
+        )
+        (record,) = (self.ledger() / "evidence/listening/runs").glob("*.json")
+        refused = json.loads(record.read_text(encoding="utf-8"))["quotes_refused"]
+        self.assertEqual(sorted(entry["file"] for entry in refused), sorted([f"{POST}.md", f"{OTHER}.md"]))
         self.assertEqual(list((self.workspace() / "evidence/listening").iterdir()), [])
         self.assertIn("| Listening Evidence | complete |", report, "a refused record is the check working, not a gap")
 
@@ -691,6 +725,35 @@ class LearningCycleTest(WorkCycleTestCase):
         )
         self.assertEqual(list((self.workspace() / "evidence/learning").iterdir()), [])
 
+    def test_the_answer_to_an_angle_reason_is_queued_and_marks_it_answered_though_it_touches_the_angle_bank(self):
+        self.rejected()
+        answer = (
+            fakes.proposal(title="retire the wording the Founder rejected from the Angle bank")
+            .replace(
+                "- `projects/RepToday/gtm/02-brand/brand-guidelines.md`",
+                "- `projects/RepToday/gtm/05-social-pmf/angles.md`",
+            )
+            .replace(
+                "- Cleared and reserved:",
+                f"- The Founder's reason: `evidence/decisions/{self.SECOND}.json`\n- Cleared and reserved:",
+            )
+        )
+        writes = self.code_file(self.SECOND, "angle")
+        writes["review-queue/incoming/angle-answer.md"] = answer
+        self.agent(writes)
+        self.go(weeks=1)
+        answered = "20261018-angle-answer"
+        self.assertIn(answered, [entry["id"] for entry in self.items("package-change-proposal")])
+        self.assertIn("\nnew_angle: no\n---\n", self.item_text(answered))
+        strategy = next(r for r in self.read("evidence/learning/ledger.json")["reasons"] if r["item"] == self.SECOND)
+        self.assertEqual((strategy["code"], strategy["proposal"]), ("angle", answered))
+        self.assertIn(f"- Strategy reason `{self.SECOND}` (angle): answered by `{answered}`.", self.section("Learning"))
+        self.agent()
+        self.go(weeks=2)
+        self.assertNotIn(
+            "each becomes a package-change proposal", self.brief(), "an answered reason is not asked again"
+        )
+
     def test_a_strategy_reason_yields_a_proposal_and_never_an_instructions_change(self):
         self.rejected()
         guidance = self.workspace() / "instructions/README.md"
@@ -836,6 +899,40 @@ class RetentionTest(WorkCycleTestCase):
         self.assertNotIn("I deleted it that night", kept, "a text nobody quoted is in no record")
         self.assertNotIn("the baby came", kept, "nor are the words around a quote, or its title")
         self.assertNotIn("Back after two years", kept)
+
+    def test_a_refused_quote_record_leaves_its_name_and_reasons_and_none_of_its_text(self):
+        long_link = "https://www.reddit.com/r/fitness30plus/comments/long001/a_long_post/"
+        long_post = " ".join(f"Part {n} of a long post about losing a routine after a move." for n in range(1, 16))
+        self.web.pages["https://www.reddit.com/r/fitness30plus/new/.rss"] = fakes.atom_feed(
+            [
+                (fakes.THREAD, "Back after two years", fakes.THREAD_TEXT, "2026-10-09T14:00:00+00:00"),
+                (long_link, "A long post", long_post, "2026-10-10T08:00:00+00:00"),
+            ]
+        )
+        long_id = sources.document_id(long_link)
+        writes = quote_file(link=None)
+        writes.update(quote_file(long_id, long_link, long_post))
+        pasted = fakes.quote_record(OTHER, fakes.OTHER_THREAD, "One missed day and the app put me back to zero.")
+        writes[f"evidence/listening/{OTHER}.md"] = pasted.replace(
+            "theme:", "note: I deleted it that night and never opened it again.\ntheme:"
+        )
+        self.agent(writes)
+        out, (working,) = self.go_reading(self.clone)
+        self.assertIn("records: pushed", out)
+        self.assertGreater(len(long_post), 600)
+        self.assertIn(long_post, working, "the agent could read the whole post while the run was on")
+        (record,) = (self.clone / "ledger/evidence/listening/runs").glob("*.json")
+        refused = {entry["file"]: entry["problems"] for entry in json.loads(record.read_text())["quotes_refused"]}
+        self.assertEqual(sorted(refused), sorted(f"{name}.md" for name in (POST, long_id, OTHER)))
+        self.assertIn("a quote needs its link", refused[f"{POST}.md"][0])
+        self.assertEqual(refused[f"{long_id}.md"], ["the quote must be 3 words or more and at most 600 characters"])
+        self.assertIn("line 7 of the front matter is not one of", refused[f"{OTHER}.md"][0])
+        saved = fakes.git(self.remote, "ls-tree", "-r", "--name-only", "HEAD", env=self.env).splitlines()
+        self.assertEqual([path for path in saved if "/evidence/listening/" in path and "/runs/" not in path], [])
+        self.assertEqual(fakes.git(self.clone, "status", "--porcelain", env=self.env), "")
+        kept = self.kept()
+        for words in (QUOTE, "Part 7 of a long post", "I deleted it that night", "One missed day and the app put me"):
+            self.assertNotIn(words, kept, "nothing a refused record held is in any record")
 
     def test_a_snapshot_a_killed_run_left_behind_is_never_saved_and_never_read_again(self):
         left = self.clone / "ledger/working/20261004T230000Z-scheduled-dead.sources.json"

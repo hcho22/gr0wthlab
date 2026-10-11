@@ -132,7 +132,9 @@ class ValidatorTest(unittest.TestCase):
         self.assertIn("the sections must be exactly: ## Quote, ## Context", self.check(text=text)[1][0])
         self.assertIn("must start with front matter", self.check(text="## Quote\n\nwords here now\n")[1][0])
         extra = fakes.quote_record(self.post.id, fakes.THREAD, QUOTE).replace("theme:", "confidence: High\ntheme:")
-        self.assertIn("front matter line 'confidence: High' is not one of", self.check(text=extra)[1][0])
+        (problem,) = self.check(text=extra)[1]
+        self.assertIn("line 7 of the front matter is not one of: evidence, product, document,", problem)
+        self.assertNotIn("High", problem, "a reason never repeats what the record held")
 
     def test_fit_is_never_guessed_when_its_definition_could_not_be_read(self):
         self.assertIn("so fit must be unclear, never a guess", self.check(fit_readable=False)[1][0])

@@ -12,6 +12,7 @@ from pathlib import Path
 from . import (
     codex,
     cycle,
+    evidence,
     exchange,
     fetch,
     launcher,
@@ -96,8 +97,7 @@ def queued(products: list[str]) -> tuple[Ledger, dict[str, str], str | None]:
 
 def check_incoming(out=sys.stdout) -> int:
     """The launcher's own check of each item in incoming/, for the agent to use before it finishes."""
-    registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
-    products = [product["name"] for product in registry.get("products", [])]
+    products = [product["name"] for product in load_json(REPO_ROOT / PRODUCT_REGISTRY).get("products", [])]
     try:
         if any(
             path.is_symlink() or (os.path.lexists(str(path)) and not path.is_dir())
@@ -118,10 +118,10 @@ def check_incoming(out=sys.stdout) -> int:
     ledger, seen, warning = queued(products)
     if warning:
         print(warning, file=out)
-    sourced = listening.sourced_pain(registry, Store(LEDGER_DIR))
+    kept = evidence.records(Store(LEDGER_DIR))
     failed = 0
     for name in names:
-        item, problems = ledger.check_incoming(INCOMING / name, name, products, seen, sourced)
+        item, problems = ledger.check_incoming(INCOMING / name, name, products, seen, kept)
         if item is not None:
             seen[exchange.item_hash(item)] = name
         failed += bool(problems)

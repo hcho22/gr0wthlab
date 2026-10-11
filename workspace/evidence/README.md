@@ -5,7 +5,7 @@ Evidence never holds an email address, and it can support a package-change propo
 Formats: US-ME11, US-ME13, US-ME16.
 
 - `listening/<document id>.md`: a quote record the agent writes during a run, in the format of the run's task definition ([`src/instructions/weekly-run.md`](../../src/instructions/weekly-run.md)).
-  The launcher keeps it only if its quote stands word for word in the text it fetched from that link, moves it into `ledger/evidence/listening/quotes/`, and empties this folder; a record it refuses is set aside and named in the run report.
+  The launcher keeps it only if its quote stands word for word in the text it fetched from that link, moves it into `ledger/evidence/listening/quotes/`, and empties this folder; a record it refuses is removed, and the run report names it with the reasons.
   What it fetched is working data in `ledger/working/`, removed when the run ends: a quote in a kept record is all that stays.
 - `learning/<item id>.md`: the code the agent proposes for one rejection reason; the launcher checks it against its fixed code list and writes it into that decision's Evidence.
 

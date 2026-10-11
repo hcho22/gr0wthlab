@@ -18,7 +18,8 @@ Each run's records step commits this folder to `main` together with `workspace/`
 - `evidence/listening/quotes/<document id>.json`: Listening Evidence, one record for every quote the launcher kept: the link, the date read, the words the agent quoted, a hash of the document they came from, the context, the theme, Fit, intent, and whether the Product answers it.
   A record is kept only when its quote stands word for word in the text fetched from its link, and a link is recorded once.
   It is all that is kept of what a run fetched: nothing a source said that the agent did not quote is committed.
-- `evidence/listening/runs/<run id>.json`: what each run's Listening read, kept, refused, and offered, with the confidence counted for each theme from its independent, unprompted sources; `evidence/listening/set-aside/<run id>/` holds the quote records it refused.
+- `evidence/listening/runs/<run id>.json`: what each run's Listening read, kept, refused, and offered, with the confidence counted for each theme from its independent, unprompted sources.
+  A quote record the launcher refused is named there with the reasons and kept nowhere: no copy of it is made.
 - `evidence/outreach/<run id>.json`: every check of every outreach message that run, and what the Founder's records in Mandu said of each creator.
 - `evidence/learning/ledger.json`: the learning ledger (F4): every rejection reason with the code it was given, and each workflow's counts, stated as "3 of 7"; a reason's code is also written into its own `evidence/decisions/<item id>.json`, beside the Founder's words.
 - `run-reports/<run id>.requests.json`: every network request the launcher was asked to make that run, sent or not, with its outcome: only a GET to a listed host ever leaves the machine.

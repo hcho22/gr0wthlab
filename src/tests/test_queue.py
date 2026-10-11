@@ -10,7 +10,7 @@ from unittest import mock
 
 from gr0wthlab import boundary, exchange, state
 from gr0wthlab.areas import Areas, Store
-from gr0wthlab.queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger, QueueError, SourcedPain
+from gr0wthlab.queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger, QueueError
 from tests import fakes
 from tests.test_boundary import CONFIG, REGISTRY
 
@@ -266,54 +266,87 @@ class OrderAndPersistenceTest(LedgerTestCase):
     PAIRS = "projects/RepToday/gtm/05-social-pmf/ab-pairs.md"
     KEPT = "evidence/listening/quotes/d-0123456789ab.json"
 
-    def angle(self, title, touches=None, cited=None):
-        """A proposal with this ask, which touches that package file and cites that Listening quote's record."""
-        text = fakes.proposal(title=title)
+    def declared(self, title, new_angle, touches=None, evidence=""):
+        """A package-change proposal with this ask and declaration, touching that package file, with that Evidence
+        line before its own."""
+        text = fakes.proposal(title=title, new_angle=new_angle)
         if touches:
             text = text.replace("- `projects/RepToday/gtm/02-brand/brand-guidelines.md`", f"- `{touches}`")
-        if cited:
-            text = text.replace("- Cleared and reserved:", f"- Sourced pain: `{cited}`\n- Cleared and reserved:")
-        return text
+        return text.replace("- Cleared and reserved:", f"{evidence}\n- Cleared and reserved:".lstrip("\n"))
 
-    def take_sourced(self):
-        sourced = SourcedPain((self.BANK, self.PAIRS), (self.KEPT,))
-        return self.ledger.take_incoming(self.areas, self.store, PRODUCTS, "RUN1", NOW, None, sourced)
+    def take_kept(self):
+        """Take incoming/ in as a run whose ledger keeps one Listening quote."""
+        return self.ledger.take_incoming(self.areas, self.store, PRODUCTS, "RUN1", NOW, None, {self.KEPT})
 
-    def assert_needs_sourced_pain(self, name, title, touches=None):
-        """Set aside with the rule and what to add, whatever it cites that is not kept; queued once it cites one."""
-        for cited in (None, "evidence/listening/quotes/d-000000000000.json"):
-            self.drop(name, self.angle(title, touches, cited))
-            published, set_aside = self.take_sourced()
-            self.assertEqual(published, [], title)
-            (problem,) = set_aside[0].problems
-            self.assertIn(
-                "it proposes an Angle or Hook, since it touches the Angle bank or the A/B pairs file", problem
-            )
-            self.assertIn("any change to a Hook, signal, or kill criterion is a new Angle (FR-7)", problem)
-            self.assertIn("add an Evidence line citing a Listening quote the launcher already keeps", problem)
-        self.drop(name, self.angle(title, touches, self.KEPT))
-        published, set_aside = self.take_sourced()
-        self.assertEqual((len(published), set_aside), (1, []), title)
+    def test_a_package_change_proposal_that_declares_nothing_is_set_aside(self):
+        self.drop("fix.md", fakes.proposal(new_angle=None))
+        published, set_aside = self.take_kept()
+        self.assertEqual(published, [])
+        self.assertIn(
+            "a package-change proposal needs new_angle: yes when it adds or changes an Angle or Hook",
+            set_aside[0].problems[0],
+        )
 
-    def test_a_proposal_that_touches_the_angle_bank_or_the_pairs_file_needs_sourced_pain(self):
-        self.assert_needs_sourced_pain("angle.md", "introduce Angle P07 for desk workers", self.BANK)
-        self.assert_needs_sourced_pain("angle.md", "propose an Angle about lunch breaks", self.PAIRS)
-
-    def test_an_ask_that_adds_an_angle_or_hook_needs_sourced_pain_whatever_it_touches(self):
-        for title in (
-            "add the Hook's missing kill criterion to day 4",
-            "mark the new Hook on day 9 as frozen",
-            "add a new Angle for desk workers",
-            "adding an angle: lunch breaks",
+    def test_a_declared_angle_or_hook_is_queued_only_when_its_evidence_names_a_kept_quote_exactly(self):
+        title = "introduce Angle P07 for desk workers"
+        for evidence in (
+            "",
+            "- Sourced pain: `evidence/listening/quotes/d-000000000000.json`",
+            "- The Founder's reason: `evidence/decisions/20261011-fit-wording.json`",
+            f"- Sourced pain: `notes/{self.KEPT}.txt`",
+            f"- Sourced pain, in {self.KEPT}: `{self.BANK}` line 3",
         ):
-            self.assert_needs_sourced_pain("hook.md", title)
+            with self.subTest(evidence=evidence):
+                self.drop("angle.md", self.declared(title, "yes", self.BANK, evidence))
+                published, set_aside = self.take_kept()
+                self.assertEqual(published, [])
+                (problem,) = set_aside[0].problems
+                self.assertIn(
+                    "it declares new_angle: yes, and a proposal that adds or changes an Angle or Hook", problem
+                )
+                self.assertIn(
+                    "any Hook, signal, or kill criterion included (FR-7), is queued only with sourced pain", problem
+                )
+                self.assertIn("no record its Evidence names is a Listening quote the launcher keeps", problem)
+                self.assertIn("Name one exactly in an Evidence line, as `evidence/listening/quotes/", problem)
+        self.drop("angle.md", self.declared(title, "yes", self.BANK, f"- Sourced pain: `{self.KEPT}`"))
+        published, set_aside = self.take_kept()
+        self.assertEqual((published, set_aside), (["20261011-angle"], []))
+        entry = self.ledger.entries["20261011-angle"]
+        self.assertEqual(entry["new_angle"], "yes")
+        queued = (self.store.root / entry["file"]).read_text(encoding="utf-8")
+        self.assertIn("\nnew_angle: yes\n---\n", queued, "the declaration is on the item the Founder reads")
 
-    def test_any_other_package_change_is_queued_as_before(self):
-        for title in ("resolve the frozen Hook that fails the word cap", "add the cleared status so the Hook can ship"):
-            for take in (self.take, self.take_sourced):
-                self.drop("fix.md", fakes.proposal(title=title))
-                published, set_aside = take()
-                self.assertEqual((len(published), set_aside), (1, []), title)
+    def test_a_proposal_that_declares_no_angle_or_hook_is_queued_whatever_it_touches(self):
+        for title, touches in (
+            ("add the Hook's missing kill criterion to day 4", self.PAIRS),
+            ("mark the new Hook on day 9 as frozen", self.PAIRS),
+            ("record the cleared name in the Angle bank's caveat", self.BANK),
+            ("resolve the frozen Hook that fails the word cap", None),
+            ("add the cleared status so the Hook can ship", None),
+        ):
+            with self.subTest(title=title):
+                self.drop("fix.md", self.declared(title, "no", touches))
+                published, set_aside = self.take_kept()
+                self.assertEqual((len(published), set_aside), (1, []))
+                self.assertEqual(self.ledger.entries[published[0]]["new_angle"], "no")
+
+    def test_an_ask_that_plainly_introduces_an_angle_or_hook_cannot_declare_that_it_adds_none(self):
+        for title in (
+            "introduce Angle P07 for desk workers",
+            "propose an Angle about lunch breaks",
+            "add a new Angle for desk workers",
+            "adding a Hook: lunch breaks",
+        ):
+            for touches, evidence in ((None, ""), (self.BANK, f"- Sourced pain: `{self.KEPT}`")):
+                with self.subTest(title=title, touches=touches):
+                    self.drop("angle.md", self.declared(title, "no", touches, evidence))
+                    published, set_aside = self.take_kept()
+                    self.assertEqual(published, [])
+                    (problem,) = set_aside[0].problems
+                    self.assertIn("its ask introduces an Angle or Hook, yet it declares new_angle: no", problem)
+                    self.assertIn("declare new_angle: yes and name a Listening quote the launcher keeps", problem)
+                    self.assertIn("or reword the ask if it adds or changes no Angle, Hook, signal, or kill", problem)
 
     def test_no_item_the_agent_writes_supersedes_a_post(self):
         post = self.post("day-3", 3)
