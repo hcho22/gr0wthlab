@@ -240,6 +240,44 @@ class EvaluateTest(DraftTestCase):
                 self.assertFalse(pattern.search(text))
         self.assertTrue(drafts.claim_pattern("works offline").search("It works   offline."))
 
+    def test_a_named_claim_the_video_shows_in_a_visual_action_is_carried_by_the_draft(self):
+        shown = fakes.draft(1).replace(
+            "Open today's session and tap Start.", "A timer overlay shows the session built in under 100 ms."
+        )
+        verdict = self.check(shown)
+        self.assertEqual(
+            [(finding.rule, finding.detail) for finding in verdict.blocks],
+            [
+                (
+                    "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md line 12",
+                    'Device benchmark record for the "under 100 milliseconds" claim: the Draft carries the'
+                    " 'under 100 milliseconds' claim",
+                )
+            ],
+        )
+
+    def test_only_the_hashtags_of_a_platform_may_be_none(self):
+        clean = fakes.draft(3)
+        self.assertEqual(self.check(clean.replace("#buildinpublic", "none")).blocks, [])
+        alt = "Screen recording of a workout app's history view: each missed day lowers a consistency score a little,"
+        alt += " and the score climbs again after every gap."
+        verdict = self.check(clean.replace(alt, "none"))
+        self.assertEqual(
+            [(finding.rule, finding.detail) for finding in verdict.blocks],
+            [
+                ("format", f"## {platform} ### Alt text is empty; only the hashtags may be none")
+                for platform in ("TikTok", "YouTube Shorts")
+            ],
+        )
+        empty = self.check(clean.replace("#buildinpublic\n", "\n"))
+        self.assertEqual(
+            [finding.detail for finding in empty.blocks],
+            [
+                f"## {platform} ### Hashtags is empty; only the hashtags may be none"
+                for platform in ("TikTok", "YouTube Shorts")
+            ],
+        )
+
     def test_an_open_line_that_gates_every_post_blocks_it(self):
         item = next(item for item in self.context.kit.checklist if item.line == 7)
         self.context.kit.checklist = tuple(

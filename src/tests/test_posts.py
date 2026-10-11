@@ -19,6 +19,7 @@ NOW = datetime(2026, 10, 11, 23, 0, tzinfo=timezone.utc)
 PRODUCTS = ["RepToday", "Immerse"]
 SUNDAY = date(2026, 10, 11)
 ANGLES = "projects/RepToday/gtm/05-social-pmf/angles.md"
+CHECKLIST = "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md"
 LINK = "https://example.com/threads/103"
 PAIN = f'Pain 2: "the reset made me quit" - {LINK}'
 
@@ -185,6 +186,19 @@ class TakeTest(TakeTestCase):
             " line yours to judge on this post:\n  Line 26: Founder is on camera for every first-person line.\n",
             text,
         )
+
+    def test_a_claim_line_that_gates_only_other_assets_is_never_said_to_be_about_a_claim_the_post_does_not_use(self):
+        checklist = (fakes.EXAMPLES / "files" / "mandu" / CHECKLIST).read_text(encoding="utf-8")
+        self.context.kit.checklist = posts.kit.parse_checklist(
+            checklist.replace("(blocking: site, video, social)", "(blocking: site)")
+        )
+        self.write(1, (fakes.EXAMPLES / "files/drafts/day-01-speed-claim.md").read_text(encoding="utf-8"))
+        [result] = self.take(1).results
+        self.assertEqual(result.status, posts.QUEUED, result.verdict.blocks)
+        text = (self.store.root / self.ledger.entries[result.item]["file"]).read_text(encoding="utf-8")
+        self.assertIn("Built on the phone in under 100 ms", text)
+        self.assertIn("  Done: line 7.\n  Open, gating other assets or none named: lines 8, 12, 16.\n", text)
+        self.assertNotIn("which this post does not", text)
 
     def pain_line(self, pain):
         """The Sourced pain line in the Evidence of day 3's post item, when the Angle bank words its pain so."""

@@ -98,6 +98,10 @@ class PostDraft:
             ]
         return copies
 
+    def shown(self) -> list[Copy]:
+        """Everything the post shows or says: every field a viewer reads, and each beat's visual action."""
+        return self.copies() + [Copy(f"beat {beat.number} visual action", beat.visual) for beat in self.beats]
+
 
 # Reading a Draft.
 
@@ -304,9 +308,10 @@ def checklist_status(draft: PostDraft, context: Context, angle: Angle | None) ->
     """Each checklist item's status for this post: done, open but not gating it, or blocking it.
 
     An open item blocks a post when its blocking scope covers social posts (everything public, or social); an item
-    about one named claim blocks only a post that carries the claim or whose Angle depends on it.
+    about one named claim blocks only a post that carries the claim, in anything it shows or says or in its Claims,
+    or whose Angle depends on it.
     """
-    carried = "\n".join([copy.text for copy in draft.copies()] + [claim.text for claim in draft.claims])
+    carried = "\n".join([copy.text for copy in draft.shown()] + [claim.text for claim in draft.claims])
     pair = context.kit.pairs.get(draft.fields.get("pair", ""))
     depends = "\n".join(filter(None, [angle.row if angle else "", pair.text if pair else ""]))
     lines = []
@@ -455,9 +460,10 @@ def check_platforms(draft: PostDraft, context: Context, verdict: Verdict) -> Non
         if sorted(values) != sorted(names):
             verdict.block("format", f"## {platform} needs exactly: {', '.join('### ' + name for name in names)}")
             continue
-        for name in names:
-            if not values[name].strip():
-                verdict.block("format", f"## {platform} ### {name} is empty (write none for no hashtags)")
+        for limit in facts.fields:
+            text = values[limit.name]
+            if not text.strip() or (none(text) and not limit.hashtags):
+                verdict.block("format", f"## {platform} ### {limit.name} is empty; only the hashtags may be none")
         verdict.add(check_platform(facts, values))
         shared[platform] = {
             "text": norm(values[facts.field("body").name]),
@@ -559,8 +565,7 @@ def check_competitors(draft: PostDraft, kit: Kit, context: Context, verdict: Ver
     """No field names a competitor, a beat's visual action included. A name is matched as the research writes it,
     case kept, since some names are common words; the Founder reads every post."""
     research = context.paths.get("competitors", "the research")
-    visuals = [Copy(f"beat {beat.number} visual action", beat.visual) for beat in draft.beats]
-    for copy in draft.copies() + visuals:
+    for copy in draft.shown():
         tags = copy.field.endswith(" hashtags")
         for competitor in kit.competitors:
             if tags:

@@ -641,7 +641,7 @@ def checklist_lines(plan: Plan, verdict: Verdict) -> list[str]:
     lines for every asset, which hold no state a check could read and so are the Founder's to judge."""
     done = [str(line.item.line) for line in verdict.checklist if line.status == DONE]
     waiting = [line for line in verdict.checklist if line.status not in (DONE, BLOCKS)]
-    others = [str(line.item.line) for line in waiting if not line.item.claim]
+    others = [str(line.item.line) for line in waiting if not line.item.gates_social]
     lines = ["- Pre-publication checklist (`pre-publication-checklist.md`): no open line blocks this post."]
     if done:
         lines.append(f"  Done: line{'s' if len(done) > 1 else ''} {', '.join(done)}.")
@@ -650,7 +650,7 @@ def checklist_lines(plan: Plan, verdict: Verdict) -> list[str]:
             f"  Open, gating other assets or none named: line{'s' if len(others) > 1 else ''} {', '.join(others)}."
         )
     for line in waiting:
-        if line.item.claim:
+        if line.item.gates_social:
             lines.append(
                 f"  Open, gating only assets that use the {line.item.claim!r} claim, which this post does not:"
                 f" line {line.item.line}."
