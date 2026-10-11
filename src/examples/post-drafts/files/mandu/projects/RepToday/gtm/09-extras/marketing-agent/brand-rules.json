@@ -9,7 +9,7 @@
   "no_all_caps_words_in_hook": true,
   "all_caps_allowlist": ["100"],
   "required_sections": ["Pain state", "Hook"],
-  "required_disclosure": "Screen images simulated. App is pre-release.",
+  "required_disclosure": "Screens shown are mock-ups. The app is not out yet.",
   "pain_source_url_must_start_with": "https://",
   "stock_phrases": ["join thousands of", "studies show", "say goodbye to", "game-changer", "effortless"],
   "capped_words": ["seamless", "robust", "simply", "really", "just"],

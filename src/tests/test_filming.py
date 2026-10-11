@@ -501,6 +501,11 @@ class FootagePlaceTest(FilmingRunCase):
         found = footage.read(self.footage, 1, known, tooling, self.env)
         self.assertEqual(filming.lacking(found, jobs["d01"].shots, "A", False), ([], [], []))
         self.assertEqual(filming.lacking(found, jobs["d02"].shots, "A", True), ([], [], []))
+        # A shared take that is there and could not be measured is unmeasured footage, never a file still to film.
+        (self.footage / "window-1" / "d02-s1.mov").write_text("half of a file still being copied")
+        found = footage.read(self.footage, 1, known, tooling, self.env)
+        self.assertEqual(filming.lacking(found, jobs["d02"].shots[:1], "A", True), ([], ["d02-s1"], []))
+        self.assertEqual(filming.lacking(found, jobs["d02"].shots[:1], "B", True), ([], ["d02-s1"], []))
 
     def test_a_window_folder_that_is_a_link_or_missing_is_never_read_through(self):
         tooling = video.find(self.env)

@@ -304,7 +304,7 @@ def recut_mandu(path: Path) -> Path:
     """A Mandu whose synthetic calendar marks AB-1, days 1 and 8, as a re-cut pair."""
     calendar = make_mandu(path) / "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md"
     text = calendar.read_text(encoding="utf-8")
-    calendar.write_text(text.replace("only the hook changes", "re-cut opening"), encoding="utf-8")
+    calendar.write_text(text.replace("with only its hook swapped", "re-cut opening"), encoding="utf-8")
     return path
 
 

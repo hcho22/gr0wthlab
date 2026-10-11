@@ -200,6 +200,16 @@ class RequirementsTest(unittest.TestCase):
         legs = dict(pair.legs, B=replace(pair.legs["B"], hook="Another hook drawn over the same screen record."))
         same = replace(self.kit, angles=angles, pairs=dict(self.kit.pairs, **{"AB-1": replace(pair, legs=legs)}))
         self.assertEqual(shots.requirements(same, self.roles["calendar"]).fingerprint(), before)
+        # Neither does where a fact is read from: the calendar's checklist a line lower or the calendar at another
+        # path, or other words in the cell of a day whose Angle the calendar still decides later.
+        lower = tuple(replace(check, line=check.line + 1) for check in self.kit.asset_checks)
+        moved = shots.requirements(replace(self.kit, asset_checks=lower), "another/place/calendar.md")
+        self.assertNotEqual(moved.job_for(1).shots[0].real_time_why, self.found.job_for(1).shots[0].real_time_why)
+        self.assertEqual((moved.digests(), moved.fingerprint()), (self.found.digests(), before))
+        later = {**self.kit.days, 14: replace(self.kit.days[14], cell="Decided at the day 7 review")}
+        undecided = shots.requirements(replace(self.kit, days=later), self.roles["calendar"])
+        self.assertNotEqual(undecided.unplanned, self.found.unplanned)
+        self.assertEqual(undecided.fingerprint(), before)
         # A changed Format, a Hook the Founder says on camera, and a day that joins the calendar each change it.
         changed = dict(self.kit.angles, P01=replace(self.kit.angles["P01"], format="12s screen record, no cuts"))
         self.assertNotEqual(shots.requirements(replace(self.kit, angles=changed)).fingerprint(), before)

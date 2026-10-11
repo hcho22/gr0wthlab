@@ -1,7 +1,7 @@
 # A/B hook pairs (synthetic fixture for filming)
 
 Synthetic test data for gr0wthlab's filming checks; it is not any Product's package.
-Only the hook (first 3 seconds of on-screen text plus the first caption line) changes.
+Between the legs of a pair only the hook differs: the opening words on screen and the caption's first line.
 
 ## AB-1: ready on open (angle P01, TikTok, same screen record)
 

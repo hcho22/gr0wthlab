@@ -883,7 +883,8 @@ def lacking(
         if not usable:
             (unread if inventory.for_shot(shot.id, leg, measured=False) else missing).append(shot.id)
         elif leg and not opening and all(clip.leg for clip in usable):
-            unshared.append(shot.id)
+            waiting = [clip for clip in inventory.for_shot(shot.id, leg, measured=False) if not clip.leg]
+            (unread if waiting else unshared).append(shot.id)
     return missing, unread, unshared
 
 

@@ -14,9 +14,9 @@ It is the post-Draft example set's calendar with what filming needs: a founder-o
 | 5 | Speed demo | P05 | TikTok | Waits on the speed benchmark |
 | 6 | Hallway session | P06 | TikTok | |
 | 7 | Timer timelapse | P07 | TikTok | |
-| 8 | Open-to-ready demo, hook B | P01 / AB-1 leg B | TikTok | Same asset as day 1, only the hook changes |
+| 8 | Open-to-ready demo, hook B | P01 / AB-1 leg B | TikTok | Day 1's asset again, with only its hook swapped |
 | 9 | Founder story, hook B | P02 / AB-3 leg B | TikTok | Day 2's shoot again, with a re-cut start |
-| 10 | Score dip demo, hook B | P03 / AB-2 leg B | YouTube Shorts | Same asset as day 3 |
+| 10 | Score dip demo, hook B | P03 / AB-2 leg B | YouTube Shorts | Day 3's asset again |
 | 11 | Offline demo, second take | P04 | YouTube Shorts | |
 | 12 | Hallway session, second take | P06 | TikTok | |
 | 13 | Timer timelapse, second take | P07 | TikTok | |
@@ -24,5 +24,5 @@ It is the post-Draft example set's calendar with what filming needs: a founder-o
 
 ## Pre-publication checklist (every asset, every day)
 
-- Founder is on camera for every first-person line.
+- The founder is in frame for every line said in the first person.
 - A screen recording comes off a real device in real time, and is cut only where its shot list says so.

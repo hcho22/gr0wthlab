@@ -133,7 +133,8 @@ class Job:
 
     def digest(self) -> str:
         """A fingerprint of what this job must film: its days, its Format, its shots, and, when the Founder says
-        them on camera, its Hooks. It changes only when the kit changes what must be filmed."""
+        them on camera, its Hooks. It changes only when the kit changes what must be filmed: where a shot's facts
+        were read, and the launcher's words for that, are no part of it."""
         said = [(hook.day, hook.leg, hook.text) for hook in self.hooks] if self.on_camera() else []
         content = {
             "key": self.key,
@@ -143,7 +144,20 @@ class Job:
             "recut": self.recut,
             "format": self.format,
             "length": list(self.length) if self.length else None,
-            "shots": [shot.as_json() for shot in self.shots],
+            "shots": [
+                [
+                    shot.id,
+                    shot.number,
+                    shot.kind,
+                    shot.setup,
+                    shot.needs,
+                    shot.what,
+                    shot.real_time,
+                    shot.uncut,
+                    shot.real_device,
+                ]
+                for shot in self.shots
+            ],
             "hooks": said,
         }
         return hashlib.sha256(json.dumps(content, sort_keys=True).encode("utf-8")).hexdigest()
@@ -192,7 +206,7 @@ class Requirements:
         """What must be filmed, as one fingerprint: every job, every day left out, and the sittings."""
         content = {
             "jobs": self.digests(),
-            "unplanned": [[day, why] for day, why in self.unplanned],
+            "unplanned": [day for day, _ in self.unplanned],
             "sittings": [[sitting.setup, [shot.id for _, shot in sitting.shots]] for sitting in sittings(self)],
         }
         return hashlib.sha256(json.dumps(content, sort_keys=True).encode("utf-8")).hexdigest()

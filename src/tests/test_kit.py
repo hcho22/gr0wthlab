@@ -34,7 +34,8 @@ class CalendarTest(unittest.TestCase):
     def test_the_calendar_s_own_checklist_for_every_asset_is_read_line_by_line(self):
         checks = kit.parse_asset_checks(read("05-social-pmf/cadence-14-day.md"))
         self.assertEqual(
-            [(check.line, check.text) for check in checks], [(26, "Founder is on camera for every first-person line.")]
+            [(check.line, check.text) for check in checks],
+            [(26, "The founder is in frame for every line said in the first person.")],
         )
         self.assertEqual(kit.parse_asset_checks("## The calendar\n\n- Not a checklist line.\n"), ())
 
@@ -127,7 +128,7 @@ class RecutTest(unittest.TestCase):
         calendar, pairs = read(self.CALENDAR), read(self.PAIRS)
         for day in (1, 2, 8, 14):
             self.assertEqual(self.hooks(calendar, pairs, day), ())
-        in_calendar = calendar.replace("only the hook changes", "Re-cut opening")
+        in_calendar = calendar.replace("with only its hook swapped", "Re-cut opening")
         in_pairs = pairs.replace("same screen record)", "same screen record, recut)", 1)
         for where, marked in (("calendar", (in_calendar, pairs)), ("pairs", (calendar, in_pairs))):
             with self.subTest(marked_in=where):
