@@ -434,10 +434,12 @@ gr0wthlab's side is in place, with the request filed from `src/dispatches/reptod
 **Acceptance Criteria:**
 
 - [ ] The gate is a Beta Build approval the Founder records in Mandu; before it, this story does nothing.
-- [ ] Candidates are chosen by entry identifier from the anonymous Waitlist view, opted-in good-Fit entries first.
-- [ ] Invitation Drafts are identity-framed, explain the recorded 30-minute first session the thesis's K8 rubric needs, and contain no address; the Founder resolves addresses and sends.
+- [x] Candidates are chosen by entry identifier from the anonymous Waitlist view, opted-in good-Fit entries first.
+- [x] Invitation Drafts are identity-framed, explain the recorded 30-minute first session the thesis's K8 rubric needs, and contain no address; the Founder resolves addresses and sends.
 - [ ] Only counts of invitations sent, accepted, and sessions booked are kept as Evidence, from what the Founder reports.
 - [ ] Recruiting continues weekly until the Beta Cohort reaches 20 to 50 people or the Founder stops it, and a pool too small to reach 20 is reported with the recruiting Drafts needed to close the gap.
+
+gr0wthlab's side of all five is in place and passed this story's Validation Test on a simulated record; the three open boxes wait for Mandu's side to record the Founder's approval, counts, and stop in the formats of version 4 of `docs/mandu-exchange.md`.
 
 **Validation Test:**
 

@@ -312,6 +312,44 @@ In `20261010T000549Z-on-demand-a9fe` all seven Drafts were blocked as in the cou
 In `20261010T000903Z-on-demand-bb45`, against the reconciled copy, the agent's `check-drafts` could not read the copy, because the launcher's `GR0WTHLAB_MANDU_DIR` never reaches the agent's environment; the brief's command now names each location.
 Each run cost between $0.002 and $0.03 at API prices.
 
+### Re-check after Beta Cohort recruiting (US-ME15)
+
+Beta Cohort recruiting added launcher steps to the cycle and a `beta_recruiting` block to `config/products.json`, with `06-channels/` now also a package source the workflow needs, and a batch size to `config/run.json`.
+The agent's start is unchanged: `codex.py`, `boundary.py`, `launcher.py`, the probe, and `runtime.json` are as they were, and the permission profile grants the same six areas.
+Three new reads run outside the sandbox, all in Mandu's exchange folder, which is inside the Mandu checkout the sandbox already reads: the Founder's Beta Build record, the Founder's Beta Cohort reports, and, for each package line a recruiting Draft cites, that line.
+Who is invited is ordered inside `waitlist.py`, from the view that stays outside everything the sandbox reads.
+Inside the sandbox, `check-beta-drafts` reads the run's record of which Drafts are due, which names no Waitlist entry, and the same Mandu files; the brief's command names the Mandu location the launcher used.
+One new launcher act in `workspace/` is a removal: a recruiting Draft that holds anything that looks like an email address is deleted, so the records step never saves it.
+
+Both checks were made on the code as it stands, on 2026-10-11, Mac local time, with Codex CLI 0.160.0 from a linked worktree whose configuration fingerprint is `004a906cd66214d6e0e3223f50e7627e01cb5bfe4eaa64c37de4b1c637eee705`; the run identifiers carry the UTC date.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261011T161749Z-on-demand-8b4d`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+
+That check replaces two earlier ones of this work.
+`20261011T160047Z-on-demand-1707` passed the same way, before the last changes: the task definition now says a recruiting Draft depends on nothing else in the run, and the run report words a batch that was not offered differently (`beta.py`).
+`20261011T155943Z-on-demand-4d14` was reported as failed, for two reasons that were not the boundary.
+The worker building this change edited `AGENTS.md` in the worktree while the check ran, which the check rightly reported as a change outside the areas.
+One of the agent's nine forbidden patches was malformed, so Codex refused it as an invalid patch and logged eight policy rejections, not nine.
+In that run too, no sentinel escaped, all eleven kernel denials were logged, and neither listener received a connection.
+
+US-ME15's Validation Test was run live through the launcher on demand the same day, network off, with the seeded twelve-entry anonymous view of US-ME06 in a temporary folder outside every checkout, and a throwaway copy of Mandu's `projects/RepToday/` in which the Founder's records were simulated.
+Mandu itself and the RepToday checkout were never edited: before the preflight and after the last run, each one's HEAD, refs, git status, index, and every file digest, under `projects/RepToday/` in Mandu and across the RepToday checkout, were the same, and Mandu has no `projects/gr0wthlab/` folder.
+
+| Run | Simulated in the copy | What it showed |
+| --- | --- | --- |
+| `20261011T160208Z-on-demand-23d4` | Nothing: no Beta Build record | Step 1, before the approval: no entry chosen, no recruiting Draft asked for or written, no recruiting Evidence, state file, or plan record, and no word of recruiting in the brief; the report listed the approval as skipped, not recorded, and the output as skipped |
+| `20261011T160340Z-on-demand-8ce8` | The Beta Build record, recruiting open | The launcher read the gate, chose batch 1, and asked for both Drafts, but the agent stopped early and wrote neither; the report marked recruiting incomplete, a notice named both missing Drafts, and nothing was queued. This run does not count, and led to the task definition change above |
+| `20261011T160716Z-on-demand-84d9` | The same record | Step 2, after the approval: batch 1 queued as one message item with eight entry identifiers, the five good-Fit opt-ins first in sign-up order and then the three other opt-ins, and never one of the four sign-ups that did not ask; the invitation, identity-framed, saying the first session is recorded and takes 30 minutes, citing the thesis's K8 line and the channel plan lines it rests on, passed every check after the agent corrected it with `check-beta-drafts`; the pool was reported as 12 short of 20, with the Waitlist ask queued beside it; the agent's summary noted that the K8 rubric's coder and freeze date are still blank |
+| `20261011T161234Z-on-demand-dc74` | The Founder's approval of batch 1, and a report of 8 sent and 3 accepted that leaves out the sessions booked | The eight entries became invited and none was offered again; the counts were kept as Evidence with `sessions_booked` null and named as not reported, and the report said sessions booked not reported; no further batch, as every sign-up that asked had been offered one |
+| `20261011T161329Z-on-demand-e1b0` | The record rewritten with recruiting stopped | No batch, and the open Waitlist ask withdrawn, with a notice saying the Founder stopped recruiting |
+
+A search of every recruiting output of these runs, the invitation and Waitlist ask items, their Drafts, the recruiting Evidence and count records, the run state, the briefs, the run reports, and the agent's summaries, with the launcher's own address pattern, found nothing that looks like an email address.
+Across all of `ledger/` and `workspace/` the same search found one, RepToday's own public contact address in the Waitlist Dispatch request filed from reviewed text since US-ME05.
+Codex's event streams in the launcher's log folder also hold that address and `hello@reptoday.app`, from the package and code files the agent read; no sign-up's address exists anywhere in this test, since the seeded view holds none.
+The runs' outputs were removed from the worktree afterwards and are not part of this change.
+Each run cost between $0.005 and $0.03 at API prices.
+
 ## Scheduled and on-demand runs share one configuration
 
 The scheduled path was tested with a temporary LaunchAgent, `gr0wthlab.us-me02-schedule-test`, generated by `src/bin/gr0wthlab launch-agent --once <time> --label gr0wthlab.us-me02-schedule-test --instruction src/checks/boundary-probe.md`.
