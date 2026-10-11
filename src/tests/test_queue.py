@@ -217,7 +217,9 @@ class OrderAndPersistenceTest(LedgerTestCase):
         self.post("unslotted-day-2", 2)
         self.post("sooner-post", 5, "2026-10-15T02:00Z")
         self.post("unslotted-day-1", 1, now=NOW + timedelta(minutes=5))
-        self.drop("message.md", fakes.proposal("message"))
+        fields = {"kind": "message", "product": "RepToday"}
+        message = exchange.Item(fields, "Approve personal-network ask", "The Draft.", "- The ask", "- `a/b.md` line 1")
+        self.ledger.publish(self.store, message, "message", "RUN1", NOW, {"draft": "drafts/messages/ask.md"})
         self.take()
         self.drop("old-request.md", fakes.proposal("dispatch-request"))
         self.drop("decision.md", fakes.proposal("weekly-read-decision"))
@@ -249,6 +251,29 @@ class OrderAndPersistenceTest(LedgerTestCase):
             "a post is queued only from its Draft in drafts/posts/, after the launcher's checks; never write one here",
             set_aside[0].problems,
         )
+
+    def test_a_message_is_never_taken_from_incoming(self):
+        self.drop("network-ask.md", fakes.proposal("message"))
+        published, set_aside = self.take()
+        self.assertEqual(published, [])
+        self.assertIn(
+            "a message is queued only from its Draft in drafts/messages/, after the launcher's checks; never write one"
+            " here",
+            set_aside[0].problems,
+        )
+
+    def test_a_new_angle_or_hook_is_never_taken_from_incoming(self):
+        for title in ("add a new Angle for desk workers", "Add the Hook for P03", "adding an angle: lunch breaks"):
+            self.drop("angle.md", fakes.proposal(title=title))
+            published, set_aside = self.take()
+            self.assertEqual(published, [], title)
+            self.assertIn(
+                "a new Angle or Hook is proposed only as a file in review-queue/angles/", set_aside[0].problems[0]
+            )
+        for title in ("resolve the frozen Hook that fails the word cap", "add the cleared status so the Hook can ship"):
+            self.drop("fix.md", fakes.proposal(title=title))
+            published, set_aside = self.take()
+            self.assertEqual((len(published), set_aside), (1, []), title)
 
     def test_no_item_the_agent_writes_supersedes_a_post(self):
         post = self.post("day-3", 3)

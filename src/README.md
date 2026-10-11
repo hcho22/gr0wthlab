@@ -5,12 +5,17 @@ It changes only through firstmate's reviewed pull requests (Guardrail G8) and is
 US-ME02 chose Codex as the runtime and Python 3.9 or newer, standard library only, as the language; the launcher runs under the Mac's `/usr/bin/python3`.
 Why, and the boundary the launcher enforces: [the US-ME02 spike note](../docs/spikes/us-me02-runtime-boundary.md).
 
-- [`bin/gr0wthlab`](bin/gr0wthlab): the launcher, the one entry point for scheduled and on-demand runs (`run`, `show-config`, `preflight`, `check-incoming`, `check-drafts`, `launch-agent`, `boundary-check`).
+- [`bin/gr0wthlab`](bin/gr0wthlab): the launcher, the one entry point for scheduled and on-demand runs (`run`, `show-config`, `preflight`, `check-incoming`, `check-drafts`, `check-work`, `launch-agent`, `boundary-check`).
 - [`gr0wthlab/`](gr0wthlab/): the launcher's package; [`cycle.py`](gr0wthlab/cycle.py) is one run from start to saved records, and [`launcher.py`](gr0wthlab/launcher.py) starts the agent inside the boundary.
 - [`instructions/`](instructions/): the run's fixed task definition, which only a reviewed pull request changes; the agent's refinable guidance lives in `workspace/instructions/`.
 - [`gr0wthlab/posts.py`](gr0wthlab/posts.py): the post-Draft workflow (US-ME08): which calendar days a run prepares, and which Drafts become post items; the checks themselves are in `drafts.py`, `kit.py`, `lint.py`, and `codebase.py`.
+- [`gr0wthlab/fetch.py`](gr0wthlab/fetch.py): the launcher's only way onto the network: a credential-free GET to a host listed in `config/guardrails/fetch.json`, bound by that host's `robots.txt`; the sandboxed agent has no network.
+  [`sources.py`](gr0wthlab/sources.py) reads the fixed list in `config/sources.json` into one dated snapshot per run.
+- [`gr0wthlab/listening.py`](gr0wthlab/listening.py): the Listening workflow (US-ME13); [`evidence.py`](gr0wthlab/evidence.py) decides which quote records are kept and counts confidence.
+- [`gr0wthlab/outreach.py`](gr0wthlab/outreach.py): the outreach workflow (US-ME14); [`messages.py`](gr0wthlab/messages.py) holds every check of a message Draft, replies included.
+- [`gr0wthlab/learning.py`](gr0wthlab/learning.py): the rejection-reason codes and their split (F4), and the guard that puts the agent's Instructions back after every run.
 - [`dispatches/`](dispatches/): Dispatch requests in the Review Queue item format, which the launcher files for the Founder's approval, each once ([`dispatch.py`](gr0wthlab/dispatch.py)); the first is RepToday's Waitlist, whose anonymous view [`waitlist.py`](gr0wthlab/waitlist.py) reads.
 - [`proposals/`](proposals/): package-change proposals the launcher files once each, such as the brand lint's word lists; no check ever reads them.
-- [`examples/`](examples/): each workflow's example set, out of the agent's reach, starting with [`post-drafts`](examples/post-drafts/README.md).
+- [`examples/`](examples/): each workflow's example set, out of the agent's reach: [`post-drafts`](examples/post-drafts/README.md), [`listening`](examples/listening/README.md), and [`outreach`](examples/outreach/README.md).
 - [`checks/`](checks/): instructions for live checks, such as the US-ME02 boundary probe.
 - [`tests/`](tests/): unit tests, run with `/usr/bin/python3 -m unittest discover -s src/tests -t src`.

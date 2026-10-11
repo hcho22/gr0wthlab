@@ -1,0 +1,13 @@
+{
+  "description": "The launcher's outbound network reads (Guardrails G5 and G8), added for Listening (US-ME13) and the creator messages (US-ME14). The launcher, outside the sandbox, may send a credential-free GET over HTTPS to these hosts and to no other; the sandboxed agent has no network at all (config/guardrails/runtime.json). Every host's robots.txt is binding: a path it disallows is never requested, and its source is reported as not read. The client that enforces this is src/gr0wthlab/fetch.py; the sources read from these hosts are in config/sources.json. Re-run `src/bin/gr0wthlab boundary-check` after any change to this file.",
+  "hosts": ["www.reddit.com", "itunes.apple.com", "www.youtube.com"],
+  "hosts_why": "www.reddit.com serves the three subreddits the PRD names, itunes.apple.com serves App Store customer reviews, and www.youtube.com serves the three creators' public channel feeds. A host is listed whole: which of its paths may be read is decided by its own robots.txt at each run, never here.",
+  "user_agent": "growthlab-reader/1 (gr0wthlab, a weekly read-only reader run by one person; +https://github.com/hcho22)",
+  "user_agent_why": "An honest name and a way to reach the operator, sent with every request. growthlab-reader is the product token matched against each robots.txt, in letters and a hyphen only, as a robots.txt names a reader (RFC 9309); a robots.txt with no group for it is read by its * group.",
+  "max_requests_per_run": 30,
+  "seconds_between_requests_per_host": 2,
+  "timeout_seconds": 20,
+  "max_response_bytes": 2000000,
+  "max_wait_seconds": 60,
+  "limits_why": "A small bounded number of requests per run, spaced out on each host. A host that asks for a wait (Retry-After, or a Crawl-delay in robots.txt) is waited for once when the wait is at most max_wait_seconds; a longer wait, like any refusal, ends that host's reads for the run, and its sources are reported as failed. No request carries a cookie, a credential, or a body, and a redirect is followed only to a listed host, under the same rules."
+}

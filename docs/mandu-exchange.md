@@ -1,8 +1,9 @@
-# Mandu exchange, version 3
+# Mandu exchange, version 4
 
 How gr0wthlab (the Marketing Engineer) and Mandu pass the Review Queue and the Founder's decisions between them.
 Mandu's own agent builds Mandu's side from this page.
 Later stories extend the exchange, each with a version bump: the TikTok export (US-ME11), the Beta Build approval (US-ME15), and the US-ME18 confirmation.
+Version 4 added what the Founder does with an approved message (Outreach records, below), for the outreach messages of US-ME14 and the replies of US-ME13.
 Each side writes only its own repository and only reads the other's: gr0wthlab writes items in gr0wthlab, and Mandu writes decisions in Mandu.
 
 ## Where things are
@@ -14,6 +15,7 @@ Each side writes only its own repository and only reads the other's: gr0wthlab w
 | Each run report | gr0wthlab | `~/gr0wthlab/ledger/run-reports/<run id>.md` |
 | Decisions | Mandu | `~/Mandu/projects/gr0wthlab/exchange/decisions/<id>.json` |
 | Sittings | Mandu | `~/Mandu/projects/gr0wthlab/exchange/sittings/<YYYY-MM-DD>.json` |
+| Outreach records | Mandu | `~/Mandu/projects/gr0wthlab/exchange/outreach/<id>.json` |
 
 `~/gr0wthlab` is gr0wthlab's production clone; each run also pushes its outputs to `main` of `github.com/hcho22/gr0wthlab`, but Mandu reads the local files.
 gr0wthlab finds Mandu's folder from `mandu.exchange` in gr0wthlab's `config/products.json`, and `GR0WTHLAB_EXCHANGE_DIR` overrides it on one machine.
@@ -33,6 +35,9 @@ To move the folder, change that configuration through a gr0wthlab pull request.
 6. At the end, write one sitting record with how many minutes the sitting took.
    Once gr0wthlab reads that record, it marks the items left undecided at the sitting as carried over.
 
+Outside the sitting, whenever the Founder sends or posts an approved message, or hears back from the person it went to, write or replace that message's outreach record (see Outreach records).
+gr0wthlab sends nothing and has no way to know either unless Mandu records it.
+
 Paths inside `queue.json` are relative to `~/gr0wthlab/ledger/`, the folder where gr0wthlab keeps its records.
 
 ## Items (gr0wthlab writes)
@@ -41,7 +46,7 @@ Each item is one Markdown file, named by its identifier, holding the front matte
 
 ```markdown
 ---
-exchange: 3
+exchange: 4
 id: 20261011-trademark-status-stale
 kind: package-change-proposal
 product: RepToday
@@ -87,6 +92,26 @@ The Draft or proposal itself.
 
 A notice is informational, such as a failed source or a change to the Marketing Engineer's Instructions; acknowledging it records `approve`.
 
+A message's `## Draft` opens by saying what the message is and what the Founder should know before sending, then quotes the message itself under **Message**, word for word as the Founder would send or post it.
+The Founder sends or posts every message personally and fills in every recipient: no item ever holds an email address, and gr0wthlab has no account anywhere.
+There are four kinds, each named in the item's title and in `message.purpose` of its queue entry:
+
+- A personal-network ask (`network-ask`) carries the personal-network Source link and, under **Line a friend can forward**, one line to pass on; until the Waitlist is live, the Draft says not to send it.
+- A message to a creator (`creator`) offers early access, a founder conversation, or story material, and asks for nothing.
+  It names the piece of the creator's work it cites, with its date and link, or says "No hook found" when gr0wthlab could read none; it never cites work gr0wthlab did not read.
+  It states the waiting period before the one follow-up, in days: approving the item approves that period, and the outreach record may set another.
+- The one follow-up to a creator (`creator-follow-up`) is offered only after the first message's outreach record shows it sent, no reply recorded, and the waiting period passed; after it, gr0wthlab offers nothing more for that creator.
+- A reply (`reply`) is for the Founder to post personally in the thread its Draft links, from the Founder's own account, and carries no link of any kind.
+  gr0wthlab offers one only for a subreddit whose rules notice the Founder acknowledged (below).
+
+gr0wthlab queues a message only from a Draft that passed every check; a Draft that did not is never an item, and a notice names it with what blocked it.
+An open message whose Draft stops passing, or whose follow-up may no longer be offered because a reply was recorded, leaves `open` as a withdrawn post does.
+
+The first time gr0wthlab reads a subreddit, and again whenever its rules change, it queues one notice titled "Confirm r/<name>'s self-promotion rules before any reply Draft is offered", which quotes and links those rules.
+Acknowledging that notice is the Founder's confirmation: until its decision record says `approve`, gr0wthlab offers no reply for that subreddit, and a `reject` means none is ever offered.
+
+A package-change proposal for a new Angle or Hook rests on Listening Evidence: each Evidence line quotes a person's words with the link they were read from and the date read, and its `## Proposal` ends with the confidence gr0wthlab counted from the independent, unprompted sources behind it (High for three or more, Medium for two, Low for one).
+
 A post's `## Draft` is everything the Founder needs to judge it in under a minute: the day, its Angle and pair leg, the primary platform, the slot or that none is set yet, and whether anything can be published yet (nothing can until the Waitlist is live); the frozen Hook; the video beat by beat; each platform's text, hashtags, and alt text; each behavioral claim its Draft lists with the code that supports it, and that only those were checked; and the checks it passed, with any warnings, its status against the pre-publication checklist, and the kit's own checklist lines for every asset, which are the Founder's to judge.
 Its Evidence cites the calendar row, the Angle, its sourced pain, and its pre-registered signal and kill criterion in the package.
 gr0wthlab queues a post only from a Draft that passed every check; a Draft that did not is never an item, and a notice names it with the rule that blocked it.
@@ -99,7 +124,7 @@ Once the Founder approves one, Mandu hands that item, with the Founder's note if
 
 ```json
 {
-  "exchange": 3,
+  "exchange": 4,
   "updated_by_run": "20261011T230002Z-scheduled-1a2b",
   "updated_at": "2026-10-11T23:41:09+00:00",
   "run_report": "run-reports/20261011T230002Z-scheduled-1a2b.md",
@@ -145,7 +170,7 @@ One file per decided item, `decisions/<id>.json`, written once and never edited 
 
 ```json
 {
-  "exchange": 3,
+  "exchange": 4,
   "item": "20261011-trademark-status-stale",
   "decision": "reject",
   "reason": "Keep the legal line until counsel confirms the filing.",
@@ -179,15 +204,45 @@ Such a record changes nothing: a decision already taken stands, and Mandu does n
 One file per sitting, `sittings/<YYYY-MM-DD>.json`, with the minutes the Founder spent, measured by Mandu or reported by the Founder:
 
 ```json
-{"exchange": 3, "date": "2026-10-11", "minutes": 48, "note": null}
+{"exchange": 4, "date": "2026-10-11", "minutes": 48, "note": null}
 ```
 
 `minutes` is a whole number from 1 to 600, and `date` equals the file name.
 Write it when the sitting ends: gr0wthlab counts an item as left undecided at the sitting when the item is still open, was queued on or before the sitting's date, and was queued before gr0wthlab first read this record.
 
+## Outreach records (Mandu writes)
+
+One file per approved message the Founder sent or posted, `outreach/<id>.json`, named for the message item.
+Write it when the Founder sends the message, and replace it, whole, when a reply arrives; it is the only record gr0wthlab has of either.
+
+```json
+{
+  "exchange": 4,
+  "item": "20261011-message-creator-gmb-fitness",
+  "sent_on": "2026-10-12",
+  "replied_on": null,
+  "follow_up_wait_days": null,
+  "note": null
+}
+```
+
+- `item` equals the file name without `.json`, and names a message item the Founder approved.
+- `sent_on` is the date the Founder sent or posted it.
+- `replied_on` is the date the person replied, in any form the Founder counts as a reply, or `null` while none has; it cannot come before `sent_on`.
+- `follow_up_wait_days` is the waiting period the Founder wants before the one follow-up, a whole number of days from 1 to 90, or `null` or left out for the period the item stated.
+- `note` is one optional line of at most 300 characters.
+
+What gr0wthlab does with it:
+
+- For a creator's first message, it offers the one follow-up only once the record shows the message sent, `replied_on` still `null`, and the waiting period passed since `sent_on`.
+  With no record, it offers none: nothing shows the message was sent.
+- Once `replied_on` is set, it never offers a follow-up for that creator, and withdraws one still open.
+- For any other message, the record is kept as the fact that it was sent; nothing else depends on it.
+- A record that names no message item, or a message the Founder has not approved, changes nothing; gr0wthlab names it in the run report and a notice at every run until Mandu corrects or removes its own file.
+
 ## Rules for both sides
 
-- Every record states the exchange version its writer follows, `"exchange": 3` today, and every item states `exchange: 3`.
+- Every record states the exchange version its writer follows, `"exchange": 4` today, and every item states `exchange: 4`.
 - Versions are additive: a new version only adds record types or optional fields, so every record of an earlier version stays valid as written.
 - A reader reads every record at or below its own version, by that record's version: a field added after it is simply absent.
 - A record of a newer version than the reader knows is reported as unreadable and never guessed at.
@@ -195,6 +250,8 @@ Write it when the sitting ends: gr0wthlab counts an item as left undecided at th
 - Version 2 added `next_run` and `carried_over_from` to the queue.
 - Version 3 added a post's `window` and `day`, made its `slot` wait until the window's first sitting and posting slot are set, and added `withdrawn` to the queue.
   Mandu's own records change nothing: a decision or sitting record of version 2 reads as it is.
+- Version 4 added the outreach records Mandu writes, the message kinds a `## Draft` may hold, the subreddit rules notice, and `message` in a queue entry (`purpose`, and `to`: the creator's key, `network`, or the Evidence a reply answers).
+  A decision or sitting record of version 3 reads as it is.
 - Times carry their UTC offset; dates are `YYYY-MM-DD`.
 - Write each file whole: write a temporary file whose name starts with `.` in the same folder, then rename it; both sides ignore files whose names start with `.`.
 - Neither side ever writes, moves, or deletes a file in the other's repository.

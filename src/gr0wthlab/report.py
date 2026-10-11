@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import exchange, package, posts, schedule, waitlist
+from . import exchange, learning, listening, outreach, package, posts, schedule, waitlist
 from .state import Tally, run_tally
 
 SKIPPED = "skipped"
@@ -94,6 +94,23 @@ class RunState:
     posts_problem: str = ""  # why the post Drafts were not prepared or not taken in, when they were not
     filing: str = ""  # where the proposed brand-rules lists stand
     filed: str | None = None  # the brand-rules proposal, when this run filed it
+    snapshot_sources: str = (
+        ""  # this run's snapshot of the network sources, relative to ledger/; none when none is read
+    )
+    requests_file: str = ""  # this run's request log, relative to ledger/
+    listening: listening.Plan | None = None
+    listening_result: listening.Result | None = None
+    listening_problem: str = ""  # why Listening was not prepared or not taken in, when it was not
+    outreach: outreach.Plan | None = None
+    outreach_result: outreach.Result | None = None
+    outreach_problem: str = ""
+    outreach_filing: str = ""  # where the proposed loss-framing and sponsorship lists stand
+    reasons: list = field(default_factory=list)  # learning.Reason, every rejection reason kept before the agent started
+    learning: learning.Result | None = None
+    guidance: learning.Guidance | None = None  # the agent's Instructions as they were before it started
+    put_back: list[str] = field(default_factory=list)  # each change to them the launcher undid
+    work_published: list[str] = field(default_factory=list)  # the items Listening and outreach queued this run
+    check_work: str = ""  # the command the agent checks its Listening and outreach work with
 
     @property
     def lateness(self) -> timedelta | None:
@@ -391,6 +408,20 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
         lines += waitlist_brief(state.waitlist, evidence)
     if state.posts is not None:
         lines += [""] + posts.brief_lines(state.posts, repo_root)[:-1]
+    context = state.posts.context if state.posts is not None else None
+    if state.listening is not None or state.listening_problem:
+        lines += [""] + (
+            listening.brief_lines(state.listening, workspace, ledger, mandu, state.check_work)
+            if state.listening is not None
+            else ["## Listening", "", f"Listening was {state.listening_problem}; record nothing from memory."]
+        )
+    if state.outreach is not None or state.outreach_problem:
+        lines += [""] + (
+            outreach.brief_lines(state.outreach, context, mandu, ledger, state.check_work)
+            if state.outreach is not None
+            else ["## Outreach", "", f"Outreach was {state.outreach_problem}; write no outreach Draft this run."]
+        )
+    lines += [""] + learning.brief_lines(state.reasons, workspace)
     lines += [
         "",
         "## Where to write",
@@ -400,6 +431,7 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
         f"- The launcher's records, which you can read and never write: `{ledger}`.",
         f"- Their format: `{repo_root / 'docs' / 'mandu-exchange.md'}`.",
         f"- Check them before you finish: `/usr/bin/python3 {repo_root / 'src/bin/gr0wthlab'} check-incoming`.",
+        f"- Check your quote records, Angle and Hook proposals, messages, and rejection codes: `{state.check_work}`.",
         "",
     ]
     return "\n".join(lines)
@@ -440,6 +472,13 @@ def summary_lines(state: RunState) -> list[str]:
         lines.append(f"- Post Drafts: {', '.join(counts) or 'no calendar day was due'}.")
     elif state.posts_problem:
         lines.append(f"- Post Drafts: {state.posts_problem}")
+    for workflow, title, active in (
+        (listening.WORKFLOW, "Listening", state.listening is not None and bool(state.listening.snapshot.readings)),
+        (outreach.WORKFLOW, "Outreach", state.outreach is not None and bool(state.outreach.slots)),
+    ):
+        tally = next((tally for tally in state.tallies if tally.workflow == workflow), None)
+        if active and tally is not None:
+            lines.append(f"- {title}: {tally.account()}.")
     if state.notice:
         lines.append(f"- Problems this run are listed in the notice `{state.notice}`.")
     lines.append(f"- {cost_line(state)}")
@@ -469,6 +508,13 @@ def render_report(state: RunState) -> str:
     for item in state.set_aside:
         lines.append(f"- Set aside, not queued: `{item.name}`: {'; '.join(item.problems)}")
     lines += [""] + posts.report_lines(state.posts, state.post_outcome, state.filing, state.posts_problem)
+    lines += [""] + listening.report_lines(
+        state.listening, state.listening_result, state.requests_file, state.listening_problem
+    )
+    lines += [""] + outreach.report_lines(
+        state.outreach, state.outreach_result, state.outreach_filing, state.outreach_problem
+    )
+    lines += [""] + learning.report_lines(state.learning, state.put_back)
     lines += ["", "## Run state", ""]
     lines += [f"- {tally.workflow}: {tally.line()}" for tally in state.tallies]
     if state.state_notes:
@@ -482,6 +528,13 @@ def render_report(state: RunState) -> str:
             f"- Boundary preflight: {'passed' if preflight.get('ok') else 'FAILED'}, refused "
             f"{len(preflight.get('refused', []))} paths and allowed {len(preflight.get('writable', []))} areas."
         )
+        network = preflight.get("network")
+        if network:
+            reached = ", ".join(network.get("reached", [])) or "none"
+            lines.append(
+                f"- Sandbox network: {len(network.get('unreachable', []))} listed hosts tried from inside the sandbox,"
+                f" reached: {reached}."
+            )
     if state.agent.get("fingerprint"):
         lines.append(f"- Configuration fingerprint: `{state.agent['fingerprint']}`")
     if state.agent.get("error"):
@@ -547,6 +600,13 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     blocked = posts.notice_section(state.post_outcome, day)
     if blocked:
         sections.append(blocked)
+    for section in (
+        listening.notice_section(state.listening, state.listening_result, day),
+        outreach.notice_section(state.outreach, state.outreach_result, day),
+        learning.notice_section(state.learning, day),
+    ):
+        if section:
+            sections.append(section)
     if state.set_aside:
         sections.append(
             (

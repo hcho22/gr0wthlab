@@ -190,5 +190,28 @@ class PreflightTest(CodexTestCase):
         self.assertTrue(json.dumps(result.failures))
 
 
+class NetworkProbeTest(unittest.TestCase):
+    TARGETS = ["www.reddit.com:443", "itunes.apple.com:443", "www.youtube.com:443"]
+
+    def test_the_probe_s_output_is_read_target_by_target(self):
+        output = "UNREACHABLE www.reddit.com:443 101\nREACHED itunes.apple.com:443 102\nnoise\nUNREACHABLE x 1 2\n"
+        result = codex.evaluate_network(output, self.TARGETS)
+        self.assertEqual(result.unreachable, (("www.reddit.com:443", 101),))
+        self.assertEqual(result.reached, ("itunes.apple.com:443",))
+        self.assertEqual(result.failures, ("www.youtube.com:443 was not probed",))
+        self.assertFalse(result.ok)
+        self.assertEqual(result.as_json()["unreachable"], ["www.reddit.com:443"])
+
+    def test_only_a_probe_that_tried_every_target_and_reached_none_passes(self):
+        output = "".join(f"UNREACHABLE {target} {pid}\n" for pid, target in enumerate(self.TARGETS, 200))
+        self.assertTrue(codex.evaluate_network(output, self.TARGETS).ok)
+        self.assertFalse(codex.evaluate_network("", self.TARGETS).ok)
+        self.assertTrue(codex.evaluate_network("", []).ok)
+
+    def test_the_probe_sends_nothing_and_names_the_process_that_tried(self):
+        self.assertIn("/usr/bin/nc -z", codex.NETWORK_SCRIPT)
+        self.assertIn('echo "UNREACHABLE $target $pid"', codex.NETWORK_SCRIPT)
+
+
 if __name__ == "__main__":
     unittest.main()

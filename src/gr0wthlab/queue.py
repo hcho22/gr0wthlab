@@ -11,6 +11,7 @@ An open item is carried over once the Founder has left it undecided at a sitting
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -30,6 +31,8 @@ ITEMS = "items"
 SET_ASIDE = "set-aside"
 QUEUE_FILE = "queue.json"
 MAX_SLUG = 60
+# An ask that proposes a new Angle or Hook: it enters only through review-queue/angles/, with its sourced pain.
+NEW_ANGLE = re.compile(r"\b(?:new|add(?:s|ing)?)\s+(?:an?\s+|the\s+)?(?:angle|hook)s?\b", re.IGNORECASE)
 
 
 class QueueError(Exception):
@@ -235,6 +238,16 @@ class Ledger:
                 "a post is queued only from its Draft in drafts/posts/, after the launcher's checks; never write one"
                 " here"
             )
+        if item.kind == "message":
+            problems.append(
+                "a message is queued only from its Draft in drafts/messages/, after the launcher's checks; never"
+                " write one here"
+            )
+        if item.kind == "package-change-proposal" and NEW_ANGLE.search(item.ask):
+            problems.append(
+                "a new Angle or Hook is proposed only as a file in review-queue/angles/, citing its sourced pain;"
+                " never here"
+            )
         target = item.fields.get("supersedes")
         replaced = self.entries.get(target, {}) if target else {}
         if target and replaced.get("status") != OPEN:
@@ -244,10 +257,11 @@ class Ledger:
                 f"supersedes {target}, which the launcher filed from reviewed text; only a reviewed change to that"
                 " text replaces it"
             )
-        elif replaced.get("kind") == "post":
+        elif replaced.get("kind") in ("post", "message"):
+            folder = "drafts/posts/" if replaced["kind"] == "post" else "drafts/messages/"
             problems.append(
-                f"supersedes {target}, a post the launcher queued from its Draft; only a change to that Draft in"
-                " drafts/posts/ replaces it"
+                f"supersedes {target}, a {replaced['kind']} the launcher queued from its Draft; only a change to that"
+                f" Draft in {folder} replaces it"
             )
         fingerprint = exchange.item_hash(item)
         if fingerprint in seen:

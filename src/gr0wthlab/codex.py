@@ -141,6 +141,88 @@ done
 """
 
 
+# Runs inside the sandbox, or outside it as the control: try to open one TCP connection to each host:port, sending
+# nothing, and report whether it opened, with the id of the process that tried, so the kernel's own denial of that
+# process can be matched to it.
+NETWORK_SCRIPT = """
+shift
+for target in "$@"; do
+  /usr/bin/nc -z -G 3 -w 3 "${target%:*}" "${target##*:}" >/dev/null 2>&1 &
+  pid=$!
+  if wait "$pid"; then echo "REACHED $target $pid"; else echo "UNREACHABLE $target $pid"; fi
+done
+"""
+
+
+@dataclass(frozen=True)
+class NetworkProbe:
+    """What a network probe found: each target that could not be reached, with the process that tried, each that
+    could, and why the probe itself fell short, if it did."""
+
+    unreachable: tuple[tuple[str, int], ...]
+    reached: tuple[str, ...]
+    failures: tuple[str, ...]
+
+    @property
+    def ok(self) -> bool:
+        return not self.reached and not self.failures
+
+    def as_json(self) -> dict[str, object]:
+        return {
+            "ok": self.ok,
+            "unreachable": [target for target, _ in self.unreachable],
+            "reached": list(self.reached),
+            "failures": list(self.failures),
+        }
+
+
+def evaluate_network(output: str, targets: Sequence[str]) -> NetworkProbe:
+    outcomes: dict[str, tuple[str, int]] = {}
+    for line in output.splitlines():
+        parts = line.split()
+        if len(parts) == 3 and parts[0] in ("REACHED", "UNREACHABLE") and parts[2].isdigit():
+            outcomes[parts[1]] = (parts[0], int(parts[2]))
+    unreachable = tuple(
+        (target, outcomes[target][1]) for target in targets if outcomes.get(target, ("",))[0] == "UNREACHABLE"
+    )
+    reached = tuple(target for target in targets if outcomes.get(target, ("",))[0] == "REACHED")
+    failures = tuple(f"{target} was not probed" for target in targets if target not in outcomes)
+    return NetworkProbe(unreachable, reached, failures)
+
+
+def run_network_probe(
+    config: Mapping,
+    boundary: Boundary,
+    codex_bin: Path,
+    environment: Mapping[str, str],
+    targets: Sequence[str],
+    sandboxed: bool = True,
+) -> NetworkProbe:
+    """Try each host:port from inside the run's sandbox, with no model, where none must be reachable: the agent has
+    no network, and the launcher fetches for it. With sandboxed off the same script runs outside the sandbox, as the
+    control that shows the probe can reach a listener at all."""
+    script = ["/bin/sh", "-c", NETWORK_SCRIPT, "network", "probe"] + list(targets)
+    if not targets:
+        return NetworkProbe((), (), ())
+    if not sandboxed:
+        completed = subprocess.run(script, capture_output=True, text=True, env=dict(environment))
+        return evaluate_network(completed.stdout, targets)
+    with tempfile.TemporaryDirectory(prefix="gr0wthlab-preflight-") as empty_home:
+        command = [str(codex_bin), "sandbox"] + config_overrides(config, boundary) + ["--"] + script
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            env=dict(environment, CODEX_HOME=empty_home),
+            cwd=str(boundary.working_directory),
+        )
+    result = evaluate_network(completed.stdout, targets)
+    if completed.returncode != 0:
+        failure = f"codex sandbox exited {completed.returncode}: {completed.stderr.strip()[-500:]}"
+        return NetworkProbe(result.unreachable, result.reached, result.failures + (failure,))
+    return result
+
+
 @dataclass(frozen=True)
 class PreflightResult:
     allowed: tuple[Path, ...]

@@ -1,5 +1,5 @@
-"""The Mandu exchange formats in docs/mandu-exchange.md: the Review Queue items gr0wthlab writes, and the decision
-and sitting records Mandu writes for gr0wthlab to read.
+"""The Mandu exchange formats in docs/mandu-exchange.md: the Review Queue items gr0wthlab writes, and the decision,
+sitting, and outreach records Mandu writes for gr0wthlab to read.
 
 Everything here is pure parsing and rendering, so the agent's own check (check-incoming) and the launcher's
 post-run validation apply exactly the same rules.
@@ -13,7 +13,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
-EXCHANGE_VERSION = 3
+EXCHANGE_VERSION = 4
 
 # Each kind's body heading, in the order a week's non-post items are presented; posts come first by nearest slot.
 KINDS = {
@@ -37,6 +37,7 @@ MAX_ID = 80
 MAX_TITLE = 120
 MAX_ITEM_CHARS = 12000
 MAX_LINE = 300
+MAX_WAIT_DAYS = 90
 # An Evidence line names its source as a URL or as a path in backticks.
 SOURCE_PATTERN = re.compile(r"https?://\S+|`[^`\s]*[/.][^`]*`")
 
@@ -256,6 +257,18 @@ class Sitting:
     note: str | None
 
 
+@dataclass(frozen=True)
+class Outreach:
+    """What the Founder did with an approved message: the day it was sent, the day a reply came, if one has, and the
+    waiting period before a follow-up, when the Founder set one other than gr0wthlab's default."""
+
+    item: str
+    sent_on: str
+    replied_on: str | None
+    wait_days: int | None
+    note: str | None
+
+
 def one_line(value: object, name: str, problems: list[str], required: bool) -> str | None:
     if value is not None and (not isinstance(value, str) or "\n" in value or "\r" in value):
         problems.append(f"{name} must be one line of text")
@@ -336,3 +349,29 @@ def parse_sitting(stem: str, data: object) -> tuple[Sitting | None, list[str]]:
     if problems:
         return None, problems
     return Sitting(stem, minutes, note), []
+
+
+def parse_outreach(stem: str, data: object) -> tuple[Outreach | None, list[str]]:
+    """An outreach record from outreach/<item id>.json: Mandu writes it when the Founder sends an approved message,
+    and writes it again, whole, when a reply arrives."""
+    problems: list[str] = []
+    if not isinstance(data, dict):
+        return None, ["the record must be a JSON object"]
+    check_version(data, problems)
+    if data.get("item") != stem:
+        problems.append(f"item must equal the file name {stem!r}; got {data.get('item')!r}")
+    sent_on = data.get("sent_on")
+    if not isinstance(sent_on, str) or not valid_date(sent_on):
+        problems.append("sent_on must be the YYYY-MM-DD date the message was sent")
+    replied_on = data.get("replied_on")
+    if replied_on is not None and not (isinstance(replied_on, str) and valid_date(replied_on)):
+        problems.append("replied_on must be null or the YYYY-MM-DD date a reply came")
+    elif replied_on is not None and isinstance(sent_on, str) and valid_date(sent_on) and replied_on < sent_on:
+        problems.append("replied_on cannot come before sent_on")
+    wait = data.get("follow_up_wait_days")
+    if wait is not None and (isinstance(wait, bool) or not isinstance(wait, int) or not 1 <= wait <= MAX_WAIT_DAYS):
+        problems.append(f"follow_up_wait_days must be null or a whole number of days from 1 to {MAX_WAIT_DAYS}")
+    note = one_line(data.get("note"), "note", problems, required=False)
+    if problems:
+        return None, problems
+    return Outreach(stem, sent_on, replied_on, wait, note), []

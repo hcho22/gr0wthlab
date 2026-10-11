@@ -76,6 +76,12 @@
             ]
           },
           {
+            "path": "projects/RepToday/gtm/02-brand/positioning.md",
+            "needed_by": [
+              "listening"
+            ]
+          },
+          {
             "path": "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json",
             "needed_by": [
               "post-drafts",
@@ -135,6 +141,14 @@
           "checklist": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md",
           "competitors": "projects/RepToday/gtm/01-research/",
           "note": "Which package file plays each part in the post-Draft checks (US-ME08); each is one of the sources above, so every run snapshots it. The competitors are the ones the research names in its files that start with competitor."
+        },
+        "listening": {
+          "fit": "projects/RepToday/gtm/02-brand/positioning.md",
+          "note": "The package file that defines the customer the Product is built for, which the Marketing Engineer reads to score each Listening quote's Fit (US-ME13); it is one of the sources above, and the definition is never restated here. The competitors whose App Store reviews are read are post_drafts.competitors, each by the store page its own section of the research cites. The places Listening reads are in config/sources.json."
+        },
+        "outreach": {
+          "channel_plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+          "note": "The package file that names the personal-network ask and the creators worth writing to (US-ME14); one of the sources above covers it. A run drafts a message only for a creator in config/sources.json that this file still names."
         }
       },
       "waitlist": {

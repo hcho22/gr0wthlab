@@ -24,13 +24,25 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
    A reviewed change that brings back a text the Founder rejected, while another text is open, files the rejected text again in that open item's place.
    An approval the Founder gave an item that a reviewed change had already replaced still counts as the request's approval, though Mandu hands no superseded item to firstmate: the replacement stays open for the Founder to decide, no reviewed change replaces it any more, nothing is filed after it, and the run report says so.
 6. It reads the 14-day kit from Mandu, works out which calendar days need post Drafts this run, now that the Founder's decisions are in, and fixes RepToday's `main` to one commit for claim checks.
+   It reads the fixed list of network sources in `config/sources.json` itself, outside the sandbox: the three subreddits' newest threads and rules, App Store reviews of the competitors the research names, and the three creators' own feeds.
+   Every request is a credential-free GET to a host listed in `config/guardrails/fetch.json`; it reads each host's `robots.txt` first and never requests a path that file disallows.
+   What it read goes into one snapshot (`ledger/evidence/sources/`), and every request it was asked to make, sent or not, into the run's request log (`ledger/run-reports/<run id>.requests.json`).
+   A source that is disallowed, refused, or failing is reported with its reason, queued in a notice, and marks its workflow incomplete; the run goes on.
+   The first time it reads a subreddit's rules, it queues a notice that quotes and links them; no reply Draft for that subreddit is offered until the Founder acknowledges it.
+   It reads the Founder's outreach records from Mandu's exchange folder and works out which messages may be offered: the personal-network ask, one message for each creator the channel plan names, and one follow-up only for a creator who was written to, has not replied, and whose waiting period has passed.
    It writes the agent's brief and runs the agent in the sandbox with the task definition `src/instructions/weekly-run.md`.
+   The agent has no network, and every run proves it before the agent starts: the preflight tries each listed host from inside the sandbox and stops the run if one is reachable.
    The agent writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records, and never write there.
 7. Once the agent finishes, it restores its owner's read and write access to anything under `workspace/` the agent left without it, and the run report names every entry it fixed, before or after the agent.
    It queues the items the agent wrote to `workspace/review-queue/incoming/` that pass the format, sets the rest aside, and turns every problem into one notice.
    The package review counts as complete only when the agent's summary ends with the line `Review: complete`; otherwise the run report marks it incomplete and the notice says so.
    It checks each post Draft the agent wrote in `workspace/drafts/posts/` and queues a post only for one that passes; a blocked Draft is named in the run report and the notice with every failing rule or checklist line, and every check is kept in `ledger/evidence/post-drafts/`.
    It files the brand lint's word-list proposal once, and never again whatever the Founder decides.
+   It puts back any change the run made in `workspace/instructions/`, and names it in the run report.
+   It keeps each quote record whose words stand in the text it fetched from that record's link (`ledger/evidence/listening/quotes/`), and refuses every other.
+   It queues a proposed Angle or Hook only when every source it cites is a kept quote, with the confidence it counts itself, and discards an unsourced one with a note.
+   It checks each message Draft in `workspace/drafts/messages/` and queues a message only for one that passes; an open message that may no longer be offered, such as a follow-up to a creator who has since replied, is withdrawn.
+   It takes in the code the agent proposed for each rejection reason, writes it beside the Founder's words in that decision's Evidence, and rebuilds the learning ledger (`ledger/evidence/learning/ledger.json`), whose counts read "3 of 7".
 8. It writes `ledger/review-queue/queue.json`, each workflow's run state (`ledger/run-reports/state/`), and the run report (`ledger/run-reports/<run id>.md`), whose first line is `checked=N acted=N note=...` even when nothing happened.
 9. In the production clone only, it commits the changed `workspace/` and `ledger/` paths and pushes them to `main`, never anything else and never by force; a change to a README in either is put back, since only a reviewed pull request changes documentation.
    If `origin/main` moved meanwhile, it replays the records commit on top and retries once; a commit that cannot be pushed stays local and goes with the next run, and the run log says why the replay failed.
@@ -43,7 +55,7 @@ Launcher logs, Codex's event stream, and each run's record go to `~/Library/Logs
 ```sh
 git clone https://github.com/hcho22/gr0wthlab.git ~/gr0wthlab
 cd ~/gr0wthlab
-src/bin/gr0wthlab preflight        # proves the write boundary with no model
+src/bin/gr0wthlab preflight        # proves the write boundary and the closed network with no model
 src/bin/gr0wthlab boundary-check   # the US-ME02 check, from this clone
 src/bin/gr0wthlab run              # the first run, on demand
 ```

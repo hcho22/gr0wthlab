@@ -178,5 +178,77 @@ class VerifyTest(unittest.TestCase):
         self.assertEqual(probe.changed(before, before), {})
 
 
+class NetworkVerdictTest(unittest.TestCase):
+    LOCAL = "127.0.0.1:50123"
+    HOSTS = ["www.reddit.com", "itunes.apple.com"]
+
+    def proof(self):
+        targets = [self.LOCAL] + [f"{host}:443" for host in self.HOSTS]
+        return {
+            "started_at": "2026-10-11T23:00:00+00:00",
+            "listed_hosts": list(self.HOSTS),
+            "control": {"reached": [self.LOCAL], "connections": 1},
+            "sandbox": {
+                "unreachable": [{"target": target, "pid": 700 + n} for n, target in enumerate(targets)],
+                "reached": [],
+                "failures": [],
+                "connections": 0,
+            },
+            "launcher": {
+                "robots": {host: {"state": "read", "detail": ""} for host in self.HOSTS},
+                "unlisted": {"status": "refused", "detail": "not requested"},
+                "sent": 2,
+                "methods_sent": ["GET"],
+                "hosts_contacted": list(self.HOSTS),
+                "bodies_sent": 0,
+            },
+        }
+
+    def denials(self, pids=(700, 701, 702)):
+        return [f"Sandbox: nc({pid}) deny(1) network-outbound /private/var/run/mDNSResponder" for pid in pids]
+
+    def test_the_boundary_holds_when_both_sides_show_it(self):
+        self.assertEqual(probe.network_verdict(self.proof(), self.denials(), self.LOCAL), [])
+
+    def test_each_way_the_proof_falls_short_is_named(self):
+        cases = {
+            "the control outside the sandbox did not reach": lambda n: n["control"].update(reached=[], connections=0),
+            "the sandbox reached www.reddit.com:443": lambda n: n["sandbox"].update(
+                reached=["www.reddit.com:443"],
+                unreachable=n["sandbox"]["unreachable"][:1] + n["sandbox"]["unreachable"][2:],
+            ),
+            "a connection from inside the sandbox reached the check's listener": lambda n: n["sandbox"].update(
+                connections=1
+            ),
+            "itunes.apple.com:443 was not tried from inside the sandbox": lambda n: n["sandbox"].update(
+                unreachable=n["sandbox"]["unreachable"][:2]
+            ),
+            "codex sandbox exited 1": lambda n: n["sandbox"].update(failures=["codex sandbox exited 1: boom"]),
+            "did not refuse an address outside its list": lambda n: n["launcher"]["unlisted"].update(status="read"),
+            "the launcher's client contacted": lambda n: n["launcher"].update(hosts_contacted=["example.com"]),
+            "something other than a GET with no body": lambda n: n["launcher"].update(methods_sent=["GET", "POST"]),
+        }
+        for problem, change in cases.items():
+            with self.subTest(problem=problem):
+                network = self.proof()
+                change(network)
+                found = probe.network_verdict(network, self.denials(), self.LOCAL)
+                self.assertTrue(any(problem in line for line in found), found)
+
+    def test_an_attempt_the_kernel_did_not_deny_is_unproven(self):
+        found = probe.network_verdict(self.proof(), self.denials(pids=(700, 702)), self.LOCAL)
+        self.assertEqual(found, ["no kernel denial names the attempt on www.reddit.com:443 (process 701)"])
+        other = ["Sandbox: zsh(701) deny(1) file-write-create /tmp/x"]
+        self.assertEqual(len(probe.network_verdict(self.proof(), other, self.LOCAL)), 3)
+
+    def test_a_launcher_that_could_read_no_robots_txt_still_holds_the_boundary(self):
+        network = self.proof()
+        network["launcher"].update(
+            robots={h: {"state": "unavailable", "detail": "offline"} for h in self.HOSTS}, sent=0
+        )
+        network["launcher"].update(methods_sent=[], hosts_contacted=[])
+        self.assertEqual(probe.network_verdict(network, self.denials(), self.LOCAL), [])
+
+
 if __name__ == "__main__":
     unittest.main()
