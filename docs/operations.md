@@ -38,7 +38,8 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
    It files the brand lint's word-list proposal once, and never again whatever the Founder decides.
    It checks each recruiting Draft the brief asked for in `workspace/drafts/beta-recruiting/`, and queues the invitation, with its batch attached, or the Waitlist ask only from a Draft that passes; a blocked Draft is named in the run report and the notice with every failing rule.
    A recruiting Draft that holds anything that looks like an email address is removed from `workspace/`, so the records step never saves it.
-   It withdraws an open recruiting item whose Draft stopped passing, that holds a sign-up who left the Waitlist, or that outlived the Founder's stop, and keeps the run's recruiting Evidence in `ledger/evidence/beta-recruiting/`.
+   It withdraws an open recruiting item whose Draft stopped passing, or that outlived the end of recruiting, at the Founder's stop or once the Founder reports the cohort full, and keeps the run's recruiting Evidence in `ledger/evidence/beta-recruiting/`.
+   It replaces an open invitation that holds a sign-up who left the Waitlist with the batch made again without them, and withdraws it when that batch cannot be made.
    It replaces an open Waitlist ask whose stated gap changed with one that states the current gap, and withdraws it once the cohort can reach its minimum.
 8. It writes `ledger/review-queue/queue.json`, each workflow's run state (`ledger/run-reports/state/`), and the run report (`ledger/run-reports/<run id>.md`), whose first line is `checked=N acted=N note=...` even when nothing happened.
 9. In the production clone only, it commits the changed `workspace/` and `ledger/` paths and pushes them to `main`, never anything else and never by force; a change to a README in either is put back, since only a reviewed pull request changes documentation.

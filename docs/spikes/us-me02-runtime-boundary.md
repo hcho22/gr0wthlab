@@ -316,7 +316,7 @@ Each run cost between $0.002 and $0.03 at API prices.
 
 Beta Cohort recruiting added launcher steps to the cycle and a `beta_recruiting` block to `config/products.json`, with `06-channels/` now also a package source the workflow needs, and a batch size to `config/run.json`.
 The agent's start is unchanged: `codex.py`, `boundary.py`, `launcher.py`, the probe, and `runtime.json` are as they were, and the permission profile grants the same six areas.
-Three new reads run outside the sandbox, all in Mandu's exchange folder, which is inside the Mandu checkout the sandbox already reads: the Founder's Beta Build record, the Founder's Beta Cohort reports, and, for each package line a recruiting Draft cites, that line.
+Three new reads run outside the sandbox, all inside the Mandu checkout the sandbox already reads: in its exchange folder, the Founder's Beta Build record and the Founder's Beta Cohort reports, and, in the package, each line a recruiting Draft cites.
 Who is invited is ordered inside `waitlist.py`, from the view that stays outside everything the sandbox reads.
 Inside the sandbox, `check-beta-drafts` reads the run's record of which Drafts are due, which names no Waitlist entry, and the same Mandu files; the brief's command names the Mandu location the launcher used.
 One new launcher act in `workspace/` is a removal: a recruiting Draft that holds anything that looks like an email address is deleted, so the records step never saves it.
