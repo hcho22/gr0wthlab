@@ -1,6 +1,7 @@
 """Whole runs with a fake Codex: snapshot, decisions, Review Queue, run report, and the production clone's records."""
 
 import fcntl
+import hashlib
 import io
 import json
 import os
@@ -1169,13 +1170,16 @@ class PostDraftsTest(CycleTestCase):
         ):
             return cli.check_drafts(run_id, out), out.getvalue()
 
-    def run_with_check_drafts(self, at=None):
+    def run_with_check_drafts(self, at=None, meanwhile=None):
         """Run a cycle whose agent, once it has written its files, runs check-drafts for its run while the run is
-        still in progress, as the brief tells it to; returns check-drafts's exit code and its output."""
+        still in progress, as the brief tells it to; returns check-drafts's exit code and its output. meanwhile is
+        what happens outside the run while the agent works, before it runs check-drafts."""
         launch, seen = cycle.launcher.run, []
 
         def agent(*args, **kwargs):
             result = launch(*args, **kwargs)
+            if meanwhile:
+                meanwhile()
             seen.append(self.check_drafts(kwargs["run_id"]))
             return result
 
@@ -1390,6 +1394,73 @@ class PostDraftsTest(CycleTestCase):
         self.assertEqual([(due["day"], due["open"], due["rejected"]) for due in record["due"]], [(8, None, [])])
         self.assertIn(f"check-drafts --run {queue['updated_by_run']}`", self.brief())
 
+    def test_check_drafts_checks_claims_at_the_commit_the_launcher_fixed_whatever_lands_on_main_since(self):
+        fakes.set_window(self.repo, fakes.window_from(fakes.SUNDAY_RUN.date()))
+        fakes.keep_days(self.mandu, 3)
+        fakes.behave(self.codex_dir, {"write": {fakes.draft_path(3): fakes.draft(3)}})
+        fixed = fakes.git(self.code, "rev-parse", "main", env=self.env)
+
+        def a_commit_lands():
+            score = self.code / "Engine/ConsistencyScore.swift"
+            score.write_text(score.read_text().replace("value - missPenalty", "value - penalty"))
+            fakes.git(self.code, "commit", "--quiet", "--all", "-m", "rename the penalty", env=self.env)
+
+        code, text = self.run_with_check_drafts(meanwhile=a_commit_lands)
+        self.assertNotEqual(fakes.git(self.code, "rev-parse", "main", env=self.env), fixed)
+        self.assertEqual(
+            (code, text.splitlines()[1:]),
+            (0, ["OK day 3: drafts/posts/window-1/day-03.md", "1 day due, 0 with problems"]),
+        )
+        queue = self.queue()
+        record = json.loads((self.ledger() / f"run-reports/{queue['updated_by_run']}.post-plan.json").read_text())
+        self.assertEqual(record["code"], {"commit": fixed, "problem": None})
+        report = self.report()
+        self.assertIn(f"- Claims checked against RepToday `main` at `{fixed[:7]}`", report)
+        self.assertIn("| 3 | P03 / AB-2 leg A | queued |", report)
+
+    def test_check_drafts_keeps_the_launcher_s_reason_when_it_could_not_read_the_code_before_the_agent_started(self):
+        shutil.rmtree(self.code)
+        fakes.set_window(self.repo, fakes.window_from(fakes.SUNDAY_RUN.date()))
+        fakes.keep_days(self.mandu, 3)
+        fakes.behave(self.codex_dir, {"write": {fakes.draft_path(3): fakes.draft(3)}})
+        code, text = self.run_with_check_drafts(meanwhile=lambda: fakes.make_code(self.code, self.env))
+        self.assertEqual(code, 1, text)
+        missing = f"the RepToday checkout {self.code} does not exist"
+        self.assertIn(f"PROBLEM RepToday's code could not be read: {missing}", text)
+        self.assertIn("BLOCKED day 3: drafts/posts/window-1/day-03.md", text)
+        self.assertIn(
+            f"  - claim-location: 'A missed day lowers the score, and nothing resets it to zero.': {missing}", text
+        )
+        self.assertIn("| 3 | P03 / AB-2 leg A | blocked |", self.report())
+
+    def test_check_drafts_names_a_kit_file_that_is_no_longer_as_the_launcher_read_it(self):
+        fakes.set_window(self.repo, fakes.window_from(fakes.SUNDAY_RUN.date()))
+        fakes.keep_days(self.mandu, 3)
+        fakes.behave(self.codex_dir, {"write": {fakes.draft_path(3): fakes.draft(3)}})
+        checklist = "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md"
+
+        def the_trademark_line_is_reopened():
+            path = self.mandu / checklist
+            path.write_text(path.read_text().replace("- [x] **Trademark", "- [ ] **Trademark"))
+
+        code, text = self.run_with_check_drafts(meanwhile=the_trademark_line_is_reopened)
+        self.assertEqual(code, 1, text)
+        self.assertEqual(
+            text.splitlines()[1],
+            f"Kit files in Mandu that are no longer as the launcher read them for this run: `{checklist}`. The"
+            " launcher checks every Draft against what it read then, so its verdict may differ from the ones below,"
+            " which use what Mandu holds now.",
+        )
+        self.assertIn("BLOCKED day 3: drafts/posts/window-1/day-03.md", text)
+        self.assertIn(f"  - {checklist} line 7: Trademark search for the name", text)
+        queue = self.queue()
+        record = json.loads((self.ledger() / f"run-reports/{queue['updated_by_run']}.post-plan.json").read_text())
+        self.assertEqual(record["kit"]["checklist"]["path"], checklist)
+        self.assertNotEqual(
+            record["kit"]["checklist"]["sha256"], hashlib.sha256((self.mandu / checklist).read_bytes()).hexdigest()
+        )
+        self.assertIn("| 3 | P03 / AB-2 leg A | queued |", self.report())
+
     def test_check_drafts_names_a_draft_the_founder_rejected_and_skips_a_day_the_founder_approved(self):
         first = self.first_batch()
         ids = {entry["day"]: entry["id"] for entry in first["open"] if entry["kind"] == "post"}
@@ -1432,6 +1503,16 @@ class PostDraftsTest(CycleTestCase):
         code, text = self.check_drafts("../../workspace/drafts/posts")
         self.assertEqual(code, 1, text)
         self.assertIn("could not be read (refusing to touch", text)
+        self.run_cycle()
+        taken = self.ledger() / "run-reports" / f"{self.queue()['updated_by_run']}.post-plan.json"
+        self.assertEqual(self.check_drafts(self.queue()["updated_by_run"])[0], 0)
+        for code_read in ({"commit": "main", "problem": None}, {"commit": None, "problem": None}):
+            with self.subTest(code=code_read):
+                record.write_text(json.dumps(dict(json.loads(taken.read_text()), code=code_read)), encoding="utf-8")
+                code, text = self.check_drafts(run_id)
+                self.assertEqual(code, 1, text)
+                self.assertIn("it names neither a commit of the Product's code nor why there is none", text)
+                self.assertIn("so no Draft was checked", text)
 
     def test_the_brand_rules_proposal_is_filed_once_and_its_lists_are_pending_until_mandu_has_them(self):
         rules = self.mandu / "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json"

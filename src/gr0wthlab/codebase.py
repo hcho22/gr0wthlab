@@ -22,6 +22,7 @@ TIMEOUT = 30
 # with warnings; any other machine uses the git on its PATH.
 CLT_GIT = Path("/Library/Developer/CommandLineTools/usr/bin/git")
 LOCATION = re.compile(r"([^\s:`]+):(\d+)(?:-(\d+))?")
+COMMIT = re.compile(r"[0-9a-f]{40,64}")
 
 
 def environment(env: Mapping[str, str]) -> dict[str, str]:
@@ -116,7 +117,7 @@ def open_code(name: str, checkout: Path, branch: str, env: Mapping[str, str]) ->
     except (OSError, subprocess.SubprocessError) as error:
         code.problem = f"git could not read the {name} checkout ({error})"
         return code
-    if completed.returncode != 0 or not re.fullmatch(r"[0-9a-f]{40,64}", completed.stdout.strip()):
+    if completed.returncode != 0 or not COMMIT.fullmatch(completed.stdout.strip()):
         code.problem = f"the {name} checkout {checkout} has no branch {branch}"
         return code
     code.commit = completed.stdout.strip()

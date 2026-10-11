@@ -110,7 +110,9 @@ def check_drafts(run_id: str, out=sys.stdout) -> int:
 
     Each day's standing is read from the record the launcher wrote for that run before the agent started, never
     worked out again here: the queue it comes from is saved only when the run ends. Without that record no Draft is
-    checked, and the output says so.
+    checked, and the output says so. The record also fixes the commit every claim is checked at, and names each kit
+    file's fingerprint: a kit file that is no longer as the launcher read it is named, since only what it holds now
+    can be checked against.
     """
     env = dict(os.environ)
     home = Path.home()
@@ -126,7 +128,7 @@ def check_drafts(run_id: str, out=sys.stdout) -> int:
         return 0
     try:
         record = Store(LEDGER_DIR).path(cycle.RUN_REPORTS, posts.plan_file(run_id))
-        posts.restore(plan, json.loads(read_plain(record).decode("utf-8")))
+        changed = posts.restore(plan, json.loads(read_plain(record).decode("utf-8")))
     except (ConfigError, OSError, UnsafeFile, ValueError) as error:
         print(
             f"PROBLEM the post plan of run {run_id} could not be read ({error}), so no Draft was checked; the"
@@ -135,6 +137,14 @@ def check_drafts(run_id: str, out=sys.stdout) -> int:
         )
         return 1
     print(plan.reason, file=out)
+    if changed:
+        names = ", ".join(f"`{path}`" for path in changed)
+        print(
+            f"Kit files in Mandu that are no longer as the launcher read them for this run: {names}. The launcher"
+            " checks every Draft against what it read then, so its verdict may differ from the ones below, which use"
+            " what Mandu holds now.",
+            file=out,
+        )
     if plan.code.problem:
         print(f"PROBLEM {plan.product}'s code could not be read: {plan.code.problem}", file=out)
     areas = Areas(boundary)

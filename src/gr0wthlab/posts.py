@@ -22,7 +22,7 @@ from pathlib import Path
 from . import exchange, kit, lint, schedule
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import Boundary, ConfigError, load_json
-from .codebase import CLT_GIT, Code, open_code
+from .codebase import CLT_GIT, COMMIT, Code, open_code
 from .drafts import BLOCKS, DONE, Context, PostDraft, Verdict, evaluate, parse
 from .queue import APPROVED, OPEN, REJECTED, Ledger
 from .settings import Settings, Window
@@ -384,10 +384,18 @@ def plan_file(run_id: str) -> str:
     return f"{run_id}.post-plan.json"
 
 
+def kit_files(plan: Plan) -> dict[str, dict[str, str | None]]:
+    """Each kit file the plan read from Mandu, by role, with its fingerprint; a file that could not be read has
+    none."""
+    return {role: {"path": path, "sha256": digest} for role, (path, digest) in plan.files.items()}
+
+
 def plan_record(plan: Plan) -> dict[str, object]:
-    """Each day's standing as the launcher worked it out, once, after taking in the Founder's decisions and before
-    the agent started: the days due and skipped, and each day's open, approved, and rejected posts. The launcher
-    records it for check-drafts, since the queue it comes from is saved only when the run ends."""
+    """What the launcher fixed, once, after taking in the Founder's decisions and before the agent started: the days
+    due and skipped, each day's open, approved, and rejected posts, the commit the Product's code is read at, or why
+    it could not be read, and each kit file's fingerprint. The launcher records it for check-drafts, since the queue
+    the standing comes from is saved only when the run ends, and the Product's branch and Mandu's files can move on
+    while the agent works."""
     return {
         "run": plan.run,
         "product": plan.product,
@@ -400,11 +408,16 @@ def plan_record(plan: Plan) -> dict[str, object]:
             for due in plan.days
         ],
         "skipped": [{"day": number, "why": why} for number, why in plan.skipped],
+        "code": {"commit": plan.code.commit, "problem": plan.code.problem},
+        "kit": kit_files(plan),
     }
 
 
-def restore(plan: Plan, record: object) -> None:
-    """Give a plan the standing the launcher recorded for its run, in place of working one out."""
+def restore(plan: Plan, record: object) -> list[str]:
+    """Give a plan what the launcher recorded for its run, in place of working it out again: each day's standing,
+    and the commit the Product's code is read at, or why the launcher could not read it. Returns the kit files, by
+    their path in Mandu, that are no longer as the launcher read them: only what they hold now can be checked
+    against."""
     try:
         plan.run, plan.reason = str(record["run"]), str(record["reason"])
         plan.waitlist_live = record["waitlist_live"] is True
@@ -414,6 +427,12 @@ def restore(plan: Plan, record: object) -> None:
             due_day(plan, int(entry["day"]), entry["slot"], entry["open"], entry["approved"], list(entry["rejected"]))
             for entry in record["due"]
         ]
+        commit, problem = record["code"]["commit"], record["code"]["problem"]
+        if not (problem if commit is None else COMMIT.fullmatch(commit)):
+            raise ValueError("it names neither a commit of the Product's code nor why there is none")
+        plan.code.commit, plan.code.problem = commit, problem or plan.code.problem
+        read = {role: (entry["path"], entry["sha256"]) for role, entry in record["kit"].items()}
+        return [path for role, (path, digest) in plan.files.items() if read[role] != (path, digest)]
     except (AttributeError, KeyError, TypeError, ValueError) as error:
         raise PlanError(f"it does not hold a run's post plan ({type(error).__name__}: {error})") from error
 
@@ -744,7 +763,7 @@ def record(plan: Plan, outcome: Outcome, store: Store, run_id: str, now: datetim
             "slot": plan.window.slot.strftime("%H:%M") if plan.window.slot else None,
         },
         "plan": plan.reason,
-        "kit": {role: {"path": path, "sha256": digest} for role, (path, digest) in plan.files.items()},
+        "kit": kit_files(plan),
         "kit_problems": dict(plan.context.kit.problems),
         "competitors": [competitor.name for competitor in plan.context.kit.competitors],
         "code": {
