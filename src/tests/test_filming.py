@@ -629,7 +629,7 @@ class EditRunTest(FilmingRunCase):
         self.assertIn(
             "- Day 8 (`drafts/posts/window-1/day-08.md`): pair-legs: its source ranges differ from day 1's leg", notice
         )
-        self.assertIn("- Day 8 has no video (`drafts/edits/window-1/day-08.json`): pair-legs:", notice)
+        self.assertEqual(notice.count("pair-legs"), 1)  # named once, with the day's post
         # Corrected, the leg is cut and offered.
         queue = self.run_ok({fakes.edit_path(8): fakes.edit_record(8, DAY_1)})
         self.assertEqual(sorted(entry["day"] for entry in queue["open"] if entry["kind"] == "post"), [1, 8])
@@ -658,7 +658,7 @@ class EditRunTest(FilmingRunCase):
             notice,
         )
         self.assertIn(
-            f"- The open post `{post['id']}` for day 1 is withdrawn, since its Draft no longer passes.", notice
+            f"- The open post `{post['id']}` for day 1 is withdrawn, since its edit record does not pass.", notice
         )
         queue = self.run_ok({fakes.edit_path(1): fakes.edit_record(1, DAY_1)})
         posts_open = [entry for entry in queue["open"] if entry["kind"] == "post"]
@@ -679,11 +679,26 @@ class EditRunTest(FilmingRunCase):
         notice = self.notice()
         self.assertIn("- Day 2 has no video: shot d02-s2 has no footage, and nothing is substituted.", notice)
         self.assertIn("not ready: no footage yet for shot d02-s2", self.brief())
+        self.assertNotIn("Day 9", notice)  # not due this run
         # An edit record written all the same, without the shot, is blocked: nothing stands in for the shot.
         only = fakes.edit_record(2, ("d02-s1", "d02-s1a-take-1.mov", 0, 6))
         self.run_ok({fakes.edit_path(2): only})
         self.assertIn("| 2 | d02-s1, d02-s2 | not cut | no footage yet for shot d02-s2 |", self.report())
         self.assertFalse((self.ledger() / "assets").exists())
+
+    def test_a_day_with_no_footage_at_all_is_named_once_footage_has_begun_to_arrive(self):
+        self.approved_plan(days=(1, 3, 8, 10))
+        writes = {fakes.draft_path(1): fakes.filming_draft(1)}
+        self.run_ok(writes)
+        self.assertNotIn("has no video", self.notice())  # nothing is filmed yet, so nothing is missing
+        self.clip("d01-s1.mov")
+        self.run_ok({fakes.edit_path(1): fakes.edit_record(1, DAY_1)})
+        notice = self.notice()
+        self.assertIn("- Day 3 has no video: shot d03-s1 has no footage, and nothing is substituted.", notice)
+        self.assertNotIn("Day 1 has no video", notice)
+        evidence = json.loads(sorted((self.ledger() / "evidence/filming").glob("2*.json"))[-1].read_text())
+        self.assertEqual(evidence["plan"]["jobs"][0]["format"], f"{ANGLES} line 8")
+        self.assertEqual([day["status"] for day in evidence["days"]], ["finished", "no edit record"])
 
     def test_a_rendered_asset_that_does_not_measure_9_16_is_not_kept(self):
         self.approved_plan()

@@ -460,7 +460,11 @@ class Filming:
         asset.reused = bool(known) and target.is_file() and footage.fingerprint(target)[0] == known.get("sha256")
         if not asset.reused:
             video.render(self.tooling, self.canvas, cuts, overlays, target, env)
-        facts = video.probe(self.tooling, target, env)
+        try:
+            facts = video.probe(self.tooling, target, env)
+        except video.VideoError:
+            target.unlink()  # a render that cannot be measured is never kept
+            raise
         problems = video.verify(facts, self.canvas, edit.length)
         if problems:
             target.unlink()
@@ -1069,23 +1073,22 @@ def report_lines(filming: Filming | None, skipped: str = "") -> list[str]:
 
 
 def notice_section(filming: Filming | None, day_text: str) -> tuple[int, str, str] | None:
-    """What the Founder must know of this run's edits: each one that failed a check, each shot with no footage
-    while its job's other shots have some, each file that is footage of no shot, and edits skipped for want of
-    tooling; None when there is nothing."""
+    """What the Founder must know of this run's footage: each shot of an approved plan with no footage once
+    footage has begun to arrive, each file that is footage of no shot, and edits skipped for want of tooling; None
+    when there is nothing. Before any footage is in the window's folder nothing is missing yet, so no shot is named.
+    An edit record that failed a check blocked its day's post, so the post Drafts' part of the notice names it."""
     if filming is None:
         return None
     lines = []
     blocked = [asset for asset in filming.results.values() if asset.status == BLOCKED]
-    for asset in sorted(blocked, key=lambda asset: asset.day):
-        lines.append(
-            f"- Day {asset.day} has no video (`{asset.edit}`): {describe_blocks(asset.blocks) or asset.detail}"
-        )
     inventory = filming.inventory
+    begun = inventory.status == footage.READ and any(clip.shot for clip in inventory.clips.values())
     for number, day in sorted(filming.days.items()):
         spec = day.spec
-        with_footage = [shot.id for shot in spec.shots if inventory.for_shot(shot.id, spec.leg)]
-        without = [shot.id for shot in spec.shots if shot.id not in with_footage]
-        if with_footage and without and number not in [asset.day for asset in blocked]:
+        job = filming.requirements.job_for(number)
+        without = [shot.id for shot in spec.shots if not inventory.for_shot(shot.id, spec.leg)]
+        approved = job is not None and not gate(filming, job)
+        if begun and approved and without and number not in [asset.day for asset in blocked]:
             lines.append(
                 f"- Day {number} has no video: {'shot' if len(without) == 1 else 'shots'} {', '.join(without)}"
                 f" {'has' if len(without) == 1 else 'have'} no footage, and nothing is substituted."
@@ -1163,6 +1166,7 @@ def record(filming: Filming, store: Store, run_id: str, now: datetime) -> str:
                     "angle": job.angle,
                     "pair": job.pair,
                     "recut": job.recut,
+                    "format": f"{filming.paths.get('angles', 'the Angle bank')} line {job.line}",
                     "digest": job.digest(),
                     "shots": [shot.as_json() for shot in job.shots],
                 }

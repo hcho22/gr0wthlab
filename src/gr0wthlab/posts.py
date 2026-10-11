@@ -1151,9 +1151,10 @@ def notice_section(outcome: Outcome | None, day_text: str) -> tuple[int, str, st
             where = f" (`{result.draft}`)" if result.draft else ""
             lines.append(f"- Day {result.day}{where}: {failing}")
             if result.withdrawn:
+                video = result.asset is not None and bool(result.asset.blocks)
                 lines.append(
-                    f"- The open post `{result.withdrawn}` for day {result.day} is withdrawn, since its Draft no"
-                    " longer passes."
+                    f"- The open post `{result.withdrawn}` for day {result.day} is withdrawn, since its"
+                    f" {'edit record does not pass' if video else 'Draft no longer passes'}."
                 )
     for result in missing:
         lines.append(f"- Day {result.day} has no Draft, so it has no post this run.")
