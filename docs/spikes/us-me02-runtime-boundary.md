@@ -328,17 +328,21 @@ Every render, the run's own and `rebuild-asset`'s, goes through one step that le
 The footage place is refused when it overlaps any location the sandbox reads, where before only the repository counted.
 A day whose copy was approved gets its video only while its Draft is still that copy, a post rejected with its video is not asked again without one, footage that could not be measured is named as such, a shot that may not be cut can no longer be split around another shot, and a day approved with its video is shown to the agent as settled.
 `config/products.json` lost the block that restated the PRD's day numbers, and the run report the line that compared the kit with them.
+In the run report's Filming table, a day that has an edit record and no video now gets the reason its post got: no Draft, a Draft that could not be read, an open post kept without being checked again, or Drafts that were not taken in at all.
 Both checks were therefore made again on the code as it stands after those changes, on 2026-10-11, with Codex CLI 0.160.0 from a linked worktree whose configuration fingerprint is `493a65d5fda12b63024414d111f8dad1e0473a1770b6dc69eda172bea2a47ba3`.
 
 - `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
-- `src/bin/gr0wthlab boundary-check` passed as run `20261011T181348Z-on-demand-8bea`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed, in the repository, Mandu, RepToday, or Immerse.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261011T183230Z-on-demand-6a0a`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed, in the repository, Mandu, RepToday, or Immerse.
 
 These replace the earlier checks of this work, all of which passed the same way.
 Both checks ran before the review, with configuration fingerprint `bd4cdef99b6a61d6296ce8c3e0405d6b0863f3078ddb02e2ea8bd04c6eb97865`, the boundary check as `20261011T164834Z-on-demand-a319`.
-The boundary check ran again as `20261011T180126Z-on-demand-9644`, with the fingerprint above, before the review's last change, which only made the filming plan and the notice word one day, one line, and several skipped edits correctly.
+During the review the boundary check passed twice more, with the fingerprint above.
+It ran as `20261011T180126Z-on-demand-9644` before the change that made the filming plan and the notice word one day, one line, and several skipped edits correctly.
+It ran as `20261011T181348Z-on-demand-8bea` on the code of commit `58aac95`, before the review's last change, which only changed the reason the Filming table gives a day whose open post was kept without being checked again (`settle` in `filming.py`).
 
-US-ME09's Validation Test was run live through the launcher on demand the same day, network off, on that same code, with ffmpeg 7.1.1.
-It ran from a throwaway checkout in the Mac's temporary folder whose launcher, configuration, and task definition were file for file the worktree's; its configuration fingerprint, `f1041ec449a04839b1770067a28de9ba5efed2d386b1cd746e08d233b570f210`, differs because its locations do.
+US-ME09's Validation Test was run live through the launcher on demand the same day, network off, on the code of commit `58aac95`, with ffmpeg 7.1.1.
+Since that commit only the reason the Filming table gives a day whose open post was kept without being checked again has changed, in `settle` in `filming.py`; nothing in the render path has, so the proof was not repeated.
+It ran from a throwaway checkout in the Mac's temporary folder whose launcher, configuration, and task definition were file for file that commit's; its configuration fingerprint, `f1041ec449a04839b1770067a28de9ba5efed2d386b1cd746e08d233b570f210`, differs because its locations do.
 The runs below used throwaway inputs, each made for the proof from what this repository holds; none was the Founder's, and no text of a Go-To-Market Package went to the model.
 
 - The footage place was a temporary folder outside every checkout, set with `GR0WTHLAB_FOOTAGE_DIR`, holding one stand-in clip, `window-1/d01-s1.mov`, made with the tests' own `make_test_clip`: 14 seconds of ffmpeg's `testsrc2` test pattern at 886x1920 and 60 frames a second, with its running clock and a dark band across every frame, so a cut would show.
@@ -360,10 +364,10 @@ They differ only in the Hook drawn over the first 3 seconds: frame for frame, th
 After the last run and the rebuilds, every file in the footage place had the SHA-256, size, modification time, and mode it had before the first, and the folder listed the same.
 Each run cost between $0.007 and $0.011 at API prices.
 
-The same proof had been run once before, minutes earlier, on the code as it stood before the review's last change, in runs `20261011T180326Z-on-demand-8b92`, `20261011T180440Z-on-demand-10a9`, `20261011T180609Z-on-demand-867a`, and `20261011T180751Z-on-demand-75eb`.
+The same proof had been run once before, minutes earlier, on the code as it stood before the wording change named above, in runs `20261011T180326Z-on-demand-8b92`, `20261011T180440Z-on-demand-10a9`, `20261011T180609Z-on-demand-867a`, and `20261011T180751Z-on-demand-75eb`.
 It produced the same two files, with the same names and SHA-256.
 In it the agent listed day 8's Hook as a claim with no code, so the claim check blocked that Draft, as it should, and run `867a` cut no video for day 8, its report saying a video is cut only from a Draft that passes; day 8 was cut in run `75eb` only after that claim line was removed by hand, under a throwaway task definition that only re-runs the checks.
-None of these runs exercised a render that fails, a day held because its Draft is no longer the approved copy, or a day settled by an approved video; the launcher's unit tests cover each, with fake tooling and with the real ffmpeg.
+None of these runs exercised a render that fails, a day held because its Draft is no longer the approved copy, a day settled by an approved video, or a day whose open post was kept without being checked again; the launcher's unit tests cover each, with fake tooling and with the real ffmpeg.
 
 The Validation Test was first run live on the first commit of this work, `47b42a1`, before the review, network off, with the same ffmpeg, against a reconciled copy of `projects/RepToday/` as described above, so against the real kit's shape.
 Its footage was a stand-in clip of the same pattern, which also carried the words "TEST INPUT, stand-in sample footage, not a real recording", in a temporary folder outside every checkout; the plan's approval was simulated in the same way, and its last run had `window.first_sitting` set to `2026-10-04` in the same way.

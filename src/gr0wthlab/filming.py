@@ -431,10 +431,10 @@ class Filming:
             else:
                 if result is None:
                     why = "the post Drafts were not taken in this run"
-                elif result.verdict is None:
-                    why = f"its post Draft was not checked ({result.detail})"
-                else:
+                elif result.status == posts.BLOCKED and not result.detail:
                     why = "its post Draft did not pass its checks"
+                else:
+                    why = f"its post Draft was not checked ({result.detail})"
                 why += ", and a video is cut only from a Draft that passes"
             self.results[number] = Asset(number, HELD if exists else NO_EDIT, why)
 

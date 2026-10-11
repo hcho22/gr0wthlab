@@ -1079,6 +1079,26 @@ class EditRunTest(FilmingRunCase):
         self.assertNotIn("did not pass its checks", report)
         self.assertFalse((self.ledger() / "assets").exists())
 
+    def test_a_day_whose_open_post_is_kept_unchecked_gets_that_reason_for_its_video_too(self):
+        self.approved_plan()
+        queue = self.run_ok({fakes.draft_path(1): fakes.filming_draft(1)})
+        post = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.clip("d01-s1.mov")
+        rules = self.mandu / "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json"
+        rules.write_text("not the brand rules", encoding="utf-8")
+        queue = self.run_ok({fakes.edit_path(1): fakes.edit_record(1, DAY_1)})
+        self.assertEqual([entry["id"] for entry in queue["open"] if entry["kind"] == "post"], [post["id"]])
+        kept = "not checked again, since brand-rules.json could not be used; the open item stands"
+        report = self.report()
+        self.assertIn(f"| 1 | P01 / AB-1 leg A | kept | `{post['id']}`; {kept} |", report)
+        self.assertIn(
+            f"| 1 | d01-s1 | not cut | its post Draft was not checked ({kept}), and a video is cut only from a Draft"
+            " that passes |",
+            report,
+        )
+        self.assertNotIn("did not pass its checks", report)
+        self.assertFalse((self.ledger() / "assets").exists())
+
     def test_a_day_approved_with_its_video_is_settled_for_the_agent_and_never_named_as_unfilmed(self):
         queue = self.day_1()
         post = next(entry for entry in queue["open"] if entry["kind"] == "post")
