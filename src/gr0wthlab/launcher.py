@@ -193,18 +193,8 @@ def run(
         )
         print(
             f"gr0wthlab: run {run_id} timed out: the agent was still running at its {process.limit_text(time_limit)}"
-            f" time limit and was stopped; {stop_line(completed.stop)}; logs in {log_dir}",
+            f" time limit and was stopped; {completed.stop.describe()}; logs in {log_dir}",
             file=out,
         )
     write_json(record_path, record)
     return record
-
-
-def stop_line(stop: process.Stop) -> str:
-    """What stopping the agent took and what it left, for the launcher's output."""
-    took = f"{len(stop.asked)} asked to stop, {len(stop.forced)} forced"
-    if stop.left:
-        return f"{took}, and {len(stop.left)} still running ({', '.join(str(pid) for pid in stop.left)})"
-    if not stop.proven:
-        return f"{took}; the process table could not be read to confirm nothing is left running"
-    return f"{took}, none left running"

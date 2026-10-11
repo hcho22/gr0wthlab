@@ -110,7 +110,7 @@ Each checkout keeps its run lock (`ledger/run.lock`, never committed) and these 
 ## When a run times out
 
 Every run ends with its report, so the agent has a time limit: `agent.time_limit_seconds` in [`config/run.json`](../config/run.json), 1800 seconds (30 minutes) today.
-The 29 weekly runs recorded with the real agent took 18 to 164 seconds, so a healthy run ends long before the limit and is never touched by it.
+The 46 weekly runs recorded with the real agent took 18 to 218 seconds, so a healthy run ends long before the limit and is never touched by it.
 An agent still running at the limit, for example because its model stream stalled, is stopped with every process it started: each is asked to stop, and any still running 10 seconds later is forced.
 The launcher then reads the Mac's process table to confirm that none is left, and finishes the run as it finishes any run.
 
@@ -128,7 +128,7 @@ If healthy runs come near the limit, or runs keep timing out though the agent wa
 The value must be above zero and at most 86400 (a day); a run refuses to start on any other value and says why.
 If the report names a process that could not be stopped, end it by hand (`kill -9 <process id>`) before the next run.
 
-There is one limit, on the agent's total time, and none on silence: Codex's event stream reports only whole steps, so a long step and a stalled stream look the same from outside until the step ends.
+There is one limit, on the agent's total time, and none on silence: Codex's event stream reports only whole steps, and the longest recorded run went 35 seconds without an event while it worked, so a long step and a stalled stream look the same from outside until the step ends.
 Every other process the launcher starts (git, Codex's version and sandbox probes, the boundary check's kernel-log query) has a fixed time limit of its own; one that passes it is stopped the same way, and the step that needed it fails with the reason.
 
 ## When RepToday's Waitlist build lands

@@ -82,7 +82,7 @@ class EntryPointTest(TimeLimitTestCase):
         self.assertIn(
             f"timed out: the agent was still running at its {LIMIT} s time limit and was stopped", done.stdout
         )
-        self.assertIn("3 asked to stop, 0 forced, none left running", done.stdout)
+        self.assertIn("3 processes asked to stop; the process table shows none left running; logs in", done.stdout)
         self.assertIn(f"- The run timed out: the agent was still running at its {LIMIT} s time limit", self.report())
         [notice] = self.notices()
         self.assertRegex(notice["ask"], r"^Notice: the run timed out on \d{4}-\d\d-\d\d$")
@@ -206,7 +206,7 @@ class TimedOutRunTest(TimeLimitTestCase):
         stopped = self.record()["stopped"]
         self.assertEqual((sorted(stopped["asked"]), stopped["forced"], stopped["left"]), ([agent, child], [agent], []))
         self.assertTrue(fakes.all_gone([agent, child]))
-        self.assertIn("2 asked to stop, 1 forced, none left running", out)
+        self.assertIn("2 processes asked to stop, 1 of them forced after 1 s; the process table shows none", out)
         text = self.report()
         self.assertIn("- Timed out: 2 processes asked to stop, 1 of them forced after 1 s; the process table", text)
         self.assertIn(
@@ -229,12 +229,37 @@ class TimedOutRunTest(TimeLimitTestCase):
         self.assertFalse((self.ledger() / "run-reports").exists())
 
 
+class TimedOutProductionRunTest(TimeLimitTestCase):
+    def test_a_timed_out_run_in_the_production_clone_still_saves_its_records(self):
+        fakes.git(self.repo, "commit", "--quiet", "--all", "-m", "a short agent time limit", env=self.env)
+        remote, clone = self.root / "remote.git", self.root / "production"
+        fakes.git(self.root, "init", "--quiet", "--bare", str(remote), env=self.env)
+        fakes.git(self.repo, "remote", "add", "origin", str(remote), env=self.env)
+        fakes.git(self.repo, "push", "--quiet", "origin", "main", env=self.env)
+        fakes.git(self.root, "clone", "--quiet", str(remote), str(clone), env=self.env)
+        fakes.behave(self.codex_dir, {"write": {WHOLE_ITEM: fakes.PROPOSAL}, "hang": True})
+        code, out = self.run_cycle(repo=clone)
+        self.assertEqual(code, cycle.EXIT_STOPPED, out)
+        self.assertIn("records: pushed", out)
+        changed = fakes.git(remote, "diff", "--name-only", "HEAD~1", "HEAD", env=self.env).split()
+        self.assertTrue(all(path.startswith(("workspace/", "ledger/")) for path in changed), changed)
+        self.assertIn("ledger/review-queue/queue.json", changed)
+        report_file = next(
+            path for path in changed if path.startswith("ledger/run-reports/2") and ".brief." not in path
+        )
+        self.assertIn("- The run timed out:", fakes.git(remote, "show", f"HEAD:{report_file}", env=self.env))
+        self.assertEqual(fakes.git(clone, "status", "--porcelain", env=self.env), "")
+        self.assertEqual(
+            sorted(entry["kind"] for entry in self.queue(clone)["open"]), ["notice", "package-change-proposal"]
+        )
+
+
 class LimitSettingTest(unittest.TestCase):
     def test_the_committed_limit_has_headroom_over_every_recorded_run(self):
         config = settings.load(fakes.REPO, {}, Path("/Users/founder"))
         self.assertEqual(config.agent, settings.Agent(1800.0))
-        self.assertIn("164 seconds", config.data["agent"]["why"])
-        self.assertGreaterEqual(config.agent.time_limit, 10 * 164)
+        self.assertIn("18 to 218 seconds", config.data["agent"]["why"])
+        self.assertGreaterEqual(config.agent.time_limit, 8 * 218)
 
     def test_a_limit_is_a_number_of_seconds_above_zero_and_at_most_a_day(self):
         self.assertEqual(settings.load_agent({"time_limit_seconds": 2.5}), settings.Agent(2.5))
@@ -277,7 +302,7 @@ class TimedOutReportTest(unittest.TestCase):
         clean = report.render_report(self.state())
         self.assertIn("- Agent time: 30 min 3 s of a 30 min time limit.", clean)
         self.assertIn("- Timed out: 2 processes asked to stop; the process table shows none left running.", clean)
-        self.assertIsNone(report.left_running(self.state().agent["stopped"]))
+        self.assertIsNone(report.left_running(self.state().stop))
         left = self.state(forced=[12], left=[12])
         self.assertIn(
             "- Timed out: 2 processes asked to stop, 1 of them forced after 10 s; still running after that: process"
@@ -285,7 +310,7 @@ class TimedOutReportTest(unittest.TestCase):
             report.render_report(left),
         )
         self.assertEqual(
-            report.left_running(left.agent["stopped"]),
+            report.left_running(left.stop),
             "1 process the agent started could not be stopped and may still be running; the run report's Agent section"
             " names each",
         )
@@ -295,7 +320,7 @@ class TimedOutReportTest(unittest.TestCase):
             " running.",
             report.render_report(unproven),
         )
-        self.assertIn("the process table could not be read", report.left_running(unproven.agent["stopped"]))
+        self.assertIn("the process table could not be read", report.left_running(unproven.stop))
 
     def test_a_notice_about_a_timed_out_run_reads_the_same_at_every_run_of_the_day(self):
         notices = []

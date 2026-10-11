@@ -803,7 +803,7 @@ class Cycle:
         state.usage = report.token_usage(log_dir / f"{run_id}.events.jsonl")
         if state.usage:
             state.cost = report.cost(state.usage, config.prices)
-        left = report.left_running(state.agent.get("stopped") or {}) if state.timed_out else None
+        left = report.left_running(state.stop) if state.timed_out else None
         if left:
             state.problems.append(left)
         state.problems += records.restore_access(canonical(self.repo_root))

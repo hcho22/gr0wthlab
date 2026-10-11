@@ -52,6 +52,22 @@ class Stop:
     def as_json(self) -> dict[str, object]:
         return {"asked": list(self.asked), "forced": list(self.forced), "left": list(self.left), "proven": self.proven}
 
+    @classmethod
+    def from_json(cls, data: Mapping[str, object]) -> Stop:
+        asked, forced, left = (tuple(data.get(key) or ()) for key in ("asked", "forced", "left"))
+        return cls(asked, forced, left, bool(data.get("proven")))
+
+    def describe(self) -> str:
+        """What the stop took and what it left running, in one sentence without its full stop."""
+        took = ("1 process" if len(self.asked) == 1 else f"{len(self.asked)} processes") + " asked to stop"
+        if self.forced:
+            took += f", {len(self.forced)} of them forced after {limit_text(STOP_GRACE)}"
+        if self.left:
+            return f"{took}; still running after that: process {', '.join(str(pid) for pid in self.left)}"
+        if not self.proven:
+            return f"{took}; the process table could not be read to confirm that nothing is left running"
+        return f"{took}; the process table shows none left running"
+
 
 @dataclass(frozen=True)
 class Completed:

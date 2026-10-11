@@ -120,6 +120,11 @@ class RunState:
         """The agent's time limit in words."""
         return process.limit_text(float(self.agent.get("time_limit_seconds") or 0))
 
+    @property
+    def stop(self) -> process.Stop:
+        """What stopping a timed-out agent took, as the launcher's run record keeps it."""
+        return process.Stop.from_json(self.agent.get("stopped") or {})
+
     def agent_gap(self) -> str:
         """Why every output that needs the agent is incomplete this run, or "" when the agent finished."""
         if self.timed_out:
@@ -262,33 +267,16 @@ def span_text(seconds: float) -> str:
     return f"{minutes} min {rest} s" if minutes else f"{rest} s"
 
 
-def processes(count: int) -> str:
-    return "1 process" if count == 1 else f"{count} processes"
-
-
-def stop_text(stop: Mapping[str, object]) -> str:
-    """What stopping the agent and everything it started took, and what it left running."""
-    asked, forced, left = (list(stop.get(key) or ()) for key in ("asked", "forced", "left"))
-    took = f"{processes(len(asked))} asked to stop"
-    if forced:
-        took += f", {len(forced)} of them forced after {process.limit_text(process.STOP_GRACE)}"
-    if left:
-        return f"{took}; still running after that: process {', '.join(str(pid) for pid in left)}"
-    if not stop.get("proven"):
-        return f"{took}; the process table could not be read to confirm that nothing is left running"
-    return f"{took}; the process table shows none left running"
-
-
-def left_running(stop: Mapping[str, object]) -> str | None:
+def left_running(stop: process.Stop) -> str | None:
     """The launcher problem a stop leaves when it could not show that nothing the agent started is still running; the
     process ids stay in the run report's Agent section, so the same problem reads the same at every run."""
-    left = list(stop.get("left") or ())
-    if left:
+    if stop.left:
+        count = "1 process" if len(stop.left) == 1 else f"{len(stop.left)} processes"
         return (
-            f"{processes(len(left))} the agent started could not be stopped and may still be running; the run report's"
-            " Agent section names each"
+            f"{count} the agent started could not be stopped and may still be running; the run report's Agent section"
+            " names each"
         )
-    if not stop.get("proven"):
+    if not stop.proven:
         return (
             "the process table could not be read after the agent was stopped, so nothing shows whether a process it"
             " started is still running"
@@ -563,7 +551,7 @@ def render_report(state: RunState) -> str:
             f"- Agent time: {span_text(float(state.agent['agent_seconds']))} of a {state.time_limit} time limit."
         )
     if state.timed_out:
-        lines.append(f"- Timed out: {stop_text(state.agent.get('stopped') or {})}.")
+        lines.append(f"- Timed out: {state.stop.describe()}.")
         lines.append(f"- Exit code: {state.agent.get('exit_code')}, the run's own for an agent stopped at its limit")
     else:
         lines.append(f"- Exit code: {state.agent.get('exit_code', 'none')}")
