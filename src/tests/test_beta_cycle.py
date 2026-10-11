@@ -492,6 +492,33 @@ class WeekByWeekTest(BetaCycleTestCase):
         self.assertEqual(self.messages(), [])
         self.assertEqual([entry["id"] for entry in self.queue()["open"]], [notice["id"]])
 
+    def test_a_gate_that_goes_missing_or_invalid_after_recruiting_began_starts_nothing_new(self):
+        """The record is the gate at every run: without a valid one no entry is chosen and nothing is written, and
+        what the Founder was already offered stays as it was."""
+        self.next_week()
+        first = self.invitation()
+        saved = self.recruiting_state()["entries"]
+        evidence = sorted((self.ledger() / "evidence/beta-recruiting").glob("*.json"))
+        record = self.exchange / beta.BUILDS / "RepToday.json"
+        text = record.read_text(encoding="utf-8")
+        for broken in (None, "{not json"):
+            if broken is None:
+                record.unlink()
+            else:
+                record.write_text(broken, encoding="utf-8")
+            self.write(invitation=fakes.beta_draft(old="and the beta is ready.", new="and it is ready for you."))
+            self.next_week()
+            self.assertEqual(self.invitation()["id"], first["id"])
+            self.assertEqual(self.recruiting_state()["entries"], saved)
+            self.assertEqual(sorted((self.ledger() / "evidence/beta-recruiting").glob("*.json")), evidence)
+            self.assertNotIn("## Beta Cohort recruiting", self.brief() + self.report())
+            self.assertNotIn("check-beta-drafts", self.brief())
+        self.assertIn("| Beta Build approval in Mandu | failed |", self.report())
+        record.write_text(text, encoding="utf-8")
+        self.next_week()
+        second = self.invitation()
+        self.assertEqual((second["supersedes"], second["candidates"]), (first["id"], first["candidates"]))
+
     def test_recruiting_ends_once_the_founder_reports_the_cohort_full(self):
         self.next_week()
         self.decide(self.invitation()["id"], "approve")
