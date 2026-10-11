@@ -249,6 +249,11 @@ class Ledger:
                 f"supersedes {target}, a post the launcher queued from its Draft; only a change to that Draft in"
                 " drafts/posts/ replaces it"
             )
+        elif replaced.get("beta"):
+            problems.append(
+                f"supersedes {target}, a Beta Cohort recruiting message the launcher queued from its Draft; only a"
+                " change to that Draft in drafts/beta-recruiting/ replaces it"
+            )
         fingerprint = exchange.item_hash(item)
         if fingerprint in seen:
             earlier = self.entries.get(seen[fingerprint])

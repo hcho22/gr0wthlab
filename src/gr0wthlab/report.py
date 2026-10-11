@@ -369,6 +369,11 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
             "An item filed by the launcher changes only through a reviewed change to its source text, and a post only"
             " through its Draft, so an item that supersedes either is refused.",
         ]
+        if any(entry.get("beta") for entry in state.queue_before):
+            lines.append(
+                "A Beta Cohort invitation or a Waitlist ask also changes only through its Draft, so an item that"
+                " supersedes one is refused."
+            )
         for entry in state.queue_before:
             filed = ", filed by the launcher" if entry.get("origin") else ""
             line = f"- `{entry['id']}` ({entry['kind']}{filed}): {entry['ask']}"

@@ -264,6 +264,38 @@ class OrderAndPersistenceTest(LedgerTestCase):
         )
         self.assertEqual(self.ledger.entries[post]["status"], OPEN)
 
+    def test_no_item_the_agent_writes_supersedes_a_recruiting_message(self):
+        queued = []
+        for purpose in ("beta-invitation", "waitlist-ask"):
+            item = exchange.Item(
+                {"kind": "message", "product": "RepToday"},
+                f"Approve {purpose}",
+                "The Draft.",
+                "- The message",
+                "- `a/b.md` line 1",
+            )
+            extra = {"beta": purpose, "draft": f"drafts/beta-recruiting/RepToday/{purpose}.md"}
+            queued.append(self.ledger.publish(self.store, item, purpose, "RUN1", NOW, extra))
+            text = fakes.proposal("message", f"supersedes: {queued[-1]}\n", f"a better {purpose}")
+            self.drop(f"better-{purpose}.md", text)
+        published, set_aside = self.take("RUN2")
+        self.assertEqual(published, [])
+        self.assertEqual(
+            sorted(problem for item in set_aside for problem in item.problems),
+            [
+                f"supersedes {identifier}, a Beta Cohort recruiting message the launcher queued from its Draft; only a"
+                " change to that Draft in drafts/beta-recruiting/ replaces it"
+                for identifier in sorted(queued)
+            ],
+        )
+        self.assertEqual([self.ledger.entries[identifier]["status"] for identifier in queued], [OPEN, OPEN])
+        ordinary = exchange.Item({"kind": "message"}, "Approve a note", "The Draft.", "- A note", "- `a/b.md` line 1")
+        plain = self.ledger.publish(self.store, ordinary, "note", "RUN1", NOW)
+        self.drop("better-note.md", fakes.proposal("message", f"supersedes: {plain}\n", "a better note"))
+        published, set_aside = self.take("RUN3")
+        self.assertEqual((len(published), set_aside), (1, []))
+        self.assertEqual(self.ledger.entries[plain]["superseded_by"], published[0])
+
     def test_an_item_carries_over_only_once_a_sitting_has_left_it_undecided(self):
         self.drop("first.md", fakes.PROPOSAL)
         [first] = self.take("20261011T230000Z-scheduled-aaaa")[0]

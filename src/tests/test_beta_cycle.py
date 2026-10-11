@@ -445,6 +445,43 @@ class WeekByWeekTest(BetaCycleTestCase):
             f"| Waitlist ask | approved earlier | `{again['id']}`; the Founder approved this Draft", self.report()
         )
 
+    def test_no_item_the_agent_writes_takes_the_place_of_the_open_invitation_or_ask(self):
+        self.next_week()
+        first, (ask,) = self.invitation(), self.asks()
+        self.assertNotIn("A Beta Cohort invitation or a Waitlist ask also changes only through its Draft", self.brief())
+        fakes.behave(
+            self.codex_dir,
+            {
+                "write": {
+                    fakes.INVITATION: fakes.beta_draft(),
+                    fakes.WAITLIST_ASK: fakes.beta_draft("waitlist-ask-clean"),
+                    "review-queue/incoming/better-invite.md": fakes.proposal(
+                        "message", f"supersedes: {first['id']}\n", "a better invitation"
+                    ),
+                    "review-queue/incoming/better-ask.md": fakes.proposal(
+                        "message", f"supersedes: {ask['id']}\n", "a better ask"
+                    ),
+                }
+            },
+        )
+        self.next_week()
+        self.assertEqual([entry["id"] for entry in self.messages()], [first["id"], ask["id"]])
+        self.assertEqual(self.invitation()["candidates"], first["candidates"])
+        self.assertEqual(self.recruiting_state()["entries"].keys(), set(first["candidates"]))
+        report = self.report()
+        self.assertIn(f"| Beta invitation | kept | `{first['id']}`; its Draft is unchanged and passes |", report)
+        for item in (first, ask):
+            self.assertIn(
+                f"supersedes {item['id']}, a Beta Cohort recruiting message the launcher queued from its Draft; only a"
+                " change to that Draft in drafts/beta-recruiting/ replaces it",
+                report,
+            )
+        self.assertIn(
+            "A Beta Cohort invitation or a Waitlist ask also changes only through its Draft, so an item that"
+            " supersedes one is refused.",
+            self.brief(),
+        )
+
     def test_a_changed_draft_replaces_the_open_invitation_with_the_same_entries(self):
         self.next_week()
         first = self.invitation()

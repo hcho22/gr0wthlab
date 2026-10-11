@@ -95,7 +95,7 @@
   },
   {
    "id": 5,
-   "prompt": "Run the weekly cycle on the seeded Waitlist view once the Founder has recorded the approval; the batch size is 10.",
+   "prompt": "Run the weekly cycle on the seeded Waitlist view once the Founder has recorded the approval; the batch size is 20.",
    "expected_output": "One batch of every sign-up that asked for an invitation, good Fit first and then by sign-up date, never anyone who did not ask; and the pool is reported as 12 short of 20, with the Waitlist ask asked for.",
    "assertions": [
     {

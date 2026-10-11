@@ -18,8 +18,8 @@
     "why": "No public post may go out before the Waitlist is live (FR-9). live_since is the date (YYYY-MM-DD) the Waitlist went live, set here through a reviewed change once US-ME05's Validation Test has passed on reptoday.app, and never inferred from whether a source is connected or what it is named. While it is null, or a date still ahead, every post item, the run brief, and the run report say that nothing can be published until the Waitlist is live."
   },
   "beta_recruiting": {
-    "batch_size": 10,
-    "why": "How many Waitlist entries one Beta Cohort invitation batch offers the Founder (US-ME15), the Founder's call, changed here through a reviewed change. At most one batch is open at a time, and the next is offered only after the Founder has decided the last, so a week's sends and first sessions stay manageable; 10 keeps a week's recorded first sessions within the founder hours the channel plan in Mandu allows for the cohort. It cannot be larger than the cohort's maximum in config/products.json."
+    "batch_size": 20,
+    "why": "How many Waitlist entries one Beta Cohort invitation batch offers the Founder (US-ME15), the Founder's call, changed here through a reviewed change. The Founder confirmed capped batches and chose 20 on 2026-10-11. At most one batch is open at a time, and the next is offered only after the Founder has decided the last, so a week's sends and first sessions stay manageable. It cannot be larger than the cohort's maximum in config/products.json."
   },
   "records": {
     "production_clone": "~/gr0wthlab",

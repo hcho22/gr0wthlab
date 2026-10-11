@@ -214,17 +214,20 @@ class InvitationOrderTest(unittest.TestCase):
 
 
 class ConfigTest(unittest.TestCase):
-    def rules(self, change=None, batch_size=10):
+    def rules(self, change=None, batch_size=None):
+        """The rules from the committed configuration, or with another batch size."""
         registry = json.loads(json.dumps(REGISTRY))
         product = registry["products"][0]
         if change:
             change(product)
-        config = dataclasses.replace(settings.load(fakes.REPO, {}, Path("/Users/founder")), beta_batch_size=batch_size)
+        config = settings.load(fakes.REPO, {}, Path("/Users/founder"))
+        if batch_size is not None:
+            config = dataclasses.replace(config, beta_batch_size=batch_size)
         return beta.rules(registry, config)
 
     def test_the_committed_configuration(self):
         rules = self.rules()
-        self.assertEqual((rules.product, rules.minimum, rules.maximum, rules.batch_size), ("RepToday", 20, 50, 10))
+        self.assertEqual((rules.product, rules.minimum, rules.maximum, rules.batch_size), ("RepToday", 20, 50, 20))
         self.assertEqual(rules.k8, "projects/RepToday/gtm/07-thesis/")
         self.assertEqual(
             sorted(source.path for source in rules.citable),
@@ -523,7 +526,7 @@ class DecideTest(TempCase):
         plan, _, _ = self.plan(view, batches=approved[:4])
         self.assertEqual((plan.batch.action, plan.batch.number, len(plan.batch.entries)), (beta.NEW, 5, 10))
         plan, _, _ = self.plan(view, batches=approved, reports=[fakes.beta_report("2026-10-04", accepted=12)])
-        self.assertEqual((plan.batch.action, len(plan.batch.entries)), (beta.NEW, 10))
+        self.assertEqual((plan.batch.action, len(plan.batch.entries)), (beta.NEW, 20))
 
     def test_no_entry_is_chosen_without_a_usable_view(self):
         plan, _, _ = self.plan({"view": 1})
