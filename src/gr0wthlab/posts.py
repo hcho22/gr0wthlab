@@ -413,26 +413,30 @@ def plan_record(plan: Plan) -> dict[str, object]:
     }
 
 
-def restore(plan: Plan, record: object) -> list[str]:
+def restore(plan: Plan, record: object) -> tuple[list[str], list[int]]:
     """Give a plan what the launcher recorded for its run, in place of working it out again: each day's standing,
-    and the commit the Product's code is read at, or why the launcher could not read it. Returns the kit files, by
-    their path in Mandu, that are no longer as the launcher read them: only what they hold now can be checked
-    against."""
+    and the commit the Product's code is read at, or why the launcher could not read it. Only what Mandu holds now
+    can be checked against, so this returns the kit files, by their path in Mandu, that are no longer as the
+    launcher read them, and the days due that the calendar no longer holds, which the plan leaves out."""
     try:
         plan.run, plan.reason = str(record["run"]), str(record["reason"])
         plan.waitlist_live = record["waitlist_live"] is True
         plan.posted = {int(number): dict(post) for number, post in record["posted"].items()}
         plan.skipped = [(int(entry["day"]), str(entry["why"])) for entry in record["skipped"]]
+        due = {int(entry["day"]): entry for entry in record["due"]}
+        calendar = plan.context.kit.days
         plan.days = [
-            due_day(plan, int(entry["day"]), entry["slot"], entry["open"], entry["approved"], list(entry["rejected"]))
-            for entry in record["due"]
+            due_day(plan, number, entry["slot"], entry["open"], entry["approved"], list(entry["rejected"]))
+            for number, entry in due.items()
+            if number in calendar
         ]
         commit, problem = record["code"]["commit"], record["code"]["problem"]
         if not (problem if commit is None else COMMIT.fullmatch(commit)):
             raise ValueError("it names neither a commit of the Product's code nor why there is none")
         plan.code.commit, plan.code.problem = commit, problem or plan.code.problem
         read = {role: (entry["path"], entry["sha256"]) for role, entry in record["kit"].items()}
-        return [path for role, (path, digest) in plan.files.items() if read[role] != (path, digest)]
+        changed = [path for role, (path, digest) in plan.files.items() if read[role] != (path, digest)]
+        return changed, [number for number in due if number not in calendar]
     except (AttributeError, KeyError, TypeError, ValueError) as error:
         raise PlanError(f"it does not hold a run's post plan ({type(error).__name__}: {error})") from error
 
@@ -609,6 +613,16 @@ def quoted(text: str) -> list[str]:
     return ["  > " + line if line.strip() else "  >" for line in text.splitlines()]
 
 
+def excerpt(text: str, limit: int) -> str:
+    """Package text for an Evidence line: whole when short, otherwise cut between words, so never through a link,
+    and followed by each link the cut left out."""
+    text = " ".join(text.split())
+    if len(text) <= limit:
+        return text
+    kept = text[:limit].rpartition(" ")[0]
+    return " ".join(filter(None, [kept, "...", *kit.urls(text[len(kept) :])]))
+
+
 def lint_line(plan: Plan, verdict: Verdict) -> str:
     rules = plan.context.rules
     warnings = sorted({finding.line() for finding in verdict.warnings})
@@ -711,9 +725,9 @@ def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict) ->
         f"- Calendar: day {day.day}, {day.asset}, {day.cell}, primary {day.primary}:"
         f" `{roles['calendar']}` line {day.line}",
         f"- Angle {angle.id}, {angle.name}: `{roles['angles']}` line {angle.line}",
-        f"- Sourced pain: {lint.snippet(angle.pain, 400)}",
-        f"- Pre-registered signal: {lint.snippet(angle.signal, 200)}: `{roles['angles']}` line {angle.line}",
-        f"- Kill criterion: {lint.snippet(angle.kill, 200)}: `{roles['angles']}` line {angle.line}",
+        f"- Sourced pain: {excerpt(angle.pain, 400)}: `{roles['angles']}` line {angle.line}",
+        f"- Pre-registered signal: {excerpt(angle.signal, 200)}: `{roles['angles']}` line {angle.line}",
+        f"- Kill criterion: {excerpt(angle.kill, 200)}: `{roles['angles']}` line {angle.line}",
         f"- Frozen Hook: `{roles[hook.source]}` line {hook.line}",
     ]
     fields = {"kind": "post", "product": plan.product, "window": str(plan.window.number), "day": str(day.day)}

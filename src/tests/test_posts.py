@@ -18,6 +18,9 @@ from tests.test_boundary import CONFIG, REGISTRY
 NOW = datetime(2026, 10, 11, 23, 0, tzinfo=timezone.utc)
 PRODUCTS = ["RepToday", "Immerse"]
 SUNDAY = date(2026, 10, 11)
+ANGLES = "projects/RepToday/gtm/05-social-pmf/angles.md"
+LINK = "https://example.com/threads/103"
+PAIN = f'Pain 2: "the reset made me quit" - {LINK}'
 
 
 class TargetDaysTest(unittest.TestCase):
@@ -182,6 +185,38 @@ class TakeTest(TakeTestCase):
             " line yours to judge on this post:\n  Line 26: Founder is on camera for every first-person line.\n",
             text,
         )
+
+    def pain_line(self, pain):
+        """The Sourced pain line in the Evidence of day 3's post item, when the Angle bank words its pain so."""
+        bank = (fakes.EXAMPLES / "files" / "mandu" / ANGLES).read_text(encoding="utf-8")
+        self.context.kit.angles = posts.kit.parse_angles(bank.replace(PAIN, pain))
+        self.write(3, fakes.draft(3))
+        plan = self.plan(3)
+        draft = posts.read_draft(self.areas, plan.draft_path(3))[0]
+        verdict, item = posts.check_day(plan, plan.days[0], draft, self.areas, PRODUCTS)
+        self.assertEqual(verdict.blocks, [])
+        return next(line for line in item.evidence.splitlines() if line.startswith("- Sourced pain: "))
+
+    def test_the_sourced_pain_cites_the_angle_bank_and_keeps_its_link_whole_however_long_it_is(self):
+        cited = f": `{ANGLES}` line 9"
+        self.assertEqual(self.pain_line(PAIN), f"- Sourced pain: {PAIN}{cited}")
+        words = ("the reset made me quit " * 22).strip()
+        after = f'Pain 2: "{words}" - {LINK}'
+        astride = f'Pain 2: "{words[:367]}" - {LINK} and the thread goes on from there'
+        self.assertGreater(after.index(LINK), 400)
+        self.assertTrue(astride.index(LINK) < 400 < astride.index(LINK) + len(LINK))
+        for name, pain in (("the link comes after the cut", after), ("the link straddles the cut", astride)):
+            with self.subTest(name):
+                quote, cut, rest = self.pain_line(pain)[len("- Sourced pain: ") :].partition(" ...")
+                self.assertTrue(pain.startswith(quote + " ") and 370 < len(quote) <= 400, quote)
+                self.assertEqual(rest, f" {LINK}{cited}")
+
+    def test_an_excerpt_is_cut_between_words_and_never_through_a_link(self):
+        link = "https://example.com/" + "a" * 60
+        self.assertEqual(posts.excerpt("one two  three", 30), "one two three")
+        self.assertEqual(posts.excerpt("one two three four", 9), "one two ...")
+        self.assertEqual(posts.excerpt(f"See {link}, then {link}/b.", 30), f"See ... {link} {link}/b")
+        self.assertEqual(posts.excerpt(link, 30), f"... {link}")
 
     def test_an_unchanged_draft_keeps_its_open_item_and_a_changed_one_supersedes_it(self):
         self.write(3, fakes.draft(3))

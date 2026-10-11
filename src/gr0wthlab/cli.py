@@ -112,7 +112,7 @@ def check_drafts(run_id: str, out=sys.stdout) -> int:
     worked out again here: the queue it comes from is saved only when the run ends. Without that record no Draft is
     checked, and the output says so. The record also fixes the commit every claim is checked at, and names each kit
     file's fingerprint: a kit file that is no longer as the launcher read it is named, since only what it holds now
-    can be checked against.
+    can be checked against, and so is a day due that the calendar no longer holds, whose Draft cannot be checked.
     """
     env = dict(os.environ)
     home = Path.home()
@@ -128,7 +128,7 @@ def check_drafts(run_id: str, out=sys.stdout) -> int:
         return 0
     try:
         record = Store(LEDGER_DIR).path(cycle.RUN_REPORTS, posts.plan_file(run_id))
-        changed = posts.restore(plan, json.loads(read_plain(record).decode("utf-8")))
+        changed, gone = posts.restore(plan, json.loads(read_plain(record).decode("utf-8")))
     except (ConfigError, OSError, UnsafeFile, ValueError) as error:
         print(
             f"PROBLEM the post plan of run {run_id} could not be read ({error}), so no Draft was checked; the"
@@ -148,7 +148,13 @@ def check_drafts(run_id: str, out=sys.stdout) -> int:
     if plan.code.problem:
         print(f"PROBLEM {plan.product}'s code could not be read: {plan.code.problem}", file=out)
     areas = Areas(boundary)
-    failed = 0
+    failed = len(gone)
+    for number in gone:
+        print(
+            f"PROBLEM day {number}: the calendar as Mandu holds it now has no day {number}, so its Draft was not"
+            " checked",
+            file=out,
+        )
     for day_plan in plan.days:
         number = day_plan.day.day
         path = plan.draft_path(number)
@@ -181,7 +187,8 @@ def check_drafts(run_id: str, out=sys.stdout) -> int:
             print(f"  - warning, which does not block: {line}", file=out)
     for number, why in plan.skipped:
         print(f"SKIP day {number}: {why}", file=out)
-    print(f"{len(plan.days)} day{'' if len(plan.days) == 1 else 's'} due, {failed} with problems", file=out)
+    due = len(plan.days) + len(gone)
+    print(f"{due} day{'' if due == 1 else 's'} due, {failed} with problems", file=out)
     return 1 if failed else 0
 
 

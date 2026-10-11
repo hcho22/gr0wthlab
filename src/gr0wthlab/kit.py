@@ -171,6 +171,11 @@ def cell(row: Sequence[str], header: Sequence[str], name: str) -> str:
     return row[index] if index is not None and index < len(row) else ""
 
 
+def urls(text: str) -> tuple[str, ...]:
+    """Each link in a text, without the punctuation that ends its sentence."""
+    return tuple(url.rstrip(".,;") for url in URL.findall(text))
+
+
 def one_quote(text: str) -> str | None:
     """The text inside the quotes when a cell is exactly one quoted line."""
     match = re.fullmatch(r"\"([^\"]+)\"", text.strip())
@@ -244,7 +249,7 @@ def parse_angles(text: str) -> dict[str, Angle]:
             identifier,
             cell(row, header, "Angle"),
             pain,
-            tuple(url.rstrip(".,;") for url in URL.findall(pain)),
+            urls(pain),
             hook_cell,
             one_quote(hook_cell),
             cell(row, header, "Format"),

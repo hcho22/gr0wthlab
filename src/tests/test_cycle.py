@@ -1461,6 +1461,34 @@ class PostDraftsTest(CycleTestCase):
         )
         self.assertIn("| 3 | P03 / AB-2 leg A | queued |", self.report())
 
+    def test_check_drafts_names_a_day_due_that_the_calendar_no_longer_holds_and_checks_the_rest(self):
+        fakes.set_window(self.repo, fakes.window_from(fakes.SUNDAY_RUN.date()))
+        fakes.keep_days(self.mandu, 3, 4)
+        fakes.behave(self.codex_dir, {"write": {fakes.draft_path(day): fakes.draft(day) for day in (3, 4)}})
+        calendar = "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md"
+        changed = (
+            f"Kit files in Mandu that are no longer as the launcher read them for this run: `{calendar}`. The"
+            " launcher checks every Draft against what it read then, so its verdict may differ from the ones below,"
+            " which use what Mandu holds now."
+        )
+        gone = "PROBLEM day {0}: the calendar as Mandu holds it now has no day {0}, so its Draft was not checked"
+        code, text = self.run_with_check_drafts(meanwhile=lambda: fakes.keep_days(self.mandu, 4))
+        self.assertEqual(
+            (code, text.splitlines()[1:]),
+            (
+                1,
+                [changed, gone.format(3), "OK day 4: drafts/posts/window-1/day-04.md", "2 days due, 1 with problems"],
+            ),
+        )
+        report = self.report()
+        self.assertIn("| 3 | P03 / AB-2 leg A | queued |", report)
+        self.assertIn("| 4 | P04 | queued |", report)
+        (self.mandu / calendar).write_text("No table here.\n", encoding="utf-8")
+        code, text = self.check_drafts(self.queue()["updated_by_run"])
+        self.assertEqual(
+            (code, text.splitlines()[1:]), (1, [changed, gone.format(3), gone.format(4), "2 days due, 2 with problems"])
+        )
+
     def test_check_drafts_names_a_draft_the_founder_rejected_and_skips_a_day_the_founder_approved(self):
         first = self.first_batch()
         ids = {entry["day"]: entry["id"] for entry in first["open"] if entry["kind"] == "post"}
