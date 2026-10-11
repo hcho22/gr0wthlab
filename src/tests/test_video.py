@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import tempfile
 import unittest
 import unittest.mock
@@ -228,6 +229,16 @@ class ToolingTest(unittest.TestCase):
         unprobed = video.find(dict(self.env, GR0WTHLAB_FFPROBE_BIN="relative/ffprobe"), self.canvas)
         self.assertEqual(unprobed.problem, "ffprobe is not an executable at `relative/ffprobe`")
 
+    def test_tooling_is_found_where_homebrew_installs_it_when_the_path_does_not_name_it(self):
+        # launchd's PATH names neither Homebrew folder, so a scheduled run finds the tooling by looking there.
+        env = {"PATH": "/usr/bin:/bin", "HOME": str(self.root)}
+        with unittest.mock.patch.object(video, "SEARCH", (str(self.root / "empty"), str(self.root / "tools"))):
+            tooling = video.find(env, self.canvas)
+        self.assertTrue(tooling.ok, tooling.problem)
+        self.assertEqual(tooling.ffmpeg, self.root / "tools" / "ffmpeg")
+        self.assertEqual(tooling.ffprobe, self.root / "tools" / "ffprobe")
+        self.assertEqual(video.environment(env)["PATH"], "/usr/bin:/bin:/usr/sbin:/sbin")
+
     def test_tooling_that_lacks_a_filter_or_the_font_names_what_it_lacks(self):
         (self.root / "tools" / "ffmpeg.json").write_text(json.dumps({"lacks": ["subtitles"]}))
         self.assertEqual(
@@ -332,6 +343,30 @@ class RealToolingTest(unittest.TestCase):
         self.assertEqual(video.verify(facts, REAL_CANVAS, 5.0), [])
         self.assertTrue(facts.sound)
         self.assertEqual(fakes.tree_digest(self.root / "footage"), self.before)
+
+    def test_hdr_footage_as_a_phone_records_it_is_converted_so_the_asset_is_not_hdr(self):
+        if not TOOLING.converts_hdr:
+            self.skipTest("this ffmpeg has no zscale and tonemap filters, so it cannot convert HDR footage")
+        clip = self.root / "footage" / "d02-s1-hdr.mov"
+        tagged = "log-level=error:colorprim=bt2020:transfer=arib-std-b67:colormatrix=bt2020nc"
+        command = [str(TOOLING.ffmpeg), "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi"]
+        command += ["-i", "testsrc2=size=1080x1920:rate=30:duration=3", "-c:v", "libx265", "-preset", "ultrafast"]
+        command += ["-pix_fmt", "yuv420p10le", "-x265-params", tagged, "-tag:v", "hvc1", str(clip)]
+        made = subprocess.run(command, capture_output=True, text=True)
+        if made.returncode != 0:
+            self.skipTest("this ffmpeg cannot make an HDR test clip (no libx265 encoder)")
+        try:
+            source = video.probe(TOOLING, clip, self.env)
+            self.assertTrue(source.hdr)
+            self.assertIn("HDR", source.describe())
+            out = self.root / "assets" / "from-hdr.mp4"
+            cut = video.Cut(clip, 0.0, 2.0, 1.0, "contain", False, source)
+            video.render(TOOLING, REAL_CANVAS, [cut], [video.Overlay(0, 2, "Stand-in test footage.")], out, self.env)
+            facts = video.probe(TOOLING, out, self.env)
+            self.assertFalse(facts.hdr)
+            self.assertEqual(video.verify(facts, REAL_CANVAS, 2.0), [])
+        finally:
+            clip.unlink()
 
     def test_a_landscape_file_measured_as_an_asset_is_not_9_16(self):
         problems = video.verify(video.probe(TOOLING, self.camera, self.env), REAL_CANVAS, 4.0)
