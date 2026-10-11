@@ -320,8 +320,9 @@ The agent stays in the launcher's own session and process group, so an interrupt
 Both checks were made on the changed launcher on 2026-10-11, Mac local time, with Codex CLI 0.160.0.
 
 - `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
-- `src/bin/gr0wthlab boundary-check` passed as run `20261011T155408Z-on-demand-225d`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
-  The probe's agent ran 78 seconds of its 30 minute limit, and the kernel-log query finished well inside its own 5 minute limit.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261011T160853Z-on-demand-17ce`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+  The probe's agent ran 77 seconds of its 30 minute limit, and the kernel-log query finished well inside its own 5 minute limit.
+  It had passed the same way as `20261011T155408Z-on-demand-225d`, before the last change to how the launcher words a stop.
 
 What stopping a real Codex agent takes was measured the same day, since a missed process would linger after a timed-out run.
 Codex runs as a node wrapper, the `codex` binary, and a `codex-code-mode-host` helper, and it starts each shell command in a session of its own.
@@ -330,6 +331,7 @@ So the launcher never trusts the stopped agent's exit status, and it asks every 
 
 | Run | What it showed |
 | --- | --- |
+| `20261011T155138Z-on-demand-5cde` | A stand-in agent that never exits, at the committed 30 minute limit, from a throwaway clone: the run ended 1800.3 seconds after the agent started, with the report saying timed out, one notice, the lock free, nothing left running, and exit code 6; the next run in that clone started and ended with exit code 0 |
 | `20261011T155551Z-on-demand-7a41` | The weekly task with the real agent and the limit lowered to 20 seconds for this one run: stopped mid-work while reading the package, three processes asked to stop, none forced, none left; the report said timed out, the cost not available, and the run ended with exit code 6 |
 | A real agent told to run `sleep 613`, started through `process.run` with a 30 second limit | Four processes asked to stop, the shell command in its own session among them, none forced, none left; before the limit, another worktree's Codex was running on the Mac and was not touched |
 | `20261011T155629Z-on-demand-6eb3` | An ordinary weekly run with the real agent at the committed 30 minute limit, in the same checkout right after the timed-out one: the lock was free, the agent ran 3 minutes 38 seconds and was not touched, the run ended with exit code 0, and the earlier run's notice was not queued again |
