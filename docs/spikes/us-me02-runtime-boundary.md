@@ -314,10 +314,10 @@ Each run cost between $0.002 and $0.03 at API prices.
 
 ### Re-check after the agent time limit (US-ME17)
 
-The launcher now starts every process it waits for through `src/gr0wthlab/process.py`, each with a time limit: the agent (`agent.time_limit_seconds` in `config/run.json`), Codex's version and sandbox probes, the launcher's git lookups, and the boundary check's `git status` and kernel-log query.
+The launcher now starts every process it waits for through `src/gr0wthlab/process.py`, each with a time limit: the agent (`agent.time_limit_seconds` in `config/run.json`), Codex's version and sandbox probes, the launcher's git commands, and the boundary check's `git status` and kernel-log query.
 How Codex is started is unchanged: the command line, environment, and permission profile are as they were, and the configuration fingerprint from this worktree, `13a0eee82a14b1d5491d0dea3eeab9c3cf64c8aaa361d6a14f66dba124499659`, is the one its runs had on 2026-10-09.
 The agent stays in the launcher's own session and process group, so an interrupt at the terminal and launchd's cleanup reach it as before.
-Both checks were made on the changed launcher on 2026-10-11, Mac local time, with Codex CLI 0.160.0.
+Both checks were made on the changed launcher on 2026-10-11, Mac local time, with Codex CLI 0.160.0, before the records step's git and the claim checks' reads of a Product's code were moved to `process.py`; neither check runs those.
 
 - `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
 - `src/bin/gr0wthlab boundary-check` passed as run `20261011T160853Z-on-demand-17ce`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.

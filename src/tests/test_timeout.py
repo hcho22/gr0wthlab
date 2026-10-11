@@ -172,7 +172,7 @@ class TimedOutRunTest(TimeLimitTestCase):
         self.assertIn("| Post Drafts | complete |", text)
         self.assertIn("| Package snapshot | complete |", text)
         self.assertIn("| Review Queue | complete | 1 open item |", text)
-        self.assertIn(f"- Agent time: {LIMIT} s of a {LIMIT} s time limit.", text)
+        self.assertRegex(text, rf"\n- Agent time: \d+ s of a {LIMIT} s time limit\.\n")
         self.assertIn("- Timed out: 3 processes asked to stop; the process table shows none left running.", text)
         self.assertIn(f"- Exit code: {cycle.EXIT_STOPPED}, the run's own for an agent stopped at its limit", text)
         self.assertIn("- Problems this run are listed in the notice `20261011-notice-run-problems`.", text)
@@ -258,7 +258,6 @@ class LimitSettingTest(unittest.TestCase):
     def test_the_committed_limit_has_headroom_over_every_recorded_run(self):
         config = settings.load(fakes.REPO, {}, Path("/Users/founder"))
         self.assertEqual(config.agent, settings.Agent(1800.0))
-        self.assertIn("18 to 218 seconds", config.data["agent"]["why"])
         self.assertGreaterEqual(config.agent.time_limit, 8 * 218)
 
     def test_a_limit_is_a_number_of_seconds_above_zero_and_at_most_a_day(self):

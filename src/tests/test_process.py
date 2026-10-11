@@ -1,6 +1,5 @@
 """The one place the launcher starts a process: a time limit on every wait, and a stop that leaves nothing behind."""
 
-import ast
 import os
 import signal
 import subprocess
@@ -13,9 +12,7 @@ from unittest import mock
 
 from gr0wthlab import process
 from tests import fakes
-
-SOURCES = Path(__file__).resolve().parents[1] / "gr0wthlab"
-STARTERS = ("run", "call", "check_call", "check_output", "Popen")
+from tests.test_cycle import CycleTestCase
 
 # Starts what a stalled agent leaves, notes each process id, says it is ready, and waits: a shell in a session of its
 # own, as Codex starts a shell command, which answers a request to stop by starting one more process and ending, so
@@ -78,7 +75,8 @@ class RunTest(unittest.TestCase):
         try:
             self.assertEqual(family.stdout.readline(), "ready\n")
             root, shell, stubborn = fakes.agent_pids(Path(self.tmp.name))
-            stopped = process.stop(family, grace=2)
+            with mock.patch.object(process, "STOP_GRACE", 2):
+                stopped = process.stop(family)
             left_without_its_parent = int(late.read_text())
             self.assertTrue({root, shell, stubborn} <= set(stopped.asked), stopped)
             self.assertEqual(set(stopped.forced), {stubborn, left_without_its_parent})
@@ -126,25 +124,32 @@ class RunTest(unittest.TestCase):
         )
 
 
-class EveryWaitIsBoundedTest(unittest.TestCase):
-    def test_every_process_the_launcher_starts_has_a_time_limit(self):
-        """A process started without one is a wait that can never end; process.run is the place to start it."""
-        unbounded = []
-        for path in sorted(SOURCES.glob("*.py")):
-            for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-                if not isinstance(node, ast.Call) or not isinstance(node.func, ast.Attribute):
-                    continue
-                owner = node.func.value
-                if not isinstance(owner, ast.Name) or owner.id != "subprocess" or node.func.attr not in STARTERS:
-                    continue
-                # process.run waits on its own Popen with a time limit, and stops it when the limit passes.
-                waits_itself = path.name == "process.py" and node.func.attr == "Popen"
-                if not waits_itself and not any(keyword.arg == "timeout" for keyword in node.keywords):
-                    unbounded.append(f"{path.name}:{node.lineno}")
-        self.assertEqual(unbounded, [])
-        for name in ("os.system", "os.popen", "os.spawn"):
-            for path in sorted(SOURCES.glob("*.py")):
-                self.assertNotIn(name, path.read_text(encoding="utf-8"), path.name)
+class EveryWaitIsBoundedTest(CycleTestCase):
+    def test_a_whole_run_never_waits_without_a_time_limit_on_a_process_it_started(self):
+        """A wait without one can last forever. This watches every process a run in the production clone starts, with
+        a day's Draft due, so the records step's git and the claim checks' reads of a Product's code are among them."""
+        fakes.set_window(self.repo, {"first_sitting": None, "slot": None})
+        fakes.git(self.repo, "commit", "--quiet", "--all", "-m", "a window with days due", env=self.env)
+        remote, clone = self.root / "remote.git", self.root / "production"
+        fakes.git(self.root, "init", "--quiet", "--bare", str(remote), env=self.env)
+        fakes.git(self.repo, "remote", "add", "origin", str(remote), env=self.env)
+        fakes.git(self.repo, "push", "--quiet", "origin", "main", env=self.env)
+        fakes.git(self.root, "clone", "--quiet", str(remote), str(clone), env=self.env)
+        fakes.behave(self.codex_dir, {"write": {fakes.draft_path(1): fakes.draft(1)}})
+        waits = []
+
+        class Watched(subprocess.Popen):
+            def wait(self, timeout=None):
+                waits.append((self.args, timeout is not None or self.returncode is not None))
+                return super().wait(timeout)
+
+        with mock.patch.object(subprocess, "Popen", Watched):
+            code, out = self.run_cycle(repo=clone)
+        self.assertEqual(code, 0, out)
+        self.assertIn("records: pushed", out)
+        self.assertLessEqual({"codex", "git"}, {Path(command[0]).name for command, _ in waits})
+        self.assertLessEqual({"fetch", "cat-file", "push"}, {word for command, _ in waits for word in command})
+        self.assertEqual([command for command, bounded in waits if not bounded], [])
 
 
 if __name__ == "__main__":

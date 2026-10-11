@@ -1,10 +1,11 @@
 """Every process the launcher starts and waits for, each with a time limit, so no wait can last forever.
 
-run() is the one place such a process starts. One still running at its limit is stopped with everything it started:
-asked first (SIGTERM), then forced (SIGKILL) after a grace period, and the result says which processes that took and
-whether any is still running, read from the process table rather than assumed. A process that finishes in time is
-never signalled, and it stays in the launcher's own session and process group, so an interrupt at the terminal and
-launchd's own cleanup reach it as before.
+run() is the one place such a process starts, but for the ps a stop reads the process table with, which has a time
+limit of its own. One still running at its limit is stopped with everything it started: asked first (SIGTERM), then
+forced (SIGKILL) after a grace period, and the result says which processes that took and whether any is still running,
+read from the process table rather than assumed. A process that finishes in time is never signalled, and it stays in
+the launcher's own session and process group, so an interrupt at the terminal and launchd's own cleanup reach it as
+before.
 
 What a process started is found as the process table shows it: its descendants, each remembered by its process id
 and start time, and every session one of them leads, so a child left without its parent is still found. Codex starts
@@ -187,13 +188,13 @@ class Family:
             time.sleep(POLL)
 
 
-def stop(process: subprocess.Popen, grace: float | None = None) -> Stop:
-    """Stop a process and everything it started: ask, wait up to grace seconds (STOP_GRACE unless given), force what
-    is left, and read the process table once more to say what, if anything, is still running."""
+def stop(process: subprocess.Popen) -> Stop:
+    """Stop a process and everything it started: ask, wait up to STOP_GRACE seconds, force what is left, and read the
+    process table once more to say what, if anything, is still running."""
     family = Family(process)
     asked = family.signal(signal.SIGTERM)
     forced: tuple[int, ...] = ()
-    if family.wait(STOP_GRACE if grace is None else grace):
+    if family.wait(STOP_GRACE):
         forced = family.signal(signal.SIGKILL)
     left = family.wait(KILL_WAIT)
     return Stop(asked, forced, tuple(left), family.readable)
@@ -209,7 +210,6 @@ def run(
     env: Mapping[str, str] | None = None,
     cwd: str | None = None,
     errors: str = "replace",
-    grace: float | None = None,
 ) -> Completed:
     """Run a command to its end or to its time limit in seconds, whichever comes first.
 
@@ -230,7 +230,7 @@ def run(
     try:
         out, err = process.communicate(input, timeout=timeout)
     except subprocess.TimeoutExpired:
-        stopped = stop(process, grace)
+        stopped = stop(process)
         out, err = drain(process)
         return Completed(process.returncode, out, err, timeout, stopped)
     except BaseException:  # an interrupt at the terminal included, as subprocess.run handles it
