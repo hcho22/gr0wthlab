@@ -61,7 +61,7 @@ The PRD's Guardrails section says what enforces each one.
 | [`workspace/instructions/`](workspace/instructions/) | The Marketing Engineer's Instructions | Yes |
 | [`ledger/`](ledger/) | The launcher's records: the published Review Queue, the launcher's own Evidence, run reports, and run state | No |
 | [`src/`](src/) | Code | No |
-| [`config/`](config/) | Guardrail configuration, the Product registry, and the run's settings | No |
+| [`config/`](config/) | Guardrail configuration, the Product registry, the run's settings, and platform facts | No |
 | `docs/`, `CONTEXT.md`, this README | Specification and decision records | No |
 
 `workspace/` is the only tree the agent may write (G1); `ledger/` is written only by the launcher, outside the sandbox, and everything else changes only through firstmate's reviewed pull requests (G8).

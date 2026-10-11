@@ -2,13 +2,15 @@
 
 Order: bring the production clone up to origin's main; snapshot the Go-To-Market Package; take in the Founder's
 decisions from Mandu; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests
-that need filing; brief the agent and run it inside the sandbox (launcher.run); queue the items it wrote to
-workspace/review-queue/incoming/ that pass the format; write the Review Queue and the run report; commit and push
-workspace/ and ledger/. Every step but the agent is deterministic code outside the sandbox. The launcher's records live
-in ledger/, which the agent can read and never write, so nothing it does can change them; in workspace/ the launcher
-only restores its owner's access to entries the agent left without it, and reads and removes the incoming items it
-takes in. One run at a time per checkout holds the run lock in its ledger/ from the sync to the saved records; a run
-started meanwhile refuses to start, and the next report says so.
+that need filing; plan the post Drafts from the 14-day kit (posts.prepare); brief the agent and run it inside the
+sandbox (launcher.run); queue the items it wrote to workspace/review-queue/incoming/ that pass the format, a post for
+each Draft it wrote that passes every check (posts.take), and the reviewed brand-rules proposal when it needs filing;
+write the Review Queue and the run report; commit and push workspace/ and ledger/. Every step but the agent is
+deterministic code outside the sandbox. The launcher's records live in ledger/, which the agent can read and never
+write, so nothing it does can change them; in workspace/ the launcher only restores its owner's access to entries the
+agent left without it, reads the post Drafts, and reads and removes the incoming items it takes in. One run at a time
+per checkout holds the run lock in its ledger/ from the sync to the saved records; a run started meanwhile refuses to
+start, and the next report says so.
 """
 
 from __future__ import annotations
