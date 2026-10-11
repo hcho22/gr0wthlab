@@ -139,14 +139,14 @@ class RuntimeConfigTest(unittest.TestCase):
         disabled = set(self.config["codex"]["disabled_features"])
         for feature in ("apps", "plugins", "hooks", "browser_use", "computer_use", "multi_agent", "multi_agent_v2"):
             self.assertIn(feature, disabled)
-
-    def test_image_generation_stays_disabled_so_no_run_can_generate_a_frame(self):
-        self.assertIn("image_generation", self.config["codex"]["disabled_features"])
-        self.assertIs(self.config["network"], False)
         self.assertIs(self.config["codex"]["sub_agents"], False)
         self.assertEqual(
             self.config["codex"]["session_flags"], ["--ignore-user-config", "--ignore-rules", "--ephemeral"]
         )
+
+    def test_image_generation_stays_disabled_so_no_run_can_generate_a_frame(self):
+        self.assertIn("image_generation", self.config["codex"]["disabled_features"])
+        self.assertIs(self.config["network"], False)
 
 
 if __name__ == "__main__":

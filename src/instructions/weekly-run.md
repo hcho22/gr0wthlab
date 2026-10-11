@@ -198,7 +198,7 @@ Write it as the file `day-NN.json` (such as `day-01.json`) in the edits folder t
 
 - `segments` lists the pieces of the video in the order they play; each is one source range of one footage file, shown as one shot of the day's shot list.
 - `shot` is a shot the brief lists for the day, and `source` is a file the brief lists for that shot, written exactly as the brief writes it.
-  A file can be used only as the shot its name starts with, and a take named for one leg (`d02-s1a`, `d02-s1b`) only in that leg's video.
+  A file can be used only as the shot its name starts with, and a take named for one leg (`d02-s1a`, `d02-s1b`) only in that leg's video, under its opening.
 - `in` and `out` are seconds into the source file, inside its measured length; a segment plays for `out` minus `in` seconds.
 - The segments together run exactly as long as the day's post Draft: its last beat's end time, which must also be a length the Format gives.
   The launcher draws each beat's on-screen text, and its spoken line as a caption, over the video for the beat's time; an edit record holds no text.
@@ -211,6 +211,7 @@ Write it as the file `day-NN.json` (such as `day-01.json`) in the edits folder t
 - The legs of an A/B pair share their footage.
   When the brief says a day uses the same source ranges as its other leg from the first frame to the last, copy that leg's segments unchanged.
   When it says after its opening, the kit marks the pair as a re-cut: only the segments under the hook beat, and under any later beat that shows one of the pair's Hooks, may differ; every later segment is that leg's, unchanged and in the same order.
+  Outside those opening beats, use only files with no leg letter in their name, since both legs must be able to use them.
 
 ## Rules
 

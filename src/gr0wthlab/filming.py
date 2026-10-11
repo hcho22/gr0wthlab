@@ -748,7 +748,11 @@ def plan_item(filming: Filming, previous: Mapping[str, object] | None = None) ->
         if job.recut and len(job.hooks) > 1:
             first = job.shots[0].id
             takes = " and ".join(f"`{first}{hook.leg.lower()}` for day {hook.day}" for hook in job.hooks if hook.leg)
-            line += f" Each leg opens on its own Hook, so record the opening once for each: name the takes {takes}."
+            line += (
+                f" Each leg opens on its own Hook, so record the opening once for each: name the takes {takes}."
+                " Everything after the opening is shared by both legs: record it once, in a take named without a"
+                f" leg letter, such as `{first}.mov`."
+            )
         body.append(line)
     for number, why in found.unplanned:
         body.append("")
@@ -865,17 +869,37 @@ def gate(filming: Filming, job: shots.Job) -> str:
     return f"the filming plan `{standing.item}` is not approved yet"
 
 
-def lacking(inventory: footage.Inventory, wanted: Sequence[shots.Shot], leg: str | None) -> tuple[list[str], list[str]]:
-    """The shots of a day no edit can be cut from yet: those with no footage, and those whose only footage could
-    not be measured."""
-    without = [shot.id for shot in wanted if not inventory.for_shot(shot.id, leg)]
-    unread = [name for name in without if inventory.for_shot(name, leg, measured=False)]
-    return [name for name in without if name not in unread], unread
+def lacking(
+    inventory: footage.Inventory, wanted: Sequence[shots.Shot], leg: str | None, recut: bool
+) -> tuple[list[str], list[str], list[str]]:
+    """The shots of a day no edit can be cut from yet: those with no footage, those whose only footage could not be
+    measured, and, for a pair leg, those with no take both legs can use. The legs of a pair share their footage, so
+    a take named for one leg is only that leg's opening in a re-cut pair: the first shot of several can do with one,
+    and every other shot needs a take named without a leg letter."""
+    missing, unread, unshared = [], [], []
+    for index, shot in enumerate(wanted):
+        usable = inventory.for_shot(shot.id, leg)
+        opening = recut and index == 0 and len(wanted) > 1
+        if not usable:
+            (unread if inventory.for_shot(shot.id, leg, measured=False) else missing).append(shot.id)
+        elif leg and not opening and all(clip.leg for clip in usable):
+            unshared.append(shot.id)
+    return missing, unread, unshared
+
+
+def no_shared_take(names: Sequence[str], recut: bool) -> str:
+    """Why a pair leg has no video while a shot the legs share is filmed only in takes named for one leg."""
+    where = "everything after the opening" if recut else "all of their footage"
+    one = len(names) == 1
+    return (
+        f"{shot_names(names)} {'has' if one else 'have'} no take both legs can use (the legs share {where}, so"
+        f" {'it needs' if one else 'each needs'} a file named without a leg letter, such as `{names[0]}.mov`)"
+    )
 
 
 def readiness(filming: Filming, job: shots.Job, leg: str | None) -> str:
     """Why a day's edit cannot be cut this run, or "" when it can: its job is in an approved plan, the footage
-    place could be read and measured, and every shot has footage."""
+    place could be read and measured, and every shot has footage the day's video can be cut from."""
     inventory = filming.inventory
     waiting = gate(filming, job)
     if waiting:
@@ -886,10 +910,12 @@ def readiness(filming: Filming, job: shots.Job, leg: str | None) -> str:
         return f"the video tooling cannot be used ({filming.tooling.problem})"
     if filming.canvas is None:
         return filming.problem or "config/platforms.json holds no canvas"
-    missing, unread = lacking(inventory, job.shots, leg)
+    missing, unread, unshared = lacking(inventory, job.shots, leg, job.recut)
     reasons = [f"no footage yet for {shot_names(missing)}"] if missing else []
     if unread:
         reasons.append(f"the footage of {shot_names(unread)} could not be measured")
+    if unshared:
+        reasons.append(no_shared_take(unshared, job.recut))
     return "; ".join(reasons)
 
 
@@ -1122,13 +1148,15 @@ def notice_section(filming: Filming | None, day_text: str) -> tuple[int, str, st
     for number, day in sorted(filming.days.items()):
         spec = day.spec
         job = filming.requirements.job_for(number)
-        missing, unread = lacking(inventory, spec.shots, spec.leg)
+        missing, unread, unshared = lacking(inventory, spec.shots, spec.leg, spec.recut)
         approved = job is not None and not gate(filming, job)
         owed = begun and approved and not filming.due.get(number)
-        if owed and (missing or unread) and number not in [asset.day for asset in blocked]:
+        if owed and (missing or unread or unshared) and number not in [asset.day for asset in blocked]:
             reasons = [f"{shot_names(missing)} {'has' if len(missing) == 1 else 'have'} no footage"] if missing else []
             if unread:
                 reasons.append(f"the footage of {shot_names(unread)} could not be measured")
+            if unshared:
+                reasons.append(no_shared_take(unshared, spec.recut))
             lines.append(f"- Day {number} has no video: {' and '.join(reasons)}, and nothing is substituted.")
     for clip in inventory.unmatched():
         lines.append(f"- `{clip.name}` in the footage place is footage of no shot: {clip.problem}.")

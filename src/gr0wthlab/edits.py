@@ -9,8 +9,8 @@ The checks follow the shot list the launcher read from the kit: every source is 
 for the shot it is used as; a shot that may not be cut appears as one unbroken source range, with no other shot
 between its pieces; nothing runs at another speed unless its shot list says it is not real time; every shot of the
 list has footage; the length is the one the Format gives and the one the Draft's beats add up to; and the legs of an
-A/B pair use the same source ranges after their opening. A record that fails any of them renders nothing: no footage
-is ever substituted for a shot.
+A/B pair use the same source ranges after their opening, from takes both legs can use. A record that fails any of them
+renders nothing: no footage is ever substituted for a shot.
 """
 
 from __future__ import annotations
@@ -417,6 +417,16 @@ def check(
                     f"the {kind} at {overlay.start:g}s is {len(overlay.text)} characters, more than the"
                     f" {canvas.max_chars} that fit the safe zone",
                 )
+        if spec.other is not None:
+            where = "after the opening" if spec.recut else "from the first frame"
+            shared = {source for source, *_ in pieces(edit.segments, opening_windows(draft, spec.hooks))}
+            for clip in (clips[source] for source in sorted(shared) if source in clips):
+                if clip.leg == spec.leg:
+                    block(
+                        "pair-legs",
+                        f"`{clip.name}` is leg {clip.leg}'s own take, and {where} the legs of {spec.pair} share their"
+                        " footage; use a take named without a leg letter there",
+                    )
     return found
 
 

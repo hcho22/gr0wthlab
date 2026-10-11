@@ -116,11 +116,13 @@ Name each file for its shot in the approved filming plan, in one folder per 14-d
     d01-s1-take-2.mov    another take: anything may follow the shot's name after a hyphen, space, or underscore
     d06-s1a.mov          leg A's own opening take of a pair whose opening is re-cut
     d06-s1b.mov          leg B's
+    d06-s1.mov           everything after that pair's opening, filmed once for both legs
 ```
 
 - A file's name starts with its shot, `d<two-digit day>-s<number>`, exactly as the plan writes it, in upper or lower case; `.mov`, `.mp4`, and `.m4v` files are read.
 - A later leg of an A/B pair films nothing: day 8 is cut from the footage of `d01`.
-  Only a pair whose opening is re-cut has a take per leg, marked `a` or `b` right after the shot's name, and a take marked for one leg is used only in that leg's video.
+  Only a pair whose opening is re-cut has a take per leg, marked `a` or `b` right after the shot's name, and a take marked for one leg is used only in that leg's video, for its opening.
+  Everything after the opening is shared by both legs, so it is filmed once, in a take with no leg letter: a pair filmed only as lettered takes has no video, and the run's notice names the shot that needs the shared take.
 - Files sit directly in the window's folder.
   A folder, a link, a file of another type, and a file named for no shot of the plan are left alone and named in the run report.
 - Film upright; any resolution and frame rate is taken, HDR included, and the finished video is always 1080x1920 at 30 frames a second.

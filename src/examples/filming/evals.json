@@ -296,7 +296,7 @@
     },
     {
       "id": 14,
-      "prompt": "Write the edit record for day 7 (P07), a timelapse of one five-minute session: the brief lists `window-1/d07-s1.mov`, 330.00s.",
+      "prompt": "Write the edit record for day 7 (P07), a timelapse of a whole five-minute session: the brief lists `window-1/d07-s1.mov`, 330.00s.",
       "expected_output": "One segment at twenty times the recorded speed: a timelapse is not real time, so its shot list lets it run faster. It passes.",
       "assertions": [
         {

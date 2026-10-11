@@ -19,87 +19,88 @@ def one(text, rule=None):
 
 class ShotListTest(unittest.TestCase):
     def test_a_screen_recording_states_its_length_device_real_time_and_no_cuts(self):
-        length, found = one(
-            "8-12s screen record, cold open to a ready session, no cuts, real time, on-screen text only"
-        )
-        self.assertEqual(length, (8, 12))
+        length, found = one("9-11s screen record, the timer view counting down, no cuts, real time, captions off")
+        self.assertEqual(length, (9, 11))
         self.assertEqual(len(found), 1)
         shot = found[0]
         self.assertEqual(
             (shot.id, shot.kind, shot.setup, shot.needs), ("d01-s1", "screen recording", "device", "a real device")
         )
-        self.assertEqual(
-            shot.what, "screen record, cold open to a ready session, no cuts, real time, on-screen text only"
-        )
+        self.assertEqual(shot.what, "screen record, the timer view counting down, no cuts, real time, captions off")
         self.assertEqual((shot.real_time, shot.real_time_why), (True, "the Format: real time"))
         self.assertEqual((shot.uncut, shot.uncut_why), (True, "the Format: no cuts"))
 
     def test_what_the_format_does_not_state_is_not_stated_never_guessed(self):
-        _, (shot,) = one("12s screen record: the history view with a missed day, on-screen text")
+        _, (shot,) = one("14s screen record: the settings page with one toggle off, a label over it")
         self.assertEqual((shot.real_time, shot.uncut, shot.real_device), (None, False, False))
-        self.assertEqual(shot.what, "screen record: the history view with a missed day, on-screen text")
-        _, (founder,) = one("20s founder-on-camera (mandatory, first person), review shown as on-screen text")
+        self.assertEqual(shot.what, "screen record: the settings page with one toggle off, a label over it")
+        _, (founder,) = one("25s founder-on-camera (seated, facing the lens), a quote shown as a label")
         self.assertEqual((founder.kind, founder.setup, founder.needs), ("founder on camera", "camera", "the Founder"))
         self.assertEqual((founder.real_time, founder.uncut), (None, False))
 
     def test_the_calendar_s_rule_for_every_screen_recording_fills_in_what_the_format_leaves_out(self):
-        _, (shot,) = one("12s screen record: the history view with a missed day", RULE)
+        _, (shot,) = one("14s screen record: the settings page with one toggle off", RULE)
         self.assertEqual((shot.real_time, shot.uncut, shot.real_device), (True, True, True))
         self.assertEqual(shot.real_time_why, f"{CALENDAR} line 31: screen recordings are real time")
-        self.assertIn("cuts only where the shot list declares them, and it declares none", shot.uncut_why)
-        _, (founder,) = one("20s founder-on-camera line", RULE)
+        self.assertEqual(
+            shot.uncut_why,
+            f"{CALENDAR} line 31: a screen recording is cut only where its shot list says, and it names no cut",
+        )
+        _, (founder,) = one("25s founder-on-camera greeting", RULE)
         self.assertEqual((founder.real_time, founder.uncut), (None, False))
 
     def test_a_recording_starts_after_then_or_at_an_insert_and_keeps_the_format_s_own_words(self):
         length, found = one(
-            "20-30s founder-on-camera intro (mandatory, first person) then screen record of a missed day"
+            "18-24s founder-on-camera hello (seated, facing the lens) then screen record of the settings page"
         )
-        self.assertEqual(length, (20, 30))
+        self.assertEqual(length, (18, 24))
         self.assertEqual(
             [(shot.id, shot.kind) for shot in found], [("d01-s1", "founder on camera"), ("d01-s2", "screen recording")]
         )
-        self.assertEqual(found[0].what, "founder-on-camera intro (mandatory, first person)")
-        self.assertEqual(found[1].what, "screen record of a missed day")
+        self.assertEqual(found[0].what, "founder-on-camera hello (seated, facing the lens)")
+        self.assertEqual(found[1].what, "screen record of the settings page")
         _, insert = one(
-            "20-30s founder-on-camera (mandatory for first-person lines) with screen-record insert of the return flow"
+            "18-24s founder-on-camera (standing, by a window) with a screen-record cutaway to the sign-up form"
         )
         self.assertEqual(
             [shot.what for shot in insert],
-            ["founder-on-camera (mandatory for first-person lines)", "screen-record insert of the return flow"],
+            ["founder-on-camera (standing, by a window)", "a screen-record cutaway to the sign-up form"],
         )
         _, demo = one(
-            "15-20s founder-on-camera line (mandatory, first person) then immediate cold-open demo, no chaperone"
-            " sentence"
+            "16-22s founder-on-camera greeting (standing, by a window) then a quick demo of the timer, nothing said"
+            " over it"
         )
         self.assertEqual(
             [(shot.kind, shot.setup) for shot in demo], [("founder on camera", "camera"), ("device demo", "device")]
         )
 
     def test_words_that_name_no_recording_stay_with_the_recording_before_them(self):
-        _, overlay = one("10s screen record with a tap counter overlay that increments only on visible taps, real time")
+        _, overlay = one("11s screen record with a red dot marker that follows each swipe on the list, real time")
         self.assertEqual(len(overlay), 1)
         self.assertTrue(overlay[0].real_time)
-        _, history = one("12s screen record: history view with a missed day, the score dips and does not reset")
-        self.assertEqual(len(history), 1)
-        _, pan = one("12s video: slow pan of a bare room, then app opens to a ready session")
-        self.assertEqual([(shot.kind, shot.setup) for shot in pan], [("camera footage", "camera")])
-        self.assertEqual(pan[0].what, "video: slow pan of a bare room, then app opens to a ready session")
+        _, settings = one("14s screen record: settings page with one toggle off, the label turns grey and stays put")
+        self.assertEqual(len(settings), 1)
+        _, counter = one("13s video: steady shot of a kitchen counter, then the phone lights up on the timer")
+        self.assertEqual([(shot.kind, shot.setup) for shot in counter], [("camera footage", "camera")])
+        self.assertEqual(
+            counter[0].what, "video: steady shot of a kitchen counter, then the phone lights up on the timer"
+        )
 
     def test_a_timelapse_and_slow_motion_are_never_real_time(self):
-        _, (lapse,) = one("15-20s timelapse of one real 5-minute session, phone timer visible")
+        _, (lapse,) = one("16-22s timelapse of a ten-minute stretch routine, wall clock in frame")
         self.assertEqual((lapse.kind, lapse.setup, lapse.real_time), ("timelapse", "camera", False))
         self.assertEqual(lapse.real_time_why, "the Format: timelapse")
         length, (slow,) = one(
-            "15s: high-frame-rate capture of cold open played in slow motion, then once at real speed, no cuts"
-            " within each take"
+            "17s: high-frame-rate footage of the timer starting, shown in slow motion, then again at normal speed, no"
+            " cut inside each recording"
         )
         self.assertEqual(
             (length, slow.kind, slow.setup, slow.real_time, slow.uncut),
-            ((15, 15), "slow-motion capture", "not stated", False, True),
+            ((17, 17), "slow-motion capture", "not stated", False, True),
         )
 
-    def test_no_cuts_within_each_take_holds_for_every_shot(self):
-        _, found = one("20s founder-on-camera line then screen record of the app, no cuts within each take")
+    def test_no_cut_inside_each_recording_holds_for_every_shot(self):
+        _, found = one("25s founder-on-camera greeting then screen record of the timer, no cut inside each recording")
         self.assertEqual([shot.uncut for shot in found], [True, True])
 
     def test_a_format_that_names_no_recording_has_no_shot(self):
@@ -145,7 +146,7 @@ class RequirementsTest(unittest.TestCase):
 
     def test_each_job_quotes_its_format_and_holds_each_day_s_frozen_hook(self):
         job = self.found.job_for(2)
-        self.assertEqual(job.format, "20s founder-on-camera line, then a screen record of the app opening")
+        self.assertEqual(job.format, "20s founder-on-camera greeting, then a screen record of the app opening")
         self.assertEqual(job.line, self.kit.angles["P02"].line)
         self.assertEqual([shot.id for shot in job.shots], ["d02-s1", "d02-s2"])
         self.assertEqual(
@@ -216,7 +217,7 @@ class RequirementsTest(unittest.TestCase):
     def test_the_screen_rule_is_read_from_the_calendar_s_own_checklist(self):
         rule = shots.screen_rule(self.kit.asset_checks)
         self.assertEqual((rule.real_device, rule.real_time, rule.cuts_declared_only), (True, True, True))
-        self.assertIsNone(shots.screen_rule((kit.AssetCheck(3, "Founder is on camera for every first-person line."),)))
+        self.assertIsNone(shots.screen_rule((kit.AssetCheck(3, "The founder is in frame for every spoken line."),)))
 
 
 if __name__ == "__main__":

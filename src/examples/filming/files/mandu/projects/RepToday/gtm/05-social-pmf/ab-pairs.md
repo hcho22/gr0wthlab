@@ -17,4 +17,4 @@ Only the hook (first 3 seconds of on-screen text plus the first caption line) ch
 
 - Leg A hook: "I open my own app and the session is already there."
 - Leg B hook: "The session is already there when I open my own app."
-- Each leg opens on its own line; everything after the opening is identical footage re-cut.
+- A re-cut pair: each leg has its own first seconds, and the rest of the two videos is one recording.

@@ -10,7 +10,7 @@ import unittest
 from datetime import date, timedelta
 from unittest import mock
 
-from gr0wthlab import boundary, cli, cycle, exchange, filming, footage, video
+from gr0wthlab import boundary, cli, cycle, exchange, filming, footage, shots, video
 from gr0wthlab.boundary import ConfigError
 from tests import fakes
 from tests.test_cycle import CycleTestCase
@@ -116,8 +116,8 @@ class FilmingPlanTest(FilmingRunCase):
             text,
         )
         self.assertIn(
-            "| d02-s1 | days 2 and 9 | part of 20s | founder-on-camera line | Camera, the Founder in frame | Not stated"
-            " | The Hook, then the Draft's | The spoken lines | Not stated |",
+            "| d02-s1 | days 2 and 9 | part of 20s | founder-on-camera greeting | Camera, the Founder in frame | Not"
+            " stated | The Hook, then the Draft's | The spoken lines | Not stated |",
             text,
         )
         self.assertIn(
@@ -126,7 +126,7 @@ class FilmingPlanTest(FilmingRunCase):
             text,
         )
         self.assertIn(
-            "| d07-s1 | day 7 | 15-20s | timelapse of one five-minute session | Camera | No: timelapse |", text
+            "| d07-s1 | day 7 | 15-20s | timelapse of a whole five-minute session | Camera | No: timelapse |", text
         )
         self.assertIn("| d05-s1 | day 5 | 15s | slow-motion capture | Not stated | No: slow-motion capture |", text)
         # Each shot list cites the Angle's Format, and each day the frozen Hook it opens on.
@@ -143,7 +143,8 @@ class FilmingPlanTest(FilmingRunCase):
         )
         self.assertIn(
             " Each leg opens on its own Hook, so record the opening once for each: name the takes `d02-s1a` for day 2"
-            " and `d02-s1b` for day 9.",
+            " and `d02-s1b` for day 9. Everything after the opening is shared by both legs: record it once, in a take"
+            " named without a leg letter, such as `d02-s1.mov`.",
             text,
         )
         self.assertIn('- d04, day 4 (P04): Format in `angles.md` line 11. Day 4 opens on "Airplane mode on.', text)
@@ -480,6 +481,26 @@ class FootagePlaceTest(FilmingRunCase):
         self.assertEqual(found.path(first), self.footage / "window-1" / "d01-s1.mov")
         with self.assertRaises(KeyError):
             found.path(first.__class__("window-1/../../elsewhere.mov", 1, "0" * 64, "d01-s1", None, first.facts))
+
+    def test_a_pair_leg_needs_a_take_both_legs_can_use_wherever_the_legs_share_their_footage(self):
+        tooling = video.find(self.env)
+        parsed, roles = fakes.filming_kit(self.root / "kit")
+        jobs = {job.key: job for job in shots.requirements(parsed, roles["calendar"]).jobs}
+        for name in ("d01-s1a.mov", "d02-s1a.mov", "d02-s2a.mov", "d04-s1a.mov"):
+            self.clip(name)
+        known = {"d01-s1", "d02-s1", "d02-s2", "d04-s1"}
+        found = footage.read(self.footage, 1, known, tooling, self.env)
+        self.assertEqual(filming.lacking(found, jobs["d01"].shots, "A", False), ([], [], ["d01-s1"]))
+        self.assertEqual(filming.lacking(found, jobs["d01"].shots, "B", False), (["d01-s1"], [], []))
+        # In a re-cut pair the first shot of several can be the leg's own opening take; every other shot is shared.
+        self.assertEqual(filming.lacking(found, jobs["d02"].shots, "A", True), ([], [], ["d02-s2"]))
+        self.assertEqual(filming.lacking(found, jobs["d02"].shots[:1], "A", True), ([], [], ["d02-s1"]))
+        self.assertEqual(filming.lacking(found, jobs["d04"].shots, None, False), ([], [], []))
+        self.clip("d02-s2.mov")
+        self.clip("d01-s1-take-2.mov")
+        found = footage.read(self.footage, 1, known, tooling, self.env)
+        self.assertEqual(filming.lacking(found, jobs["d01"].shots, "A", False), ([], [], []))
+        self.assertEqual(filming.lacking(found, jobs["d02"].shots, "A", True), ([], [], []))
 
     def test_a_window_folder_that_is_a_link_or_missing_is_never_read_through(self):
         tooling = video.find(self.env)
@@ -1235,6 +1256,74 @@ class EditRunTest(FilmingRunCase):
 
 
 class RecutRunTest(FilmingRunCase):
+    def one_shot_pair(self):
+        """AB-3, days 2 and 9, as one founder-on-camera shot whose opening is re-cut, with its plan approved."""
+        angles = self.mandu / ANGLES
+        text = angles.read_text(encoding="utf-8")
+        whole = "20s founder-on-camera greeting, then a screen record of the app opening"
+        self.assertIn(whole, text)
+        angles.write_text(text.replace(whole, "20s founder-on-camera greeting"), encoding="utf-8")
+        self.approved_plan(days=(2, 9))
+
+    def test_a_re_cut_pair_filmed_only_as_lettered_takes_has_no_video_and_the_shared_take_is_named(self):
+        self.one_shot_pair()
+        self.clip("d02-s1a.mov", 20.0, 1080, 1920, 30, sound=True)
+        self.clip("d02-s1b.mov", 6.0, 1080, 1920, 30, sound=True)
+        why = (
+            "shot d02-s1 has no take both legs can use (the legs share everything after the opening, so it needs a"
+            " file named without a leg letter, such as `d02-s1.mov`)"
+        )
+        whole = fakes.edit_record(2, ("d02-s1", "d02-s1a.mov", 0, 20))
+        queue = self.run_ok({fakes.draft_path(2): fakes.filming_draft(2), fakes.edit_path(2): whole})
+        self.assertFalse((self.ledger() / "assets").exists())
+        brief = self.brief().split("## Filming")[1]
+        self.assertIn(
+            f"| `window-1/d02-s1a.mov` for d02-s1: 20.00s, 1080x1920, 30 fps, with sound | not ready: {why} |", brief
+        )
+        self.assertIn("- No day is ready for an edit record this run.", brief)
+        self.assertIn(f"| 2 | d02-s1 | not cut | {why} |", self.report())
+        self.assertIn(f"- Day 2 has no video: {why}, and nothing is substituted.", self.notice())
+        post = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.assertNotIn("asset", post)
+        self.assertIn(f"**Video file**: none yet ({why}).", self.item(post))
+        code, text = self.check_edits(queue["updated_by_run"])
+        self.assertEqual(code, 1, text)
+        self.assertIn(f"PROBLEM day 2: drafts/edits/window-1/day-02.json will not be cut this run: {why}", text)
+        # The later leg is not ready either: its own opening take is there, and nothing it can share with day 2.
+        fakes.set_window(self.repo, fakes.window_from(date(2026, 10, 4)))
+        self.run_ok()
+        self.assertIn(f"| not ready: {why} |", self.brief().split("## Filming")[1].split("| 9 |")[1].split("\n")[0])
+        self.assertIn(f"- Day 9 has no video: {why}, and nothing is substituted.", self.notice())
+        self.assertFalse((self.ledger() / "assets").exists())
+
+    def test_a_re_cut_pair_with_its_shared_take_is_cut_and_a_lettered_take_stays_in_the_opening(self):
+        self.one_shot_pair()
+        self.clip("d02-s1a.mov", 20.0, 1080, 1920, 30, sound=True)
+        self.clip("d02-s1b.mov", 6.0, 1080, 1920, 30, sound=True)
+        self.clip("d02-s1.mov", 20.0, 1080, 1920, 30, sound=True)
+        whole = fakes.edit_record(2, ("d02-s1", "d02-s1a.mov", 0, 20))
+        queue = self.run_ok({fakes.draft_path(2): fakes.filming_draft(2), fakes.edit_path(2): whole})
+        self.assertEqual([entry for entry in queue["open"] if entry["kind"] == "post"], [])
+        self.assertFalse((self.ledger() / "assets" / "window-1").exists())
+        self.assertIn(
+            "pair-legs: `window-1/d02-s1a.mov` is leg A's own take, and after the opening the legs of AB-3 share"
+            " their footage; use a take named without a leg letter there",
+            self.report(),
+        )
+        day_2 = fakes.edit_record(2, ("d02-s1", "d02-s1a.mov", 0, 3), ("d02-s1", "d02-s1.mov", 3, 20))
+        queue = self.run_ok({fakes.edit_path(2): day_2})
+        first = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.assertIn("asset", first)
+        fakes.set_window(self.repo, fakes.window_from(date(2026, 10, 4)))
+        day_9 = fakes.edit_record(9, ("d02-s1", "d02-s1b.mov", 0, 3), ("d02-s1", "d02-s1.mov", 3, 20))
+        queue = self.run_ok({fakes.draft_path(9): fakes.filming_draft(9), fakes.edit_path(9): day_9})
+        second = next(entry for entry in queue["open"] if entry.get("day") == 9)
+        self.assertIn("the same source ranges as day 2's leg after the re-cut opening", self.item(second))
+        ours, theirs = self.asset(first), self.asset(second)
+        self.assertEqual(ours["inputs"][1:], theirs["inputs"][1:])
+        self.assertEqual(ours["seeks"][1:], theirs["seeks"][1:])
+        self.assertNotEqual(ours["inputs"][0], theirs["inputs"][0])
+
     def test_the_legs_of_a_re_cut_pair_open_on_their_own_takes_and_share_everything_after(self):
         self.approved_plan(days=(2, 9))
         for name, seconds in (("d02-s1a-take-1.mov", 6.0), ("d02-s1b-take-1.mov", 6.0), ("d02-s1-closing.mov", 15.0)):

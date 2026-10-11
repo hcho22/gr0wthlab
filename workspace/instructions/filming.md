@@ -45,6 +45,7 @@ The edit record's format is in the task definition, and the launcher's checks de
   The two videos then differ only in the Hook the launcher draws over them.
 - When it says after its opening, the kit marks the pair as a re-cut.
   Each leg opens on its own take, the one whose name ends in the leg's letter, such as `d06-s1a` for leg A and `d06-s1b` for leg B.
+  Use a lettered take only under the opening beats: everything after them comes from files with no leg letter, which both legs can use.
   Every segment after the opening is the other leg's, unchanged and in the same order.
 - When the other leg's video is already in an open or approved post, never change that leg's edit record to make the two match: change the newer leg.
 

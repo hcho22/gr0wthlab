@@ -35,7 +35,7 @@ EVERY_TAKE = re.compile(r"\bno cuts?\b[^,;]*\beach\b", re.IGNORECASE)
 REAL_TIME = re.compile(r"\breal[- ]time\b", re.IGNORECASE)
 SCREEN_RECORDING = re.compile(r"\bscreen[- ]record(?:ing)?s?\b", re.IGNORECASE)
 REAL_DEVICE = re.compile(r"\breal device\b", re.IGNORECASE)
-CUTS_DECLARED = re.compile(r"\bcuts only where the shot list declares\b", re.IGNORECASE)
+CUTS_DECLARED = re.compile(r"\bcuts? only where\b", re.IGNORECASE)
 # A footage file's name starts with its shot, then the leg whose opening it is, if any: d06-s1b-take-2.mov.
 FILE_SHOT = re.compile(r"(d\d{2}-s\d+)([ab])?(?=$|[-_ .])", re.IGNORECASE)
 
@@ -268,7 +268,8 @@ def shot_list(
         if NO_CUTS.search(part) or every_take:
             uncut, uncut_why = True, "the Format: no cuts"
         elif screen and rule.cuts_declared_only:
-            uncut, uncut_why = True, f"{where}: cuts only where the shot list declares them, and it declares none"
+            uncut = True
+            uncut_why = f"{where}: a screen recording is cut only where its shot list says, and it names no cut"
         else:
             uncut, uncut_why = False, ""
         found.append(

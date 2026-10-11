@@ -301,6 +301,39 @@ class PairTest(EditTestCase):
         muted = record(8, ("d01-s1", "d01-s1.mov", 2, 12, {"mute": True}))
         self.assertEqual(len(self.pair(muted, 8, day_1, 1)), 1)
 
+    def test_a_take_named_for_one_leg_is_only_that_leg_s_opening(self):
+        opening = ("d02-s1", "d02-s1a-take-1.mov", 1, 4)
+        screen = ("d02-s2", "d02-s2.mov", 2, 13)
+        shared = record(2, opening, screen, ("d02-s1", "d02-s1-closing.mov", 5, 11))
+        self.assertEqual(self.rules(shared, 2)[0], [])
+        rules, lines = self.rules(record(2, opening, screen, ("d02-s1", "d02-s1a-take-1.mov", 0, 6)), 2)
+        self.assertEqual(rules, ["pair-legs"])
+        self.assertEqual(
+            lines[0],
+            "pair-legs: `window-1/d02-s1a-take-1.mov` is leg A's own take, and after the opening the legs of AB-3"
+            " share their footage; use a take named without a leg letter there",
+        )
+        # The legs of a plain pair share every frame, so a take named for one leg has no place in either video.
+        lettered = replace(self.clips["window-1/d01-s1.mov"], name="window-1/d01-s1a.mov", leg="A")
+        found = edits.check(
+            record(1, ("d01-s1", "d01-s1a.mov", 2, 12)),
+            self.spec(1),
+            dict(self.clips, **{lettered.name: lettered}),
+            draft(1),
+            CANVAS,
+        )
+        self.assertEqual(
+            [finding.line() for finding in found],
+            [
+                "pair-legs: `window-1/d01-s1a.mov` is leg A's own take, and from the first frame the legs of AB-1"
+                " share their footage; use a take named without a leg letter there"
+            ],
+        )
+        # A day outside any pair shares nothing, so the letter in a take's name means nothing there.
+        solo = replace(self.clips["window-1/d01-s1.mov"], name="window-1/d04-s1a.mov", shot="d04-s1", leg="A")
+        found = edits.check(record(4, ("d04-s1", "d04-s1a.mov", 2, 12)), self.spec(4), {solo.name: solo}, None, CANVAS)
+        self.assertEqual(found, [])
+
     def test_the_legs_of_a_re_cut_pair_share_every_source_range_after_the_opening(self):
         tail = (("d02-s2", "d02-s2.mov", 2, 13), ("d02-s1", "d02-s1-closing.mov", 5, 11))
         day_2 = record(2, ("d02-s1", "d02-s1a-take-1.mov", 1, 4), *tail)
