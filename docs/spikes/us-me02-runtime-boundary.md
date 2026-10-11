@@ -85,6 +85,7 @@ With network on, the file grants would not be the whole boundary: in review, `co
 Any local service that accepted a request from a run would act for it outside the sandbox, so the write boundary would rest on every such service refusing.
 With network off, the kernel refuses those connections (`deny(1) network-outbound`), and the boundary check tests it.
 A later story that needs network, such as Listening, YouTube read access, or scheduler drafts, must enable it only through Codex's `network_proxy` domain allow-list for its specific hosts, keep local sockets and localhost unreachable, and re-run the boundary check.
+Listening did not need it: the launcher fetches for the agent, outside the sandbox (see the re-check after Listening and outreach below).
 
 ## Refused-write evidence
 
@@ -312,6 +313,49 @@ In `20261010T000549Z-on-demand-a9fe` all seven Drafts were blocked as in the cou
 In `20261010T000903Z-on-demand-bb45`, against the reconciled copy, the agent's `check-drafts` could not read the copy, because the launcher's `GR0WTHLAB_MANDU_DIR` never reaches the agent's environment; the brief's command now names each location.
 Each run cost between $0.002 and $0.03 at API prices.
 
+### Re-check after Listening and outreach (US-ME13, US-ME14)
+
+Listening and outreach are the runtime's first use of the network and its first untrusted input, so this change touches the boundary itself.
+The tighter of the two designs held: the sandboxed agent never needed the network, so it still has none, and Codex's `network_proxy` is not used.
+`runtime.json` is unchanged, the launcher still passes `permissions.gr0wthlab.network.enabled=false`, and the permission profile, the Codex flags, and the environment are as they were.
+
+What is new sits outside the sandbox.
+The launcher itself now reads a fixed list of sources (`config/sources.json`) before the agent starts, through one client (`src/gr0wthlab/fetch.py`) whose rules are `config/guardrails/fetch.json` and its own code: a credential-free GET over HTTPS on port 443 to a listed host and to no other, each host's `robots.txt` read first and binding, a bounded number of spaced requests, and a redirect followed only to a listed host.
+It writes what it read into one snapshot in `ledger/`, which the agent can read and never write, and every request it was asked to make, sent or not, into the run's request log.
+`src/tests/test_fetch.py` holds the contract: no other module imports a network library, the client puts one method on the wire from one place, and a path a `robots.txt` disallows is never requested.
+`config/products.json` gained one package source and the package files Listening and outreach read.
+
+Two proofs were added to what every run and the boundary check already did.
+Every run's preflight now also tries each listed host from inside the sandbox, with no model, and stops the run before the agent starts if one is reachable.
+The boundary check proves the network from both sides: a control outside the sandbox shows the probe can open a connection to the check's own listener, the same probe inside the sandbox must reach neither that listener nor any listed host, a kernel Seatbelt denial must name each of those attempts by its process, and the launcher's client must send nothing but a GET to listed hosts and refuse an address outside the list before anything is sent.
+
+Both checks were run on 2026-10-11 with Codex CLI 0.160.0, from a linked worktree on the code as committed, whose configuration fingerprint is `f92a4c4aa4b29adbef9c716c4582e96810cdd2b4ea574a7ee1fd73ef51dc0747`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached none of the three listed hosts (`www.reddit.com`, `itunes.apple.com`, `www.youtube.com`) from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261011T170146Z-on-demand-8ae0`: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox all four targets were refused, and the kernel named each attempt, the listener's as `network-outbound remote:*:<port>` and each host's as `network-outbound /private/var/run/mDNSResponder`, since the sandbox refuses even the name lookup; the launcher's client sent three requests, each a GET for a listed host's `robots.txt`, and refused `https://example.com/` unsent.
+
+The same check passed on the first feature commit as run `20261011T164442Z-on-demand-24ff`.
+One attempt before it does not count: run `20261011T164318Z-on-demand-bc98`, from a throwaway clone under `/private/tmp`, passed the network proof the same way but failed, correctly, on the patch rejections (three of nine), because the agent shortened that clone's very long path in several of its file-tool attempts.
+
+The stories' Validation Tests were then run live through the launcher on demand, against Mandu and RepToday (`main` at `de0355d`) as they are, with a throwaway exchange folder standing in for Mandu's.
+
+| Run | What it showed |
+| --- | --- |
+| `20261011T164542Z-on-demand-3900` | The weekly run as configured: three requests left the Mac, each a GET for a listed host's `robots.txt`, and all 21 source requests (the three subreddits' threads and rules, reviews of the 12 competitors the research cites a store page for, and the three creators' feeds) were refused unsent, since each host's `robots.txt` disallows the path. Every source was reported as failed with that reason, one notice named them, Listening and the outreach Drafts were marked incomplete, and the agent recorded nothing from memory. Two creator messages were queued, each saying "No hook found" and why; the personal-network ask and the third creator message were blocked, on a front matter value and on a code citation. |
+| `20261011T165257Z-on-demand-9bb9` | A proposed Angle with no source, placed in `workspace/review-queue/angles/`, with a throwaway task definition that only runs `check-work`: the launcher discarded it with a note in the run report, set it aside, and queued nothing from it. |
+| `20261011T165333Z-on-demand-9de5` | Simulated records: both creator messages approved, one recorded as sent with no reply, one as sent and answered, and two proposals rejected with reasons. One follow-up was queued, for the creator who had not replied; none was offered for the one who replied or the one never written to. Both reasons were coded, one execution and one strategy, and kept beside the Founder's words. |
+| `20261011T165657Z-on-demand-9a05` | The personal-network ask was queued with the Source link `reptoday.app/network`, the line to forward, and the warning not to send before the Waitlist is live, and the third creator message was queued. Follow-up Drafts placed for the creator who replied and the one not yet approved were not offered. The strategy reason was answered by a package-change proposal citing its decision record, and `workspace/instructions/` was as it had been. |
+
+Across the four runs twelve requests left the Mac, all of them a GET for `robots.txt` on a listed host, 84 source requests were refused unsent, and no request carried a body, so nothing was posted anywhere.
+Mandu's and RepToday's HEAD, refs, git status, index, and every file digest were the same after the last check as before the first run.
+The two simulated send dates are earlier than the day their items were queued, which only a simulation can be.
+The three weekly runs cost between $0.018 and $0.033 each at API prices, and the check-only run $0.003.
+
+What these runs could not show is a real thread or review being read: no named source can be read under its host's `robots.txt` today, so no real quote was recorded, no reply Draft was offered, and no fetched text ever reached the model.
+The Evidence validator, the reply checks, and the handling of instructions planted in a fetched post are therefore shown only by the unit tests and the example sets, on synthetic fixtures (`src/tests/test_evidence.py`, `src/tests/test_work_cycle.py`, `src/examples/listening/`).
+How the named sources may be read is the Founder's decision, and nothing here reads a disallowed path.
+
 ## Scheduled and on-demand runs share one configuration
 
 The scheduled path was tested with a temporary LaunchAgent, `gr0wthlab.us-me02-schedule-test`, generated by `src/bin/gr0wthlab launch-agent --once <time> --label gr0wthlab.us-me02-schedule-test --instruction src/checks/boundary-probe.md`.
@@ -349,6 +393,7 @@ Records commits never touch code or Guardrail configuration, so G8 holds, and ea
   Codex's spawn path copies the parent's permission profile to a child (`codex-rs/core/src/agent/child_config.rs` at `rust-v0.160.0`), but turning sub-agents on still needs a fresh boundary check.
 - The Codex process itself runs outside the sandbox and writes its own state, logs, and login refresh to `CODEX_HOME` (`~/.codex`); `--ephemeral` keeps run sessions out of the Founder's history.
 - A Codex upgrade can change profile semantics; the per-run preflight fails closed, and the boundary check should be re-run after every upgrade.
+- The launcher's own network reads run outside the sandbox, as the launcher's other reads of Mandu and the Waitlist view do, so nothing in the sandbox bounds them: `fetch.py`, its contract tests, and the reviewed host list are the boundary, and the request log is the record.
 - A separate macOS user with no credentials would be a stronger boundary than unreadable credential files; nothing in v1 needs it.
 - Inside an area, the sandbox refuses a hard link to a file the run cannot read but allows a symbolic link to one.
   The launcher reads and commits files from `workspace/` outside the sandbox, so it never follows a link there: it opens agent-written files without following links, refuses any file with more than one link, and never commits a link.
@@ -357,11 +402,11 @@ Records commits never touch code or Guardrail configuration, so G8 holds, and ea
 ## Repeat the check
 
 The live check needs the Founder's Mac, the Codex login, and the real checkouts, so CI cannot run it; CI runs the launcher's and configuration's unit tests instead.
-Re-run it after any change to the launcher, `config/guardrails/runtime.json`, or `config/products.json`, and after every Codex upgrade:
+Re-run it after any change to the launcher, `config/guardrails/runtime.json`, `config/guardrails/fetch.json`, or `config/products.json`, and after every Codex upgrade:
 
 ```sh
 src/bin/gr0wthlab show-config      # the resolved command, environment, policy, and fingerprint
-src/bin/gr0wthlab preflight        # the per-run sandbox proof, with no model
+src/bin/gr0wthlab preflight        # the per-run sandbox proof of writes and network, with no model
 src/bin/gr0wthlab boundary-check   # the US-ME02 validation test, on demand
 ```
 
