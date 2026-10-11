@@ -1,0 +1,461 @@
+{
+ "adapted_from": "the evals.json shape of github.com/coreyhaines31/marketingskills skills/*/evals/evals.json at commit 1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff (MIT; see THIRD_PARTY_NOTICES.md)",
+ "skill_name": "beta-recruiting",
+ "description": "The Beta Cohort recruiting workflow's example set (US-ME15, F5), in the marketingskills evals.json shape: each example's prompt, the output expected, its assertions, and its files. A deterministic assertion is checked by the unit tests (src/tests/test_beta_examples.py); a judged assertion waits for US-ME16's re-run on every Instructions change. An example's first file is either a candidate Draft, checked against the synthetic package in files/mandu with the brand rules named below, or a scenario: a synthetic Beta Build record, Founder reports, and batches already queued, run against the Waitlist view in its second file.",
+ "package": "files/mandu",
+ "brand_rules": "../post-drafts/files/mandu/projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json",
+ "assertion_kinds": {
+  "deterministic": "check is one of: passes; blocked_by (rule: a finding's rule, or the start of one); not_blocked_by (rule); no_address_in_findings; nothing_before_approval; batch (action, entries in invitation order, good_fit); gap (size); asks_for (drafts); never_offered (entries); not_reported (counts); reported (count, value); recruiting_ended",
+  "judged": "text is a statement a reviewer, or a model at US-ME16, judges true or false of the agent's Draft"
+ },
+ "evals": [
+  {
+   "id": 1,
+   "prompt": "Write the Beta Cohort invitation the brief asks for.",
+   "expected_output": "An invitation that passes every check: no address and no link, each cited package line found in Mandu, the first session explained as recorded and 30 minutes long from the lines it cites, and the brand lint passed.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "passes"
+    },
+    {
+     "kind": "deterministic",
+     "check": "no_address_in_findings"
+    },
+    {
+     "kind": "judged",
+     "text": "The message is identity-framed: it speaks to who the person already is, and never to what they would lose."
+    },
+    {
+     "kind": "judged",
+     "text": "The message says nothing about what the app does or shows, so the first session still measures what a person sees without being told."
+    },
+    {
+     "kind": "judged",
+     "text": "The message says plainly what the person is asked to do and that the session is recorded, before asking them to reply."
+    }
+   ],
+   "files": [
+    "files/drafts/invitation-clean.md"
+   ]
+  },
+  {
+   "id": 2,
+   "prompt": "Run the weekly cycle on the seeded Waitlist view before the Founder has recorded a Beta Build approval.",
+   "expected_output": "Nothing: no entry is chosen, no Draft is asked for, no Evidence is written, the brief says nothing of recruiting, and the run report lists the approval as not recorded.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "nothing_before_approval"
+    }
+   ],
+   "files": [
+    "files/scenarios/before-approval.json",
+    "files/waitlist-view.json"
+   ]
+  },
+  {
+   "id": 3,
+   "prompt": "Write the Beta Cohort invitation the brief asks for.",
+   "expected_output": "A Draft that tells people to write to an address is blocked, the launcher removes the file, and no record repeats the address.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "blocked_by",
+     "rule": "no-address"
+    },
+    {
+     "kind": "deterministic",
+     "check": "no_address_in_findings"
+    }
+   ],
+   "files": [
+    "files/drafts/invitation-address.md"
+   ]
+  },
+  {
+   "id": 4,
+   "prompt": "Write the Beta Cohort invitation the brief asks for.",
+   "expected_output": "A Draft that says how many places are left is blocked: the figure is in no package line it cites, and the phrase is on the brand rules' fake-scarcity list.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "blocked_by",
+     "rule": "unbacked-number"
+    },
+    {
+     "kind": "deterministic",
+     "check": "blocked_by",
+     "rule": "fake_scarcity"
+    }
+   ],
+   "files": [
+    "files/drafts/invitation-spot-count.md"
+   ]
+  },
+  {
+   "id": 5,
+   "prompt": "Run the weekly cycle on the seeded Waitlist view once the Founder has recorded the approval; the batch size is 10.",
+   "expected_output": "One batch of every sign-up that asked for an invitation, good Fit first and then by sign-up date, never anyone who did not ask; and the pool is reported as 12 short of 20, with the Waitlist ask asked for.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "batch",
+     "action": "new",
+     "entries": [
+      "Qm7tLx2a",
+      "Ka0zMn2p",
+      "Xf9mKa3i",
+      "Jd2wGs6u",
+      "Lr6jFq5s",
+      "Ne5qTb1o",
+      "Wi7cJx4l",
+      "Hc8nRy4e"
+     ],
+     "good_fit": 5
+    },
+    {
+     "kind": "deterministic",
+     "check": "gap",
+     "size": 12
+    },
+    {
+     "kind": "deterministic",
+     "check": "asks_for",
+     "drafts": [
+      "beta-invitation",
+      "waitlist-ask"
+     ]
+    }
+   ],
+   "files": [
+    "files/scenarios/first-batch.json",
+    "files/waitlist-view.json"
+   ]
+  },
+  {
+   "id": 6,
+   "prompt": "Run the weekly cycle after the Founder approved batch 1 of two entries; the batch size is 2.",
+   "expected_output": "Batch 2 holds the next two entries in invitation order, and neither entry already invited is offered again.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "batch",
+     "action": "new",
+     "entries": [
+      "Xf9mKa3i",
+      "Jd2wGs6u"
+     ],
+     "good_fit": 2
+    },
+    {
+     "kind": "deterministic",
+     "check": "never_offered",
+     "entries": [
+      "Qm7tLx2a",
+      "Ka0zMn2p"
+     ]
+    }
+   ],
+   "files": [
+    "files/scenarios/already-invited.json",
+    "files/waitlist-view.json"
+   ]
+  },
+  {
+   "id": 7,
+   "prompt": "Take in the Founder's report of invitations sent and accepted, which leaves out the sessions booked.",
+   "expected_output": "The sessions booked are recorded as not reported, never as zero, in the Evidence and in what the Founder is told.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "not_reported",
+     "counts": [
+      "sessions_booked"
+     ]
+    },
+    {
+     "kind": "deterministic",
+     "check": "reported",
+     "count": "accepted",
+     "value": 1
+    }
+   ],
+   "files": [
+    "files/scenarios/count-not-reported.json",
+    "files/waitlist-view.json"
+   ]
+  },
+  {
+   "id": 8,
+   "prompt": "Run the weekly cycle after the Founder recorded a stop in Mandu, with an invitation still open.",
+   "expected_output": "No batch is offered, and the open invitation is withdrawn.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "batch",
+     "action": "none",
+     "entries": [],
+     "good_fit": 0
+    },
+    {
+     "kind": "deterministic",
+     "check": "recruiting_ended"
+    }
+   ],
+   "files": [
+    "files/scenarios/stopped.json",
+    "files/waitlist-view.json"
+   ]
+  },
+  {
+   "id": 9,
+   "prompt": "Run the weekly cycle after the Founder reported that 50 people accepted.",
+   "expected_output": "No batch is offered: the Beta Cohort reached its maximum.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "batch",
+     "action": "none",
+     "entries": [],
+     "good_fit": 0
+    },
+    {
+     "kind": "deterministic",
+     "check": "recruiting_ended"
+    }
+   ],
+   "files": [
+    "files/scenarios/cohort-full.json",
+    "files/waitlist-view.json"
+   ]
+  },
+  {
+   "id": 10,
+   "prompt": "Run the weekly cycle while the Founder has not yet decided batch 1.",
+   "expected_output": "Batch 1 stays open as it is, and no second batch is offered beside it.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "batch",
+     "action": "keep",
+     "entries": [
+      "Qm7tLx2a",
+      "Ka0zMn2p"
+     ],
+     "good_fit": 2
+    }
+   ],
+   "files": [
+    "files/scenarios/open-batch.json",
+    "files/waitlist-view.json"
+   ]
+  },
+  {
+   "id": 11,
+   "prompt": "Run the weekly cycle after a person in the open batch asked to be removed from the Waitlist.",
+   "expected_output": "The batch is made again without the entry that left, topped up with the next entry in invitation order.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "batch",
+     "action": "rebuild",
+     "entries": [
+      "Qm7tLx2a",
+      "Ka0zMn2p"
+     ],
+     "good_fit": 2
+    },
+    {
+     "kind": "deterministic",
+     "check": "never_offered",
+     "entries": [
+      "Gone0000"
+     ]
+    }
+   ],
+   "files": [
+    "files/scenarios/entry-left.json",
+    "files/waitlist-view.json"
+   ]
+  },
+  {
+   "id": 12,
+   "prompt": "Run the weekly cycle after the Founder rejected batch 1.",
+   "expected_output": "The rejected batch's entries are free again, so the next batch offers them in the same order.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "batch",
+     "action": "new",
+     "entries": [
+      "Qm7tLx2a",
+      "Ka0zMn2p"
+     ],
+     "good_fit": 2
+    }
+   ],
+   "files": [
+    "files/scenarios/rejected-batch.json",
+    "files/waitlist-view.json"
+   ]
+  },
+  {
+   "id": 13,
+   "prompt": "Write the Beta Cohort invitation the brief asks for.",
+   "expected_output": "A Draft that carries the install link is blocked: how the Founder invites is undecided, so an invitation carries no link.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "blocked_by",
+     "rule": "no-link"
+    }
+   ],
+   "files": [
+    "files/drafts/invitation-link.md"
+   ]
+  },
+  {
+   "id": 14,
+   "prompt": "Write the Beta Cohort invitation the brief asks for.",
+   "expected_output": "A Draft that does not say the first session is recorded is blocked.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "blocked_by",
+     "rule": "session-recorded"
+    }
+   ],
+   "files": [
+    "files/drafts/invitation-not-recorded.md"
+   ]
+  },
+  {
+   "id": 15,
+   "prompt": "Write the Beta Cohort invitation the brief asks for.",
+   "expected_output": "A Draft that does not say how many minutes the first session takes is blocked.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "blocked_by",
+     "rule": "session-length"
+    }
+   ],
+   "files": [
+    "files/drafts/invitation-no-length.md"
+   ]
+  },
+  {
+   "id": 16,
+   "prompt": "Write the Beta Cohort invitation the brief asks for.",
+   "expected_output": "A Draft whose quote is not on the package line it cites is blocked.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "blocked_by",
+     "rule": "source-quote"
+    }
+   ],
+   "files": [
+    "files/drafts/invitation-wrong-quote.md"
+   ]
+  },
+  {
+   "id": 17,
+   "prompt": "Write the Beta Cohort invitation the brief asks for.",
+   "expected_output": "A Draft that cites no line of the thesis's K8 files is blocked.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "blocked_by",
+     "rule": "k8-citation"
+    }
+   ],
+   "files": [
+    "files/drafts/invitation-no-k8.md"
+   ]
+  },
+  {
+   "id": 18,
+   "prompt": "Write the Beta Cohort invitation the brief asks for.",
+   "expected_output": "A Draft that cites a package file this workflow does not read is blocked.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "blocked_by",
+     "rule": "source-quote"
+    }
+   ],
+   "files": [
+    "files/drafts/invitation-outside-file.md"
+   ]
+  },
+  {
+   "id": 19,
+   "prompt": "Write the Beta Cohort invitation the brief asks for.",
+   "expected_output": "A Draft that uses a word the brand rules ban is blocked, naming the rule.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "blocked_by",
+     "rule": "banned_words_in_hook"
+    }
+   ],
+   "files": [
+    "files/drafts/invitation-banned-word.md"
+   ]
+  },
+  {
+   "id": 20,
+   "prompt": "Write the Beta Cohort invitation the brief asks for.",
+   "expected_output": "A Draft that says it is the last chance to take part is blocked by the brand rules' fake-scarcity list.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "blocked_by",
+     "rule": "fake_scarcity"
+    }
+   ],
+   "files": [
+    "files/drafts/invitation-fake-scarcity.md"
+   ]
+  },
+  {
+   "id": 21,
+   "prompt": "Write the Beta Cohort invitation the brief asks for.",
+   "expected_output": "A Draft may state the cohort's real size when it cites the package line that holds it; nothing is invented, so the number check passes.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "not_blocked_by",
+     "rule": "unbacked-number"
+    },
+    {
+     "kind": "judged",
+     "text": "Stating the cohort's size does not read as pressure to answer quickly."
+    }
+   ],
+   "files": [
+    "files/drafts/invitation-cohort-size.md"
+   ]
+  },
+  {
+   "id": 22,
+   "prompt": "Write the Waitlist ask the brief asks for, since the pool cannot fill the cohort.",
+   "expected_output": "A message for people who have not signed up that passes every check, with no address, no link, and no figure of its own.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "passes"
+    },
+    {
+     "kind": "judged",
+     "text": "The ask is identity-framed and names one thing to do: join the Waitlist and ask for a beta invitation."
+    }
+   ],
+   "files": [
+    "files/drafts/waitlist-ask-clean.md"
+   ]
+  }
+ ]
+}

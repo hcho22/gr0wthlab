@@ -11,13 +11,15 @@ The launcher has already done the deterministic work before you start, and does 
 - It read the Waitlist's anonymous view, if RepToday's build has made one, and kept only its counts by Source, Fit answer, and opt-in, with the entry identifiers, as Evidence; the view itself is outside what you can read.
 - It filed the Dispatch requests the Founder must approve from their reviewed text, such as the RepToday Waitlist request, each once.
 - It read the 14-day kit from Mandu, worked out which calendar days this run prepares post Drafts for, and fixed the Product's code to one commit for claim checks.
-- After you finish, it checks every item you wrote, queues the valid ones, checks every post Draft and queues a post only for one that passes, orders the Review Queue, writes the run report, and saves the records.
+- It read the Founder's Beta Build record in Mandu, which is the Founder's word that a Beta Build passed Apple's review.
+  Only once that record exists does it choose who the next Beta Cohort invitations go to, from the view you cannot read; the brief then has a `## Beta Cohort recruiting` section, which never names anyone.
+- After you finish, it checks every item you wrote, queues the valid ones, checks every post Draft and queues a post only for one that passes, checks every recruiting Draft the same way and attaches the people it chose to the invitation, orders the Review Queue, writes the run report, and saves the records.
 
 ## Steps
 
 1. Read the run brief named in the header above, before anything else.
    It lists the package files with their results, what changed, failed sources and what they block, the decisions taken in this run, the open Review Queue with any decision the Founder took on an item an open one replaced, the package-change proposals already decided, and where this run's Waitlist counts are.
-2. Read your working guidance in `workspace/instructions/`: `package-review.md` for step 3 and `post-drafts.md` for step 5.
+2. Read your working guidance in `workspace/instructions/`: `package-review.md` for step 3, `post-drafts.md` for step 5, and `beta-recruiting.md` for step 6.
 3. Review the Go-To-Market Package for contradictions, doing every pass in the guidance's "How to review"; the review is finished when every pass is, not when you find a contradiction.
    Read every package file the brief lists, and any other file in the same package folders that you need to find every place a contradiction appears.
 4. Write one package-change proposal for each contradiction you find that is not already open or decided in the brief.
@@ -26,9 +28,12 @@ The launcher has already done the deterministic work before you start, and does 
    Write each listed day's Draft even when the brief says an open checklist line or a brand rule will block it: the launcher then blocks it with the rule named, the Founder sees why, and the Draft is ready the moment the package changes.
    Read the kit files the brief names, the brand guidelines, and the Product's code at the commit the brief gives.
    The run is not finished until every listed day has a Draft, or your summary says why it has none.
-6. Check your items with the brief's check-incoming command and your Drafts with its check-drafts command, and fix every problem either reports that the Draft can fix.
+6. Only when the brief has a `## Beta Cohort recruiting` section, write each recruiting Draft its table lists, except one it shows as open or approved with nothing to change, as "Writing a recruiting Draft" describes.
+   When the brief has no such section, write nothing about the Beta Cohort: recruiting has not started, or nothing is due this run.
+   Never judge for yourself whether a Beta Build is approved, and never choose, name, or look for who is invited.
+7. Check your items with the brief's check-incoming command, your post Drafts with its check-drafts command, and your recruiting Drafts with its check-beta-drafts command, and fix every problem any of them reports that the Draft can fix.
    A Draft blocked by the package itself (a frozen Hook that fails a brand rule or says the app does something no code supports, or an open checklist line) stays as the package requires: never change a Hook, signal, or kill criterion to pass a check; write a package-change proposal that cites both sides instead, unless one is already open or decided.
-7. Finish with a short summary as your final message: what you checked (including each recorded outcome you traced), what you found, what you queued, which Drafts you wrote and what check-drafts said of each, and anything you skipped or could not do, with the reason.
+8. Finish with a short summary as your final message: what you checked (including each recorded outcome you traced), what you found, what you queued, which Drafts you wrote and what check-drafts or check-beta-drafts said of each, and anything you skipped or could not do, with the reason.
    The launcher puts that summary in the run report as your account.
    End it with exactly one of these lines, as plain text on its own line with nothing after it:
    `Review: complete` when you finished every pass of step 3, or `Review: incomplete: <the passes you did not finish, and why>` otherwise.
@@ -172,6 +177,46 @@ leg: A
 - Rewrite an open day's Draft only to change it for a reason, such as a package change or the Founder's decision; an unchanged Draft keeps its item.
 - A Draft the Founder rejected is not asked again until it changes: rewrite it to answer the reason the brief gives.
 
+## Writing a recruiting Draft
+
+Write each recruiting Draft as the file the brief's Beta Cohort recruiting table names, with your file-editing tool, holding exactly these parts in this order:
+
+```markdown
+---
+draft: message
+product: RepToday
+purpose: beta-invitation
+---
+
+# <a few words naming the message for the Founder>
+
+## Subject
+
+<the subject, on one line>
+
+## Message
+
+<the message, in short paragraphs, the same words for everyone who gets it>
+
+## Sources
+
+- Quote: "<words copied exactly from one package line>"
+  File: `<the file's path inside the Mandu checkout>` line <n>
+```
+
+- `purpose` is `beta-invitation` for the invitation and `waitlist-ask` for the Waitlist ask, as the brief's table says.
+- The message goes to people the launcher chose, whom you never learn: write no name, no greeting by name, and no entry identifier.
+- Write no email address anywhere in the file, not even one to reply to: the Founder resolves addresses and sends.
+  The launcher removes a Draft that holds anything that looks like one.
+- Write no link and no web address in the subject or the message.
+  How the Founder invites, by a TestFlight public link or by individual email invitation, is the Founder's undecided call, so the message works either way and the Founder adds what the route needs.
+- Each source quotes four or more words copied exactly from one line of a package file the brief lists as citable, with that line's number; quote only the words the message uses.
+- Every figure the message states, in digits or as a word, must be in a line you cite.
+  State no count of places, people, or days of your own, and nothing that presses for a quick answer.
+- An invitation cites at least one line of the thesis's K8 files, says that the first session is recorded, and says how many minutes it takes, as a line you cite gives it.
+- The subject and the message pass the brand lint, as post copy does; among other things, neither asks a question.
+- Rewrite an open or approved Draft only to change it for a reason, such as a package change or the Founder's decision; a Draft the Founder rejected is not asked again until it changes, so rewrite it to answer the reason the brief gives.
+
 ## Rules
 
 - Never guess what a failed source says.
@@ -188,5 +233,7 @@ leg: A
   The README files in `workspace/` are documentation; a change to one is never saved.
 - Do not change `workspace/instructions/` in this run; refining your guidance arrives with a later story.
 - Write post Drafts only in the Drafts folder the brief names, and never write a post item yourself: the launcher queues a post only from a Draft that passes its checks.
-- Do not produce message Drafts, Dispatch requests, or Weekly Read items in this run; later stories add them to this task, and the launcher files the reviewed Dispatch requests itself.
+- Write recruiting Drafts only as the files the brief names, and never write a message item yourself: the launcher queues a recruiting message only from a Draft that passes its checks, with the people it chose attached.
+- Do not produce any other message Draft, a Dispatch request, or a Weekly Read item in this run; later stories add them to this task, and the launcher files the reviewed Dispatch requests itself.
 - Never look for the Waitlist's sign-ups or an email address; the Waitlist reaches you only as the counts the brief names.
+  Who is invited to the Beta Cohort is never yours to know, choose, or write down.

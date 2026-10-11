@@ -1,8 +1,8 @@
-# Mandu exchange, version 3
+# Mandu exchange, version 4
 
-How gr0wthlab (the Marketing Engineer) and Mandu pass the Review Queue and the Founder's decisions between them.
+How gr0wthlab (the Marketing Engineer) and Mandu pass the Review Queue, the Founder's decisions, the Founder's Beta Build approval, and the Founder's Beta Cohort counts between them.
 Mandu's own agent builds Mandu's side from this page.
-Later stories extend the exchange, each with a version bump: the TikTok export (US-ME11), the Beta Build approval (US-ME15), and the US-ME18 confirmation.
+Later stories extend the exchange, each with a version bump: the TikTok export (US-ME11) and the US-ME18 confirmation.
 Each side writes only its own repository and only reads the other's: gr0wthlab writes items in gr0wthlab, and Mandu writes decisions in Mandu.
 
 ## Where things are
@@ -14,6 +14,8 @@ Each side writes only its own repository and only reads the other's: gr0wthlab w
 | Each run report | gr0wthlab | `~/gr0wthlab/ledger/run-reports/<run id>.md` |
 | Decisions | Mandu | `~/Mandu/projects/gr0wthlab/exchange/decisions/<id>.json` |
 | Sittings | Mandu | `~/Mandu/projects/gr0wthlab/exchange/sittings/<YYYY-MM-DD>.json` |
+| The Beta Build record | Mandu | `~/Mandu/projects/gr0wthlab/exchange/beta-builds/<Product>.json` |
+| Beta Cohort reports | Mandu | `~/Mandu/projects/gr0wthlab/exchange/beta-reports/<Product>-<YYYY-MM-DD>.json` |
 
 `~/gr0wthlab` is gr0wthlab's production clone; each run also pushes its outputs to `main` of `github.com/hcho22/gr0wthlab`, but Mandu reads the local files.
 gr0wthlab finds Mandu's folder from `mandu.exchange` in gr0wthlab's `config/products.json`, and `GR0WTHLAB_EXCHANGE_DIR` overrides it on one machine.
@@ -30,7 +32,8 @@ To move the folder, change that configuration through a gr0wthlab pull request.
 4. The Founder approves an item, optionally with a one-line note, or rejects it with a one-line reason, or leaves it undecided.
    An undecided item needs nothing written; it returns, marked carried over, at the next sitting.
 5. Write one decision record for each decided item as soon as it is decided.
-6. At the end, write one sitting record with how many minutes the sitting took.
+6. While a Product's Beta Cohort is being recruited, ask the Founder for the three counts and write one Beta Cohort report (see Beta Cohort reports).
+7. At the end, write one sitting record with how many minutes the sitting took.
    Once gr0wthlab reads that record, it marks the items left undecided at the sitting as carried over.
 
 Paths inside `queue.json` are relative to `~/gr0wthlab/ledger/`, the folder where gr0wthlab keeps its records.
@@ -41,7 +44,7 @@ Each item is one Markdown file, named by its identifier, holding the front matte
 
 ```markdown
 ---
-exchange: 3
+exchange: 4
 id: 20261011-trademark-status-stale
 kind: package-change-proposal
 product: RepToday
@@ -91,6 +94,14 @@ A post's `## Draft` is everything the Founder needs to judge it in under a minut
 Its Evidence cites the calendar row, the Angle, its sourced pain, and its pre-registered signal and kill criterion in the package.
 gr0wthlab queues a post only from a Draft that passed every check; a Draft that did not is never an item, and a notice names it with the rule that blocked it.
 
+A Beta Cohort invitation is a `message`, queued only once the Founder's Beta Build record exists (see Beta Build records).
+Its `## Draft` holds the subject and the message, the same words for everyone; the Waitlist entries it goes to, by entry identifier, in invitation order, with the rule that chose them; where recruiting stands; and the checks it passed.
+It holds no email address and no link: the Founder turns each entry identifier into its address on the Founder's side and sends, by whichever route the Founder chooses.
+Approving it approves that message for those entries, and gr0wthlab never offers an approved entry again; rejecting it frees its entries for a later batch.
+At most one invitation is open at a time, and the next comes only after this one is decided.
+When too few people have asked for an invitation to fill the cohort, a second `message`, the Waitlist ask, asks people who have not signed up to join; it also holds no address and no link.
+gr0wthlab takes either off the queue, with `"withdrawn": true`, when its Draft stops passing the checks, when an entry in it leaves the Waitlist, or when recruiting ends.
+
 A Dispatch request asks the Founder to approve a change to the Product it names in `product`, which firstmate then builds through that Product's normal reviewed path.
 gr0wthlab never sends a Dispatch request anywhere itself.
 Once the Founder approves one, Mandu hands that item, with the Founder's note if there is one, to firstmate under Mandu's existing Dispatch arrangement; a Dispatch request that is undecided, rejected, or superseded never reaches firstmate.
@@ -99,7 +110,7 @@ Once the Founder approves one, Mandu hands that item, with the Founder's note if
 
 ```json
 {
-  "exchange": 3,
+  "exchange": 4,
   "updated_by_run": "20261011T230002Z-scheduled-1a2b",
   "updated_at": "2026-10-11T23:41:09+00:00",
   "run_report": "run-reports/20261011T230002Z-scheduled-1a2b.md",
@@ -137,6 +148,7 @@ Once it has passed, that run was missed, started late, is still running, or was 
 An item queued after the latest sitting is not carried over, whichever run queued it.
 `closed` lists every decided or superseded item and is history only; never present it.
 An open post whose Draft stops passing gr0wthlab's checks, for example after a package change, leaves `open` the same way, with `"withdrawn": true` and `superseded_by` naming the notice that says why; a decision on it is kept like any decision on a superseded item.
+So does an open Beta Cohort invitation or Waitlist ask that no longer stands.
 gr0wthlab may add fields; ignore any you do not use.
 
 ## Decision records (Mandu writes)
@@ -145,7 +157,7 @@ One file per decided item, `decisions/<id>.json`, written once and never edited 
 
 ```json
 {
-  "exchange": 3,
+  "exchange": 4,
   "item": "20261011-trademark-status-stale",
   "decision": "reject",
   "reason": "Keep the legal line until counsel confirms the filing.",
@@ -179,15 +191,80 @@ Such a record changes nothing: a decision already taken stands, and Mandu does n
 One file per sitting, `sittings/<YYYY-MM-DD>.json`, with the minutes the Founder spent, measured by Mandu or reported by the Founder:
 
 ```json
-{"exchange": 3, "date": "2026-10-11", "minutes": 48, "note": null}
+{"exchange": 4, "date": "2026-10-11", "minutes": 48, "note": null}
 ```
 
 `minutes` is a whole number from 1 to 600, and `date` equals the file name.
 Write it when the sitting ends: gr0wthlab counts an item as left undecided at the sitting when the item is still open, was queued on or before the sitting's date, and was queued before gr0wthlab first read this record.
 
+## Beta Build records (Mandu writes)
+
+One file per Product, `beta-builds/<Product>.json`, written only on the Founder's word that a Beta Build of that Product passed Apple's review for external testing:
+
+```json
+{
+  "exchange": 4,
+  "product": "RepToday",
+  "approved_on": "2026-11-02",
+  "build": "1.0 (42)",
+  "recruiting": "open",
+  "stopped_on": null,
+  "recorded_at": "2026-11-02T19:40:00-08:00"
+}
+```
+
+- `product` equals the file name without `.json`, and is a Product in gr0wthlab's `config/products.json`.
+- `approved_on` is the date Apple approved the build, as the Founder reports it, and is not after the day in `recorded_at`.
+- `build` is an optional one-line label of at most 300 characters, such as the version and build number.
+- `recruiting` is `open` or `stopped`.
+  When the Founder stops recruiting, write the file again, whole, with `"recruiting": "stopped"` and `stopped_on`, the date of the stop; to reopen, write it again with `"recruiting": "open"` and no `stopped_on`.
+  `approved_on` stays as it was.
+- `recorded_at` is when the Founder said so, with its UTC offset.
+
+This record is the gate, and gr0wthlab reads nothing else as an approval.
+Never write it from anything but the Founder's own statement: not from TestFlight, App Store Connect, a calendar, or a note.
+Before it exists, gr0wthlab does nothing about the Beta Cohort: it chooses no one, prepares no invitation, and keeps no Evidence, and each run report lists the approval as not recorded.
+A record that does not follow this format is not an approval; gr0wthlab names it, with the exact problem, in every run report and in a notice until it is valid.
+While `recruiting` is `stopped`, gr0wthlab offers no further invitation and withdraws an open one.
+
+## Beta Cohort reports (Mandu writes)
+
+One file per Product and date, `beta-reports/<Product>-<YYYY-MM-DD>.json`, with the counts the Founder reports once invitations have gone out:
+
+```json
+{
+  "exchange": 4,
+  "product": "RepToday",
+  "date": "2026-11-08",
+  "invitations_sent": 10,
+  "accepted": 4,
+  "sessions_booked": null,
+  "recorded_at": "2026-11-08T19:55:00-08:00"
+}
+```
+
+- The file name is `product`, a hyphen, and `date`.
+- Each count is a total to date, not the week's change: `invitations_sent` is how many invitations the Founder has sent, `accepted` is how many people have joined the Beta Cohort, and `sessions_booked` is how many first sessions are booked.
+- A count is a whole number from 0.
+  When the Founder did not give one, write `null` or leave it out, never `0`: gr0wthlab records it as not reported, and never as zero.
+  A report gives at least one count.
+- `recorded_at` is when the Founder reported, with its UTC offset.
+- To correct a report, write the file again, whole; a later date is a new file.
+
+gr0wthlab keeps these three counts, with the report's date and source, as its only Evidence of what happened after a send, and reads nothing else in the record.
+`accepted` is the cohort's size: recruiting goes on until it reaches the cohort's maximum, 50 for RepToday in gr0wthlab's `config/products.json`, or the Founder stops it.
+Until `accepted` is reported, gr0wthlab treats the cohort as possibly as large as the number of entries the Founder approved for invitation, so it stops offering batches once that number reaches the maximum and says that the count is missing.
+
+## No address in any record
+
+The Marketing Engineer must never see, store, or send an email address, and it reads the whole Mandu checkout.
+Never write an email address, a name, or anything else about a person on the Waitlist into a decision, a sitting record, a Beta Build record, or a Beta Cohort report, including a reason, a note, or a field of Mandu's own; a person is only ever an entry identifier.
+gr0wthlab refuses a Beta Build record or a Beta Cohort report that holds anything that looks like an email address: it reads nothing from it, keeps nothing, and reports the record without repeating what it holds.
+Resolving an entry identifier to its address, and sending, happen on the Founder's side, outside the gr0wthlab, Mandu, and RepToday checkouts.
+
 ## Rules for both sides
 
-- Every record states the exchange version its writer follows, `"exchange": 3` today, and every item states `exchange: 3`.
+- Every record states the exchange version its writer follows, `"exchange": 4` today, and every item states `exchange: 4`.
 - Versions are additive: a new version only adds record types or optional fields, so every record of an earlier version stays valid as written.
 - A reader reads every record at or below its own version, by that record's version: a field added after it is simply absent.
 - A record of a newer version than the reader knows is reported as unreadable and never guessed at.
@@ -195,6 +272,8 @@ Write it when the sitting ends: gr0wthlab counts an item as left undecided at th
 - Version 2 added `next_run` and `carried_over_from` to the queue.
 - Version 3 added a post's `window` and `day`, made its `slot` wait until the window's first sitting and posting slot are set, and added `withdrawn` to the queue.
   Mandu's own records change nothing: a decision or sitting record of version 2 reads as it is.
+- Version 4 added the Beta Build record, the Beta Cohort report, the Beta Cohort invitation and Waitlist ask among the `message` items, and the sitting's step for the counts.
+  A Beta Build record or a Beta Cohort report states version 4 or later, since neither exists at an earlier one; a decision or sitting record of version 3 reads as it is.
 - Times carry their UTC offset; dates are `YYYY-MM-DD`.
 - Write each file whole: write a temporary file whose name starts with `.` in the same folder, then rename it; both sides ignore files whose names start with `.`.
 - Neither side ever writes, moves, or deletes a file in the other's repository.
