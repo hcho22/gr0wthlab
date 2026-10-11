@@ -5,7 +5,6 @@ purpose: creator
 to: slow-strength
 angle: P03
 offer: paid-review
-work: none
 ---
 
 # A short hello

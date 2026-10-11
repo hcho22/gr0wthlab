@@ -20,8 +20,12 @@
   "outreach": {
     "network_ask_source": "network",
     "follow_up_wait_days": 7,
-    "max_message_words": 150,
-    "why": "The personal-network ask carries the link of the Source tagged network_ask_source, exactly as the reviewed Waitlist Dispatch request in src/dispatches/ defines it; null prepares no ask. A creator who has not replied may be offered one follow-up follow_up_wait_days after the Founder records the first message as sent in Mandu: each creator message states that period, approving it approves the period, and the Founder's record may set another. A message Draft over max_message_words is blocked. Which creators are written to is in config/sources.json, and only those the channel plan in Mandu still names."
+    "creators": [
+      {"key": "gmb-fitness", "name": "GMB Fitness"},
+      {"key": "hybrid-calisthenics", "name": "Hybrid Calisthenics"},
+      {"key": "the-bioneer", "name": "The Bioneer"}
+    ],
+    "why": "The personal-network ask carries the link of the Source tagged network_ask_source, exactly as the reviewed Waitlist Dispatch request in src/dispatches/ defines it; null prepares no ask. creators are the three the PRD names, each with the key its Draft file and its Review Queue items are named for; a run drafts a message only for one the channel plan in Mandu still names (the Product registry's outreach.channel_plan). A creator who has not replied may be offered one follow-up follow_up_wait_days after the Founder records the first message as sent in Mandu: each creator message states that period, approving it approves the period, and the Founder's record may set another."
   },
   "records": {
     "production_clone": "~/gr0wthlab",

@@ -389,10 +389,11 @@ gr0wthlab's side is in place, with the request filed from `src/dispatches/reptod
 **Acceptance Criteria:**
 
 - [ ] Each run reads, without posting, r/fitness30plus, r/bodyweightfitness, r/getdisciplined, and recent App Store reviews of the competitors named in the package's research.
-  Waiting on the Founder: each run asks for these sources and reports every one, but each host's `robots.txt` disallows the path a credential-free reader would need, so none is requested until the Founder decides how they may be read.
+  The Founder decided on 2026-10-11 that each host's `robots.txt` is binding for now, while the owners' terms are read first-hand: each run asks for these sources and reports every one, but each host's `robots.txt` disallows the path a credential-free reader would need, so none is requested while that decision stands.
 - [ ] Each finding is Evidence with the verbatim quote, the link, and the date read.
   Waiting on a readable source: the Evidence record and its validator are in place and pass on synthetic fixtures, and no real finding exists yet.
-- [x] A proposed new Angle or Hook enters only as a package-change proposal that cites at least one sourced pain; anything without a source is discarded by the Marketing Engineer's own check.
+- [ ] A proposed new Angle or Hook enters only as a package-change proposal that cites at least one sourced pain; anything without a source is discarded by the Marketing Engineer's own check.
+  Waiting on the Validation Test: the check is in place and passes on synthetic fixtures, and a story's boxes flip only when its Validation Test passes, which needs a readable source.
 - [ ] Where RepToday genuinely answers a thread, the Marketing Engineer may draft a reply as a message Draft with no link of any kind, for the Founder to post personally.
   Waiting on a readable source: the reply Draft and its no-link check are in place, and no thread can be read yet.
 - [ ] Each subreddit's self-promotion rules are summarized for the Founder the first time it is used, and the Founder confirms before any reply Draft for that subreddit is offered.

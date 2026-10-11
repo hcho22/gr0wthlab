@@ -13,9 +13,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from . import exchange, learning, listening, outreach, package, posts, schedule, waitlist
+from .exchange import plural
+from .package import SKIPPED
 from .state import Tally, run_tally
 
-SKIPPED = "skipped"
 COMPLETE = "complete"
 INCOMPLETE = "incomplete"
 NOT_BUILT = "not built yet"
@@ -94,9 +95,7 @@ class RunState:
     posts_problem: str = ""  # why the post Drafts were not prepared or not taken in, when they were not
     filing: str = ""  # where the proposed brand-rules lists stand
     filed: str | None = None  # the brand-rules proposal, when this run filed it
-    snapshot_sources: str = (
-        ""  # this run's snapshot of the network sources, relative to ledger/; none when none is read
-    )
+    snapshot_sources: str = ""  # this run's working snapshot of the network sources, relative to ledger/
     requests_file: str = ""  # this run's request log, relative to ledger/
     listening: listening.Plan | None = None
     listening_result: listening.Result | None = None
@@ -258,10 +257,6 @@ def file_line(file: package.FileResult) -> str:
     }.get(str(file.change), "unchanged since the previous snapshot")
 
 
-def plural(count: int, noun: str) -> str:
-    return f"{count} {noun}" + ("" if count == 1 else "s")
-
-
 def package_changes(state: RunState) -> list[str]:
     if state.previous_snapshot is None:
         return ["First snapshot; there is no earlier run to compare with."]
@@ -417,7 +412,7 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
         )
     if state.outreach is not None or state.outreach_problem:
         lines += [""] + (
-            outreach.brief_lines(state.outreach, context, mandu, ledger, state.check_work)
+            outreach.brief_lines(state.outreach, context, mandu, state.check_work)
             if state.outreach is not None
             else ["## Outreach", "", f"Outreach was {state.outreach_problem}; write no outreach Draft this run."]
         )

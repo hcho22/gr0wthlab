@@ -5,7 +5,6 @@ purpose: creator-follow-up
 to: slow-strength
 angle: P03
 offer: early-access
-work: none
 ---
 
 # One last note

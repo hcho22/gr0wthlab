@@ -91,8 +91,8 @@ class DraftFormatTest(unittest.TestCase):
             with self.subTest(problem=problem):
                 self.assertTrue(any(problem in found for found in messages.parse(text, "x.md").problems))
         ask = messages.parse(fakes.message("network-ask", "network", fakes.NETWORK_BODY), "x.md")
-        self.assertEqual((ask.problems, ask.forward), ([], fakes.FORWARD))
-        self.assertEqual([copy.field for copy in ask.sent()], ["message", "line to forward"])
+        self.assertEqual(ask.problems, [])
+        self.assertEqual([(copy.field, copy.text) for copy in ask.sent()], [("message", fakes.NETWORK_BODY)])
 
     def test_a_queue_entry_names_its_message_and_a_slug_fits(self):
         target = messages.Target(messages.FOLLOW_UP, "a-very-long-creator-key-that-goes-on-and-on-and-on-and-on", "X")
@@ -105,7 +105,16 @@ class DraftFormatTest(unittest.TestCase):
 class OutreachSettingsTest(unittest.TestCase):
     def test_the_committed_settings_and_the_package_file_they_point_at(self):
         config = json.loads((fakes.REPO / "config" / "run.json").read_text(encoding="utf-8"))
-        self.assertEqual(outreach.settings(config), outreach.Settings("network", 7, 150))
+        loaded = outreach.settings(config)
+        self.assertEqual((loaded.network_source, loaded.wait_days), ("network", 7))
+        self.assertEqual(
+            [(creator.key, creator.name) for creator in loaded.creators],
+            [
+                ("gmb-fitness", "GMB Fitness"),
+                ("hybrid-calisthenics", "Hybrid Calisthenics"),
+                ("the-bioneer", "The Bioneer"),
+            ],
+        )
         registry = json.loads((fakes.REPO / "config" / "products.json").read_text(encoding="utf-8"))
         self.assertEqual(
             outreach.package_role(registry), ("RepToday", "projects/RepToday/gtm/06-channels/channel-plan.md")
@@ -115,13 +124,18 @@ class OutreachSettingsTest(unittest.TestCase):
         self.assertNotIn("Listening sources", [source["name"] for source in config["sources_not_connected"]])
 
     def test_settings_that_are_not_what_they_say_stop_the_run(self):
-        good = {"network_ask_source": None, "follow_up_wait_days": 7, "max_message_words": 150}
+        good = {"network_ask_source": None, "follow_up_wait_days": 7, "creators": fakes.creators()}
         self.assertIsNone(outreach.settings({"outreach": good}).network_source)
+        self.assertEqual(outreach.settings({"outreach": dict(good, creators=[])}).creators, ())
         for change in (
             {"follow_up_wait_days": 0},
             {"follow_up_wait_days": True},
-            {"max_message_words": 5},
             {"network_ask_source": 3},
+            {"creators": None},
+            {"creators": [{"key": "A B", "name": "A"}]},
+            {"creators": [{"key": "a"}]},
+            {"creators": ["a"]},
+            {"creators": fakes.creators() + fakes.creators()[:1]},
         ):
             with self.subTest(change=change), self.assertRaises(ConfigError):
                 outreach.settings({"outreach": dict(good, **change)})
@@ -194,13 +208,11 @@ class OutreachListsProposalTest(unittest.TestCase):
             rules.sponsorship(lint.Copy("message", "Early access is yours, with nothing asked in return.")), []
         )
 
-    def test_the_word_lists_live_in_mandu_and_in_no_launcher_code(self):
-        block = proposals.item_text(self.SOURCE.read_text(encoding="utf-8")).split("```json\n")[1].split("\n```")[0]
-        phrases = [phrase for values in json.loads(block).values() for phrase in values if " " in phrase]
-        for path in sorted((fakes.REPO / "src" / "gr0wthlab").glob("*.py")) + [fakes.REPO / "config" / "run.json"]:
-            text = path.read_text(encoding="utf-8").casefold()
-            for phrase in phrases:
-                self.assertNotIn(phrase, text, f"{phrase!r} in {path.name}")
+    def test_without_the_lists_from_mandu_the_lint_knows_none_of_their_phrases(self):
+        bare = lint.Rules({})
+        self.assertEqual(bare.check([lint.Copy("message", "Don’t break your streak, you’ll regret it.")]), [])
+        self.assertEqual(bare.sponsorship(lint.Copy("message", "Send me your rate card.")), [])
+        self.assertEqual(bare.pending()[-1:] + bare.creator_pending(), ["loss framing", "sponsorship asks"])
 
     def test_a_post_is_not_read_for_sponsorship_asks_and_says_so(self):
         rules = lint.Rules({"sponsorship_asks": ["sponsor"], "loss_framing": ["falling behind"]})

@@ -31,7 +31,7 @@ ITEMS = "items"
 SET_ASIDE = "set-aside"
 QUEUE_FILE = "queue.json"
 MAX_SLUG = 60
-# An ask that proposes a new Angle or Hook: it enters only through review-queue/angles/, with its sourced pain.
+# An ask that adds an Angle or Hook, whatever files its proposal says it touches.
 NEW_ANGLE = re.compile(r"\b(?:new|add(?:s|ing)?)\s+(?:an?\s+|the\s+)?(?:angle|hook)s?\b", re.IGNORECASE)
 
 
@@ -53,6 +53,23 @@ class SetAside:
     name: str
     moved_to: str
     problems: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SourcedPain:
+    """What tells a proposed Angle or Hook from any other package change, and what one must cite: the kit files a run
+    reads Angles and frozen Hooks from, as paths in Mandu, and the record of each Listening quote the launcher keeps,
+    as a path in ledger/."""
+
+    files: tuple[str, ...] = ()
+    records: tuple[str, ...] = ()
+
+    def missing(self, item: exchange.Item) -> bool:
+        """Whether a proposal is for an Angle or Hook and cites no kept quote. Any change to a Hook, signal, or kill
+        criterion is a new Angle (FR-7), so a proposal that touches one of those files is one, as is an ask that
+        adds one."""
+        proposes = NEW_ANGLE.search(item.ask) or any(path in item.touches for path in self.files)
+        return bool(proposes) and not any(record in item.evidence for record in self.records)
 
 
 def slug_of(name: str) -> str:
@@ -176,11 +193,13 @@ class Ledger:
         run_id: str,
         now: datetime,
         seen: dict[str, str] | None = None,
+        sourced: SourcedPain | None = None,
     ) -> tuple[list[str], list[SetAside]]:
         """Queue every valid item the agent wrote to incoming/; set every other file aside with its problems.
 
         seen maps each queued item's fingerprint to its identifier; an item that asks the same thing as one already
-        open or decided is set aside, so nothing decided is ever asked again under another name.
+        open or decided is set aside, so nothing decided is ever asked again under another name. sourced says which
+        proposals are for an Angle or Hook, and which Listening quotes one may rest on.
         """
         seen = {} if seen is None else seen
         incoming = areas.path("review_queue", INCOMING)
@@ -190,7 +209,7 @@ class Ledger:
         superseding: list[tuple[str, str]] = []
         for path in list(areas.files(incoming)):
             name = areas.relative(path)[len("review-queue/incoming/") :]
-            item, problems = self.check_incoming(path, name, products, seen)
+            item, problems = self.check_incoming(path, name, products, seen, sourced)
             if item is None:
                 set_aside.append(self.set_aside(areas, store, path, name, run_id, problems))
                 continue
@@ -212,11 +231,16 @@ class Ledger:
         return published, set_aside
 
     def check_incoming(
-        self, path: Path, name: str, products: Sequence[str], seen: Mapping[str, str]
+        self,
+        path: Path,
+        name: str,
+        products: Sequence[str],
+        seen: Mapping[str, str],
+        sourced: SourcedPain | None = None,
     ) -> tuple[exchange.Item | None, list[str]]:
         """Every rule a file in incoming/ must pass to be queued, for the launcher and the agent's own check alike:
-        its name, the item format, an open item to supersede that the launcher neither filed from reviewed text nor
-        queued from a Draft, and no repeat of an item queued or decided.
+        its name, the item format, sourced pain behind a proposed Angle or Hook, an open item to supersede that the
+        launcher neither filed from reviewed text nor queued from a Draft, and no repeat of an item queued or decided.
 
         name is the file's path inside incoming/; seen maps each queued item's fingerprint to its identifier.
         The item comes back only when there is no problem.
@@ -243,10 +267,13 @@ class Ledger:
                 "a message is queued only from its Draft in drafts/messages/, after the launcher's checks; never"
                 " write one here"
             )
-        if item.kind == "package-change-proposal" and NEW_ANGLE.search(item.ask):
+        if item.kind == "package-change-proposal" and (sourced or SourcedPain()).missing(item):
             problems.append(
-                "a new Angle or Hook is proposed only as a file in review-queue/angles/, citing its sourced pain;"
-                " never here"
+                "it proposes an Angle or Hook, since it touches the Angle bank or the A/B pairs file or its ask adds"
+                " one, and any change to a Hook, signal, or kill criterion is a new Angle (FR-7), which needs sourced"
+                " pain: add an Evidence line citing a Listening quote the launcher already keeps, as"
+                " `evidence/listening/quotes/<document id>.json`, or propose it in review-queue/angles/ with this"
+                " run's quotes under ## Sourced pain"
             )
         target = item.fields.get("supersedes")
         replaced = self.entries.get(target, {}) if target else {}

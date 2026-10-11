@@ -5,23 +5,23 @@ The agent writes each Draft under workspace/drafts/messages/. The launcher, outs
 message item only for one that passes, so a message reaches the Review Queue no other way (FR-1, FR-6):
 
 - every message cites an Angle in the bank, passes the brand lint, whose one rule source is Mandu's brand-rules.json,
-  names no competitor, stays under its word limit, shows the code behind each behavioral claim it lists, and holds
-  nothing that looks like an email address (Guardrail G6);
+  shows the code behind each behavioral claim it lists, and holds nothing that looks like an email address
+  (Guardrail G6);
 - a reply answers a thread whose quote the launcher validated and whose Evidence says the Product answers it, in a
   subreddit whose rules the Founder confirmed, and carries no link of any kind;
 - a personal-network ask carries the personal-network Source link exactly as the Waitlist Dispatch request defines
-  it, no other link, and a short line a friend can forward;
-- a message to a creator offers one of the three things the plan allows, asks for nothing paid, and cites a piece of
-  their work only if the launcher read it this run; "no hook found" is said plainly when it did not.
+  it, and no other link;
+- a message to a creator offers one of the three things the plan allows and asks for nothing paid.
 
-Whether the words are right is judgment: the agent's first, then the Founder's.
+Whether the words are right, how long a message runs, and whether an ask ends on a line a friend could forward are
+judgment: the agent's first, then the Founder's.
 """
 
 from __future__ import annotations
 
 import hashlib
 import re
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -30,14 +30,15 @@ from . import dispatch, evidence, exchange
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .drafts import BLOCKS, DONE, OPEN, ChecklistLine, Claim, ClaimResult, Context, Verdict, claim_pattern, none
 from .drafts import parse_claims as parse_claim_items
+from .exchange import plural, quoted
 from .lint import APPLIED, Copy, snippet
 from .queue import APPROVED, REJECTED, SUPERSEDED, Ledger
 from .queue import OPEN as OPEN_ITEM
-from .sources import Document, link_key
 from .waitlist import looks_like_address
 
 DRAFTS = ("messages",)
-FRONT_KEYS = ("draft", "product", "purpose", "to", "angle", "offer", "work")
+FRONT_KEYS = ("draft", "product", "purpose", "to", "angle", "offer")
+SECTIONS = ("Message", "Notes", "Claims")
 REPLY = "reply"
 NETWORK = "network-ask"
 CREATOR = "creator"
@@ -47,7 +48,6 @@ TO_CREATOR = (CREATOR, FOLLOW_UP)
 # The three things the plan lets a message to a creator offer, as US-ME14 names them; never a sponsorship.
 OFFERS = ("early-access", "founder-conversation", "story-material")
 OFFER_WORDS = dict(zip(OFFERS, ("early access", "a founder conversation", "story material")))
-MAX_FORWARD_WORDS = 30
 MAX_NOTES = 600
 
 # What became of a message this run.
@@ -73,10 +73,6 @@ MENTION = re.compile(r"(?<![\w/])[ru]/[A-Za-z0-9_-]{2,}")
 
 # A Source link as the Waitlist Dispatch request writes it: `site/tag`, in backticks.
 SOURCE_LINK = re.compile(r"`((?:[a-z0-9-]+\.)+[a-z]{2,}/([a-z0-9-]+))`")
-
-
-def plural(count: int, noun: str) -> str:
-    return evidence.plural(count, noun)
 
 
 def source_links(repo_root: Path, products: Sequence[str], tags: Sequence[str]) -> dict[str, tuple[str, str]]:
@@ -116,7 +112,6 @@ class MessageDraft:
     fields: dict[str, str] = field(default_factory=dict)
     title: str = ""
     message: str = ""
-    forward: str = ""
     notes: str = ""
     claims: list[Claim] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
@@ -135,12 +130,7 @@ class MessageDraft:
 
     def sent(self) -> list[Copy]:
         """What the person on the other side would read, named as the Founder sees it."""
-        copies = [Copy("message", self.message)]
-        return copies + ([Copy("line to forward", self.forward)] if self.forward.strip() else [])
-
-
-def wanted_sections(purpose: str) -> tuple[str, ...]:
-    return ("Message", "Forward", "Notes", "Claims") if purpose == NETWORK else ("Message", "Notes", "Claims")
+        return [Copy("message", self.message)]
 
 
 def parse(text: str, path: str) -> MessageDraft:
@@ -164,9 +154,8 @@ def parse(text: str, path: str) -> MessageDraft:
         problems.append("the Draft needs exactly one # title line")
     else:
         draft.title = titles[0][2:].strip()
-    content = evidence.sections(body, wanted_sections(draft.purpose), problems)
+    content = evidence.sections(body, SECTIONS, problems)
     draft.message = content.get("Message", "")
-    draft.forward = content.get("Forward", "")
     draft.notes = "" if none(content.get("Notes", "")) else content.get("Notes", "")
     claims = content.get("Claims", "")
     if not none(claims):
@@ -205,8 +194,6 @@ class Target:
     quote: evidence.Quote | None = None  # a reply: the validated quote it answers
     place: str = ""  # a reply: the subreddit, as r/name
     confirmed: str = ""  # a reply: the rules notice the Founder acknowledged
-    work: tuple[Document, ...] = ()  # a creator: what the launcher read of their work this run
-    work_problem: str = ""  # a creator: why nothing of theirs could be read
     wait_days: int = 0  # a creator: the waiting period before the one follow-up
     sent_on: str = ""  # a follow-up: when the Founder recorded the first message as sent
     plan: str = ""  # the package file that names this kind of outreach
@@ -218,10 +205,25 @@ class Target:
 
 @dataclass(frozen=True)
 class Limits:
-    max_words: int
-    site: str = ""  # the Product's own site, which a reply may not name in any spelling
-    snapshot: str = ""  # this run's source snapshot, relative to ledger/
+    """What bounds every message of a run: the Product's own site, which a reply may not name in any spelling, and
+    whether the Waitlist is live, before which the personal-network ask is not to be sent."""
+
+    site: str = ""
     waitlist_live: bool = False
+
+
+def run_limits(repo_root: Path, registry: Mapping, waitlist_live: bool) -> tuple[Limits, dict[str, tuple[str, str]]]:
+    """A run's limits, and each Waitlist Source's link as source_links reads it; the Product's own site is the one
+    those links are on."""
+    products = [str(product["name"]) for product in registry.get("products", [])]
+    tags = [
+        tag
+        for product in registry.get("products", [])
+        for tag in (product.get("waitlist") or {}).get("source_tags") or ()
+    ]
+    links = source_links(repo_root, products, tags)
+    site = next((link.split("/", 1)[0] for link, _ in links.values()), "")
+    return Limits(site, waitlist_live), links
 
 
 # Checking a Draft.
@@ -236,8 +238,7 @@ def site_pattern(site: str) -> re.Pattern | None:
 
 
 def check_links(draft: MessageDraft, target: Target, limits: Limits, verdict: Verdict) -> None:
-    """Which links a message may carry: a reply none, a personal-network ask its Source link and no other, and a
-    message to a creator only the piece of their work it cites."""
+    """Which links a message may carry: a reply none, and a personal-network ask its Source link and no other."""
     for copy in draft.sent():
         found = links(copy.text)
         if draft.purpose == REPLY:
@@ -261,16 +262,6 @@ def check_links(draft: MessageDraft, target: Target, limits: Limits, verdict: Ve
                     )
             if target.source_link and not any(same_link(link, target.source_link) for link in found):
                 verdict.block("source-link", f"does not carry the Source link `{target.source_link}`", copy.field)
-        else:
-            cited = draft.fields.get("work", "")
-            for link in found:
-                if none(cited) or not same_link(link, cited):
-                    verdict.block(
-                        "no-link",
-                        f"carries {snippet(link, 80)!r}; a message to a creator links only the piece of their work it"
-                        " cites",
-                        copy.field,
-                    )
 
 
 def check_purpose(draft: MessageDraft, target: Target, verdict: Verdict) -> None:
@@ -286,32 +277,13 @@ def check_purpose(draft: MessageDraft, target: Target, verdict: Verdict) -> None
                 "reply-evidence",
                 f"Evidence `{quote.id}` says the Product does not answer this thread, so it gets no reply",
             )
-    if draft.purpose == NETWORK:
-        forward = draft.forward.strip()
-        if not forward or "\n" in forward or len(forward.split()) > MAX_FORWARD_WORDS:
-            verdict.block(
-                "forward-line", f"## Forward holds one line of at most {MAX_FORWARD_WORDS} words a friend can pass on"
-            )
-    elif draft.forward.strip():
-        verdict.block("format", "only a personal-network ask has a ## Forward section")
     if draft.purpose in TO_CREATOR:
         if draft.fields.get("offer") not in OFFERS:
             verdict.block(
                 "ask-free", f"offer must be one of: {', '.join(OFFERS)}; a message to a creator asks for nothing else"
             )
-        cited = draft.fields.get("work", "")
-        if not cited:
-            verdict.block("creator-work", "front matter needs work: the link of the piece it cites, or none")
-        elif not none(cited) and not any(link_key(cited) == link_key(document.link) for document in target.work):
-            verdict.block(
-                "creator-work",
-                f"cites {snippet(cited, 80)!r}, which is not a piece of {target.label}'s work the launcher read this"
-                " run; cite one from the snapshot, or write work: none",
-            )
-    else:
-        for key in ("offer", "work"):
-            if key in draft.fields:
-                verdict.block("format", f"only a message to a creator has {key}")
+    elif "offer" in draft.fields:
+        verdict.block("format", "only a message to a creator has offer")
 
 
 def checklist_status(draft: MessageDraft, context: Context, public: bool) -> list[ChecklistLine]:
@@ -339,7 +311,7 @@ def check(draft: MessageDraft, context: Context, target: Target, limits: Limits)
     """Every deterministic check of one message Draft; it is offered only when nothing blocks it."""
     verdict = Verdict()
     kit = context.kit
-    for role in ("angles", "checklist", "competitors"):
+    for role in ("angles", "checklist"):
         if role in kit.problems:
             verdict.block("kit", f"{context.paths.get(role, role)} could not be used: {kit.problems[role]}")
     if context.rules is None:
@@ -364,11 +336,9 @@ def check(draft: MessageDraft, context: Context, target: Target, limits: Limits)
         verdict.block("angle-bank", f"Angle {draft.fields['angle']} is not in {bank}")
     if not draft.message.strip():
         verdict.block("format", "## Message is empty")
-    if draft.words > limits.max_words:
-        verdict.block("length", f"the message is {draft.words} words; at most {limits.max_words}")
     if len(draft.notes) > MAX_NOTES:
         verdict.block("format", f"## Notes is at most {MAX_NOTES} characters")
-    whole = "\n".join([draft.title, draft.message, draft.forward, draft.notes] + [claim.text for claim in draft.claims])
+    whole = "\n".join([draft.title, draft.message, draft.notes] + [claim.text for claim in draft.claims])
     if looks_like_address(whole):
         verdict.block("email-address", "the Draft holds something that looks like an email address; no Draft ever may")
     check_links(draft, target, limits, verdict)
@@ -378,15 +348,6 @@ def check(draft: MessageDraft, context: Context, target: Target, limits: Limits)
         if draft.purpose in TO_CREATOR:
             for copy in draft.sent():
                 verdict.add(context.rules.sponsorship(copy))
-    research = context.paths.get("competitors", "the research")
-    for copy in draft.sent():
-        for competitor in kit.competitors:
-            if re.search(rf"(?<![\w]){re.escape(competitor.name)}(?![\w])", copy.text):
-                verdict.block(
-                    "competitor-name",
-                    f"names {competitor.name}, a competitor in `{research}{competitor.source}` line {competitor.line}",
-                    copy.field,
-                )
     for claim in draft.claims:
         unsupported = none(claim.location)
         problem = "no code supports it" if unsupported else context.code.verify(claim.location, claim.excerpt)
@@ -402,11 +363,6 @@ def check(draft: MessageDraft, context: Context, target: Target, limits: Limits)
 
 
 # The message item.
-
-
-def quoted(text: str) -> list[str]:
-    """Text as a block quote, so no line of it can read as a heading of the item that holds it."""
-    return ["> " + line if line.strip() else ">" for line in text.strip().splitlines()]
 
 
 def excerpt(text: str, limit: int) -> str:
@@ -446,21 +402,10 @@ def intro_lines(draft: MessageDraft, target: Target, context: Context, limits: L
             " Source.",
             live,
         ]
-    cited = draft.fields.get("work", "")
-    document = next((d for d in target.work if not none(cited) and link_key(d.link) == link_key(cited)), None)
-    if document is not None:
-        when = f", published {document.published[:10]}" if document.published else ""
-        hook = f"It cites one piece of their work: {document.title}{when}: {document.link}"
-    else:
-        why = (
-            target.work_problem or f"nothing read of {target.label}'s work this run gave an honest reason to write now"
-        )
-        hook = f"No hook found: {why}. This message cites none of their work and must not pretend to."
     offer = OFFER_WORDS.get(draft.fields.get("offer", ""), "nothing")
     lines = [
         f"A message for you to send to {target.label}, in your own name; gr0wthlab sends nothing and holds no address.",
         f"It offers {offer} and asks for nothing: no sponsorship, no post, no reply owed.",
-        hook,
     ]
     if draft.purpose == CREATOR:
         lines.append(
@@ -486,10 +431,7 @@ def check_lines(draft: MessageDraft, target: Target, context: Context, verdict: 
     pending = (rules.pending() if rules else []) + (
         rules.creator_pending() if rules and draft.purpose in TO_CREATOR else []
     )
-    line = "- Brand lint (`brand-rules.json`, from Mandu) on the message" + (
-        " and the line to forward" if draft.forward.strip() else ""
-    )
-    line += ": passed"
+    line = "- Brand lint (`brand-rules.json`, from Mandu) on the message: passed"
     if warnings:
         line += "; warnings: " + "; ".join(warnings)
     if pending:
@@ -503,8 +445,8 @@ def check_lines(draft: MessageDraft, target: Target, context: Context, verdict: 
             " link: checked."
         )
     else:
-        lines.append("- No link but the cited work's, and no sponsorship ask the brand rules list: checked.")
-    lines.append(f"- No email address, no competitor's name, and {draft.words} words: checked.")
+        lines.append("- No sponsorship ask the brand rules list: checked.")
+    lines.append("- No email address: checked.")
     waiting = [line for line in verdict.checklist if line.status not in (DONE, BLOCKS)]
     if waiting:
         numbers = ", ".join(str(line.item.line) for line in waiting)
@@ -522,8 +464,6 @@ def render(draft: MessageDraft, verdict: Verdict, context: Context, target: Targ
     roles = context.paths
     body = intro_lines(draft, target, context, limits)
     body += ["", f"**Message** ({plural(draft.words, 'word')})", ""] + quoted(draft.message)
-    if draft.forward.strip():
-        body += ["", "**Line a friend can forward**", ""] + quoted(draft.forward)
     if draft.notes.strip():
         body += ["", "**Notes for you, never sent**", ""] + quoted(draft.notes)
     body += ["", f"**Claims, checked against {context.product} `{context.code.branch}` at `{context.code.short}`**", ""]
@@ -560,15 +500,8 @@ def render(draft: MessageDraft, verdict: Verdict, context: Context, target: Targ
         lines.append(f"- The personal-network Source link: `{target.link_source}`")
         if target.plan:
             lines.append(f"- The personal-network ask and its framing: `{target.plan}`")
-    else:
-        if target.plan:
-            lines.append(f"- {target.label}, and what a message to a creator may offer: `{target.plan}`")
-        cited = draft.fields.get("work", "")
-        document = next((d for d in target.work if not none(cited) and link_key(d.link) == link_key(cited)), None)
-        if document is not None:
-            lines.append(f"- The piece of their work it cites, read this run: {document.link}")
-        elif limits.snapshot:
-            lines.append(f"- No hook found; what this run could read of their work: `{limits.snapshot}`")
+    elif target.plan:
+        lines.append(f"- {target.label}, and what a message to a creator may offer: `{target.plan}`")
     fields = {"kind": "message", "product": context.product}
     return exchange.Item(fields, ask(draft, target), "\n".join(body), "\n".join(touches), "\n".join(lines))
 

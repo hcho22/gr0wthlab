@@ -141,13 +141,14 @@ done
 """
 
 
-# Runs inside the sandbox, or outside it as the control: try to open one TCP connection to each host:port, sending
-# nothing, and report whether it opened, with the id of the process that tried, so the kernel's own denial of that
-# process can be matched to it.
+# Runs inside the sandbox, or outside it as the control: with the tool named first, try to open one TCP connection to
+# each host:port, sending nothing, and report whether it opened, with the id of the process that tried, so the
+# kernel's own denial of that process can be matched to it.
+NETCAT = "/usr/bin/nc"
 NETWORK_SCRIPT = """
-shift
+nc="$1"; shift
 for target in "$@"; do
-  /usr/bin/nc -z -G 3 -w 3 "${target%:*}" "${target##*:}" >/dev/null 2>&1 &
+  "$nc" -z -G 3 -w 3 "${target%:*}" "${target##*:}" >/dev/null 2>&1 &
   pid=$!
   if wait "$pid"; then echo "REACHED $target $pid"; else echo "UNREACHABLE $target $pid"; fi
 done
@@ -201,7 +202,7 @@ def run_network_probe(
     """Try each host:port from inside the run's sandbox, with no model, where none must be reachable: the agent has
     no network, and the launcher fetches for it. With sandboxed off the same script runs outside the sandbox, as the
     control that shows the probe can reach a listener at all."""
-    script = ["/bin/sh", "-c", NETWORK_SCRIPT, "network", "probe"] + list(targets)
+    script = ["/bin/sh", "-c", NETWORK_SCRIPT, "network", NETCAT] + list(targets)
     if not targets:
         return NetworkProbe((), (), ())
     if not sandboxed:

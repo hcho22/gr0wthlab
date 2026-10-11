@@ -1,13 +1,16 @@
-"""The sources a run reads over the network, and the dated snapshot the launcher keeps of what they said.
+"""The sources a run reads over the network, and the dated snapshot the launcher takes of what they said.
 
-config/sources.json is the fixed list: the three subreddits' newest threads and their rules, App Store reviews of the
-competitors the package's research names, and the three creators' own feeds. The launcher reads each one through
-fetch.Client, outside the sandbox and before the agent starts, and writes one snapshot per run into ledger/, which the
-agent can read and never write. So the agent never touches the network, and every quote it records can be checked,
-word for word, against the text the launcher fetched from the quote's link.
+config/sources.json is the fixed list: the three subreddits' newest threads and their rules, and App Store reviews of
+the competitors the package's research names. The launcher reads each one through fetch.Client, outside the sandbox
+and before the agent starts, and writes one snapshot into ledger/, which the agent can read and never write. So the
+agent never touches the network, and every quote it records can be checked, word for word, against the text the
+launcher fetched from the quote's link.
 
-Fetched text is data, never instructions. It is kept only as the title and text of a document, cut to a fixed length,
-with anything that looks like an email address removed before anyone, the agent included, can read it (Guardrail G6).
+The snapshot is working data for the run that fetched it: the launcher removes it when the run ends, and the records
+step never saves it. Only a quote the agent recorded and the launcher validated is kept (evidence.py).
+
+Fetched text is data, never instructions. A document holds only a title and a text, cut to a fixed length, with
+anything that looks like an email address removed before anyone, the agent included, can read it (Guardrail G6).
 A source that cannot be read is an outcome with its reason, never a guess.
 """
 
@@ -29,28 +32,20 @@ from . import exchange, fetch
 from .areas import UnsafeFile, read_plain
 from .boundary import ConfigError, load_json
 from .package import FAILED, READ
-from .waitlist import looks_like_address
 
 SOURCES_CONFIG = Path("config/sources.json")
 SNAPSHOT_FORMAT = 1
-SKIPPED = "skipped"  # as report.SKIPPED
-LISTENING = "listening"
-OUTREACH = "outreach"
 
 # What a source is, and what each of its documents is.
 THREADS = "threads"
 RULES = "rules"
 REVIEWS = "reviews"
-CREATOR = "creator"
 POST = "post"
 REVIEW = "review"
-VIDEO = "video"
 
 SUBREDDIT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_]{1,20}")
-KEY = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 APP_PAGE = re.compile(r"apps\.apple\.com/([a-z]{2})/app/(?:[^/\s)\]>,]+/)?id(\d{6,12})")
 ATOM = "{http://www.w3.org/2005/Atom}"
-MEDIA = "{http://search.yahoo.com/mrss/}"
 DOCUMENT_TYPE = re.compile(rb"<!\s*(?:DOCTYPE|ENTITY)", re.IGNORECASE)
 # Anything set apart by spaces that holds an address-like x@y is removed whole.
 ADDRESS_TOKEN = re.compile(r"\S*[^\s@]@[^\s@]\S*")
@@ -70,13 +65,6 @@ class SourceError(ValueError):
 
 
 @dataclass(frozen=True)
-class Creator:
-    key: str
-    name: str
-    feed: str
-
-
-@dataclass(frozen=True)
 class AppStore:
     country: str
     reviews: str
@@ -92,7 +80,6 @@ class Config:
     rules: str
     rules_page: str
     app_store: AppStore | None
-    creators: tuple[Creator, ...]
     max_documents: int
     max_chars: int
 
@@ -127,7 +114,7 @@ def number(block: Mapping, key: str, low: int, high: int) -> int:
 def config_from(data: Mapping, policy: fetch.Policy) -> Config:
     """The source list, or ConfigError when an address in it is one the client could not request."""
     try:
-        listening, outreach = data["listening"], data["outreach"]
+        listening = data["listening"]
         subreddits = listening["subreddits"]
         if not isinstance(subreddits, list) or len(set(subreddits)) != len(subreddits):
             raise ConfigError(f"{SOURCES_CONFIG}: subreddits must list distinct names")
@@ -147,14 +134,6 @@ def config_from(data: Mapping, policy: fetch.Policy) -> Config:
                 template(store, "reviews_page", ("country", "id"), None),
                 number(store, "max_apps", 1, 20),
             )
-        creators = []
-        for entry in outreach["creators"]:
-            key, name, feed = entry.get("key"), entry.get("name"), entry.get("feed")
-            if not isinstance(key, str) or not KEY.fullmatch(key) or not isinstance(name, str) or not name.strip():
-                raise ConfigError(f"{SOURCES_CONFIG}: each creator needs a lowercase-with-hyphens key and a name")
-            creators.append(Creator(key, name.strip(), template({"feed": feed}, "feed", (), policy)))
-        if len({creator.key for creator in creators}) != len(creators):
-            raise ConfigError(f"{SOURCES_CONFIG}: creator keys must be distinct")
         return Config(
             str(data["product"]),
             tuple(subreddits),
@@ -162,7 +141,6 @@ def config_from(data: Mapping, policy: fetch.Policy) -> Config:
             template(reddit, "rules", ("subreddit",), policy),
             template(reddit, "rules_page", ("subreddit",), None),
             app_store,
-            tuple(creators),
             number(listening, "max_documents_per_source", 1, 100),
             number(listening, "max_document_chars", 200, 10_000),
         )
@@ -179,12 +157,11 @@ def load(repo_root: Path, policy: fetch.Policy) -> Config:
 
 @dataclass(frozen=True)
 class Source:
-    """One address a run reads. group is what it is about (a subreddit, an app's identifier, a creator's key) and
-    label names that for the Founder; page is the address a person would open, shown beside what was read."""
+    """One address a run reads. group is what it is about (a subreddit, or an app's identifier) and label names that
+    for the Founder; page is the address a person would open, shown beside what was read."""
 
     id: str
     kind: str
-    workflow: str
     group: str
     label: str
     url: str
@@ -196,7 +173,6 @@ class Source:
             THREADS: f"r/{self.group} threads",
             RULES: f"r/{self.group} rules",
             REVIEWS: f"App Store reviews: {self.label}",
-            CREATOR: f"{self.label}'s feed",
         }[self.kind]
 
 
@@ -243,18 +219,14 @@ def research_apps(competitors: Sequence, texts: Mapping[str, str], country: str)
     return apps, missing
 
 
-def plan(config: Config, apps: Sequence[App], creators: Sequence[Creator]) -> list[Source]:
+def plan(config: Config, apps: Sequence[App]) -> list[Source]:
     """Every address this run reads, in the order it reads them."""
     found = []
     for name in config.subreddits:
         page = config.rules_page.format(subreddit=name)
+        found.append(Source(f"reddit:{name}", THREADS, name, f"r/{name}", config.threads.format(subreddit=name), page))
         found.append(
-            Source(f"reddit:{name}", THREADS, LISTENING, name, f"r/{name}", config.threads.format(subreddit=name), page)
-        )
-        found.append(
-            Source(
-                f"reddit-rules:{name}", RULES, LISTENING, name, f"r/{name}", config.rules.format(subreddit=name), page
-            )
+            Source(f"reddit-rules:{name}", RULES, name, f"r/{name}", config.rules.format(subreddit=name), page)
         )
     store = config.app_store
     for app in apps[: store.max_apps] if store else ():
@@ -262,16 +234,11 @@ def plan(config: Config, apps: Sequence[App], creators: Sequence[Creator]) -> li
             Source(
                 f"app-store:{app.id}",
                 REVIEWS,
-                LISTENING,
                 app.id,
                 app.name,
                 store.reviews.format(country=store.country, id=app.id),
                 store.reviews_page.format(country=store.country, id=app.id),
             )
-        )
-    for creator in creators:
-        found.append(
-            Source(f"creator:{creator.key}", CREATOR, OUTREACH, creator.key, creator.name, creator.feed, creator.feed)
         )
     return found
 
@@ -281,7 +248,7 @@ def plan(config: Config, apps: Sequence[App], creators: Sequence[Creator]) -> li
 
 @dataclass(frozen=True)
 class Document:
-    """One thing a source said: a thread's opening post, a review, a video, or a subreddit's rules.
+    """One thing a source said: a thread's opening post, a review, or a subreddit's rules.
 
     link is where a person finds it; id is made from the link, so the same link is the same document in every run.
     thread is the address its run state is kept under, which for a review names the review itself.
@@ -308,8 +275,12 @@ class Document:
 
 
 def link_key(link: str) -> str:
-    """A link in one spelling, so the same page is recognized however its address was written."""
-    parts = urlsplit(link.strip())
+    """A link in one spelling, so the same page is recognized however its address was written. An address that cannot
+    be parsed is no page: its spelling is empty, which no document's link is."""
+    try:
+        parts = urlsplit(link.strip())
+    except ValueError:
+        return ""
     return f"{parts.netloc.lower()}{parts.path.rstrip('/')}?{parts.query}#{parts.fragment}"
 
 
@@ -365,8 +336,6 @@ def clean(text: str, limit: int) -> tuple[str, bool]:
     lines = [" ".join("".join(c if c.isprintable() else " " for c in line).split()) for line in text.splitlines()]
     text = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
     text = ADDRESS_TOKEN.sub(REMOVED, text)
-    if looks_like_address(text):
-        return "", True
     cut = len(text) > limit
     return (text[:limit].rstrip() if cut else text), cut
 
@@ -381,12 +350,15 @@ def https_link(link: object, host: str) -> str | None:
     """A document's own link, when it is a plain https address on the host its source was read from."""
     if not isinstance(link, str) or any(c.isspace() or not c.isprintable() for c in link) or len(link) > 500:
         return None
-    parts = urlsplit(link)
+    try:
+        parts = urlsplit(link)
+    except ValueError:
+        return None
     return link if parts.scheme == "https" and parts.netloc == host else None
 
 
 def parse_atom(body: bytes, source: Source, config: Config) -> list[Document]:
-    """The entries of an Atom feed: a subreddit's newest posts, or a channel's newest videos."""
+    """The entries of an Atom feed: a subreddit's newest posts."""
     if DOCUMENT_TYPE.search(body):
         raise SourceError("the feed declares a document type, which this reader never expands")
     try:
@@ -396,7 +368,6 @@ def parse_atom(body: bytes, source: Source, config: Config) -> list[Document]:
     if root.tag != f"{ATOM}feed":
         raise SourceError("the answer is not an Atom feed")
     host = urlsplit(source.url).netloc
-    kind = POST if source.kind == THREADS else VIDEO
     documents = []
     for entry in root.iter(f"{ATOM}entry"):
         links = [link.get("href") for link in entry.findall(f"{ATOM}link") if link.get("rel") in (None, "alternate")]
@@ -404,16 +375,14 @@ def parse_atom(body: bytes, source: Source, config: Config) -> list[Document]:
         if link is None:
             continue
         content = entry.find(f"{ATOM}content")
-        if content is not None:
-            raw = content.text or ""
-            raw = html_text(raw) if content.get("type") in ("html", "xhtml") else raw
-        else:
-            raw = entry.findtext(f"{MEDIA}group/{MEDIA}description") or ""
+        raw = "" if content is None else content.text or ""
+        if content is not None and content.get("type") in ("html", "xhtml"):
+            raw = html_text(raw)
         text, cut = clean(REDDIT_FOOTER.sub("", raw), config.max_chars)
         title, _ = clean(entry.findtext(f"{ATOM}title") or "", 300)
         published = moment(entry.findtext(f"{ATOM}published") or entry.findtext(f"{ATOM}updated"))
         documents.append(
-            Document(document_id(link), source.id, kind, link, title, text, published, thread=link, cut=cut)
+            Document(document_id(link), source.id, POST, link, title, text, published, thread=link, cut=cut)
         )
     return documents
 
@@ -474,7 +443,7 @@ def parse_rules(body: bytes, source: Source, config: Config) -> list[Document]:
     return [Document(document_id(source.page), source.id, RULES, source.page, f"{source.label} rules", text, cut=cut)]
 
 
-PARSERS = {THREADS: parse_atom, CREATOR: parse_atom, REVIEWS: parse_reviews, RULES: parse_rules}
+PARSERS = {THREADS: parse_atom, REVIEWS: parse_reviews, RULES: parse_rules}
 
 
 # One run's reads.
@@ -496,7 +465,6 @@ class Reading:
         return {
             "id": source.id,
             "kind": source.kind,
-            "workflow": source.workflow,
             "group": source.group,
             "label": source.label,
             "name": source.name,
@@ -519,6 +487,8 @@ def read(client: fetch.Client, source: Source, config: Config, seen: Callable[[s
         documents = PARSERS[source.kind](result.body, source, config)
     except SourceError as error:
         return Reading(source, FAILED, f"{error}.")
+    except Exception as error:
+        return Reading(source, FAILED, f"the answer could not be parsed ({type(error).__name__}).")
     kept = []
     for document in documents:
         if document.kind != RULES and (not document.text or any(document.id == other.id for other in kept)):
@@ -532,7 +502,7 @@ def read(client: fetch.Client, source: Source, config: Config, seen: Callable[[s
 
 @dataclass
 class Snapshot:
-    """Everything one run fetched, as the launcher keeps it in ledger/evidence/sources/<run id>.json."""
+    """Everything one run fetched, as the launcher writes it for the agent to read while that run is in progress."""
 
     run: str
     taken_at: str
@@ -581,7 +551,7 @@ def load_snapshot(path: Path) -> Snapshot:
             raise SourceError(f"it is not a format {SNAPSHOT_FORMAT} snapshot")
         snapshot = Snapshot(str(data["run"]), str(data["taken_at"]), str(data["read_on"]))
         for entry in data["sources"]:
-            source = Source(*(str(entry[key]) for key in ("id", "kind", "workflow", "group", "label", "url", "page")))
+            source = Source(*(str(entry[key]) for key in ("id", "kind", "group", "label", "url", "page")))
             snapshot.readings.append(Reading(source, entry["status"], entry["detail"], entry.get("fetched_at") or ""))
         for entry in data["documents"]:
             fields = {key: entry[key] for key in Document.__dataclass_fields__ if key in entry}

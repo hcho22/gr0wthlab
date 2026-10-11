@@ -10,7 +10,7 @@ Why, and the boundary the launcher enforces: [the US-ME02 spike note](../docs/sp
 - [`instructions/`](instructions/): the run's fixed task definition, which only a reviewed pull request changes; the agent's refinable guidance lives in `workspace/instructions/`.
 - [`gr0wthlab/posts.py`](gr0wthlab/posts.py): the post-Draft workflow (US-ME08): which calendar days a run prepares, and which Drafts become post items; the checks themselves are in `drafts.py`, `kit.py`, `lint.py`, and `codebase.py`.
 - [`gr0wthlab/fetch.py`](gr0wthlab/fetch.py): the launcher's only way onto the network: a credential-free GET to a host listed in `config/guardrails/fetch.json`, bound by that host's `robots.txt`; the sandboxed agent has no network.
-  [`sources.py`](gr0wthlab/sources.py) reads the fixed list in `config/sources.json` into one dated snapshot per run.
+  [`sources.py`](gr0wthlab/sources.py) reads the fixed list in `config/sources.json` into one dated snapshot, which is working data removed when the run ends.
 - [`gr0wthlab/listening.py`](gr0wthlab/listening.py): the Listening workflow (US-ME13); [`evidence.py`](gr0wthlab/evidence.py) decides which quote records are kept and counts confidence.
 - [`gr0wthlab/outreach.py`](gr0wthlab/outreach.py): the outreach workflow (US-ME14); [`messages.py`](gr0wthlab/messages.py) holds every check of a message Draft, replies included.
 - [`gr0wthlab/learning.py`](gr0wthlab/learning.py): the rejection-reason codes and their split (F4), and the guard that puts the agent's Instructions back after every run.

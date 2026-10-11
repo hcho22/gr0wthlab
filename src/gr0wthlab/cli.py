@@ -96,7 +96,8 @@ def queued(products: list[str]) -> tuple[Ledger, dict[str, str], str | None]:
 
 def check_incoming(out=sys.stdout) -> int:
     """The launcher's own check of each item in incoming/, for the agent to use before it finishes."""
-    products = [product["name"] for product in load_json(REPO_ROOT / PRODUCT_REGISTRY).get("products", [])]
+    registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
+    products = [product["name"] for product in registry.get("products", [])]
     try:
         if any(
             path.is_symlink() or (os.path.lexists(str(path)) and not path.is_dir())
@@ -117,9 +118,10 @@ def check_incoming(out=sys.stdout) -> int:
     ledger, seen, warning = queued(products)
     if warning:
         print(warning, file=out)
+    sourced = listening.sourced_pain(registry, Store(LEDGER_DIR))
     failed = 0
     for name in names:
-        item, problems = ledger.check_incoming(INCOMING / name, name, products, seen)
+        item, problems = ledger.check_incoming(INCOMING / name, name, products, seen, sourced)
         if item is not None:
             seen[exchange.item_hash(item)] = name
         failed += bool(problems)
@@ -241,7 +243,8 @@ def check_work(run_id: str, out=sys.stdout) -> int:
 
     What may be offered is read from the record the launcher wrote for the run before the agent started, never
     worked out again: the Founder's decisions and records it rests on are saved only when the run ends. Every quote
-    is checked against that run's snapshot, which the launcher fetched; this command never touches the network.
+    is checked against that run's snapshot, which the launcher fetched and keeps only while the run is in progress;
+    this command never touches the network.
     """
     env = dict(os.environ)
     home = Path.home()
@@ -307,7 +310,7 @@ def check_work(run_id: str, out=sys.stdout) -> int:
         for outcome in result.replies:
             say_message(outcome, f"reply {outcome.target.key}")
     if record.get("outreach"):
-        plan = outreach.restore(record["outreach"], snapshot, areas, run_id)
+        plan = outreach.restore(record["outreach"], areas, run_id)
         if plan.problem:
             print(f"{plan.problem[0].upper()}{plan.problem[1:]}.", file=out)
         elif context is None:

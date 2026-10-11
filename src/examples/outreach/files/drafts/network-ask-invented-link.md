@@ -14,10 +14,6 @@ I have been building Rep Today for people who want movement to fit the life they
 A missed day lowers a score a little, and nothing ever resets it.
 If that sounds like you, the waitlist is at reptoday.app/friends.
 
-## Forward
-
-Rep Today is a workout app for people whose routine fell apart: reptoday.app/network
-
 ## Notes
 
 none

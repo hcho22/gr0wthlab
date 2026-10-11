@@ -10,7 +10,7 @@ from unittest import mock
 
 from gr0wthlab import boundary, exchange, state
 from gr0wthlab.areas import Areas, Store
-from gr0wthlab.queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger, QueueError
+from gr0wthlab.queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger, QueueError, SourcedPain
 from tests import fakes
 from tests.test_boundary import CONFIG, REGISTRY
 
@@ -262,18 +262,58 @@ class OrderAndPersistenceTest(LedgerTestCase):
             set_aside[0].problems,
         )
 
-    def test_a_new_angle_or_hook_is_never_taken_from_incoming(self):
-        for title in ("add a new Angle for desk workers", "Add the Hook for P03", "adding an angle: lunch breaks"):
-            self.drop("angle.md", fakes.proposal(title=title))
-            published, set_aside = self.take()
+    BANK = "projects/RepToday/gtm/05-social-pmf/angles.md"
+    PAIRS = "projects/RepToday/gtm/05-social-pmf/ab-pairs.md"
+    KEPT = "evidence/listening/quotes/d-0123456789ab.json"
+
+    def angle(self, title, touches=None, cited=None):
+        """A proposal with this ask, which touches that package file and cites that Listening quote's record."""
+        text = fakes.proposal(title=title)
+        if touches:
+            text = text.replace("- `projects/RepToday/gtm/02-brand/brand-guidelines.md`", f"- `{touches}`")
+        if cited:
+            text = text.replace("- Cleared and reserved:", f"- Sourced pain: `{cited}`\n- Cleared and reserved:")
+        return text
+
+    def take_sourced(self):
+        sourced = SourcedPain((self.BANK, self.PAIRS), (self.KEPT,))
+        return self.ledger.take_incoming(self.areas, self.store, PRODUCTS, "RUN1", NOW, None, sourced)
+
+    def assert_needs_sourced_pain(self, name, title, touches=None):
+        """Set aside with the rule and what to add, whatever it cites that is not kept; queued once it cites one."""
+        for cited in (None, "evidence/listening/quotes/d-000000000000.json"):
+            self.drop(name, self.angle(title, touches, cited))
+            published, set_aside = self.take_sourced()
             self.assertEqual(published, [], title)
+            (problem,) = set_aside[0].problems
             self.assertIn(
-                "a new Angle or Hook is proposed only as a file in review-queue/angles/", set_aside[0].problems[0]
+                "it proposes an Angle or Hook, since it touches the Angle bank or the A/B pairs file", problem
             )
+            self.assertIn("any change to a Hook, signal, or kill criterion is a new Angle (FR-7)", problem)
+            self.assertIn("add an Evidence line citing a Listening quote the launcher already keeps", problem)
+        self.drop(name, self.angle(title, touches, self.KEPT))
+        published, set_aside = self.take_sourced()
+        self.assertEqual((len(published), set_aside), (1, []), title)
+
+    def test_a_proposal_that_touches_the_angle_bank_or_the_pairs_file_needs_sourced_pain(self):
+        self.assert_needs_sourced_pain("angle.md", "introduce Angle P07 for desk workers", self.BANK)
+        self.assert_needs_sourced_pain("angle.md", "propose an Angle about lunch breaks", self.PAIRS)
+
+    def test_an_ask_that_adds_an_angle_or_hook_needs_sourced_pain_whatever_it_touches(self):
+        for title in (
+            "add the Hook's missing kill criterion to day 4",
+            "mark the new Hook on day 9 as frozen",
+            "add a new Angle for desk workers",
+            "adding an angle: lunch breaks",
+        ):
+            self.assert_needs_sourced_pain("hook.md", title)
+
+    def test_any_other_package_change_is_queued_as_before(self):
         for title in ("resolve the frozen Hook that fails the word cap", "add the cleared status so the Hook can ship"):
-            self.drop("fix.md", fakes.proposal(title=title))
-            published, set_aside = self.take()
-            self.assertEqual((len(published), set_aside), (1, []), title)
+            for take in (self.take, self.take_sourced):
+                self.drop("fix.md", fakes.proposal(title=title))
+                published, set_aside = take()
+                self.assertEqual((len(published), set_aside), (1, []), title)
 
     def test_no_item_the_agent_writes_supersedes_a_post(self):
         post = self.post("day-3", 3)

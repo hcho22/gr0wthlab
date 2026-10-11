@@ -1,10 +1,10 @@
 """The launcher's network client: what it may request, what robots.txt binds, and what it logs.
 
 These are the contract tests of Guardrails G5 and G8 for the network: the client can issue only a credential-free GET
-to a listed host, never a path the host's robots.txt disallows, and nothing else in the launcher opens a connection.
+to a listed host, never a path the host's robots.txt disallows, and in a unit test nothing can open a connection
+beyond this machine, so the whole runs in test_work_cycle show that nothing but this client tries to.
 """
 
-import ast
 import http.client
 import json
 import unittest
@@ -17,7 +17,6 @@ from gr0wthlab.boundary import ConfigError
 from tests import fakes
 
 REPO = Path(__file__).resolve().parents[2]
-SOURCE = REPO / "src" / "gr0wthlab"
 POLICY = {
     "hosts": ["forum.example.com", "store.example.org"],
     "user_agent": "growthlab-reader/1 (unit tests; +https://example.com/contact)",
@@ -34,9 +33,9 @@ def client(web, **overrides):
 
 
 class PolicyTest(unittest.TestCase):
-    def test_the_committed_policy_lists_three_public_hosts_and_an_honest_reader(self):
+    def test_the_committed_policy_lists_two_public_hosts_and_an_honest_reader(self):
         policy = fetch.load_policy(REPO)
-        self.assertEqual(policy.hosts, ("www.reddit.com", "itunes.apple.com", "www.youtube.com"))
+        self.assertEqual(policy.hosts, ("www.reddit.com", "itunes.apple.com"))
         self.assertEqual(policy.token, "growthlab-reader")
         self.assertIn("github.com/hcho22", policy.user_agent)
         self.assertLessEqual(policy.max_requests, 30)
@@ -180,6 +179,22 @@ class OnlyListedReadsTest(unittest.TestCase):
         self.assertNotIn("evil.example.net", " ".join(web.requests))
         self.assertTrue(all(url.startswith("https://") for url in web.requests))
 
+    def test_a_redirect_to_an_address_that_cannot_be_parsed_is_a_failed_read(self):
+        web = fakes.Web({"https://forum.example.com/odd": (302, {"location": "https://[x"}, "")})
+        result = client(web).get("https://forum.example.com/odd", "odd")
+        self.assertEqual(result.status, fetch.FAILED)
+        self.assertIn("redirected to an address that cannot be parsed", result.detail)
+        self.assertEqual(web.requests, ["https://forum.example.com/robots.txt", "https://forum.example.com/odd"])
+
+    def test_an_address_the_wire_cannot_carry_is_a_failed_read(self):
+        reader = fakes.client(None, POLICY)
+        reader.transport = tests.REAL_SEND
+        reader.robots["forum.example.com"] = fetch.Robots("forum.example.com", "none")
+        result = reader.get("https://forum.example.com/caf\u00e9", "threads")
+        self.assertEqual(result.status, fetch.FAILED)
+        self.assertIn("forum.example.com could not be read: UnicodeEncodeError", result.detail)
+        self.assertEqual([entry["outcome"] for entry in reader.log], [fetch.FAILED])
+
     def test_an_answer_over_the_size_limit_is_a_failure_not_a_cut_read(self):
         web = fakes.Web({"https://forum.example.com/big": "x" * 5000})
         result = client(web).get("https://forum.example.com/big", "big")
@@ -220,22 +235,24 @@ class RobotsTest(unittest.TestCase):
         self.assertEqual([entry["sent"] for entry in reader.log], [True, False])
 
     def test_the_named_sources_are_disallowed_by_their_hosts_today(self):
-        """The three robots.txt files as read on 2026-10-11, and the path each named source would need."""
+        """The two robots.txt files as read on 2026-10-11, and the path each named source would need."""
         reddit = "# Welcome\n\nUser-agent: *\nDisallow: /\n"
         apple = (
             "User-agent: *\nDisallow: /WebObjects/*\nAllow: /WebObjects/MZStore.woa/wa/viewMultiRoom?*\n"
             "Disallow: /search*\nDisallow: /*/rss/*\nDisallow: /*/lookup?\n\nUser-agent: Googlebot\nDisallow: /x\n"
         )
-        youtube = (
-            "User-agent: Mediapartners-Google*\nDisallow:\n\nUser-agent: *\nDisallow: /comment\n"
-            "Disallow: /feeds/videos.xml\n"
-        )
         self.assertFalse(self.allows(reddit, "/r/fitness30plus/new/.rss"))
         self.assertFalse(self.allows(reddit, "/r/fitness30plus/about/rules.json"))
         self.assertFalse(self.allows(apple, "/us/rss/customerreviews/page=1/id=301521403/sortby=mostrecent/json"))
         self.assertTrue(self.allows(apple, "/us/app/id301521403"))
-        self.assertFalse(self.allows(youtube, "/feeds/videos.xml?channel_id=UC_ruB7qtdk4KufASPRuWhZA"))
-        self.assertTrue(self.allows(youtube, "/watch?v=abc"))
+
+    def test_a_byte_order_mark_does_not_hide_the_first_group(self):
+        marked = "\ufeffUser-agent: *\nDisallow: /\n"
+        self.assertFalse(self.allows(marked, "/x"))
+        web = fakes.Web({"https://forum.example.com/x": "x"}, robots={"forum.example.com": marked})
+        result = client(web).get("https://forum.example.com/x", "x")
+        self.assertEqual(result.status, fetch.DISALLOWED)
+        self.assertEqual(web.requests, ["https://forum.example.com/robots.txt"])
 
     def test_the_longest_rule_wins_and_allow_wins_a_tie(self):
         text = "User-agent: *\nDisallow: /a\nAllow: /a/b\nDisallow: /a/b/c\nAllow: /tie\nDisallow: /tie\n"
@@ -405,61 +422,19 @@ class RequestLogTest(unittest.TestCase):
 
 
 class OnlyOneDoorTest(unittest.TestCase):
-    """Nothing else in the launcher can reach the network: the modules that could are listed here, by import."""
+    """No unit test can leave this machine, so a whole run under test (test_work_cycle) reads the web only through
+    the transport its client was given."""
 
-    NETWORK_MODULES = {
-        "http", "urllib.request", "socket", "ssl", "ftplib", "smtplib", "poplib", "imaplib", "telnetlib", "xmlrpc",
-        "asyncio", "socketserver", "webbrowser", "nntplib",
-    }  # fmt: skip
-    # probe.py listens on a local socket and a localhost port for the boundary check and never connects out.
-    ALLOWED = {"fetch.py": {"http", "ssl"}, "probe.py": {"socket"}}
+    def test_the_client_s_own_send_is_replaced_by_a_refusal(self):
+        with self.assertRaises(AssertionError):
+            fetch.send("forum.example.com", "/robots.txt", {}, 1.0, 10)
 
-    def imports(self, path):
-        found = set()
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            names = []
-            if isinstance(node, ast.Import):
-                names = [alias.name for alias in node.names]
-            elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
-                names = [node.module] + [f"{node.module}.{alias.name}" for alias in node.names]
-            for name in names:
-                found.update(
-                    module for module in self.NETWORK_MODULES if name == module or name.startswith(module + ".")
-                )
-        return found
-
-    def test_only_fetch_imports_a_network_module(self):
-        for path in sorted(SOURCE.glob("*.py")):
-            with self.subTest(module=path.name):
-                self.assertEqual(self.imports(path), self.ALLOWED.get(path.name, set()))
-
-    def test_fetch_sends_one_method_from_one_place(self):
-        tree = ast.parse((SOURCE / "fetch.py").read_text(encoding="utf-8"))
-        requests = [
-            node
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "request"
-        ]
-        self.assertEqual(len(requests), 1, "one place puts a request on the wire")
-        call = requests[0]
-        self.assertEqual((call.args[0].id, [keyword.arg for keyword in call.keywords]), ("METHOD", ["headers"]))
-        self.assertEqual(len(call.args), 2, "the method and the path, and no body")
-        self.assertEqual(fetch.METHOD, "GET")
-        connections = [
-            node for node in ast.walk(tree) if isinstance(node, ast.Attribute) and node.attr.endswith("Connection")
-        ]
-        self.assertEqual([node.attr for node in connections], ["HTTPSConnection"])
-        strings = {
-            node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)
-        }
-        self.assertFalse(strings & {"POST", "PUT", "PATCH", "DELETE", "Authorization", "Cookie", "authorization"})
-
-    def test_no_launcher_module_shells_out_to_a_network_tool(self):
-        for path in sorted(SOURCE.glob("*.py")):
-            text = path.read_text(encoding="utf-8")
-            for tool in ("curl", "wget", "/usr/bin/ssh", "scp "):
-                with self.subTest(module=path.name, tool=tool):
-                    self.assertNotIn(tool, text)
+    def test_the_real_send_is_stopped_before_it_leaves_this_machine(self):
+        tried = len(tests.ATTEMPTS)
+        with self.assertRaises(AssertionError):
+            tests.REAL_SEND("forum.example.com", "/robots.txt", {}, 1.0, 10)
+        self.assertEqual(tests.ATTEMPTS[tried:], ["forum.example.com"])
+        del tests.ATTEMPTS[tried:]
 
 
 if __name__ == "__main__":

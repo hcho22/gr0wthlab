@@ -2,7 +2,7 @@
 one follow-up each, all as Drafts the Founder alone sends.
 
 Before the agent starts, the launcher works out which messages may be offered this run: the ask, when a reviewed
-Dispatch request defines the personal-network Source link; a message for each creator in config/sources.json that the
+Dispatch request defines the personal-network Source link; a message for each creator in config/run.json that the
 channel plan in Mandu still names; and a follow-up only for a creator whose first message the Founder approved and
 recorded as sent, who has not replied, once the waiting period the Founder approved has passed, and only once. What
 was sent and who replied is the Founder's record in Mandu (docs/mandu-exchange.md); the run state is rebuilt from
@@ -24,9 +24,8 @@ from . import exchange, messages, proposals
 from .areas import Areas, Store
 from .boundary import ConfigError
 from .drafts import Context
-from .package import READ
+from .exchange import plural
 from .queue import APPROVED, Ledger
-from .sources import Creator, Snapshot
 from .state import OutreachState, Tally, target_key
 
 WORKFLOW = "outreach"
@@ -36,21 +35,26 @@ NETWORK_KEY = "network"
 RULES_PROPOSAL = proposals.PROPOSALS / "outreach-word-lists.md"
 
 
-def plural(count: int, noun: str) -> str:
-    return messages.plural(count, noun)
-
-
 # Configuration.
+
+
+@dataclass(frozen=True)
+class Creator:
+    """A creator the plan may name: the key their Draft file and their items are named for, and their name."""
+
+    key: str
+    name: str
 
 
 @dataclass(frozen=True)
 class Settings:
     """config/run.json's outreach: the Source whose link the personal-network ask carries, or None for no ask; the
-    days before a follow-up may be offered, unless the Founder's record sets another; and a message's word limit."""
+    days before a follow-up may be offered, unless the Founder's record sets another; and the creators a run may
+    write to."""
 
     network_source: str | None
     wait_days: int
-    max_words: int
+    creators: tuple[Creator, ...]
 
 
 def settings(data: Mapping) -> Settings:
@@ -60,13 +64,25 @@ def settings(data: Mapping) -> Settings:
     source = block.get("network_ask_source")
     if source is not None and (not isinstance(source, str) or not source):
         raise ConfigError("config/run.json: outreach.network_ask_source must be null or a Source tag")
-    numbers = []
-    for key, low, high in (("follow_up_wait_days", 1, exchange.MAX_WAIT_DAYS), ("max_message_words", 30, 400)):
-        value = block.get(key)
-        if isinstance(value, bool) or not isinstance(value, int) or not low <= value <= high:
-            raise ConfigError(f"config/run.json: outreach.{key} must be a whole number from {low} to {high}")
-        numbers.append(value)
-    return Settings(source, numbers[0], numbers[1])
+    wait = block.get("follow_up_wait_days")
+    if isinstance(wait, bool) or not isinstance(wait, int) or not 1 <= wait <= exchange.MAX_WAIT_DAYS:
+        raise ConfigError(
+            f"config/run.json: outreach.follow_up_wait_days must be a whole number from 1 to {exchange.MAX_WAIT_DAYS}"
+        )
+    listed = block.get("creators")
+    if not isinstance(listed, list):
+        raise ConfigError("config/run.json: outreach.creators must be a list")
+    creators = []
+    for entry in listed:
+        key, name = (entry.get("key"), entry.get("name")) if isinstance(entry, dict) else (None, None)
+        if not isinstance(key, str) or not exchange.SLUG_PATTERN.fullmatch(key):
+            raise ConfigError("config/run.json: each of outreach.creators needs a lowercase-with-hyphens key")
+        if not isinstance(name, str) or not name.strip():
+            raise ConfigError(f"config/run.json: outreach.creators {key} needs a name")
+        creators.append(Creator(key, name.strip()))
+    if len({creator.key for creator in creators}) != len(creators):
+        raise ConfigError("config/run.json: outreach.creators keys must be distinct")
+    return Settings(source, wait, tuple(creators))
 
 
 def package_role(registry: Mapping) -> tuple[str, str] | None:
@@ -97,7 +113,6 @@ class Plan:
 
     product: str
     run: str
-    settings: Settings
     plan_path: str
     limits: messages.Limits
     folder: Path
@@ -133,43 +148,18 @@ def usable_records(
     return usable, problems
 
 
-def creator_target(creator: Creator, snapshot: Snapshot | None, plan_path: str, wait_days: int) -> messages.Target:
-    """A creator, with what the launcher read of their work this run, or why it read none."""
-    source = f"creator:{creator.key}"
-    reading = snapshot.reading(source) if snapshot else None
-    work = tuple(snapshot.of(source)) if snapshot else ()
-    if reading is None:
-        problem = f"{creator.name}'s own feed was not read this run"
-    elif reading.status != READ:
-        problem = f"{creator.name}'s own feed could not be read this run ({reading.detail.rstrip('.')})"
-    else:
-        problem = "" if work else f"{creator.name}'s own feed held nothing this run"
-    return messages.Target(
-        messages.CREATOR,
-        creator.key,
-        creator.name,
-        work=work,
-        work_problem=problem,
-        wait_days=wait_days,
-        plan=plan_path,
-    )
-
-
 def prepare(
     repo_root: Path,
     config: Settings,
     registry: Mapping,
     mandu: Path,
     ledger: Ledger,
-    snapshot: Snapshot | None,
-    creators: Sequence[Creator],
     records: Sequence[exchange.Outreach],
     saved: OutreachState,
     areas: Areas,
     now: datetime,
     run_id: str,
     waitlist_live: bool,
-    snapshot_file: str,
 ) -> tuple[Plan | None, OutreachState]:
     """The run's outreach plan and the run state rebuilt from the Founder's records; None when no active Product has
     a channel plan."""
@@ -177,17 +167,14 @@ def prepare(
     if found is None:
         return None, saved
     product, plan_path = found
-    products = [str(entry["name"]) for entry in registry.get("products", [])]
     entry = next(item for item in registry["products"] if item["name"] == product)
     tags = tuple((entry.get("waitlist") or {}).get("source_tags") or ())
     today = now.astimezone().date()
-    links = messages.source_links(repo_root, products, tags)
-    site = next((link.split("/", 1)[0] for link, _ in links.values()), "")
-    limits = messages.Limits(config.max_words, site, snapshot_file, waitlist_live)
-    plan = Plan(product, run_id, config, plan_path, limits, areas.path("drafts", *FOLDER))
+    limits, links = messages.run_limits(repo_root, registry, waitlist_live)
+    plan = Plan(product, run_id, plan_path, limits, areas.path("drafts", *FOLDER))
     plan.records, plan.record_problems = usable_records(records, ledger, today)
     state = OutreachState()
-    if config.network_source is None and not creators:
+    if config.network_source is None and not config.creators:
         return plan, state  # nothing to prepare, so the plan in Mandu need not be read
     try:
         plan_text = (mandu / plan_path).read_text(encoding="utf-8")
@@ -214,14 +201,16 @@ def prepare(
             )
             plan.slots.append(messages.slot_for(ledger, product, target, plan.folder / "network-ask.md"))
 
-    for creator in creators:
+    for creator in config.creators:
         if creator.name not in plan_text:
             plan.skipped.append((creator.name, f"the channel plan (`{plan_path}`) does not name them"))
             continue
-        target = creator_target(creator, snapshot, plan_path, config.wait_days)
+        target = messages.Target(
+            messages.CREATOR, creator.key, creator.name, wait_days=config.wait_days, plan=plan_path
+        )
         first = messages.slot_for(ledger, product, target, plan.folder / f"creator-{creator.key}.md")
         plan.slots.append(first)
-        plan.slots.append(follow_up(plan, creator, target, first, ledger, state, today))
+        plan.slots.append(follow_up(plan, creator, first, ledger, state, today, config.wait_days))
     plan.notes = differences(saved, state)
     return plan, state
 
@@ -229,30 +218,23 @@ def prepare(
 def follow_up(
     plan: Plan,
     creator: Creator,
-    first_target: messages.Target,
     first: messages.Slot,
     ledger: Ledger,
     state: OutreachState,
     today: date,
+    wait_days: int,
 ) -> messages.Slot:
     """The one follow-up a creator may get, and why it may not be offered now, if it may not."""
     key = f"creator:{creator.key}"
     record = plan.records.get(str(first.approved["id"])) if first.approved else None
-    target = messages.Target(
-        messages.FOLLOW_UP,
-        creator.key,
-        creator.name,
-        work=first_target.work,
-        work_problem=first_target.work_problem,
-        plan=first_target.plan,
-    )
+    target = messages.Target(messages.FOLLOW_UP, creator.key, creator.name, plan=plan.plan_path)
     path = plan.folder / f"follow-up-{creator.key}.md"
     if first.approved is None:
         target.reason = f"the first message to {creator.name} is not approved yet"
     elif record is None:
         target.reason = f"the first message to {creator.name} is not recorded as sent in Mandu yet"
     else:
-        wait = record.wait_days or plan.settings.wait_days
+        wait = record.wait_days or wait_days
         state.record_contact(key, date.fromisoformat(record.sent_on), wait)
         if record.replied_on:
             state.record_reply(key)
@@ -299,8 +281,6 @@ def slot_json(slot: messages.Slot, areas: Areas) -> dict[str, object]:
         "reason": target.reason,
         "source_link": target.source_link,
         "link_source": target.link_source,
-        "work": [document.id for document in target.work],
-        "work_problem": target.work_problem,
         "wait_days": target.wait_days,
         "sent_on": target.sent_on,
         "plan": target.plan,
@@ -317,24 +297,19 @@ def plan_record(plan: Plan, areas: Areas) -> dict[str, object]:
         "product": plan.product,
         "plan_path": plan.plan_path,
         "problem": plan.problem,
-        "settings": dict(plan.settings.__dict__),
         "limits": dict(plan.limits.__dict__),
         "slots": [slot_json(slot, areas) for slot in plan.slots],
         "skipped": [list(entry) for entry in plan.skipped],
     }
 
 
-def restore(record: Mapping, snapshot: Snapshot | None, areas: Areas, run_id: str) -> Plan:
+def restore(record: Mapping, areas: Areas, run_id: str) -> Plan:
     """A plan as the launcher recorded it, for check-work; the standing is never worked out again."""
     limits = messages.Limits(**record["limits"])
-    folder = areas.path("drafts", *FOLDER)
-    plan = Plan(
-        str(record["product"]), run_id, Settings(**record["settings"]), str(record["plan_path"]), limits, folder
-    )
+    plan = Plan(str(record["product"]), run_id, str(record["plan_path"]), limits, areas.path("drafts", *FOLDER))
     plan.problem = str(record["problem"])
     plan.skipped = [(str(who), str(why)) for who, why in record["skipped"]]
     for entry in record["slots"]:
-        work = tuple(snapshot.documents[key] for key in entry["work"] if snapshot and key in snapshot.documents)
         target = messages.Target(
             entry["purpose"],
             entry["key"],
@@ -342,8 +317,6 @@ def restore(record: Mapping, snapshot: Snapshot | None, areas: Areas, run_id: st
             entry["reason"],
             entry["source_link"],
             entry["link_source"],
-            work=work,
-            work_problem=entry["work_problem"],
             wait_days=entry["wait_days"],
             sent_on=entry["sent_on"],
             plan=entry["plan"],
@@ -447,7 +420,7 @@ def tally(plan: Plan | None, result: Result | None, problem: str, agent_finished
 # What the agent, the run report, and the Founder are told.
 
 
-def brief_lines(plan: Plan | None, context: Context | None, mandu: Path, ledger_root: Path, check: str) -> list[str]:
+def brief_lines(plan: Plan | None, context: Context | None, mandu: Path, check: str) -> list[str]:
     lines = ["## Outreach", ""]
     if plan is None:
         return lines + ["No active Product has a channel plan, so no outreach message is prepared."]
@@ -473,25 +446,10 @@ def brief_lines(plan: Plan | None, context: Context | None, mandu: Path, ledger_
         if target.purpose == messages.NETWORK:
             lines.append(
                 f"- The ask carries the personal-network Source link `{target.source_link}`, exactly as"
-                f" `{target.link_source}` defines it, once in the message and once in the line to forward, and no other"
-                " link. Never invent or alter a link."
+                f" `{target.link_source}` defines it, and no other link. Never invent or alter a link."
             )
-        elif target.purpose == messages.CREATOR:
-            if target.work:
-                ids = ", ".join(f"`{document.id}`" for document in target.work[:5])
-                lines.append(
-                    f"- {target.label}: the launcher read {plural(len(target.work), 'piece')} of their work this run"
-                    f" ({ids} in `{ledger_root / plan.limits.snapshot}`). Cite one by its link as `work:`, only if it"
-                    " gives an honest reason to write now; otherwise write `work: none`."
-                )
-            else:
-                lines.append(
-                    f"- {target.label}: {target.work_problem}. Write `work: none`; the item will say no hook was"
-                    " found. Never write as if you had seen their recent work."
-                )
     lines.append(
-        f"- A message is at most {plan.limits.max_words} words, holds no email address, and names no competitor."
-        f" A message to a creator offers one of: {', '.join(messages.OFFERS)}."
+        f"- A message holds no email address. A message to a creator offers one of: {', '.join(messages.OFFERS)}."
     )
     if context is not None:
         lines += messages.describe_rules(context, creator=True)

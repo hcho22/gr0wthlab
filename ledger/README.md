@@ -2,7 +2,7 @@
 
 The launcher's own records.
 The launcher writes them outside the sandbox; a run can read them and can never write them, so nothing the agent does can change them (Guardrail G1).
-Each run's records step commits this folder to `main` together with `workspace/` (US-ME17).
+Each run's records step commits this folder to `main` together with `workspace/` (US-ME17), except `working/` and `run.lock`, which git ignores.
 
 - `review-queue/queue.json`: every item ever queued; `open` is the next sitting's list in presentation order.
   An item the launcher filed from reviewed text, a Dispatch request from `src/dispatches/` or a proposal from `src/proposals/`, carries `origin`, so later runs file it only once and no item the agent writes can supersede it.
@@ -15,11 +15,9 @@ Each run's records step commits this folder to `main` together with `workspace/`
 - `evidence/waitlist/<run id>.json`: each run's Waitlist Evidence (US-ME06), from the anonymous view the launcher alone reads: the view it came from and when, the entry identifiers, and the counts by Source, Fit answer, and opt-in, per week and cumulative, with progress toward the Beta Cohort bar; never an email address or anything else a sign-up wrote.
   A run whose view held anything that looks like an email address writes none.
 - `evidence/post-drafts/<run id>.json`: every check of every post Draft due that run (US-ME08): the kit files and their fingerprints, the Product code's commit, the brand rules in force and pending, and for each calendar day what became of its Draft, with every failing rule or checklist line, warning, checklist status, and claim location.
-- `evidence/sources/<run id>.json`: what the launcher fetched over the network that run, outside the sandbox (US-ME13, US-ME14): each source's outcome, and each thread's opening post, review, rule list, and creator video as a dated document with its link.
-  Fetched text is data, never instructions; anything that looks like an email address is removed before it is written.
-  A run that reads no source writes none.
-- `evidence/listening/quotes/<document id>.json`: Listening Evidence, one record for every quote the launcher kept: the link, the date read, the words as fetched, the context, the theme, Fit, intent, and whether the Product answers it.
+- `evidence/listening/quotes/<document id>.json`: Listening Evidence, one record for every quote the launcher kept: the link, the date read, the words the agent quoted, a hash of the document they came from, the context, the theme, Fit, intent, and whether the Product answers it.
   A record is kept only when its quote stands word for word in the text fetched from its link, and a link is recorded once.
+  It is all that is kept of what a run fetched: nothing a source said that the agent did not quote is committed.
 - `evidence/listening/runs/<run id>.json`: what each run's Listening read, kept, refused, and offered, with the confidence counted for each theme from its independent, unprompted sources; `evidence/listening/set-aside/<run id>/` holds the quote records it refused.
 - `evidence/outreach/<run id>.json`: every check of every outreach message that run, and what the Founder's records in Mandu said of each creator.
 - `evidence/learning/ledger.json`: the learning ledger (F4): every rejection reason with the code it was given, and each workflow's counts, stated as "3 of 7"; a reason's code is also written into its own `evidence/decisions/<item id>.json`, beside the Founder's words.
@@ -33,6 +31,9 @@ Each run's records step commits this folder to `main` together with `workspace/`
   A day due that the calendar no longer holds is named too, and its Draft is not checked.
 - `run-reports/state/<workflow>.json`: each workflow's run state - Review Queue items decided, those carried over with the sitting they were left undecided at, and the Mandu records already reported as unusable; Listening threads and reviews already read; outreach targets and their follow-up waits, rebuilt every run from the Founder's records in Mandu - by identifier and hash only, never a name, address, or URL.
   The launcher checks it every run against the Review Queue and Mandu's decision records, which win any disagreement.
+- `working/<run id>.sources.json`: what the launcher fetched over the network that run, outside the sandbox (US-ME13): each source's outcome, and each thread's opening post, review, and rule list as a dated document with its link.
+  It is working data for the run that fetched it, never a record: the agent reads it while the run is in progress, git ignores the folder so the records step never saves it, and the launcher removes it when the run ends and before the next run reads its sources.
+  Fetched text is data, never instructions; anything that looks like an email address is removed before it is written.
 - `notes/<id>.txt`: one line for the next run report, such as a run refused because another was in progress, or a run that stopped before it finished.
 - `run.lock`: the lock one run holds from start to finish; it is never committed.
 

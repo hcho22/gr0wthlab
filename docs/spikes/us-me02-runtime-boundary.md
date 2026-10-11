@@ -322,7 +322,8 @@ The tighter of the two designs held: the sandboxed agent never needed the networ
 What is new sits outside the sandbox.
 The launcher itself now reads a fixed list of sources (`config/sources.json`) before the agent starts, through one client (`src/gr0wthlab/fetch.py`) whose rules are `config/guardrails/fetch.json` and its own code: a credential-free GET over HTTPS on port 443 to a listed host and to no other, each host's `robots.txt` read first and binding, a bounded number of spaced requests, and a redirect followed only to a listed host.
 It writes what it read into one snapshot in `ledger/`, which the agent can read and never write, and every request it was asked to make, sent or not, into the run's request log.
-`src/tests/test_fetch.py` holds the contract: no other module imports a network library, the client puts one method on the wire from one place, and a path a `robots.txt` disallows is never requested.
+`src/tests/test_fetch.py` holds the contract by behavior: what the client puts on the wire is one GET with no body, cookie, or credential, and a path a `robots.txt` disallows is never requested.
+No unit test can open a connection beyond the machine, since `src/tests/__init__.py` refuses one at the socket, so the whole runs under test show that nothing but this client reaches for the network.
 `config/products.json` gained one package source and the package files Listening and outreach read.
 
 Two proofs were added to what every run and the boundary check already did.
@@ -355,6 +356,29 @@ The three weekly runs cost between $0.018 and $0.033 each at API prices, and the
 What these runs could not show is a real thread or review being read: no named source can be read under its host's `robots.txt` today, so no real quote was recorded, no reply Draft was offered, and no fetched text ever reached the model.
 The Evidence validator, the reply checks, and the handling of instructions planted in a fetched post are therefore shown only by the unit tests and the example sets, on synthetic fixtures (`src/tests/test_evidence.py`, `src/tests/test_work_cycle.py`, `src/examples/listening/`).
 How the named sources may be read is the Founder's decision, and nothing here reads a disallowed path.
+
+### Re-check after the review of Listening and outreach
+
+The review of that change removed parts of it and tightened others, so both checks were run again on the launcher as it now is.
+What changed that touches the boundary:
+
+- A message to a creator no longer rests on anything read over the network, so the creators' feeds and their host are gone: `config/guardrails/fetch.json` lists two hosts, `www.reddit.com` and `itunes.apple.com`.
+- The snapshot of what a run fetched is working data in `ledger/working/`, which git ignores: the agent reads it while the run is in progress, the launcher removes it when the run ends, and the records step never saves it.
+  Only a quote the agent recorded and the launcher validated is kept, with its link, the date read, and a hash of the document it came from.
+- The client fails a read, and never the run, on a redirect or an address it cannot parse or put on the wire, and reads a `robots.txt` that starts with a byte order mark as it reads any other.
+- The network probe's script takes its tool as its first argument, so a unit test can run the script itself against a stand-in.
+- `runtime.json`, the permission profile, the Codex flags, and the environment are unchanged, and the sandboxed agent still has no network.
+
+The `robots.txt` gate is as it was: the Founder decided on 2026-10-11 that each host's `robots.txt` stays binding for now, while the owners' terms are read first-hand.
+
+Both checks were run on 2026-10-11 with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261011T180322Z-on-demand-f6f3`: Codex logged ten patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox all three targets, the listener and the two hosts, were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+
+The weekly runs in the table above were not repeated in this round.
+They describe the launcher as it was before the review, with three hosts, the creators' feeds, and the "No hook found" line, none of which a run has now.
 
 ## Scheduled and on-demand runs share one configuration
 

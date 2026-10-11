@@ -7,6 +7,9 @@ make by eye: the record names a document the run fetched, carries that document'
 repeats no link already recorded, and its quote stands in the fetched text word for word, so a quote can never be
 invented or altered. Which words to quote, the theme, the Fit, and the intent are the agent's judgment.
 
+A kept record is all that outlives the run of what was fetched: the words the agent quoted, their link, the date
+read, and a hash of the document they came from. The snapshot itself is removed when the run ends.
+
 Confidence is never the agent's to state: it is counted here, from the independent, unprompted sources behind a set of
 quotes. High needs three or more, Medium two, and Low one.
 """
@@ -21,6 +24,7 @@ from pathlib import Path
 
 from . import exchange
 from .areas import Store, UnsafeFile, read_plain
+from .exchange import plural
 from .sources import POST, REVIEW, Document, Snapshot, flat, link_key
 from .waitlist import looks_like_address
 
@@ -41,10 +45,6 @@ MAX_THEME = 40
 HIGH = "High"
 MEDIUM = "Medium"
 LOW = "Low"
-
-
-def plural(count: int, noun: str) -> str:
-    return f"{count} {noun}" + ("" if count == 1 else "s")
 
 
 # A record as the agent wrote it.
@@ -108,8 +108,9 @@ def parse(text: str, path: str) -> Record:
 
 @dataclass(frozen=True)
 class Quote:
-    """One validated quote. independent is what two quotes share when they are one source said twice, and unprompted
-    says the person spoke without being asked: the opening post of a thread, or a review."""
+    """One validated quote. document_sha256 is the hash of the fetched document it came from, which two quotes share
+    when they are one source said twice, and unprompted says the person spoke without being asked: the opening post
+    of a thread, or a review."""
 
     id: str
     product: str
@@ -123,11 +124,9 @@ class Quote:
     answerable: bool
     source: str
     kind: str
-    title: str
     published: str
-    independent: str
+    document_sha256: str
     unprompted: bool
-    snapshot: str
     recorded_by_run: str
 
     def as_json(self) -> dict[str, object]:
@@ -207,11 +206,9 @@ def check(
             fields["answerable"] == "yes",
             document.source,
             document.kind,
-            document.title,
             document.published,
             document.sha256,
             document.kind in QUOTED_KINDS,
-            snapshot.run,
             run_id,
         ),
         [],
@@ -280,7 +277,7 @@ def file_of(quote_id: str) -> str:
 
 def independent_sources(quotes: Sequence[Quote]) -> int:
     """How many independent, unprompted sources stand behind the quotes: one text said twice counts once."""
-    return len({quote.independent for quote in quotes if quote.unprompted})
+    return len({quote.document_sha256 for quote in quotes if quote.unprompted})
 
 
 def confidence(count: int) -> str:
@@ -303,7 +300,9 @@ def by_theme(quotes: Sequence[Quote]) -> dict[str, list[Quote]]:
 
 
 def cite(quote: Quote, limit: int = 300) -> str:
-    """One quote as an Evidence line of a Review Queue item: the words, where they were read, and when."""
+    """One quote as an Evidence line of a Review Queue item: where it was read and when, then the words, marked as
+    every item marks a third party's text."""
     words = quote.quote if len(quote.quote) <= limit else quote.quote[: limit - 3].rstrip() + "..."
-    what = "a review" if quote.kind == REVIEW else "a thread"
-    return f'- "{words}" ({what}, theme `{quote.theme}`, read {quote.read_on}): {quote.link}'
+    what = "A review" if quote.kind == REVIEW else "A thread"
+    lines = [f"- {what}, theme `{quote.theme}`, read {quote.read_on}: {quote.link}"]
+    return "\n".join(lines + exchange.third_party(words, "  "))

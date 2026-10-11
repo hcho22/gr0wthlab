@@ -30,6 +30,7 @@ from pathlib import Path
 
 from . import evidence, exchange
 from .areas import Areas, Store, UnsafeFile, read_plain
+from .exchange import plural
 from .queue import Ledger
 from .state import Tally, queued_item
 from .waitlist import looks_like_address
@@ -58,10 +59,6 @@ CODES_IN = ("learning",)  # under workspace/evidence/
 FRONT_KEYS = ("item", "code")
 FORMAT = 1
 MAX_WHY = 300
-
-
-def plural(count: int, noun: str) -> str:
-    return evidence.plural(count, noun)
 
 
 def kind(code: str) -> str:

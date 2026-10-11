@@ -16,7 +16,7 @@ from tests import fakes
 SETS = fakes.REPO / "src" / "examples"
 PRODUCTS = ["RepToday", "Immerse"]
 RUN = "example-run"
-SNAPSHOT_FILE = f"evidence/sources/{RUN}.json"
+SNAPSHOT_FILE = f"working/{RUN}.sources.json"
 
 
 class ExampleSet:
@@ -32,7 +32,6 @@ class ExampleSet:
         cls.folder = SETS / cls.NAME
         cls.data = json.loads((cls.folder / "evals.json").read_text(encoding="utf-8"))
         cls.context = fakes.kit_context(fakes.make_code(cls.root / "code", env), env)
-        cls.snapshot = sources.load_snapshot((cls.folder / cls.data["snapshot"]).resolve())
         cls.areas = fakes.workspace_areas(cls.root / "repo")
         cls.registry = json.loads((fakes.REPO / "config" / "products.json").read_text(encoding="utf-8"))
 
@@ -100,10 +99,15 @@ class ExampleSet:
 class ListeningExamplesTest(ExampleSet, unittest.TestCase):
     NAME = "listening"
 
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.snapshot = sources.load_snapshot((cls.folder / cls.data["snapshot"]).resolve())
+
     def setUp(self):
         policy = fetch.policy_from(fakes.FETCH_POLICY)
         config = sources.config_from(fakes.sources_with(["fitness30plus", "getdisciplined"]), policy)
-        limits = messages.Limits(150, "reptoday.app", SNAPSHOT_FILE)
+        limits = messages.Limits("reptoday.app")
         fit = "projects/RepToday/gtm/02-brand/positioning.md"
         self.plan = listening.Plan("RepToday", RUN, config, self.snapshot, SNAPSHOT_FILE, fit, True, limits)
         confirmed = self.data["confirmed_subreddits"]
@@ -224,22 +228,19 @@ class OutreachExamplesTest(ExampleSet, unittest.TestCase):
             if record["follow_up_approved"]:
                 second = self.entry(messages.FOLLOW_UP, record["creator"], "follow-up")
                 ledger.entries[second["id"]] = second
-        creators = [sources.Creator(key, name, fakes.creator_feed(key)[0]) for key, name in fakes.KIT_CREATORS]
+        creators = tuple(outreach.Creator(key, name) for key, name in fakes.KIT_CREATORS)
         plan, _ = outreach.prepare(
             fakes.REPO,
-            outreach.Settings("network", 7, 150),
+            outreach.Settings("network", 7, creators),
             self.registry,
             fakes.EXAMPLES / "files" / "mandu",
             ledger,
-            self.snapshot,
-            creators,
             records,
             OutreachState(),
             self.areas,
             now,
             RUN,
             False,
-            SNAPSHOT_FILE,
         )
         self.assertEqual((plan.problem, plan.skipped), ("", []))
         slot = next(s for s in plan.slots if (s.target.purpose, s.target.key) == (draft.purpose, draft.to))
@@ -251,14 +252,12 @@ class OutreachExamplesTest(ExampleSet, unittest.TestCase):
         check, item = assertion["check"], outcome["item"]
         if check == "carries_source_link":
             return (
-                item.body.count(fakes.SOURCE_LINK) >= 3
+                f"It carries the personal-network Source link `{fakes.SOURCE_LINK}`" in item.body
+                and f"> Rep Today is a workout app for people whose routine fell apart: {fakes.SOURCE_LINK}"
+                in item.body
                 and "- The personal-network Source link: `src/dispatches/reptoday-waitlist.md`" in item.evidence
                 and "Do not send it until the RepToday Waitlist is live" in item.body
             )
-        if check == "no_hook_found":
-            return "No hook found: Hallway Moves" not in item.body and "\nNo hook found: " in item.body
-        if check == "cites_work":
-            return f"published 2026-10-05: {assertion['link']}" in item.body and assertion["link"] in item.evidence
         return self.message_holds(assertion, outcome)
 
     def test_the_set_covers_the_failure_cases_the_story_names(self):

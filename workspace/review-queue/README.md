@@ -8,6 +8,7 @@ The format, and what Mandu writes back: [the Mandu exchange](../../docs/mandu-ex
 
 - `angles/`: where the agent proposes a new Angle or Hook, citing the Listening quotes it rests on.
   The launcher queues one as a package-change proposal only if every source it cites is kept Listening Evidence, and discards any other with a note.
+  A package-change proposal in `incoming/` that touches the Angle bank or the A/B pairs file, or whose ask adds an Angle or Hook, is held to the same rule: it is set aside unless its Evidence cites a quote the launcher already keeps.
   A message never goes in `incoming/` either: the launcher queues it from a Draft in [`drafts/messages/`](../drafts/README.md).
 
 The published Review Queue (`queue.json`, each item, and what was set aside) is in [`ledger/review-queue/`](../../ledger/README.md), which only the launcher writes and Mandu reads.

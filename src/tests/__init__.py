@@ -1,6 +1,7 @@
 """The launcher's unit tests, every one run with the Mac's clock in the same time zone."""
 
 import os
+import socket
 import time
 
 # The launcher dates its records by the Mac's local date, so the zone is an input like the clock: left to the machine,
@@ -22,3 +23,31 @@ def no_network(host, target, headers, timeout, limit):
 
 
 fetch.send = no_network
+
+# Nor may anything else the launcher runs in a unit test: a connection or a name lookup beyond this machine is refused
+# at the socket, whatever opened it, and listed here, so a whole run under test shows that it tried none. The boundary
+# check's own listeners are local, and stay reachable.
+ATTEMPTS: list[object] = []
+LOCAL = ("127.0.0.1", "::1", "localhost", "", None)
+connect, lookup = socket.socket.connect, socket.getaddrinfo
+
+
+def refuse(host):
+    ATTEMPTS.append(host)
+    raise AssertionError(f"a unit test tried to open the network: a connection to {host}")
+
+
+def local_connect(sock, address):
+    if sock.family != socket.AF_UNIX and address[0] not in LOCAL:
+        refuse(address[0])
+    return connect(sock, address)
+
+
+def local_lookup(host, *args, **kwargs):
+    if host not in LOCAL:
+        refuse(host)
+    return lookup(host, *args, **kwargs)
+
+
+socket.socket.connect = local_connect
+socket.getaddrinfo = local_lookup

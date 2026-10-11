@@ -23,7 +23,7 @@ import http.client
 import re
 import ssl
 import time
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -201,7 +201,7 @@ def parse_robots(host: str, text: str, token: str) -> Robots:
     """The rules of the group that names this reader's product token, or of the * group when none does."""
     groups: list[tuple[list[str], list[Rule], list[float]]] = []
     collecting = False  # whether the last record read was a user-agent line, so the next one joins its group
-    for raw in text.splitlines():
+    for raw in text.lstrip("\ufeff").splitlines():
         line = raw.split("#", 1)[0].strip()
         key, colon, value = line.partition(":")
         key, value = key.strip().lower(), value.strip()
@@ -368,7 +368,12 @@ class Client:
                     return Result(
                         FAILED, f"HTTP {response.status} with no address to follow", url, b"", response.status
                     )
-                url = urljoin(url, location)
+                try:
+                    url = urljoin(url, location)
+                except ValueError:
+                    return Result(
+                        FAILED, "the host redirected to an address that cannot be parsed", url, b"", response.status
+                    )
                 continue
             if response.status != 200:
                 return Result(FAILED, f"the host answered HTTP {response.status}", url, b"", response.status)
@@ -416,7 +421,7 @@ class Client:
             self.sent += 1
             try:
                 response = (self.transport or send)(host, target, headers, self.policy.timeout, limit)
-            except (OSError, http.client.HTTPException) as error:
+            except (OSError, http.client.HTTPException, ValueError) as error:
                 detail = f"{host} could not be read: {type(error).__name__}: {short(error)}"
                 self.ready[host] = self.clock() + self.policy.interval
                 self.record(url, purpose, True, FAILED, detail)
@@ -462,8 +467,3 @@ class Client:
             },
             "requests": self.log,
         }
-
-
-def hosts_of(urls: Sequence[str]) -> list[str]:
-    """The host of each address, for checking a source list against the policy."""
-    return sorted({urlsplit(url).netloc for url in urls})

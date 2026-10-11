@@ -3,19 +3,18 @@
 Order: bring the production clone up to origin's main; snapshot the Go-To-Market Package; take in the Founder's
 decisions from Mandu; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests
 that need filing; plan the post Drafts from the 14-day kit (posts.prepare); read the fixed list of network sources
-into one snapshot (fetch.Client, the launcher's only way onto the network) and plan Listening and outreach from it and
-from the Founder's records; brief the agent and run it inside the sandbox, which has no network (launcher.run); put
-back any change the run made to its own Instructions; queue the items it wrote to workspace/review-queue/incoming/
-that pass the format, a post for each Draft it wrote that passes every check (posts.take), the quotes, proposals, and
-messages that pass theirs (listening.take, outreach.take), the code it proposed for each rejection reason
-(learning.take), and the reviewed proposals that need filing; write the Review Queue and the run report; commit and
-push workspace/ and ledger/. Every step but the agent is deterministic code outside the sandbox. The launcher's
-records live in ledger/, which the agent can read and never write, so nothing it does can change them; in workspace/
-the launcher only restores its owner's access to entries the agent left without it, reads the Drafts, reads and
-removes the items, quote records, proposals, and codes it takes in, and puts the agent's Instructions back as they
-were. One run at a time per checkout holds the run lock in its ledger/ from the sync to the saved records; a run
-started meanwhile refuses to
-start, and the next report says so.
+into one snapshot (fetch.Client, the launcher's only way onto the network), which is working data removed when the run
+ends, and plan Listening from it and outreach from the Founder's records; brief the agent and run it inside the
+sandbox, which has no network (launcher.run); put back any change the run made to its own Instructions; queue the
+items it wrote to workspace/review-queue/incoming/ that pass the format, a post for each Draft it wrote that passes
+every check (posts.take), the quotes, proposals, and messages that pass theirs (listening.take, outreach.take), the
+code it proposed for each rejection reason (learning.take), and the reviewed proposals that need filing; write the
+Review Queue and the run report; commit and push workspace/ and ledger/. Every step but the agent is deterministic
+code outside the sandbox. The launcher's records live in ledger/, which the agent can read and never write, so
+nothing it does can change them; in workspace/ the launcher only restores its owner's access to entries the agent
+left without it, reads the Drafts, reads and removes the items, quote records, proposals, and codes it takes in, and
+puts the agent's Instructions back as they were. One run at a time per checkout holds the run lock in its ledger/
+from the sync to the saved records; a run started meanwhile refuses to start, and the next report says so.
 """
 
 from __future__ import annotations
@@ -25,6 +24,7 @@ import hashlib
 import json
 import os
 import shlex
+import shutil
 import stat
 import subprocess
 import sys
@@ -68,7 +68,7 @@ RUN_REPORTS = "run-reports"
 SNAPSHOTS = "package-snapshots"
 SUMMARY_LIMIT = 4000
 WAITLIST_NEEDS = ("waitlist-counts", "weekly-read", "beta-recruiting")
-SOURCE_SNAPSHOTS = ("evidence", "sources")
+WORKING = "working"
 # The folders, each inside one of the agent's areas, that the launcher takes the agent's work in from.
 INTAKE = (
     ("evidence", listening.QUOTES_IN),
@@ -685,6 +685,7 @@ class Cycle:
     ) -> tuple[sources.Snapshot, list[tuple[str, str]], str]:
         """Read the fixed list of network sources, outside the sandbox, into this run's snapshot, and keep the
         request log; every source's result goes into the run report, read or not."""
+        self.discard_working()
         now = self.now()
         apps, missing, research_problem = self.research_apps(state, source_config, mandu)
         limit = source_config.app_store.max_apps if source_config.app_store else 0
@@ -694,25 +695,26 @@ class Cycle:
         ]
         client = self.client(policy)
         snapshot = listening.read_sources(client, source_config, apps, seen, state.run_id, now)
-        needs = {
-            sources.LISTENING: output_titles(config, ("listening",)),
-            sources.OUTREACH: output_titles(config, ("outreach-drafts",)),
-        }
+        needs = output_titles(config, ("listening",))
         for reading in snapshot.readings:
-            line = SourceLine(reading.source.name, reading.status, reading.detail, needs[reading.source.workflow])
-            state.sources.append(line)
+            state.sources.append(SourceLine(reading.source.name, reading.status, reading.detail, needs))
         state.sources += [SourceLine(name, SKIPPED, why) for name, why in skipped]
         if research_problem:
             detail = f"{research_problem[0].upper()}{research_problem[1:]}."
-            state.sources.append(SourceLine("App Store reviews", package.FAILED, detail, needs[sources.LISTENING]))
+            state.sources.append(SourceLine("App Store reviews", package.FAILED, detail, needs))
         if snapshot.readings:
-            path = self.store.path(*SOURCE_SNAPSHOTS, f"{state.run_id}.json")
+            path = self.store.path(WORKING, f"{state.run_id}.sources.json")
             self.store.write_json(path, snapshot.as_json())
             state.snapshot_sources = self.store.relative(path)
             log = self.store.path(RUN_REPORTS, f"{state.run_id}.requests.json")
             self.store.write_json(log, dict(client.summary(), run=state.run_id))
             state.requests_file = self.store.relative(log)
         return snapshot, skipped, research_problem
+
+    def discard_working(self) -> None:
+        """Remove what a run fetched over the network: working data for that run alone, which is gone when the run
+        ends and which no later run reads."""
+        shutil.rmtree(str(self.store.path(WORKING)), ignore_errors=True)
 
     def prepare_work(
         self,
@@ -726,13 +728,12 @@ class Cycle:
         folder: Path,
         network: tuple[fetch.Policy, sources.Config, outreach.Settings],
     ) -> None:
-        """Before the agent: read the network sources, plan Listening and outreach from them and from the Founder's
+        """Before the agent: read the network sources, plan Listening from them and outreach from the Founder's
         records in Mandu, and record both plans for the agent's own check. Each step fails on its own; with no
         ledger, as when the Review Queue could not be read, nothing is filed or matched."""
         policy, source_config, outreach_settings = network
         mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
         today = self.now().astimezone().date()
-        snapshot = None
         try:
             snapshot, skipped, research_problem = self.read_sources(
                 state, config, policy, source_config, mandu, states.listening
@@ -743,17 +744,7 @@ class Cycle:
                 for result in state.snapshot
                 for file in result.files
             )
-            names = [str(product["name"]) for product in registry.get("products", [])]
-            tags = [
-                tag
-                for product in registry.get("products", [])
-                for tag in (product.get("waitlist") or {}).get("source_tags") or ()
-            ]
-            links = messages.source_links(canonical(self.repo_root), names, tags)
-            site = next((link.split("/", 1)[0] for link, _ in links.values()), "")
-            limits = messages.Limits(
-                outreach_settings.max_words, site, state.snapshot_sources, config.waitlist_live(today)
-            )
+            limits, _ = messages.run_limits(canonical(self.repo_root), registry, config.waitlist_live(today))
             state.listening = listening.prepare(
                 registry,
                 source_config,
@@ -798,15 +789,12 @@ class Cycle:
                     registry,
                     mandu,
                     ledger,
-                    snapshot,
-                    source_config.creators,
                     usable,
                     states.outreach,
                     areas,
                     self.now(),
                     state.run_id,
                     config.waitlist_live(today),
-                    state.snapshot_sources,
                 )
                 if state.outreach is not None:
                     state.outreach.record_problems += bad
@@ -967,6 +955,8 @@ class Cycle:
                 self.leave_note(run_id, line)
                 self.say(f"the run stopped: {error}; the next run's report will say so")
                 return EXIT_STOPPED
+            finally:
+                self.discard_working()
 
     def locked_run(
         self,
@@ -1115,7 +1105,8 @@ class Cycle:
         now = self.now()
         published: list[str] = []
         if ledger_ok:
-            published, state.set_aside = ledger.take_incoming(areas, self.store, products, run_id, now, seen)
+            sourced = listening.sourced_pain(registry, self.store)
+            published, state.set_aside = ledger.take_incoming(areas, self.store, products, run_id, now, seen, sourced)
             state.published += published
         incoming = len(published) + len(state.set_aside)
         if ledger_ok:

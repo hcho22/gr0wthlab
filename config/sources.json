@@ -1,5 +1,5 @@
 {
-  "description": "The fixed list of sources the launcher reads over the network, outside the sandbox, at each run: the places Listening hears from (US-ME13) and the three creators' own work that a creator message may cite (US-ME14). The launcher reads this file and the agent cannot write it (G8). Every address here is on a host listed in config/guardrails/fetch.json, is read with one credential-free GET, and only where that host's robots.txt allows it; a source that cannot be read is reported with its reason and its workflow is marked incomplete. Which competitors' reviews are read comes from the package's research in Mandu, never from here; the addresses are platform facts, not strategy.",
+  "description": "The fixed list of sources the launcher reads over the network, outside the sandbox, at each run: the places Listening hears from (US-ME13). The launcher reads this file and the agent cannot write it (G8). Every address here is on a host listed in config/guardrails/fetch.json, is read with one credential-free GET, and only where that host's robots.txt allows it; a source that cannot be read is reported with its reason and its workflow is marked incomplete. Which competitors' reviews are read comes from the package's research in Mandu, never from here; the addresses are platform facts, not strategy.",
   "product": "RepToday",
   "listening": {
     "subreddits": ["fitness30plus", "bodyweightfitness", "getdisciplined"],
@@ -19,25 +19,5 @@
     "max_documents_per_source": 25,
     "max_document_chars": 2000,
     "limits_note": "The newest documents of each source are kept, each cut to max_document_chars; a quote is checked against exactly the text kept."
-  },
-  "outreach": {
-    "creators": [
-      {
-        "key": "gmb-fitness",
-        "name": "GMB Fitness",
-        "feed": "https://www.youtube.com/feeds/videos.xml?channel_id=UC_ruB7qtdk4KufASPRuWhZA"
-      },
-      {
-        "key": "hybrid-calisthenics",
-        "name": "Hybrid Calisthenics",
-        "feed": "https://www.youtube.com/feeds/videos.xml?channel_id=UCeJFgNahi--FKs0oJyeRDEw"
-      },
-      {
-        "key": "the-bioneer",
-        "name": "The Bioneer",
-        "feed": "https://www.youtube.com/feeds/videos.xml?channel_id=UCIh_TPYPqjJuS_-nOfAIlfg"
-      }
-    ],
-    "note": "The three creators the PRD names, each with the public feed of their channel's newest videos; the channel identifiers are the ones the package's creator research cites. A run drafts a message only for a creator the channel plan in Mandu still names (the Product registry's outreach.channel_plan). A creator whose feed cannot be read gets a message that says no hook was found, never an invented one."
   }
 }

@@ -1,2 +1,3 @@
 __pycache__/
 /ledger/run.lock
+/ledger/working/

@@ -8,7 +8,6 @@
     {
       "id": "reddit:fitness30plus",
       "kind": "threads",
-      "workflow": "listening",
       "group": "fitness30plus",
       "label": "r/fitness30plus",
       "name": "r/fitness30plus threads",
@@ -23,7 +22,6 @@
     {
       "id": "reddit-rules:fitness30plus",
       "kind": "rules",
-      "workflow": "listening",
       "group": "fitness30plus",
       "label": "r/fitness30plus",
       "name": "r/fitness30plus rules",
@@ -38,7 +36,6 @@
     {
       "id": "reddit:getdisciplined",
       "kind": "threads",
-      "workflow": "listening",
       "group": "getdisciplined",
       "label": "r/getdisciplined",
       "name": "r/getdisciplined threads",
@@ -53,7 +50,6 @@
     {
       "id": "reddit-rules:getdisciplined",
       "kind": "rules",
-      "workflow": "listening",
       "group": "getdisciplined",
       "label": "r/getdisciplined",
       "name": "r/getdisciplined rules",
@@ -68,7 +64,6 @@
     {
       "id": "app-store:222222222",
       "kind": "reviews",
-      "workflow": "listening",
       "group": "222222222",
       "label": "IronFit",
       "name": "App Store reviews: IronFit",
@@ -78,21 +73,6 @@
       "detail": "1 document, 1 not read by an earlier run",
       "fetched_at": "2026-10-11T23:00:00+00:00",
       "sha256": "61e4c7b167cb5aa001e1511061a9caa681daaeebe4649951187b8cb833254e00",
-      "documents": 1
-    },
-    {
-      "id": "creator:slow-strength",
-      "kind": "creator",
-      "workflow": "outreach",
-      "group": "slow-strength",
-      "label": "Slow Strength",
-      "name": "Slow Strength's feed",
-      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCslow-strength",
-      "page": "https://www.youtube.com/feeds/videos.xml?channel_id=UCslow-strength",
-      "status": "read",
-      "detail": "1 document, 1 not read by an earlier run",
-      "fetched_at": "2026-10-11T23:00:00+00:00",
-      "sha256": "001eadf67f4f5a1bcff5a83b4347d417db121b426cca081d51228e09fc9f3549",
       "documents": 1
     }
   ],
@@ -208,20 +188,6 @@
       "cut": false,
       "new": true,
       "sha256": "a367e31d2ac611fa811ed72d0e53948c5d3175de07c3a98c3e708a6432eca62b"
-    },
-    {
-      "id": "d-664900bf0b5d",
-      "source": "creator:slow-strength",
-      "kind": "video",
-      "link": "https://www.youtube.com/watch?v=slow0001",
-      "title": "Five slow squats a day",
-      "text": "A short routine for stiff mornings.",
-      "published": "2026-10-05T16:45:13+00:00",
-      "detail": "",
-      "thread": "https://www.youtube.com/watch?v=slow0001",
-      "cut": false,
-      "new": true,
-      "sha256": "9b501afdd5358dc047d951a313b4c4630b400f61b70a39bbda74997701e5a442"
     }
   ]
 }

@@ -31,19 +31,21 @@ class ConfigTest(unittest.TestCase):
         policy = fetch.load_policy(REPO)
         loaded = sources.load(REPO, policy)
         self.assertEqual(loaded.subreddits, ("fitness30plus", "bodyweightfitness", "getdisciplined"))
-        self.assertEqual([c.name for c in loaded.creators], ["GMB Fitness", "Hybrid Calisthenics", "The Bioneer"])
         apps = [sources.App("Example", "301521403", "competitor-example.md line 8")]
-        planned = sources.plan(loaded, apps, loaded.creators)
-        self.assertEqual(len(planned), 3 * 2 + 1 + 3)
-        self.assertLessEqual(set(fetch.hosts_of([source.url for source in planned])), set(policy.hosts))
+        planned = sources.plan(loaded, apps)
+        self.assertEqual(len(planned), 3 * 2 + 1)
         for source in planned:
             self.assertIsNone(fetch.refusal(policy, source.url), source.url)
         self.assertEqual(planned[0].url, "https://www.reddit.com/r/fitness30plus/new/.rss")
         self.assertEqual(planned[6].url, loaded.app_store.reviews.format(country="us", id="301521403"))
 
-    def test_the_committed_list_holds_no_package_content(self):
-        text = (REPO / "config" / "sources.json").read_text(encoding="utf-8")
-        self.assertNotRegex(text, r"id\d{6,}|id=\d{6,}", "which apps are read comes from the research in Mandu")
+    def test_which_apps_are_read_comes_from_the_research_never_from_the_list(self):
+        loaded = sources.load(REPO, fetch.load_policy(REPO))
+        self.assertEqual({source.kind for source in sources.plan(loaded, [])}, {"threads", "rules"})
+        apps = [sources.App("One", "111111111", "a.md line 1"), sources.App("Two", "222222222", "b.md line 2")]
+        reviews = [source for source in sources.plan(loaded, apps) if source.kind == "reviews"]
+        self.assertEqual([source.group for source in reviews], ["111111111", "222222222"])
+        self.assertEqual([source.url.count(app.id) for source, app in zip(reviews, apps)], [1, 1])
 
     def test_an_address_the_client_could_not_request_stops_the_run(self):
         for path, value in (
@@ -56,9 +58,7 @@ class ConfigTest(unittest.TestCase):
             (("listening", "subreddits"), ["fitness30plus", "fitness30plus"]),
             (("listening", "subreddits"), ["r/fitness30plus"]),
             (("listening", "max_documents_per_source"), 0),
-            (("outreach", "creators"), [{"key": "A B", "name": "A", "feed": "https://www.youtube.com/feeds/x"}]),
-            (("outreach", "creators"), [{"key": "a", "name": "A", "feed": "https://example.net/feed"}]),
-            (("outreach",), {}),
+            (("listening",), {}),
         ):
             data = committed()
             block = data
@@ -95,7 +95,7 @@ class ResearchAppsTest(unittest.TestCase):
 class ParsingTest(unittest.TestCase):
     def setUp(self):
         self.config = config(subreddits=["fitness30plus", "getdisciplined"])
-        self.threads, self.rules = sources.plan(self.config, [], [])[:2]
+        self.threads, self.rules = sources.plan(self.config, [])[:2]
 
     def test_a_subreddit_feed_becomes_posts_with_link_date_and_plain_text(self):
         body = fakes.atom_feed(
@@ -138,24 +138,18 @@ class ParsingTest(unittest.TestCase):
         documents = sources.parse_atom(fakes.atom_feed(entries).encode(), self.threads, self.config)
         self.assertEqual([document.link for document in documents], [fakes.THREAD])
 
+    def test_a_feed_entry_whose_link_cannot_be_parsed_is_left_out(self):
+        entries = [("https://[x", "a", "text", ""), (fakes.THREAD, "b", "text", "")]
+        documents = sources.parse_atom(fakes.atom_feed(entries).encode(), self.threads, self.config)
+        self.assertEqual([document.link for document in documents], [fakes.THREAD])
+        self.assertEqual(sources.link_key("https://[x"), "")
+        self.assertNotEqual(sources.link_key(fakes.THREAD), "")
+
     def test_a_feed_that_declares_a_document_type_is_never_parsed(self):
         bomb = b'<?xml version="1.0"?><!DOCTYPE feed [<!ENTITY a "aaaa">]><feed xmlns="http://www.w3.org/2005/Atom"/>'
         for body in (bomb, b"<feed", b"<rss/>", b"not xml"):
             with self.subTest(body=body[:20]), self.assertRaises(sources.SourceError):
                 sources.parse_atom(body, self.threads, self.config)
-
-    def test_a_channel_feed_becomes_dated_linked_videos(self):
-        creator = sources.Creator(
-            "gmb-fitness", "GMB Fitness", "https://www.youtube.com/feeds/videos.xml?channel_id=UCx"
-        )
-        source = sources.plan(self.config, [], [creator])[-1]
-        link = "https://www.youtube.com/watch?v=abc123"
-        body = fakes.atom_feed(
-            [(link, "A shoulder test", "Try this at home.", "2026-10-05T16:45:13+00:00")], reddit=False
-        )
-        (video,) = sources.parse_atom(body.encode(), source, self.config)
-        self.assertEqual((video.kind, video.link, video.title), ("video", link, "A shoulder test"))
-        self.assertEqual((video.text, video.published), ("Try this at home.", "2026-10-05T16:45:13+00:00"))
 
     def test_a_review_feed_becomes_reviews_each_with_its_own_link(self):
         store = {
@@ -165,7 +159,7 @@ class ParsingTest(unittest.TestCase):
             "max_apps": 3,
         }
         loaded = config(app_store=store)
-        source = sources.plan(loaded, [sources.App("IronFit", "222222222", "x")], [])[-1]
+        source = sources.plan(loaded, [sources.App("IronFit", "222222222", "x")])[-1]
         body = fakes.review_feed(
             [
                 (
@@ -200,6 +194,8 @@ class ParsingTest(unittest.TestCase):
         )
         with self.assertRaises(sources.SourceError):
             sources.parse_rules(b'{"rules": "none"}', self.rules, self.config)
+        (empty,) = sources.parse_rules(b'{"rules": []}', self.rules, self.config)
+        self.assertEqual((empty.kind, empty.text), ("rules", ""))
 
 
 def _escaped(markup):
@@ -211,7 +207,7 @@ def _escaped(markup):
 class SnapshotTest(unittest.TestCase):
     def setUp(self):
         self.config = config(subreddits=["fitness30plus", "getdisciplined"])
-        self.sources = sources.plan(self.config, [], [])
+        self.sources = sources.plan(self.config, [])
 
     def test_each_source_is_read_on_its_own_and_the_snapshot_reads_back(self):
         web = fakes.listening_web()
@@ -256,6 +252,19 @@ class SnapshotTest(unittest.TestCase):
         )
         self.assertEqual(web.requests, ["https://www.reddit.com/robots.txt"])
         self.assertEqual(snapshot.documents, {})
+
+    def test_markup_no_parser_can_read_fails_its_source_and_no_other(self):
+        web = fakes.listening_web()
+        feed = fakes.atom_feed([(fakes.THREAD, "t", "placeholder", "")])
+        web.pages["https://www.reddit.com/r/fitness30plus/new/.rss"] = feed.replace("placeholder", "&lt;![name[ x")
+        snapshot = sources.take(fakes.client(web), self.sources, self.config, lambda _: False, "run-1", AT)
+        first, *others = snapshot.readings
+        # The system Python's parser gives up on this markup; a newer one may read past it. Neither stops the run.
+        if first.status == "failed":
+            self.assertIn("the answer could not be parsed", first.detail)
+            self.assertEqual(snapshot.of("reddit:fitness30plus"), [])
+        self.assertEqual([reading.status for reading in others], ["read", "read", "read"])
+        self.assertEqual([document.link for document in snapshot.of("reddit:getdisciplined")], [fakes.OTHER_THREAD])
 
     def test_the_snapshot_says_fetched_text_is_data(self):
         snapshot = sources.take(

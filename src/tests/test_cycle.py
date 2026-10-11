@@ -209,8 +209,7 @@ class DecisionRoundTripTest(CycleTestCase):
         writes[fakes.draft_path(1)] = fakes.draft(1)  # a post is queued only from its Draft
         creator = fakes.KIT_CREATORS[0]
         writes[fakes.message_path("creator", creator[0])] = fakes.message("creator", creator[0], fakes.CREATOR_BODY)
-        fakes.set_sources(self.repo, fakes.sources_with(creators=[creator]))  # and so is a message
-        self.web.pages.update([fakes.creator_feed(creator[0])])
+        fakes.set_run(self.repo, "outreach", {"creators": fakes.creators([creator])})  # and so is a message
         fakes.set_window(self.repo, fakes.window_from(fakes.SUNDAY_RUN.date()))
         fakes.keep_days(self.mandu, 1)
         fakes.behave(self.codex_dir, {"write": writes})

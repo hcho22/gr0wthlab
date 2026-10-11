@@ -20,7 +20,9 @@ The format is in the task definition, and the launcher's checks decide whether a
 - Say in one or two sentences what the Product is and who it is for, in mechanics the code supports.
 - Give the Source link exactly as the brief gives it, once, at the end of the message.
   Never shorten, decorate, or replace it.
-- The line to forward stands alone: someone who never saw the message understands it, and it carries the same link.
+- Close the message on one line a friend could forward by itself: someone who never saw the rest understands what the Product is and who it is for, and the line carries the link.
+  The launcher checks only the link; whether the line stands alone is yours to get right, and the Founder's to judge.
+- Keep it short: well under 150 words, so it is read in one look.
 - Ask for nothing but a look: no deadline, no favor owed, no "share this".
 - The brand lint reads a message as copy, so it asks no question: write statements a friend can act on or ignore.
 
@@ -29,12 +31,10 @@ The format is in the task definition, and the launcher's checks decide whether a
 - It is ask-free.
   Offer one thing from the three the task definition lists, and nothing that costs them time or attention to refuse.
 - Never mention money, a rate, a code, a post, or a mention; the lint blocks the phrases the package lists, and the rest is yours to keep out.
-- Cite their work only when the brief says the launcher read it this run, and only when that piece is honestly why you are writing now.
-  One sentence about it is enough.
-- When nothing of theirs could be read, or nothing read gives an honest reason, write `work: none`.
-  The item then tells the Founder that no hook was found, which is a valid result; a message that pretends otherwise is worse than none.
+- Nothing of a creator's recent work reaches you, so never write as if you had seen it.
+  What the channel plan says of them is all you know; a message that pretends otherwise is worse than none.
 - Say who the Founder is in a clause, what the Product does in a sentence the code supports, and the offer.
-  Stop there: shorter is kinder, and the word limit is a ceiling.
+  Stop there: shorter is kinder, and a message to a creator stays well under 150 words.
 - A name written in capitals is read by the brand lint as an all-caps word.
   Write around it, or propose the package change that allows it; never change the name.
 - Use Notes for what the Founder should know before sending and would not say in the message: why this creator, and anything to check.

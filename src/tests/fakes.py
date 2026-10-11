@@ -95,8 +95,8 @@ def set_sources(repo: Path, data: dict) -> None:
     (repo / "config" / "sources.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
-def sources_with(subreddits=(), creators=(), app_store: bool = False) -> dict:
-    """The quiet source list with these subreddits and (key, name) creators, and App Store reviews when asked."""
+def sources_with(subreddits=(), app_store: bool = False) -> dict:
+    """The quiet source list with these subreddits, and App Store reviews when asked."""
     data = json.loads(json.dumps(SOURCES_QUIET))
     data["listening"]["subreddits"] = list(subreddits)
     if app_store:
@@ -106,10 +106,6 @@ def sources_with(subreddits=(), creators=(), app_store: bool = False) -> dict:
             "reviews_page": "https://apps.apple.com/{country}/app/id{id}?see-all=reviews",
             "max_apps": 12,
         }
-    data["outreach"]["creators"] = [
-        {"key": key, "name": name, "feed": f"https://www.youtube.com/feeds/videos.xml?channel_id=UC{key}"}
-        for key, name in creators
-    ]
     return data
 
 
@@ -120,7 +116,7 @@ def make_repo(path: Path, env: dict[str, str], window: dict | None = None) -> Pa
     shutil.copytree(str(REPO / "config"), str(path / "config"))
     set_window(path, QUIET_WINDOW if window is None else window)
     set_sources(path, SOURCES_QUIET)
-    set_run(path, "outreach", {"network_ask_source": None})
+    set_run(path, "outreach", {"network_ask_source": None, "creators": []})
     shutil.copytree(str(REPO / "src" / "instructions"), str(path / "src" / "instructions"))
     shutil.copytree(str(REPO / "src" / "proposals"), str(path / "src" / "proposals"))
     shutil.copy(str(REPO / ".gitignore"), str(path / ".gitignore"))
@@ -399,7 +395,7 @@ class Web:
 
 
 FETCH_POLICY = {
-    "hosts": ["www.reddit.com", "itunes.apple.com", "www.youtube.com"],
+    "hosts": ["www.reddit.com", "itunes.apple.com"],
     "user_agent": "growthlab-reader/1 (unit tests; +https://example.com/contact)",
     "max_requests_per_run": 30,
     "seconds_between_requests_per_host": 2,
@@ -423,20 +419,16 @@ def client(web: Web | None = None, policy=None):
 # What the named sources answer, in their own formats, with synthetic content.
 
 
-def atom_feed(entries, reddit: bool = True) -> str:
-    """An Atom feed of (link, title, text, published) entries, as a subreddit's feed or a channel's feed writes it."""
+def atom_feed(entries) -> str:
+    """An Atom feed of (link, title, text, published) entries, as a subreddit's feed writes it."""
     from xml.sax.saxutils import escape
 
-    parts = ['<?xml version="1.0" encoding="UTF-8"?>']
-    parts.append('<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/">')
+    parts = ['<?xml version="1.0" encoding="UTF-8"?>', '<feed xmlns="http://www.w3.org/2005/Atom">']
     for link, title, text, published in entries:
-        if reddit:
-            markup = f'<!-- SC_OFF --><div class="md"><p>{escape(text)}</p></div><!-- SC_ON --> &#32; submitted by'
-            markup += ' &#32; <a href="https://www.reddit.com/user/someone"> /u/someone </a> <br/> <span><a href='
-            markup += f'"{link}">[link]</a></span> &#32; <span><a href="{link}">[comments]</a></span>'
-            body = f'<content type="html">{escape(markup)}</content>'
-        else:
-            body = f"<media:group><media:description>{escape(text)}</media:description></media:group>"
+        markup = f'<!-- SC_OFF --><div class="md"><p>{escape(text)}</p></div><!-- SC_ON --> &#32; submitted by'
+        markup += ' &#32; <a href="https://www.reddit.com/user/someone"> /u/someone </a> <br/> <span><a href='
+        markup += f'"{link}">[link]</a></span> &#32; <span><a href="{link}">[comments]</a></span>'
+        body = f'<content type="html">{escape(markup)}</content>'
         parts.append(
             f"<entry><author><name>/u/someone</name></author>{body}<id>x</id>"
             f'<link rel="alternate" href="{escape(link)}"/><published>{published}</published>'
@@ -490,7 +482,6 @@ SOURCES_QUIET = {
         "max_documents_per_source": 25,
         "max_document_chars": 2000,
     },
-    "outreach": {"creators": []},
 }
 
 
@@ -533,6 +524,13 @@ def quote_record(document: str, link: str, quote: str, **fields: str) -> str:
 # Message Drafts for the synthetic kit, and the three creators its channel plan names.
 
 KIT_CREATORS = [("slow-strength", "Slow Strength"), ("hallway-moves", "Hallway Moves"), ("desk-reset", "Desk Reset")]
+
+
+def creators(pairs=KIT_CREATORS) -> list[dict]:
+    """(key, name) creators as config/run.json's outreach lists them."""
+    return [{"key": key, "name": name} for key, name in pairs]
+
+
 SOURCE_LINK = "reptoday.app/network"
 CLAIM = (
     "- Claim: A missed day lowers the score, and nothing resets it to zero.\n"
@@ -549,7 +547,6 @@ NETWORK_BODY = (
     "A missed day lowers a score a little, and nothing ever resets it.\n"
     f"If that sounds like you, the waitlist is at {SOURCE_LINK}."
 )
-FORWARD = f"Rep Today is a workout app for people whose routine fell apart: {SOURCE_LINK}"
 REPLY_BODY = (
     "I was in the same place after a long break. What helped me was having one short session ready before I could"
     " talk myself out of it, and not treating a missed day as starting over."
@@ -557,8 +554,8 @@ REPLY_BODY = (
 
 
 def message(purpose: str, to: str, body: str, **parts: str) -> str:
-    """A message Draft as the agent writes it. parts may give angle, offer, work, title, forward, notes, and
-    claims; a creator message offers early access and cites no work unless told otherwise."""
+    """A message Draft as the agent writes it. parts may give angle, offer, title, notes, and claims; a creator
+    message offers early access unless told otherwise."""
     creator = purpose in ("creator", "creator-follow-up")
     front = {
         "draft": "message",
@@ -569,12 +566,8 @@ def message(purpose: str, to: str, body: str, **parts: str) -> str:
     }
     if creator or "offer" in parts:
         front["offer"] = parts.get("offer", "early-access")
-    if creator or "work" in parts:
-        front["work"] = parts.get("work", "none")
     lines = ["---"] + [f"{key}: {value}" for key, value in front.items() if value is not None] + ["---", ""]
     lines += [f"# {parts.get('title', 'A short hello')}", "", "## Message", "", body, ""]
-    if purpose == "network-ask" or "forward" in parts:
-        lines += ["## Forward", "", parts.get("forward", FORWARD), ""]
     lines += ["## Notes", "", parts.get("notes", "none"), "", "## Claims", "", parts.get("claims", CLAIM)]
     return "\n".join(lines) + "\n"
 
@@ -588,16 +581,6 @@ def message_path(purpose: str, key: str = "") -> str:
         "reply": f"replies/{key}.md",
     }[purpose]
     return f"drafts/messages/{name}"
-
-
-def creator_feed(key: str, entries=()) -> tuple[str, str]:
-    """A creator's feed address in sources_with, and a feed of (video id, title, published) videos."""
-    url = f"https://www.youtube.com/feeds/videos.xml?channel_id=UC{key}"
-    feed = atom_feed(
-        [(f"https://www.youtube.com/watch?v={video}", title, "About the video.", at) for video, title, at in entries],
-        reddit=False,
-    )
-    return url, feed
 
 
 def workspace_areas(root: Path):

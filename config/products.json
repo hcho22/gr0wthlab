@@ -148,7 +148,7 @@
         },
         "outreach": {
           "channel_plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
-          "note": "The package file that names the personal-network ask and the creators worth writing to (US-ME14); one of the sources above covers it. A run drafts a message only for a creator in config/sources.json that this file still names."
+          "note": "The package file that names the personal-network ask and the creators worth writing to (US-ME14); one of the sources above covers it. A run drafts a message only for a creator in config/run.json that this file still names."
         }
       },
       "waitlist": {
