@@ -262,11 +262,13 @@ def follow_up(
         if record.replied_on:
             why = f"{creator.name} replied on {record.replied_on}; a follow-up goes only to a non-reply"
         target.reason = "" if allowed else why
-        replied = f"replied {record.replied_on}" if record.replied_on else "no reply recorded"
-        plan.record_lines.append(
-            f"{creator.name}: first message sent {record.sent_on}, {replied}; a follow-up may be offered from"
-            f" {entry['follow_up_after']} ({plural(wait, 'day')})"
+        after = (
+            "so no follow-up is ever offered"
+            if record.replied_on
+            else f"a follow-up may be offered from {entry['follow_up_after']} ({plural(wait, 'day')})"
         )
+        replied = f"replied {record.replied_on}" if record.replied_on else "no reply recorded"
+        plan.record_lines.append(f"{creator.name}: first message sent {record.sent_on}, {replied}; {after}")
     slot = messages.slot_for(ledger, plan.product, target, path, required=not target.reason)
     if slot.approved and record is not None:
         # The one follow-up is used: nothing further is ever offered for this creator.
@@ -456,14 +458,15 @@ def brief_lines(plan: Plan | None, context: Context | None, mandu: Path, ledger_
         f" definition gives. Check them before you finish: `{check}`. The launcher queues a message only from a Draft"
         " that passes every check; the Founder alone sends it.",
         "",
-        "| For | Draft file | In the Review Queue |",
-        "| --- | --- | --- |",
+        "| For | Front matter | Draft file | In the Review Queue |",
+        "| --- | --- | --- | --- |",
     ]
     for slot in plan.slots:
-        who = f"{slot.target.label}, {kind_of(slot.target)}"
-        lines.append(f"| {who} | `{slot.path}` | {slot.standing()} |")
+        target = slot.target
+        front = f"`purpose: {target.purpose}`, `to: {target.key}`"
+        lines.append(f"| {target.label}, {kind_of(target)} | {front} | `{slot.path}` | {slot.standing()} |")
     if not plan.slots:
-        lines.append("| - | - | No message is due this run. |")
+        lines.append("| - | - | - | No message is due this run. |")
     lines += ["", f"- The plan for all of them, read it first: `{mandu / plan.plan_path}`."]
     for slot in plan.slots:
         target = slot.target

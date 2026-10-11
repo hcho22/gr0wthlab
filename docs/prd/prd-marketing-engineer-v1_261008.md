@@ -389,10 +389,16 @@ gr0wthlab's side is in place, with the request filed from `src/dispatches/reptod
 **Acceptance Criteria:**
 
 - [ ] Each run reads, without posting, r/fitness30plus, r/bodyweightfitness, r/getdisciplined, and recent App Store reviews of the competitors named in the package's research.
+  Waiting on the Founder: each run asks for these sources and reports every one, but each host's `robots.txt` disallows the path a credential-free reader would need, so none is requested until the Founder decides how they may be read.
 - [ ] Each finding is Evidence with the verbatim quote, the link, and the date read.
-- [ ] A proposed new Angle or Hook enters only as a package-change proposal that cites at least one sourced pain; anything without a source is discarded by the Marketing Engineer's own check.
+  Waiting on a readable source: the Evidence record and its validator are in place and pass on synthetic fixtures, and no real finding exists yet.
+- [x] A proposed new Angle or Hook enters only as a package-change proposal that cites at least one sourced pain; anything without a source is discarded by the Marketing Engineer's own check.
 - [ ] Where RepToday genuinely answers a thread, the Marketing Engineer may draft a reply as a message Draft with no link of any kind, for the Founder to post personally.
+  Waiting on a readable source: the reply Draft and its no-link check are in place, and no thread can be read yet.
 - [ ] Each subreddit's self-promotion rules are summarized for the Founder the first time it is used, and the Founder confirms before any reply Draft for that subreddit is offered.
+  Waiting on a readable source, and on Mandu's side: the rules notice and the confirmation gate are in place, and no rule list can be read yet.
+
+The launcher reads the sources itself, outside the sandbox, through one credential-free read-only client whose host list is reviewed configuration; the agent has no network (`config/guardrails/fetch.json`, `src/gr0wthlab/fetch.py`).
 
 **Validation Test:**
 
@@ -412,9 +418,13 @@ gr0wthlab's side is in place, with the request filed from `src/dispatches/reptod
 **Acceptance Criteria:**
 
 - [ ] Personal-network asks are identity-framed ("movement that fits the life you already have"), never loss-framed, and carry the personal-network Source link.
+  Waiting on Mandu: the Source link is checked, but the loss-framing list reaches the lint only once Mandu applies the proposal (`src/proposals/outreach-word-lists.md`).
 - [ ] Three creator messages are drafted, one each for GMB Fitness, Hybrid Calisthenics, and The Bioneer: ask-free (early access, a founder conversation, or story material), never a sponsorship request.
-- [ ] Each creator gets at most one follow-up Draft, offered only after a waiting period the Founder approves, and then no further contact.
-- [ ] Every message passes the brand lint and is sent by the Founder.
+  Waiting on Mandu: the offer is checked, but the sponsorship-ask list reaches the lint only once Mandu applies the same proposal.
+- [x] Each creator gets at most one follow-up Draft, offered only after a waiting period the Founder approves, and then no further contact.
+- [x] Every message passes the brand lint and is sent by the Founder.
+
+What was sent and who replied reaches gr0wthlab only as the Founder's outreach record in Mandu (`docs/mandu-exchange.md`); until Mandu writes one, no follow-up is offered.
 
 **Validation Test:**
 
@@ -460,6 +470,9 @@ gr0wthlab's side is in place, with the request filed from `src/dispatches/reptod
 - [ ] A reason about execution (tone, length, a factual slip) may refine the Marketing Engineer's Instructions; a reason about strategy (Fit, an Angle, a claim, positioning) becomes a package-change proposal instead.
 - [ ] Each workflow has a set of about ten example inputs with their expected outputs, re-run on every Instructions change, and a change that makes any example worse is not kept.
 - [ ] Every kept Instructions change appears as a notice at the next sitting, with the reason that prompted it and the example results.
+
+Rejection-reason coding landed early, with US-ME13 and US-ME14: each reason gets a code from a fixed list split into execution and strategy, a strategy reason is routed to a package-change proposal, and no run can change Instructions yet (`src/gr0wthlab/learning.py`).
+The refinement loop and the example re-run are still this story's to build, so its boxes stay open.
 
 **Validation Test:**
 

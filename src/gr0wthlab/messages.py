@@ -46,6 +46,7 @@ PURPOSES = (REPLY, NETWORK, CREATOR, FOLLOW_UP)
 TO_CREATOR = (CREATOR, FOLLOW_UP)
 # The three things the plan lets a message to a creator offer, as US-ME14 names them; never a sponsorship.
 OFFERS = ("early-access", "founder-conversation", "story-material")
+OFFER_WORDS = dict(zip(OFFERS, ("early access", "a founder conversation", "story material")))
 MAX_FORWARD_WORDS = 30
 MAX_NOTES = 600
 
@@ -352,7 +353,11 @@ def check(draft: MessageDraft, context: Context, target: Target, limits: Limits)
     if draft.fields["product"] != context.product:
         verdict.block("format", f"product must be {context.product}")
     if (draft.purpose, draft.to) != (target.purpose, target.key):
-        verdict.block("format", f"this file holds the {target.purpose} for {target.key}; its front matter must say so")
+        verdict.block(
+            "format",
+            f"this file's front matter must read `purpose: {target.purpose}` and `to: {target.key}`; it reads"
+            f" `purpose: {draft.purpose}` and `to: {draft.to}`",
+        )
     verdict.angle = kit.angles.get(draft.fields["angle"])
     if verdict.angle is None and "angles" not in kit.problems:
         bank = context.paths.get("angles", "the Angle bank")
@@ -451,7 +456,7 @@ def intro_lines(draft: MessageDraft, target: Target, context: Context, limits: L
             target.work_problem or f"nothing read of {target.label}'s work this run gave an honest reason to write now"
         )
         hook = f"No hook found: {why}. This message cites none of their work and must not pretend to."
-    offer = draft.fields.get("offer", "").replace("-", " ")
+    offer = OFFER_WORDS.get(draft.fields.get("offer", ""), "nothing")
     lines = [
         f"A message for you to send to {target.label}, in your own name; gr0wthlab sends nothing and holds no address.",
         f"It offers {offer} and asks for nothing: no sponsorship, no post, no reply owed.",

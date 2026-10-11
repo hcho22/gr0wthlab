@@ -288,6 +288,7 @@ work: <the link of the piece of their work it cites, or none>
 ```
 
 - `purpose` is `network-ask`, `creator`, `creator-follow-up`, or `reply`.
+  Copy `purpose` and `to` exactly from the brief's Outreach table: for the personal-network ask, `to` is the one word `network`; for a creator, their key; for a reply, the document id it answers.
 - Only a message to a creator has `offer` and `work`; `offer` is `early-access`, `founder-conversation`, or `story-material`, and never anything paid.
 - `work` is the link of one document the snapshot holds for that creator, when it gives an honest reason to write now; otherwise `work: none`.
   Never write as if you had seen work the snapshot does not hold: the item then tells the Founder that no hook was found, which is a valid result.
@@ -295,6 +296,7 @@ work: <the link of the piece of their work it cites, or none>
   The ask carries the Source link the brief gives, exactly as written, once in the message and once in the line to forward, and no other link.
 - A message to a creator may link only the piece of work it cites.
 - Under Claims, list every behavioral claim the message makes, as in a post Draft; write `none` when it makes none.
+  Nothing in a message is frozen, so a message never lists a claim with `Code: none`: find the lines of code that show the behavior at the brief's commit and quote them exactly, or cut the sentence that makes the claim.
 - A message is at most the number of words the brief gives, names no competitor, and holds no email address: the Founder fills in every recipient.
 - Every message passes the brand lint, whose rules come only from the package in Mandu; the brief says what it reads.
 - A follow-up is written only when the brief's table offers it, says plainly that it is the last message, and is the only one a creator ever gets.

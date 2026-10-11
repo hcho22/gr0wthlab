@@ -49,3 +49,5 @@ The format is in the task definition, and the launcher's checks decide whether a
 
 - A message makes claims too: anything it says the app does is listed under Claims with the code that supports it, as in a post Draft.
 - When a sentence about the Product is not a behavior the code shows, cut it.
+  A message has no frozen wording, so there is never a reason to keep a claim no code supports.
+- Quote the code as it is on the cited lines: a comment that says what the code does is weaker support than the code itself, and the check compares your quote with those lines character for character.

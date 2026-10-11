@@ -416,7 +416,9 @@ class OutreachCycleTest(WorkCycleTestCase):
         self.assertIn("- Outreach: 7 messages: 4 queued, 3 not due.", report)
         self.assertIn("| Mandu outreach records | skipped | no message has been recorded as sent yet |", report)
         brief = self.brief()
-        self.assertIn("| your personal network, ask |", brief)
+        self.assertIn("| your personal network, ask | `purpose: network-ask`, `to: network` |", brief)
+        self.assertIn("| Slow Strength, the one follow-up | `purpose: creator-follow-up`, `to: slow-strength` |", brief)
+        self.assertIn("It offers early access and asks for nothing: no sponsorship, no post, no reply owed.", slow)
         self.assertIn("exactly as `src/dispatches/reptoday-waitlist.md` defines it", brief)
         self.assertEqual(self.read("run-reports/state/outreach.json")["targets"], {})
 
@@ -448,6 +450,9 @@ class OutreachCycleTest(WorkCycleTestCase):
             report,
         )
         self.assertIn("| Mandu outreach records | read | 2 records |", report)
+        self.assertIn(
+            "Hallway Moves: first message sent 2026-10-12, replied 2026-10-14; so no follow-up is ever offered", report
+        )
         state = (self.ledger() / "run-reports/state/outreach.json").read_text(encoding="utf-8")
         self.assertEqual(sorted(t["replied"] for t in json.loads(state)["targets"].values()), [False, True])
         self.assertNotIn("slow", state.lower(), "the run state holds hashes, never a name")
