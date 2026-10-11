@@ -1,11 +1,15 @@
 {
-  "description": "How each Marketing Engineer run works around the agent: its task definition, weekly schedule, the 14-day window, whether the Waitlist is live, the outputs and sources its run report accounts for, the records step that saves workspace/ and ledger/ to main, and the prices behind its approximate cost. The launcher reads this file; the agent cannot write it (G8). The exchange with Mandu: docs/mandu-exchange.md. Operating the production clone: docs/operations.md.",
+  "description": "How each Marketing Engineer run works around the agent: its task definition, weekly schedule, the agent's time limit, the 14-day window, whether the Waitlist is live, the outputs and sources its run report accounts for, the records step that saves workspace/ and ledger/ to main, and the prices behind its approximate cost. The launcher reads this file; the agent cannot write it (G8). The exchange with Mandu: docs/mandu-exchange.md. Operating the production clone: docs/operations.md.",
   "instruction": "src/instructions/weekly-run.md",
   "schedule": {
     "day": "sunday",
     "time": "16:00",
     "why": "The Founder's Mandu sitting is Sunday evening. 16:00 in the Mac's local time zone leaves a few hours to finish, or to re-run on demand, before it.",
     "late_after_minutes": 15
+  },
+  "agent": {
+    "time_limit_seconds": 1800,
+    "why": "Every run must end with its report (US-ME17), so the launcher stops an agent still running this many seconds after it started, with everything the agent started, and finishes the run as timed out. Basis: the 29 weekly runs with the real agent recorded on the Founder's Mac on 2026-10-09 and 2026-10-10 (UTC) took 18 to 164 seconds from the run's start to the agent's end, median 48; the longest wrote the first batch's seven post Drafts. 1800 seconds, 30 minutes, is about 11 times the longest, which leaves room for the workflows still to be built, and a run that starts at 16:00 and is cut at the limit still ends hours before the Sunday evening sitting. There is no separate, shorter limit on silence: Codex's event stream reports only whole steps, with no sign of progress inside one, so a long step and a stalled model stream look the same from outside. Raise the limit here, through a reviewed change, if run reports show healthy runs coming near it; it must be above zero and at most 86400, a day."
   },
   "window": {
     "number": 1,

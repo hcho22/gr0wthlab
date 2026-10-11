@@ -6,7 +6,7 @@ US-ME02 chose Codex as the runtime and Python 3.9 or newer, standard library onl
 Why, and the boundary the launcher enforces: [the US-ME02 spike note](../docs/spikes/us-me02-runtime-boundary.md).
 
 - [`bin/gr0wthlab`](bin/gr0wthlab): the launcher, the one entry point for scheduled and on-demand runs (`run`, `show-config`, `preflight`, `check-incoming`, `check-drafts`, `launch-agent`, `boundary-check`).
-- [`gr0wthlab/`](gr0wthlab/): the launcher's package; [`cycle.py`](gr0wthlab/cycle.py) is one run from start to saved records, and [`launcher.py`](gr0wthlab/launcher.py) starts the agent inside the boundary.
+- [`gr0wthlab/`](gr0wthlab/): the launcher's package; [`cycle.py`](gr0wthlab/cycle.py) is one run from start to saved records, [`launcher.py`](gr0wthlab/launcher.py) starts the agent inside the boundary, and [`process.py`](gr0wthlab/process.py) is where every process the launcher waits for starts, each with a time limit.
 - [`instructions/`](instructions/): the run's fixed task definition, which only a reviewed pull request changes; the agent's refinable guidance lives in `workspace/instructions/`.
 - [`gr0wthlab/posts.py`](gr0wthlab/posts.py): the post-Draft workflow (US-ME08): which calendar days a run prepares, and which Drafts become post items; the checks themselves are in `drafts.py`, `kit.py`, `lint.py`, and `codebase.py`.
 - [`dispatches/`](dispatches/): Dispatch requests in the Review Queue item format, which the launcher files for the Founder's approval, each once ([`dispatch.py`](gr0wthlab/dispatch.py)); the first is RepToday's Waitlist, whose anonymous view [`waitlist.py`](gr0wthlab/waitlist.py) reads.

@@ -26,6 +26,7 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
 6. It reads the 14-day kit from Mandu, works out which calendar days need post Drafts this run, now that the Founder's decisions are in, and fixes RepToday's `main` to one commit for claim checks.
    It writes the agent's brief and runs the agent in the sandbox with the task definition `src/instructions/weekly-run.md`.
    The agent writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records, and never write there.
+   The agent has a time limit; one still running at it is stopped, and the run goes on without it ([When a run times out](#when-a-run-times-out)).
 7. Once the agent finishes, it restores its owner's read and write access to anything under `workspace/` the agent left without it, and the run report names every entry it fixed, before or after the agent.
    It queues the items the agent wrote to `workspace/review-queue/incoming/` that pass the format, sets the rest aside, and turns every problem into one notice.
    The package review counts as complete only when the agent's summary ends with the line `Review: complete`; otherwise the run report marks it incomplete and the notice says so.
@@ -35,7 +36,7 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
 9. In the production clone only, it commits the changed `workspace/` and `ledger/` paths and pushes them to `main`, never anything else and never by force; a change to a README in either is put back, since only a reviewed pull request changes documentation.
    If `origin/main` moved meanwhile, it replays the records commit on top and retries once; a commit that cannot be pushed stays local and goes with the next run, and the run log says why the replay failed.
 
-The schedule, the production clone's path, and the records step are in [`config/run.json`](../config/run.json).
+The schedule, the agent's time limit, the production clone's path, and the records step are in [`config/run.json`](../config/run.json).
 Launcher logs, Codex's event stream, and each run's record go to `~/Library/Logs/gr0wthlab/`.
 
 ## Set up the production clone (once, after merge)
@@ -103,7 +104,32 @@ A post queued from that date on says the Waitlist is live; an open post keeps th
 
 Only one run works at a time in each checkout: a run started while another is in progress in the same checkout, scheduled or on demand, refuses to start with exit code 5, and that checkout's next run report says it was refused.
 A run that cannot finish, for example because a file it must write cannot be written, stops with exit code 6 instead of a crash, and the next run report says so too, as it does when a run could not write its report.
+A run whose agent was stopped at its time limit also ends with exit code 6, after it has written its own report, which says it timed out.
 Each checkout keeps its run lock (`ledger/run.lock`, never committed) and these notes for its next report (`ledger/notes/`) in its own `ledger/`, so a run in a firstmate worktree never blocks or hides a production run.
+
+## When a run times out
+
+Every run ends with its report, so the agent has a time limit: `agent.time_limit_seconds` in [`config/run.json`](../config/run.json), 1800 seconds (30 minutes) today.
+The 29 weekly runs recorded with the real agent took 18 to 164 seconds, so a healthy run ends long before the limit and is never touched by it.
+An agent still running at the limit, for example because its model stream stalled, is stopped with every process it started: each is asked to stop, and any still running 10 seconds later is forced.
+The launcher then reads the Mac's process table to confirm that none is left, and finishes the run as it finishes any run.
+
+What the Founder sees after a timed-out run:
+
+- The run report's summary says `The run timed out`, and its Agent section says how long the agent ran, how many processes were asked to stop or forced, and whether any is still running.
+- Each output that needed the agent, such as the package review and the post Drafts of a run with a day due, is marked incomplete with the reason; what the launcher does alone is complete as usual.
+- Whatever the agent had written is checked as always: an item or Draft that passes every check is queued, and one cut off mid-way fails its checks and is set aside or blocked, named in the report.
+- One notice in the Review Queue leads with the timeout and lists what it left incomplete; a second timed-out run the same day adds no second notice while the first is open.
+- The cost line says the cost is not available, or gives the part Codex had reported before the stop as a floor; it never says zero.
+- The run saves its records and releases the run lock, so the next run starts as usual and does the unfinished work again; the run itself ends with exit code 6.
+
+One timed-out run needs nothing from the Founder beyond a re-run on demand if the sitting needs the missing work.
+If healthy runs come near the limit, or runs keep timing out though the agent was working, raise `agent.time_limit_seconds` through a reviewed pull request; the report's `Agent time` line shows how long each run's agent took.
+The value must be above zero and at most 86400 (a day); a run refuses to start on any other value and says why.
+If the report names a process that could not be stopped, end it by hand (`kill -9 <process id>`) before the next run.
+
+There is one limit, on the agent's total time, and none on silence: Codex's event stream reports only whole steps, so a long step and a stalled stream look the same from outside until the step ends.
+Every other process the launcher starts (git, Codex's version and sandbox probes, the boundary check's kernel-log query) has a fixed time limit of its own; one that passes it is stopped the same way, and the step that needed it fails with the reason.
 
 ## When RepToday's Waitlist build lands
 
