@@ -76,14 +76,17 @@ class Stop:
     def describe(self) -> str:
         """What the stop took and whether any process it found is still running, in one sentence without its full
         stop."""
-        took = ("1 process" if len(self.asked) == 1 else f"{len(self.asked)} processes") + " asked to stop"
+        one = len(self.asked) == 1
+        took = ("1 process" if one else f"{len(self.asked)} processes") + " asked to stop"
         if self.forced:
-            took += f", {len(self.forced)} of them forced after {limit_text(STOP_GRACE)}"
+            took += (", then" if one else f", {len(self.forced)} of them") + f" forced after {limit_text(STOP_GRACE)}"
         if self.left:
             return f"{took}; still running after that: process {', '.join(str(pid) for pid in self.left)}"
         if not self.proven:
             return f"{took}; the process table could not be read to confirm that nothing is left running"
-        return f"{took}; the process table shows none of them left running"
+        if not self.asked:
+            return f"{took}; the stop found none still running in the process table"
+        return f"{took}; the process table shows {'it is no longer running' if one else 'none of them left running'}"
 
 
 @dataclass(frozen=True)

@@ -292,13 +292,17 @@ class TimedOutProductionRunTest(TimeLimitTestCase):
         code, out = self.run_cycle(repo=clone)
         self.assertEqual(code, cycle.EXIT_STOPPED, out)
         self.assertIn("records: pushed", out)
+        said = "1 process asked to stop; the process table shows it is no longer running"
+        self.assertIn(f"{said}; logs in", out)
         changed = fakes.git(remote, "diff", "--name-only", "HEAD~1", "HEAD", env=self.env).split()
         self.assertTrue(all(path.startswith(("workspace/", "ledger/")) for path in changed), changed)
         self.assertIn("ledger/review-queue/queue.json", changed)
         report_file = next(
             path for path in changed if path.startswith("ledger/run-reports/2") and ".brief." not in path
         )
-        self.assertIn("- The run timed out:", fakes.git(remote, "show", f"HEAD:{report_file}", env=self.env))
+        pushed = fakes.git(remote, "show", f"HEAD:{report_file}", env=self.env)
+        self.assertIn("- The run timed out:", pushed)
+        self.assertIn(f"- Timed out: {said}.", pushed)
         self.assertEqual(fakes.git(clone, "status", "--porcelain", env=self.env), "")
         self.assertEqual(
             sorted(entry["kind"] for entry in self.queue(clone)["open"]), ["notice", "package-change-proposal"]
@@ -374,6 +378,21 @@ class TimedOutReportTest(unittest.TestCase):
             report.render_report(unproven),
         )
         self.assertIn("the process table could not be read", report.left_running(unproven.stop))
+
+    def test_the_stop_line_agrees_with_how_many_processes_were_asked_to_stop(self):
+        for stopped, said in (
+            ({"asked": [11]}, "1 process asked to stop; the process table shows it is no longer running"),
+            (
+                {"asked": [11], "forced": [11]},
+                "1 process asked to stop, then forced after 10 s; the process table shows it is no longer running",
+            ),
+            ({"asked": [11], "forced": [11], "left": [11]}, "1 process asked to stop, then forced after 10 s; still"),
+            ({"asked": []}, "0 processes asked to stop; the stop found none still running in the process table"),
+        ):
+            with self.subTest(**stopped):
+                text = report.render_report(self.state(**stopped))
+                self.assertIn(f"- Timed out: {said}", text)
+                self.assertNotIn("of them", text)
 
     def test_the_report_says_the_mac_slept_while_the_agent_ran_only_when_it_did_and_for_about_how_long(self):
         state = self.state()

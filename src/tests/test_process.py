@@ -96,6 +96,15 @@ class RunTest(unittest.TestCase):
         self.assertEqual(done.returncode, -signal.SIGTERM)
         self.assertLess(time.monotonic() - started, 3 + process.STOP_GRACE)
 
+    def test_a_process_that_ended_on_its_own_as_its_limit_passed_is_not_spoken_of_as_several(self):
+        ended = subprocess.Popen([sys.executable, "-c", "pass"])
+        ended.wait()
+        stopped = process.stop(ended)
+        self.assertEqual((stopped.asked, stopped.forced, stopped.left, stopped.proven), ((), (), (), True))
+        self.assertEqual(
+            stopped.describe(), "0 processes asked to stop; the stop found none still running in the process table"
+        )
+
     def test_a_process_the_mac_slept_past_its_limit_is_stopped_once_the_mac_wakes(self):
         started = time.monotonic()
         asleep = [sys.executable, "-c", "import time; time.sleep(600)"]
