@@ -279,8 +279,8 @@ def span_text(seconds: float) -> str:
 
 
 def left_running(stop: process.Stop) -> str | None:
-    """The launcher problem a stop leaves when it could not show that nothing the agent started is still running; the
-    process ids stay in the run report's Agent section, so the same problem reads the same at every run."""
+    """The launcher problem a stop leaves when it could not show that none of the processes it found is still running;
+    the process ids stay in the run report's Agent section, so the same problem reads the same at every run."""
     if stop.left:
         count = "1 process" if len(stop.left) == 1 else f"{len(stop.left)} processes"
         return (

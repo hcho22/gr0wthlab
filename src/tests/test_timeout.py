@@ -83,12 +83,29 @@ class EntryPointTest(TimeLimitTestCase):
         self.assertIn(
             f"timed out: the agent was still running at its {LIMIT} s time limit and was stopped", done.stdout
         )
-        self.assertIn("3 processes asked to stop; the process table shows none left running; logs in", done.stdout)
+        self.assertIn(
+            "3 processes asked to stop; the process table shows none of them left running; logs in", done.stdout
+        )
         self.assertIn(f"- The run timed out: the agent was still running at its {LIMIT} s time limit", self.report())
         [notice] = self.notices()
         self.assertRegex(notice["ask"], r"^Notice: the run timed out on \d{4}-\d\d-\d\d$")
         self.assertTrue(fakes.all_gone(fakes.agent_pids(self.codex_dir)))
         self.assertTrue(self.lock_is_free())
+
+    def test_the_run_speaks_only_for_the_processes_its_stop_found(self):
+        """A process the agent detached from a command that has finished, in a session of its own with no parent left,
+        is not found by the stop, so the run must not say that nothing is left running."""
+        fakes.behave(self.codex_dir, {"hang": True, "children": 1, "detach": True})
+        done, _ = self.run_on_demand()
+        self.assertEqual(done.returncode, cycle.EXIT_STOPPED, done.stdout + done.stderr)
+        *found, detached = fakes.agent_pids(self.codex_dir)
+        stopped = self.record()["stopped"]
+        self.assertEqual((sorted(stopped["asked"]), stopped["left"], stopped["proven"]), (sorted(found), [], True))
+        self.assertTrue(fakes.all_gone(found))
+        self.assertTrue(fakes.running(detached))
+        said = "2 processes asked to stop; the process table shows none of them left running"
+        self.assertIn(f"{said}; logs in", done.stdout)
+        self.assertIn(f"- Timed out: {said}.", self.report())
 
     def test_an_agent_that_goes_silent_mid_work_leaves_nothing_half_written_queued_and_the_next_run_is_clean(self):
         fakes.set_window(self.repo, {"first_sitting": None, "slot": None})
@@ -174,7 +191,9 @@ class TimedOutRunTest(TimeLimitTestCase):
         self.assertIn("| Package snapshot | complete |", text)
         self.assertIn("| Review Queue | complete | 1 open item |", text)
         self.assertRegex(text, rf"\n- Agent time: \d+ s; time limit {LIMIT} s\.\n")
-        self.assertIn("- Timed out: 3 processes asked to stop; the process table shows none left running.", text)
+        self.assertIn(
+            "- Timed out: 3 processes asked to stop; the process table shows none of them left running.", text
+        )
         self.assertIn(f"- Exit code: {cycle.EXIT_STOPPED}, the run's own for an agent stopped at its limit", text)
         self.assertIn("- Problems this run are listed in the notice `20261011-notice-run-problems`.", text)
         self.assertNotIn("## Launcher problems", text)
@@ -333,7 +352,9 @@ class TimedOutReportTest(unittest.TestCase):
     def test_the_agent_section_names_a_process_that_could_not_be_stopped(self):
         clean = report.render_report(self.state())
         self.assertIn("- Agent time: 30 min 3 s; time limit 30 min.", clean)
-        self.assertIn("- Timed out: 2 processes asked to stop; the process table shows none left running.", clean)
+        self.assertIn(
+            "- Timed out: 2 processes asked to stop; the process table shows none of them left running.", clean
+        )
         self.assertIsNone(report.left_running(self.state().stop))
         left = self.state(forced=[12], left=[12])
         self.assertIn(

@@ -114,12 +114,14 @@ The limit counts wall-clock time from the moment the agent starts, the Mac's sle
 Nothing keeps the Mac awake for a run, and a sleeping Mac runs nothing, so the stop of an agent the Mac slept past its limit starts within about a second of the Mac waking, not at the time of day the limit fell.
 Awake time is counted as well, and the agent is stopped at whichever count reaches the limit first, so a wall clock set back cannot extend a run; one set forward can end a run early.
 The 46 weekly runs recorded with the real agent took 18 to 218 seconds, so a healthy run on a Mac that stays awake ends long before the limit and is never touched by it.
-An agent still running at the limit, for example because its model stream stalled, is stopped with every process it started: each is asked to stop, and any still running after 10 seconds of awake time is forced.
-The launcher then reads the Mac's process table to confirm that none is left, and finishes the run as it finishes any run.
+An agent still running at the limit, for example because its model stream stalled, is stopped with every process the Mac's process table shows it started, which is its descendants and every process in a session one of them leads: each is asked to stop, and any still running after 10 seconds of awake time is forced.
+The launcher then reads the process table again to confirm that none of them is left, and finishes the run as it finishes any run.
+The stop does not find a process the agent detached earlier in the run: one in a session of its own whose parent has already ended, as a shell command that has finished can leave.
+Nothing in the process table ties such a process to the agent, so it is not stopped and the report does not speak for it; it outlives a run that finishes in time as well, since the launcher stops nothing then.
 
 What the Founder sees after a timed-out run:
 
-- The run report's summary says `The run timed out`, and its Agent section says how long the agent ran by the wall clock, how many processes were asked to stop or forced, and whether any is still running.
+- The run report's summary says `The run timed out`, and its Agent section says how long the agent ran by the wall clock, how many processes were asked to stop or forced, and whether any of them is still running.
 - If the Mac slept while the agent ran, in this or any other run, the summary and the Agent section say for about how long.
 - Each output that needed the agent, such as the package review and the post Drafts of a run with a day due, is marked incomplete with the reason; what the launcher does alone is complete as usual.
 - Whatever the agent had written is checked as always: an item or Draft that passes every check is queued, and one cut off mid-way fails its checks and is set aside or blocked, named in the report.

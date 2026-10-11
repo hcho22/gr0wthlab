@@ -1,7 +1,8 @@
 """Start one Marketing Engineer run: resolve the boundary, prove it, then hand Codex the instruction.
 
 The weekly LaunchAgent and an on-demand run both call run(); only the prompt's header differs, never the configuration.
-The agent has a time limit: one still running at it is stopped with everything it started, and the run record says so.
+The agent has a time limit: one still running at it is stopped with every process the process table shows it started,
+and the run record says so.
 """
 
 from __future__ import annotations
@@ -114,9 +115,9 @@ def run(
     facts are extra header lines for the prompt, which the configuration fingerprint does not cover.
     record["agent_started"] says whether Codex itself was started, after the preflight passed.
     time_limit is how many seconds the agent has, by the wall clock or awake, whichever the clock shows first. One
-    still running then is stopped with everything it started: record["timed_out"] is True, record["exit_code"] is
-    EXIT_STOPPED whatever status the stopped agent left, and record["stopped"] names the processes asked to stop,
-    forced, and left running.
+    still running then is stopped with every process the process table shows it started: record["timed_out"] is True,
+    record["exit_code"] is EXIT_STOPPED whatever status the stopped agent left, and record["stopped"] names the
+    processes asked to stop, forced, and left running.
     record["agent_seconds"] is the agent's wall-clock time, and record["agent_awake_seconds"] how much of it the Mac
     was awake.
     """

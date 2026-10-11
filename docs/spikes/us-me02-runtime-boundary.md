@@ -327,10 +327,13 @@ They ran from another checkout of this branch, and a checkout's path is part of 
   The probe's agent ran 35 seconds of its 30 minute limit, all of them with the Mac awake, and the kernel-log query finished well inside its own 5 minute limit.
   It had passed the same way as `20261011T160853Z-on-demand-17ce` and `20261011T155408Z-on-demand-225d`, on the launcher as it stood before those changes.
 
+Two changes to the launcher's wording came after those checks, neither to how a process is started or stopped: the run report's `Agent time` line, and what a stop says of the processes it found.
+With both in place, `boundary-check` passed again the same day as run `20261011T183738Z-on-demand-b270`, from a throwaway clone with a synthetic Mandu and Product checkout: nine patch rejections, eleven kernel Seatbelt denials naming the run, no connection to a local listener, no sentinel escaped, the permitted files in all six areas, and nothing outside the areas changed.
+
 What stopping a real Codex agent takes was measured the same day, since a missed process would linger after a timed-out run.
 Codex runs as a node wrapper, the `codex` binary, and a `codex-code-mode-host` helper, and it starts each shell command in a session of its own.
 Asked to stop (SIGTERM), the wrapper exits with status 0 and takes the binary and the helper with it, but a shell command still running is left behind without a parent.
-So the launcher never trusts the stopped agent's exit status, and it asks every process the agent started to stop, found in the Mac's process table as the agent's descendants and every session one of them leads, then forces any still running 10 seconds later and reads the table again.
+So the launcher never trusts the stopped agent's exit status, and it asks every process the Mac's process table shows the agent started to stop, which is the agent's descendants and every session one of them leads, then forces any still running 10 seconds later and reads the table again.
 
 | Run | What it showed |
 | --- | --- |
@@ -341,6 +344,13 @@ So the launcher never trusts the stopped agent's exit status, and it asks every 
 
 These four runs were made before the limit counted wall-clock time and before the prompt reached Codex as a file; the stop they measure has not changed since.
 Mandu's, RepToday's, and Immerse's HEAD, git status, stash, and a digest over every file outside `.git` were the same before the first of these runs and after the last.
+
+The stop has a limit, measured the same day with the real agent from a throwaway clone with a synthetic Mandu and throwaway task definitions.
+Told to run one shell command that starts `/bin/sleep 619` in a session of its own and returns, and then `sleep 613`, the agent was stopped at a 40 second limit with four processes asked to stop and none of them left, in `20261011T181516Z-on-demand-ddf1` and again in `20261011T183441Z-on-demand-7923`.
+The detached `/bin/sleep 619`, by then a child of launchd in its own session, was not found either time and was still running after the run ended, as was the one an identical run had left a minute before the first (`20261011T181416Z-on-demand-29a8`); each was ended by hand.
+Nothing in the process table ties such a process to the agent, so the stop does not look for it, and the report speaks only for the processes it found: the later run's said `4 processes asked to stop; the process table shows none of them left running`, where the earlier one's had said none was left at all.
+This is not particular to a timed-out run: in `20261011T183552Z-on-demand-5ac3` the agent started `/bin/sleep 621` the same way and the run ended with exit code 0 after 17 seconds; the launcher stopped nothing, and the process was still running 15 seconds later.
+A plain background job (`nohup sleep 617 >/dev/null 2>&1 &`, run `20261011T181728Z-on-demand-a19e`) left nothing: no reading of the process table during or after that run showed it.
 
 ## Scheduled and on-demand runs share one configuration
 

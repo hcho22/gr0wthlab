@@ -1,11 +1,11 @@
 """Every process the launcher starts and waits for, each with a time limit, so no wait can last forever.
 
 run() is the one place such a process starts, but for the ps a stop reads the process table with, which has a time
-limit of its own. One still running at its limit is stopped with everything it started: asked first (SIGTERM), then
-forced (SIGKILL) after a grace period, and the result says which processes that took and whether any is still running,
-read from the process table rather than assumed. A process that finishes in time is never signalled, and it stays in
-the launcher's own session and process group, so an interrupt at the terminal and launchd's own cleanup reach it as
-before.
+limit of its own. One still running at its limit is stopped with every process the process table shows it started:
+asked first (SIGTERM), then forced (SIGKILL) after a grace period, and the result says which processes that took and
+whether any of them is still running, read from the process table rather than assumed. A process that finishes in time
+is never signalled, and it stays in the launcher's own session and process group, so an interrupt at the terminal and
+launchd's own cleanup reach it as before.
 
 A limit counts from the moment the process starts, on two clocks, and the process is stopped when either reaches it.
 The wall clock goes on while the Mac sleeps, so the stop of a process the Mac slept past its limit starts within CHECK
@@ -13,9 +13,14 @@ seconds of the Mac waking; awake time cannot be set, so a wall clock set back ca
 forward can end it early. The short waits of a stop itself count awake time only: a process asked to stop needs
 running time to end.
 
-What a process started is found as the process table shows it: its descendants, each remembered by its process id
-and start time, and every session one of them leads, so a child left without its parent is still found. Codex starts
-each shell command in a session of its own and does not stop it when Codex itself is asked to stop.
+What a process started is found as the process table shows it from the first reading of a stop on: its descendants,
+each remembered by its process id and start time, and every session one of them leads, so a child that loses its
+parent during the stop is still found. Codex starts each shell command in a session of its own and does not stop it
+when Codex itself is asked to stop.
+
+A process detached before the stop is not found: one in a session of its own whose parent has already ended, as a
+shell command that has finished can leave, has nothing in the table that ties it to the process that started it. It is
+not stopped, and the result does not speak for it.
 """
 
 from __future__ import annotations
@@ -57,7 +62,7 @@ class Stop:
 
     @property
     def clean(self) -> bool:
-        """Whether the process table shows that nothing the process started is still running."""
+        """Whether the process table shows that none of the processes the stop found is still running."""
         return self.proven and not self.left
 
     def as_json(self) -> dict[str, object]:
@@ -69,7 +74,8 @@ class Stop:
         return cls(asked, forced, left, bool(data.get("proven")))
 
     def describe(self) -> str:
-        """What the stop took and what it left running, in one sentence without its full stop."""
+        """What the stop took and whether any process it found is still running, in one sentence without its full
+        stop."""
         took = ("1 process" if len(self.asked) == 1 else f"{len(self.asked)} processes") + " asked to stop"
         if self.forced:
             took += f", {len(self.forced)} of them forced after {limit_text(STOP_GRACE)}"
@@ -77,7 +83,7 @@ class Stop:
             return f"{took}; still running after that: process {', '.join(str(pid) for pid in self.left)}"
         if not self.proven:
             return f"{took}; the process table could not be read to confirm that nothing is left running"
-        return f"{took}; the process table shows none left running"
+        return f"{took}; the process table shows none of them left running"
 
 
 @dataclass(frozen=True)
@@ -163,7 +169,7 @@ def session(pid: int) -> int | None:
 
 
 class Family:
-    """A process and everything it started, followed across readings of the process table."""
+    """A process and every process the process table shows it started, followed across readings of the table."""
 
     def __init__(self, root: subprocess.Popen):
         self.root = root
@@ -225,8 +231,8 @@ class Family:
 
 
 def stop(process: subprocess.Popen) -> Stop:
-    """Stop a process and everything it started: ask, wait up to STOP_GRACE seconds, force what is left, and read the
-    process table once more to say what, if anything, is still running."""
+    """Stop a process and every process the process table shows it started: ask, wait up to STOP_GRACE seconds, force
+    what is left, and read the process table once more to say which of them, if any, is still running."""
     family = Family(process)
     asked = family.signal(signal.SIGTERM)
     forced: tuple[int, ...] = ()

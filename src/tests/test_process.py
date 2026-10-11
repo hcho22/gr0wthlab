@@ -1,4 +1,4 @@
-"""The one place the launcher starts a process: a time limit on every wait, and a stop that leaves nothing behind."""
+"""The one place the launcher starts a process: a time limit on every wait, and a stop that takes all it can find."""
 
 import os
 import signal

@@ -23,7 +23,9 @@ QUIET_WINDOW = {"number": 1, "first_sitting": "2099-01-04", "slot": "19:00"}
 # Stands in for codex. `codex sandbox` answers the preflight as an enforcing sandbox would, without running anything;
 # `codex exec` plays the agent from behavior.json beside it, writing straight into the workspace. An agent told to
 # hang does its writing, starts its children, the first in a session of its own as Codex starts a shell command, notes
-# every process id in pids.txt, and then never exits and never reports its summary or its token counts.
+# every process id in pids.txt, and then never exits and never reports its summary or its token counts. One told to
+# detach first leaves what a shell command that has finished can leave, noted last: a process in a session of its own
+# whose parent has ended.
 FAKE_CODEX = """#!{python}
 import json, os, re, shutil, signal, subprocess, sys, time
 from pathlib import Path
@@ -60,6 +62,12 @@ children = [
     subprocess.Popen(["/bin/sleep", "600"], start_new_session=number == 0).pid
     for number in range(behavior.get("children", 0))
 ]
+if behavior.get("detach"):
+    detach = (
+        "import subprocess; sleep = ['/bin/sleep', '600']; "
+        "print(subprocess.Popen(sleep, start_new_session=True, stdout=subprocess.DEVNULL).pid)"
+    )
+    children.append(int(subprocess.run([sys.executable, "-c", detach], stdout=subprocess.PIPE, text=True).stdout))
 if behavior.get("ignore_stop"):
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
 (here / "pids.txt").write_text(" ".join(str(pid) for pid in [os.getpid(), *children]))
@@ -160,7 +168,8 @@ def behave(directory: Path, behavior: dict) -> None:
 
 
 def agent_pids(directory: Path) -> list[int]:
-    """The fake agent's own process id and its children's, as its last run noted them."""
+    """The fake agent's own process id, its children's, and last that of a process it detached, as its last run
+    noted them."""
     return [int(pid) for pid in (directory / "pids.txt").read_text(encoding="utf-8").split()]
 
 
