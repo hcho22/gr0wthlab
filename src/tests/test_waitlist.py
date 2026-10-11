@@ -94,7 +94,6 @@ class ReadTestCase(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.path = Path(os.path.realpath(self.tmp.name)) / "view" / "waitlist-view.json"
         self.rules = replace(RULES, view=self.path)
-        fakes.mac_time_zone(self)
 
     def tearDown(self):
         if self.path.is_file():

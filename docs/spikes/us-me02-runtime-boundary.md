@@ -278,6 +278,40 @@ Mandu's, the RepToday checkout's, and the Immerse checkout's HEAD, git status, i
 The same checks and runs were first made earlier that day, before the review, on the code as it then was: the boundary check as `20261009T234224Z-on-demand-67b6`, and the four runs as `20261009T234719Z-on-demand-e4ad`, `20261009T234857Z-on-demand-c3e4`, `20261009T234937Z-on-demand-2abd`, and `20261009T235032Z-on-demand-3413`, with the same outcomes.
 The review rounds after that changed only how the launcher compares a reviewed request with the items it queued from it, by the whole text and no longer by the ask and Request section alone, and what its report says when an approval is taken in for an item already replaced; nothing the preflight or the boundary check exercises depends on either, so the checks and runs above were not made again, and the launcher's unit tests cover both.
 
+### Re-check after the post Drafts (US-ME08)
+
+The post Drafts added a package source to `config/products.json` (the research files starting with `competitor`, for the competitor check) and the package file that plays each part in the checks.
+The agent's start is unchanged: `codex.py`, `boundary.py`, the probe, and `runtime.json` are as they were, and the Mandu checkout was already a read grant.
+Two new reads run outside the sandbox: the launcher reads the 14-day kit from Mandu, and resolves RepToday's `main` to one commit and reads files at it with `git cat-file` and optional locks off, which never writes the checkout's index, refs, or working tree.
+Inside the sandbox, `check-drafts` reads the same files, and the brief's command names the Mandu and RepToday locations the launcher used, since the agent's environment carries no override.
+
+The review of this work then changed the launcher and its configuration again: `check-drafts --run` and the record the cycle writes into `ledger/run-reports/` for it (each day's standing, the commit claims are read at, and the kit files' fingerprints), the kit, Draft, and lint checks (`kit.py`, `posts.py`, `drafts.py`, `lint.py`), which queued items an item the agent writes may supersede (`queue.py`, `proposals.py`), and the window and `waitlist` sections of `config/run.json` with the settings that read them.
+Both checks were therefore made again on the code as it stands after those changes, on 2026-10-10, Mac local time, with Codex CLI 0.160.0 from a linked worktree whose configuration fingerprint is `6dca08699985566e0d2e6c14aae2e8752bb43c3df2210c7e211a50b9cce3ec8b`; the run identifier carries the UTC date.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261011T065207Z-on-demand-2c4d`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+
+These replace the earlier checks of this work, all of which passed the same way.
+The boundary check ran as `20261010T000124Z-on-demand-9dbc` on 2026-10-09, right after the first feature commit, and as `20261011T040346Z-on-demand-635a`, `20261011T042833Z-on-demand-cf42`, `20261011T044547Z-on-demand-b746`, and `20261011T050430Z-on-demand-11ce` on 2026-10-10, before the review's last changes to what `check-drafts` reads, what a post item's Evidence quotes, and what the checklist, platform, lint, and Hook checks of a Draft read.
+It ran as `20261011T052436Z-on-demand-92e7` after those, before the last change of this work: a claim a Draft lists with no code now blocks that Draft (`drafts.py`), and each post item and the run report say that only the listed claims were checked (`posts.py`), with the task definition and the agent's guidance changed to match.
+
+US-ME08's Validation Test was run live through the launcher on demand on 2026-10-09, on the code as it stood before that review, network off, against Mandu and RepToday (`main` at `de0355d`) as they are.
+Before the first run and after the last, RepToday's and Mandu's HEAD, refs, git status, index, and every file digest under `projects/RepToday/` and in the RepToday checkout were the same.
+"Reconciled copy" is a copy of `projects/RepToday/` with the two package contradictions these runs surface resolved as Mandu would after the Founder's decisions: the trademark line in `pre-publication-checklist.md` checked, as the launch checklist records, and `brand-rules.json`'s Hook word cap raised to 17 with "streak" no longer banned, so the frozen Hooks the brand guidelines approve can pass.
+Mandu itself was never edited.
+
+| Run | Against | What it showed |
+| --- | --- | --- |
+| `20261010T001926Z-on-demand-8ed9` | Mandu as it is | Seven Drafts, one per day 1 to 7, each the calendar's Angle and pair leg with its frozen Hook, and every claim's code location verified at `de0355d`; all seven blocked, each naming the trademark line (`pre-publication-checklist.md` line 9, open and blocking everything public), days 1, 2, 4, and 6 also naming `hook_max_words` (their frozen Hooks run 13, 13, 17, and 18 words against 12) and day 6 `banned_words_in_hook` ("streak"); none reached the Review Queue, a notice named each; the brand-rules proposal was queued once |
+| `20261010T001505Z-on-demand-bcfa` | Reconciled copy | Six of seven Drafts passed and stood as post items (three queued that run, three kept from the run before), each citing the calendar row, the Angle, its sourced pain, signal, and kill criterion, with no slot yet and the Waitlist line; day 6 blocked naming `hook_max_words` (18 against 17), and the agent proposed resolving that Hook's conflict; the agent used `check-drafts` to correct its own wrong code citations first |
+| `20261010T001823Z-on-demand-c2bd` | Reconciled copy, "grind" added to day 3's caption | Run with a throwaway task definition that only re-runs `check-drafts`, so the agent could not remove the word: day 3 blocked naming `banned_words_in_hook` in the TikTok caption and YouTube description, its open post withdrawn and replaced by the notice that says why; no open post holds the word; the brand-rules proposal was still the one queued by the first attempt below, never filed again |
+
+Three earlier attempts do not count, and each led to a fix.
+In `20261010T000234Z-on-demand-ac2c` the agent wrote no Draft, reading the brief's open trademark line as a reason not to; the task definition now says every listed day gets a Draft that the launcher then blocks with the rule named.
+In `20261010T000549Z-on-demand-a9fe` all seven Drafts were blocked as in the counted run above, three also by the agent's wrong code citations; it ran on code from before the fixes below.
+In `20261010T000903Z-on-demand-bb45`, against the reconciled copy, the agent's `check-drafts` could not read the copy, because the launcher's `GR0WTHLAB_MANDU_DIR` never reaches the agent's environment; the brief's command now names each location.
+Each run cost between $0.002 and $0.03 at API prices.
+
 ## Scheduled and on-demand runs share one configuration
 
 The scheduled path was tested with a temporary LaunchAgent, `gr0wthlab.us-me02-schedule-test`, generated by `src/bin/gr0wthlab launch-agent --once <time> --label gr0wthlab.us-me02-schedule-test --instruction src/checks/boundary-probe.md`.

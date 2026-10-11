@@ -22,13 +22,42 @@ def item(kind="package-change-proposal", heading=None, extra_fields="", body="Ch
 class ItemCheckTest(unittest.TestCase):
     def test_a_well_formed_item_of_every_kind_passes(self):
         for kind in exchange.KINDS:
-            fields = "slot: 2026-10-14T19:00-07:00\n" if kind == "post" else ""
+            fields = "window: 1\nday: 3\nslot: 2026-10-14T19:00-07:00\n" if kind == "post" else ""
             with self.subTest(kind=kind):
                 check = exchange.check_item(item(kind, extra_fields=fields), PRODUCTS)
                 self.assertEqual(check.problems, [])
                 self.assertEqual(check.item.kind, kind)
                 self.assertEqual(check.item.ask, "Approve package change: fix the status")
                 self.assertEqual(check.item.body, "Change the line.")
+
+    def test_a_post_names_its_window_and_day_and_has_a_slot_once_the_window_has_one(self):
+        cases = {
+            "window: 1\nday: 3\n": [],
+            "window: 1\nday: 3\nslot: 2026-10-14T19:00-07:00\n": [],
+            "day: 3\n": ["a post needs window: a whole number from 1"],
+            "window: 1\nday: 0\n": ["a post needs day: a whole number from 1"],
+            "window: 1\nday: 3\nslot: tomorrow\n": [
+                "slot must be the publishing time with its UTC offset, such as 2026-10-14T19:00-07:00"
+            ],
+        }
+        for fields, problems in cases.items():
+            with self.subTest(fields=fields):
+                self.assertEqual(exchange.check_item(item("post", extra_fields=fields), PRODUCTS).problems, problems)
+
+    def test_a_version_2_post_always_had_a_slot(self):
+        published = "exchange: 2\nid: 20261011-day-three\n"
+        check = exchange.check_item(item("post", extra_fields=published), PRODUCTS, published=True)
+        self.assertEqual(
+            check.problems, ["a version 2 post needs slot: its publishing time, such as 2026-10-14T19:00-07:00"]
+        )
+        slotted = published + "slot: 2026-10-14T19:00-07:00\n"
+        self.assertEqual(exchange.check_item(item("post", extra_fields=slotted), PRODUCTS, published=True).problems, [])
+
+    def test_only_a_post_has_a_window_a_day_or_a_slot(self):
+        for key, value in (("window", "1"), ("day", "3"), ("slot", "2026-10-14T19:00-07:00")):
+            with self.subTest(key=key):
+                check = exchange.check_item(item(extra_fields=f"{key}: {value}\n"), PRODUCTS)
+                self.assertEqual(check.problems, [f"only a post has a {key}"])
 
     def test_each_kind_needs_its_own_body_heading(self):
         check = exchange.check_item(

@@ -49,9 +49,34 @@ class RunConfigTest(unittest.TestCase):
         outputs = set(self.config["outputs"])
         reptoday = next(p for p in self.registry["products"] if p["name"] == "RepToday")
         sources = reptoday["go_to_market_package"]["sources"]
-        self.assertEqual(len(sources), 12)
+        self.assertEqual(len(sources), 13)
         for source in sources + self.config["sources_not_connected"]:
             self.assertLessEqual(set(source["needed_by"]), outputs, source)
+
+    def test_every_kit_role_is_a_snapshotted_package_source(self):
+        from gr0wthlab import posts
+
+        product, roles = posts.kit_config(self.registry)
+        self.assertEqual(product, "RepToday")
+        self.assertEqual(sorted(role for role in roles if role != "note"), sorted(posts.ROLES))
+
+    def test_the_window_waits_for_the_founder(self):
+        window = self.config["window"]
+        self.assertEqual((window["number"], window["first_sitting"], window["slot"]), (1, None, None))
+        self.assertTrue(self.config["outputs"]["post-drafts"]["built"])
+        self.assertNotIn("RepToday repository", [source["name"] for source in self.config["sources_not_connected"]])
+
+    def test_the_platform_facts_name_both_test_platforms(self):
+        from gr0wthlab import lint
+
+        platforms = lint.load_platforms(load("config/platforms.json"))
+        self.assertEqual(sorted(platforms), ["TikTok", "YouTube Shorts"])
+        self.assertEqual(platforms["TikTok"].max_hashtags, 5)
+        self.assertEqual(platforms["YouTube Shorts"].hashtags_void_above, 15)
+        caption = platforms["TikTok"].field("body")
+        self.assertEqual((caption.name, caption.max_chars, caption.visible_chars), ("Caption", 4000, 150))
+        title = platforms["YouTube Shorts"].field("title")
+        self.assertEqual((title.name, title.max_chars, title.visible_chars), ("Title", 100, 70))
 
     def test_the_exchange_folder_is_read_only_and_overridable(self):
         exchange = self.registry["mandu"]["exchange"]

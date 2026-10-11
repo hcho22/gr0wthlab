@@ -61,7 +61,7 @@ The PRD's Guardrails section says what enforces each one.
 | [`workspace/instructions/`](workspace/instructions/) | The Marketing Engineer's Instructions | Yes |
 | [`ledger/`](ledger/) | The launcher's records: the published Review Queue, the launcher's own Evidence, run reports, and run state | No |
 | [`src/`](src/) | Code | No |
-| [`config/`](config/) | Guardrail configuration, the Product registry, and the run's settings | No |
+| [`config/`](config/) | Guardrail configuration, the Product registry, the run's settings, and platform facts | No |
 | `docs/`, `CONTEXT.md`, this README | Specification and decision records | No |
 
 `workspace/` is the only tree the agent may write (G1); `ledger/` is written only by the launcher, outside the sandbox, and everything else changes only through firstmate's reviewed pull requests (G8).
@@ -73,3 +73,4 @@ The weekly run is scheduled for Sunday afternoon, before the Founder's Sunday ev
 Setting up the production clone and the schedule, and removing them: [operations](docs/operations.md).
 How the Review Queue reaches Mandu and the Founder's decisions come back: [the Mandu exchange](docs/mandu-exchange.md).
 Why Codex, how the boundary is enforced, and the refused-write evidence: [the US-ME02 spike note](docs/spikes/us-me02-runtime-boundary.md).
+Text adapted from other projects, and its licenses: [third-party notices](THIRD_PARTY_NOTICES.md).

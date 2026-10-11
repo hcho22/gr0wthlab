@@ -1,11 +1,21 @@
 {
-  "description": "How each Marketing Engineer run works around the agent: its task definition, weekly schedule, the outputs and sources its run report accounts for, the records step that saves workspace/ and ledger/ to main, and the prices behind its approximate cost. The launcher reads this file; the agent cannot write it (G8). The exchange with Mandu: docs/mandu-exchange.md. Operating the production clone: docs/operations.md.",
+  "description": "How each Marketing Engineer run works around the agent: its task definition, weekly schedule, the 14-day window, whether the Waitlist is live, the outputs and sources its run report accounts for, the records step that saves workspace/ and ledger/ to main, and the prices behind its approximate cost. The launcher reads this file; the agent cannot write it (G8). The exchange with Mandu: docs/mandu-exchange.md. Operating the production clone: docs/operations.md.",
   "instruction": "src/instructions/weekly-run.md",
   "schedule": {
     "day": "sunday",
     "time": "16:00",
     "why": "The Founder's Mandu sitting is Sunday evening. 16:00 in the Mac's local time zone leaves a few hours to finish, or to re-run on demand, before it.",
     "late_after_minutes": 15
+  },
+  "window": {
+    "number": 1,
+    "first_sitting": null,
+    "slot": null,
+    "why": "Day 1 of the 14-day window follows from the Founder's sitting: first_sitting is the date (YYYY-MM-DD, on the schedule's day) of the sitting that approves the window's first batch, day 1 is the day after it, and every calendar day follows from day 1. Which sitting that is, and the window's one fixed evening posting slot (HH:MM, the Mac's local time), are the Founder's call (FR-8), set here through a reviewed change and never inferred, since nothing posts before the Waitlist is live; the kit's posting-slot rule in the calendar names no time, so the time is set here. Until first_sitting is set, every run prepares calendar days 1 to 7 as the first batch, with no slot; once it is set, each run prepares the calendar days that fall in the week after the coming sitting, and a post's slot is its date at this time once slot is set too."
+  },
+  "waitlist": {
+    "live_since": null,
+    "why": "No public post may go out before the Waitlist is live (FR-9). live_since is the date (YYYY-MM-DD) the Waitlist went live, set here through a reviewed change once US-ME05's Validation Test has passed on reptoday.app, and never inferred from whether a source is connected or what it is named. While it is null, or a date still ahead, every post item, the run brief, and the run report say that nothing can be published until the Waitlist is live."
   },
   "records": {
     "production_clone": "~/gr0wthlab",
@@ -34,7 +44,7 @@
     "decisions": {"title": "Founder decisions taken in", "story": "US-ME07", "built": true},
     "review-queue": {"title": "Review Queue", "story": "US-ME07", "built": true},
     "waitlist-counts": {"title": "Waitlist counts", "story": "US-ME06", "built": true},
-    "post-drafts": {"title": "Post Drafts", "story": "US-ME08", "built": false},
+    "post-drafts": {"title": "Post Drafts", "story": "US-ME08", "built": true},
     "filming-plan": {"title": "Filming plan", "story": "US-ME09", "built": false},
     "scheduler-drafts": {"title": "Scheduling-service drafts", "story": "US-ME10", "built": false},
     "results": {"title": "Post results", "story": "US-ME11", "built": false},
@@ -44,7 +54,6 @@
     "beta-recruiting": {"title": "Beta Cohort recruiting", "story": "US-ME15", "built": false}
   },
   "sources_not_connected": [
-    {"name": "RepToday repository", "story": "US-ME08", "needed_by": ["post-drafts"]},
     {"name": "Scheduling service", "story": "US-ME10", "needed_by": ["scheduler-drafts"]},
     {"name": "YouTube results", "story": "US-ME11", "needed_by": ["results", "weekly-read"]},
     {"name": "TikTok export in Mandu", "story": "US-ME11", "needed_by": ["results", "weekly-read"]},

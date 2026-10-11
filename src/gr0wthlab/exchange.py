@@ -13,7 +13,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
-EXCHANGE_VERSION = 2
+EXCHANGE_VERSION = 3
 
 # Each kind's body heading, in the order a week's non-post items are presented; posts come first by nearest slot.
 KINDS = {
@@ -30,7 +30,7 @@ OPTIONS = {
     "notice": ("Acknowledge, optionally with a note", "Reject, with a one-line reason"),
     "default": ("Approve, optionally with a note", "Reject, with a one-line reason"),
 }
-ITEM_KEYS = ("exchange", "id", "kind", "product", "slot", "supersedes")
+ITEM_KEYS = ("exchange", "id", "kind", "product", "window", "day", "slot", "supersedes")
 ID_PATTERN = re.compile(r"\d{8}-[a-z0-9]+(?:-[a-z0-9]+)*")
 SLUG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 MAX_ID = 80
@@ -120,10 +120,21 @@ def check_fields(fields: Mapping[str, str], products: Sequence[str], published: 
         problems.append(f"product must be one of: {', '.join(products)}")
     slot = fields.get("slot")
     if kind == "post":
-        if slot is None or parse_datetime(slot) is None:
-            problems.append("a post needs slot: its publishing time, such as 2026-10-14T19:00-07:00")
-    elif slot is not None:
-        problems.append("only a post has a slot")
+        # Version 3: a post names its window and calendar day, and has a slot once the window's day 1 and posting
+        # slot are set; a version 2 post always had a slot.
+        version = fields.get("exchange")
+        if version == "2" and slot is None:
+            problems.append("a version 2 post needs slot: its publishing time, such as 2026-10-14T19:00-07:00")
+        if slot is not None and parse_datetime(slot) is None:
+            problems.append("slot must be the publishing time with its UTC offset, such as 2026-10-14T19:00-07:00")
+        if version != "2":
+            for key in ("window", "day"):
+                if not re.fullmatch(r"[1-9][0-9]*", fields.get(key, "")):
+                    problems.append(f"a post needs {key}: a whole number from 1")
+    else:
+        for key in ("slot", "window", "day"):
+            if fields.get(key) is not None:
+                problems.append(f"only a post has a {key}")
     supersedes = fields.get("supersedes")
     if supersedes is not None and not ID_PATTERN.fullmatch(supersedes):
         problems.append("supersedes must name an item id")

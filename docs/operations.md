@@ -23,11 +23,14 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
    Two exceptions arise only after a reviewed change to the request's text while an item of it is open, which is firstmate's own reviewed act.
    A reviewed change that brings back a text the Founder rejected, while another text is open, files the rejected text again in that open item's place.
    An approval the Founder gave an item that a reviewed change had already replaced still counts as the request's approval, though Mandu hands no superseded item to firstmate: the replacement stays open for the Founder to decide, no reviewed change replaces it any more, nothing is filed after it, and the run report says so.
-6. It writes the agent's brief and runs the agent in the sandbox with the task definition `src/instructions/weekly-run.md`.
+6. It reads the 14-day kit from Mandu, works out which calendar days need post Drafts this run, now that the Founder's decisions are in, and fixes RepToday's `main` to one commit for claim checks.
+   It writes the agent's brief and runs the agent in the sandbox with the task definition `src/instructions/weekly-run.md`.
    The agent writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records, and never write there.
 7. Once the agent finishes, it restores its owner's read and write access to anything under `workspace/` the agent left without it, and the run report names every entry it fixed, before or after the agent.
    It queues the items the agent wrote to `workspace/review-queue/incoming/` that pass the format, sets the rest aside, and turns every problem into one notice.
    The package review counts as complete only when the agent's summary ends with the line `Review: complete`; otherwise the run report marks it incomplete and the notice says so.
+   It checks each post Draft the agent wrote in `workspace/drafts/posts/` and queues a post only for one that passes; a blocked Draft is named in the run report and the notice with every failing rule or checklist line, and every check is kept in `ledger/evidence/post-drafts/`.
+   It files the brand lint's word-list proposal once, and never again whatever the Founder decides.
 8. It writes `ledger/review-queue/queue.json`, each workflow's run state (`ledger/run-reports/state/`), and the run report (`ledger/run-reports/<run id>.md`), whose first line is `checked=N acted=N note=...` even when nothing happened.
 9. In the production clone only, it commits the changed `workspace/` and `ledger/` paths and pushes them to `main`, never anything else and never by force; a change to a README in either is put back, since only a reviewed pull request changes documentation.
    If `origin/main` moved meanwhile, it replays the records commit on top and retries once; a commit that cannot be pushed stays local and goes with the next run, and the run log says why the replay failed.
@@ -61,7 +64,36 @@ launchctl print gui/$(id -u)/gr0wthlab.weekly-run | grep -E 'state|path'
 
 The schedule lives only in `config/run.json`: the LaunchAgent takes its time from there, and each run reads the same entry to tell whether it started late and when the next run is due (`next_run` in the Review Queue).
 To change the sitting day or time, change `schedule` in `config/run.json` through a reviewed pull request, then reinstall the LaunchAgent as above once the change has reached the production clone.
+A window's `first_sitting`, once set, must fall on the sitting's day, so a change of day changes it in the same pull request; a run refuses to start otherwise.
 If the Mac is asleep at that time, launchd starts the run when it wakes, and the run report says how late it started.
+
+## Set the 14-day window
+
+Day 1 of the window follows from the Founder's sitting: it is the day after the sitting that approves the window's first batch.
+Which sitting that is, and the window's one fixed posting slot, are the Founder's call, set in `window` in [`config/run.json`](../config/run.json) through a reviewed pull request and never inferred, since nothing posts before the Waitlist is live:
+
+```json
+"window": {"number": 1, "first_sitting": "2026-10-18", "slot": "19:00"}
+```
+
+`first_sitting` is that sitting's date, which must fall on the schedule's day (a Sunday today); day 1 is then Monday 2026-10-19, and every calendar day follows from it.
+`slot` is the Mac's local time; the kit's posting-slot rule in the calendar names no time, so it is set here.
+Until `first_sitting` is set, every run prepares calendar days 1 to 7 as the first batch, with no slot on the posts.
+Once it is set, each run prepares the calendar days from the next day through the end of the week after the coming sitting (on the sitting's own day, exactly that week), skipping any day already approved, and each post's slot is its date at `slot`.
+A changed slot reaches an open post at the next run, which replaces the post with one that carries it.
+
+## Mark the Waitlist live
+
+No public post may go out before the Waitlist is live.
+That is a fact only the Founder sets, in `waitlist` in [`config/run.json`](../config/run.json), through a reviewed pull request once US-ME05's Validation Test has passed on reptoday.app:
+
+```json
+"waitlist": {"live_since": "2026-10-20"}
+```
+
+It is never inferred from whether a source is connected or what a source is called.
+While `live_since` is `null`, or a date still ahead, every post item, the run brief, and the run report say that nothing can be published until the Waitlist is live.
+A post queued from that date on says the Waitlist is live; an open post keeps the line it was queued with until its Draft or slot changes and the launcher replaces it.
 
 ## Run on demand
 

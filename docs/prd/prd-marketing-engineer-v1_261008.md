@@ -267,13 +267,14 @@ gr0wthlab's side is in place, with the request filed from `src/dispatches/reptod
 
 **Acceptance Criteria:**
 
-- [ ] Drafts follow `cadence-14-day.md` day by day: the Angle, the pair leg, the primary platform, and identical content on both platforms per `platform-assignment.md`.
-- [ ] Each post Draft includes the per-platform caption, on-screen text, hashtags, and alt text, and cites its Angle, its sourced pain, and its pre-registered signal and kill criterion by reference.
-- [ ] Hooks are used exactly as frozen in `ab-pairs.md` and `angles.md`; A/B legs differ only in the Hook; a changed signal is never an edit and enters only as a new Angle through a package-change proposal.
-- [ ] Every Draft passes the `brand-rules.json` lint, and a lint failure blocks the Draft from the Review Queue with the failing rule named.
-- [ ] Every Draft shows its status against `pre-publication-checklist.md`, and a Draft that fails the checklist is not offered for approval.
-- [ ] Every behavioral claim in a Draft is checked against RepToday's current code and shows the code location that supports it; an Angle that depends on the unsubstantiated "under 100 ms" claim stays blocked until the real-device measurement exists.
+- [x] Drafts follow `cadence-14-day.md` day by day: the Angle, the pair leg, the primary platform, and identical content on both platforms per `platform-assignment.md`.
+- [x] Each post Draft includes the per-platform caption, on-screen text, hashtags, and alt text, and cites its Angle, its sourced pain, and its pre-registered signal and kill criterion by reference.
+- [x] Hooks are used exactly as frozen in `ab-pairs.md` and `angles.md`; A/B legs differ only in the Hook; a changed signal is never an edit and enters only as a new Angle through a package-change proposal.
+- [x] Every Draft passes the `brand-rules.json` lint, and a lint failure blocks the Draft from the Review Queue with the failing rule named.
+- [x] Every Draft shows its status against `pre-publication-checklist.md`, and a Draft that fails the checklist is not offered for approval.
+- [x] Every behavioral claim in a Draft is checked against RepToday's current code and shows the code location that supports it; an Angle that depends on the unsubstantiated "under 100 ms" claim stays blocked until the real-device measurement exists.
 - [ ] No Draft implies users, downloads, ratings, reviews, testimonials, or results that do not exist, and none names a competitor.
+  Waiting on Mandu: competitor names are checked, but the invented-proof list reaches the lint only once Mandu applies the brand-rules proposal (`src/proposals/brand-rules-word-lists.md`).
 
 **Validation Test:**
 

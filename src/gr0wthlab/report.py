@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import exchange, package, schedule, waitlist
+from . import exchange, package, posts, schedule, waitlist
 from .state import Tally, run_tally
 
 SKIPPED = "skipped"
@@ -89,6 +89,11 @@ class RunState:
     tallies: list[Tally] = field(default_factory=list)
     state_notes: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
+    posts: posts.Plan | None = None
+    post_outcome: posts.Outcome | None = None
+    posts_problem: str = ""  # why the post Drafts were not prepared or not taken in, when they were not
+    filing: str = ""  # where the proposed brand-rules lists stand
+    filed: str | None = None  # the brand-rules proposal, when this run filed it
 
     @property
     def lateness(self) -> timedelta | None:
@@ -358,8 +363,8 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
     if state.queue_before:
         lines += [
             "Do not queue these again; to change one, write a new item with `supersedes: <id>`.",
-            "An item filed by the launcher changes only through a reviewed change to its source text, so an item that"
-            " supersedes it is refused.",
+            "An item filed by the launcher changes only through a reviewed change to its source text, and a post only"
+            " through its Draft, so an item that supersedes either is refused.",
         ]
         for entry in state.queue_before:
             filed = ", filed by the launcher" if entry.get("origin") else ""
@@ -384,6 +389,8 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
     if state.waitlist is not None:
         evidence = ledger / state.waitlist_file if state.waitlist_file else None
         lines += waitlist_brief(state.waitlist, evidence)
+    if state.posts is not None:
+        lines += [""] + posts.brief_lines(state.posts, repo_root)[:-1]
     lines += [
         "",
         "## Where to write",
@@ -427,6 +434,12 @@ def summary_lines(state: RunState) -> list[str]:
         f"- Review Queue: {plural(len(open_items), 'item')} open for the next sitting ({len(state.published)} new"
         f" this run, {carried} carried over); {plural(len(taken), 'Founder decision')} taken in."
     )
+    outcome = state.post_outcome
+    if outcome is not None:
+        counts = outcome.counts()
+        lines.append(f"- Post Drafts: {', '.join(counts) or 'no calendar day was due'}.")
+    elif state.posts_problem:
+        lines.append(f"- Post Drafts: {state.posts_problem}")
     if state.notice:
         lines.append(f"- Problems this run are listed in the notice `{state.notice}`.")
     lines.append(f"- {cost_line(state)}")
@@ -455,6 +468,7 @@ def render_report(state: RunState) -> str:
         lines.append("Nothing is waiting for the Founder.")
     for item in state.set_aside:
         lines.append(f"- Set aside, not queued: `{item.name}`: {'; '.join(item.problems)}")
+    lines += [""] + posts.report_lines(state.posts, state.post_outcome, state.filing, state.posts_problem)
     lines += ["", "## Run state", ""]
     lines += [f"- {tally.workflow}: {tally.line()}" for tally in state.tallies]
     if state.state_notes:
@@ -530,6 +544,9 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 + "\n".join(bullet(f"`{record.name}`: {'; '.join(record.problems)}") for record in others),
             )
         )
+    blocked = posts.notice_section(state.post_outcome, day)
+    if blocked:
+        sections.append(blocked)
     if state.set_aside:
         sections.append(
             (

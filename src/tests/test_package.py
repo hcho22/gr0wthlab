@@ -105,6 +105,22 @@ class SnapshotTest(unittest.TestCase):
         self.assertEqual(results[1].failure(), "plan.md: Permission denied")
         self.assertEqual(self.files(results)["p/gtm/channels/schema.md"].status, package.READ)
 
+    def test_a_prefixed_folder_source_reads_only_its_files(self):
+        self.write("p/gtm/research/competitor-a.md", "a\n")
+        self.write("p/gtm/research/competitors-more.md", "b\n")
+        self.write("p/gtm/research/pains.md", "c\n")
+        self.sources = [package.Source("RepToday", "p/gtm/research/", ("post-drafts",), "competitor")]
+        first = self.take()
+        self.assertEqual(
+            sorted(self.files(first)), ["p/gtm/research/competitor-a.md", "p/gtm/research/competitors-more.md"]
+        )
+        known = package.last_known(package.record("r1", datetime.now(timezone.utc), self.mandu, first, None))
+        (self.mandu / "p/gtm/research/competitor-a.md").unlink()
+        second = self.take(known)
+        self.assertEqual(second[0].removed, ["p/gtm/research/competitor-a.md"])
+        self.sources = [package.Source("RepToday", "p/gtm/research/", ("post-drafts",), "nothing")]
+        self.assertEqual(self.take()[0].reason, "holds no files starting with nothing")
+
     def test_a_missing_or_empty_directory_fails(self):
         self.sources.append(package.Source("RepToday", "p/gtm/thesis/", ()))
         self.assertEqual(self.take()[2].reason, "missing")
@@ -199,6 +215,22 @@ class SourcesTest(unittest.TestCase):
         ):
             self.assertIn(expected, names)
         self.assertTrue(all(source.path.startswith("projects/RepToday/") for source in sources))
+
+    def test_a_folder_source_can_cover_only_the_files_its_names_start_with(self):
+        registry = json.loads((REPO / "config/products.json").read_text(encoding="utf-8"))
+        research = next(source for source in package.package_sources(registry) if source.prefix)
+        self.assertEqual((research.path, research.prefix), ("projects/RepToday/gtm/01-research/", "competitor"))
+        bad = {
+            "products": [
+                {
+                    "name": "P",
+                    "status": "active",
+                    "go_to_market_package": {"sources": [{"path": "a.md", "files_starting_with": "competitor"}]},
+                }
+            ]
+        }
+        with self.assertRaises(ConfigError):
+            package.package_sources(bad)
 
     def test_paths_must_stay_inside_mandu(self):
         for path in ("/etc/passwd", "../outside.md", "projects/../../x", ""):

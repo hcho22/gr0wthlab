@@ -7,6 +7,8 @@ import os
 import tempfile
 import unittest
 from contextlib import redirect_stdout
+from dataclasses import replace
+from datetime import date
 from pathlib import Path
 from unittest import mock
 
@@ -33,6 +35,38 @@ class RunSettingsTest(unittest.TestCase):
         self.assertEqual(override.records.production_clone, Path("/srv/clone"))
         with self.assertRaises(ConfigError):
             settings.load(REPO, {"GR0WTHLAB_PRODUCTION_CLONE": "relative"}, HOME)
+
+    def test_day_1_follows_the_window_s_first_sitting_which_only_the_founder_sets(self):
+        unset = settings.load(REPO, {}, HOME).window
+        self.assertEqual((unset, unset.day_1), (settings.Window(1, None, None), None))
+        window = settings.load_window({"number": 1, "first_sitting": "2026-10-11", "slot": "19:00"}, "sunday")
+        self.assertEqual((window.day_1.isoformat(), window.slot.isoformat()), ("2026-10-12", "19:00:00"))
+        moved = settings.load_window({"number": 1, "first_sitting": "2026-10-10", "slot": None}, "saturday")
+        self.assertEqual(moved.day_1.isoformat(), "2026-10-11")
+        for bad in (
+            {"number": 0, "first_sitting": None, "slot": None},
+            {"number": 1, "first_sitting": "next Sunday", "slot": None},
+            {"number": 1, "first_sitting": "2026-13-01", "slot": None},
+            {"number": 1, "first_sitting": "2026-10-12", "slot": None},  # a Monday, when the sitting is on Sunday
+            {"number": 1, "first_sitting": None, "slot": "7pm"},
+            {"number": 1, "first_sitting": None, "slot": "24:00"},
+            "sunday",
+        ):
+            with self.subTest(window=bad), self.assertRaises(ConfigError):
+                settings.load_window(bad, "sunday")
+
+    def test_the_waitlist_is_live_only_from_the_date_a_reviewed_change_sets(self):
+        unset = settings.load(REPO, {}, HOME)
+        self.assertIsNone(unset.waitlist_live_since)
+        self.assertFalse(unset.waitlist_live(date(2030, 1, 1)))
+        self.assertIsNone(settings.load_live_since({"live_since": None}))
+        since = settings.load_live_since({"live_since": "2026-10-20", "why": "set after US-ME05"})
+        self.assertEqual(since, date(2026, 10, 20))
+        live = replace(unset, waitlist_live_since=since)
+        self.assertEqual([live.waitlist_live(date(2026, 10, day)) for day in (19, 20, 21)], [False, True, True])
+        for bad in ({"live_since": "yes"}, {"live_since": True}, {"live_since": "2026-13-01"}, "2026-10-20"):
+            with self.subTest(waitlist=bad), self.assertRaises(ConfigError):
+                settings.load_live_since(bad)
 
     def test_the_task_definition_must_be_reviewed_code(self):
         self.assertEqual(

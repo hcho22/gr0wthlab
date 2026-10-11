@@ -2,13 +2,15 @@
 
 Order: bring the production clone up to origin's main; snapshot the Go-To-Market Package; take in the Founder's
 decisions from Mandu; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests
-that need filing; brief the agent and run it inside the sandbox (launcher.run); queue the items it wrote to
-workspace/review-queue/incoming/ that pass the format; write the Review Queue and the run report; commit and push
-workspace/ and ledger/. Every step but the agent is deterministic code outside the sandbox. The launcher's records live
-in ledger/, which the agent can read and never write, so nothing it does can change them; in workspace/ the launcher
-only restores its owner's access to entries the agent left without it, and reads and removes the incoming items it
-takes in. One run at a time per checkout holds the run lock in its ledger/ from the sync to the saved records; a run
-started meanwhile refuses to start, and the next report says so.
+that need filing; plan the post Drafts from the 14-day kit (posts.prepare); brief the agent and run it inside the
+sandbox (launcher.run); queue the items it wrote to workspace/review-queue/incoming/ that pass the format, a post for
+each Draft it wrote that passes every check (posts.take), and the reviewed brand-rules proposal when it needs filing;
+write the Review Queue and the run report; commit and push workspace/ and ledger/. Every step but the agent is
+deterministic code outside the sandbox. The launcher's records live in ledger/, which the agent can read and never
+write, so nothing it does can change them; in workspace/ the launcher only restores its owner's access to entries the
+agent left without it, reads the post Drafts, and reads and removes the incoming items it takes in. One run at a time
+per checkout holds the run lock in its ledger/ from the sync to the saved records; a run started meanwhile refuses to
+start, and the next report says so.
 """
 
 from __future__ import annotations
@@ -26,7 +28,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TextIO
 
-from . import dispatch, exchange, launcher, package, records, report, settings, waitlist
+from . import dispatch, exchange, launcher, package, posts, proposals, records, report, settings, waitlist
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
@@ -393,14 +395,22 @@ class Cycle:
         breach = state.breach_notice if state.breach_notice in state.published else None
         queued = [ledger.entries[i] for i in state.published if i not in filed and i != breach]
         # Each queued item counts once, under the workflow that produced it; until a workflow has its own tally
-        # (Drafts, Weekly Reads), its items count under the Review Queue with the launcher's notices.
-        proposals = sum(1 for entry in queued if entry["kind"] == "package-change-proposal")
-        others = len(queued) - proposals
+        # (Weekly Reads), its items count under the Review Queue with the launcher's notices.
+        outcome = state.post_outcome
+        drafting = set(outcome.published if outcome else ()) | ({state.filed} if state.filed else set())
+        proposals = sum(
+            1 for entry in queued if entry["kind"] == "package-change-proposal" and entry["id"] not in drafting
+        )
+        others = sum(
+            1 for entry in queued if entry["kind"] != "package-change-proposal" and entry["id"] not in drafting
+        )
         taken = sum(1 for outcome in state.decisions if outcome.status == "taken")
         superseded = sum(
             1
             for entry in ledger.entries.values()
-            if entry["status"] == SUPERSEDED and entry.get("closed_by_run") == state.run_id
+            if entry["status"] == SUPERSEDED
+            and entry.get("closed_by_run") == state.run_id
+            and not entry.get("withdrawn")
         )
         carried = sum(1 for entry in state.queue_after if entry.get("carried_over"))
         records = len(state.decisions) + len(state.unusable)
@@ -428,6 +438,7 @@ class Cycle:
                 "; ".join(filing.account() for filing in state.dispatches)
                 or ("no reviewed Dispatch request" if ledger_ok else "none filed: the Review Queue could not be read"),
             ),
+            self.post_tally(state),
             run_state.Tally("listening", 0, 0, "not built until US-ME13"),
             run_state.Tally("outreach", 0, 0, "not built until US-ME14"),
         ]
@@ -445,6 +456,43 @@ class Cycle:
             note = "read refused" + (f"; breach notice `{breach}` queued" if breach else "")
             return run_state.Tally("waitlist", 0, int(bool(breach)), note, "the view held what looks like an address")
         return run_state.Tally("waitlist", 0, 0, "no counts this run", "the view could not be used")
+
+    def post_tally(self, state: RunState) -> run_state.Tally:
+        """What the post-Draft workflow checked and acted on: each Draft taken in, each item queued or withdrawn, and
+        the brand-rules proposal when this run filed it, whether or not any Draft was taken in."""
+        outcome = state.post_outcome
+        gaps = self.post_gaps(state)
+        if outcome is None:
+            checked, acted = 0, 0
+            note = state.posts_problem or "no calendar day was prepared"
+        else:
+            checked = len(outcome.results)
+            acted = len(outcome.published) + len(outcome.withdrawn)
+            note = f"{report.plural(checked, 'day')}: {', '.join(outcome.counts()) or 'none due'}"
+            if outcome.withdrawn:
+                note += f"; {len(outcome.withdrawn)} withdrawn"
+        if state.filed:
+            acted += 1
+            note += "; the brand-rules proposal filed"
+        return run_state.Tally("post-drafts", checked, acted, note, "; ".join(gaps))
+
+    def post_gaps(self, state: RunState) -> list[str]:
+        """Why the post Drafts are incomplete this run: a kit file, the code, or the brand rules could not be used,
+        a due day has no Draft, or the agent or the take-in fell short. A blocked Draft is the check working, not a
+        gap."""
+        plan, outcome = state.posts, state.post_outcome
+        if plan is None:
+            return [state.posts_problem] if state.posts_problem else []
+        gaps = posts.unchecked(plan)
+        if outcome is None:
+            gaps.append(state.posts_problem or "the Drafts were not taken in")
+        else:
+            missing = [str(result.day) for result in outcome.results if result.status == posts.MISSING]
+            if missing:
+                gaps.append(f"no Draft for day {', '.join(missing)}")
+        if plan.days and state.agent.get("exit_code") != 0:
+            gaps.append("the agent did not finish")
+        return gaps
 
     def outputs(self, state: RunState, config: settings.Settings, ledger_ok: bool) -> None:
         """Each output's status: a built output is incomplete when a failed source it needs names it, or when its own
@@ -471,6 +519,7 @@ class Cycle:
                 else [],
                 f"`{state.waitlist_file}`",
             ),
+            "post-drafts": (self.post_gaps(state), self.post_tally(state).note),
         }
         rows = []
         for key, output in config.outputs.items():
@@ -485,6 +534,73 @@ class Cycle:
             gaps = [f"{line.name} could not be read" for line in failed if title in line.needed_by] + gaps
             rows.append([title, INCOMPLETE if gaps else COMPLETE, "; ".join(gaps) or done])
         state.outputs = rows
+
+    def prepare_posts(
+        self, state: RunState, config: settings.Settings, registry, boundary: Boundary, ledger: Ledger
+    ) -> None:
+        """The run's post-Draft plan, with its record of each day's standing for check-drafts, and the Product code it
+        checks claims against as one of the run's sources."""
+        try:
+            plan = posts.prepare(self.repo_root, config, registry, boundary, ledger, self.now(), self.env, state.run_id)
+            if plan is not None:
+                record = self.store.path(RUN_REPORTS, posts.plan_file(state.run_id))
+                self.store.write_json(record, posts.plan_record(plan))
+        except (ConfigError, OSError) as error:
+            state.posts_problem = f"not prepared: {error}"
+            state.problems.append(f"the post Drafts could not be prepared ({error})")
+            return
+        if plan is None:
+            return
+        state.posts = plan
+        code = state.posts.code
+        needs = output_titles(config, ("post-drafts",))
+        if code.problem:
+            state.sources.append(SourceLine(f"{code.name} repository", package.FAILED, f"{code.problem}.", needs))
+        else:
+            detail = f"`{code.branch}` at `{code.short}`, read at that commit for claim checks"
+            state.sources.append(SourceLine(f"{code.name} repository", package.READ, detail, needs))
+
+    def take_posts(
+        self,
+        state: RunState,
+        areas: Areas,
+        ledger: Ledger,
+        products: Sequence[str],
+        run_id: str,
+        now: datetime,
+        seen: dict[str, str],
+    ) -> None:
+        """Queue each Draft that passes, record every check, and file the brand-rules proposal unless it ever was."""
+        if state.posts is not None:
+            try:
+                state.post_outcome = posts.take(state.posts, areas, self.store, ledger, run_id, now, products)
+                state.published += state.post_outcome.published
+                posts.record(state.posts, state.post_outcome, self.store, run_id, now)
+            except (OSError, ConfigError) as error:
+                state.posts_problem = f"not taken in: {error}"
+                state.problems.append(f"the post Drafts could not be taken in ({error})")
+        rules = state.posts.context.rules if state.posts else None
+        try:
+            filing = proposals.file_once(
+                canonical(self.repo_root),
+                proposals.BRAND_RULES,
+                rules.data if rules else None,
+                self.store,
+                ledger,
+                products,
+                run_id,
+                now,
+                seen,
+            )
+        except (OSError, ConfigError) as error:
+            state.problems.append(f"`{proposals.BRAND_RULES}` could not be filed ({error})")
+            return
+        if filing.status == proposals.FILED:
+            state.filed = filing.item
+            state.published.append(filing.item)
+        elif filing.status == proposals.UNUSABLE:
+            state.problems.append(f"`{filing.source}` could not be filed: {filing.detail}")
+        state.filing = proposals.describe(filing, ledger)
 
     def leave_note(self, run_id: str, line: str) -> None:
         """A one-line note in ledger/notes/, which the next run's report shows."""
@@ -641,6 +757,7 @@ class Cycle:
             for entry in ledger.entries.values()
             if entry["kind"] == "package-change-proposal" and entry["status"] != OPEN
         ]
+        self.prepare_posts(state, config, registry, boundary, ledger)
         areas.ensure_folder(areas.path("review_queue", INCOMING))
         brief = self.store.path(RUN_REPORTS, f"{run_id}.brief.md")
         self.store.write_text(
@@ -678,6 +795,10 @@ class Cycle:
             published, state.set_aside = ledger.take_incoming(areas, self.store, products, run_id, now, seen)
             state.published += published
         incoming = len(published) + len(state.set_aside)
+        if ledger_ok:
+            self.take_posts(state, areas, ledger, products, run_id, now, seen)
+        elif state.posts is not None:
+            state.posts_problem = "not taken in: the Review Queue could not be read"
         report_path = self.store.path(RUN_REPORTS, f"{run_id}.md")
         state.problems += areas.problems
         areas.problems.clear()
@@ -698,14 +819,15 @@ class Cycle:
                     " report is the only place it is told"
                 )
         state.queue_after = ledger.ordered()
-        self.outputs(state, config, ledger_ok)
         notice = report.problems_notice(state, self.store.relative(report_path))
         if notice and ledger_ok:
             state.notice = self.queue_notice(
                 state, ledger, seen, notice, "notice-run-problems", "the notice of this run's problems"
             )
-            state.queue_after = ledger.ordered()
-            self.outputs(state, config, ledger_ok)
+        if ledger_ok and state.post_outcome is not None and state.post_outcome.withdrawn:
+            posts.withdraw(ledger, state.post_outcome, state.notice, run_id, now)
+        state.queue_after = ledger.ordered()
+        self.outputs(state, config, ledger_ok)
         if ledger_ok:
             ledger.mark_carried_over(sittings)
             next_run = report.next_due(now, config.weekly)
