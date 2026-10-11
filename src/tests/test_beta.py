@@ -456,6 +456,21 @@ class DecideTest(TempCase):
         plan, _, _ = self.plan(nobody, batch_size=2, batches=[batch(1, "open", ["Qm7tLx2a", "Ka0zMn2p"])])
         self.assertEqual((plan.batch.action, plan.batch.stale, plan.batch.ended), (beta.NONE, True, False))
 
+    def test_an_offered_entry_that_left_no_longer_counts_toward_the_cohort_and_an_invited_one_still_does(self):
+        opted_out = fakes.waitlist_view(
+            entries=[e if e[0] != "Ka0zMn2p" else (*e[:3], False, e[4]) for e in fakes.WAITLIST_ENTRIES]
+        )
+        plan, _, _ = self.plan(opted_out, batch_size=2, batches=[batch(1, "open", ["Qm7tLx2a", "Ka0zMn2p"])])
+        self.assertEqual(plan.gap, 13)
+        self.assertIn("7 sign-ups asked for a beta invitation in all", beta.gap_line(plan))
+        plan, _, _ = self.plan(batch_size=2, batches=[batch(1, "open", ["Qm7tLx2a", "Gone0000"])])
+        self.assertEqual(plan.gap, 12)
+        plan, _, _ = self.plan(opted_out, batch_size=2, batches=[batch(1, "approved", ["Qm7tLx2a", "Ka0zMn2p"])])
+        self.assertEqual(plan.gap, 12)
+        nobody = fakes.waitlist_view(entries=[entry for entry in fakes.WAITLIST_ENTRIES if not entry[3]])
+        plan, _, _ = self.plan(nobody, batch_size=2, batches=[batch(1, "open", ["Qm7tLx2a", "Ka0zMn2p"])])
+        self.assertEqual(plan.gap, 20)
+
     def test_an_open_item_that_cannot_stand_is_not_recorded_as_standing_for_check_beta_drafts(self):
         def recorded(plan):
             return {due["purpose"]: due["open"] for due in beta.plan_record(plan, _Areas(self.root))["drafts"]}

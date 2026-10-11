@@ -467,6 +467,78 @@ class WeekByWeekTest(BetaCycleTestCase):
         self.assertNotIn("Ka0zMn2p", (self.ledger() / second["file"]).read_text(encoding="utf-8"))
         self.assertNotIn("Ka0zMn2p", self.recruiting_state()["entries"])
 
+    def test_an_offered_entry_that_leaves_while_an_ask_is_open_changes_the_gap_in_the_same_run(self):
+        self.next_week()
+        (ask,) = self.asks()
+        self.assertEqual(ask["gap"], 12)
+        fakes.write_view(
+            self.view, fakes.waitlist_view(entries=[e for e in fakes.WAITLIST_ENTRIES if e[0] != "Ka0zMn2p"])
+        )
+        self.next_week()
+        (again,) = self.asks()
+        self.assertEqual(
+            (again["supersedes"], again["ask"], again["gap"]),
+            (ask["id"], "Approve Waitlist ask: the pool is 13 short of a 20-person Beta Cohort", 13),
+        )
+        report = self.report()
+        self.assertIn(
+            "- The pool is too small to reach 20: 7 sign-ups asked for a beta invitation in all, so even if every one"
+            " accepted, the Beta Cohort would be 13 short of 20.",
+            report,
+        )
+        self.assertRegex(report, r"- beta-recruiting: checked=7 acted=\d+ note=.*; the pool is 13 short of 20")
+        self.assertEqual(self.evidence()["pool"]["gap"], 13)
+        self.assertIn("would be 13 short of 20", (self.ledger() / self.invitation()["file"]).read_text())
+        self.next_week()  # the figure was current in the run that saw the entry leave, so the ask stands
+        self.assertEqual([entry["id"] for entry in self.asks()], [again["id"]])
+
+    def test_an_unreadable_review_queue_prepares_nothing_past_the_gate_and_states_no_standing(self):
+        self.next_week()
+        self.decide(self.invitation()["id"], "approve")
+        self.next_week()
+        second = self.invitation()
+        saved = self.recruiting_state()["entries"]
+        ledger = self.ledger()
+        evidence = sorted((ledger / "evidence/beta-recruiting").rglob("*.json"))
+        plans = sorted((ledger / "run-reports").glob("*.beta-plan.json"))
+        self.report_counts("2026-10-24", accepted=1)
+        queue = ledger / "review-queue/queue.json"
+        text = queue.read_text(encoding="utf-8")
+        queue.write_text("{", encoding="utf-8")
+        self.next_week()
+        report = self.report()
+        section = report.split("## Beta Cohort recruiting")[1].split("\n## ")[0]
+        self.assertEqual(
+            section.strip().splitlines(),
+            [
+                "- Beta Build: approved on 2026-10-09, build 1.0 (42), recorded 2026-10-10T19:40:00-07:00; recruiting"
+                " is open.",
+                "- This run: not prepared: the Review Queue could not be read.",
+            ],
+        )
+        for line in (
+            "- Beta Cohort recruiting: not prepared: the Review Queue could not be read",
+            "| Beta Cohort reports in Mandu | skipped | not taken in: Beta Cohort recruiting was not prepared this"
+            " run |",
+            "| Beta Cohort recruiting | incomplete | not prepared: the Review Queue could not be read |",
+            "- beta-recruiting: checked=0 acted=0 note=not prepared: the Review Queue could not be read",
+        ):
+            self.assertIn(line, report)
+        for never in ("approved for invitation", "No invitation has been approved", "not offered one yet"):
+            self.assertNotIn(never, report)
+        self.assertNotIn("## Beta Cohort recruiting", self.brief())
+        self.assertEqual(sorted((ledger / "evidence/beta-recruiting").rglob("*.json")), evidence)
+        self.assertEqual(sorted((ledger / "run-reports").glob("*.beta-plan.json")), plans)
+        self.assertEqual(self.recruiting_state()["entries"], saved)
+        queue.write_text(text, encoding="utf-8")
+        self.next_week()
+        self.assertEqual(self.invitation()["id"], second["id"])
+        report = self.report()
+        self.assertIn("| Beta Cohort reports in Mandu | changed | 1 record, 1 new |", report)
+        self.assertIn(
+            "2 entries approved for invitation, 2 offered and waiting for the Founder's decision, 4 sign-ups", report
+        )
+
     def test_only_the_counts_the_founder_reports_are_kept_and_a_missing_one_is_not_reported(self):
         self.next_week()
         first = self.invitation()

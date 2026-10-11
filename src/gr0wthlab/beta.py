@@ -462,12 +462,15 @@ def held_as_invited(entry: Mapping[str, object]) -> bool:
     return entry["status"] == APPROVED or entry.get("decided") == APPROVED
 
 
-def gap(rules: Rules, reading: waitlist.Reading | None, held: Mapping[str, object], counts: Counts) -> int | None:
-    """How far short of its minimum the cohort would be even if every invitation ever offered, and every one still
-    to offer, were accepted; None when the view could not be read, since the pool is then unknown."""
+def gap(
+    rules: Rules, reading: waitlist.Reading | None, held: Mapping[str, Mapping[str, str]], counts: Counts
+) -> int | None:
+    """How far short of its minimum the cohort would be even if everyone approved for invitation, and every sign-up
+    that asks for one now, accepted; None when the view could not be read, since the pool is then unknown. An entry
+    offered in an open batch counts only while the view still holds it."""
     if reading is None or reading.status != package.READ:
         return None
-    reachable = len(set(held) | {candidate.entry for candidate in reading.candidates})
+    reachable = len(set(invited(held)) | {candidate.entry for candidate in reading.candidates})
     return max(0, rules.minimum - max(reachable, counts.accepted or 0))
 
 
@@ -605,7 +608,7 @@ def prepare(
 
 def source_lines(plan: Plan) -> list[tuple[str, str, str]]:
     """The run report's Sources rows for this workflow: (name, status, detail). Before the gate the approval is listed
-    as not recorded, and the Founder's reports as not read."""
+    as not recorded, and the Founder's reports as not read; a run that prepared nothing past the gate took none in."""
     gate = plan.gate
     if gate.status == NOT_RECORDED:
         rows = [(GATE_SOURCE, SKIPPED, gate.detail)]
@@ -615,6 +618,8 @@ def source_lines(plan: Plan) -> list[tuple[str, str, str]]:
         rows = [(GATE_SOURCE, package.CHANGED if plan.changed else package.READ, gate.detail)]
     if not plan.active:
         return rows + [(REPORT_SOURCE, SKIPPED, "not read: Beta Cohort recruiting has not started")]
+    if plan.batch is None:
+        return rows + [(REPORT_SOURCE, SKIPPED, "not taken in: Beta Cohort recruiting was not prepared this run")]
     if plan.reports_failure:
         detail = f"`{REPORTS}/` in Mandu's exchange folder could not be read: {plan.reports_failure}."
         return rows + [(REPORT_SOURCE, package.FAILED, detail)]

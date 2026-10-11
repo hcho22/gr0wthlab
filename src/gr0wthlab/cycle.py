@@ -652,46 +652,49 @@ class Cycle:
     ) -> None:
         """Read the Founder's Beta Build record, the gate, as one of the run's sources. Before it exists nothing else
         happens here: the Founder's reports are not read, no entry is chosen, and nothing is written. Once it does,
-        fix the run's recruiting plan and record which Drafts are due for check-beta-drafts."""
+        fix the run's recruiting plan and record which Drafts are due for check-beta-drafts. A run whose Review Queue
+        could not be read stops at the gate as well, since only the Review Queue says who is invited or offered."""
         if rules is None:
             return
         needs = output_titles(config, (beta.WORKFLOW,))
         found, problems, failure = read_records(folder / beta.BUILDS)
         unusable = [(Path(record.name).name, "; ".join(record.problems)) for record in problems]
         gate = beta.read_gate(rules.product, found, unusable, failure)
-        reports, reports_failure = None, None
-        if gate.recorded:
-            reports, problems, reports_failure = read_records(folder / beta.REPORTS)
-            for record in problems:
-                name = beta.mandu_file(beta.REPORTS, Path(record.name).name)
-                state.problems.append(f"{name} could not be used ({'; '.join(record.problems)})")
-        try:
-            state.beta = beta.prepare(
-                rules,
-                gate,
-                reports,
-                reports_failure,
-                registry,
-                boundary,
-                ledger,
-                previous,
-                state.waitlist,
-                state.waitlist_file,
-                self.store,
-                state.run_id,
-                self.now(),
-            )
-            if state.beta.active:
-                record = self.store.path(RUN_REPORTS, beta.plan_file(state.run_id))
-                self.store.write_json(record, beta.plan_record(state.beta, areas))
-        except (ConfigError, OSError) as error:
+        if gate.recorded and not ledger_ok:
             state.beta = beta.Plan(rules, gate, state.run_id)
-            state.beta_problem = f"not prepared: {error}"
-            state.problems.append(f"Beta Cohort recruiting could not be prepared ({error})")
+            state.beta_problem = "not prepared: the Review Queue could not be read"
+        else:
+            reports, reports_failure = None, None
+            if gate.recorded:
+                reports, problems, reports_failure = read_records(folder / beta.REPORTS)
+                for record in problems:
+                    name = beta.mandu_file(beta.REPORTS, Path(record.name).name)
+                    state.problems.append(f"{name} could not be used ({'; '.join(record.problems)})")
+            try:
+                state.beta = beta.prepare(
+                    rules,
+                    gate,
+                    reports,
+                    reports_failure,
+                    registry,
+                    boundary,
+                    ledger,
+                    previous,
+                    state.waitlist,
+                    state.waitlist_file,
+                    self.store,
+                    state.run_id,
+                    self.now(),
+                )
+                if state.beta.active:
+                    record = self.store.path(RUN_REPORTS, beta.plan_file(state.run_id))
+                    self.store.write_json(record, beta.plan_record(state.beta, areas))
+            except (ConfigError, OSError) as error:
+                state.beta = beta.Plan(rules, gate, state.run_id)
+                state.beta_problem = f"not prepared: {error}"
+                state.problems.append(f"Beta Cohort recruiting could not be prepared ({error})")
         for name, status, detail in beta.source_lines(state.beta):
             state.sources.append(SourceLine(name, status, detail, needs))
-        if state.beta.active and not ledger_ok:
-            state.beta_problem = state.beta_problem or "not taken in: the Review Queue could not be read"
 
     def take_beta(
         self,

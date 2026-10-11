@@ -254,7 +254,7 @@
   {
    "id": 11,
    "prompt": "Run the weekly cycle after a person in the open batch asked to be removed from the Waitlist.",
-   "expected_output": "The batch is made again without the entry that left, topped up with the next entry in invitation order.",
+   "expected_output": "The batch is made again without the entry that left, topped up with the next entry in invitation order; the entry that left no longer counts toward the cohort, so the pool is reported as 12 short of 20.",
    "assertions": [
     {
      "kind": "deterministic",
@@ -272,6 +272,11 @@
      "entries": [
       "Gone0000"
      ]
+    },
+    {
+     "kind": "deterministic",
+     "check": "gap",
+     "size": 12
     }
    ],
    "files": [
