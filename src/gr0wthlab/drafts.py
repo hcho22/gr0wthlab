@@ -436,16 +436,7 @@ def check_isolation(draft: PostDraft, kit: Kit, opening: Collection[str], verdic
 
 
 def check_beats(draft: PostDraft, verdict: Verdict) -> None:
-    if not draft.beats:
-        return
-    hook = draft.beats[0]
-    if not none(hook.spoken) and norm(hook.spoken).casefold() == norm(hook.on_screen).casefold():
-        verdict.warnings.append(
-            Finding(
-                "hook-channels", "beat 1", "the spoken line repeats the on-screen text; they work best apart", False
-            )
-        )
-    if none(hook.visual):
+    if draft.beats and none(draft.beats[0].visual):
         verdict.block("format", "the hook beat needs a visual action")
 
 
@@ -481,9 +472,9 @@ def check_platforms(draft: PostDraft, context: Context, verdict: Verdict) -> Non
 
 
 def beyond_hook(draft: PostDraft, context: Context, opening: Collection[str]) -> PostDraft:
-    """The Draft with its Hook taken out, leaving what an A/B leg shares with its other leg: no hook beat, no title,
-    and no first line of each platform's text. In a re-cut pair a later beat that shows one of the pair's Hooks, one
-    of opening, goes too, since it is part of the opening the two legs cut differently."""
+    """The Draft with its Hook taken out, leaving the text an A/B leg shares with its other leg: no hook beat, no
+    title, and no first line of each platform's text. In a re-cut pair a later beat that shows one of the pair's
+    Hooks, one of opening, goes too, since it is part of the opening the two legs cut differently."""
     beats = [
         beat
         for beat in draft.beats[1:]
@@ -508,10 +499,11 @@ def check_pair(
     opening: Collection[str],
     verdict: Verdict,
 ) -> None:
-    """An A/B leg differs from its reference leg only in the Hook, so every field outside the Hook matches: beat by
-    beat in order, or, in a re-cut pair, as the same set of beats in any order. Text an approved reference no longer
-    passes a brand rule with is never inherited or waived, and no Draft can change it: this leg stays blocked,
-    naming the rule, until the Founder resolves it."""
+    """An A/B leg differs from its reference leg only in the Hook, so every field outside the Hook matches, beat by
+    beat in order: every beat at the same time in the video, the hook beat included, and every later beat with the
+    same lines. A re-cut pair's opening moves the beats after it, so each of those runs for the same length of time
+    instead. Text an approved reference no longer passes a brand rule with is never inherited or waived, and no Draft
+    can change it: this leg stays blocked, naming the rule, until the Founder resolves it."""
     mine, theirs = beyond_hook(draft, context, opening), beyond_hook(reference, context, opening)
 
     def differs(where: str) -> None:
@@ -522,18 +514,25 @@ def check_pair(
     def lines(text: str) -> list[str]:
         return [norm(line) for line in text.splitlines()]
 
+    def time(beat: Beat) -> object:
+        return round(beat.end - beat.start, 3) if opening else (beat.start, beat.end)
+
     ours, others = (
-        [[norm(getattr(beat, key)) for key in BEAT_LINES.values()] for beat in leg.beats] for leg in (mine, theirs)
+        [[time(beat)] + [norm(getattr(beat, key)) for key in BEAT_LINES.values()] for beat in leg.beats]
+        for leg in (mine, theirs)
     )
     if opening:
-        if sorted(ours) != sorted(others):
+        if ours != others:
             differs("beats after the re-cut opening")
     else:
-        absent = [None] * len(BEAT_LINES)
+        if [time(beat) for beat in draft.beats[:1]] != [time(beat) for beat in reference.beats[:1]]:
+            differs("beat 1 time")
+        labels = ["time"] + [label.lower() for label in BEAT_LINES]
+        absent = [None] * len(labels)
         for number, (here, there) in enumerate(zip_longest(ours, others, fillvalue=absent), start=2):
-            for label, said, expected in zip(BEAT_LINES, here, there):
+            for label, said, expected in zip(labels, here, there):
                 if said != expected:
-                    differs(f"beat {number} {label.lower()}")
+                    differs(f"beat {number} {label}")
     for platform, values in theirs.platforms.items():
         for name, expected in values.items():
             if lines(mine.platforms.get(platform, {}).get(name, "")) != lines(expected):

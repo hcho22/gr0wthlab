@@ -456,21 +456,23 @@ class Cycle:
         return run_state.Tally("waitlist", 0, 0, "no counts this run", "the view could not be used")
 
     def post_tally(self, state: RunState) -> run_state.Tally:
-        """What the post-Draft workflow checked and acted on: each Draft taken in, and each item queued or withdrawn."""
+        """What the post-Draft workflow checked and acted on: each Draft taken in, each item queued or withdrawn, and
+        the brand-rules proposal when this run filed it, whether or not any Draft was taken in."""
         outcome = state.post_outcome
         gaps = self.post_gaps(state)
         if outcome is None:
-            return run_state.Tally(
-                "post-drafts", 0, 0, state.posts_problem or "no calendar day was prepared", "; ".join(gaps)
-            )
-        acted = len(outcome.published) + len(outcome.withdrawn) + bool(state.filed)
-        counts = outcome.counts()
-        note = f"{report.plural(len(outcome.results), 'day')}: {', '.join(counts) or 'none due'}"
-        if outcome.withdrawn:
-            note += f"; {len(outcome.withdrawn)} withdrawn"
+            checked, acted = 0, 0
+            note = state.posts_problem or "no calendar day was prepared"
+        else:
+            checked = len(outcome.results)
+            acted = len(outcome.published) + len(outcome.withdrawn)
+            note = f"{report.plural(checked, 'day')}: {', '.join(outcome.counts()) or 'none due'}"
+            if outcome.withdrawn:
+                note += f"; {len(outcome.withdrawn)} withdrawn"
         if state.filed:
+            acted += 1
             note += "; the brand-rules proposal filed"
-        return run_state.Tally("post-drafts", len(outcome.results), acted, note, "; ".join(gaps))
+        return run_state.Tally("post-drafts", checked, acted, note, "; ".join(gaps))
 
     def post_gaps(self, state: RunState) -> list[str]:
         """Why the post Drafts are incomplete this run: a kit file, the code, or the brand rules could not be used,

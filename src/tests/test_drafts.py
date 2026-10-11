@@ -122,38 +122,67 @@ class EvaluateTest(DraftTestCase):
                 ("beat 3 spoken line",),
             ),
             ("Open today's session and tap Start.", "Open today's session.", ("beat 3 visual action",)),
+            ("### Beat 3: 9-12s", "### Beat 3: 9-58s", ("beat 3 time",)),
+            ("### Beat 2: 3-9s", "### Beat 2: 4-9s", ("beat 2 time",)),
+            ("### Beat 1 (hook): 0-3s", "### Beat 1 (hook): 0-2s", ("beat 1 time",)),
         )
         for old, new, fields in cases:
             with self.subTest(fields=fields):
                 verdict = self.check(clean.replace(old, new), reference)
                 self.assertEqual(rules_of(verdict), ["pair-legs"])
                 self.assertEqual(tuple(finding.field for finding in verdict.blocks), fields)
+        quicker = clean.replace("### Beat 2: 3-9s", "### Beat 2: 3-5s").replace("### Beat 3: 9-12s", "### Beat 3: 5-6s")
+        self.assertEqual(
+            [finding.field for finding in self.check(quicker, reference).blocks], ["beat 2 time", "beat 3 time"]
+        )
         shorter = clean.split("### Beat 3")[0] + "## TikTok" + clean.split("## TikTok")[1]
         self.assertEqual(
             [finding.field for finding in self.check(shorter, reference).blocks],
-            ["beat 3 visual action", "beat 3 spoken line", "beat 3 on-screen text"],
+            ["beat 3 time", "beat 3 visual action", "beat 3 spoken line", "beat 3 on-screen text"],
         )
 
-    def test_a_re_cut_pair_s_legs_may_reorder_their_opening_and_match_as_a_set_of_beats(self):
+    def test_a_leg_s_hook_beat_runs_as_long_as_its_reference_leg_s(self):
+        def hook_beat_only(text):
+            return text.split("### Beat 2")[0] + "## TikTok" + text.split("## TikTok")[1]
+
+        reference = drafts.parse(hook_beat_only(fakes.draft(1)), "day-01.md")
+        leg = hook_beat_only(fakes.draft(8))
+        self.assertEqual(self.check(leg, reference).blocks, [])
+        longer = self.check(leg.replace("### Beat 1 (hook): 0-3s", "### Beat 1 (hook): 0-58s"), reference)
+        self.assertEqual([(finding.rule, finding.field) for finding in longer.blocks], [("pair-legs", "beat 1 time")])
+
+    def test_a_re_cut_pair_s_legs_may_cut_their_opening_differently_and_match_beat_by_beat_after_it(self):
         hook_a, hook_b = fakes.KIT_DAYS[1][3], fakes.KIT_DAYS[8][3]
         body = ("Open today's session and tap Start.", "Real phone, real time.")
-        leg_a = fakes.with_beats(fakes.draft(1), ("Hold on the session list.", hook_b), body)
-        leg_b = fakes.with_beats(fakes.draft(8), ("The home screen, then one tap.", hook_a), body)
-        reordered = fakes.with_beats(fakes.draft(8), body, ("The home screen, then one tap.", hook_a))
-        changed = fakes.with_beats(fakes.draft(8), ("The home screen.", hook_a), ("Open today's session.", body[1]))
+        close = ("Lock the phone.", "Done for today.")
+        leg_a = fakes.with_beats(fakes.draft(1), ("Hold on the session list.", hook_b), body, close)
+        leg_b = fakes.with_beats(fakes.draft(8), ("The home screen, then one tap.", hook_a), body, close)
+        moved = fakes.with_beats(fakes.draft(8), body, ("The home screen, then one tap.", hook_a), close)
+        sooner = fakes.with_beats(fakes.draft(8), body, close)
+        shuffled = fakes.with_beats(fakes.draft(8), ("The home screen, then one tap.", hook_a), close, body)
+        retimed = leg_b.replace("### Beat 4: 9-12s", "### Beat 4: 9-58s")
+        changed = fakes.with_beats(
+            fakes.draft(8), ("The home screen.", hook_a), ("Open today's session.", body[1]), close
+        )
         # In an ordinary pair no beat shows the other leg's Hook, so neither check lets the opening move.
         self.assertEqual(rules_of(self.check(leg_a)), ["hook-isolation"])
         self.context = fakes.kit_context(self.code, self.env, fakes.recut_mandu(self.root / "Mandu"))
         reference = drafts.parse(leg_a, "day-01.md")
         self.assertEqual(self.check(leg_a).blocks, [])
-        self.assertEqual(self.check(leg_b, reference).blocks, [])
-        self.assertEqual(self.check(reordered, reference).blocks, [])
-        verdict = self.check(changed, reference)
-        self.assertEqual(
-            [(finding.rule, finding.field) for finding in verdict.blocks],
-            [("pair-legs", "beats after the re-cut opening")],
-        )
-        recaptioned = fakes.with_beats(fakes.draft(8, caption="Another second line."), ("A tap.", hook_a), body)
+        for name, leg in (
+            ("the same opening order", leg_b),
+            ("the other Hook later", moved),
+            ("no other Hook", sooner),
+        ):
+            with self.subTest(name):
+                self.assertEqual(self.check(leg, reference).blocks, [])
+        for name, leg in (("shuffled", shuffled), ("re-timed", retimed), ("reworded", changed)):
+            with self.subTest(name):
+                self.assertEqual(
+                    [(finding.rule, finding.field) for finding in self.check(leg, reference).blocks],
+                    [("pair-legs", "beats after the re-cut opening")],
+                )
+        recaptioned = fakes.with_beats(fakes.draft(8, caption="Another second line."), ("A tap.", hook_a), body, close)
         self.assertEqual(
             [finding.field for finding in self.check(recaptioned, reference).blocks],
             ["TikTok caption", "YouTube Shorts description"],
@@ -167,15 +196,14 @@ class EvaluateTest(DraftTestCase):
         tagged = fakes.draft(3).replace("#buildinpublic", "#ironfit")
         self.assertEqual(rules_of(self.check(tagged)), ["competitor-name"])
 
-    def test_the_hook_beat_s_channels_should_not_repeat_each_other(self):
+    def test_a_hook_the_kit_has_spoken_on_camera_passes_with_no_warning(self):
         text = fakes.draft(2).replace(
             "- Spoken line: none\n- On-screen text: I missed five days",
             "- Spoken line: I missed five days and the app welcomed me back.\n- On-screen text: I missed five days",
             1,
         )
         verdict = self.check(text)
-        self.assertTrue(verdict.passed, verdict.blocks)
-        self.assertIn("hook-channels", [finding.rule for finding in verdict.warnings])
+        self.assertEqual((verdict.blocks, verdict.warnings), ([], []))
 
     def test_a_draft_with_no_claim_is_blocked(self):
         text = fakes.draft(3).split("## Claims")[0] + "## Claims\n"

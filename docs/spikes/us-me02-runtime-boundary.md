@@ -284,12 +284,16 @@ The post Drafts added a package source to `config/products.json` (the research f
 The agent's start is unchanged: `codex.py`, `boundary.py`, the probe, and `runtime.json` are as they were, and the Mandu checkout was already a read grant.
 Two new reads run outside the sandbox: the launcher reads the 14-day kit from Mandu, and resolves RepToday's `main` to one commit and reads files at it with `git cat-file` and optional locks off, which never writes the checkout's index, refs, or working tree.
 Inside the sandbox, `check-drafts` reads the same files, and the brief's command names the Mandu and RepToday locations the launcher used, since the agent's environment carries no override.
-Both checks were re-run on 2026-10-09 with Codex CLI 0.160.0 from a linked worktree whose configuration fingerprint is `13a0eee82a14b1d5491d0dea3eeab9c3cf64c8aaa361d6a14f66dba124499659`:
 
-- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths.
-- `src/bin/gr0wthlab boundary-check` passed as run `20261010T000124Z-on-demand-9dbc`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+The review of this work then changed the launcher and its configuration again: `check-drafts --run` and the record of each day's standing that the cycle writes into `ledger/run-reports/` for it, the kit, Draft, and lint checks (`kit.py`, `posts.py`, `drafts.py`, `lint.py`), which queued items an item the agent writes may supersede (`queue.py`, `proposals.py`), and the window and `waitlist` sections of `config/run.json` with the settings that read them.
+Both checks were therefore made again on the code as it stands after those changes, on 2026-10-10, Mac local time, with Codex CLI 0.160.0 from a linked worktree whose configuration fingerprint is `6dca08699985566e0d2e6c14aae2e8752bb43c3df2210c7e211a50b9cce3ec8b`; the run identifier carries the UTC date.
 
-US-ME08's Validation Test was then run live through the launcher on demand, network off, against Mandu and RepToday (`main` at `de0355d`) as they are.
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261011T040346Z-on-demand-635a`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+
+These replace the checks first made on 2026-10-09, right after the first feature commit, when the boundary check passed the same way as run `20261010T000124Z-on-demand-9dbc`.
+
+US-ME08's Validation Test was run live through the launcher on demand on 2026-10-09, on the code as it stood before that review, network off, against Mandu and RepToday (`main` at `de0355d`) as they are.
 Before the first run and after the last, RepToday's and Mandu's HEAD, refs, git status, index, and every file digest under `projects/RepToday/` and in the RepToday checkout were the same.
 "Reconciled copy" is a copy of `projects/RepToday/` with the two package contradictions these runs surface resolved as Mandu would after the Founder's decisions: the trademark line in `pre-publication-checklist.md` checked, as the launch checklist records, and `brand-rules.json`'s Hook word cap raised to 17 with "streak" no longer banned, so the frozen Hooks the brand guidelines approve can pass.
 Mandu itself was never edited.

@@ -2,8 +2,9 @@
 wrote for the Founder to decide, such as the brand lint's word lists (F1).
 
 Each is queued at most once, under the identifier it first got, and never re-asked whatever the Founder decides: the
-ledger entry keeps the file it came from. A proposal whose keys Mandu's file already holds is not filed at all. The
-text is a one-time source only; no check ever reads it, so the lint keeps exactly one rule source, Mandu.
+ledger entry's origin names the text it came from, which also keeps any item the agent writes from superseding it
+(queue.check_incoming). A proposal whose keys Mandu's file already holds is not filed at all. The text is a one-time
+source only; no check ever reads it, so the lint keeps exactly one rule source, Mandu.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from .queue import Ledger
 
 PROPOSALS = Path("src/proposals")
 BRAND_RULES = PROPOSALS / "brand-rules-word-lists.md"
-SOURCE_KEY = "proposal_source"
+ORIGIN = "proposal"
 FILED = "filed"
 QUEUED_BEFORE = "queued before"
 IN_MANDU = "already in Mandu"
@@ -72,8 +73,9 @@ def file_once(
     still filed, since nothing shows it applied.
     """
     relative = str(source)
+    origin = f"{ORIGIN}/{source.stem}"
     for entry in ledger.entries.values():
-        if entry.get(SOURCE_KEY) == relative:
+        if entry.get("origin") == origin:
             decided = entry.get("decided") or entry["status"]
             return Filing(relative, QUEUED_BEFORE, str(entry["id"]), str(decided))
     try:
@@ -89,7 +91,7 @@ def file_once(
     fingerprint = exchange.item_hash(check.item)
     if fingerprint in seen:
         return Filing(relative, QUEUED_BEFORE, seen[fingerprint], "the same proposal is already queued", adds)
-    identifier = ledger.publish(store, check.item, source.stem, run_id, now, {SOURCE_KEY: relative})
+    identifier = ledger.publish(store, check.item, source.stem, run_id, now, origin=origin)
     seen[fingerprint] = identifier
     return Filing(relative, FILED, identifier, "queued this run", adds)
 

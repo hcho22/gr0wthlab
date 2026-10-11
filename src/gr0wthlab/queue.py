@@ -212,8 +212,8 @@ class Ledger:
         self, path: Path, name: str, products: Sequence[str], seen: Mapping[str, str]
     ) -> tuple[exchange.Item | None, list[str]]:
         """Every rule a file in incoming/ must pass to be queued, for the launcher and the agent's own check alike:
-        its name, the item format, an open item to supersede that the launcher did not file from reviewed text, and no
-        repeat of an item queued or decided.
+        its name, the item format, an open item to supersede that the launcher neither filed from reviewed text nor
+        queued from a Draft, and no repeat of an item queued or decided.
 
         name is the file's path inside incoming/; seen maps each queued item's fingerprint to its identifier.
         The item comes back only when there is no problem.
@@ -243,6 +243,11 @@ class Ledger:
             problems.append(
                 f"supersedes {target}, which the launcher filed from reviewed text; only a reviewed change to that"
                 " text replaces it"
+            )
+        elif replaced.get("kind") == "post":
+            problems.append(
+                f"supersedes {target}, a post the launcher queued from its Draft; only a change to that Draft in"
+                " drafts/posts/ replaces it"
             )
         fingerprint = exchange.item_hash(item)
         if fingerprint in seen:

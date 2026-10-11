@@ -363,8 +363,8 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
     if state.queue_before:
         lines += [
             "Do not queue these again; to change one, write a new item with `supersedes: <id>`.",
-            "An item filed by the launcher changes only through a reviewed change to its source text, so an item that"
-            " supersedes it is refused.",
+            "An item filed by the launcher changes only through a reviewed change to its source text, and a post only"
+            " through its Draft, so an item that supersedes either is refused.",
         ]
         for entry in state.queue_before:
             filed = ", filed by the launcher" if entry.get("origin") else ""

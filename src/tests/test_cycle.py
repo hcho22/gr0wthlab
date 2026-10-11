@@ -1261,6 +1261,23 @@ class PostDraftsTest(CycleTestCase):
         self.assertIn("| 3 | P03 / AB-2 leg A | blocked |", report)
         self.assertIn("| 1 | P01 / AB-1 leg A | kept |", report)
 
+    def test_no_item_the_agent_writes_takes_a_post_off_the_queue(self):
+        first = self.first_batch()
+        day_3 = next(entry["id"] for entry in first["open"] if entry.get("day") == 3)
+        instead = fakes.proposal("notice", f"supersedes: {day_3}\n", "day 3 is off")
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/day-3-off.md": instead}})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))
+        self.assertEqual(code, 0, out)
+        self.assertIn(day_3, [entry["id"] for entry in self.queue()["open"]])
+        report = self.report()
+        self.assertIn(
+            f"- Set aside, not queued: `day-3-off.md`: supersedes {day_3}, a post the launcher queued from its Draft;"
+            " only a change to that Draft in drafts/posts/ replaces it",
+            report,
+        )
+        self.assertIn("| 3 | P03 / AB-2 leg A | kept |", report)
+        self.assertIn("and a post only through its Draft, so an item that supersedes either is refused.", self.brief())
+
     def test_a_withdrawn_post_is_counted_once_and_leaves_the_report_s_count_of_open_items(self):
         self.first_batch()
         self.exchange.mkdir()
@@ -1425,20 +1442,41 @@ class PostDraftsTest(CycleTestCase):
         rules.write_text(json.dumps(data))
         self.run_cycle()
         queue = self.queue()
-        [filed] = [
-            entry
-            for entry in queue["open"]
-            if entry.get("proposal_source") == "src/proposals/brand-rules-word-lists.md"
-        ]
+        [filed] = [entry for entry in queue["open"] if entry.get("origin") == "proposal/brand-rules-word-lists"]
         self.assertEqual(filed["id"], "20261011-brand-rules-word-lists")
         report = self.report()
         self.assertIn("Pending, until Mandu adds their lists: stock phrases, capped words per paragraph", report)
         self.assertIn("is `20261011-brand-rules-word-lists`, filed this run: open for the Founder's decision.", report)
         self.assertIn("post-drafts 0 days: none due; the brand-rules proposal filed", report)
+        fewer = fakes.proposal(extra=f"supersedes: {filed['id']}\n", title="fewer lists")
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/fewer-lists.md": fewer}})
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
-        again = [entry for entry in self.queue()["open"] if entry.get("proposal_source")]
+        again = [entry for entry in self.queue()["open"] if entry.get("origin")]
         self.assertEqual([entry["id"] for entry in again], [filed["id"]])
-        self.assertIn("filed earlier, never re-asked", self.report())
+        report = self.report()
+        self.assertIn("filed earlier, never re-asked", report)
+        self.assertIn(f"- `{filed['id']}` (package-change-proposal, filed by the launcher): ", self.brief())
+        self.assertIn(
+            f"- Set aside, not queued: `fewer-lists.md`: supersedes {filed['id']}, which the launcher filed from"
+            " reviewed text; only a reviewed change to that text replaces it",
+            report,
+        )
+
+    def test_the_proposal_filed_in_a_run_that_took_in_no_draft_still_counts_as_acted_on(self):
+        path = self.repo / "config/products.json"
+        registry = json.loads(path.read_text(encoding="utf-8"))
+        for product in registry["products"]:
+            (product.get("go_to_market_package") or {}).pop("post_drafts", None)
+        path.write_text(json.dumps(registry), encoding="utf-8")
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        self.assertEqual([entry["id"] for entry in self.queue()["open"]], ["20261011-brand-rules-word-lists"])
+        report = self.report()
+        self.assertIn(
+            "- post-drafts: checked=0 acted=1 note=no calendar day was prepared; the brand-rules proposal filed\n",
+            report,
+        )
+        self.assertRegex(report, r"## Summary\n\n- checked=\d+ acted=1 note=")
 
     def test_the_report_never_says_an_approved_proposal_waits_for_mandu_once_mandu_holds_its_lists(self):
         rules = self.mandu / "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json"

@@ -153,12 +153,12 @@ leg: A
   A hashtag runs its words together, so there the lint is stricter: a listed word or phrase blocks the Draft anywhere inside a hashtag, run together or joined by underscores, even as part of a longer word.
   So does a number or quantity that comes before an invented-proof term inside one hashtag.
   When a hashtag is blocked this way, choose another hashtag.
-- An A/B leg differs from its other leg only in the Hook: when the other leg already has an open or approved post, copy its Draft and change only the Hook's lines; the hook beat's visual action and spoken line may change with them.
+- An A/B leg differs from its other leg only in the Hook: when the other leg already has an open or approved post, copy its Draft and change only the Hook's lines; the hook beat's visual action and spoken line may change with them, and every beat keeps its time.
   When you draft both legs in one run, write the earlier day first and copy it for the later day.
-  The launcher checks the newer leg against that Draft field by field, in the order of the beats, and blocks it on any other difference; it never changes the leg already posted.
+  The launcher checks the newer leg against that Draft field by field, in the order of the beats and with each beat's time, and blocks it on any other difference; it never changes the leg already posted.
 - A re-cut pair is one the kit marks as a re-cut, in the pair's own section of the A/B pairs or in the calendar row of either leg.
   Each leg of a re-cut pair opens on its own Hook in the hook beat and may show the pair's other Hook in a later beat, as the pair's opening order says.
-  Every beat that shows neither Hook is the same in both legs, word for word, in whatever order the re-cut puts them.
+  Every beat that shows neither Hook is the same in both legs, word for word, in the same order and for the same length of time; only when it starts may move with the opening.
   In any other pair, and on a day that is not a pair leg, no beat shows another Hook.
 - When text a leg must share with its other leg fails a brand rule, never reword one leg alone.
   If the other leg is not approved and the brief lists both days, reword both Drafts together, so they still match beyond the Hook.
@@ -176,6 +176,7 @@ leg: A
 - Never assume a file is unreadable: read it, and if the read fails, report the exact error.
 - Do not queue an item that is already open; to replace one, write a new item with `supersedes: <id>` in its front matter.
   An item the brief marks as filed by the launcher, such as a Dispatch request, cannot be superseded: only a reviewed change to its source text replaces it.
+  A post cannot be superseded either: it changes only through its Draft.
 - Do not propose again what the Founder already rejected unless new Evidence answers the reason.
   The launcher refuses an item that asks the same as an open or decided one, and rewording an ask does not make it new.
 - Quote only the specific package text a proposal uses or replaces, citing its file; never copy a package file or a large part of one.

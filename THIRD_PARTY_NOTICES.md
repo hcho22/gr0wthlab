@@ -13,6 +13,7 @@ Each adapted file opens with a one-line header naming its source paths and commi
 | --- | --- |
 | [`config/platforms.json`](config/platforms.json) | `skills/social/references/platform-limits.md` |
 | [`src/proposals/brand-rules-word-lists.md`](src/proposals/brand-rules-word-lists.md) | `skills/copywriting/references/ai-tells.md`, `skills/copy-editing/SKILL.md`, `skills/seo-audit/references/ai-writing-detection.md`, `skills/offers/references/scarcity-urgency.md` |
+| [`src/examples/post-drafts/files/mandu/projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json`](src/examples/post-drafts/files/mandu/projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json) | a subset of the same lists, for the tests and the example set: `skills/copywriting/references/ai-tells.md`, `skills/copy-editing/SKILL.md`, `skills/seo-audit/references/ai-writing-detection.md`, `skills/offers/references/scarcity-urgency.md` |
 | [`workspace/instructions/post-drafts.md`](workspace/instructions/post-drafts.md) | `skills/copywriting/references/ai-tells.md`, `skills/copy-editing/SKILL.md` |
 | [`src/examples/post-drafts/evals.json`](src/examples/post-drafts/evals.json) | the shape of the library's `skills/*/evals/evals.json` (`{id, prompt, expected_output, assertions[], files[]}`) |
 

@@ -250,6 +250,20 @@ class OrderAndPersistenceTest(LedgerTestCase):
             set_aside[0].problems,
         )
 
+    def test_no_item_the_agent_writes_supersedes_a_post(self):
+        post = self.post("day-3", 3)
+        self.drop("day-3-off.md", fakes.proposal("notice", f"supersedes: {post}\n", "day 3 is off"))
+        published, set_aside = self.take("RUN2")
+        self.assertEqual(published, [])
+        self.assertEqual(
+            set_aside[0].problems,
+            (
+                f"supersedes {post}, a post the launcher queued from its Draft; only a change to that Draft in"
+                " drafts/posts/ replaces it",
+            ),
+        )
+        self.assertEqual(self.ledger.entries[post]["status"], OPEN)
+
     def test_an_item_carries_over_only_once_a_sitting_has_left_it_undecided(self):
         self.drop("first.md", fakes.PROPOSAL)
         [first] = self.take("20261011T230000Z-scheduled-aaaa")[0]

@@ -45,9 +45,9 @@ class CalendarTest(unittest.TestCase):
 
     def test_a_parenthetical_queued_pair_is_not_a_leg(self):
         text = "| Day | Asset | Angle / pair leg | Primary platform | Notes |\n|---|---|---|---|---|\n"
-        text += "| 7 | Timelapse | P04 (single leg this window; AB-5 queued) | TikTok | |\n"
+        text += "| 7 | Walkthrough | P06 (one leg for now; AB-9 held back) | TikTok | |\n"
         day = kit.parse_calendar(text)[7]
-        self.assertEqual((day.angle, day.pair, day.leg), ("P04", None, None))
+        self.assertEqual((day.angle, day.pair, day.leg), ("P06", None, None))
 
     def test_a_calendar_that_does_not_parse_says_why(self):
         for text, why in (
@@ -167,12 +167,12 @@ class PlatformsChecklistCompetitorsTest(unittest.TestCase):
         )
 
     def test_a_competitor_name_is_cut_before_its_description(self):
-        self.assertEqual(kit.competitor_name("Down Dog (Yoga Buddhi Co.) - incl. HIIT | Down Dog"), ["Down Dog"])
+        self.assertEqual(kit.competitor_name("Iron Fit (Ironworks Co.) - incl. cardio | Iron Fit"), ["Iron Fit"])
         self.assertEqual(
-            kit.competitor_name("Peloton App (app subscription, not the bike)"), ["Peloton App", "Peloton"]
+            kit.competitor_name("Pulseday App (app subscription, not the band)"), ["Pulseday App", "Pulseday"]
         )
-        self.assertEqual(kit.competitor_name("Wakeout! Break the Sit Habit (Wakeout, LLC)"), ["Wakeout"])
-        self.assertEqual(kit.competitor_name("Seven: 7 Minute Workout (Perigee)"), ["Seven"])
+        self.assertEqual(kit.competitor_name("Stretchly! Move Every Hour (Stretchly, LLC)"), ["Stretchly"])
+        self.assertEqual(kit.competitor_name("Nine: 9 Minute Circuit (Northfold)"), ["Nine"])
         numbered = {"a.md": "## 7. Wedge contrast: us vs them\n\nNo source line.\n"}
         with self.assertRaisesRegex(kit.KitError, "no competitor names"):
             kit.parse_competitors(numbered)

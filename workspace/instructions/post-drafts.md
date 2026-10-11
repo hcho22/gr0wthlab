@@ -68,11 +68,11 @@ Leave alone: a single absence next to the point it supports, a list of three whe
 ## Pair legs and re-drafts
 
 - For an A/B leg whose other leg already has an open or approved post, copy that leg's Draft and change only the Hook's lines: the hook beat's on-screen text, the first caption line, and the YouTube title.
-  The hook beat's visual action and spoken line may change with them; every later beat, the rest of each caption, the hashtags, and the alt text stay word for word, beat for beat.
+  The hook beat's visual action and spoken line may change with them; every later beat, the rest of each caption, the hashtags, and the alt text stay word for word, beat for beat, and every beat keeps its time.
 - When both legs are due in one run, write the earlier day first and copy it for the later day.
 - A re-cut pair is one the kit marks as a re-cut, in its section of the A/B pairs or in either leg's calendar row.
   Plan its opening for both legs before you write either: each leg opens on its own Hook in the hook beat, and the pair's other Hook, where the opening order calls for it, sits in one later beat as its on-screen text or spoken line.
-  Write every other beat once and use it in both legs unchanged; the re-cut may put those beats in a different order, and never changes what one says or shows.
+  Write every other beat once and use it in both legs unchanged, in the same order and for the same length of time; the re-cut may move when those beats start, and never changes what one says or shows.
 - When a brand rule fails text the two legs share, do not reword one leg alone to pass.
   If the other leg is not approved and the brief lists both days, reword both Drafts together, word for word the same beyond the Hook.
   If the other leg is approved, its text is settled: leave yours as that leg has it, let the launcher block it naming the rule, and say so in your summary.

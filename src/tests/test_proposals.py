@@ -61,7 +61,7 @@ class BrandRulesProposalTest(unittest.TestCase):
         filed = self.file()
         self.assertEqual((filed.status, filed.item), (proposals.FILED, "20261011-brand-rules-word-lists"))
         entry = self.ledger.entries[filed.item]
-        self.assertEqual(entry["proposal_source"], str(proposals.BRAND_RULES))
+        self.assertEqual(entry["origin"], "proposal/brand-rules-word-lists")
         self.assertIn("filed this run: open for the Founder's decision", proposals.describe(filed, self.ledger))
         again = self.file(run="RUN2", now=NOW + timedelta(days=7))
         self.assertEqual((again.status, again.item), (proposals.QUEUED_BEFORE, filed.item))
@@ -71,6 +71,21 @@ class BrandRulesProposalTest(unittest.TestCase):
         self.assertEqual((later.status, later.item), (proposals.QUEUED_BEFORE, filed.item))
         self.assertIn("rejected: Too many words.", proposals.describe(later, self.ledger))
         self.assertEqual(len(self.ledger.entries), 1)
+
+    def test_no_item_the_agent_writes_supersedes_it_so_the_reviewed_text_stays_the_one_asked(self):
+        filed = self.file()
+        incoming = self.store.root.parent / "smaller-lists.md"
+        incoming.write_text(fakes.proposal(extra=f"supersedes: {filed.item}\n", title="fewer lists"), encoding="utf-8")
+        item, problems = self.ledger.check_incoming(incoming, incoming.name, PRODUCTS, self.seen)
+        self.assertIsNone(item)
+        self.assertEqual(
+            problems,
+            [
+                f"supersedes {filed.item}, which the launcher filed from reviewed text; only a reviewed change to that"
+                " text replaces it"
+            ],
+        )
+        self.assertEqual(self.ledger.entries[filed.item]["status"], "open")
 
     def test_an_approved_proposal_says_only_that_and_is_not_filed_once_mandu_holds_the_lists(self):
         filed = self.file()
