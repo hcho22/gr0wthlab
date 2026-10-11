@@ -482,6 +482,7 @@ class WeekByWeekTest(BetaCycleTestCase):
             " not invited.",
             text,
         )
+        self.assertIn(f"- The open `{ask['id']}` is withdrawn: the Founder stopped recruiting on 2026-10-20.\n", text)
         report = self.report()
         self.assertIn("- Beta Cohort recruiting: no batch: the Founder stopped recruiting on 2026-10-20.", report)
         self.assertIn("the Founder stopped recruiting on 2026-10-20 |", report.split("## Package changes")[0])

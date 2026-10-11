@@ -1187,7 +1187,12 @@ def batch_line(plan: Plan, outcome: Outcome | None) -> str:
         return f"batch {batch.number} queued as `{result.item}`: {count} ({mix})"
     if result.status == KEPT:
         return f"batch {batch.number} stays open as `{result.item}`: {count} ({mix})"
-    return f"batch {batch.number} of {count} ({mix}) was not offered: its Draft is {result.status}"
+    why = {
+        MISSING: "it has no Draft",
+        BLOCKED: "its Draft was blocked",
+        REPEATED: "the Founder rejected its Draft, which has not changed",
+    }.get(result.status, result.status)
+    return f"batch {batch.number} of {count} ({mix}) was not offered: {why}"
 
 
 def summary(plan: Plan | None, outcome: Outcome | None, problem: str = "") -> str:
@@ -1284,7 +1289,8 @@ def notice_section(outcome: Outcome | None, day_text: str) -> tuple[int, str, st
             lines.append(f"- The {label} has no Draft, so it was not offered this run.")
         if result.withdrawn:
             why = f": {result.detail}" if result.status == NOT_DUE and result.detail else ", since it no longer stands"
-            lines.append(f"- The open `{result.withdrawn}` is withdrawn{why}. Its entries were not invited.")
+            freed = " Its entries were not invited." if result.purpose == INVITATION else ""
+            lines.append(f"- The open `{result.withdrawn}` is withdrawn{why}.{freed}")
     if not lines:
         return None
     count = sum(1 for result in outcome.results if result.status in (BLOCKED, MISSING) or result.withdrawn)

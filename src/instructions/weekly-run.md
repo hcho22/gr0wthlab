@@ -30,6 +30,8 @@ The launcher has already done the deterministic work before you start, and does 
    The run is not finished until every listed day has a Draft, or your summary says why it has none.
 6. Only when the brief has a `## Beta Cohort recruiting` section, write each recruiting Draft its table lists, except one it shows as open or approved with nothing to change, as "Writing a recruiting Draft" describes.
    When the brief has no such section, write nothing about the Beta Cohort: recruiting has not started, or nothing is due this run.
+   A recruiting Draft is one short message and depends on nothing else in the run: write each one the table lists even when a post Draft is blocked or your package review is unfinished.
+   The run is not finished until every recruiting Draft the table lists is written, or your summary says why it has none.
    Never judge for yourself whether a Beta Build is approved, and never choose, name, or look for who is invited.
 7. Check your items with the brief's check-incoming command, your post Drafts with its check-drafts command, and your recruiting Drafts with its check-beta-drafts command, and fix every problem any of them reports that the Draft can fix.
    A Draft blocked by the package itself (a frozen Hook that fails a brand rule or says the app does something no code supports, or an open checklist line) stays as the package requires: never change a Hook, signal, or kill criterion to pass a check; write a package-change proposal that cites both sides instead, unless one is already open or decided.
