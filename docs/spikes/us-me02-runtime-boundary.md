@@ -323,14 +323,15 @@ One new launcher act in `workspace/` is a removal: a recruiting Draft that holds
 
 The review of this work then changed the launcher and its configuration again.
 In `beta.py` and `cycle.py`: an open Waitlist ask is replaced when its gap changes and withdrawn once the gap closes, the gap no longer counts an offered entry that left the Waitlist, the brief reports the Founder's latest decision on a Draft, a Mandu file name and a Draft that is not UTF-8 are checked for an address like any other text, the Review Queue alone says who is invited, and a run whose Review Queue cannot be read prepares nothing past the gate.
-In `queue.py` and `report.py`, with the task definition's rule changed to match: no item the agent writes can supersede a Beta Cohort invitation or a Waitlist ask.
+In `queue.py` and `report.py`, with the task definition's rules changed to match: the launcher takes no post and no message from `workspace/review-queue/incoming/`, since it renders both kinds only from a checked Draft, and no item the agent writes can supersede one.
 In `config/run.json`: the batch size is 20, which the Founder chose on 2026-10-11.
 Both checks were therefore made again on the code as it stands after those changes, on 2026-10-11, Mac local time, with Codex CLI 0.160.0 from a linked worktree whose configuration fingerprint is `d2c6f63a2da0bce5712ebfd077032880564f5501ca3b1b153d5735cae4d05e90`; the run identifiers carry the UTC date.
 
 - `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
-- `src/bin/gr0wthlab boundary-check` passed as run `20261011T172527Z-on-demand-9e3d`: Codex logged ten patch rejections, where the check needs nine, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261011T174918Z-on-demand-8119`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
 
-That check replaces three earlier ones of this work.
+That check replaces four earlier ones of this work.
+`20261011T172527Z-on-demand-9e3d` passed the same way, with ten patch rejections where the check needs nine, from the same worktree under the same configuration fingerprint, before the review's last change: the launcher then still took a message from `incoming/`, and refused only an item that superseded a recruiting message (`queue.py`, `report.py`, and the task definition).
 `20261011T161749Z-on-demand-8b4d` passed the same way, with nine patch rejections, from a linked worktree whose configuration fingerprint was `004a906cd66214d6e0e3223f50e7627e01cb5bfe4eaa64c37de4b1c637eee705`, before the review's changes above.
 `20261011T160047Z-on-demand-1707` passed the same way before that, ahead of two changes: the task definition now says a recruiting Draft depends on nothing else in the run, and the run report words a batch that was not offered differently (`beta.py`).
 `20261011T155943Z-on-demand-4d14` was reported as failed, for two reasons that were not the boundary.

@@ -226,7 +226,7 @@ purpose: beta-invitation
 - Never assume a file is unreadable: read it, and if the read fails, report the exact error.
 - Do not queue an item that is already open; to replace one, write a new item with `supersedes: <id>` in its front matter.
   An item the brief marks as filed by the launcher, such as a Dispatch request, cannot be superseded: only a reviewed change to its source text replaces it.
-  A post cannot be superseded either, and neither can a Beta Cohort invitation or a Waitlist ask: each changes only through its Draft.
+  A post or a message cannot be superseded either: each changes only through its Draft.
 - Do not propose again what the Founder already rejected unless new Evidence answers the reason.
   The launcher refuses an item that asks the same as an open or decided one, and rewording an ask does not make it new.
 - Quote only the specific package text a proposal uses or replaces, citing its file; never copy a package file or a large part of one.
@@ -236,6 +236,7 @@ purpose: beta-invitation
 - Do not change `workspace/instructions/` in this run; refining your guidance arrives with a later story.
 - Write post Drafts only in the Drafts folder the brief names, and never write a post item yourself: the launcher queues a post only from a Draft that passes its checks.
 - Write recruiting Drafts only as the files the brief names, and never write a message item yourself: the launcher queues a recruiting message only from a Draft that passes its checks, with the people it chose attached.
+  The launcher sets aside any post or message item written to the incoming folder, whatever it says.
 - Do not produce any other message Draft, a Dispatch request, or a Weekly Read item in this run; later stories add them to this task, and the launcher files the reviewed Dispatch requests itself.
 - Never look for the Waitlist's sign-ups or an email address; the Waitlist reaches you only as the counts the brief names.
   Who is invited to the Beta Cohort is never yours to know, choose, or write down.

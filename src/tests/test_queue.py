@@ -210,6 +210,13 @@ class OrderAndPersistenceTest(LedgerTestCase):
         item = exchange.Item(fields, f"Approve day {day} post: {slug}", "The Draft.", "- The post", "- `a/b.md` line 1")
         return self.ledger.publish(self.store, item, slug, "RUN1", now, {"draft": f"day-{day:02d}.md"})
 
+    def message(self, slug, purpose="beta-invitation"):
+        """A recruiting message as the launcher queues it from a Draft that passed."""
+        fields = {"kind": "message", "product": "RepToday"}
+        item = exchange.Item(fields, f"Approve {slug}", "The Draft.", "- The message", "- `a/b.md` line 1")
+        extra = {"beta": purpose, "draft": f"drafts/beta-recruiting/RepToday/{slug}.md"}
+        return self.ledger.publish(self.store, item, slug, "RUN1", NOW, extra)
+
     def test_posts_by_nearest_slot_then_by_day_then_each_kind_oldest_first(self):
         self.drop("notice.md", fakes.proposal("notice"))
         self.post("later-post", 6, "2026-10-16T19:00-07:00")
@@ -217,7 +224,7 @@ class OrderAndPersistenceTest(LedgerTestCase):
         self.post("unslotted-day-2", 2)
         self.post("sooner-post", 5, "2026-10-15T02:00Z")
         self.post("unslotted-day-1", 1, now=NOW + timedelta(minutes=5))
-        self.drop("message.md", fakes.proposal("message"))
+        self.message("message")
         self.take()
         self.drop("old-request.md", fakes.proposal("dispatch-request"))
         self.drop("decision.md", fakes.proposal("weekly-read-decision"))
@@ -240,15 +247,28 @@ class OrderAndPersistenceTest(LedgerTestCase):
         entry = self.ledger.entries["20261011-later-post"]
         self.assertEqual((entry["window"], entry["day"], entry["draft"]), (1, 6, "day-06.md"))
 
-    def test_a_post_is_never_taken_from_incoming(self):
-        post = fakes.proposal("post", "window: 1\nday: 3\n", title="day 3")
-        self.drop("day-3.md", post)
+    def test_a_post_or_a_message_is_never_taken_from_incoming(self):
+        self.drop("day-3.md", fakes.proposal("post", "window: 1\nday: 3\n", title="day 3"))
+        self.drop("network-ask.md", fakes.proposal("message", title="a note to my network"))
         published, set_aside = self.take()
         self.assertEqual(published, [])
+        problems = {item.name: item.problems for item in set_aside}
         self.assertIn(
             "a post is queued only from its Draft in drafts/posts/, after the launcher's checks; never write one here",
-            set_aside[0].problems,
+            problems["day-3.md"],
         )
+        self.assertEqual(
+            problems["network-ask.md"],
+            (
+                "a message is queued only from its Draft in drafts/beta-recruiting/, after the launcher's checks;"
+                " never write one here",
+            ),
+        )
+        self.assertEqual(self.ledger.entries, {})
+        self.drop("example-notice.md", fakes.proposal("notice"))
+        self.drop("name-status-stale.md", fakes.PROPOSAL)
+        published, set_aside = self.take("RUN2")
+        self.assertEqual((len(published), set_aside), (2, []))
 
     def test_no_item_the_agent_writes_supersedes_a_post(self):
         post = self.post("day-3", 3)
@@ -265,36 +285,21 @@ class OrderAndPersistenceTest(LedgerTestCase):
         self.assertEqual(self.ledger.entries[post]["status"], OPEN)
 
     def test_no_item_the_agent_writes_supersedes_a_recruiting_message(self):
-        queued = []
-        for purpose in ("beta-invitation", "waitlist-ask"):
-            item = exchange.Item(
-                {"kind": "message", "product": "RepToday"},
-                f"Approve {purpose}",
-                "The Draft.",
-                "- The message",
-                "- `a/b.md` line 1",
-            )
-            extra = {"beta": purpose, "draft": f"drafts/beta-recruiting/RepToday/{purpose}.md"}
-            queued.append(self.ledger.publish(self.store, item, purpose, "RUN1", NOW, extra))
-            text = fakes.proposal("message", f"supersedes: {queued[-1]}\n", f"a better {purpose}")
-            self.drop(f"better-{purpose}.md", text)
+        queued = [self.message("invitation"), self.message("waitlist-ask", "waitlist-ask")]
+        for identifier in queued:
+            text = fakes.proposal("notice", f"supersedes: {identifier}\n", f"{identifier} is off")
+            self.drop(f"off-{identifier}.md", text)
         published, set_aside = self.take("RUN2")
         self.assertEqual(published, [])
         self.assertEqual(
             sorted(problem for item in set_aside for problem in item.problems),
             [
-                f"supersedes {identifier}, a Beta Cohort recruiting message the launcher queued from its Draft; only a"
-                " change to that Draft in drafts/beta-recruiting/ replaces it"
+                f"supersedes {identifier}, a message the launcher queued from its Draft; only a change to that Draft in"
+                " drafts/beta-recruiting/ replaces it"
                 for identifier in sorted(queued)
             ],
         )
         self.assertEqual([self.ledger.entries[identifier]["status"] for identifier in queued], [OPEN, OPEN])
-        ordinary = exchange.Item({"kind": "message"}, "Approve a note", "The Draft.", "- A note", "- `a/b.md` line 1")
-        plain = self.ledger.publish(self.store, ordinary, "note", "RUN1", NOW)
-        self.drop("better-note.md", fakes.proposal("message", f"supersedes: {plain}\n", "a better note"))
-        published, set_aside = self.take("RUN3")
-        self.assertEqual((len(published), set_aside), (1, []))
-        self.assertEqual(self.ledger.entries[plain]["superseded_by"], published[0])
 
     def test_an_item_carries_over_only_once_a_sitting_has_left_it_undecided(self):
         self.drop("first.md", fakes.PROPOSAL)

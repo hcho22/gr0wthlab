@@ -94,6 +94,7 @@ A post's `## Draft` is everything the Founder needs to judge it in under a minut
 Its Evidence cites the calendar row, the Angle, its sourced pain, and its pre-registered signal and kill criterion in the package.
 gr0wthlab queues a post only from a Draft that passed every check; a Draft that did not is never an item, and a notice names it with the rule that blocked it.
 
+gr0wthlab queues a `message` the same way, only from a Draft that passed every check, so every message in the queue is the launcher's own rendering of one.
 A Beta Cohort invitation is a `message`, queued only once the Founder's Beta Build record exists (see Beta Build records).
 Its `## Draft` holds the subject and the message, the same words for everyone; the Waitlist entries it goes to, by entry identifier, in invitation order, with the rule that chose them; where recruiting stood at the run that queued it, which it names; and the checks it passed.
 Those figures are not brought up to date while the item waits: each run report holds the current ones.

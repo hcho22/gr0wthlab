@@ -30,6 +30,9 @@ ITEMS = "items"
 SET_ASIDE = "set-aside"
 QUEUE_FILE = "queue.json"
 MAX_SLUG = 60
+# The kinds the launcher renders only from a Draft that passed its checks, each with the folder its Drafts are
+# written in. No file of these kinds is taken from incoming/, and no item written there supersedes one.
+FROM_DRAFT = {"post": "drafts/posts/", "message": "drafts/beta-recruiting/"}
 
 
 class QueueError(Exception):
@@ -212,8 +215,9 @@ class Ledger:
         self, path: Path, name: str, products: Sequence[str], seen: Mapping[str, str]
     ) -> tuple[exchange.Item | None, list[str]]:
         """Every rule a file in incoming/ must pass to be queued, for the launcher and the agent's own check alike:
-        its name, the item format, an open item to supersede that the launcher neither filed from reviewed text nor
-        queued from a Draft, and no repeat of an item queued or decided.
+        its name, the item format, a kind the launcher does not render from a Draft, an open item to supersede that
+        the launcher neither filed from reviewed text nor queued from a Draft, and no repeat of an item queued or
+        decided.
 
         name is the file's path inside incoming/; seen maps each queued item's fingerprint to its identifier.
         The item comes back only when there is no problem.
@@ -230,10 +234,10 @@ class Ledger:
         item = check.item
         if item is None:
             return None, problems
-        if item.kind == "post":
+        if item.kind in FROM_DRAFT:
             problems.append(
-                "a post is queued only from its Draft in drafts/posts/, after the launcher's checks; never write one"
-                " here"
+                f"a {item.kind} is queued only from its Draft in {FROM_DRAFT[item.kind]}, after the launcher's checks;"
+                " never write one here"
             )
         target = item.fields.get("supersedes")
         replaced = self.entries.get(target, {}) if target else {}
@@ -244,15 +248,11 @@ class Ledger:
                 f"supersedes {target}, which the launcher filed from reviewed text; only a reviewed change to that"
                 " text replaces it"
             )
-        elif replaced.get("kind") == "post":
+        elif replaced.get("kind") in FROM_DRAFT:
+            kind = replaced["kind"]
             problems.append(
-                f"supersedes {target}, a post the launcher queued from its Draft; only a change to that Draft in"
-                " drafts/posts/ replaces it"
-            )
-        elif replaced.get("beta"):
-            problems.append(
-                f"supersedes {target}, a Beta Cohort recruiting message the launcher queued from its Draft; only a"
-                " change to that Draft in drafts/beta-recruiting/ replaces it"
+                f"supersedes {target}, a {kind} the launcher queued from its Draft; only a change to that Draft in"
+                f" {FROM_DRAFT[kind]} replaces it"
             )
         fingerprint = exchange.item_hash(item)
         if fingerprint in seen:

@@ -6,8 +6,8 @@ Each run's records step commits this folder to `main` together with `workspace/`
 
 - `review-queue/queue.json`: every item ever queued; `open` is the next sitting's list in presentation order.
   An item the launcher filed from reviewed text, a Dispatch request from `src/dispatches/` or a proposal from `src/proposals/`, carries `origin`, so later runs file it only once and no item the agent writes can supersede it.
-  No item the agent writes can supersede a post either: the launcher queues a post from its Draft and replaces it only when that Draft or its slot changes.
-  The same holds for a Beta Cohort invitation and a Waitlist ask, which carry `beta`: the launcher queues each from its recruiting Draft and alone replaces it.
+  No item the agent writes is a post or a message, and none can supersede one: the launcher queues each of those kinds only from a Draft that passed its checks, and sets aside any written to `incoming/`.
+  It replaces a post only when its Draft or its slot changes, and a Beta Cohort invitation or a Waitlist ask, which carry `beta`, only when its recruiting Draft, its batch, or its gap changes.
 - `review-queue/items/<id>.md`: each queued item, under an identifier that never changes.
 - `review-queue/set-aside/<run id>/`: what the launcher refused to queue that run, kept for the record and named in that run's notice.
 - `evidence/package-snapshots/<run id>.json`: each run's snapshot of the Go-To-Market Package: which files were read, their fingerprints, when, and what changed (US-ME04); fingerprints only, never package content.
