@@ -5,8 +5,8 @@ The checks follow US-ME08 and the kit in Mandu: the Draft is the calendar's day 
 its Hook is the frozen text, opens the video and every caption, and no other Angle's Hook appears; both platforms
 carry identical content; an A/B leg differs from its other leg only in the Hook; every field passes the brand-rules
 lint and the platform limits, and no visual action shows social proof the rules ban; no competitor is named; every
-behavioral claim shows the code that supports it; and its status against the pre-publication checklist lets it be
-offered. Judgment (the words themselves, and which claims a Draft makes) is the agent's; these checks decide only
+behavioral claim it lists shows the code that supports it; and its status against the pre-publication checklist lets
+it be offered. Judgment (the words themselves, and which claims a Draft makes) is the agent's; these checks decide only
 what can be decided from text.
 """
 
@@ -587,10 +587,18 @@ def check_competitors(draft: PostDraft, kit: Kit, context: Context, verdict: Ver
 
 
 def check_claims(draft: PostDraft, code: Code, verdict: Verdict) -> None:
+    """Every claim the Draft lists shows the code that supports it. Which claims a Draft makes is the agent's to
+    list, so a claim it cannot cut and no code supports is listed with no code (Code: none), and blocks the Draft,
+    naming the claim; no other listed claim stands in for it."""
     if not draft.claims:
-        verdict.block("claims", "a post Draft shows each behavioral claim it makes with the code that supports it")
+        verdict.block(
+            "claims",
+            "a post Draft lists each behavioral claim it makes, the Hook's included, with the code that supports it,"
+            " or with Code: none when no code does",
+        )
     for claim in draft.claims:
-        problem = code.verify(claim.location, claim.excerpt)
+        unsupported = none(claim.location)
+        problem = "no code supports it" if unsupported else code.verify(claim.location, claim.excerpt)
         verdict.claims.append(ClaimResult(claim, problem))
         if problem:
-            verdict.block("claim-location", f"{claim.text!r}: {problem}")
+            verdict.block("claim-unsupported" if unsupported else "claim-location", f"{claim.text!r}: {problem}")

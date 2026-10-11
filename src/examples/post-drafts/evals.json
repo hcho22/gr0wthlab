@@ -159,6 +159,18 @@
         {"kind": "deterministic", "check": "warns", "rule": "long_sentence_commas"}
       ],
       "files": ["files/drafts/day-03-long-sentence.md"]
+    },
+    {
+      "id": 16,
+      "prompt": "Prepare the Draft for day 2 of window 1 (P02, primary TikTok); its frozen Hook says the app does something no code at the commit read does.",
+      "expected_output": "A Draft that keeps the frozen Hook and lists the Hook's claim under Claims with Code: none, so the launcher blocks it naming that claim; the supported claim listed beside it never stands in for it. A package-change proposal cites the Hook and the code.",
+      "assertions": [
+        {"kind": "deterministic", "check": "blocked_by", "rule": "claim-unsupported"},
+        {"kind": "deterministic", "check": "hook_frozen"},
+        {"kind": "judged", "text": "Every behavioral claim the copy makes appears under Claims, the Hook's included, and no listed claim is one the Draft does not make."},
+        {"kind": "judged", "text": "A package-change proposal cites the frozen Hook and the code that lacks the behavior, and the Hook is unchanged."}
+      ],
+      "files": ["files/drafts/day-02-unsupported-hook.md"]
     }
   ]
 }

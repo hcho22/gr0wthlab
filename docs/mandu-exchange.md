@@ -87,7 +87,7 @@ The Draft or proposal itself.
 
 A notice is informational, such as a failed source or a change to the Marketing Engineer's Instructions; acknowledging it records `approve`.
 
-A post's `## Draft` is everything the Founder needs to judge it in under a minute: the day, its Angle and pair leg, the primary platform, the slot or that none is set yet, and whether anything can be published yet (nothing can until the Waitlist is live); the frozen Hook; the video beat by beat; each platform's text, hashtags, and alt text; each behavioral claim with the code that supports it; and the checks it passed, with any warnings, its status against the pre-publication checklist, and the kit's own checklist lines for every asset, which are the Founder's to judge.
+A post's `## Draft` is everything the Founder needs to judge it in under a minute: the day, its Angle and pair leg, the primary platform, the slot or that none is set yet, and whether anything can be published yet (nothing can until the Waitlist is live); the frozen Hook; the video beat by beat; each platform's text, hashtags, and alt text; each behavioral claim its Draft lists with the code that supports it, and that only those were checked; and the checks it passed, with any warnings, its status against the pre-publication checklist, and the kit's own checklist lines for every asset, which are the Founder's to judge.
 Its Evidence cites the calendar row, the Angle, its sourced pain, and its pre-registered signal and kill criterion in the package.
 gr0wthlab queues a post only from a Draft that passed every check; a Draft that did not is never an item, and a notice names it with the rule that blocked it.
 

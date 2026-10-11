@@ -723,6 +723,11 @@ def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict) ->
     commit = plan.code.short
     body += ["", f"**Claims, checked against {plan.product} `{plan.code.branch}` at `{commit}`**", ""]
     body += [f"- {claim.text} `{claim.location}` shows `{claim.excerpt}`" for claim in draft.claims]
+    body += [
+        "",
+        "Only the claims listed here were checked. Anything else the Hook, the video, or the text says the app does is"
+        " yours to judge.",
+    ]
     body += ["", "**Checks**", ""] + lint_lines(plan, verdict) + checklist_lines(plan, verdict)
     touches = [
         f"- The day {day.day} post on {', '.join(plan.context.kit.platforms)},"
@@ -990,6 +995,7 @@ def report_lines(plan: Plan | None, outcome: Outcome | None, filing: str, proble
     lines.append("")
     lines.append(
         f"- Claims checked against {plan.product} `{code.branch}` at `{code.short}` (`{code.checkout}`)."
+        " Only the claims a Draft lists are checked; each post item says so."
         if not code.problem
         else f"- {plan.product}'s code could not be read: {code.problem}; every Draft was blocked."
     )

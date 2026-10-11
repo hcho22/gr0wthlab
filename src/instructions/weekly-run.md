@@ -27,7 +27,7 @@ The launcher has already done the deterministic work before you start, and does 
    Read the kit files the brief names, the brand guidelines, and the Product's code at the commit the brief gives.
    The run is not finished until every listed day has a Draft, or your summary says why it has none.
 6. Check your items with the brief's check-incoming command and your Drafts with its check-drafts command, and fix every problem either reports that the Draft can fix.
-   A Draft blocked by the package itself (a frozen Hook that fails a brand rule, or an open checklist line) stays as the package requires: never change a Hook, signal, or kill criterion to pass a check; write a package-change proposal that cites both sides instead, unless one is already open or decided.
+   A Draft blocked by the package itself (a frozen Hook that fails a brand rule or says the app does something no code supports, or an open checklist line) stays as the package requires: never change a Hook, signal, or kill criterion to pass a check; write a package-change proposal that cites both sides instead, unless one is already open or decided.
 7. Finish with a short summary as your final message: what you checked (including each recorded outcome you traced), what you found, what you queued, which Drafts you wrote and what check-drafts said of each, and anything you skipped or could not do, with the reason.
    The launcher puts that summary in the run report as your account.
    End it with exactly one of these lines, as plain text on its own line with nothing after it:
@@ -142,8 +142,8 @@ leg: A
 ## Claims
 
 - Claim: <a behavioral claim the Draft makes, in plain words>
-  Code: `<path in the Product's repository>:<line>`, or `:<first>-<last>` for at most 40 lines
-  Shows: `<code copied from those lines that supports the claim>`
+  Code: `<path in the Product's repository>:<line>`, or `:<first>-<last>` for at most 40 lines; none when no code supports the claim
+  Shows: `<code copied from those lines that supports the claim>`, or none
 ```
 
 - Leave out `pair` and `leg` for a day that is not an A/B pair leg.
@@ -164,7 +164,10 @@ leg: A
   If the other leg is not approved and the brief lists both days, reword both Drafts together, so they still match beyond the Hook.
   If the other leg is approved, leave the text as that leg has it: the launcher blocks the Draft naming the rule and tells the Founder that the pair cannot both pass until a package change or a re-cut of both legs resolves it.
   Otherwise leave the text as it is and say so in your summary.
-- Give each behavioral claim (anything the video or copy says the app does) its own item under Claims, with the lines of code at the brief's commit that support it; cut a claim no code supports.
+- Give each behavioral claim (anything the video or copy says the app does, the frozen Hook included) its own item under Claims, with the lines of code at the brief's commit that support it; cut a claim no code supports.
+  A claim you cannot cut, because the frozen Hook makes it or an approved leg shares its text, stays in the Draft, listed with `Code: none` and `Shows: none`.
+  The launcher then blocks the Draft naming that claim, which is the outcome the Founder needs to see.
+  List only the claims the Draft makes, and every one of them: the launcher can check only what you list, so never list a claim the Draft does not make, or leave one out, to pass the check.
   Shows may quote more than one of the cited lines: start each further line with two spaces, like the Code and Shows lines, and close the backtick after the last one.
 - Rewrite an open day's Draft only to change it for a reason, such as a package change or the Founder's decision; an unchanged Draft keeps its item.
 - A Draft the Founder rejected is not asked again until it changes: rewrite it to answer the reason the brief gives.

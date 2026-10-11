@@ -1423,7 +1423,11 @@ class PostDraftsTest(CycleTestCase):
         record = json.loads((self.ledger() / f"run-reports/{queue['updated_by_run']}.post-plan.json").read_text())
         self.assertEqual(record["code"], {"commit": fixed, "problem": None})
         report = self.report()
-        self.assertIn(f"- Claims checked against RepToday `main` at `{fixed[:7]}`", report)
+        self.assertIn(
+            f"- Claims checked against RepToday `main` at `{fixed[:7]}` (`{self.code}`). Only the claims a Draft lists"
+            " are checked; each post item says so.",
+            report,
+        )
         self.assertIn("| 3 | P03 / AB-2 leg A | queued |", report)
 
     def test_check_drafts_keeps_the_launcher_s_reason_when_it_could_not_read_the_code_before_the_agent_started(self):

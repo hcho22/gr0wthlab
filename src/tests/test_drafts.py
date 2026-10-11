@@ -209,6 +209,15 @@ class EvaluateTest(DraftTestCase):
         text = fakes.draft(3).split("## Claims")[0] + "## Claims\n"
         self.assertEqual(rules_of(self.check(text)), ["claims"])
 
+    def test_a_claim_listed_with_no_code_blocks_the_draft_naming_it_whatever_else_the_code_supports(self):
+        text = fakes.draft(2) + "- Claim: After missed days, the app welcomes you back.\n  Code: none\n  Shows: none\n"
+        verdict = self.check(text)
+        self.assertEqual(
+            [finding.line() for finding in verdict.blocks],
+            ["claim-unsupported: 'After missed days, the app welcomes you back.': no code supports it"],
+        )
+        self.assertEqual([result.problem for result in verdict.claims], [None, "no code supports it"])
+
     def test_a_claim_s_excerpt_may_quote_more_than_one_line_of_the_code_and_is_checked_whole(self):
         second = "value = max(floorValue, value - missPenalty)"
         text = fakes.draft(3).replace(

@@ -172,7 +172,12 @@ class TakeTest(TakeTestCase):
         self.assertIn("Nothing can be published until the RepToday Waitlist is live.", text)
         self.assertIn("Slot: not set yet", text)
         self.assertIn("**Hook**, frozen in `projects/RepToday/gtm/05-social-pmf/ab-pairs.md` line 13", text)
-        self.assertIn("`Engine/ConsistencyScore.swift:6-7` shows `value = max(floorValue, value - missPenalty)`", text)
+        self.assertIn(
+            "`Engine/ConsistencyScore.swift:6-7` shows `value = max(floorValue, value - missPenalty)`\n\n"
+            "Only the claims listed here were checked. Anything else the Hook, the video, or the text says the app does"
+            " is yours to judge.\n",
+            text,
+        )
         self.assertIn("- Angle P03, Score that dips: `projects/RepToday/gtm/05-social-pmf/angles.md` line 9", text)
         self.assertIn("- Kill criterion: Bottom quartile viewed rate on two reads:", text)
         self.assertIn(
@@ -194,6 +199,18 @@ class TakeTest(TakeTestCase):
             " line yours to judge on this post:\n  Line 26: Founder is on camera for every first-person line.\n",
             text,
         )
+
+    def test_a_draft_listing_a_claim_no_code_supports_is_never_offered_beside_a_claim_the_code_does_support(self):
+        text = (fakes.EXAMPLES / "files/drafts/day-02-unsupported-hook.md").read_text(encoding="utf-8")
+        self.write(2, text)
+        outcome = self.take(2)
+        [result] = outcome.results
+        self.assertEqual((result.status, result.item, outcome.published), (posts.BLOCKED, None, []))
+        self.assertEqual(
+            posts.grouped(result.verdict.blocks),
+            ["claim-unsupported: 'After missed days, the app welcomes you back.': no code supports it"],
+        )
+        self.assertEqual(self.ledger.entries, {})
 
     def test_a_claim_line_that_gates_only_other_assets_is_never_said_to_be_about_a_claim_the_post_does_not_use(self):
         checklist = (fakes.EXAMPLES / "files" / "mandu" / CHECKLIST).read_text(encoding="utf-8")

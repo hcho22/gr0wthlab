@@ -38,8 +38,13 @@ The Draft's format is in the task definition, and the launcher's checks decide w
 ## Claims
 
 - A behavioral claim is anything the copy or the video says the app does: what it shows when it opens, what a missed day does to the score, that it works offline.
+  The frozen Hook is copy: when it says the app does something, that is a claim, and you list it first.
 - Find the code that does it at the commit the brief gives, with `git grep -n` and `git show` on that commit, and cite the lines that show it, copying the code exactly into Shows.
 - If no code supports a claim, cut the claim; never soften it into a vaguer one.
+- A claim you cannot cut, because the frozen Hook makes it or an approved leg shares its text, stays in the Draft and is listed with `Code: none` and `Shows: none`.
+  The launcher blocks the Draft naming that claim; that is the right result, not a problem to work around.
+- The launcher can check only the claims you list, and the post item tells the Founder so.
+  List every claim the Draft makes and no other: a supported claim the Draft does not make never stands in for one it does.
 - Never state a speed, a number of users, downloads, ratings, reviews, or results, and never what the app records or sends beyond the shipped mechanic.
 
 ## Voice
@@ -61,8 +66,8 @@ Leave alone: a single absence next to the point it supports, a list of three whe
 
 ## When the package blocks a Draft
 
-- If the frozen Hook fails a brand rule, or an open checklist line blocks every post, write the Draft as the kit requires anyway and let the launcher block it, naming the rule.
-- Then write one package-change proposal that cites both sides (the Hook or checklist line, and the rule or record it conflicts with), unless one is already open or decided in the brief; the Founder decides which side changes.
+- If the frozen Hook fails a brand rule or says the app does something no code supports, or an open checklist line blocks every post, write the Draft as the kit requires anyway and let the launcher block it, naming the rule.
+- Then write one package-change proposal that cites both sides (the Hook or checklist line, and the rule, record, or code it conflicts with), unless one is already open or decided in the brief; the Founder decides which side changes.
 - A changed Hook, signal, or kill criterion is never an edit: it enters only as a new Angle through a package-change proposal.
 
 ## Pair legs and re-drafts
