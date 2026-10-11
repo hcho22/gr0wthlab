@@ -662,7 +662,7 @@ class Cycle:
                 state.posts_problem = f"not taken in: {error}"
                 state.problems.append(f"the post Drafts could not be taken in ({error})")
         if state.filming is not None:
-            state.filming.settle()
+            state.filming.settle(state.post_outcome)
             try:
                 filming.record(state.filming, self.store, run_id, now)
             except (OSError, ConfigError) as error:

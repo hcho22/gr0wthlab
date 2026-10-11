@@ -60,6 +60,7 @@ BLOCKED = "blocked"
 HELD = "not cut"
 NO_EDIT = "no edit record"
 READY = "ready to cut"
+SETTLED = "the Founder approved its post with its video, so nothing is cut again and its edit record stays as it is"
 
 
 def plural(count: int, noun: str) -> str:
@@ -316,6 +317,8 @@ class Filming:
             return Asset(
                 number, HELD if self.wanted(number) else NO_EDIT, why, relative if self.wanted(number) else None
             )
+        if self.due.get(number):
+            return Asset(number, HELD, day.why)
         edit, problem = read_edit(areas, path)
         if edit is None and not problem:
             return Asset(number, NO_EDIT, day.why if not day.ready else "it is ready for an edit record and has none")
@@ -414,19 +417,25 @@ class Filming:
         """Account for a day the post-Draft workflow asked no video of for a reason the Founder must be told."""
         self.results[number] = Asset(number, HELD, why, told=True)
 
-    def settle(self) -> None:
-        """Account for each due day the post-Draft workflow did not ask a video of, so the report names every day:
-        a video is cut only from a Draft that passes, and never again for a post approved with its video."""
+    def settle(self, outcome: posts.Outcome | None) -> None:
+        """Account for each due day the post-Draft workflow did not ask a video of, so the report names every day.
+        A video is cut only from a Draft that passes, so a day with an edit record and no video gets the reason
+        its post got; outcome is None when the Drafts could not be taken in at all."""
+        taken = {result.day: result for result in outcome.results} if outcome else {}
         for number, day in self.days.items():
             if number in self.results:
                 continue
-            exists = self.wanted(number)
-            if self.due.get(number):
-                why = "the Founder approved its post with its video, so nothing is cut again"
-            elif exists:
-                why = "its post Draft did not pass its checks, and a video is cut only from a Draft that passes"
-            else:
+            exists, result = self.wanted(number), taken.get(number)
+            if not exists or self.due.get(number):
                 why = day.why if not day.ready else "it is ready for an edit record and has none"
+            else:
+                if result is None:
+                    why = "the post Drafts were not taken in this run"
+                elif result.verdict is None:
+                    why = f"its post Draft was not checked ({result.detail})"
+                else:
+                    why = "its post Draft did not pass its checks"
+                why += ", and a video is cut only from a Draft that passes"
             self.results[number] = Asset(number, HELD if exists else NO_EDIT, why)
 
     def cut(self, asset: Asset, draft: posts.PostDraft, store: Store, now: datetime) -> None:
@@ -668,12 +677,13 @@ def plan_item(filming: Filming, previous: Mapping[str, object] | None = None) ->
     groups = filming.sittings()
     days = sorted(day for job in found.jobs for day in job.days)
     reuse = found.reuse_days()
+    many = len(reuse) > 1
     body = [
         f"{product} window {window} needs footage for {plural(len(found.jobs), 'asset')}, filmed in"
-        f" {plural(len(groups), 'sitting')}, for calendar days {listed(days)}."
+        f" {plural(len(groups), 'sitting')}, for calendar {'days' if len(days) > 1 else 'day'} {listed(days)}."
         + (
-            f" Days {listed(reuse)} are cut from an earlier day's footage with only the opening changed, so they"
-            " film nothing new."
+            f" {'Days' if many else 'Day'} {listed(reuse)} {'are' if many else 'is'} cut from an earlier day's"
+            f" footage with only the opening changed, so {'they film' if many else 'it films'} nothing new."
             if reuse
             else ""
         ),
@@ -748,12 +758,13 @@ def plan_item(filming: Filming, previous: Mapping[str, object] | None = None) ->
         "- The raw footage place set in `config/products.json`, which gr0wthlab only ever reads",
     ]
     rows = sorted(filming.calendar_lines)
+    formats = sorted({job.line for job in found.jobs})
     evidence = [
         f"- The calendar's days, their Angles and pair legs: `{roles['calendar']}` lines {rows[0]}-{rows[-1]}"
         if rows
         else f"- The calendar: `{roles['calendar']}`",
-        f"- Each Angle's Format, quoted in the shot lists: `{roles['angles']}` lines"
-        f" {listed(sorted({job.line for job in found.jobs}))}",
+        f"- Each Angle's Format, quoted in the shot lists: `{roles['angles']}`"
+        f" {'lines' if len(formats) > 1 else 'line'} {listed(formats)}",
         f"- Each pair's legs and frozen Hooks: `{roles['pairs']}`",
     ]
     rule = filming.screen_rule
@@ -947,7 +958,7 @@ def prepare(
         job = found.job_for(number)
         if job is None:
             continue
-        why = readiness(filming, job, day.leg)
+        why = SETTLED if filming.due[number] else readiness(filming, job, day.leg)
         filming.days[number] = DayEdit(day_spec(plan.product, window, number, day.leg, job), not why, why)
     return filming
 
@@ -1099,8 +1110,9 @@ def notice_section(filming: Filming | None, day_text: str) -> tuple[int, str, st
     """What the Founder must know of this run's footage: each shot of an approved plan with no footage it can be
     cut from once footage has begun to arrive, each file that is footage of no shot or could not be measured, edits
     skipped for want of tooling, and each video not cut for a reason outside its edit record; None when there is
-    nothing. Before any footage is in the window's folder nothing is missing yet, so no shot is named. An edit
-    record that failed a check blocked its day's post, so the post Drafts' part of the notice names it."""
+    nothing. Before any footage is in the window's folder nothing is missing yet, so no shot is named, and neither
+    is a shot of a day whose video the Founder already approved. An edit record that failed a check blocked its
+    day's post, so the post Drafts' part of the notice names it."""
     if filming is None:
         return None
     lines = []
@@ -1112,7 +1124,8 @@ def notice_section(filming: Filming | None, day_text: str) -> tuple[int, str, st
         job = filming.requirements.job_for(number)
         missing, unread = lacking(inventory, spec.shots, spec.leg)
         approved = job is not None and not gate(filming, job)
-        if begun and approved and (missing or unread) and number not in [asset.day for asset in blocked]:
+        owed = begun and approved and not filming.due.get(number)
+        if owed and (missing or unread) and number not in [asset.day for asset in blocked]:
             reasons = [f"{shot_names(missing)} {'has' if len(missing) == 1 else 'have'} no footage"] if missing else []
             if unread:
                 reasons.append(f"the footage of {shot_names(unread)} could not be measured")
@@ -1121,10 +1134,13 @@ def notice_section(filming: Filming | None, day_text: str) -> tuple[int, str, st
         lines.append(f"- `{clip.name}` in the footage place is footage of no shot: {clip.problem}.")
     for clip in inventory.unmeasured():
         lines.append(f"- `{clip.name}` in the footage place could not be measured: {clip.problem}.")
-    waiting = [asset for asset in filming.results.values() if asset.held and asset.edit]
+    waiting = sorted(asset.day for asset in filming.results.values() if asset.held and asset.edit)
     if waiting and not filming.tooling.ok:
-        days = listed(sorted(asset.day for asset in waiting))
-        lines.append(f"- The edit of day {days} was skipped: {filming.tooling.problem}.")
+        many = len(waiting) > 1
+        lines.append(
+            f"- The {'edits' if many else 'edit'} of {'days' if many else 'day'} {listed(waiting)}"
+            f" {'were' if many else 'was'} skipped: {filming.tooling.problem}."
+        )
     for asset in sorted(filming.results.values(), key=lambda asset: asset.day):
         if asset.told:
             lines.append(f"- Day {asset.day}'s video was not cut: {asset.detail}.")

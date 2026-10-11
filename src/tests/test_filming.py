@@ -158,6 +158,20 @@ class FilmingPlanTest(FilmingRunCase):
             self.assertNotIn(strategy, text)
         self.assertLess(len(text), exchange.MAX_ITEM_CHARS)
 
+    def test_a_plan_for_one_asset_or_one_day_reads_in_the_singular(self):
+        queue = self.run_ok(days=(1, 4, 8))
+        text = self.item(next(entry for entry in queue["open"] if entry["kind"] == "filming-plan"))
+        self.assertIn(
+            "RepToday window 1 needs footage for 2 assets, filmed in 1 sitting, for calendar days 1, 4, and 8. Day 8"
+            " is cut from an earlier day's footage with only the opening changed, so it films nothing new.\n",
+            text,
+        )
+        self.assertIn(f"- Each Angle's Format, quoted in the shot lists: `{ANGLES}` lines 8 and 11\n", text)
+        queue = self.run_ok(days=(4,))
+        text = self.item(next(entry for entry in queue["open"] if entry["kind"] == "filming-plan"))
+        self.assertIn("needs footage for 1 asset, filmed in 1 sitting, for calendar day 4.\n", text)
+        self.assertIn(f"- Each Angle's Format, quoted in the shot lists: `{ANGLES}` line 11\n", text)
+
     def test_the_report_and_the_brief_say_where_the_plan_the_tooling_and_the_footage_stand(self):
         queue = self.run_ok()
         report = self.report()
@@ -752,6 +766,26 @@ class EditRunTest(FilmingRunCase):
         shown = next(entry for entry in queue["open"] if entry["kind"] == "post")
         self.assertEqual((shown["supersedes"], "asset" in shown), (post["id"], True))
 
+    def test_missing_tooling_names_every_day_whose_edit_was_skipped(self):
+        self.approved_plan(days=(1, 2, 8, 9))
+        self.env["GR0WTHLAB_FFMPEG_BIN"] = str(self.root / "no-ffmpeg")
+        day_2 = fakes.edit_record(
+            2,
+            ("d02-s1", "d02-s1a-take-1.mov", 1, 4),
+            ("d02-s2", "d02-s2.mov", 2, 13),
+            ("d02-s1", "d02-s1-closing.mov", 5, 11),
+        )
+        self.run_ok(
+            {
+                fakes.draft_path(1): fakes.filming_draft(1),
+                fakes.edit_path(1): fakes.edit_record(1, DAY_1),
+                fakes.draft_path(2): fakes.filming_draft(2),
+                fakes.edit_path(2): day_2,
+            }
+        )
+        problem = f"ffmpeg is not an executable at `{self.root}/no-ffmpeg`"
+        self.assertIn(f"- The edits of days 1 and 2 were skipped: {problem}.", self.notice())
+
     def test_tooling_that_goes_missing_leaves_a_post_that_already_shows_its_video_as_it_is(self):
         queue = self.day_1()
         post = next(entry for entry in queue["open"] if entry["kind"] == "post")
@@ -1020,6 +1054,56 @@ class EditRunTest(FilmingRunCase):
             " that passes |",
             self.report(),
         )
+
+    def test_a_day_with_an_edit_record_and_no_checked_draft_gets_the_reason_its_post_got(self):
+        self.approved_plan()
+        self.clip("d01-s1.mov")
+        self.run_ok({fakes.edit_path(1): fakes.edit_record(1, DAY_1)})
+        report = self.report()
+        self.assertIn("| no Draft | no Draft at `drafts/posts/window-1/day-01.md` |", report)
+        self.assertIn(
+            "| 1 | d01-s1 | not cut | its post Draft was not checked (no Draft at `drafts/posts/window-1/day-01.md`),"
+            " and a video is cut only from a Draft that passes |",
+            report,
+        )
+        self.assertNotIn("did not pass its checks", report)
+        with mock.patch.object(cycle.posts, "take", side_effect=OSError("the disk is full")):
+            self.run_ok()
+        report = self.report()
+        self.assertIn("- Post Drafts: not taken in: the disk is full", report)
+        self.assertIn(
+            "| 1 | d01-s1 | not cut | the post Drafts were not taken in this run, and a video is cut only from a Draft"
+            " that passes |",
+            report,
+        )
+        self.assertNotIn("did not pass its checks", report)
+        self.assertFalse((self.ledger() / "assets").exists())
+
+    def test_a_day_approved_with_its_video_is_settled_for_the_agent_and_never_named_as_unfilmed(self):
+        queue = self.day_1()
+        post = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.decide(post["id"], "approve")
+        queue = self.run_ok()
+        settled = (
+            "the Founder approved its post with its video, so nothing is cut again and its edit record stays as it is"
+        )
+        brief = self.brief().split("## Filming")[1]
+        self.assertIn(f"| not ready: {settled} |", brief)
+        self.assertNotIn("| ready |", brief)
+        self.assertIn("- No day is ready for an edit record this run.", brief)
+        code, text = self.check_edits(queue["updated_by_run"])
+        self.assertEqual(code, 0, text)
+        self.assertIn(f"SKIP day 1: no edit record is due: {settled}", text)
+        self.assertIn("1 day checked, 0 with problems", text)
+        self.assertIn(f"| 1 | d01-s1 | not cut | {settled} |", self.report())
+        # Its footage put away afterwards, with another leg's take still there, leaves no video missing.
+        clip = self.footage / "window-1" / "d01-s1.mov"
+        clip.rename(clip.with_name("d01-s1b.mov"))
+        queue = self.run_ok()
+        told = [entry for entry in queue["open"] if entry["published_by_run"] == queue["updated_by_run"]]
+        self.assertEqual(told, [])
+        self.assertIn(f"| 1 | d01-s1 | not cut | {settled} |", self.report())
+        self.assertNotIn("has no video", self.report())
 
     def test_check_edits_gives_the_agent_the_launcher_s_verdict_without_opening_the_footage(self):
         self.approved_plan(days=(1, 2, 8, 9))

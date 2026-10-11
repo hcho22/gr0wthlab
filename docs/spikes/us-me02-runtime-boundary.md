@@ -316,44 +316,72 @@ Each run cost between $0.002 and $0.03 at API prices.
 
 Filming added three launcher steps, all outside the sandbox.
 Before the agent starts, the launcher files the filming plan from the kit and lists the footage place, read-only, measuring each file with `ffprobe`.
-Once the agent has finished, it renders each edit record that passes its checks with `ffmpeg` into `ledger/assets/`, which git ignores.
+Once the agent has finished, it renders each edit record that passes its checks with `ffmpeg` into `ledger/assets/`, which git ignores: each render is written beside its place, measured there, and moved into place only if it measures as the canvas asks.
 `config/products.json` gained RepToday's footage place, unset, and `config/platforms.json` the shape a finished video is rendered at.
 The agent's start is unchanged: `codex.py`, `boundary.py`, `launcher.py`, the probe, and `runtime.json` are as they were, and `image_generation` stays among the disabled features.
 The footage place is never one of the locations the sandbox reads, and the launcher refuses to start if it overlaps the repository or any of those locations.
 Inside the sandbox, the new `check-edits` reads only the record the launcher wrote for the run in `ledger/run-reports/` and the agent's own files in `workspace/`.
 
-Both checks were made on 2026-10-11 with Codex CLI 0.160.0 from a linked worktree, on the code as it stands after this work, with configuration fingerprint `bd4cdef99b6a61d6296ce8c3e0405d6b0863f3078ddb02e2ea8bd04c6eb97865`.
+The review of this work then changed the launcher and its configuration again.
+A render that fails for a reason outside its edit record (a tool error, footage that changed while the run worked, a record that could not be written) now holds the day's video instead of blocking the day, and an open post stands.
+Every render, the run's own and `rebuild-asset`'s, goes through one step that leaves what is in place as it was unless the new file verifies, and `rebuild-asset` puts a file in place only when it is byte for byte the one its record names.
+The footage place is refused when it overlaps any location the sandbox reads, where before only the repository counted.
+A day whose copy was approved gets its video only while its Draft is still that copy, a post rejected with its video is not asked again without one, footage that could not be measured is named as such, a shot that may not be cut can no longer be split around another shot, and a day approved with its video is shown to the agent as settled.
+`config/products.json` lost the block that restated the PRD's day numbers, and the run report the line that compared the kit with them.
+Both checks were therefore made again on the code as it stands after those changes, on 2026-10-11, with Codex CLI 0.160.0 from a linked worktree whose configuration fingerprint is `493a65d5fda12b63024414d111f8dad1e0473a1770b6dc69eda172bea2a47ba3`.
 
 - `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
-- `src/bin/gr0wthlab boundary-check` passed as run `20261011T164834Z-on-demand-a319`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261011T181348Z-on-demand-8bea`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed, in the repository, Mandu, RepToday, or Immerse.
 
-US-ME09's Validation Test was run live through the launcher on demand the same day, network off, on the first commit of this work, with ffmpeg 7.1.1.
-The runs below used throwaway inputs, each made for the proof and none of them the Founder's.
+These replace the earlier checks of this work, all of which passed the same way.
+Both checks ran before the review, with configuration fingerprint `bd4cdef99b6a61d6296ce8c3e0405d6b0863f3078ddb02e2ea8bd04c6eb97865`, the boundary check as `20261011T164834Z-on-demand-a319`.
+The boundary check ran again as `20261011T180126Z-on-demand-9644`, with the fingerprint above, before the review's last change, which only made the filming plan and the notice word one day, one line, and several skipped edits correctly.
 
-- The footage place was a temporary folder outside every checkout, set with `GR0WTHLAB_FOOTAGE_DIR`, holding one stand-in clip, `window-1/d01-s1.mov`: 14 seconds of ffmpeg's own test pattern at 886x1920 and 60 frames a second, with "TEST INPUT, stand-in sample footage, not a real recording" and a running clock drawn on every frame, so a cut would show.
-- The package was the reconciled copy of `projects/RepToday/` described above, since Mandu as it is still blocks every Draft on the open trademark line.
+US-ME09's Validation Test was run live through the launcher on demand the same day, network off, on that same code, with ffmpeg 7.1.1.
+It ran from a throwaway checkout in the Mac's temporary folder whose launcher, configuration, and task definition were file for file the worktree's; its configuration fingerprint, `f1041ec449a04839b1770067a28de9ba5efed2d386b1cd746e08d233b570f210`, differs because its locations do.
+The runs below used throwaway inputs, each made for the proof from what this repository holds; none was the Founder's, and no text of a Go-To-Market Package went to the model.
+
+- The footage place was a temporary folder outside every checkout, set with `GR0WTHLAB_FOOTAGE_DIR`, holding one stand-in clip, `window-1/d01-s1.mov`, made with the tests' own `make_test_clip`: 14 seconds of ffmpeg's `testsrc2` test pattern at 886x1920 and 60 frames a second, with its running clock and a dark band across every frame, so a cut would show.
+- The package was the filming example set's synthetic kit (`src/examples/filming/`, laid over the post-Draft example set's), its calendar cut down to days 1 and 8, and the Product's code was the post-Draft example set's synthetic checkout.
 - The Founder's approval of the filming plan was one decision record in a throwaway exchange folder, marked as simulated.
 - The last run had `window.first_sitting` set to `2026-10-04` in an uncommitted `config/run.json`, so that calendar days 8 to 14 were due.
 
 | Run | What it showed |
 | --- | --- |
-| `20261011T162946Z-on-demand-412a` | The filming plan arrived as one item, `20261011-filming-plan-w1`, of the `filming-plan` kind: 9 assets in 2 sittings for days 1 to 13, device screen recordings and on camera, with day 14 left out because the calendar decides its Angle later; the report said the kit films the Founder on camera on days 2, 4, 6, and 12 and reuses footage on days 8, 9, 10, and 13, as the PRD names them; no edit record was written, since the plan was not approved |
+| `20261011T181507Z-on-demand-38d3` | The filming plan arrived as one item, `20261011-filming-plan-w1`, of the `filming-plan` kind: 1 asset in 1 sitting, the device screen recording `d01-s1` for days 1 and 8, with day 8 named as cut from an earlier day's footage; the brief listed the stand-in clip with its measured facts and marked day 1 not ready, since the plan was not approved; the agent wrote day 1's Draft, which passed and was queued as copy alone, its item saying there is no video until the plan is approved; no edit record was written |
+| `20261011T181559Z-on-demand-fd6a` | With the plan approved, the brief marked day 1 ready; the agent wrote day 1's edit record, one unbroken range from 2 to 12 seconds, and said the start point was a first guess the Founder must check; the launcher rendered `assets/window-1/day-01-a225d209b598.mp4` and replaced the day's post with `20261011-post-w1-day-01-2`, which names the file, its SHA-256, the source range, and the checks it passed |
+| `20261011T181701Z-on-demand-e247` | The agent wrote day 8's Draft from day 1's, changing only the day and leg it names, the Hook's lines, and its claim, and day 8's edit record with the same source range; the launcher compared the two records, rendered `assets/window-1/day-08-572967c80330.mp4`, and queued day 8's post with it |
+
+All three runs used the real task definition, and every Draft and edit record in them is the agent's own, unedited.
+Both assets measure 1080x1920 with square pixels, 9:16, H.264, 30 frames a second, 300 frames, 10.00 seconds.
+Both follow the shot list: one unbroken range of `d01-s1`, which may not be cut, at the speed it was recorded.
+They differ only in the Hook drawn over the first 3 seconds: frame for frame, the two files have a structural similarity of 0.975 during the hook beat and 0.998 after it, where the only difference left is how each file was compressed.
+`rebuild-asset` rendered day 1's asset again from its record and the footage twice, once with the asset in place and once after it was deleted; each time the render was byte for byte the file the record names and took its place.
+After the last run and the rebuilds, every file in the footage place had the SHA-256, size, modification time, and mode it had before the first, and the folder listed the same.
+Each run cost between $0.007 and $0.011 at API prices.
+
+The same proof had been run once before, minutes earlier, on the code as it stood before the review's last change, in runs `20261011T180326Z-on-demand-8b92`, `20261011T180440Z-on-demand-10a9`, `20261011T180609Z-on-demand-867a`, and `20261011T180751Z-on-demand-75eb`.
+It produced the same two files, with the same names and SHA-256.
+In it the agent listed day 8's Hook as a claim with no code, so the claim check blocked that Draft, as it should, and run `867a` cut no video for day 8, its report saying a video is cut only from a Draft that passes; day 8 was cut in run `75eb` only after that claim line was removed by hand, under a throwaway task definition that only re-runs the checks.
+None of these runs exercised a render that fails, a day held because its Draft is no longer the approved copy, or a day settled by an approved video; the launcher's unit tests cover each, with fake tooling and with the real ffmpeg.
+
+The Validation Test was first run live on the first commit of this work, `47b42a1`, before the review, network off, with the same ffmpeg, against a reconciled copy of `projects/RepToday/` as described above, so against the real kit's shape.
+Its footage was a stand-in clip of the same pattern, which also carried the words "TEST INPUT, stand-in sample footage, not a real recording", in a temporary folder outside every checkout; the plan's approval was simulated in the same way, and its last run had `window.first_sitting` set to `2026-10-04` in the same way.
+
+| Run | What it showed |
+| --- | --- |
+| `20261011T162946Z-on-demand-412a` | The filming plan arrived as one item, `20261011-filming-plan-w1`, of the `filming-plan` kind: 9 assets in 2 sittings for days 1 to 13, device screen recordings and on camera, with day 14 left out because the calendar decides its Angle later; that run's report also said the kit films the Founder on camera on days 2, 4, 6, and 12 and reuses footage on days 8, 9, 10, and 13, as the PRD names them, a line the review has since removed with the registry block it read; no edit record was written, since the plan was not approved |
 | `20261011T163326Z-on-demand-e095` | With the plan approved, the brief listed the stand-in clip with its measured facts and marked day 1 ready; the agent wrote day 1's edit record, one unbroken range from 2 to 12 seconds, and said the start point was a first guess the Founder must check; nothing was cut, since day 1's Draft was blocked by its own claim check |
 | `20261011T163558Z-on-demand-b6db` | Day 1's asset was rendered, `assets/window-1/day-01-9c397efe26f7.mp4`, and the day's post was queued with it, the item naming the file, its SHA-256, the source range, and the checks it passed |
 | `20261011T163627Z-on-demand-f344` | On the real task definition, the agent wrote day 8's Draft from day 1's, changing only the Hook's lines, and day 8's edit record with the same source range; the launcher compared the two records, rendered `assets/window-1/day-08-a513ae2aa863.mp4`, and queued day 8's post with it |
 
-Both assets measure 1080x1920 with square pixels, 9:16, H.264, 30 frames a second, 300 frames, 10.00 seconds.
-Both follow the shot list: one unbroken range of `d01-s1`, which may not be cut, at the speed it was recorded.
-They differ only in the Hook drawn over the first 3 seconds: frame for frame, the two files have a structural similarity of 0.956 during the hook beat and 0.999 after it, where the only difference left is how each file was compressed.
-`rebuild-asset` rendered day 1's asset again from its record and the footage, byte for byte the same.
-After the last run and the rebuild, every file in the footage place had the SHA-256, size, modification time, and mode it had before the first, and the folder listed the same.
-Mandu's, the RepToday checkout's, and the Immerse checkout's HEAD, refs, git status, index, and every file digest were the same after the boundary check as before the first run.
-Each run cost between $0.003 and $0.034 at API prices.
-
-Two things in these runs were not the agent's.
+Its two assets measured as the ones above do, and differed only in the Hook: a structural similarity of 0.956 during the hook beat and 0.999 after it.
+`rebuild-asset`, which then rendered straight over the asset, gave day 1's file again byte for byte, and the footage place was as it had been before the first run.
+Mandu's, the RepToday checkout's, and the Immerse checkout's HEAD, refs, git status, index, and every file digest were the same after that day's boundary check as before the first run.
+Each of those runs cost between $0.003 and $0.034 at API prices.
+Two things in them were not the agent's.
 In its first two runs the agent listed day 1's Hook claim with no code, so the claim check blocked the Draft, as it should, and no video was cut; for the proof, the claim's citation was then written by hand (`ReadyViewModel.swift` lines 4 to 9 at `de0355d`), which `check-drafts` verified.
 Run `b6db` used a throwaway task definition that only re-runs the checks, so the agent could not rewrite that Draft; the edit record it rendered was the one the agent wrote in run `e095`.
-After these runs the work changed only what a notice says of unfilmed days and of a withdrawn post, what the run's filming record cites, and the removal of a render that cannot be measured; the launcher's unit tests cover each, with fake tooling and with the real ffmpeg.
 
 ## Scheduled and on-demand runs share one configuration
 
