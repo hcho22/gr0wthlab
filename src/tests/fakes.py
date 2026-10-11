@@ -9,7 +9,6 @@ import shutil
 import stat
 import subprocess
 import sys
-import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -160,24 +159,6 @@ class Clock:
 
 
 SUNDAY_RUN = datetime(2026, 10, 11, 23, 0, tzinfo=timezone.utc)
-# US Pacific time, where SUNDAY_RUN is Sunday 16:00, spelled out so that no time zone database is needed.
-PACIFIC = "PST8PDT,M3.2.0,M11.1.0"
-
-
-def mac_time_zone(test, zone: str = PACIFIC) -> None:
-    """Run one test with the Mac's clock in a time zone, and put the real one back after it."""
-    previous = os.environ.get("TZ")
-
-    def restore() -> None:
-        if previous is None:
-            os.environ.pop("TZ", None)
-        else:
-            os.environ["TZ"] = previous
-        time.tzset()
-
-    os.environ["TZ"] = zone
-    time.tzset()
-    test.addCleanup(restore)
 
 
 PROPOSAL = """---

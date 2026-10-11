@@ -873,7 +873,6 @@ class WaitlistRunTest(CycleTestCase):
         self.view = self.root / "RepToday-exports" / "waitlist-view.json"
         self.env["GR0WTHLAB_WAITLIST_VIEW"] = str(self.view)
         self.exchange.mkdir()
-        fakes.mac_time_zone(self)
 
     def assert_no_address_anywhere(self):
         """Every output of every run so far: the records, the agent's areas, the logs, and what the agent was told."""
