@@ -47,16 +47,23 @@ class Inventory:
             raise KeyError(clip.name)
         return self.place / clip.name
 
-    def for_shot(self, shot: str, leg: str | None = None) -> list[Clip]:
-        """The clips that are footage of a shot and that a leg may use: a take named for one leg is that leg's."""
+    def for_shot(self, shot: str, leg: str | None = None, measured: bool = True) -> list[Clip]:
+        """The clips that are footage of a shot and that a leg may use: a take named for one leg is that leg's. An
+        edit is cut only from a clip that could be measured; measured=False gives the shot's clips that could not."""
         return [
             clip
             for clip in self.clips.values()
-            if clip.shot == shot and not clip.problem and (clip.leg is None or leg is None or clip.leg == leg)
+            if clip.shot == shot
+            and bool(clip.problem) != measured
+            and (clip.leg is None or leg is None or clip.leg == leg)
         ]
 
     def unmatched(self) -> list[Clip]:
         return [clip for clip in self.clips.values() if clip.shot is None]
+
+    def unmeasured(self) -> list[Clip]:
+        """The clips named for a shot that could not be measured, so nothing is cut from them."""
+        return [clip for clip in self.clips.values() if clip.shot is not None and clip.problem]
 
 
 def fingerprint(path: Path) -> tuple[str, int]:

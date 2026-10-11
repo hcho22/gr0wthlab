@@ -143,13 +143,7 @@
           "local_path": null,
           "env": "GR0WTHLAB_FOOTAGE_DIR",
           "access": "read-only",
-          "note": "The agreed place where the Founder drops raw footage: a folder outside this repository holding one window-<n>/ folder per 14-day window, each file named for its shot of the filming plan (docs/operations.md has the naming). null until the Founder sets it through a reviewed change, and never inferred. The launcher only ever reads it, to fingerprint and measure each file and to cut finished assets from it; nothing in gr0wthlab writes, renames, or deletes anything there, and the sandboxed agent never opens it. The launcher refuses to start if it overlaps this repository, where runs write."
-        },
-        "prd_expects": {
-          "founder_on_camera_days": [2, 4, 6, 12],
-          "reuse_days": [8, 9, 10, 13],
-          "source": "the PRD's US-ME09",
-          "note": "What the PRD named when it was written, kept only so a run can say when the kit, which it reads every run and which always wins, no longer agrees. The filming plan is never built from these."
+          "note": "The agreed place where the Founder drops raw footage: a folder outside this repository holding one window-<n>/ folder per 14-day window, each file named for its shot of the filming plan (docs/operations.md has the naming). null until the Founder sets it through a reviewed change, and never inferred. The launcher only ever reads it, to fingerprint and measure each file and to cut finished assets from it; nothing in gr0wthlab writes, renames, or deletes anything there, and the sandboxed agent never opens it, so it must lie outside this repository and every location the sandbox reads; the launcher refuses to start otherwise."
         },
         "note": "Filming (US-ME09). Which assets need the Founder or a real device, their shot lists, and their sittings come from the kit in Mandu every run. Finished assets go to ledger/assets/, outside git; the canvas they are finished at is in config/platforms.json."
       },

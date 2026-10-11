@@ -37,7 +37,7 @@ class FilmingExampleSetTest(unittest.TestCase):
             "RepToday",
             1,
             "run",
-            filming.Place("RepToday", None, "", {}),
+            filming.Place("RepToday", None, ""),
             CANVAS,
             video.Tooling(None, None),
             filming.Standing(filming.NOT_FILED),
@@ -176,7 +176,7 @@ class FilmingExampleSetTest(unittest.TestCase):
             video.render(TOOLING, CANVAS, cuts, edits.overlays(draft), assets[draft.day], env)
             rendered = video.probe(TOOLING, assets[draft.day], env)
             self.assertEqual(video.verify(rendered, CANVAS, edit.length), [], example["id"])
-        self.assertIn(examples[3]["assertions"][1]["check"], "legs_differ_only_in_the_opening")
+        self.assertEqual(examples[3]["assertions"][1]["check"], "legs_differ_only_in_the_opening")
 
         def likeness(start, length):
             command = [str(TOOLING.ffmpeg), "-nostdin", "-hide_banner", "-ss", str(start), "-t", str(length)]

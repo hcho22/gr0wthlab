@@ -34,6 +34,8 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
    It checks each post Draft the agent wrote in `workspace/drafts/posts/` and queues a post only for one that passes; a blocked Draft is named in the run report and the notice with every failing rule or checklist line, and every check is kept in `ledger/evidence/post-drafts/`.
    For a Draft that passes, it checks the day's edit record in `workspace/drafts/edits/`, if the agent wrote one, against the shot list and the footage, renders it with `ffmpeg` into `ledger/assets/` with the Draft's text drawn over it, and measures the result; the day's post then shows the finished video.
    An edit record that fails a check renders nothing and blocks the day's post, naming the rule; missing video tooling is reported as a skipped edit, never as a failed run; every check is kept in `ledger/evidence/filming/`.
+   A cut that fails for a reason outside the edit record (a tooling error, footage that changed while the run worked, a record that could not be written) holds the video as missing tooling does: nothing is blocked, an open post stands, and the run's notice names the failure.
+   A day whose copy the Founder approved before its video existed gets its video only while its Draft is still that copy; otherwise no video is cut and the notice says so.
    It files the brand lint's word-list proposal once, and never again whatever the Founder decides.
 8. It writes `ledger/review-queue/queue.json`, each workflow's run state (`ledger/run-reports/state/`), and the run report (`ledger/run-reports/<run id>.md`), whose first line is `checked=N acted=N note=...` even when nothing happened.
 9. In the production clone only, it commits the changed `workspace/` and `ledger/` paths and pushes them to `main`, never anything else and never by force; a change to a README in either is put back, since only a reviewed pull request changes documentation.
@@ -97,7 +99,7 @@ It is unset until the Founder sets it, in `filming.footage.local_path` for RepTo
 
 `~/Movies/gr0wthlab-footage` is the proposed place.
 It is outside the production clone, Mandu, and every Product checkout, it is not a folder iCloud syncs, and macOS lets the scheduled run read `~/Movies` without the consent prompt that guards the Desktop, Documents, and Downloads folders.
-The launcher refuses to start if the place overlaps this repository, where runs write.
+The launcher refuses to start if the place overlaps this repository, Mandu, a Product checkout, or anything else the sandbox reads, since the agent could then open the footage.
 `GR0WTHLAB_FOOTAGE_DIR` overrides it on one machine, for example to try a run against test clips.
 The change touches `config/products.json`, so it needs the boundary check below.
 
@@ -139,7 +141,8 @@ Its record, `ledger/evidence/filming/assets/window-<n>-day-<nn>-<recipe>.json`, 
 ~/gr0wthlab/src/bin/gr0wthlab rebuild-asset evidence/filming/assets/window-1-day-01-0a1b2c3d4e5f.json
 ```
 
-The command renders the video again where its record says it was, and says whether it came out byte for byte the same; other tooling can encode the same frames differently.
+The command renders the video again beside where its record says it was, measures it, and puts it in place only if it came out byte for byte the file its record names.
+Anything else, such as a render by other tooling, which can encode the same frames differently, is reported and discarded, and whatever is at that path stays as it was.
 A video no open or approved post names can simply be deleted.
 
 ## Mark the Waitlist live

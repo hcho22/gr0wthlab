@@ -319,7 +319,7 @@ Before the agent starts, the launcher files the filming plan from the kit and li
 Once the agent has finished, it renders each edit record that passes its checks with `ffmpeg` into `ledger/assets/`, which git ignores.
 `config/products.json` gained RepToday's footage place, unset, and `config/platforms.json` the shape a finished video is rendered at.
 The agent's start is unchanged: `codex.py`, `boundary.py`, `launcher.py`, the probe, and `runtime.json` are as they were, and `image_generation` stays among the disabled features.
-The footage place is never one of the locations the sandbox reads, and the launcher refuses to start if it overlaps the repository.
+The footage place is never one of the locations the sandbox reads, and the launcher refuses to start if it overlaps the repository or any of those locations.
 Inside the sandbox, the new `check-edits` reads only the record the launcher wrote for the run in `ledger/run-reports/` and the agent's own files in `workspace/`.
 
 Both checks were made on 2026-10-11 with Codex CLI 0.160.0 from a linked worktree, on the code as it stands after this work, with configuration fingerprint `bd4cdef99b6a61d6296ce8c3e0405d6b0863f3078ddb02e2ea8bd04c6eb97865`.

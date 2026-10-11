@@ -26,7 +26,7 @@ The edit record's format is in the task definition, and the launcher's checks de
 ## Choosing source ranges
 
 - A shot the table marks as never cut is one unbroken stretch of one file.
-  Pick one stretch as long as the shot plays for, and leave it whole.
+  Pick one stretch as long as the shot plays for, and leave it whole: never cut away to another shot and back.
 - A file is usually longer than its shot: the recording starts before the action and ends after it.
   With nothing but the length to go on, take the stretch from the middle of the file, leaving the same margin at each end, and say in your summary that the start point is a first guess the Founder should check.
   When the Founder's rejection reason names a start point, such as "start a second later", use it exactly.

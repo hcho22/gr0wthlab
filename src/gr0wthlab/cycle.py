@@ -602,7 +602,10 @@ class Cycle:
         """The run's filming standing, fixed before the agent starts: the filming plan filed or found, and the
         footage place listed and measured, with the video tooling and the footage place as two of the run's
         sources. Tooling that is missing is a skipped source, so its edits are skipped, never a failed run."""
-        if where is None or state.posts is None:
+        if where is None:
+            return
+        if state.posts is None:
+            state.filming_problem = "not planned: the post Drafts, whose calendar the plan reads, were not prepared"
             return
         if not ledger_ok:
             state.filming_problem = "not planned: the Review Queue could not be read"

@@ -129,15 +129,26 @@ class CheckTest(EditTestCase):
         twice = record(1, ("d01-s1", "d01-s1.mov", 2, 7), ("d01-s1", "d01-s1.mov", 2, 7))
         self.assertEqual(self.rules(twice, 1)[0], ["no-cut"])
 
-    def test_an_uncut_shot_may_still_sit_either_side_of_another_shot_only_as_one_range(self):
+    def test_an_uncut_shot_split_around_another_shot_is_cut_even_when_its_source_runs_on(self):
+        whole = record(
+            2,
+            ("d02-s1", "d02-s1a-take-1.mov", 1, 4),
+            ("d02-s2", "d02-s2.mov", 2, 7),
+            ("d02-s2", "d02-s2.mov", 7, 13),
+            ("d02-s1", "d02-s1-closing.mov", 5, 11),
+        )
+        self.assertEqual(self.rules(whole, 2)[0], [])
         split = record(
             2,
-            ("d02-s2", "d02-s2.mov", 2, 8),
-            ("d02-s1", "d02-s1-closing.mov", 0, 9),
-            ("d02-s2", "d02-s2.mov", 8, 13),
+            ("d02-s1", "d02-s1a-take-1.mov", 1, 4),
+            ("d02-s2", "d02-s2.mov", 2, 7),
+            ("d02-s1", "d02-s1-closing.mov", 5, 11),
+            ("d02-s2", "d02-s2.mov", 7, 13),
         )
         rules, lines = self.rules(split, 2)
-        self.assertEqual(rules, [])
+        self.assertEqual(rules, ["no-cut"])
+        self.assertIn("shot d02-s2 may not be cut", lines[0])
+        self.assertIn("as 2 source ranges, not one unbroken range", lines[0])
         gap = record(
             2,
             ("d02-s2", "d02-s2.mov", 2, 8),

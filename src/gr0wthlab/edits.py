@@ -6,10 +6,11 @@ of the day's shot list it shows, the footage file it comes from, and where in th
 words drawn over the video are not in it; they come from the day's post Draft, which has its own checks.
 
 The checks follow the shot list the launcher read from the kit: every source is a file of the footage place, named
-for the shot it is used as; a shot that may not be cut appears as one unbroken source range; nothing runs at another
-speed unless its shot list says it is not real time; every shot of the list has footage; the length is the one the
-Format gives and the one the Draft's beats add up to; and the legs of an A/B pair use the same source ranges after
-their opening. A record that fails any of them renders nothing: no footage is ever substituted for a shot.
+for the shot it is used as; a shot that may not be cut appears as one unbroken source range, with no other shot
+between its pieces; nothing runs at another speed unless its shot list says it is not real time; every shot of the
+list has footage; the length is the one the Format gives and the one the Draft's beats add up to; and the legs of an
+A/B pair use the same source ranges after their opening. A record that fails any of them renders nothing: no footage
+is ever substituted for a shot.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ import hashlib
 import json
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
+from itertools import groupby
 
 from . import shots as shot_lists
 from .drafts import PostDraft, none, norm
@@ -376,10 +378,11 @@ def check(
                 f"out is {segment.end:g}s, past the end of `{clip.name}`, which measures {clip.facts.duration:.2f}s",
                 where,
             )
+    runs = [(name, list(run)) for name, run in groupby(edit.segments, key=lambda segment: segment.shot)]
     for shot in spec.shots:
-        if not any(segment.shot == shot.id for segment in edit.segments):
+        ranges = [piece for name, run in runs if name == shot.id for piece in pieces(run)]
+        if not ranges:
             block("missing-shot", f"shot {shot.id} ({shot.what}) has no footage in this edit, so there is no asset")
-        ranges = pieces([segment for segment in edit.segments if segment.shot == shot.id])
         if shot.uncut and len(ranges) > 1:
             block(
                 "no-cut",

@@ -12,7 +12,7 @@ A day's video (US-ME09) is part of its post. When the run films, take is given t
 day's edit record into a finished asset once its Draft passes: the post item then shows the video file with the
 copy, an edit record that fails a check blocks the day's post like any failing Draft check, and a post queued before
 its video existed is replaced by one that shows it. A day whose copy the Founder approved before its video existed
-is offered once more, with the video, and a day approved with its video is never asked again.
+is offered once more, with the video cut from that very copy, and a day approved with its video is never asked again.
 """
 
 from __future__ import annotations
@@ -513,15 +513,19 @@ def reference_leg(plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas)
     return current, posted["status"] == APPROVED, ""
 
 
-def rejected_as(day_plan: DayPlan, draft: PostDraft, video: str | None = None) -> dict[str, object] | None:
+def rejected_as(
+    day_plan: DayPlan, draft: PostDraft, video: str | None = None, cut: bool = False
+) -> dict[str, object] | None:
     """The post the Founder rejected that was queued from this very Draft, which is not asked again until it changes.
     A post rejected with its video is asked again once the video changes too; one rejected before its video existed
-    was rejected for its copy, so no video brings it back."""
+    was rejected for its copy, so no video brings it back. cut says the run has made what video it can: with none to
+    show, nothing has changed that the Founder has not refused, so the Draft is not asked again without its video."""
     return next(
         (
             entry
             for entry in day_plan.rejected
-            if entry.get("draft_sha256") == draft.sha256 and entry.get("asset_sha256") in (None, video)
+            if entry.get("draft_sha256") == draft.sha256
+            and (entry.get("asset_sha256") in (None, video) or (cut and video is None))
         ),
         None,
     )
@@ -596,17 +600,20 @@ def take_day(
     number = day_plan.day.day
     approved = day_plan.approved
     # A day approved with its video is settled. One approved before its video existed is taken up again only once
-    # it has an edit record, so the Founder can approve the video with the copy.
+    # it has an edit record, so the Founder can approve the video with the copy, and only while its Draft is still
+    # the copy the Founder approved, since the video's text is drawn from it.
     if approved and (approved.get("asset_sha256") or video is None or not video.wanted(number)):
         return DayResult(
             number, APPROVED_BEFORE, "the Founder approved it, so it is not asked again", str(approved["id"])
         )
     draft, problem = read_draft(areas, plan.draft_path(number))
-    if draft is None and approved:
+    if approved and (draft is None or draft.sha256 != approved.get("draft_sha256")):
+        why = "its Draft is gone" if draft is None else "its Draft is no longer that copy"
+        video.hold(number, f"the Founder approved its copy as `{approved['id']}`, and {why}")
         return DayResult(
             number,
             APPROVED_BEFORE,
-            "the Founder approved its copy; its Draft is gone, so no video is cut for it",
+            f"the Founder approved its copy; {why}, so no video is cut for it",
             str(approved["id"]),
         )
     if draft is None:
@@ -620,7 +627,8 @@ def take_day(
     asset = None
     if video is not None and verdict.passed:
         # The day's video is cut only from a Draft that passes, since its text is drawn over it; an edit record
-        # that fails a check blocks the day's post like any failing Draft check.
+        # that fails a check blocks the day's post like any failing Draft check, and a cut that fails for a reason
+        # outside the record holds the video and blocks nothing.
         asset = video.finish(number, draft, areas, store, now)
         verdict.blocks += asset.blocks
     item = offer(plan, day_plan, draft, verdict, products, asset)
@@ -659,7 +667,7 @@ def take_day(
             verdict,
             asset=asset,
         )
-    rejected = rejected_as(day_plan, draft, shown)
+    rejected = rejected_as(day_plan, draft, shown, cut=True)
     if rejected:
         result.status, result.item = REPEATED, str(rejected["id"])
         result.detail = "the Founder rejected this Draft, so it is not asked again until it changes"

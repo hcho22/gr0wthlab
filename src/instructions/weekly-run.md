@@ -202,7 +202,7 @@ Write it as the file `day-NN.json` (such as `day-01.json`) in the edits folder t
 - `in` and `out` are seconds into the source file, inside its measured length; a segment plays for `out` minus `in` seconds.
 - The segments together run exactly as long as the day's post Draft: its last beat's end time, which must also be a length the Format gives.
   The launcher draws each beat's on-screen text, and its spoken line as a caption, over the video for the beat's time; an edit record holds no text.
-- A shot the brief marks as never cut is one segment, or segments that run on from each other in the same file with no gap.
+- A shot the brief marks as never cut is one segment, or neighbouring segments that run on from each other in the same file with no gap; no other shot plays between its segments.
 - Every shot the brief lists for the day appears at least once.
   If a shot has no file, there is no video: write no edit record and say so.
 - A segment may add `"speed"`, a number other than 1, only for a shot the brief says may run at another speed, such as a timelapse; it then plays for `out` minus `in`, divided by the speed.
