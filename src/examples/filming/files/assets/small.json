@@ -1,0 +1,11 @@
+{
+  "duration": 10.0,
+  "width": 720,
+  "height": 1280,
+  "fps": 30.0,
+  "codec": "h264",
+  "pix_fmt": "yuv420p",
+  "sound": false,
+  "transfer": "",
+  "square_pixels": true
+}

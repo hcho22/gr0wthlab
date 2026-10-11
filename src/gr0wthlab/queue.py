@@ -153,7 +153,7 @@ class Ledger:
             "published_by_run": run_id,
             "status": OPEN,
         }
-        for key in ("product", "slot", "supersedes"):
+        for key in ("product", "slot", "asset", "supersedes"):
             if item.fields.get(key):
                 entry[key] = item.fields[key]
         for key in ("window", "day"):
@@ -235,6 +235,8 @@ class Ledger:
                 "a post is queued only from its Draft in drafts/posts/, after the launcher's checks; never write one"
                 " here"
             )
+        if item.kind == "filming-plan":
+            problems.append("the filming plan is filed only by the launcher, from the kit; never write one here")
         target = item.fields.get("supersedes")
         replaced = self.entries.get(target, {}) if target else {}
         if target and replaced.get("status") != OPEN:

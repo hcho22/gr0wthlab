@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import exchange, package, posts, schedule, waitlist
+from . import exchange, filming, package, posts, schedule, waitlist
 from .state import Tally, run_tally
 
 SKIPPED = "skipped"
@@ -94,6 +94,8 @@ class RunState:
     posts_problem: str = ""  # why the post Drafts were not prepared or not taken in, when they were not
     filing: str = ""  # where the proposed brand-rules lists stand
     filed: str | None = None  # the brand-rules proposal, when this run filed it
+    filming: filming.Filming | None = None
+    filming_problem: str = ""  # why filming was not planned, when a Product films and it was not
 
     @property
     def lateness(self) -> timedelta | None:
@@ -391,6 +393,8 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
         lines += waitlist_brief(state.waitlist, evidence)
     if state.posts is not None:
         lines += [""] + posts.brief_lines(state.posts, repo_root)[:-1]
+    if state.filming is not None:
+        lines += [""] + filming.brief_lines(state.filming, repo_root)[:-1]
     lines += [
         "",
         "## Where to write",
@@ -440,6 +444,8 @@ def summary_lines(state: RunState) -> list[str]:
         lines.append(f"- Post Drafts: {', '.join(counts) or 'no calendar day was due'}.")
     elif state.posts_problem:
         lines.append(f"- Post Drafts: {state.posts_problem}")
+    if state.filming is not None or state.filming_problem:
+        lines.append(f"- Filming: {state.filming_problem or filming.tally(state.filming).note}.")
     if state.notice:
         lines.append(f"- Problems this run are listed in the notice `{state.notice}`.")
     lines.append(f"- {cost_line(state)}")
@@ -469,6 +475,8 @@ def render_report(state: RunState) -> str:
     for item in state.set_aside:
         lines.append(f"- Set aside, not queued: `{item.name}`: {'; '.join(item.problems)}")
     lines += [""] + posts.report_lines(state.posts, state.post_outcome, state.filing, state.posts_problem)
+    if state.filming is not None or state.filming_problem:
+        lines += [""] + filming.report_lines(state.filming, state.filming_problem)
     lines += ["", "## Run state", ""]
     lines += [f"- {tally.workflow}: {tally.line()}" for tally in state.tallies]
     if state.state_notes:
@@ -547,6 +555,9 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     blocked = posts.notice_section(state.post_outcome, day)
     if blocked:
         sections.append(blocked)
+    unfilmed = filming.notice_section(state.filming, day)
+    if unfilmed:
+        sections.append(unfilmed)
     if state.set_aside:
         sections.append(
             (

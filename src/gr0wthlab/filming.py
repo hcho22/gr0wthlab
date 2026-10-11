@@ -1,0 +1,1240 @@
+"""The filming workflow (US-ME09): the filming plan the Founder approves before filming, and the finished video cut
+from the footage the Founder then drops in the footage place.
+
+Before the agent starts, the launcher reads the shot lists from the kit (shots.py), groups them into the fewest
+sittings, and files the filming plan as one Review Queue item under an identifier that never changes. The plan is
+never asked again once the Founder decided it, and a new one replaces it only when the kit changes what must be
+filmed. The launcher then lists the footage place, read-only, and measures each file, since the agent cannot watch
+video: the agent learns each file's name and measured facts from the brief, never the file.
+
+The agent's part is an edit record per calendar day (edits.py): which source ranges of which files make up the day's
+video. Once the agent has finished, the launcher checks each record against the shot list, renders it with the text
+of the day's post Draft drawn over it (video.py), measures the result, and hands the finished asset to the post-Draft
+workflow, which shows it in the day's post item. Nothing is cut from footage of a shot the Founder has not approved a
+plan for, a record that fails a check renders nothing, and tooling that is missing is reported as a skipped edit,
+never as a failed run. A finished asset lives outside git, in ledger/assets/, and its record in ledger/evidence/
+holds everything needed to rebuild it from the footage.
+
+The plan's shot lists use one beat-sheet shape, a row per shot, adapted from skills/video/references/edit-anatomy.md of
+github.com/coreyhaines31/marketingskills at commit 1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff (MIT; see
+THIRD_PARTY_NOTICES.md).
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import shlex
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
+
+from . import edits, exchange, footage, posts, shots, video
+from .areas import Areas, Store, UnsafeFile, read_plain
+from .boundary import Boundary, ConfigError, is_within, load_json
+from .lint import Finding
+from .queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger
+from .settings import resolve_home_path
+from .state import Tally
+
+KIND = "filming-plan"
+ORIGIN = "filming-plan"
+ASSETS = "assets"
+EVIDENCE = "filming"
+EDITS = "edits"
+ROLES = ("calendar", "angles", "pairs")
+
+# Where the filming plan stands.
+FILED = "filed"
+REPLACED = "replaced"
+WAITING = "open"
+APPROVED_BEFORE = "approved"
+DECIDED = "rejected"
+NOT_FILED = "not filed"
+
+# What became of one calendar day's edit record.
+FINISHED = "finished"
+BLOCKED = "blocked"
+HELD = "not cut"
+NO_EDIT = "no edit record"
+READY = "ready to cut"
+
+
+def plural(count: int, noun: str) -> str:
+    return f"{count} {noun}" + ("" if count == 1 else "s")
+
+
+def listed(numbers: Sequence[object]) -> str:
+    """Numbers in a sentence: 2, 4, 6, and 12."""
+    words = [str(number) for number in numbers]
+    if len(words) < 3:
+        return " and ".join(words)
+    return f"{', '.join(words[:-1])}, and {words[-1]}"
+
+
+def record_file(run_id: str) -> str:
+    """The name, among the run reports, of a run's record of its filming standing."""
+    return f"{run_id}.filming.json"
+
+
+# The footage place, from the Product registry.
+
+
+@dataclass(frozen=True)
+class Place:
+    """Where a Product's raw footage is, once the Founder has set it, and what the PRD expects of the kit."""
+
+    product: str
+    path: Path | None
+    env: str
+    expects: Mapping[str, object]
+
+
+def place(registry: Mapping, boundary: Boundary, env: Mapping[str, str], home: Path) -> Place | None:
+    """The footage place of the one active Product that films, or None when none does.
+
+    The launcher only ever reads it, and writes its own files only inside this repository, so a footage place that
+    overlaps the repository, where the agent writes too, stops the run before it starts.
+    """
+    found = [
+        product
+        for product in registry.get("products", [])
+        if product.get("filming") and product.get("status") == "active"
+    ]
+    if not found:
+        return None
+    if len(found) > 1:
+        raise ConfigError("only one Product may film until the run plans more than one")
+    name = str(found[0].get("name"))
+    try:
+        block = found[0]["filming"]
+        where = block["footage"]
+        if not isinstance(where, dict) or where.get("access") != "read-only":
+            raise ConfigError(f"{name}'s footage place must be declared read-only")
+        env_name = where.get("env")
+        if not isinstance(env_name, str) or not env_name:
+            raise ConfigError(f"{name}'s footage place needs an env override name")
+        path = None
+        if env.get(env_name) or where["local_path"] is not None:
+            path = resolve_home_path(where["local_path"], f"{name}.filming.footage.local_path", env_name, env, home)
+        expects = block.get("prd_expects") or {}
+    except (KeyError, TypeError) as error:
+        raise ConfigError(f"{name}'s filming block in the Product registry is incomplete: {error}") from error
+    if path is not None:
+        for other in (boundary.repo_root, *boundary.git_dirs):
+            if is_within(path, other) or is_within(other, path):
+                raise ConfigError(
+                    f"{name}'s footage place {path} overlaps {other}; raw footage lives outside this repository,"
+                    " where no run writes"
+                )
+    return Place(name, path, env_name, expects)
+
+
+# What the plan and each day's edit come to.
+
+
+@dataclass
+class Standing:
+    """Where the filming plan stands in the Review Queue, and which jobs the Founder has approved filming for."""
+
+    status: str
+    item: str | None = None
+    detail: str = ""
+    replaced: str | None = None
+    approved: frozenset = frozenset()  # (job key, job digest) of every job an approved plan holds
+
+    @property
+    def acted(self) -> bool:
+        return self.status in (FILED, REPLACED)
+
+    def account(self) -> str:
+        return {
+            FILED: f"filed this run as `{self.item}`",
+            REPLACED: f"filed as `{self.item}` in place of `{self.replaced}`, as the kit changed what must be filmed",
+            WAITING: f"open as `{self.item}`",
+            APPROVED_BEFORE: f"approved as `{self.item}`; never asked again",
+            DECIDED: f"rejected as `{self.item}`{self.detail}; not asked again until the kit changes what must be"
+            " filmed",
+            NOT_FILED: f"not filed: {self.detail}",
+        }[self.status]
+
+
+@dataclass
+class DayEdit:
+    """One due calendar day the plan covers: what its edit must follow, and whether an edit can be cut this run."""
+
+    spec: edits.DaySpec
+    ready: bool
+    why: str = ""
+
+
+@dataclass
+class Asset:
+    """What the launcher made of one calendar day's edit record. The post-Draft workflow reads blocks, finished,
+    held, sha256, entry, and lines; everything else is for the run's own account."""
+
+    day: int
+    status: str
+    detail: str = ""
+    edit: str | None = None  # the edit record, relative to workspace/
+    edit_sha256: str | None = None
+    blocks: list[Finding] = field(default_factory=list)
+    path: str | None = None  # the finished asset, relative to ledger/
+    sha256: str | None = None
+    bytes: int | None = None
+    facts: video.Facts | None = None
+    record: str | None = None  # the asset's own record, relative to ledger/
+    reused: bool = False
+    cuts: list[dict[str, object]] = field(default_factory=list)
+    checks: list[str] = field(default_factory=list)
+    parsed: edits.Edit | None = None
+
+    @property
+    def finished(self) -> bool:
+        return self.status == FINISHED
+
+    @property
+    def held(self) -> bool:
+        """An edit record that could not be cut this run for a reason outside it, such as missing tooling."""
+        return self.status == HELD
+
+    def entry(self) -> dict[str, object]:
+        """What a post's Review Queue entry keeps of its video."""
+        if not self.finished:
+            return {}
+        return {
+            "asset": self.path,
+            "asset_sha256": self.sha256,
+            "asset_record": self.record,
+            "edit": self.edit,
+            "edit_sha256": self.edit_sha256,
+        }
+
+    def lines(self) -> list[str]:
+        """The post item's account of its video file."""
+        if not self.finished:
+            why = self.detail.rstrip(".") or "its footage is not edited yet"
+            return [
+                f"**Video file**: none yet ({why}). Approving this item approves its copy and its beat plan; the"
+                " finished video comes back with this copy for approval."
+            ]
+        facts = self.facts
+        sound = "with sound" if facts.sound else "no sound"
+        lines = [
+            "**Video file**",
+            "",
+            f"- `{self.path}`, under gr0wthlab's `ledger/`: {facts.duration:.2f}s, {facts.shape()},"
+            f" {facts.fps:g} frames a second, {sound}. SHA-256 `{self.sha256}`.",
+            f"- Cut by `{self.edit}` from the Founder's footage; nothing in it is generated:",
+            "",
+            "| Time | Shot | Footage file | From | To | Speed |",
+            "| --- | --- | --- | --- | --- | --- |",
+        ]
+        for cut in self.cuts:
+            speed = "as recorded" if cut["speed"] == 1 else f"{cut['speed']:g}x"
+            lines.append(
+                f"| {cut['at']:g}-{cut['until']:g}s | {cut['shot']} | `{cut['source']}` | {cut['in']:g}s"
+                f" | {cut['out']:g}s | {speed} |"
+            )
+        lines += ["", "- Checked: " + "; ".join(self.checks) + "."]
+        lines.append(f"- Everything needed to rebuild it from the footage: `{self.record}`.")
+        return lines
+
+    def summary(self) -> dict[str, object]:
+        return {
+            "day": self.day,
+            "status": self.status,
+            "detail": self.detail,
+            "edit": self.edit,
+            "edit_sha256": self.edit_sha256,
+            "blocks": [finding.__dict__ for finding in self.blocks],
+            "asset": self.path,
+            "asset_sha256": self.sha256,
+            "bytes": self.bytes,
+            "facts": self.facts.as_json() if self.facts else None,
+            "asset_record": self.record,
+            "reused": self.reused,
+            "checks": self.checks,
+        }
+
+
+@dataclass
+class Filming:
+    """Everything a run knows about filming: the plan, the footage, and each due day's edit."""
+
+    product: str
+    window: int
+    run: str
+    place: Place
+    canvas: video.Canvas | None
+    tooling: video.Tooling
+    standing: Standing
+    inventory: footage.Inventory
+    drafts: Path  # workspace/drafts/posts/window-<n>/
+    edits: Path  # workspace/drafts/edits/window-<n>/
+    requirements: shots.Requirements = field(default_factory=shots.Requirements)
+    paths: dict[str, str] = field(default_factory=dict)  # kit role: its Mandu-relative path
+    days: dict[int, DayEdit] = field(default_factory=dict)
+    unplanned: dict[int, str] = field(default_factory=dict)
+    posted: dict[int, dict[str, object]] = field(default_factory=dict)  # each calendar day's standing post
+    due: dict[int, bool] = field(default_factory=dict)  # each due day: whether its video is already approved
+    problem: str = ""  # why nothing could be planned this run
+    expectation: list[str] = field(default_factory=list)
+    calendar_lines: list[int] = field(default_factory=list)  # the calendar rows the plan read
+    screen_rule: shots.ScreenRule | None = None
+    results: dict[int, Asset] = field(default_factory=dict)
+    record: str | None = None
+    env: Mapping[str, str] = field(default_factory=dict)  # what the video tooling runs with
+
+    def edit_path(self, number: int) -> Path:
+        return self.edits / f"day-{number:02d}.json"
+
+    def draft_path(self, number: int) -> Path:
+        return self.drafts / f"day-{number:02d}.md"
+
+    def sittings(self) -> list[shots.Sitting]:
+        return shots.sittings(self.requirements)
+
+    # After the agent: what the post-Draft workflow asks.
+
+    def wanted(self, number: int) -> bool:
+        """Whether a day has an edit record, so its video can be offered even after its copy was approved."""
+        path = self.edit_path(number)
+        return path.exists() or path.is_symlink()
+
+    def examine(self, number: int, areas: Areas, draft: posts.PostDraft | None = None) -> Asset:
+        """Every check of one day's edit record that needs no tooling, as the launcher and check-edits both run
+        them; an Asset that is READY passed them all."""
+        day = self.days.get(number)
+        path = self.edit_path(number)
+        relative = areas.relative(path)
+        if day is None:
+            why = self.unplanned.get(number) or f"the filming plan does not cover day {number}"
+            return Asset(
+                number, HELD if self.wanted(number) else NO_EDIT, why, relative if self.wanted(number) else None
+            )
+        edit, problem = read_edit(areas, path)
+        if edit is None and not problem:
+            return Asset(number, NO_EDIT, day.why if not day.ready else "it is ready for an edit record and has none")
+        if edit is None:
+            return Asset(number, BLOCKED, problem, relative, blocks=[Finding("edit-format", "", problem)])
+        asset = Asset(number, BLOCKED, "", edit.path, edit.sha256, parsed=edit)
+        if not day.ready:
+            asset.status, asset.detail = HELD, day.why
+            return asset
+        if draft is None:
+            draft, problem = posts.read_draft(areas, self.draft_path(number))
+            if draft is None or draft.problems:
+                asset.status = HELD
+                asset.detail = (
+                    problem or f"day {number} has no post Draft that can be read, and its text is drawn from it"
+                )
+                return asset
+        asset.blocks = edits.check(edit, day.spec, self.inventory.clips, draft, self.canvas)
+        asset.checks = [
+            f"{shot.id}, which may not be cut, is one unbroken source range" for shot in day.spec.shots if shot.uncut
+        ]
+        if all(segment.speed == 1 for segment in edit.segments):
+            asset.checks.append("every cut plays at the speed it was recorded at")
+        if not asset.blocks:
+            reference, reference_draft, problem = self.reference(day.spec, edit, areas)
+            if problem:
+                asset.blocks.append(Finding("pair-legs", "", problem))
+            elif reference is not None:
+                asset.blocks += edits.check_pair(edit, draft, reference, reference_draft, day.spec)
+                where = "after the re-cut opening" if day.spec.recut else "from the first frame to the last"
+                asset.checks.append(f"the same source ranges as day {reference.day}'s leg {where}")
+            elif day.spec.other is not None:
+                asset.checks.append(f"day {day.spec.other}, its pair's other leg, has no video to compare with yet")
+        if not asset.blocks:
+            asset.status = READY
+        return asset
+
+    def reference(
+        self, spec: edits.DaySpec, edit: edits.Edit, areas: Areas
+    ) -> tuple[edits.Edit | None, posts.PostDraft | None, str]:
+        """The edit an A/B leg must match outside its opening, with that leg's Draft, and why the leg cannot be
+        compared when it cannot; the same rules as the post-Draft check of the two legs' copy.
+
+        A leg whose own post already shows the video cut from this very record is not checked again, so it stays
+        the reference for the newer leg. When this run cuts both legs anew, the earlier day is checked alone and the
+        later day against it.
+        """
+        other = spec.other
+        mine = self.posted.get(spec.day) or {}
+        if other is None or mine.get("edit_sha256") == edit.sha256:
+            return None, None, ""
+        posted = self.posted.get(other) or {}
+        current, _ = read_edit(areas, self.edit_path(other))
+        anew = other in self.due and not self.due[other]
+        if anew and current is not None and current.sha256 != posted.get("edit_sha256"):
+            chosen = current if other < spec.day else None
+        elif not posted.get("edit_sha256"):
+            chosen = None
+        elif current is None or current.sha256 != posted["edit_sha256"]:
+            return (
+                None,
+                None,
+                f"day {other}'s edit record is no longer the one the video of `{posted['id']}` was cut from, so this"
+                " leg cannot be compared with it",
+            )
+        else:
+            chosen = current
+        if chosen is None:
+            return None, None, ""
+        if chosen.problems:
+            return None, None, f"day {other}'s edit record does not follow the format, so this leg cannot be compared"
+        draft, _ = posts.read_draft(areas, self.draft_path(other))
+        if draft is None or draft.problems:
+            return None, None, f"day {other}'s post Draft could not be read, so the opening it re-cuts cannot be told"
+        return chosen, draft, ""
+
+    def finish(self, number: int, draft: posts.PostDraft, areas: Areas, store: Store, now: datetime) -> Asset:
+        """Turn a day's edit record into a finished asset when it passes every check: render it with the Draft's
+        text drawn over it, measure it, and keep it only if it measures as the canvas asks."""
+        asset = self.results[number] = self.examine(number, areas, draft)
+        if asset.status != READY:
+            return asset
+        try:
+            self.cut(asset, draft, store, now)
+        except video.VideoError as error:
+            asset.status, asset.blocks = BLOCKED, [Finding("render", "", str(error))]
+        except OSError as error:
+            asset.status, asset.blocks = BLOCKED, [Finding("render", "", error.strerror or str(error))]
+        return asset
+
+    def settle(self) -> None:
+        """Account for each due day the post-Draft workflow did not ask a video of, so the report names every day:
+        a video is cut only from a Draft that passes, and never again for a post approved with its video."""
+        for number, day in self.days.items():
+            if number in self.results:
+                continue
+            exists = self.wanted(number)
+            if self.due.get(number):
+                why = "the Founder approved its post with its video, so nothing is cut again"
+            elif exists:
+                why = "its post Draft did not pass its checks, and a video is cut only from a Draft that passes"
+            else:
+                why = day.why if not day.ready else "it is ready for an edit record and has none"
+            self.results[number] = Asset(number, HELD if exists else NO_EDIT, why)
+
+    def cut(self, asset: Asset, draft: posts.PostDraft, store: Store, now: datetime) -> None:
+        env = self.env
+        edit = asset.parsed
+        clips = [self.inventory.clips[segment.source] for segment in edit.segments]
+        for clip in {clip.name: clip for clip in clips}.values():
+            if footage.fingerprint(self.inventory.path(clip))[0] != clip.sha256:
+                raise video.VideoError(
+                    f"`{clip.name}` changed while the run was working, so nothing was cut from it; the next run"
+                    " measures it again"
+                )
+        overlays = edits.overlays(draft)
+        cuts = [
+            video.Cut(
+                self.inventory.path(clip),
+                segment.start,
+                segment.end,
+                segment.speed,
+                segment.fit,
+                segment.mute,
+                clip.facts,
+            )
+            for segment, clip in zip(edit.segments, clips)
+        ]
+        made = {
+            "tooling": self.tooling.version,
+            "encoding": [*video.VIDEO_CODEC, *video.SOUND_CODEC, *video.REPEATABLE],
+            "canvas": self.canvas.as_json(),
+            "overlays": [overlay.__dict__ for overlay in overlays],
+            "cuts": [
+                dict(segment.as_json(), sha256=clip.sha256, bytes=clip.bytes, facts=clip.facts.as_json())
+                for segment, clip in zip(edit.segments, clips)
+            ],
+        }
+        recipe = hashlib.sha256(json.dumps(made, sort_keys=True).encode("utf-8")).hexdigest()
+        stem = f"day-{asset.day:02d}-{recipe[:12]}"
+        target = store.path(ASSETS, f"window-{self.window}", f"{stem}.mp4")
+        record = store.path("evidence", EVIDENCE, ASSETS, f"window-{self.window}-{stem}.json")
+        known = read_json(record)
+        asset.reused = bool(known) and target.is_file() and footage.fingerprint(target)[0] == known.get("sha256")
+        if not asset.reused:
+            video.render(self.tooling, self.canvas, cuts, overlays, target, env)
+        facts = video.probe(self.tooling, target, env)
+        problems = video.verify(facts, self.canvas, edit.length)
+        if problems:
+            target.unlink()
+            asset.status = BLOCKED
+            asset.blocks = [
+                Finding("asset-shape", "", f"the rendered asset was not kept: {problem}") for problem in problems
+            ]
+            return
+        asset.sha256, asset.bytes = footage.fingerprint(target)
+        asset.path, asset.record, asset.facts = store.relative(target), store.relative(record), facts
+        clock = 0.0
+        for segment in edit.segments:
+            asset.cuts.append(dict(segment.as_json(), at=round(clock, 3), until=round(clock + segment.length, 3)))
+            clock += segment.length
+        asset.checks.insert(0, f"measured {facts.shape()} at {facts.fps:g} frames a second")
+        asset.status = FINISHED
+        if not known or known.get("sha256") != asset.sha256:
+            store.write_json(
+                record,
+                dict(
+                    made,
+                    asset=asset.path,
+                    sha256=asset.sha256,
+                    bytes=asset.bytes,
+                    facts=facts.as_json(),
+                    recipe=recipe,
+                    product=self.product,
+                    window=self.window,
+                    day=asset.day,
+                    made_by_run=self.run,
+                    made_at=now.isoformat(),
+                    edit={"path": edit.path, "sha256": edit.sha256, "record": edit.as_json()},
+                    draft={"path": draft.path, "sha256": draft.sha256},
+                    checks=asset.checks,
+                    rebuild=f"src/bin/gr0wthlab rebuild-asset {asset.record}",
+                ),
+            )
+
+    # The record check-edits reads.
+
+    def as_record(self) -> dict[str, object]:
+        """What the launcher fixed for this run's edits before the agent started: the footage it measured, each due
+        day's shot list and whether an edit can be cut, and where each day's post stands."""
+        inventory = self.inventory
+        return {
+            "run": self.run,
+            "product": self.product,
+            "window": self.window,
+            "plan": {"status": self.standing.status, "item": self.standing.item},
+            "problem": self.problem,
+            "tooling": self.tooling.as_json(),
+            "canvas": self.canvas.as_json() if self.canvas else None,
+            "footage": {
+                "place": str(inventory.place) if inventory.place else None,
+                "folder": inventory.folder,
+                "status": inventory.status,
+                "detail": inventory.detail,
+                "clips": [clip.as_json() for clip in inventory.clips.values()],
+                "ignored": [list(entry) for entry in inventory.ignored],
+            },
+            "days": {
+                str(number): {"spec": day.spec.as_json(), "ready": day.ready, "why": day.why}
+                for number, day in self.days.items()
+            },
+            "unplanned": {str(number): why for number, why in self.unplanned.items()},
+            "posted": {str(number): post for number, post in self.posted.items()},
+            "due": {str(number): approved for number, approved in self.due.items()},
+            "drafts": str(self.drafts),
+            "edits": str(self.edits),
+        }
+
+
+class RecordError(ValueError):
+    """A record that does not hold a run's filming standing."""
+
+
+def from_record(data: object) -> Filming:
+    """A run's filming standing as the launcher recorded it, for check-edits; the footage itself is never needed."""
+    try:
+        held = data["footage"]
+        inventory = footage.Inventory(
+            Path(held["place"]) if held["place"] else None,
+            str(held["folder"]),
+            str(held["status"]),
+            str(held["detail"]),
+            {clip["name"]: edits.Clip.from_json(clip) for clip in held["clips"]},
+            [tuple(entry) for entry in held["ignored"]],
+        )
+        canvas = data["canvas"]
+        tooling = data["tooling"]
+        return Filming(
+            str(data["product"]),
+            int(data["window"]),
+            str(data["run"]),
+            Place(str(data["product"]), inventory.place, "", {}),
+            video.Canvas(**dict(canvas, font=Path(canvas["font"]))) if canvas else None,
+            video.Tooling(
+                None, None, str(tooling["version"]), str(tooling["problem"]), tooling["converts_hdr"] is True
+            ),
+            Standing(str(data["plan"]["status"]), data["plan"]["item"]),
+            inventory,
+            Path(data["drafts"]),
+            Path(data["edits"]),
+            days={
+                int(number): DayEdit(edits.DaySpec.from_json(day["spec"]), day["ready"] is True, str(day["why"]))
+                for number, day in data["days"].items()
+            },
+            unplanned={int(number): str(why) for number, why in data["unplanned"].items()},
+            posted={int(number): dict(post) for number, post in data["posted"].items()},
+            due={int(number): approved is True for number, approved in data["due"].items()},
+            problem=str(data["problem"]),
+        )
+    except (AttributeError, KeyError, TypeError, ValueError) as error:
+        raise RecordError(f"it does not hold a run's filming standing ({type(error).__name__}: {error})") from error
+
+
+def read_json(path: Path) -> dict:
+    """One of the launcher's own JSON records, or {} when there is none that can be read."""
+    try:
+        data = json.loads(read_plain(path).decode("utf-8"))
+    except (UnsafeFile, OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def read_edit(areas: Areas, path: Path) -> tuple[edits.Edit | None, str]:
+    """An edit record the agent wrote, read without following links; None with the reason when there is none."""
+    if not path.exists() and not path.is_symlink():
+        return None, ""
+    folder = areas.check(path.parent)
+    if not areas.real_folder(folder):
+        return None, f"`{areas.relative(folder)}` is not a real folder, so its edit records were not read"
+    try:
+        text = read_plain(path).decode("utf-8")
+    except (UnsafeFile, OSError, UnicodeDecodeError) as error:
+        return None, f"`{areas.relative(path)}` could not be read ({error})"
+    return edits.parse(text, areas.relative(path)), ""
+
+
+# Before the agent.
+
+
+def expectation(found: shots.Requirements, expects: Mapping[str, object]) -> list[str]:
+    """Whether the kit, read this run, still gives the days the PRD names; the kit wins, and the report says so."""
+    source = str(expects.get("source") or "the PRD")
+    lines = []
+    pairs = (
+        ("founder_on_camera_days", found.on_camera_days(), "films the Founder on camera on"),
+        ("reuse_days", found.reuse_days(), "reuses an earlier day's footage on"),
+    )
+    for key, got, verb in pairs:
+        wanted = expects.get(key)
+        if not isinstance(wanted, list):
+            continue
+        if sorted(wanted) == got:
+            lines.append(f"The kit {verb} days {listed(got) or 'none'}, as {source} names them.")
+        else:
+            lines.append(
+                f"The kit disagrees with {source}, and the kit wins: it {verb} days {listed(got) or 'none'}, where"
+                f" the PRD names days {listed(sorted(wanted)) or 'none'}."
+            )
+    return lines
+
+
+def device(shot: shots.Shot, product: str) -> str:
+    if shot.setup == shots.DEVICE:
+        real = "real device" if shot.real_device else "device"
+        return f"The {real} running {product}, screen recording"
+    if shot.setup == shots.CAMERA:
+        return "Camera, the Founder in frame" if shot.kind == shots.FOUNDER_ON_CAMERA else "Camera"
+    return "Not stated"
+
+
+def real_time(shot: shots.Shot) -> str:
+    if shot.real_time is None:
+        return "Not stated"
+    return "Yes" if shot.real_time else f"No: {shot.kind}"
+
+
+def span(length: tuple[int, int] | None) -> str:
+    if length is None:
+        return "not stated"
+    return f"{length[0]}s" if length[0] == length[1] else f"{length[0]}-{length[1]}s"
+
+
+def plan_item(filming: Filming, previous: Mapping[str, object] | None = None) -> exchange.Item:
+    """The filming plan as one Review Queue item: the sittings, then one beat sheet per asset, each quoting only
+    the kit text it uses."""
+    found, product, window = filming.requirements, filming.product, filming.window
+    roles, canvas = filming.paths, filming.canvas
+    groups = filming.sittings()
+    days = sorted(day for job in found.jobs for day in job.days)
+    reuse = found.reuse_days()
+    body = [
+        f"{product} window {window} needs footage for {plural(len(found.jobs), 'asset')}, filmed in"
+        f" {plural(len(groups), 'sitting')}, for calendar days {listed(days)}."
+        + (
+            f" Days {listed(reuse)} are cut from an earlier day's footage with only the opening changed, so they"
+            " film nothing new."
+            if reuse
+            else ""
+        ),
+        "No video is cut from a shot's footage until a plan that holds the shot is approved.",
+    ]
+    if previous is not None:
+        before = previous.get("filming_jobs") or {}
+        now = found.digests()
+        changed = [key for key in now if key in before and before[key] != now[key]]
+        new = [key for key in now if key not in before]
+        gone = [key for key in before if key not in now]
+        parts = [
+            f"{', '.join(keys)} {word}" for keys, word in ((changed, "changed"), (new, "new"), (gone, "gone")) if keys
+        ]
+        decided = f", which you {previous['status']}" if previous["status"] in (APPROVED, REJECTED) else ""
+        body.append(
+            f"This plan replaces `{previous['id']}`{decided}, because the kit changed what must be filmed:"
+            f" {'; '.join(parts) or 'the sittings'}."
+        )
+    body += ["", "**Before you film**", ""]
+    if canvas is not None:
+        body.append(
+            f"- Every asset is finished at {canvas.shape}, so film upright. Text is drawn {canvas.top} pixels from"
+            f" the top and {canvas.bottom} from the bottom, so keep what matters between them."
+        )
+    body += [
+        f"- Drop each file in the footage place's `window-{window}/` folder, named for its shot, such as"
+        " `d01-s1.mov`, or `d01-s1-take-2.mov` for another take; `docs/operations.md` has the rest.",
+        "- On-screen text and captions are never filmed: the edit draws them from each day's post Draft, whose"
+        " Video table is that day's script.",
+        "- Nothing is generated or substituted: a shot with no file has no video.",
+    ]
+    for sitting in groups:
+        served = sitting.days()
+        body += [
+            "",
+            f"**Sitting {sitting.number}: {sitting.label.lower()}**, for {'days' if len(served) > 1 else 'day'}"
+            f" {listed(served)}",
+            "",
+            "| Shot | For | Time | What to record | Device | Real time | On-screen text | Caption | May not be cut |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+        ]
+        for job, shot in sitting.shots:
+            time = span(job.length) if len(job.shots) == 1 else f"part of {span(job.length)}"
+            text = "The Hook, then the Draft's" if shot.number == 1 else "The Draft's"
+            caption = "The spoken lines" if shot.kind == shots.FOUNDER_ON_CAMERA else "None unless a line is spoken"
+            body.append(
+                f"| {shot.id} | {'days' if len(job.days) > 1 else 'day'} {listed(job.days)} | {time}"
+                f" | {posts.cell(shot.what)} | {device(shot, product)} | {real_time(shot)} | {text} | {caption}"
+                f" | {'Yes' if shot.uncut else 'Not stated'} |"
+            )
+    names = {role: Path(path).name for role, path in roles.items()}
+    body += ["", "**Where each shot list comes from, and what each day opens on**", ""]
+    for job in found.jobs:
+        pair = f", {job.pair}" + (", opening re-cut" if job.recut else "") if job.pair else ""
+        line = (
+            f"- {job.key}, {'days' if len(job.days) > 1 else 'day'} {listed(job.days)} ({job.angle}{pair}): Format in"
+            f" `{names['angles']}` line {job.line}."
+        )
+        for hook in job.hooks:
+            line += f' Day {hook.day} opens on "{hook.text}" (`{names[hook.source]}` line {hook.line}).'
+        if job.recut and len(job.hooks) > 1:
+            first = job.shots[0].id
+            takes = " and ".join(f"`{first}{hook.leg.lower()}` for day {hook.day}" for hook in job.hooks if hook.leg)
+            line += f" Each leg opens on its own Hook, so record the opening once for each: name the takes {takes}."
+        body.append(line)
+    for number, why in found.unplanned:
+        body.append("")
+        body.append(f"Not planned: day {number}, since {why}.")
+    touches = [
+        f"- The filming of {product} window {window}: shot lists {', '.join(sorted(found.digests()))}",
+        "- The raw footage place set in `config/products.json`, which gr0wthlab only ever reads",
+    ]
+    rows = sorted(filming.calendar_lines)
+    evidence = [
+        f"- The calendar's days, their Angles and pair legs: `{roles['calendar']}` lines {rows[0]}-{rows[-1]}"
+        if rows
+        else f"- The calendar: `{roles['calendar']}`",
+        f"- Each Angle's Format, quoted in the shot lists: `{roles['angles']}` lines"
+        f" {listed(sorted({job.line for job in found.jobs}))}",
+        f"- Each pair's legs and frozen Hooks: `{roles['pairs']}`",
+    ]
+    rule = filming.screen_rule
+    if rule is not None:
+        evidence.append(f"- What holds for every screen recording: `{roles['calendar']}` line {rule.line}")
+    evidence.append("- The finished asset's shape and safe zone: `config/platforms.json`")
+    ask = (
+        f"Approve the filming plan for {product} window {window}: {plural(len(found.jobs), 'asset')} in"
+        f" {plural(len(groups), 'sitting')}"
+    )
+    fields = {"kind": KIND, "product": product}
+    return exchange.Item(fields, ask[: exchange.MAX_TITLE], "\n".join(body), "\n".join(touches), "\n".join(evidence))
+
+
+def origin(product: str, window: int) -> str:
+    return f"{ORIGIN}/{product}/window-{window}"
+
+
+def file_plan(
+    filming: Filming,
+    ledger: Ledger,
+    store: Store,
+    products: Sequence[str],
+    seen: dict[str, str],
+    now: datetime,
+) -> Standing:
+    """Queue the filming plan unless it already stands: one item, under an identifier that never changes.
+
+    The plan is compared by what must be filmed, never by its wording. A plan the Founder approved is never asked
+    again, and neither is one the Founder rejected; a plan still open stays as it is. A new plan is filed only when
+    there is none, or when the kit changed what must be filmed, and it then takes the earlier one's place.
+    """
+    found = filming.requirements
+    fingerprint, digests = found.fingerprint(), found.digests()
+    mine = sorted(
+        (entry for entry in ledger.entries.values() if entry.get("origin") == origin(filming.product, filming.window)),
+        key=lambda entry: (str(entry["published_at"]), str(entry["id"])),
+    )
+    approved = [entry for entry in mine if APPROVED in (entry["status"], entry.get("decided"))]
+    held = frozenset((key, digest) for entry in approved for key, digest in (entry.get("filming_jobs") or {}).items())
+    current = next((entry for entry in mine if entry["status"] == OPEN), None)
+    same = [entry for entry in mine if entry.get("filming_sha256") == fingerprint]
+    settled = next((entry for entry in reversed(same) if entry in approved), None)
+    if settled is not None:
+        if current is not None:
+            # The kit went back to what the Founder approved, so the plan filed for the change has nothing to ask.
+            ledger.close(current, SUPERSEDED, filming.run, now, superseded_by=str(settled["id"]))
+        return Standing(APPROVED_BEFORE, str(settled["id"]), approved=held)
+    if current is not None and current in same:
+        return Standing(WAITING, str(current["id"]), approved=held)
+    refused = next((entry for entry in reversed(same) if REJECTED in (entry["status"], entry.get("decided"))), None)
+    if current is None and refused is not None:
+        reason = f": {refused['reason']}" if refused.get("reason") else ""
+        return Standing(DECIDED, str(refused["id"]), reason, approved=held)
+    previous = current or (mine[-1] if mine else None)
+    item = plan_item(filming, previous)
+    if previous is not None:
+        item = exchange.Item(
+            dict(item.fields, supersedes=str(previous["id"])), item.ask, item.body, item.touches, item.evidence
+        )
+    check = exchange.check_item(
+        exchange.render_item(item.fields, item.ask, item.body, item.touches, item.evidence), products
+    )
+    if check.item is None:
+        return Standing(NOT_FILED, None, "; ".join(check.problems), approved=held)
+    extra = {"filming_sha256": fingerprint, "filming_jobs": digests}
+    identifier = ledger.publish(
+        store,
+        item,
+        f"filming-plan-w{filming.window}",
+        filming.run,
+        now,
+        extra,
+        origin=origin(filming.product, filming.window),
+    )
+    seen[exchange.item_hash(item)] = identifier
+    if current is None:
+        return Standing(FILED, identifier, approved=held)
+    ledger.close(current, SUPERSEDED, filming.run, now, superseded_by=identifier)
+    return Standing(REPLACED, identifier, replaced=str(current["id"]), approved=held)
+
+
+def gate(filming: Filming, job: shots.Job) -> str:
+    """Why nothing may be cut from a job's footage yet, or "" once a plan the Founder approved holds the job as the
+    kit has it now: the plan is approved before filming."""
+    standing = filming.standing
+    if (job.key, job.digest()) in standing.approved:
+        return ""
+    if standing.status == DECIDED:
+        return f"the filming plan was rejected as `{standing.item}`, so nothing is cut from its footage"
+    if standing.item is None:
+        return "there is no filming plan yet"
+    if standing.approved:
+        return (
+            f"the kit changed what day {job.films} films since a filming plan was approved, and the plan"
+            f" `{standing.item}` that holds it now is not approved yet"
+        )
+    return f"the filming plan `{standing.item}` is not approved yet"
+
+
+def readiness(filming: Filming, job: shots.Job, leg: str | None) -> str:
+    """Why a day's edit cannot be cut this run, or "" when it can: its job is in an approved plan, the footage
+    place could be read and measured, and every shot has footage."""
+    inventory = filming.inventory
+    waiting = gate(filming, job)
+    if waiting:
+        return waiting
+    if inventory.status in (footage.NOT_SET, footage.FAILED):
+        return inventory.detail
+    if not filming.tooling.ok:
+        return f"the video tooling cannot be used ({filming.tooling.problem})"
+    if filming.canvas is None:
+        return filming.problem or "config/platforms.json holds no canvas"
+    missing = [shot.id for shot in job.shots if not inventory.for_shot(shot.id, leg)]
+    if missing:
+        return f"no footage yet for {'shot' if len(missing) == 1 else 'shots'} {', '.join(missing)}"
+    return ""
+
+
+def prepare(
+    repo_root: Path,
+    plan: posts.Plan,
+    where: Place,
+    ledger: Ledger,
+    store: Store,
+    areas: Areas,
+    products: Sequence[str],
+    seen: dict[str, str],
+    env: Mapping[str, str],
+    run_id: str,
+    now: datetime,
+) -> Filming:
+    """The run's filming standing, fixed before the agent starts: the plan filed or found, the footage place listed
+    and measured, and, for each calendar day due this run, whether an edit can be cut."""
+    parsed, window = plan.context.kit, plan.window.number
+    problem = ""
+    try:
+        canvas = video.load_canvas(load_json(repo_root / posts.PLATFORMS_CONFIG))
+    except (ConfigError, ValueError) as error:
+        canvas, problem = None, str(error)
+    tooling = video.find(env, canvas) if canvas is not None else video.Tooling(None, None, problem=problem)
+    edits_folder = areas.path("drafts", EDITS, f"window-{window}")
+    filming = Filming(
+        where.product,
+        window,
+        run_id,
+        where,
+        canvas,
+        tooling,
+        Standing(NOT_FILED, None, "the kit could not be read"),
+        footage.Inventory(where.path, f"window-{window}", footage.NOT_SET),
+        plan.folder,
+        edits_folder,
+        paths=dict(plan.context.paths),
+        problem=problem,
+        env=dict(env),
+    )
+    unread = [
+        f"`{plan.context.paths.get(role, role)}` ({parsed.problems[role]})" for role in ROLES if role in parsed.problems
+    ]
+    if unread:
+        filming.problem = f"the kit could not be read: {', '.join(unread)}"
+        filming.standing = Standing(NOT_FILED, None, filming.problem)
+        return filming
+    found = filming.requirements = shots.requirements(parsed, plan.context.paths["calendar"])
+    filming.unplanned = dict(found.unplanned)
+    filming.calendar_lines = [day.line for day in parsed.days.values()]
+    filming.screen_rule = shots.screen_rule(parsed.asset_checks)
+    filming.expectation = expectation(found, where.expects)
+    if found.jobs:
+        filming.standing = file_plan(filming, ledger, store, products, seen, now)
+    else:
+        filming.standing = Standing(NOT_FILED, None, "the calendar holds no day the plan can read")
+    known = {shot.id for _, shot in found.shots()}
+    filming.inventory = footage.read(where.path, window, known, tooling, env)
+    for number in parsed.days:
+        post = posts.standing_post(posts.day_entries(ledger, plan.product, window, number))
+        if post is not None:
+            filming.posted[number] = dict(post)
+    for due in plan.days:
+        number, day = due.day.day, due.day
+        filming.due[number] = bool(due.approved and due.approved.get("asset_sha256"))
+        job = found.job_for(number)
+        if job is None:
+            continue
+        why = readiness(filming, job, day.leg)
+        filming.days[number] = DayEdit(day_spec(plan.product, window, number, day.leg, job), not why, why)
+    return filming
+
+
+def day_spec(product: str, window: int, number: int, leg: str | None, job: shots.Job) -> edits.DaySpec:
+    """What one calendar day's edit must follow, from its filming job: the job's shots and length, and, for a pair
+    leg, the other leg and both Hooks of a pair whose opening the kit marks as re-cut."""
+    others = [other for other in job.days if other != number]
+    return edits.DaySpec(
+        product,
+        window,
+        number,
+        job.key,
+        leg,
+        job.pair,
+        job.recut,
+        others[0] if others else None,
+        job.length,
+        job.shots,
+        tuple(hook.text for hook in job.hooks) if job.recut else (),
+    )
+
+
+# What the agent, the run report, and the Founder are told.
+
+
+def check_command(filming: Filming, repo_root: Path) -> str:
+    """check-edits as the agent runs it, reading this run's record of the footage and of each day's standing."""
+    return f"/usr/bin/python3 {repo_root / 'src/bin/gr0wthlab'} check-edits --run {shlex.quote(filming.run)}"
+
+
+def shot_rules(shot: shots.Shot) -> str:
+    rules = [shot.kind]
+    if shot.uncut:
+        rules.append("one unbroken range, never cut")
+    rules.append("no speed change" if shot.real_time is not False else "may run at another speed")
+    return f"{shot.id} ({'; '.join(rules)})"
+
+
+def brief_lines(filming: Filming, repo_root: Path) -> list[str]:
+    lines = ["## Filming", ""]
+    if filming.problem and not filming.requirements.jobs:
+        return lines + [f"Nothing could be planned this run: {filming.problem}. Write no edit record.", ""]
+    inventory, canvas = filming.inventory, filming.canvas
+    lines += [
+        f"- Filming plan: {filming.standing.account()}. The launcher files it from the kit; never write one.",
+        f"- Video tooling: {filming.tooling.describe()}.",
+        f"- Footage place: {inventory.detail or inventory.status}. You cannot open it and need not: every file in"
+        " it is listed below with what the launcher measured.",
+    ]
+    if canvas is not None:
+        lines.append(
+            f"- A finished video is {canvas.shape} at {canvas.fps} frames a second; the launcher renders it from"
+            " your edit record, with the text of the day's post Draft drawn over it."
+        )
+    ready = [number for number, day in filming.days.items() if day.ready]
+    lines += [
+        "",
+        f"Write an edit record for each day marked ready, as `{filming.edits}/day-NN.json`, in the format the task"
+        " definition gives, and for no other day. Check them before you finish:"
+        f" `{check_command(filming, repo_root)}`.",
+        "",
+        "| Day | Shots its edit must show | Length | Footage files | Edit record |",
+        "| --- | --- | --- | --- | --- |",
+    ]
+    for number, day in sorted(filming.days.items()):
+        spec = day.spec
+        files = []
+        for shot in spec.shots:
+            for clip in inventory.for_shot(shot.id, spec.leg):
+                measured = clip.facts.describe() if clip.facts else "not measured"
+                files.append(f"`{clip.name}` for {shot.id}: {measured}")
+        if spec.other is not None:
+            where = "after its opening" if spec.recut else "from the first frame to the last"
+            pair = f"; the same source ranges as day {spec.other} {where}"
+        else:
+            pair = ""
+        state = "ready" if day.ready else f"not ready: {day.why}"
+        lines.append(
+            f"| {number} | {posts.cell('; '.join(shot_rules(shot) for shot in spec.shots))} | {span(spec.length)}{pair}"
+            f" | {posts.cell('; '.join(files) or 'none yet')} | {posts.cell(state)} |"
+        )
+    if not filming.days:
+        lines.append("| - | - | - | - | No calendar day due this run has a shot list. |")
+    lines.append("")
+    lines += [f"- Day {number} is not in the filming plan: {why}." for number, why in sorted(filming.unplanned.items())]
+    for clip in inventory.unmatched():
+        lines.append(f"- `{clip.name}` is footage of no shot ({clip.problem}); never use it.")
+    if not ready:
+        lines.append("- No day is ready for an edit record this run.")
+    return lines + [""]
+
+
+def describe_blocks(findings: Sequence[Finding]) -> str:
+    return "; ".join(finding.line() for finding in findings)
+
+
+def result_line(asset: Asset) -> str:
+    if asset.finished:
+        made = "kept from an earlier run" if asset.reused else "rendered this run"
+        return f"`{asset.path}`, {asset.facts.describe()}, {made}"
+    if asset.status == BLOCKED:
+        return describe_blocks(asset.blocks) or asset.detail
+    return asset.detail
+
+
+def report_lines(filming: Filming | None, skipped: str = "") -> list[str]:
+    lines = ["## Filming", ""]
+    if filming is None:
+        return lines + [skipped or "No active Product films, so there is no filming plan and no edit."]
+    found, inventory = filming.requirements, filming.inventory
+    if filming.problem and not found.jobs:
+        return lines + [f"Nothing could be planned this run: {filming.problem}."]
+    groups = filming.sittings()
+    lines += [
+        f"- Filming plan: {filming.standing.account()}.",
+        f"- {plural(len(found.jobs), 'asset')} to film in {plural(len(groups), 'sitting')}: "
+        + "; ".join(f"{sitting.label} ({', '.join(shot.id for _, shot in sitting.shots)})" for sitting in groups)
+        + ".",
+    ]
+    lines += [f"- {line}" for line in filming.expectation]
+    lines += [f"- Not planned: day {number}, since {why}." for number, why in found.unplanned]
+    lines.append(f"- Video tooling: {filming.tooling.describe()}.")
+    lines.append(f"- Footage place: {inventory.detail or inventory.status}.")
+    for name, why in inventory.ignored:
+        lines.append(f"- Left alone in the footage place: `{name}` ({why}).")
+    for clip in inventory.unmatched():
+        lines.append(f"- Footage of no shot: `{clip.name}` ({clip.problem}).")
+    if filming.record:
+        lines.append(f"- Every file measured and every edit checked: `{filming.record}`.")
+    if not filming.days:
+        return lines + ["", "No calendar day due this run has a shot list."]
+    lines += ["", "| Day | Shots | Edit | Detail |", "| --- | --- | --- | --- |"]
+    for number, day in sorted(filming.days.items()):
+        asset = filming.results.get(number)
+        status = asset.status if asset else (NO_EDIT if day.ready else HELD)
+        detail = result_line(asset) if asset else day.why
+        names = ", ".join(shot.id for shot in day.spec.shots)
+        lines.append(f"| {number} | {names} | {status} | {posts.cell(detail)} |")
+    return lines
+
+
+def notice_section(filming: Filming | None, day_text: str) -> tuple[int, str, str] | None:
+    """What the Founder must know of this run's edits: each one that failed a check, each shot with no footage
+    while its job's other shots have some, each file that is footage of no shot, and edits skipped for want of
+    tooling; None when there is nothing."""
+    if filming is None:
+        return None
+    lines = []
+    blocked = [asset for asset in filming.results.values() if asset.status == BLOCKED]
+    for asset in sorted(blocked, key=lambda asset: asset.day):
+        lines.append(
+            f"- Day {asset.day} has no video (`{asset.edit}`): {describe_blocks(asset.blocks) or asset.detail}"
+        )
+    inventory = filming.inventory
+    for number, day in sorted(filming.days.items()):
+        spec = day.spec
+        with_footage = [shot.id for shot in spec.shots if inventory.for_shot(shot.id, spec.leg)]
+        without = [shot.id for shot in spec.shots if shot.id not in with_footage]
+        if with_footage and without and number not in [asset.day for asset in blocked]:
+            lines.append(
+                f"- Day {number} has no video: {'shot' if len(without) == 1 else 'shots'} {', '.join(without)}"
+                f" {'has' if len(without) == 1 else 'have'} no footage, and nothing is substituted."
+            )
+    for clip in inventory.unmatched():
+        lines.append(f"- `{clip.name}` in the footage place is footage of no shot: {clip.problem}.")
+    waiting = [asset for asset in filming.results.values() if asset.held and asset.edit]
+    if waiting and not filming.tooling.ok:
+        days = listed(sorted(asset.day for asset in waiting))
+        lines.append(f"- The edit of day {days} was skipped: {filming.tooling.problem}.")
+    if not lines:
+        return None
+    title = f"{plural(len(lines), 'filming problem')} on {day_text}"
+    return len(lines), title, "These videos were not made, or these files not used:\n" + "\n".join(lines)
+
+
+def tally(filming: Filming | None) -> Tally:
+    """What the filming workflow checked and acted on: each asset planned, each footage file measured, each edit
+    record examined, the plan when this run filed it, and each video it rendered."""
+    if filming is None:
+        return Tally("filming", 0, 0, "no active Product films")
+    results = list(filming.results.values())
+    examined = [asset for asset in results if asset.edit]
+    rendered = [asset for asset in results if asset.finished and not asset.reused]
+    counts = [
+        f"{sum(1 for asset in results if asset.status == status)} {status}"
+        for status in (FINISHED, BLOCKED, HELD)
+        if any(asset.status == status for asset in results)
+    ]
+    note = (
+        f"plan {filming.standing.account()}; {plural(len(filming.requirements.jobs), 'asset')} planned,"
+        f" {plural(len(filming.inventory.clips), 'footage file')} measured"
+        + (f"; edits: {', '.join(counts)}" if counts else "")
+    )
+    return Tally(
+        "filming",
+        len(filming.requirements.jobs) + len(filming.inventory.clips) + len(examined),
+        int(filming.standing.acted) + len(rendered),
+        note,
+        "; ".join(gaps(filming)),
+    )
+
+
+def gaps(filming: Filming) -> list[str]:
+    """Why the filming output is incomplete this run: the kit or the canvas could not be read, the plan could not be
+    filed, or the footage place could not be listed. An edit that waits on footage, approval, or tooling is not a
+    gap: the report names it as not cut."""
+    found = []
+    if filming.problem:
+        found.append(filming.problem)
+    if filming.standing.status == NOT_FILED and not filming.problem:
+        found.append(f"the filming plan was not filed ({filming.standing.detail})")
+    if filming.inventory.status == footage.FAILED:
+        found.append(filming.inventory.detail)
+    return found
+
+
+def record(filming: Filming, store: Store, run_id: str, now: datetime) -> str:
+    """The run's account of filming, kept in ledger/evidence/filming/<run id>.json: the plan, every footage file it
+    measured, and what became of every due day's edit record."""
+    found = filming.requirements
+    data = {
+        "run": run_id,
+        "at": now.isoformat(),
+        "product": filming.product,
+        "window": filming.window,
+        "plan": {
+            "status": filming.standing.status,
+            "item": filming.standing.item,
+            "fingerprint": found.fingerprint() if found.jobs else None,
+            "jobs": [
+                {
+                    "key": job.key,
+                    "days": list(job.days),
+                    "angle": job.angle,
+                    "pair": job.pair,
+                    "recut": job.recut,
+                    "digest": job.digest(),
+                    "shots": [shot.as_json() for shot in job.shots],
+                }
+                for job in found.jobs
+            ],
+            "sittings": [
+                {"number": sitting.number, "setup": sitting.setup, "shots": [shot.id for _, shot in sitting.shots]}
+                for sitting in filming.sittings()
+            ],
+            "unplanned": [{"day": number, "why": why} for number, why in found.unplanned],
+            "kit_and_prd": filming.expectation,
+        },
+        "problem": filming.problem,
+        "tooling": filming.tooling.as_json(),
+        "footage": filming.as_record()["footage"],
+        "days": [
+            dict(
+                filming.results[number].summary() if number in filming.results else {"status": NO_EDIT},
+                day=number,
+                ready=day.ready,
+                why=day.why,
+            )
+            for number, day in sorted(filming.days.items())
+        ],
+    }
+    path = store.path("evidence", EVIDENCE, f"{run_id}.json")
+    store.write_json(path, data)
+    filming.record = store.relative(path)
+    return filming.record
+
+
+# Rebuilding a finished asset from its record.
+
+
+def rebuild(store: Store, relative: str, where: Path | None, env: Mapping[str, str]) -> tuple[bool, list[str]]:
+    """Render a finished asset again from its record and the footage place alone, and say whether it came out the
+    same; the footage is read as ever, and the asset is put back only where its record says it was."""
+    lines: list[str] = []
+    try:
+        path = store.path(relative)
+        made = json.loads(read_plain(path).decode("utf-8"))
+        canvas = video.Canvas(**dict(made["canvas"], font=Path(made["canvas"]["font"])))
+        target = store.path(str(made["asset"]))
+        if not is_within(target, store.path(ASSETS)):
+            raise ValueError("its asset is not under assets/")
+        overlays = [video.Overlay(**overlay) for overlay in made["overlays"]]
+        cuts = []
+        for cut in made["cuts"]:
+            if where is None or not edits.inside(str(cut["source"])):
+                raise ValueError("the footage place is not set, or a source is not inside it")
+            source = where / str(cut["source"])
+            if footage.fingerprint(source)[0] != cut["sha256"]:
+                raise ValueError(f"`{cut['source']}` is no longer the footage this asset was cut from")
+            facts = video.Facts.from_json(cut["facts"])
+            cuts.append(video.Cut(source, cut["in"], cut["out"], cut["speed"], cut["fit"], cut["mute"], facts))
+    except (ConfigError, UnsafeFile, OSError, KeyError, TypeError, ValueError) as error:
+        return False, [f"`{relative}` cannot be rebuilt: {getattr(error, 'strerror', None) or error}"]
+    tooling = video.find(env, canvas)
+    try:
+        video.render(tooling, canvas, cuts, overlays, target, env)
+        facts = video.probe(tooling, target, env)
+    except video.VideoError as error:
+        return False, [f"`{made['asset']}` was not rebuilt: {error}"]
+    problems = video.verify(facts, canvas, sum(cut.length for cut in cuts))
+    digest = footage.fingerprint(target)[0]
+    lines.append(f"`{made['asset']}` rebuilt with {tooling.version}: {facts.describe()}.")
+    lines += [f"PROBLEM {problem}" for problem in problems]
+    if digest == made["sha256"]:
+        lines.append("It is byte for byte the asset its record names.")
+    else:
+        lines.append(
+            f"Its SHA-256 is {digest}, not the {made['sha256']} its record names: it was made by {made['tooling']},"
+            " and other tooling encodes the same frames differently."
+        )
+    return not problems, lines

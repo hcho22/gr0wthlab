@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import codex, cycle, exchange, launcher, posts, probe, schedule, settings
+from . import codex, cycle, exchange, filming, launcher, posts, probe, schedule, settings
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import LEDGER, PRODUCT_REGISTRY, ConfigError, load_json, load_runtime_config, resolve_boundary
@@ -39,6 +39,16 @@ def parser() -> argparse.ArgumentParser:
         metavar="RUN_ID",
         help="the run in progress, as its brief's check-drafts command names it",
     )
+
+    edits = commands.add_parser("check-edits", help="check a run's edit records in drafts/edits/ as the launcher will")
+    edits.add_argument(
+        "--run",
+        required=True,
+        metavar="RUN_ID",
+        help="the run in progress, as its brief's check-edits command names it",
+    )
+    rebuild = commands.add_parser("rebuild-asset", help="render a finished asset again from its record and the footage")
+    rebuild.add_argument("record", help="the asset's record under ledger/, such as evidence/filming/assets/<name>.json")
 
     agent = commands.add_parser("launch-agent", help="print a LaunchAgent plist that runs the launcher on a schedule")
     agent.add_argument(
@@ -192,6 +202,63 @@ def check_drafts(run_id: str, out=sys.stdout) -> int:
     return 1 if failed else 0
 
 
+def check_edits(run_id: str, out=sys.stdout) -> int:
+    """The launcher's own checks of each edit record due in a run, for the agent to use before it finishes.
+
+    Everything is read from the record the launcher wrote for that run before the agent started: the footage it
+    listed and measured, each due day's shot list, and where each day's post stands. The footage place itself is
+    never opened here. Nothing is rendered either: the launcher renders a record that passes once the run ends, only
+    if the day's post Draft passes too, and then measures the result.
+    """
+    registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
+    # As in check_drafts: reading the areas needs no git directories.
+    boundary = resolve_boundary(
+        REPO_ROOT, load_runtime_config(REPO_ROOT), registry, dict(os.environ), Path.home(), git=[]
+    )
+    try:
+        record = Store(LEDGER_DIR).path(cycle.RUN_REPORTS, filming.record_file(run_id))
+        found = filming.from_record(json.loads(read_plain(record).decode("utf-8")))
+    except (ConfigError, OSError, UnsafeFile, ValueError) as error:
+        print(
+            f"PROBLEM the filming record of run {run_id} could not be read ({error}), so no edit record was checked;"
+            " the launcher checks every one once you finish.",
+            file=out,
+        )
+        return 1
+    areas = Areas(boundary)
+    failed = 0
+    for number, day in sorted(found.days.items()):
+        asset = found.examine(number, areas)
+        if asset.status == filming.READY:
+            print(f"OK day {number}: {asset.edit}: it passes; the launcher renders and measures it", file=out)
+        elif asset.status == filming.BLOCKED:
+            failed += 1
+            print(f"BLOCKED day {number}: {asset.edit or found.edit_path(number)}", file=out)
+            for finding in asset.blocks:
+                print(f"  - {finding.line()}", file=out)
+        elif asset.edit:
+            failed += 1
+            print(f"PROBLEM day {number}: {asset.edit} will not be cut this run: {asset.detail}", file=out)
+        elif day.ready:
+            failed += 1
+            print(f"PROBLEM day {number}: it is ready for an edit record and has none", file=out)
+        else:
+            print(f"SKIP day {number}: no edit record is due: {asset.detail}", file=out)
+    print(f"{len(found.days)} day{'' if len(found.days) == 1 else 's'} checked, {failed} with problems", file=out)
+    return 1 if failed else 0
+
+
+def rebuild_asset(record: str, env: dict[str, str], home: Path, out=sys.stdout) -> int:
+    """Render a finished asset again from its record under ledger/ and the footage place, and say how it compares."""
+    registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
+    boundary = resolve_boundary(REPO_ROOT, load_runtime_config(REPO_ROOT), registry, env, home)
+    where = filming.place(registry, boundary, env, home)
+    ok, lines = filming.rebuild(Store(LEDGER_DIR), record, where.path if where else None, env)
+    for line in lines:
+        print(line, file=out)
+    return 0 if ok else 1
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = sys.argv[1:] if argv is None else argv
     args = parser().parse_args(arguments)
@@ -215,6 +282,10 @@ def main(argv: list[str] | None = None) -> int:
             return check_incoming()
         if args.command == "check-drafts":
             return check_drafts(args.run)
+        if args.command == "check-edits":
+            return check_edits(args.run)
+        if args.command == "rebuild-asset":
+            return rebuild_asset(args.record, env, home)
         if args.command == "launch-agent":
             config = settings.load(REPO_ROOT, env, home)
             if args.boundary_check:

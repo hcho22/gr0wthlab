@@ -2,15 +2,16 @@
 
 Order: bring the production clone up to origin's main; snapshot the Go-To-Market Package; take in the Founder's
 decisions from Mandu; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests
-that need filing; plan the post Drafts from the 14-day kit (posts.prepare); brief the agent and run it inside the
-sandbox (launcher.run); queue the items it wrote to workspace/review-queue/incoming/ that pass the format, a post for
-each Draft it wrote that passes every check (posts.take), and the reviewed brand-rules proposal when it needs filing;
-write the Review Queue and the run report; commit and push workspace/ and ledger/. Every step but the agent is
-deterministic code outside the sandbox. The launcher's records live in ledger/, which the agent can read and never
-write, so nothing it does can change them; in workspace/ the launcher only restores its owner's access to entries the
-agent left without it, reads the post Drafts, and reads and removes the incoming items it takes in. One run at a time
-per checkout holds the run lock in its ledger/ from the sync to the saved records; a run started meanwhile refuses to
-start, and the next report says so.
+that need filing; plan the post Drafts from the 14-day kit (posts.prepare); file the filming plan and list and
+measure the footage place (filming.prepare); brief the agent and run it inside the sandbox (launcher.run); queue the
+items it wrote to workspace/review-queue/incoming/ that pass the format, a post for each Draft it wrote that passes
+every check, with the video cut from its edit record when it has one (posts.take), and the reviewed brand-rules
+proposal when it needs filing; write the Review Queue and the run report; commit and push workspace/ and ledger/.
+Every step but the agent is deterministic code outside the sandbox. The launcher's records live in ledger/, which the
+agent can read and never write, so nothing it does can change them; in workspace/ the launcher only restores its
+owner's access to entries the agent left without it, reads the post Drafts and the edit records, and reads and
+removes the incoming items it takes in. One run at a time per checkout holds the run lock in its ledger/ from the
+sync to the saved records; a run started meanwhile refuses to start, and the next report says so.
 """
 
 from __future__ import annotations
@@ -28,7 +29,20 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TextIO
 
-from . import dispatch, exchange, launcher, package, posts, proposals, records, report, settings, waitlist
+from . import (
+    dispatch,
+    exchange,
+    filming,
+    footage,
+    launcher,
+    package,
+    posts,
+    proposals,
+    records,
+    report,
+    settings,
+    waitlist,
+)
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
@@ -398,6 +412,8 @@ class Cycle:
         # (Weekly Reads), its items count under the Review Queue with the launcher's notices.
         outcome = state.post_outcome
         drafting = set(outcome.published if outcome else ()) | ({state.filed} if state.filed else set())
+        if state.filming is not None and state.filming.standing.acted:
+            drafting.add(state.filming.standing.item)
         proposals = sum(
             1 for entry in queued if entry["kind"] == "package-change-proposal" and entry["id"] not in drafting
         )
@@ -439,6 +455,7 @@ class Cycle:
                 or ("no reviewed Dispatch request" if ledger_ok else "none filed: the Review Queue could not be read"),
             ),
             self.post_tally(state),
+            self.filming_tally(state),
             run_state.Tally("listening", 0, 0, "not built until US-ME13"),
             run_state.Tally("outreach", 0, 0, "not built until US-ME14"),
         ]
@@ -476,6 +493,11 @@ class Cycle:
             note += "; the brand-rules proposal filed"
         return run_state.Tally("post-drafts", checked, acted, note, "; ".join(gaps))
 
+    def filming_tally(self, state: RunState) -> run_state.Tally:
+        if state.filming is None and state.filming_problem:
+            return run_state.Tally("filming", 0, 0, state.filming_problem, state.filming_problem)
+        return filming.tally(state.filming)
+
     def post_gaps(self, state: RunState) -> list[str]:
         """Why the post Drafts are incomplete this run: a kit file, the code, or the brand rules could not be used,
         a due day has no Draft, or the agent or the take-in fell short. A blocked Draft is the check working, not a
@@ -505,6 +527,8 @@ class Cycle:
         review_gap = state.review_gap()
         reading = state.waitlist
         skipped = {"waitlist-counts": reading.detail} if reading and reading.status == SKIPPED else {}
+        if state.filming is None and not state.filming_problem:
+            skipped["filming-plan"] = "no active Product films"
         own = {
             "package-snapshot": ([], f"`{state.snapshot_file}`"),
             "package-review": ([review_gap] if review_gap else [], "the agent finished its review"),
@@ -520,6 +544,10 @@ class Cycle:
                 f"`{state.waitlist_file}`",
             ),
             "post-drafts": (self.post_gaps(state), self.post_tally(state).note),
+            "filming-plan": (
+                filming.gaps(state.filming) if state.filming is not None else [state.filming_problem],
+                self.filming_tally(state).note,
+            ),
         }
         rows = []
         for key, output in config.outputs.items():
@@ -560,6 +588,55 @@ class Cycle:
             detail = f"`{code.branch}` at `{code.short}`, read at that commit for claim checks"
             state.sources.append(SourceLine(f"{code.name} repository", package.READ, detail, needs))
 
+    def prepare_filming(
+        self,
+        state: RunState,
+        config: settings.Settings,
+        where: filming.Place | None,
+        areas: Areas,
+        ledger: Ledger,
+        ledger_ok: bool,
+        products: Sequence[str],
+        seen: dict[str, str],
+    ) -> None:
+        """The run's filming standing, fixed before the agent starts: the filming plan filed or found, and the
+        footage place listed and measured, with the video tooling and the footage place as two of the run's
+        sources. Tooling that is missing is a skipped source, so its edits are skipped, never a failed run."""
+        if where is None or state.posts is None:
+            return
+        if not ledger_ok:
+            state.filming_problem = "not planned: the Review Queue could not be read"
+            return
+        try:
+            found = filming.prepare(
+                canonical(self.repo_root),
+                state.posts,
+                where,
+                ledger,
+                self.store,
+                areas,
+                products,
+                seen,
+                self.env,
+                state.run_id,
+                self.now(),
+            )
+            self.store.write_json(self.store.path(RUN_REPORTS, filming.record_file(state.run_id)), found.as_record())
+        except (ConfigError, OSError) as error:
+            state.filming_problem = f"not planned: {error}"
+            state.problems.append(f"the filming plan could not be prepared ({error})")
+            return
+        state.filming = found
+        if found.standing.acted:
+            state.published.append(str(found.standing.item))
+        needs = output_titles(config, ("filming-plan",))
+        tooling = found.tooling
+        detail = tooling.describe() if tooling.ok else f"{tooling.problem}; every edit is skipped until it can be used"
+        state.sources.append(SourceLine("Video tooling", package.READ if tooling.ok else SKIPPED, detail, needs))
+        inventory = found.inventory
+        status = {footage.READ: package.READ, footage.FAILED: package.FAILED}.get(inventory.status, SKIPPED)
+        state.sources.append(SourceLine("Footage place", status, inventory.detail, needs))
+
     def take_posts(
         self,
         state: RunState,
@@ -573,12 +650,20 @@ class Cycle:
         """Queue each Draft that passes, record every check, and file the brand-rules proposal unless it ever was."""
         if state.posts is not None:
             try:
-                state.post_outcome = posts.take(state.posts, areas, self.store, ledger, run_id, now, products)
+                state.post_outcome = posts.take(
+                    state.posts, areas, self.store, ledger, run_id, now, products, state.filming
+                )
                 state.published += state.post_outcome.published
                 posts.record(state.posts, state.post_outcome, self.store, run_id, now)
             except (OSError, ConfigError) as error:
                 state.posts_problem = f"not taken in: {error}"
                 state.problems.append(f"the post Drafts could not be taken in ({error})")
+        if state.filming is not None:
+            state.filming.settle()
+            try:
+                filming.record(state.filming, self.store, run_id, now)
+            except (OSError, ConfigError) as error:
+                state.problems.append(f"the run's filming record could not be written ({error})")
         rules = state.posts.context.rules if state.posts else None
         try:
             filing = proposals.file_once(
@@ -715,6 +800,7 @@ class Cycle:
             registry = load_json(self.repo_root / "config" / "products.json")
             folder = settings.exchange_dir(registry, boundary, self.env, self.home)
             rules = settings.waitlist(registry, boundary, self.env, self.home)
+            footage_place = filming.place(registry, boundary, self.env, self.home)
         except ConfigError as error:
             self.say(f"refusing to start: {error}")
             return launcher.EXIT_CONFIG
@@ -750,6 +836,8 @@ class Cycle:
         self.read_waitlist(state, config, rules)
         if ledger_ok:
             self.file_dispatches(state, ledger, products, seen)
+        self.prepare_posts(state, config, registry, boundary, ledger)
+        self.prepare_filming(state, config, footage_place, areas, ledger, ledger_ok, products, seen)
         state.queue_before = ledger.ordered()
         state.replaced = {str(entry["id"]): ledger.decided_replaced(entry) for entry in state.queue_before}
         state.closed_proposals = [
@@ -757,7 +845,6 @@ class Cycle:
             for entry in ledger.entries.values()
             if entry["kind"] == "package-change-proposal" and entry["status"] != OPEN
         ]
-        self.prepare_posts(state, config, registry, boundary, ledger)
         areas.ensure_folder(areas.path("review_queue", INCOMING))
         brief = self.store.path(RUN_REPORTS, f"{run_id}.brief.md")
         self.store.write_text(

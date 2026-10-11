@@ -1,5 +1,5 @@
 {
-  "description": "How each Marketing Engineer run works around the agent: its task definition, weekly schedule, the 14-day window, whether the Waitlist is live, the outputs and sources its run report accounts for, the records step that saves workspace/ and ledger/ to main, and the prices behind its approximate cost. The launcher reads this file; the agent cannot write it (G8). The exchange with Mandu: docs/mandu-exchange.md. Operating the production clone: docs/operations.md.",
+  "description": "How each Marketing Engineer run works around the agent: its task definition, weekly schedule, the 14-day window, whether the Waitlist is live, the outputs and sources its run report accounts for, the records step that saves workspace/ and ledger/ to main, and the prices behind its approximate cost. The launcher reads this file; the agent cannot write it (G8). The exchange with Mandu: docs/mandu-exchange.md. Operating the production clone: docs/operations.md. Where a Product's raw footage is: config/products.json.",
   "instruction": "src/instructions/weekly-run.md",
   "schedule": {
     "day": "sunday",
@@ -45,7 +45,7 @@
     "review-queue": {"title": "Review Queue", "story": "US-ME07", "built": true},
     "waitlist-counts": {"title": "Waitlist counts", "story": "US-ME06", "built": true},
     "post-drafts": {"title": "Post Drafts", "story": "US-ME08", "built": true},
-    "filming-plan": {"title": "Filming plan", "story": "US-ME09", "built": false},
+    "filming-plan": {"title": "Filming plan and edits", "story": "US-ME09", "built": true},
     "scheduler-drafts": {"title": "Scheduling-service drafts", "story": "US-ME10", "built": false},
     "results": {"title": "Post results", "story": "US-ME11", "built": false},
     "weekly-read": {"title": "Weekly Read memo", "story": "US-ME12", "built": false},

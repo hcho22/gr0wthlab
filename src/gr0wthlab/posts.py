@@ -7,6 +7,12 @@ post item only for a Draft that passes, so a post never reaches the Review Queue
 is blocked with every failing rule or checklist line named in the run report and a notice; an open post whose Draft
 no longer passes is withdrawn the same way. A day already approved is never asked again, and neither is a Draft the
 Founder rejected, until it changes.
+
+A day's video (US-ME09) is part of its post. When the run films, take is given the filming workflow, which turns the
+day's edit record into a finished asset once its Draft passes: the post item then shows the video file with the
+copy, an edit record that fails a check blocks the day's post like any failing Draft check, and a post queued before
+its video existed is replaced by one that shows it. A day whose copy the Founder approved before its video existed
+is offered once more, with the video, and a day approved with its video is never asked again.
 """
 
 from __future__ import annotations
@@ -108,6 +114,7 @@ class DayResult:
     sha256: str | None = None
     verdict: Verdict | None = None
     withdrawn: str | None = None  # the open item this day's blocked Draft took off the queue
+    asset: object | None = None  # filming.Asset: what became of the day's edit record, when the run films
 
 
 @dataclass
@@ -267,12 +274,23 @@ def day_entries(ledger: Ledger, product: str, window: int, number: int) -> list[
     ]
 
 
+def approved_post(entries: Sequence[dict[str, object]]) -> dict[str, object] | None:
+    """The approved post of a day: the one that shows its video when it has one, since a day's copy can be approved
+    before its video exists."""
+    approved = [entry for entry in entries if entry["status"] == APPROVED]
+    return next((entry for entry in approved if entry.get("asset_sha256")), approved[0] if approved else None)
+
+
+def standing_post(entries: Sequence[dict[str, object]]) -> dict[str, object] | None:
+    """The post of a day that stands: its open one, otherwise its approved one."""
+    return next((entry for entry in entries if entry["status"] == OPEN), None) or approved_post(entries)
+
+
 def posted_days(ledger: Ledger, product: str, window: int, days: Sequence[int]) -> dict[int, dict[str, object]]:
     """Each of the days' open or approved post, for the days that have one."""
     found = {}
     for number in days:
-        entries = day_entries(ledger, product, window, number)
-        post = next((entry for entry in entries if entry["status"] in (OPEN, APPROVED)), None)
+        post = standing_post(day_entries(ledger, product, window, number))
         if post is not None:
             found[number] = post
     return found
@@ -372,7 +390,7 @@ def prepare(
                 number,
                 slot_for(window, number),
                 next((item for item in entries if item["status"] == OPEN), None),
-                next((item for item in entries if item["status"] == APPROVED), None),
+                approved_post(entries),
                 [item for item in entries if item["status"] == REJECTED],
             )
         )
@@ -495,29 +513,51 @@ def reference_leg(plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas)
     return current, posted["status"] == APPROVED, ""
 
 
-def rejected_as(day_plan: DayPlan, draft: PostDraft) -> dict[str, object] | None:
-    """The post the Founder rejected that was queued from this very Draft, which is not asked again until it changes."""
-    return next((entry for entry in day_plan.rejected if entry.get("draft_sha256") == draft.sha256), None)
+def rejected_as(day_plan: DayPlan, draft: PostDraft, video: str | None = None) -> dict[str, object] | None:
+    """The post the Founder rejected that was queued from this very Draft, which is not asked again until it changes.
+    A post rejected with its video is asked again once the video changes too; one rejected before its video existed
+    was rejected for its copy, so no video brings it back."""
+    return next(
+        (
+            entry
+            for entry in day_plan.rejected
+            if entry.get("draft_sha256") == draft.sha256 and entry.get("asset_sha256") in (None, video)
+        ),
+        None,
+    )
 
 
-def check_day(
-    plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas, products: Sequence[str]
-) -> tuple[Verdict, exchange.Item | None]:
-    """Every check of one day's Draft, as the launcher and check-drafts both run them, and the post item a Draft that
-    passes becomes."""
+def judge(plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas) -> Verdict:
+    """Every check of one day's Draft, as the launcher and check-drafts both run them."""
     reference, approved, problem = reference_leg(plan, day_plan, draft, areas)
     verdict = evaluate(draft, plan.context, reference, day_plan.day.day, approved)
     if problem:
         verdict.block("pair-legs", problem)
+    return verdict
+
+
+def offer(
+    plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict, products: Sequence[str], asset=None
+) -> exchange.Item | None:
+    """The post item a Draft that passes becomes, with its video when the run made one; an item that does not
+    follow the item format blocks the Draft instead."""
     if not verdict.passed:
-        return verdict, None
-    item = render(plan, day_plan, draft, verdict)
+        return None
+    item = render(plan, day_plan, draft, verdict, asset)
     check = exchange.check_item(
         exchange.render_item(item.fields, item.ask, item.body, item.touches, item.evidence), products
     )
     if check.item is None:
         verdict.block("item", "; ".join(check.problems))
-    return verdict, item
+    return item
+
+
+def check_day(
+    plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas, products: Sequence[str]
+) -> tuple[Verdict, exchange.Item | None]:
+    """Every check of one day's Draft, and the post item a Draft that passes becomes, before any video."""
+    verdict = judge(plan, day_plan, draft, areas)
+    return verdict, offer(plan, day_plan, draft, verdict, products)
 
 
 def take(
@@ -528,13 +568,15 @@ def take(
     run_id: str,
     now: datetime,
     products: Sequence[str],
+    video=None,
 ) -> Outcome:
-    """Check every Draft of the run's days and queue each that passes; nothing else ever becomes a post item."""
+    """Check every Draft of the run's days and queue each that passes; nothing else ever becomes a post item.
+    video is the filming workflow when the run films: it turns a day's edit record into the asset its post shows."""
     outcome = Outcome()
     for number, why in plan.skipped:
         outcome.results.append(DayResult(number, NOT_PREPARED, why))
     for day_plan in plan.days:
-        outcome.results.append(take_day(plan, day_plan, areas, store, ledger, run_id, now, products, outcome))
+        outcome.results.append(take_day(plan, day_plan, areas, store, ledger, run_id, now, products, outcome, video))
     outcome.results.sort(key=lambda result: result.day)
     return outcome
 
@@ -549,13 +591,24 @@ def take_day(
     now: datetime,
     products: Sequence[str],
     outcome: Outcome,
+    video=None,
 ) -> DayResult:
     number = day_plan.day.day
-    if day_plan.approved:
+    approved = day_plan.approved
+    # A day approved with its video is settled. One approved before its video existed is taken up again only once
+    # it has an edit record, so the Founder can approve the video with the copy.
+    if approved and (approved.get("asset_sha256") or video is None or not video.wanted(number)):
         return DayResult(
-            number, APPROVED_BEFORE, "the Founder approved it, so it is not asked again", str(day_plan.approved["id"])
+            number, APPROVED_BEFORE, "the Founder approved it, so it is not asked again", str(approved["id"])
         )
     draft, problem = read_draft(areas, plan.draft_path(number))
+    if draft is None and approved:
+        return DayResult(
+            number,
+            APPROVED_BEFORE,
+            "the Founder approved its copy; its Draft is gone, so no video is cut for it",
+            str(approved["id"]),
+        )
     if draft is None:
         if problem:
             withdrawn = str(day_plan.open["id"]) if day_plan.open else None
@@ -563,8 +616,15 @@ def take_day(
         if day_plan.open:
             return DayResult(number, KEPT, "no new Draft; the open item stands", str(day_plan.open["id"]))
         return DayResult(number, MISSING, f"no Draft at `{areas.relative(plan.draft_path(number))}`")
-    verdict, item = check_day(plan, day_plan, draft, areas, products)
-    result = DayResult(number, BLOCKED, "", None, draft.path, draft.sha256, verdict)
+    verdict = judge(plan, day_plan, draft, areas)
+    asset = None
+    if video is not None and verdict.passed:
+        # The day's video is cut only from a Draft that passes, since its text is drawn over it; an edit record
+        # that fails a check blocks the day's post like any failing Draft check.
+        asset = video.finish(number, draft, areas, store, now)
+        verdict.blocks += asset.blocks
+    item = offer(plan, day_plan, draft, verdict, products, asset)
+    result = DayResult(number, BLOCKED, "", None, draft.path, draft.sha256, verdict, asset=asset)
     if day_plan.open and unchecked(plan):
         # The open item passed when it was queued; a source that cannot be read now does not withdraw it.
         result.status, result.item = KEPT, str(day_plan.open["id"])
@@ -574,11 +634,32 @@ def take_day(
         if day_plan.open:
             result.withdrawn = str(day_plan.open["id"])
         return result
+    shown = asset.sha256 if asset is not None and asset.finished else None
     key = {"draft": draft.path, "draft_sha256": draft.sha256, "slot": day_plan.slot}
     if day_plan.open and all(day_plan.open.get(name) == value for name, value in key.items()):
-        result.status, result.item, result.detail = KEPT, str(day_plan.open["id"]), "its Draft is unchanged and passes"
-        return result
-    rejected = rejected_as(day_plan, draft)
+        if day_plan.open.get("asset_sha256") == shown:
+            result.status, result.item = KEPT, str(day_plan.open["id"])
+            result.detail = "its Draft is unchanged and passes" + (", and so is its video" if shown else "")
+            return result
+        if asset is not None and asset.held:
+            # Its video could not be cut again this run for a reason outside the edit record, so the one it shows
+            # stands.
+            result.status, result.item = KEPT, str(day_plan.open["id"])
+            result.detail = f"its video was not cut again ({asset.detail}); the open item stands"
+            return result
+    if approved and shown is None:
+        why = asset.detail if asset is not None and asset.detail else "its video is not finished"
+        return DayResult(
+            number,
+            APPROVED_BEFORE,
+            f"the Founder approved its copy; no video is offered yet ({why})",
+            str(approved["id"]),
+            draft.path,
+            draft.sha256,
+            verdict,
+            asset=asset,
+        )
+    rejected = rejected_as(day_plan, draft, shown)
     if rejected:
         result.status, result.item = REPEATED, str(rejected["id"])
         result.detail = "the Founder rejected this Draft, so it is not asked again until it changes"
@@ -589,12 +670,19 @@ def take_day(
         )
     slug = f"post-w{plan.window.number}-day-{number:02d}"
     extra = {"draft": draft.path, "draft_sha256": draft.sha256}
+    if shown:
+        extra.update(asset.entry())
     identifier = ledger.publish(store, item, slug, run_id, now, extra)
     if day_plan.open:
         ledger.close(ledger.entries[str(day_plan.open["id"])], "superseded", run_id, now, superseded_by=identifier)
     outcome.published.append(identifier)
     result.status, result.item = QUEUED, identifier
-    result.detail = f"replaces `{day_plan.open['id']}`" if day_plan.open else ""
+    notes = [f"replaces `{day_plan.open['id']}`"] if day_plan.open else []
+    if shown:
+        notes.append("with its finished video")
+    if approved:
+        notes.append(f"its copy was approved as `{approved['id']}`")
+    result.detail = ", ".join(notes)
     return result
 
 
@@ -671,8 +759,10 @@ def checklist_lines(plan: Plan, verdict: Verdict) -> list[str]:
     return lines
 
 
-def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict) -> exchange.Item:
-    """The Review Queue item for a Draft that passed: the Draft itself, its checks, and its citations."""
+def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict, asset=None) -> exchange.Item:
+    """The Review Queue item for a Draft that passed: the Draft itself, its checks, and its citations. asset is what
+    the filming workflow made of the day's edit record, when the run films: the item then shows the finished video
+    file, or says that there is none yet and that approving it approves the copy alone."""
     day, hook, angle = day_plan.day, verdict.hook, verdict.angle
     roles = plan.context.paths
     leg = f", {day.pair} leg {day.leg}" if day.pair else ""
@@ -704,6 +794,13 @@ def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict) ->
             f"| {label} | {beat.start:g}-{beat.end:g}s | {cell(beat.visual)} | {cell(beat.spoken)}"
             f" | {cell(beat.on_screen)} |"
         )
+    if asset is not None:
+        body += [""] + asset.lines()
+        if day_plan.approved and asset.finished:
+            body.append(
+                f"- You approved this day's copy as `{day_plan.approved['id']}` before its video existed; this item"
+                " adds the video."
+            )
     first = None
     for platform in plan.context.kit.platforms:
         facts = plan.context.platforms[platform]
@@ -746,8 +843,11 @@ def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict) ->
     fields = {"kind": "post", "product": plan.product, "window": str(plan.window.number), "day": str(day.day)}
     if day_plan.slot:
         fields["slot"] = day_plan.slot
-    asset = day.asset if day.asset[1:2].isupper() else day.asset[:1].lower() + day.asset[1:]
-    ask = f"Approve day {day.day} post: {asset}"
+    if asset is not None and asset.finished:
+        fields["asset"] = asset.path
+        touches.append(f"- Its video: `{asset.path}`, in gr0wthlab's ledger, cut by `{asset.edit}`")
+    named = day.asset if day.asset[1:2].isupper() else day.asset[:1].lower() + day.asset[1:]
+    ask = f"Approve day {day.day} post: {named}"
     return exchange.Item(fields, ask[: exchange.MAX_TITLE], "\n".join(body), "\n".join(touches), "\n".join(evidence))
 
 
@@ -809,6 +909,7 @@ def record(plan: Plan, outcome: Outcome, store: Store, run_id: str, now: datetim
                 "withdrawn": result.withdrawn,
                 "draft": result.draft,
                 "draft_sha256": result.sha256,
+                "video": result.asset.summary() if result.asset is not None else None,
                 **findings_json(result.verdict),
             }
             for result in outcome.results

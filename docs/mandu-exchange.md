@@ -1,4 +1,4 @@
-# Mandu exchange, version 3
+# Mandu exchange, version 4
 
 How gr0wthlab (the Marketing Engineer) and Mandu pass the Review Queue and the Founder's decisions between them.
 Mandu's own agent builds Mandu's side from this page.
@@ -12,10 +12,12 @@ Each side writes only its own repository and only reads the other's: gr0wthlab w
 | The Review Queue | gr0wthlab | `~/gr0wthlab/ledger/review-queue/queue.json` |
 | Each item | gr0wthlab | `~/gr0wthlab/ledger/review-queue/items/<id>.md` |
 | Each run report | gr0wthlab | `~/gr0wthlab/ledger/run-reports/<run id>.md` |
+| Each finished video | gr0wthlab | `~/gr0wthlab/ledger/assets/window-<n>/day-<nn>-<recipe>.mp4` |
 | Decisions | Mandu | `~/Mandu/projects/gr0wthlab/exchange/decisions/<id>.json` |
 | Sittings | Mandu | `~/Mandu/projects/gr0wthlab/exchange/sittings/<YYYY-MM-DD>.json` |
 
 `~/gr0wthlab` is gr0wthlab's production clone; each run also pushes its outputs to `main` of `github.com/hcho22/gr0wthlab`, but Mandu reads the local files.
+A finished video is only ever a local file: it never enters git, so it is not on GitHub, and gr0wthlab can rebuild it from the Founder's footage.
 gr0wthlab finds Mandu's folder from `mandu.exchange` in gr0wthlab's `config/products.json`, and `GR0WTHLAB_EXCHANGE_DIR` overrides it on one machine.
 To move the folder, change that configuration through a gr0wthlab pull request.
 
@@ -41,7 +43,7 @@ Each item is one Markdown file, named by its identifier, holding the front matte
 
 ```markdown
 ---
-exchange: 3
+exchange: 4
 id: 20261011-trademark-status-stale
 kind: package-change-proposal
 product: RepToday
@@ -74,11 +76,15 @@ The Draft or proposal itself.
 - A post also has `window` and `day`: the number of the 14-day window and the calendar day it posts on, such as `window: 1` and `day: 3`.
   It has `slot`, its publishing time with its UTC offset, such as `2026-10-14T19:00-07:00`, once the Founder has set the window's first sitting, which its day 1 follows, and its posting slot; until then it has no slot, and its `## Draft` says so.
   A version 2 post always had a slot and no window or day.
+- A post whose video is finished also has `asset`: the video file's path under `~/gr0wthlab/ledger/`, such as `asset: assets/window-1/day-03-0a1b2c3d4e5f.mp4`.
+  Play that file for the Founder with the item, so the video and its copy are approved together.
+  A post with no `asset` has no video yet, and its `## Draft` says so: approving it approves its copy and beat plan only, and the video comes back for approval in a later post item for the same day.
 - `supersedes` names an earlier item this one replaces; the earlier one has left `open` and is never presented again.
 
 | `kind` | The section after the title | Options |
 | --- | --- | --- |
 | `post` | `## Draft` | Approve or reject |
+| `filming-plan` | `## Plan` | Approve or reject |
 | `message` | `## Draft` | Approve or reject |
 | `weekly-read-decision` | `## Recommendation` | Approve or reject |
 | `dispatch-request` | `## Request` | Approve or reject |
@@ -90,6 +96,13 @@ A notice is informational, such as a failed source or a change to the Marketing 
 A post's `## Draft` is everything the Founder needs to judge it in under a minute: the day, its Angle and pair leg, the primary platform, the slot or that none is set yet, and whether anything can be published yet (nothing can until the Waitlist is live); the frozen Hook; the video beat by beat; each platform's text, hashtags, and alt text; each behavioral claim its Draft lists with the code that supports it, and that only those were checked; and the checks it passed, with any warnings, its status against the pre-publication checklist, and the kit's own checklist lines for every asset, which are the Founder's to judge.
 Its Evidence cites the calendar row, the Angle, its sourced pain, and its pre-registered signal and kill criterion in the package.
 gr0wthlab queues a post only from a Draft that passed every check; a Draft that did not is never an item, and a notice names it with the rule that blocked it.
+Once a post's video is finished, its `## Draft` also holds a Video file block: the file's path, length, measured shape, and SHA-256, the source range of the Founder's footage each part was cut from, and the checks it passed.
+gr0wthlab offers a video only after measuring it as 9:16 at the expected resolution and checking its cuts against the shot list, and every frame of it is the Founder's footage with text drawn over it.
+A post queued before its video existed is replaced by one that shows it; a day whose copy the Founder approved before its video existed is offered once more with the video, and that item says so.
+
+A filming plan asks the Founder to approve what a 14-day window must film before any of it is filmed: the sittings, and one shot list per asset, each stating what to record, on which device, in real time or not, and what may not be cut, in the words of the Angle's Format in the package.
+gr0wthlab files it from the package, one item per window, and never asks it again once decided; a new plan replaces it, naming it in `supersedes`, only when the package changes what must be filmed.
+gr0wthlab cuts a video only from footage of a shot in a plan the Founder approved, so an undecided or rejected plan means no video.
 
 A Dispatch request asks the Founder to approve a change to the Product it names in `product`, which firstmate then builds through that Product's normal reviewed path.
 gr0wthlab never sends a Dispatch request anywhere itself.
@@ -99,7 +112,7 @@ Once the Founder approves one, Mandu hands that item, with the Founder's note if
 
 ```json
 {
-  "exchange": 3,
+  "exchange": 4,
   "updated_by_run": "20261011T230002Z-scheduled-1a2b",
   "updated_at": "2026-10-11T23:41:09+00:00",
   "run_report": "run-reports/20261011T230002Z-scheduled-1a2b.md",
@@ -132,7 +145,8 @@ Once the Founder approves one, Mandu hands that item, with the Founder's note if
 
 `next_run` is when the next weekly run is due on gr0wthlab's schedule, and every run that writes `queue.json` moves it forward.
 Once it has passed, that run was missed, started late, is still running, or was refused because another run was in progress.
-`open` is already in presentation order: posts by nearest slot first, then posts with no slot yet by window and day, then messages, Weekly Read decisions, Dispatch requests, package-change proposals, and notices, oldest first within each kind.
+`open` is already in presentation order: posts by nearest slot first, then posts with no slot yet by window and day, then the filming plan, messages, Weekly Read decisions, Dispatch requests, package-change proposals, and notices, oldest first within each kind.
+A post entry whose video is finished carries `asset`, the same path as in its item, and `asset_sha256`, the file's SHA-256.
 `carried_over` is `true` for an item that was open at an earlier sitting and left undecided, and `carried_over_from` then gives the date of the first such sitting.
 An item queued after the latest sitting is not carried over, whichever run queued it.
 `closed` lists every decided or superseded item and is history only; never present it.
@@ -145,7 +159,7 @@ One file per decided item, `decisions/<id>.json`, written once and never edited 
 
 ```json
 {
-  "exchange": 3,
+  "exchange": 4,
   "item": "20261011-trademark-status-stale",
   "decision": "reject",
   "reason": "Keep the legal line until counsel confirms the filing.",
@@ -179,7 +193,7 @@ Such a record changes nothing: a decision already taken stands, and Mandu does n
 One file per sitting, `sittings/<YYYY-MM-DD>.json`, with the minutes the Founder spent, measured by Mandu or reported by the Founder:
 
 ```json
-{"exchange": 3, "date": "2026-10-11", "minutes": 48, "note": null}
+{"exchange": 4, "date": "2026-10-11", "minutes": 48, "note": null}
 ```
 
 `minutes` is a whole number from 1 to 600, and `date` equals the file name.
@@ -187,7 +201,7 @@ Write it when the sitting ends: gr0wthlab counts an item as left undecided at th
 
 ## Rules for both sides
 
-- Every record states the exchange version its writer follows, `"exchange": 3` today, and every item states `exchange: 3`.
+- Every record states the exchange version its writer follows, `"exchange": 4` today, and every item states `exchange: 4`.
 - Versions are additive: a new version only adds record types or optional fields, so every record of an earlier version stays valid as written.
 - A reader reads every record at or below its own version, by that record's version: a field added after it is simply absent.
 - A record of a newer version than the reader knows is reported as unreadable and never guessed at.
@@ -195,6 +209,8 @@ Write it when the sitting ends: gr0wthlab counts an item as left undecided at th
 - Version 2 added `next_run` and `carried_over_from` to the queue.
 - Version 3 added a post's `window` and `day`, made its `slot` wait until the window's first sitting and posting slot are set, and added `withdrawn` to the queue.
   Mandu's own records change nothing: a decision or sitting record of version 2 reads as it is.
+- Version 4 added the `filming-plan` kind, a post's `asset`, and `asset` and `asset_sha256` in a post's queue entry.
+  Mandu's own records change nothing again: a filming plan is decided with the same decision record as any item.
 - Times carry their UTC offset; dates are `YYYY-MM-DD`.
 - Write each file whole: write a temporary file whose name starts with `.` in the same folder, then rename it; both sides ignore files whose names start with `.`.
 - Neither side ever writes, moves, or deletes a file in the other's repository.
