@@ -565,7 +565,7 @@ def render_report(state: RunState) -> str:
     if state.agent.get("agent_seconds") is not None:
         took = span_text(float(state.agent["agent_seconds"]))
         asleep = f", about {span_text(state.asleep)} of it with the Mac asleep" if state.asleep else ""
-        lines.append(f"- Agent time: {took} of a {state.time_limit} time limit{asleep}.")
+        lines.append(f"- Agent time: {took}{asleep}; time limit {state.time_limit}.")
     if state.timed_out:
         lines.append(f"- Timed out: {state.stop.describe()}.")
         lines.append(f"- Exit code: {state.agent.get('exit_code')}, the run's own for an agent stopped at its limit")

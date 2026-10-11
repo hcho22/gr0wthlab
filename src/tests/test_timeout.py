@@ -134,7 +134,7 @@ class EntryPointTest(TimeLimitTestCase):
         self.assertNotIn("- The run timed out", clean)
         self.assertNotIn("- Timed out:", clean)
         self.assertIn("| Package review (contradictions) | complete | the agent finished its review |", clean)
-        self.assertRegex(clean, rf"\n- Agent time: \d+ s of a {LIMIT} s time limit\.\n")
+        self.assertRegex(clean, rf"\n- Agent time: \d+ s; time limit {LIMIT} s\.\n")
         self.assertEqual(sorted(entry.get("day", 0) for entry in self.queue()["open"]), [0, 0, 1, 2])
         self.assertEqual(self.notices(), [queued["notice"]])
         self.assertTrue(self.lock_is_free())
@@ -173,7 +173,7 @@ class TimedOutRunTest(TimeLimitTestCase):
         self.assertIn("| Post Drafts | complete |", text)
         self.assertIn("| Package snapshot | complete |", text)
         self.assertIn("| Review Queue | complete | 1 open item |", text)
-        self.assertRegex(text, rf"\n- Agent time: \d+ s of a {LIMIT} s time limit\.\n")
+        self.assertRegex(text, rf"\n- Agent time: \d+ s; time limit {LIMIT} s\.\n")
         self.assertIn("- Timed out: 3 processes asked to stop; the process table shows none left running.", text)
         self.assertIn(f"- Exit code: {cycle.EXIT_STOPPED}, the run's own for an agent stopped at its limit", text)
         self.assertIn("- Problems this run are listed in the notice `20261011-notice-run-problems`.", text)
@@ -210,7 +210,7 @@ class TimedOutRunTest(TimeLimitTestCase):
         )
         self.assertRegex(
             text,
-            r"\n- Agent time: 3 h 0 min \d+ s of a 30 min time limit, about 3 h 0 min 0 s of it with the Mac asleep\.",
+            r"\n- Agent time: 3 h 0 min \d+ s, about 3 h 0 min 0 s of it with the Mac asleep; time limit 30 min\.",
         )
         self.assertIn("| Package review (contradictions) | incomplete | the agent was stopped at its 30 min", text)
         self.assertEqual(len(self.notices()), 1)
@@ -332,7 +332,7 @@ class TimedOutReportTest(unittest.TestCase):
 
     def test_the_agent_section_names_a_process_that_could_not_be_stopped(self):
         clean = report.render_report(self.state())
-        self.assertIn("- Agent time: 30 min 3 s of a 30 min time limit.", clean)
+        self.assertIn("- Agent time: 30 min 3 s; time limit 30 min.", clean)
         self.assertIn("- Timed out: 2 processes asked to stop; the process table shows none left running.", clean)
         self.assertIsNone(report.left_running(self.state().stop))
         left = self.state(forced=[12], left=[12])
@@ -371,10 +371,17 @@ class TimedOutReportTest(unittest.TestCase):
             slept,
         )
         self.assertIn(
-            "- Agent time: 12 min 3 s of a 30 min time limit, about 9 min 40 s of it with the Mac asleep.", slept
+            "- Agent time: 12 min 3 s, about 9 min 40 s of it with the Mac asleep; time limit 30 min.", slept
         )
         state.agent = dict(state.agent, agent_seconds=143.0 + report.ASLEEP_AT_LEAST - 1)
         self.assertNotIn("asleep", report.render_report(state))
+
+    def test_the_agent_time_line_reads_right_at_a_limit_that_starts_with_a_vowel_sound(self):
+        for seconds, limit in ((8, "8 s"), (480, "8 min"), (660, "11 min"), (1080, "18 min"), (4800, "80 min")):
+            state = self.state()
+            state.agent = dict(state.agent, time_limit_seconds=float(seconds))
+            with self.subTest(limit=limit):
+                self.assertIn(f"\n- Agent time: 30 min 3 s; time limit {limit}.\n", report.render_report(state))
 
     def test_a_notice_about_a_timed_out_run_reads_the_same_at_every_run_of_the_day(self):
         notices = []
