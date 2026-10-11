@@ -95,12 +95,16 @@ Its Evidence cites the calendar row, the Angle, its sourced pain, and its pre-re
 gr0wthlab queues a post only from a Draft that passed every check; a Draft that did not is never an item, and a notice names it with the rule that blocked it.
 
 A Beta Cohort invitation is a `message`, queued only once the Founder's Beta Build record exists (see Beta Build records).
-Its `## Draft` holds the subject and the message, the same words for everyone; the Waitlist entries it goes to, by entry identifier, in invitation order, with the rule that chose them; where recruiting stands; and the checks it passed.
+Its `## Draft` holds the subject and the message, the same words for everyone; the Waitlist entries it goes to, by entry identifier, in invitation order, with the rule that chose them; where recruiting stood at the run that queued it, which it names; and the checks it passed.
+Those figures are not brought up to date while the item waits: each run report holds the current ones.
 It holds no email address and no link: the Founder turns each entry identifier into its address on the Founder's side and sends, by whichever route the Founder chooses.
 Approving it approves that message for those entries, and gr0wthlab never offers an approved entry again; rejecting it frees its entries for a later batch.
 At most one invitation is open at a time, and the next comes only after this one is decided.
 When too few people have asked for an invitation to fill the cohort, a second `message`, the Waitlist ask, asks people who have not signed up to join; it also holds no address and no link.
+Its title states how far the pool is short of the cohort's minimum.
+While it is undecided and that figure changes, gr0wthlab replaces it, through `supersedes`, with one that states the current figure; a change of figure never brings back an ask the Founder already decided.
 gr0wthlab takes either off the queue, with `"withdrawn": true`, when its Draft stops passing the checks, when an entry in it leaves the Waitlist, or when recruiting ends.
+It takes an open Waitlist ask off the queue the same way once the cohort can reach its minimum, since nothing is left to ask for.
 
 A Dispatch request asks the Founder to approve a change to the Product it names in `product`, which firstmate then builds through that Product's normal reviewed path.
 gr0wthlab never sends a Dispatch request anywhere itself.

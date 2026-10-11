@@ -389,7 +389,7 @@ def batch_entry(batch: dict, product: str = "RepToday") -> dict:
     }
 
 
-def beta_plan(root: Path, scenario: dict, view: dict | None, state=None):
+def beta_plan(root: Path, scenario: dict, view: dict | None):
     """A run's recruiting plan for a scenario, built as the cycle builds it: the gate from the scenario's Beta Build
     record, the reading from the view, and the batches already queued. Returns the plan, the store it wrote its
     Evidence to, and the ledger."""
@@ -445,7 +445,7 @@ def beta_plan(root: Path, scenario: dict, view: dict | None, state=None):
         registry,
         resolved,
         ledger,
-        state or BetaRecruitingState(),
+        BetaRecruitingState(),
         reading,
         "evidence/waitlist/RUN.json" if read else "",
         store,

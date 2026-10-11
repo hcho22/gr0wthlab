@@ -102,6 +102,22 @@ class RecordsTest(unittest.TestCase):
         self.assertEqual(len(problems), 1)
         self.assertNotIn("jane", problems[0])
 
+    def test_a_report_whose_file_name_looks_like_an_address_is_refused_whole_and_its_name_never_repeated(self):
+        name = f"RepToday-{fakes.ADDRESS}.json"
+        data = json.dumps(fakes.beta_report("2026-10-18", accepted=3)).encode("utf-8")
+        usable, problems = beta.read_reports("RepToday", [(name, Path("/m") / name, data)])
+        self.assertEqual(usable, [])
+        self.assertEqual(
+            problems,
+            [
+                "a file in `beta-reports/` whose name is not repeated here: it holds something that looks like an"
+                " email address, so nothing in it was read or kept"
+            ],
+        )
+        misnamed = "RepToday-2026-10-17.json"
+        _, problems = beta.read_reports("RepToday", [(misnamed, Path("/m") / misnamed, data)])
+        self.assertIn("`beta-reports/RepToday-2026-10-17.json`: the file name 'RepToday-2026-10-17'", problems[0])
+
     def test_only_a_valid_record_named_for_the_product_opens_the_gate(self):
         missing = beta.read_gate("RepToday", [], [], None)
         self.assertEqual((missing.status, missing.recorded), (beta.NOT_RECORDED, False))
@@ -440,6 +456,22 @@ class DecideTest(TempCase):
         plan, _, _ = self.plan(nobody, batch_size=2, batches=[batch(1, "open", ["Qm7tLx2a", "Ka0zMn2p"])])
         self.assertEqual((plan.batch.action, plan.batch.stale, plan.batch.ended), (beta.NONE, True, False))
 
+    def test_an_open_item_that_cannot_stand_is_not_recorded_as_standing_for_check_beta_drafts(self):
+        def recorded(plan):
+            return {due["purpose"]: due["open"] for due in beta.plan_record(plan, _Areas(self.root))["drafts"]}
+
+        first = batch(1, "open", fakes.GOOD_FIT_OPT_INS[:2])
+        ask = batch(9, "open", [], beta="waitlist-ask", gap=12)
+        plan, _, _ = self.plan(batch_size=2, batches=[first, ask])
+        standing = {"draft_sha256": "0" * 64}
+        self.assertEqual(
+            recorded(plan),
+            {"beta-invitation": dict(standing, id=first["id"]), "waitlist-ask": dict(standing, id=ask["id"])},
+        )
+        gone = batch(1, "open", ["Qm7tLx2a", "Gone0000"])
+        plan, _, _ = self.plan(batch_size=2, batches=[gone, dict(ask, gap=10)])
+        self.assertEqual(recorded(plan), {"beta-invitation": None, "waitlist-ask": None})
+
     def test_recruiting_ends_at_the_founder_s_stop_or_once_the_cohort_reaches_its_maximum(self):
         stopped = dict(fakes.BETA_BUILD, recruiting="stopped", stopped_on="2026-10-10")
         plan, _, _ = self.plan(beta_build=stopped, batches=[batch(1, "open", ["Qm7tLx2a"])])
@@ -508,18 +540,24 @@ class StateTest(TempCase):
         saved = state.BetaRecruitingState.from_json(state.BetaRecruitingState(held, "a" * 64).as_json())
         self.assertEqual((saved.entries, saved.build), (held, "a" * 64))
 
-    def test_an_invited_entry_whose_item_the_queue_lost_is_never_offered_again(self):
-        previous = state.BetaRecruitingState(
-            {"Qm7tLx2a": {"status": "invited", "item": "20261004-beta-invitation-batch-01"}}
+    def test_the_review_queue_alone_says_who_is_invited_and_the_state_s_disagreement_is_noted(self):
+        item = "20261004-beta-invitation-batch-01"
+        previous = state.BetaRecruitingState({"Qm7tLx2a": {"status": "invited", "item": item}})
+        approved = Ledger([fakes.batch_entry(batch(1, "approved", ["Qm7tLx2a"]))])
+        held, notes = beta.held_entries(previous, approved.entries, "RepToday")
+        self.assertEqual((held, notes), ({"Qm7tLx2a": {"status": "invited", "item": item}}, []))
+        rejected = Ledger([fakes.batch_entry(batch(1, "rejected", ["Qm7tLx2a"]))])
+        held, notes = beta.held_entries(previous, rejected.entries, "RepToday")
+        self.assertEqual(held, {})
+        self.assertEqual(
+            notes, [f"state had `Qm7tLx2a` invited under `{item}`; the Review Queue has that item rejected"]
         )
         held, notes = beta.held_entries(previous, {}, "RepToday")
-        self.assertEqual(held["Qm7tLx2a"]["status"], "invited")
-        self.assertIn("which the Review Queue does not hold; it stays invited, so it is never offered again", notes[0])
-        plan, _, _ = fakes.beta_plan(self.root / "run", dict(SCENARIO, batch_size=2), fakes.waitlist_view(), previous)
-        self.assertEqual(plan.batch.entries, ["Ka0zMn2p", "Xf9mKa3i"])
-        offered = state.BetaRecruitingState(
-            {"Qm7tLx2a": {"status": "offered", "item": "20261004-beta-invitation-batch-01"}}
+        self.assertEqual(held, {})
+        self.assertEqual(
+            notes, [f"state had `Qm7tLx2a` invited under `{item}`; the Review Queue does not hold that item"]
         )
+        offered = state.BetaRecruitingState({"Qm7tLx2a": {"status": "offered", "item": item}})
         self.assertEqual(beta.held_entries(offered, {}, "RepToday"), ({}, []))
 
     def test_the_state_holds_identifiers_and_hashes_only(self):
@@ -535,6 +573,26 @@ class StateTest(TempCase):
                 state.BetaRecruitingState.from_json(data)
         self.assertTrue(state.BetaRecruitingState().unused)
         self.assertFalse(state.BetaRecruitingState(build="a" * 64).unused)
+
+
+class StandingTest(unittest.TestCase):
+    def standing(self, *queued):
+        entries = Ledger([fakes.batch_entry(entry) for entry in queued]).entries
+        return beta.draft_standing(beta.draft_plan(beta_drafts.INVITATION, Path("/w"), entries, "RepToday"))
+
+    def test_the_agent_is_told_the_founder_s_latest_decision_not_an_earlier_one(self):
+        rejected = batch(1, "rejected", ["Qm7tLx2a"], reason="Too formal.")
+        approved = batch(1, "approved", ["Qm7tLx2a"], on="2026-10-11", note="Good.")
+        later = batch(2, "rejected", ["Ka0zMn2p"], on="2026-10-18", reason="Not this week.")
+        self.assertEqual(self.standing(), "nothing yet")
+        self.assertEqual(self.standing(rejected), f"rejected as `{rejected['id']}`: Too formal.")
+        self.assertEqual(
+            self.standing(rejected, approved),
+            f"approved as `{approved['id']}`; rewrite the Draft only if there is a reason to. Note: Good.",
+        )
+        self.assertEqual(self.standing(rejected, approved, later), f"rejected as `{later['id']}`: Not this week.")
+        waiting = batch(2, "open", ["Ka0zMn2p"], on="2026-10-18")
+        self.assertIn(f"open as `{waiting['id']}`", self.standing(rejected, approved, waiting))
 
 
 class ItemTest(TempCase):
@@ -563,6 +621,7 @@ class ItemTest(TempCase):
             " sends nothing.",
             "by a TestFlight public link or by individual email invitation: add what your route needs when you send.",
             "> That first look is a 30-minute video call.",
+            "**Where recruiting stood when run `20261011T230000Z-on-demand-0000` queued this item**",
             "- The Founder's counts, none reported yet: invitations sent not reported, accepted not reported, sessions"
             " booked not reported.",
             "- The pool is too small to reach 20: 8 sign-ups asked for a beta invitation in all, so even if every one"

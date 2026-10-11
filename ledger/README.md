@@ -26,7 +26,7 @@ Each run's records step commits this folder to `main` together with `workspace/`
   A day due that the calendar no longer holds is named too, and its Draft is not checked.
 - `run-reports/<run id>.beta-plan.json`: which recruiting Drafts that run asked the agent for, with the fingerprints of the Drafts the Founder already rejected, written once the Founder's gate is recorded; `check-beta-drafts --run <run id>` reads it, and it never names a Waitlist entry.
 - `run-reports/state/<workflow>.json`: each workflow's run state - Review Queue items decided, those carried over with the sitting they were left undecided at, and the Mandu records already reported as unusable; Listening threads already read; outreach targets and their follow-up waits; the Waitlist entries an invitation batch holds, invited once the Founder approved the batch or offered while it is open - by identifier and hash only, never a name, address, or URL.
-  The launcher checks it every run against the Review Queue and Mandu's decision records, which win any disagreement, except that an entry the state holds as invited stays invited when the Review Queue has lost its item, so nobody is invited twice.
+  The launcher checks it every run against the Review Queue and Mandu's decision records, which win any disagreement.
   Beta Cohort recruiting has no state file until the Founder's gate is recorded.
 - `notes/<id>.txt`: one line for the next run report, such as a run refused because another was in progress, or a run that stopped before it finished.
 - `run.lock`: the lock one run holds from start to finish; it is never committed.

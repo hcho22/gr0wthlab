@@ -53,6 +53,25 @@ class BetaCycleTestCase(CycleTestCase):
     def invitation(self):
         return next(entry for entry in self.messages() if entry["beta"] == "beta-invitation")
 
+    def asks(self):
+        return [entry for entry in self.messages() if entry["beta"] == "waitlist-ask"]
+
+    def opt_in(self, count):
+        """More sign-ups that ask for a beta invitation, added to the view."""
+        view = json.loads(self.view.read_text(encoding="utf-8"))
+        start = len(view["entries"])
+        view["entries"] += [
+            {
+                "entry": f"Entry{number:03d}",
+                "source": "tiktok",
+                "fit": "lost-the-routine",
+                "beta_opt_in": True,
+                "signed_up_on": "2026-10-10",
+            }
+            for number in range(start, start + count)
+        ]
+        fakes.write_view(self.view, view)
+
     def evidence(self):
         records = sorted((self.ledger() / "evidence/beta-recruiting").glob("*.json"))
         return json.loads(records[-1].read_text(encoding="utf-8")) if records else None
@@ -278,6 +297,29 @@ class DraftChecksTest(BetaCycleTestCase):
         again = self.invitation()
         self.assertEqual((again["batch"], again["candidates"]), (1, invitation["candidates"]))
 
+    def test_a_draft_that_is_not_utf_8_is_still_checked_for_an_address_and_removed(self):
+        path = self.workspace() / fakes.INVITATION
+        path.parent.mkdir(parents=True, exist_ok=True)
+        clean = fakes.beta_draft().encode("utf-8")
+        path.write_bytes(clean + b"\xff write to " + fakes.ADDRESS.encode("utf-8") + b"\n")
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        self.assertFalse(path.exists())
+        self.assertIn(
+            "| Beta invitation | blocked | 1 failing check, listed below; the Draft file was removed, since it held"
+            " what looks like an email address |",
+            self.report(),
+        )
+        self.assertEqual(self.messages(), [])
+        self.assert_no_address_anywhere()
+        path.write_bytes(clean + b"\xff\n")
+        self.next_week()
+        self.assertTrue(path.exists())
+        self.assertIn(
+            f"| Beta invitation | blocked | `{fakes.INVITATION}` could not be read ('utf-8' codec can't decode byte",
+            self.report(),
+        )
+
     def test_check_beta_drafts_gives_the_agent_the_launcher_s_verdict(self):
         self.write(invitation=fakes.beta_draft("invitation-spot-count"), ask=fakes.beta_draft("waitlist-ask-clean"))
         launch, seen = cycle.launcher.run, []
@@ -378,6 +420,31 @@ class WeekByWeekTest(BetaCycleTestCase):
         again = self.invitation()
         self.assertEqual((again["batch"], again["candidates"]), (1, first["candidates"]))
 
+    def test_an_approval_after_a_rejection_is_the_standing_the_agent_is_told(self):
+        self.next_week()
+        first, (ask,) = self.invitation(), self.asks()
+        self.decide(first["id"], "reject", reason="Too formal for people who asked to hear from me.")
+        self.decide(ask["id"], "reject", reason="Say who it is for sooner.")
+        self.write(
+            invitation=fakes.beta_draft(old="and the beta is ready.", new="and it is ready for you."),
+            ask=fakes.beta_draft("waitlist-ask-clean", old="try it first.", new="try it before launch."),
+        )
+        self.next_week()
+        second, (again,) = self.invitation(), self.asks()
+        self.decide(second["id"], "approve")
+        self.decide(again["id"], "approve")
+        self.next_week()
+        brief = self.brief()
+        self.assertIn(f"approved as `{second['id']}`; rewrite the Draft only if there is a reason to.", brief)
+        self.assertIn(f"approved as `{again['id']}`; rewrite the Draft only if there is a reason to.", brief)
+        self.assertNotIn("rejected as", brief)
+        third = self.invitation()
+        self.assertEqual((third["batch"], third["candidates"]), (2, ["Xf9mKa3i", "Jd2wGs6u"]))
+        self.assertEqual(self.asks(), [])
+        self.assertIn(
+            f"| Waitlist ask | approved earlier | `{again['id']}`; the Founder approved this Draft", self.report()
+        )
+
     def test_a_changed_draft_replaces_the_open_invitation_with_the_same_entries(self):
         self.next_week()
         first = self.invitation()
@@ -463,6 +530,91 @@ class WeekByWeekTest(BetaCycleTestCase):
         self.assertIn("as reported on 2026-10-24: invitations sent not reported, accepted 1,", report)
         self.assertIn("| Beta Cohort recruiting | incomplete | Beta Cohort reports in Mandu could not be read", report)
         self.assert_no_address_anywhere()
+
+    def test_a_report_file_name_that_looks_like_an_address_is_never_repeated(self):
+        self.next_week()
+        folder = self.exchange / beta.REPORTS
+        fakes.write_record(folder, f"RepToday-{fakes.ADDRESS}.json", fakes.beta_report("2026-10-24", accepted=1))
+        fakes.write_record(folder, f"{fakes.ADDRESS}.txt", "notes from the sitting")
+        self.next_week()
+        report = self.report()
+        self.assertIn(
+            "| Beta Cohort reports in Mandu | failed | 1 record, 0 new; 1 could not be used: a file in"
+            " `beta-reports/` whose name is not repeated here: it holds something that looks like an email address,"
+            " so nothing in it was read or kept. |",
+            report,
+        )
+        self.assertIn(
+            "a file in `beta-reports/` whose name is not repeated here could not be used (only <name>.json record"
+            " files belong here)",
+            report,
+        )
+        self.assertIn("The Founder's counts, none reported yet", report)
+        self.assert_no_address_anywhere()
+
+    def test_an_open_waitlist_ask_is_replaced_when_its_gap_changes_and_a_decided_one_is_not_asked_again(self):
+        self.next_week()
+        (first,) = self.asks()
+        self.assertEqual(first["ask"], "Approve Waitlist ask: the pool is 12 short of a 20-person Beta Cohort")
+        self.opt_in(2)
+        self.next_week()
+        (second,) = self.asks()
+        self.assertEqual(
+            (second["supersedes"], second["ask"]),
+            (first["id"], "Approve Waitlist ask: the pool is 10 short of a 20-person Beta Cohort"),
+        )
+        text = (self.ledger() / second["file"]).read_text(encoding="utf-8")
+        self.assertIn("10 sign-ups asked for a beta invitation in all", text)
+        self.assertNotIn("12 short", text)
+        closed = {entry["id"]: entry for entry in self.queue()["closed"]}[first["id"]]
+        self.assertEqual((closed["status"], closed["superseded_by"]), ("superseded", second["id"]))
+        self.assertIn(f"| Waitlist ask | queued | `{second['id']}`; replaces `{first['id']}` |", self.report())
+        self.next_week()  # the same gap: the ask stands as it is
+        self.assertEqual([entry["id"] for entry in self.asks()], [second["id"]])
+        self.decide(second["id"], "approve")
+        self.opt_in(2)
+        self.next_week()
+        self.assertEqual(self.asks(), [])
+        report = self.report()
+        self.assertIn(f"| Waitlist ask | approved earlier | `{second['id']}`; the Founder approved this Draft", report)
+        self.assertIn("the Beta Cohort would be 8 short of 20", report)
+
+    def test_a_rejected_waitlist_ask_is_not_asked_again_for_a_new_gap(self):
+        self.next_week()
+        (first,) = self.asks()
+        self.decide(first["id"], "reject", reason="Not on my own channels yet.")
+        self.opt_in(2)
+        self.next_week()
+        self.assertEqual(self.asks(), [])
+        self.assertIn(
+            f"| Waitlist ask | not queued again | `{first['id']}`; the Founder rejected this Draft", self.report()
+        )
+
+    def test_an_open_waitlist_ask_is_withdrawn_once_the_gap_closes(self):
+        self.next_week()
+        first, (ask,) = self.invitation(), self.asks()
+        self.opt_in(12)
+        self.next_week()
+        self.assertEqual([entry["id"] for entry in self.messages()], [first["id"]])
+        closed = {entry["id"]: entry for entry in self.queue()["closed"]}[ask["id"]]
+        (notice,) = [entry for entry in self.queue()["open"] if entry["kind"] == "notice"]
+        self.assertEqual((closed["withdrawn"], closed["superseded_by"]), (True, notice["id"]))
+        why = "the Beta Cohort can now reach its minimum of 20, so the ask is no longer needed"
+        self.assertIn(
+            f"- The open `{ask['id']}` is withdrawn: {why}.\n",
+            (self.ledger() / notice["file"]).read_text(encoding="utf-8"),
+        )
+        report = self.report()
+        self.assertIn(f"| Waitlist ask | not due | {why}; the open `{ask['id']}` was withdrawn |", report)
+        self.assertNotIn("The pool is too small", report)
+        self.assertNotIn("purpose: waitlist-ask", self.brief())
+        self.assertIn(
+            f"**Where recruiting stood when run `{first['published_by_run']}` queued this item**",
+            (self.ledger() / first["file"]).read_text(encoding="utf-8"),
+        )
+        self.next_week()
+        self.assertEqual([entry["id"] for entry in self.messages()], [first["id"]])
+        self.assertEqual([entry["id"] for entry in self.queue()["open"] if entry["kind"] == "notice"], [notice["id"]])
 
     def test_the_founder_s_stop_ends_recruiting_and_withdraws_the_open_invitation(self):
         self.next_week()

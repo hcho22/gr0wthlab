@@ -19,7 +19,8 @@ copy checked against it every run.
 Recruiting goes on until the Founder reports that the cohort reached its maximum, or records a stop in Mandu. The
 only Evidence kept of what happened after a send is the three counts the Founder reports, and a count the Founder
 left out is recorded as not reported, never as zero. A pool too small to reach the cohort's minimum is reported with
-the size of the gap, and the agent is asked for the Waitlist ask that helps close it.
+the size of the gap, and the agent is asked for the Waitlist ask that helps close it. An open ask states that gap, so
+it is replaced when the gap changes and withdrawn once the gap closes.
 
 Three of these follow the recruiting patterns of the marketingskills library, considered for this story: batches
 that are throttled, a selection rule that is written down and neutral, and no invented scarcity. Its survey benchmark
@@ -141,10 +142,18 @@ def rules(registry: Mapping, config: Settings) -> Rules | None:
 # Mandu's records.
 
 
+def mandu_file(folder: str, name: str) -> str:
+    """One of Mandu's files, as a record names it. A file name is Mandu's free text, so one that looks like an
+    address is never repeated."""
+    if waitlist.looks_like_address(name):
+        return f"a file in `{folder}/` whose name is not repeated here"
+    return f"`{folder}/{name}`"
+
+
 def read_record(data: bytes, parser, stem: str) -> tuple[object | None, list[str]]:
-    """One of Mandu's records, parsed. The address check runs over the whole file first, and a record that fails it
-    is refused whole, so nothing it holds is ever repeated."""
-    if waitlist.looks_like_address(data.decode("utf-8", errors="replace")):
+    """One of Mandu's records, parsed. The address check runs over the file's name and the whole file first, and a
+    record that fails it is refused whole, so nothing it holds is ever repeated."""
+    if waitlist.looks_like_address(stem) or waitlist.looks_like_address(data.decode("utf-8", errors="replace")):
         return None, [HOLDS_ADDRESS]
     try:
         value = json.loads(data.decode("utf-8"))
@@ -264,9 +273,9 @@ def read_reports(product: str, found: Sequence[Raw]) -> tuple[list[tuple[exchang
     for name, path, data in found:
         record, issues = read_record(data, exchange.parse_beta_report, name[: -len(".json")])
         if record is None:
-            problems.append(f"`{REPORTS}/{name}`: {'; '.join(issues)}")
+            problems.append(f"{mandu_file(REPORTS, name)}: {'; '.join(issues)}")
         elif record.product != product:
-            problems.append(f"`{REPORTS}/{name}`: it names a Product whose Beta Cohort is not being recruited")
+            problems.append(f"{mandu_file(REPORTS, name)}: it names a Product whose Beta Cohort is not being recruited")
         else:
             usable.append((record, path, hashlib.sha256(data).hexdigest()))
     return sorted(usable, key=lambda found: found[0].day), problems
@@ -319,6 +328,11 @@ def keep_reports(
 # Who has been offered an invitation.
 
 
+def queue_order(entry: Mapping[str, object]) -> tuple[str, str]:
+    """Where an item stands among those queued, oldest first."""
+    return str(entry["published_at"]), str(entry["id"])
+
+
 def batches(ledger_entries: Mapping[str, Mapping[str, object]], product: str) -> list[Mapping[str, object]]:
     """Every invitation batch ever queued for the Product, oldest first."""
     found = [
@@ -326,16 +340,15 @@ def batches(ledger_entries: Mapping[str, Mapping[str, object]], product: str) ->
         for entry in ledger_entries.values()
         if entry.get("beta") == INVITATION and entry.get("product") == product
     ]
-    return sorted(found, key=lambda entry: (str(entry["published_at"]), str(entry["id"])))
+    return sorted(found, key=queue_order)
 
 
 def held_entries(
     previous: BetaRecruitingState, ledger_entries: Mapping[str, Mapping[str, object]], product: str
 ) -> tuple[dict[str, dict[str, str]], list[str]]:
     """Each entry an invitation batch holds, as the Review Queue says: invited once the Founder approved its batch,
-    offered while its batch is open. The Review Queue wins every disagreement with the run state but one: an entry
-    the state holds as invited under an item the Review Queue no longer holds stays invited, so that a lost record
-    can never invite anyone twice. Returns the entries and every such disagreement."""
+    offered while its batch is open. The Review Queue alone says who is invited; the run state is checked against
+    it. Returns the entries and every entry the state held as invited that the Review Queue does not."""
     held: dict[str, dict[str, str]] = {}
     for entry in batches(ledger_entries, product):
         approved = entry["status"] == APPROVED or entry.get("decided") == APPROVED
@@ -346,18 +359,11 @@ def held_entries(
     notes = []
     for identifier, before in sorted(previous.entries.items()):
         # An offered entry moves on with its batch in the ordinary way; only an invitation is expected to last.
-        if before["status"] != INVITED or held.get(identifier) == before:
+        if before["status"] != INVITED or held.get(identifier, {}).get("status") == INVITED:
             continue
-        item = before["item"]
-        if item not in ledger_entries:
-            held[identifier] = dict(before)
-            notes.append(
-                f"state has `{identifier}` invited under `{item}`, which the Review Queue does not hold; it stays"
-                " invited, so it is never offered again"
-            )
-        elif held.get(identifier, {}).get("status") != INVITED:
-            status = ledger_entries[item]["status"]
-            notes.append(f"state had `{identifier}` invited under `{item}`; the Review Queue has that item {status}")
+        item = ledger_entries.get(before["item"])
+        has = f"has that item {item['status']}" if item else "does not hold that item"
+        notes.append(f"state had `{identifier}` invited under `{before['item']}`; the Review Queue {has}")
     return held, notes
 
 
@@ -522,7 +528,7 @@ def draft_plan(
             for entry in ledger_entries.values()
             if entry.get("beta") == purpose and entry.get("product") == product
         ),
-        key=lambda entry: (str(entry["published_at"]), str(entry["id"])),
+        key=queue_order,
     )
     return DraftPlan(
         purpose,
@@ -623,6 +629,14 @@ class PlanError(ValueError):
     """A record that does not hold a run's recruiting plan."""
 
 
+def cannot_stand(plan: Plan, due: DraftPlan) -> bool:
+    """Whether a Draft's open item cannot stand, whatever becomes of the Draft: an open batch that holds an entry who
+    may no longer be invited, or an open ask that states a gap the pool no longer has."""
+    if due.purpose == INVITATION:
+        return plan.batch.action == REBUILD
+    return due.open is not None and due.open.get("gap") != plan.gap
+
+
 def plan_file(run_id: str) -> str:
     """The name, among the run reports, of what a run asked the agent to draft; it never holds a Waitlist entry."""
     return f"{run_id}.beta-plan.json"
@@ -630,7 +644,7 @@ def plan_file(run_id: str) -> str:
 
 def plan_record(plan: Plan, areas: Areas) -> dict[str, object]:
     """What check-beta-drafts needs to give the launcher's verdict: the Drafts due, each with the fingerprints of
-    the Drafts the Founder already rejected and of the one its open item came from."""
+    the Drafts the Founder already rejected and of the one its open item came from, when that item can stand."""
     return {
         "run": plan.run,
         "product": plan.product,
@@ -638,7 +652,9 @@ def plan_record(plan: Plan, areas: Areas) -> dict[str, object]:
             {
                 "purpose": due.purpose,
                 "path": areas.relative(due.path),
-                "open": {"id": due.open["id"], "draft_sha256": due.open.get("draft_sha256")} if due.open else None,
+                "open": {"id": due.open["id"], "draft_sha256": due.open.get("draft_sha256")}
+                if due.open and not cannot_stand(plan, due)
+                else None,
                 "rejected": [{"id": entry["id"], "draft_sha256": entry.get("draft_sha256")} for entry in due.rejected],
             }
             for due in plan.drafts
@@ -695,17 +711,24 @@ class Outcome:
 
 
 def read_draft(areas: Areas, path: Path) -> tuple[MessageDraft | None, str]:
-    """A Draft file the agent wrote, read without following links; None with the reason when there is none."""
+    """A Draft file the agent wrote, read without following links; None with the reason when there is none. As with
+    Mandu's records, the address check runs over the whole file first, whatever its bytes."""
     if not path.exists() and not path.is_symlink():
         return None, ""
     folder = areas.check(path.parent)
     if not areas.real_folder(folder):
         return None, f"`{areas.relative(folder)}` is not a real folder, so its Drafts were not read"
     try:
-        text = read_plain(path).decode("utf-8")
-    except (UnsafeFile, OSError, UnicodeDecodeError) as error:
+        data = read_plain(path)
+    except (UnsafeFile, OSError) as error:
         return None, f"`{areas.relative(path)}` could not be read ({error})"
-    return parse(text, areas.relative(path)), ""
+    draft = parse(data.decode("utf-8", errors="replace"), areas.relative(path))
+    if not draft.holds_address:
+        try:
+            data.decode("utf-8")
+        except UnicodeDecodeError as error:
+            return None, f"`{areas.relative(path)}` could not be read ({error})"
+    return draft, ""
 
 
 def rejected_as(due: DraftPlan, draft: MessageDraft) -> Mapping[str, object] | None:
@@ -735,7 +758,7 @@ def take(
 ) -> Outcome:
     """Check each Draft the run asked for and queue each that passes, the invitation with its batch attached; nothing
     else ever becomes a recruiting item. When recruiting has ended, every open recruiting item is taken off the
-    queue instead."""
+    queue instead, and so is an open Waitlist ask once the gap it asks about has closed."""
     outcome = Outcome()
     batch = plan.batch
     if batch.ended:
@@ -753,6 +776,11 @@ def take(
             outcome.results.append(DraftResult(INVITATION, NOT_DUE, batch.why, withdrawn=current))
     for due in plan.drafts:
         outcome.results.append(take_draft(plan, due, areas, store, ledger, run_id, now, products, outcome))
+    if plan.gap == 0:
+        current = draft_plan(WAITLIST_ASK, plan.folder, ledger.entries, plan.product).open
+        if current is not None:
+            why = f"the Beta Cohort can now reach its minimum of {plan.rules.minimum}, so the ask is no longer needed"
+            outcome.results.append(DraftResult(WAITLIST_ASK, NOT_DUE, why, withdrawn=str(current["id"])))
     return outcome
 
 
@@ -768,8 +796,7 @@ def take_draft(
     outcome: Outcome,
 ) -> DraftResult:
     purpose = due.purpose
-    # An open batch that holds an entry who may no longer be invited cannot stand, whatever becomes of the Draft.
-    stale = purpose == INVITATION and plan.batch.action == REBUILD
+    stale = cannot_stand(plan, due)
     current = str(due.open["id"]) if due.open else None
     draft, problem = read_draft(areas, due.path)
     if draft is None:
@@ -779,9 +806,10 @@ def take_draft(
             return DraftResult(purpose, KEPT, "no new Draft; the open item stands", current)
         if purpose == WAITLIST_ASK and due.approved:
             earlier = str(due.approved[-1]["id"])
-            return DraftResult(purpose, APPROVED_BEFORE, "the Founder approved it, so it is not asked again", earlier)
+            why = "the Founder approved it, so it is not asked again"
+            return DraftResult(purpose, APPROVED_BEFORE, why, earlier, withdrawn=current)
         where = f"no Draft at `{areas.relative(due.path)}`"
-        return DraftResult(purpose, MISSING, where, withdrawn=current if stale else None)
+        return DraftResult(purpose, MISSING, where, withdrawn=current)
     result = DraftResult(purpose, BLOCKED, "", None, draft.path, draft.sha256)
     if draft.holds_address:
         # FR-11: the file leaves the workspace before the records step can save it, and nothing in it is quoted.
@@ -933,7 +961,10 @@ def render(plan: Plan, due: DraftPlan, draft: MessageDraft, verdict: Verdict) ->
     evidence.append(
         f"- The Beta Build approval the Founder recorded: `{BUILDS}/{product}.json` in Mandu's exchange folder"
     )
-    evidence.append(f"- Where recruiting stands, with the rule and every check: `evidence/{EVIDENCE}/{plan.run}.json`")
+    evidence.append(
+        "- Where recruiting stood when this item was queued, with the rule and every check:"
+        f" `evidence/{EVIDENCE}/{plan.run}.json`"
+    )
     if plan.waitlist_file:
         evidence.append(f"- The Waitlist counts of this run: `{plan.waitlist_file}`")
     touches = [f"- Its Draft: `{draft.path}`, in gr0wthlab's workspace"]
@@ -977,7 +1008,7 @@ def render(plan: Plan, due: DraftPlan, draft: MessageDraft, verdict: Verdict) ->
         "",
         f"{waitlist.SELECTION_RULE} No entry is offered twice.",
         "",
-        "**Where recruiting stands**",
+        f"**Where recruiting stood when run `{plan.run}` queued this item**",
         "",
         f"- Beta Build approved on {plan.gate.record.approved_on}, as the Founder recorded in Mandu.",
         f"- Approved for invitation before this batch: {plural(len(invited(plan.held)), 'entry', 'entries')}.",
@@ -1082,14 +1113,14 @@ def record(plan: Plan, outcome: Outcome, store: Store, run_id: str, now: datetim
 def draft_standing(due: DraftPlan) -> str:
     if due.open:
         return f"open as `{due.open['id']}` from its Draft; rewrite the Draft only to change it"
-    if due.rejected:
-        latest = due.rejected[-1]
+    decided = sorted(due.rejected[-1:] + due.approved[-1:], key=queue_order)
+    if not decided:
+        return "nothing yet"
+    latest = decided[-1]
+    if latest in due.rejected:
         return f"rejected as `{latest['id']}`: {latest.get('reason', 'no reason recorded')}"
-    if due.approved:
-        latest = due.approved[-1]
-        note = f" Note: {latest['note']}" if latest.get("note") else ""
-        return f"approved as `{latest['id']}`; rewrite the Draft only if there is a reason to.{note}"
-    return "nothing yet"
+    note = f" Note: {latest['note']}" if latest.get("note") else ""
+    return f"approved as `{latest['id']}`; rewrite the Draft only if there is a reason to.{note}"
 
 
 def check_command(plan: Plan, repo_root: Path) -> str:

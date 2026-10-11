@@ -662,9 +662,9 @@ class Cycle:
         reports, reports_failure = None, None
         if gate.recorded:
             reports, problems, reports_failure = read_records(folder / beta.REPORTS)
-            state.problems += [
-                f"`{record.name}` could not be used ({'; '.join(record.problems)})" for record in problems
-            ]
+            for record in problems:
+                name = beta.mandu_file(beta.REPORTS, Path(record.name).name)
+                state.problems.append(f"{name} could not be used ({'; '.join(record.problems)})")
         try:
             state.beta = beta.prepare(
                 rules,
