@@ -6,7 +6,8 @@ brand-rules.json began as a lint of the Hook alone; each of its checks now runs 
 about the Hook itself. The newer rule types (stock phrases, capped words, long sentences, invented proof, and fake
 scarcity) run with whatever lists brand-rules.json holds; one it does not hold yet is reported as pending, never
 filled in from anywhere else. A key gr0wthlab does not know blocks every Draft until a reviewed change teaches it,
-so no rule in Mandu is ever skipped silently.
+so no rule in Mandu is ever skipped silently. A filming note, such as a beat's visual action, is no copy: it may
+describe real screens and numbers, so only the social-proof rule reads it.
 
 A listed word or phrase matches as whole words, whatever sets its words apart in the rule or in the text (spaces,
 hyphens, dashes, or underscores). A hashtag runs words together, so there it matches anywhere inside the tag, which
@@ -76,13 +77,15 @@ class RulesError(ValueError):
 
 @dataclass(frozen=True)
 class Copy:
-    """One field a viewer reads, named as the Founder sees it; a description, such as alt text, describes the video
-    rather than speaking to the viewer, so the sentence-length warnings skip it."""
+    """One field of a post, named as the Founder sees it; a description, such as alt text, describes the video
+    rather than speaking to the viewer, so the sentence-length warnings skip it, and a note, such as a beat's visual
+    action, is a filming note no viewer reads, so only the social-proof rule reads it."""
 
     field: str
     text: str
     hook: bool = False
     description: bool = False
+    note: bool = False
 
 
 @dataclass(frozen=True)
@@ -246,16 +249,22 @@ class Rules:
         def block(rule: str, detail: str) -> None:
             found.append(Finding(rule, copy.field, detail))
 
+        def banned(key: str, label: str) -> None:
+            for term in self.lists.get(key, ()):
+                if words_pattern(term).search(words_text):
+                    block(key, f"{label} {term!r}")
+
+        if copy.note:
+            banned("banned_social_proof_in_hook", "social proof")
+            return found
         if copy.hook and "hook_max_words" in self.numbers:
             count = len(text.split())
             if count > self.numbers["hook_max_words"]:
                 block("hook_max_words", f"the Hook has {count} words; at most {self.numbers['hook_max_words']}")
         if self.data.get("hook_must_not_be_question") and "?" in text:
             block("hook_must_not_be_question", f"asks a question: {snippet(text)!r}")
-        for key, label in (("banned_words_in_hook", "banned word"), ("banned_social_proof_in_hook", "social proof")):
-            for term in self.lists.get(key, ()):
-                if words_pattern(term).search(words_text):
-                    block(key, f"{label} {term!r}")
+        banned("banned_words_in_hook", "banned word")
+        banned("banned_social_proof_in_hook", "social proof")
         for character in self.lists.get("banned_characters_anywhere", ()):
             if character in text:
                 block("banned_characters_anywhere", f"banned character {character!r}")

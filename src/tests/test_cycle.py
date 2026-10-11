@@ -1236,6 +1236,14 @@ class PostDraftsTest(CycleTestCase):
         self.assertIn(f"is commit `{fakes.git(self.code, 'rev-parse', 'main', env=self.env)}`", brief)
         self.assertIn("- Competitors the research names, which no Draft may name: IronFit, Pulseday, Stretchly.", brief)
         self.assertIn(
+            "run on every field a viewer reads: hook_max_words, hook_must_not_be_question, banned_words_in_hook,", brief
+        )
+        self.assertIn(
+            "  Of these rules, each beat's visual action, a filming note, is read only for social-proof phrases; it is"
+            " also checked for another Hook.\n",
+            brief,
+        )
+        self.assertIn(
             f"`GR0WTHLAB_MANDU_DIR={self.mandu} GR0WTHLAB_REPTODAY_DIR={self.code} /usr/bin/python3"
             f" {self.repo}/src/bin/gr0wthlab check-drafts --run {queue['updated_by_run']}`",
             brief,

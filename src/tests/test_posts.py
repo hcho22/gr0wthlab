@@ -4,6 +4,7 @@ import json
 import os
 import tempfile
 import unittest
+from dataclasses import replace
 from datetime import date, datetime, time, timezone
 from pathlib import Path
 
@@ -174,6 +175,13 @@ class TakeTest(TakeTestCase):
         self.assertIn("`Engine/ConsistencyScore.swift:6-7` shows `value = max(floorValue, value - missPenalty)`", text)
         self.assertIn("- Angle P03, Score that dips: `projects/RepToday/gtm/05-social-pmf/angles.md` line 9", text)
         self.assertIn("- Kill criterion: Bottom quartile viewed rate on two reads:", text)
+        self.assertIn(
+            "- Brand lint (`brand-rules.json`, from Mandu) on the Hook, every spoken line and on-screen text, and each"
+            " platform's fields, with the platform limits (`config/platforms.json`): passed.\n"
+            "  Of these rules, each beat's visual action, a filming note, is read only for social-proof phrases; it is"
+            " also checked for another Hook. The rest of what it shows is yours to judge in the Video table.\n",
+            text,
+        )
         self.assertIn("no open line blocks this post", text)
         self.assertIn("  Done: line 7.\n  Open, gating other assets or none named: lines 8, 16.\n", text)
         self.assertIn(
@@ -452,6 +460,39 @@ class TakeTest(TakeTestCase):
         [reworded] = self.take(8, run="RUN4").results
         differs = f"pair-legs: differs from day 1's leg beyond the Hook (`drafts/posts/window-1/day-01.md`) {fields}"
         self.assertEqual(posts.grouped(reworded.verdict.blocks), [differs, unresolved])
+
+    def test_what_an_approved_reference_leg_s_visual_action_shows_is_read_as_this_leg_s_is(self):
+        self.write(1, fakes.draft(1))
+        [first] = self.take(1).results
+        self.ledger.close(self.ledger.entries[first.item], APPROVED, "RUN2", NOW)
+        self.write(8, fakes.draft(8))
+        unresolved = (
+            "pair-legs: day 1's leg, which this leg must match beyond the Hook, now fails {0}, so the pair cannot both"
+            " pass until the Founder resolves it by a package change or by re-cutting both legs"
+        )
+        rules, angles = self.context.rules, dict(self.context.kit.angles)
+        data = dict(rules.data)
+        data["banned_social_proof_in_hook"] = [*data["banned_social_proof_in_hook"], "tap Start"]
+        self.context.rules = lint.Rules(data)
+        [proof] = self.take(8, run="RUN3").results
+        self.assertEqual(
+            posts.grouped(proof.verdict.blocks),
+            [
+                unresolved.format("banned_social_proof_in_hook"),
+                "banned_social_proof_in_hook: social proof 'tap Start' (beat 3 visual action)",
+            ],
+        )
+        self.context.rules = rules
+        shown = "Open today's session and tap Start."
+        self.context.kit.angles["P04"] = replace(angles["P04"], hook=shown)
+        [borrowed] = self.take(8, run="RUN4").results
+        self.assertEqual(
+            posts.grouped(borrowed.verdict.blocks),
+            [
+                f"hook-isolation: carries the Hook of Angle P04: {shown!r} (beat 3 visual action)",
+                unresolved.format("hook-isolation"),
+            ],
+        )
 
     def test_a_rule_failing_text_both_drafts_can_still_change_is_not_called_the_founder_s_to_resolve(self):
         caption = "It is really just simply a list."

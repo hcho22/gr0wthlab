@@ -240,6 +240,31 @@ class EvaluateTest(DraftTestCase):
                 self.assertFalse(pattern.search(text))
         self.assertTrue(drafts.claim_pattern("works offline").search("It works   offline."))
 
+    def test_a_visual_action_is_a_filming_note_read_only_for_social_proof_and_another_hook(self):
+        clean, action = fakes.draft(3), "Open today's session and tap Start."
+        notes = (
+            "The score reads 87%.",
+            "Timelapse of the timer at 4x.",
+            "Is the START button really just simply there? Hold on it.",
+        )
+        for note in notes:
+            with self.subTest(note):
+                verdict = self.check(clean.replace(action, note))
+                self.assertEqual((verdict.blocks, verdict.warnings), ([], []))
+                as_copy = self.check(clean.replace("Real phone, real time.", note))
+                self.assertTrue({"beat 3 on-screen text"} <= {finding.field for finding in as_copy.blocks})
+        proof = self.check(clean.replace(action, "A five-star rated badge fills the screen."))
+        self.assertEqual(
+            [(finding.rule, finding.field, finding.detail) for finding in proof.blocks],
+            [("banned_social_proof_in_hook", "beat 3 visual action", "social proof 'rated'")],
+        )
+        other = fakes.KIT_DAYS[4][3]
+        borrowed = self.check(clean.replace(action, f"A title card reads: {other}"))
+        self.assertEqual(
+            [(finding.rule, finding.field, finding.detail) for finding in borrowed.blocks],
+            [("hook-isolation", "beat 3 visual action", f"carries the Hook of Angle P04: {other!r}")],
+        )
+
     def test_a_named_claim_the_video_shows_in_a_visual_action_is_carried_by_the_draft(self):
         shown = fakes.draft(1).replace(
             "Open today's session and tap Start.", "A timer overlay shows the session built in under 100 ms."

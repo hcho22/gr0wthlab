@@ -44,6 +44,10 @@ APPROVED_BEFORE = "approved earlier"
 REPEATED = "not queued again"
 NOT_PREPARED = "not prepared"
 STATUSES = (QUEUED, KEPT, BLOCKED, MISSING, APPROVED_BEFORE, REPEATED, NOT_PREPARED)
+VISUAL_ACTIONS = (
+    "  Of these rules, each beat's visual action, a filming note, is read only for social-proof phrases; it is also"
+    " checked for another Hook."
+)
 
 
 @dataclass
@@ -623,16 +627,20 @@ def excerpt(text: str, limit: int) -> str:
     return " ".join(filter(None, [kept, "...", *kit.urls(text[len(kept) :])]))
 
 
-def lint_line(plan: Plan, verdict: Verdict) -> str:
+def lint_lines(plan: Plan, verdict: Verdict) -> list[str]:
+    """What the brand lint passed and what it read, so the line never says more than was checked."""
     rules = plan.context.rules
     warnings = sorted({finding.line() for finding in verdict.warnings})
     pending = rules.pending() if rules else []
-    line = "- Brand lint (`brand-rules.json`, from Mandu) and platform limits (`config/platforms.json`): passed"
+    line = (
+        "- Brand lint (`brand-rules.json`, from Mandu) on the Hook, every spoken line and on-screen text, and each"
+        " platform's fields, with the platform limits (`config/platforms.json`): passed"
+    )
     if warnings:
         line += "; warnings: " + "; ".join(warnings)
     if pending:
         line += f"; rule types still waiting for their lists in Mandu: {', '.join(pending)}"
-    return line + "."
+    return [line + ".", VISUAL_ACTIONS + " The rest of what it shows is yours to judge in the Video table."]
 
 
 def checklist_lines(plan: Plan, verdict: Verdict) -> list[str]:
@@ -715,7 +723,7 @@ def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict) ->
     commit = plan.code.short
     body += ["", f"**Claims, checked against {plan.product} `{plan.code.branch}` at `{commit}`**", ""]
     body += [f"- {claim.text} `{claim.location}` shows `{claim.excerpt}`" for claim in draft.claims]
-    body += ["", "**Checks**", "", lint_line(plan, verdict)] + checklist_lines(plan, verdict)
+    body += ["", "**Checks**", ""] + lint_lines(plan, verdict) + checklist_lines(plan, verdict)
     touches = [
         f"- The day {day.day} post on {', '.join(plan.context.kit.platforms)},"
         f" {plan.product} window {plan.window.number}",
@@ -849,7 +857,9 @@ def rule_summary(plan: Plan) -> list[str]:
         status: [row.rule for row in statuses if row.status == status] for status in ("applied", "pending", "unknown")
     }
     lines = [
-        f"- Brand rules from `{plan.context.paths['brand_rules']}`, run on every field: {', '.join(by['applied'])}."
+        f"- Brand rules from `{plan.context.paths['brand_rules']}`, run on every field a viewer reads:"
+        f" {', '.join(by['applied'])}.",
+        VISUAL_ACTIONS,
     ]
     if by["pending"]:
         lines.append(f"  Pending, until Mandu adds their lists: {', '.join(by['pending'])}.")

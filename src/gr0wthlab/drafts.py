@@ -4,9 +4,10 @@ launcher offers it to the Founder.
 The checks follow US-ME08 and the kit in Mandu: the Draft is the calendar's day (its Angle, pair leg, and Product);
 its Hook is the frozen text, opens the video and every caption, and no other Angle's Hook appears; both platforms
 carry identical content; an A/B leg differs from its other leg only in the Hook; every field passes the brand-rules
-lint and the platform limits; no competitor is named; every behavioral claim shows the code that supports it; and
-its status against the pre-publication checklist lets it be offered. Judgment (the words themselves, and which
-claims a Draft makes) is the agent's; these checks decide only what can be decided from text.
+lint and the platform limits, and no visual action shows social proof the rules ban; no competitor is named; every
+behavioral claim shows the code that supports it; and its status against the pre-publication checklist lets it be
+offered. Judgment (the words themselves, and which claims a Draft makes) is the agent's; these checks decide only
+what can be decided from text.
 """
 
 from __future__ import annotations
@@ -82,8 +83,9 @@ class PostDraft:
     def day(self) -> int | None:
         return self.number("day")
 
-    def copies(self) -> list[Copy]:
-        """Every field a viewer reads, named as the Founder sees it."""
+    def shown(self) -> list[Copy]:
+        """Everything the post shows or says, named as the Founder sees it: every field a viewer reads, and each
+        beat's visual action, which is a filming note."""
         copies = [Copy("Hook", self.hook, hook=True)]
         for beat in self.beats:
             for key, label in (("spoken", "spoken line"), ("on_screen", "on-screen text")):
@@ -96,11 +98,7 @@ class PostDraft:
                 for name, text in values.items()
                 if not none(text)
             ]
-        return copies
-
-    def shown(self) -> list[Copy]:
-        """Everything the post shows or says: every field a viewer reads, and each beat's visual action."""
-        return self.copies() + [Copy(f"beat {beat.number} visual action", beat.visual) for beat in self.beats]
+        return copies + [Copy(f"beat {beat.number} visual action", beat.visual, note=True) for beat in self.beats]
 
 
 # Reading a Draft.
@@ -381,13 +379,13 @@ def evaluate(
     else:
         check_hook(draft, verdict.hook, context, verdict)
     opening = {norm(hook).casefold() for hook in recut_hooks(day, kit)}
-    check_isolation(draft, kit, opening, verdict)
+    verdict.add(other_hooks(draft, draft.hook, kit, opening))
     check_beats(draft, verdict)
     check_platforms(draft, context, verdict)
     if reference is not None and verdict.hook is not None:
         check_pair(draft, reference, reference_approved, context, opening, verdict)
     if context.rules is not None:
-        verdict.add(context.rules.check(draft.copies()))
+        verdict.add(context.rules.check(draft.shown()))
         check_pain(verdict.angle, context, verdict)
     check_competitors(draft, kit, context, verdict)
     check_claims(draft, context.code, verdict)
@@ -420,13 +418,15 @@ def check_hook(draft: PostDraft, hook: FrozenHook, context: Context, verdict: Ve
             verdict.block("frozen-hook", f"the {platform} {title.name.lower()} must be the Hook")
 
 
-def check_isolation(draft: PostDraft, kit: Kit, opening: Collection[str], verdict: Verdict) -> None:
-    """A Hook belongs to one Angle and one leg, so no other Hook appears anywhere in a Draft; only a later beat of a
-    re-cut pair's leg may show the pair's other Hook, one of opening, which the re-cut moves out of the first beat."""
-    own = norm(draft.hook).casefold()
+def other_hooks(draft: PostDraft, own: str, kit: Kit, opening: Collection[str]) -> list[Finding]:
+    """A Hook belongs to one Angle and one leg, so no Hook but its own appears anywhere in what a Draft shows or says,
+    a beat's visual action included; only a later beat of a re-cut pair's leg may show the pair's other Hook, one of
+    opening, which the re-cut moves out of the first beat."""
+    own = norm(own).casefold()
     angle = draft.fields.get("angle")
+    found: list[Finding] = []
     reported = set()
-    for copy in draft.copies():
+    for copy in draft.shown():
         text = norm(copy.text).casefold()
         video_after_hook = copy.field.startswith("beat ") and not copy.field.startswith("beat 1 ")
         for hook, owner in all_hooks(kit):
@@ -437,7 +437,8 @@ def check_isolation(draft: PostDraft, kit: Kit, opening: Collection[str], verdic
                 continue
             reported.add((hook, copy.field))
             whose = "another leg of this Angle" if owner == angle else f"Angle {owner}"
-            verdict.block("hook-isolation", f"carries the Hook of {whose}: {hook!r}", copy.field)
+            found.append(Finding("hook-isolation", copy.field, f"carries the Hook of {whose}: {hook!r}"))
+    return found
 
 
 def check_beats(draft: PostDraft, verdict: Verdict) -> None:
@@ -508,8 +509,9 @@ def check_pair(
     """An A/B leg differs from its reference leg only in the Hook, so every field outside the Hook matches, beat by
     beat in order: every beat at the same time in the video, the hook beat included, and every later beat with the
     same lines. A re-cut pair's opening moves the beats after it, so each of those runs for the same length of time
-    instead. Text an approved reference no longer passes a brand rule with is never inherited or waived, and no Draft
-    can change it: this leg stays blocked, naming the rule, until the Founder resolves it."""
+    instead. What an approved reference shows or says beyond its Hook is read as this leg is: where it no longer
+    passes a brand rule or carries another Hook, that is never inherited or waived, and no Draft can change it, so
+    this leg stays blocked, naming the rule, until the Founder resolves it."""
     mine, theirs = beyond_hook(draft, context, opening), beyond_hook(reference, context, opening)
 
     def differs(where: str) -> None:
@@ -543,7 +545,10 @@ def check_pair(
         for name, expected in values.items():
             if lines(mine.platforms.get(platform, {}).get(name, "")) != lines(expected):
                 differs(f"{platform} {name.lower()}")
-    failing = context.rules.check(theirs.copies()) if approved and context.rules else []
+    failing: list[Finding] = []
+    if approved:
+        failing = other_hooks(theirs, reference.hook, context.kit, opening)
+        failing += context.rules.check(theirs.shown()) if context.rules else []
     rules = sorted({finding.rule for finding in failing if finding.blocks and finding.field})
     if rules:
         verdict.block(
