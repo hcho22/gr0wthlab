@@ -7,6 +7,12 @@ read from the process table rather than assumed. A process that finishes in time
 the launcher's own session and process group, so an interrupt at the terminal and launchd's own cleanup reach it as
 before.
 
+A limit counts from the moment the process starts, on two clocks, and the process is stopped when either reaches it.
+The wall clock goes on while the Mac sleeps, so the stop of a process the Mac slept past its limit starts within CHECK
+seconds of the Mac waking; awake time cannot be set, so a wall clock set back cannot extend a limit, though one set
+forward can end it early. The short waits of a stop itself count awake time only: a process asked to stop needs
+running time to end.
+
 What a process started is found as the process table shows it: its descendants, each remembered by its process id
 and start time, and every session one of them leads, so a child left without its parent is still found. Codex starts
 each shell command in a session of its own and does not stop it when Codex itself is asked to stop.
@@ -14,11 +20,13 @@ each shell command in a session of its own and does not stop it when Codex itsel
 
 from __future__ import annotations
 
+import contextlib
 import os
 import signal
 import subprocess
+import tempfile
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import IO
 
@@ -30,6 +38,8 @@ SLOW = 300
 STOP_GRACE = 10.0
 KILL_WAIT = 5.0
 POLL = 0.1
+# How often a wait reads the clocks, so one the Mac slept past its limit ends within this long of the Mac waking.
+CHECK = 1.0
 TABLE_TIMEOUT = 10
 PS = next((path for path in ("/bin/ps", "/usr/bin/ps") if os.path.exists(path)), "ps")
 ZOMBIE = "Z"
@@ -71,15 +81,41 @@ class Stop:
 
 
 @dataclass(frozen=True)
+class Clock:
+    """The two clocks a time limit is measured on. awake counts only while the Mac is awake and cannot be set; wall is
+    the time of day, which goes on while the Mac sleeps and can be set, forward or back."""
+
+    awake: Callable[[], float] = time.monotonic
+    wall: Callable[[], float] = time.time
+
+    def start(self) -> Callable[[], tuple[float, float]]:
+        """A reading of the seconds since this call: those a time limit counts, then those of them the Mac was awake.
+        A limit counts wall-clock time, or awake time where that is more, as after the wall clock was set back."""
+        awake, wall = self.awake(), self.wall()
+
+        def taken() -> tuple[float, float]:
+            awake_for = self.awake() - awake
+            return max(self.wall() - wall, awake_for), awake_for
+
+        return taken
+
+
+CLOCK = Clock()
+
+
+@dataclass(frozen=True)
 class Completed:
     """A finished process; stop is set only when it was stopped at its time limit, and then returncode says nothing
-    about its work: Codex asked to stop exits with 0."""
+    about its work: Codex asked to stop exits with 0. seconds is how long it took as its limit counts time, a stop
+    included, and awake is how many of those seconds the Mac was awake."""
 
     returncode: int | None
     stdout: str
     stderr: str
     limit: float
     stop: Stop | None = None
+    seconds: float = 0.0
+    awake: float = 0.0
 
     @property
     def timed_out(self) -> bool:
@@ -210,34 +246,68 @@ def run(
     env: Mapping[str, str] | None = None,
     cwd: str | None = None,
     errors: str = "replace",
+    clock: Clock = CLOCK,
 ) -> Completed:
     """Run a command to its end or to its time limit in seconds, whichever comes first.
 
-    stdout and stderr are returned as text unless a file is given for them. The command reads input, or nothing: it
-    never waits on the launcher's own standard input.
+    The limit is counted on both of the clock's readings from the moment the command starts, and the command is
+    stopped when either reaches it. stdout and stderr are returned as text unless a file is given for them. The
+    command reads input, or nothing: it never waits on the launcher's own standard input.
     """
-    process = subprocess.Popen(
-        list(command),
-        stdin=subprocess.DEVNULL if input is None else subprocess.PIPE,
-        stdout=subprocess.PIPE if stdout is None else stdout,
-        stderr=subprocess.PIPE if stderr is None else stderr,
-        text=True,
-        encoding="utf-8",
-        errors=errors,
-        env=None if env is None else dict(env),
-        cwd=cwd,
-    )
+    with standard_input(input, errors) as stdin:
+        process = subprocess.Popen(
+            list(command),
+            stdin=stdin,
+            stdout=subprocess.PIPE if stdout is None else stdout,
+            stderr=subprocess.PIPE if stderr is None else stderr,
+            text=True,
+            encoding="utf-8",
+            errors=errors,
+            env=None if env is None else dict(env),
+            cwd=cwd,
+        )
+    taken = clock.start()
     try:
-        out, err = process.communicate(input, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        stopped = stop(process)
-        out, err = drain(process)
-        return Completed(process.returncode, out, err, timeout, stopped)
+        written = finish(process, timeout, taken)
     except BaseException:  # an interrupt at the terminal included, as subprocess.run handles it
         process.kill()
         process.wait()
         raise
-    return Completed(process.returncode, out or "", err or "", timeout)
+    stopped = None
+    if written is None:
+        stopped = stop(process)
+        written = drain(process)
+    out, err = written
+    seconds, awake = taken()
+    return Completed(process.returncode, out or "", err or "", timeout, stopped, seconds, awake)
+
+
+@contextlib.contextmanager
+def standard_input(text: str | None, errors: str) -> Iterator[IO[str] | int]:
+    """What a command reads: nothing, or the text as a file of its own. A wait never has to feed the command it waits
+    for, so one that reads late, or never, gets its whole input or holds nothing up."""
+    if text is None:
+        yield subprocess.DEVNULL
+        return
+    with tempfile.TemporaryFile("w+", encoding="utf-8", errors=errors) as file:
+        file.write(text)
+        file.seek(0)
+        yield file
+
+
+def finish(
+    process: subprocess.Popen, timeout: float, taken: Callable[[], tuple[float, float]]
+) -> tuple[str | None, str | None] | None:
+    """What a process wrote, once it has ended; None when its time limit passes first. The wait is made CHECK seconds
+    at a time, since no single wait counts the time the Mac sleeps."""
+    while True:
+        left = timeout - taken()[0]
+        if left <= 0:
+            return None
+        try:
+            return process.communicate(timeout=min(left, CHECK))
+        except subprocess.TimeoutExpired:
+            pass
 
 
 def drain(process: subprocess.Popen) -> tuple[str, str]:
@@ -246,7 +316,7 @@ def drain(process: subprocess.Popen) -> tuple[str, str]:
     try:
         out, err = process.communicate(timeout=KILL_WAIT)
     except (subprocess.TimeoutExpired, ValueError, OSError):
-        for pipe in (process.stdin, process.stdout, process.stderr):
+        for pipe in (process.stdout, process.stderr):
             if pipe is not None:
                 try:
                     pipe.close()

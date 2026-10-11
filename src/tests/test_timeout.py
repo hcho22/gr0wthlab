@@ -1,6 +1,7 @@
 """A run whose agent stalls still ends, at the agent's time limit, with an honest report (US-ME17)."""
 
 import fcntl
+import functools
 import json
 import shutil
 import subprocess
@@ -183,6 +184,37 @@ class TimedOutRunTest(TimeLimitTestCase):
         self.assertIn("Incomplete this run: Package review (contradictions). The next run does this work again", notice)
         self.assertEqual(exchange.check_item(notice, ["RepToday", "Immerse"], published=True).problems, [])
 
+    def test_a_run_the_mac_slept_past_its_limit_ends_once_the_mac_wakes_and_says_how_long_it_slept(self):
+        fakes.set_run(self.repo, "agent", {"time_limit_seconds": 1800})
+        fakes.behave(self.codex_dir, {"hang": True, "children": 1})
+        slept = functools.partial(cycle.launcher.run, clock=fakes.stepped_clock(3 * 3600, after=LIMIT))
+        started = time.monotonic()
+        with mock.patch.object(cycle.launcher, "run", slept):
+            code, out = self.run_cycle()
+        self.assertEqual(code, cycle.EXIT_STOPPED, out)
+        self.assertLess(time.monotonic() - started, LIMIT + process.STOP_GRACE + 30)
+
+        record = self.record()
+        self.assertEqual((record["timed_out"], record["time_limit_seconds"]), (True, 1800))
+        self.assertTrue(3 * 3600 <= record["agent_seconds"] < 3 * 3600 + 60, record["agent_seconds"])
+        self.assertTrue(LIMIT <= record["agent_awake_seconds"] < 60, record["agent_awake_seconds"])
+        self.assertTrue(fakes.all_gone(fakes.agent_pids(self.codex_dir)))
+        self.assertTrue(self.lock_is_free())
+
+        text = self.report()
+        self.assertIn("- The run timed out: the agent was still running at its 30 min time limit", text)
+        self.assertIn(
+            "- The Mac was asleep for about 3 h 0 min 0 s while the agent ran, which counts toward the agent's time"
+            " limit.",
+            text,
+        )
+        self.assertRegex(
+            text,
+            r"\n- Agent time: 3 h 0 min \d+ s of a 30 min time limit, about 3 h 0 min 0 s of it with the Mac asleep\.",
+        )
+        self.assertIn("| Package review (contradictions) | incomplete | the agent was stopped at its 30 min", text)
+        self.assertEqual(len(self.notices()), 1)
+
     def test_a_second_timed_out_run_the_same_day_does_not_queue_the_notice_twice(self):
         fakes.behave(self.codex_dir, {"hang": True})
         self.exchange.mkdir()
@@ -284,6 +316,7 @@ class TimedOutReportTest(unittest.TestCase):
             "timed_out": True,
             "time_limit_seconds": 1800.0,
             "agent_seconds": 1803.4,
+            "agent_awake_seconds": 1803.2,
             "stopped": stop,
         }
         return state
@@ -320,6 +353,28 @@ class TimedOutReportTest(unittest.TestCase):
             report.render_report(unproven),
         )
         self.assertIn("the process table could not be read", report.left_running(unproven.stop))
+
+    def test_the_report_says_the_mac_slept_while_the_agent_ran_only_when_it_did_and_for_about_how_long(self):
+        state = self.state()
+        self.assertNotIn("asleep", report.render_report(state))
+        state.agent = {
+            "agent_started": True,
+            "exit_code": 0,
+            "time_limit_seconds": 1800.0,
+            "agent_seconds": 723.0,
+            "agent_awake_seconds": 143.0,
+        }
+        slept = report.render_report(state)
+        self.assertIn(
+            "- The run finished.\n- The Mac was asleep for about 9 min 40 s while the agent ran, which counts toward"
+            " the agent's time limit.\n",
+            slept,
+        )
+        self.assertIn(
+            "- Agent time: 12 min 3 s of a 30 min time limit, about 9 min 40 s of it with the Mac asleep.", slept
+        )
+        state.agent = dict(state.agent, agent_seconds=143.0 + report.ASLEEP_AT_LEAST - 1)
+        self.assertNotIn("asleep", report.render_report(state))
 
     def test_a_notice_about_a_timed_out_run_reads_the_same_at_every_run_of_the_day(self):
         notices = []

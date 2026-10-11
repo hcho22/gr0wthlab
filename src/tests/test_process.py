@@ -96,6 +96,35 @@ class RunTest(unittest.TestCase):
         self.assertEqual(done.returncode, -signal.SIGTERM)
         self.assertLess(time.monotonic() - started, 3 + process.STOP_GRACE)
 
+    def test_a_process_the_mac_slept_past_its_limit_is_stopped_once_the_mac_wakes(self):
+        started = time.monotonic()
+        asleep = [sys.executable, "-c", "import time; time.sleep(600)"]
+        done = process.run(asleep, 1800, clock=fakes.stepped_clock(7200))
+        self.assertLess(time.monotonic() - started, 30)
+        self.assertEqual((done.timed_out, len(done.stop.asked), done.stop.left), (True, 1, ()))
+        self.assertTrue(7200 <= done.seconds < 7230 and 0 < done.awake < 30, done)
+
+    def test_a_sleep_shorter_than_the_limit_stops_nothing_and_is_told_from_the_time_awake(self):
+        done = process.run([sys.executable, "-c", "import time; time.sleep(2)"], 1800, clock=fakes.stepped_clock(600))
+        self.assertEqual((done.timed_out, done.returncode), (False, 0))
+        self.assertEqual(round(done.seconds - done.awake), 600)
+        awake = process.run([sys.executable, "-c", "pass"], 30)
+        self.assertTrue(0 <= awake.awake <= awake.seconds < 30, awake)
+        self.assertLess(awake.seconds - awake.awake, 1)
+
+    def test_a_wall_clock_set_back_cannot_extend_a_limit(self):
+        started = time.monotonic()
+        asleep = [sys.executable, "-c", "import time; time.sleep(600)"]
+        done = process.run(asleep, 3, clock=fakes.stepped_clock(-86400))
+        self.assertLess(time.monotonic() - started, 3 + process.STOP_GRACE)
+        self.assertTrue(done.timed_out)
+        self.assertTrue(3 <= done.awake == done.seconds < 3 + process.STOP_GRACE, done)
+
+    def test_a_process_that_reads_its_input_late_still_gets_all_of_it(self):
+        late = f"import sys, time; time.sleep({process.CHECK + 0.5}); print(len(sys.stdin.read()))"
+        done = process.run([sys.executable, "-c", late], 30, input="x" * 200_000)
+        self.assertEqual((done.returncode, done.stdout), (0, "200000\n"))
+
     def test_a_process_waiting_on_input_never_waits_on_the_launcher_s_own(self):
         done = process.run([sys.executable, "-c", "import sys; print(len(sys.stdin.read()))"], 30)
         self.assertEqual(done.stdout, "0\n")

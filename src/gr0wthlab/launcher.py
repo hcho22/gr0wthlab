@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import secrets
 import sys
-import time
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
@@ -108,14 +107,18 @@ def run(
     run_id: str | None = None,
     *,
     time_limit: float,
+    clock: process.Clock = process.CLOCK,
 ) -> dict[str, object]:
     """Run the agent once and return the run record; record["exit_code"] is the launcher's exit status.
 
     facts are extra header lines for the prompt, which the configuration fingerprint does not cover.
     record["agent_started"] says whether Codex itself was started, after the preflight passed.
-    time_limit is how many seconds the agent has. One still running then is stopped with everything it started:
-    record["timed_out"] is True, record["exit_code"] is EXIT_STOPPED whatever status the stopped agent left, and
-    record["stopped"] names the processes asked to stop, forced, and left running.
+    time_limit is how many seconds the agent has, by the wall clock or awake, whichever the clock shows first. One
+    still running then is stopped with everything it started: record["timed_out"] is True, record["exit_code"] is
+    EXIT_STOPPED whatever status the stopped agent left, and record["stopped"] names the processes asked to stop,
+    forced, and left running.
+    record["agent_seconds"] is the agent's wall-clock time, and record["agent_awake_seconds"] how much of it the Mac
+    was awake.
     """
     if trigger not in TRIGGERS:
         raise ConfigError(f"trigger must be one of {', '.join(TRIGGERS)}")
@@ -163,7 +166,6 @@ def run(
     )
     record.update(agent_started=True, time_limit_seconds=time_limit)
     write_json(record_path, record)
-    clock = time.monotonic()
     with (
         (log_dir / f"{run_id}.events.jsonl").open("w", encoding="utf-8") as events,
         (log_dir / f"{run_id}.stderr.log").open("w", encoding="utf-8") as errors,
@@ -176,10 +178,12 @@ def run(
             stderr=errors,
             env=resolved.environment,
             cwd=str(resolved.boundary.working_directory),
+            clock=clock,
         )
     record.update(
         exit_code=completed.returncode,
-        agent_seconds=round(time.monotonic() - clock, 1),
+        agent_seconds=round(completed.seconds, 1),
+        agent_awake_seconds=round(completed.awake, 1),
         finished_at=datetime.now(timezone.utc).isoformat(),
     )
     if completed.stop is None:

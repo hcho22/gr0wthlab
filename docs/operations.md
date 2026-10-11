@@ -110,13 +110,17 @@ Each checkout keeps its run lock (`ledger/run.lock`, never committed) and these 
 ## When a run times out
 
 Every run ends with its report, so the agent has a time limit: `agent.time_limit_seconds` in [`config/run.json`](../config/run.json), 1800 seconds (30 minutes) today.
-The 46 weekly runs recorded with the real agent took 18 to 218 seconds, so a healthy run ends long before the limit and is never touched by it.
-An agent still running at the limit, for example because its model stream stalled, is stopped with every process it started: each is asked to stop, and any still running 10 seconds later is forced.
+The limit counts wall-clock time from the moment the agent starts, the Mac's sleep included.
+Nothing keeps the Mac awake for a run, and a sleeping Mac runs nothing, so the stop of an agent the Mac slept past its limit starts within about a second of the Mac waking, not at the time of day the limit fell.
+Awake time is counted as well, and the agent is stopped at whichever count reaches the limit first, so a wall clock set back cannot extend a run; one set forward can end a run early.
+The 46 weekly runs recorded with the real agent took 18 to 218 seconds, so a healthy run on a Mac that stays awake ends long before the limit and is never touched by it.
+An agent still running at the limit, for example because its model stream stalled, is stopped with every process it started: each is asked to stop, and any still running after 10 seconds of awake time is forced.
 The launcher then reads the Mac's process table to confirm that none is left, and finishes the run as it finishes any run.
 
 What the Founder sees after a timed-out run:
 
-- The run report's summary says `The run timed out`, and its Agent section says how long the agent ran, how many processes were asked to stop or forced, and whether any is still running.
+- The run report's summary says `The run timed out`, and its Agent section says how long the agent ran by the wall clock, how many processes were asked to stop or forced, and whether any is still running.
+- If the Mac slept while the agent ran, in this or any other run, the summary and the Agent section say for about how long.
 - Each output that needed the agent, such as the package review and the post Drafts of a run with a day due, is marked incomplete with the reason; what the launcher does alone is complete as usual.
 - Whatever the agent had written is checked as always: an item or Draft that passes every check is queued, and one cut off mid-way fails its checks and is set aside or blocked, named in the report.
 - One notice in the Review Queue leads with the timeout and lists what it left incomplete; a second timed-out run the same day adds no second notice while the first is open.
@@ -125,11 +129,12 @@ What the Founder sees after a timed-out run:
 
 One timed-out run needs nothing from the Founder beyond a re-run on demand if the sitting needs the missing work.
 If healthy runs come near the limit, or runs keep timing out though the agent was working, raise `agent.time_limit_seconds` through a reviewed pull request; the report's `Agent time` line shows how long each run's agent took.
+A run that timed out because the Mac slept past the limit needs no higher limit, only a Mac that is awake for the re-run.
 The value must be above zero and at most 86400 (a day); a run refuses to start on any other value and says why.
 If the report names a process that could not be stopped, end it by hand (`kill -9 <process id>`) before the next run.
 
 There is one limit, on the agent's total time, and none on silence: Codex's event stream reports only whole steps, and the longest recorded run went 35 seconds without an event while it worked, so a long step and a stalled stream look the same from outside until the step ends.
-Every other process the launcher starts (git, Codex's version and sandbox probes, the boundary check's kernel-log query) has a fixed time limit of its own; one that passes it is stopped the same way, and the step that needed it fails with the reason.
+Every other process the launcher starts (git, Codex's version and sandbox probes, the boundary check's kernel-log query) has a fixed time limit of its own, counted on the same two clocks; one that passes it is stopped the same way, and the step that needed it fails with the reason.
 
 ## When RepToday's Waitlist build lands
 

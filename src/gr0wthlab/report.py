@@ -24,6 +24,9 @@ REVIEW_COMPLETE = "Review: complete"
 REVIEW_INCOMPLETE = "Review: incomplete"
 USAGE_FIELDS = ("input_tokens", "cached_input_tokens", "cache_write_input_tokens", "output_tokens")
 NOTICE_BODY_LIMIT = exchange.MAX_ITEM_CHARS // 2
+# Fewer seconds than this between the agent's wall-clock time and its awake time are the two clocks' own difference,
+# not the Mac asleep.
+ASLEEP_AT_LEAST = 5
 
 
 @dataclass
@@ -119,6 +122,13 @@ class RunState:
     def time_limit(self) -> str:
         """The agent's time limit in words."""
         return process.limit_text(float(self.agent.get("time_limit_seconds") or 0))
+
+    @property
+    def asleep(self) -> float:
+        """About how many seconds of the agent's time the Mac was asleep, its wall-clock time less its awake time; 0
+        when the agent did not run or the Mac stayed awake."""
+        gap = float(self.agent.get("agent_seconds") or 0) - float(self.agent.get("agent_awake_seconds") or 0)
+        return gap if gap >= ASLEEP_AT_LEAST else 0.0
 
     @property
     def stop(self) -> process.Stop:
@@ -262,9 +272,10 @@ def cost_line(state: RunState) -> str:
 
 
 def span_text(seconds: float) -> str:
-    """How long something took, in minutes and seconds."""
+    """How long something took, in hours, minutes, and seconds."""
     minutes, rest = divmod(int(round(seconds)), 60)
-    return f"{minutes} min {rest} s" if minutes else f"{rest} s"
+    hours, minutes = divmod(minutes, 60)
+    return " ".join([f"{hours} h"] * bool(hours) + [f"{minutes} min"] * bool(hours or minutes) + [f"{rest} s"])
 
 
 def left_running(stop: process.Stop) -> str | None:
@@ -478,6 +489,11 @@ def summary_lines(state: RunState) -> list[str]:
         lines.append("- The agent did not start; see Agent below. Everything the launcher does alone still ran.")
     else:
         lines.append(f"- The agent stopped with exit code {agent}; its work this run may be incomplete.")
+    if state.asleep:
+        lines.append(
+            f"- The Mac was asleep for about {span_text(state.asleep)} while the agent ran, which counts toward the"
+            " agent's time limit."
+        )
     refused = sum(1 for line in state.sources if line.status == waitlist.REFUSED)
     lines.append(
         f"- Sources: {len(failed)} failed"
@@ -547,9 +563,9 @@ def render_report(state: RunState) -> str:
     if state.agent.get("error"):
         lines.append(f"- Did not start: {state.agent['error']}")
     if state.agent.get("agent_seconds") is not None:
-        lines.append(
-            f"- Agent time: {span_text(float(state.agent['agent_seconds']))} of a {state.time_limit} time limit."
-        )
+        took = span_text(float(state.agent["agent_seconds"]))
+        asleep = f", about {span_text(state.asleep)} of it with the Mac asleep" if state.asleep else ""
+        lines.append(f"- Agent time: {took} of a {state.time_limit} time limit{asleep}.")
     if state.timed_out:
         lines.append(f"- Timed out: {state.stop.describe()}.")
         lines.append(f"- Exit code: {state.agent.get('exit_code')}, the run's own for an agent stopped at its limit")

@@ -218,6 +218,23 @@ class Clock:
         return self.moment
 
 
+def stepped_clock(step: float, after: float = 1.0):
+    """The two clocks of a Mac whose wall clock steps once it has been read for `after` seconds: forward by `step`
+    seconds, as it reads when the Mac wakes from that long a sleep, or back, as when it is set back. Awake time is
+    real."""
+    from gr0wthlab import process
+
+    first = None
+
+    def wall() -> float:
+        nonlocal first
+        now = time.monotonic()
+        first = now if first is None else first
+        return time.time() + (step if now - first >= after else 0)
+
+    return process.Clock(time.monotonic, wall)
+
+
 SUNDAY_RUN = datetime(2026, 10, 11, 23, 0, tzinfo=timezone.utc)
 
 
