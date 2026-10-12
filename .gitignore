@@ -2,3 +2,4 @@ __pycache__/
 /ledger/run.lock
 # Finished video: rebuilt from the footage and its record in ledger/evidence/filming/, never committed.
 /ledger/assets/
+/ledger/working/

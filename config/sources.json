@@ -1,0 +1,23 @@
+{
+  "description": "The fixed list of sources the launcher reads over the network, outside the sandbox, at each run: the places Listening hears from (US-ME13). The launcher reads this file and the agent cannot write it (G8). Every address here is on a host listed in config/guardrails/fetch.json, is read with one credential-free GET, and only where that host's robots.txt allows it; a source that cannot be read is reported with its reason and its workflow is marked incomplete. Which competitors' reviews are read comes from the package's research in Mandu, never from here; the addresses are platform facts, not strategy.",
+  "product": "RepToday",
+  "listening": {
+    "subreddits": ["fitness30plus", "bodyweightfitness", "getdisciplined"],
+    "reddit": {
+      "threads": "https://www.reddit.com/r/{subreddit}/new/.rss",
+      "rules": "https://www.reddit.com/r/{subreddit}/about/rules.json",
+      "rules_page": "https://www.reddit.com/r/{subreddit}/about/rules",
+      "note": "threads is each subreddit's public feed of its newest posts; rules is the rule list the package's research cites. rules_page is the page a person opens, shown to the Founder and never requested."
+    },
+    "app_store": {
+      "country": "us",
+      "reviews": "https://itunes.apple.com/{country}/rss/customerreviews/page=1/id={id}/sortby=mostrecent/json",
+      "reviews_page": "https://apps.apple.com/{country}/app/id{id}?see-all=reviews",
+      "max_apps": 12,
+      "note": "reviews is Apple's public feed of an app's most recent customer reviews. The apps are the competitors the research in Mandu names (the files the Product registry's post_drafts.competitors covers), each by the first App Store page its own section cites; a competitor whose section cites none is reported as skipped. reviews_page is the page a person opens, shown with each quote and never requested."
+    },
+    "max_documents_per_source": 25,
+    "max_document_chars": 2000,
+    "limits_note": "The newest documents of each source are kept, each cut to max_document_chars; a quote is checked against exactly the text kept."
+  }
+}

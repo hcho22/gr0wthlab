@@ -53,4 +53,6 @@ Group every file with the same stale fact into one proposal; a different stale f
   Where a file's wording is a rule (for example a required legal line), propose the replacement rule rather than deleting it.
   Propose wording that claims exactly what the current record says and nothing more; a status the record does not state, such as a registration, is never implied.
 - Evidence: at least one line for each side, each with its file path in backticks and the line number.
+- Declaration: `new_angle: no` for a fix that only brings stale text in line with the record, even when that text sits in the Angle bank or the A/B pairs file.
+  Declare `new_angle: yes` only when the proposal would add an Angle or Hook, or change a Hook, signal, or kill criterion; that one needs sourced pain, as the task definition says.
 - Keep it decidable in under a minute.

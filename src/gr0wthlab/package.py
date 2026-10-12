@@ -23,6 +23,7 @@ SNAPSHOT_FORMAT = 1
 READ = "read"
 CHANGED = "changed"
 FAILED = "failed"
+SKIPPED = "skipped"
 
 
 @dataclass(frozen=True)

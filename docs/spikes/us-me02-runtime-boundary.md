@@ -85,6 +85,7 @@ With network on, the file grants would not be the whole boundary: in review, `co
 Any local service that accepted a request from a run would act for it outside the sandbox, so the write boundary would rest on every such service refusing.
 With network off, the kernel refuses those connections (`deny(1) network-outbound`), and the boundary check tests it.
 A later story that needs network, such as Listening, YouTube read access, or scheduler drafts, must enable it only through Codex's `network_proxy` domain allow-list for its specific hosts, keep local sockets and localhost unreachable, and re-run the boundary check.
+Listening did not need it: the launcher fetches for the agent, outside the sandbox (see the re-check after Listening and outreach below).
 
 ## Refused-write evidence
 
@@ -401,6 +402,298 @@ Nothing in the process table ties such a process to the agent, so the stop does 
 This is not particular to a timed-out run: in `20261011T183552Z-on-demand-5ac3` the agent started `/bin/sleep 621` the same way and the run ended with exit code 0 after 17 seconds; the launcher stopped nothing, and the process was still running 15 seconds later.
 A plain background job (`nohup sleep 617 >/dev/null 2>&1 &`, run `20261011T181728Z-on-demand-a19e`) left nothing: no reading of the process table during or after that run showed it.
 
+### Re-check after Listening and outreach (US-ME13, US-ME14)
+
+Listening and outreach are the runtime's first use of the network and its first untrusted input, so this change touches the boundary itself.
+The tighter of the two designs held: the sandboxed agent never needed the network, so it still has none, and Codex's `network_proxy` is not used.
+`runtime.json` is unchanged, the launcher still passes `permissions.gr0wthlab.network.enabled=false`, and the permission profile, the Codex flags, and the environment are as they were.
+
+What is new sits outside the sandbox.
+The launcher itself now reads a fixed list of sources (`config/sources.json`) before the agent starts, through one client (`src/gr0wthlab/fetch.py`) whose rules are `config/guardrails/fetch.json` and its own code: a credential-free GET over HTTPS on port 443 to a listed host and to no other, each host's `robots.txt` read first and binding, a bounded number of spaced requests, and a redirect followed only to a listed host.
+It writes what it read into one snapshot in `ledger/`, which the agent can read and never write, and every request it was asked to make, sent or not, into the run's request log.
+`src/tests/test_fetch.py` holds the contract by behavior: what the client puts on the wire is one GET with no body, cookie, or credential, and a path a `robots.txt` disallows is never requested.
+No unit test can open a connection beyond the machine, since `src/tests/__init__.py` refuses one at the socket, so the whole runs under test show that nothing but this client reaches for the network.
+`config/products.json` gained one package source and the package files Listening and outreach read.
+
+Two proofs were added to what every run and the boundary check already did.
+Every run's preflight now also tries each listed host from inside the sandbox, with no model, and stops the run before the agent starts if one is reachable.
+The boundary check proves the network from both sides: a control outside the sandbox shows the probe can open a connection to the check's own listener, the same probe inside the sandbox must reach neither that listener nor any listed host, a kernel Seatbelt denial must name each of those attempts by its process, and the launcher's client must send nothing but a GET to listed hosts and refuse an address outside the list before anything is sent.
+
+Both checks were run on 2026-10-11 with Codex CLI 0.160.0, from a linked worktree on the code as committed, whose configuration fingerprint is `f92a4c4aa4b29adbef9c716c4582e96810cdd2b4ea574a7ee1fd73ef51dc0747`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached none of the three listed hosts (`www.reddit.com`, `itunes.apple.com`, `www.youtube.com`) from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261011T170146Z-on-demand-8ae0`: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox all four targets were refused, and the kernel named each attempt, the listener's as `network-outbound remote:*:<port>` and each host's as `network-outbound /private/var/run/mDNSResponder`, since the sandbox refuses even the name lookup; the launcher's client sent three requests, each a GET for a listed host's `robots.txt`, and refused `https://example.com/` unsent.
+
+The same check passed on the first feature commit as run `20261011T164442Z-on-demand-24ff`.
+One attempt before it does not count: run `20261011T164318Z-on-demand-bc98`, from a throwaway clone under `/private/tmp`, passed the network proof the same way but failed, correctly, on the patch rejections (three of nine), because the agent shortened that clone's very long path in several of its file-tool attempts.
+
+The stories' Validation Tests were then run live through the launcher on demand, against Mandu and RepToday (`main` at `de0355d`) as they are, with a throwaway exchange folder standing in for Mandu's.
+
+| Run | What it showed |
+| --- | --- |
+| `20261011T164542Z-on-demand-3900` | The weekly run as configured: three requests left the Mac, each a GET for a listed host's `robots.txt`, and all 21 source requests (the three subreddits' threads and rules, reviews of the 12 competitors the research cites a store page for, and the three creators' feeds) were refused unsent, since each host's `robots.txt` disallows the path. Every source was reported as failed with that reason, one notice named them, Listening and the outreach Drafts were marked incomplete, and the agent recorded nothing from memory. Two creator messages were queued, each saying "No hook found" and why; the personal-network ask and the third creator message were blocked, on a front matter value and on a code citation. |
+| `20261011T165257Z-on-demand-9bb9` | A proposed Angle with no source, placed in `workspace/review-queue/angles/`, with a throwaway task definition that only runs `check-work`: the launcher discarded it with a note in the run report, set it aside, and queued nothing from it. |
+| `20261011T165333Z-on-demand-9de5` | Simulated records: both creator messages approved, one recorded as sent with no reply, one as sent and answered, and two proposals rejected with reasons. One follow-up was queued, for the creator who had not replied; none was offered for the one who replied or the one never written to. Both reasons were coded, one execution and one strategy, and kept beside the Founder's words. |
+| `20261011T165657Z-on-demand-9a05` | The personal-network ask was queued with the Source link `reptoday.app/network`, the line to forward, and the warning not to send before the Waitlist is live, and the third creator message was queued. Follow-up Drafts placed for the creator who replied and the one not yet approved were not offered. The strategy reason was answered by a package-change proposal citing its decision record, and `workspace/instructions/` was as it had been. |
+
+Across the four runs twelve requests left the Mac, all of them a GET for `robots.txt` on a listed host, 84 source requests were refused unsent, and no request carried a body, so nothing was posted anywhere.
+Mandu's and RepToday's HEAD, refs, git status, index, and every file digest were the same after the last check as before the first run.
+The two simulated send dates are earlier than the day their items were queued, which only a simulation can be.
+The three weekly runs cost between $0.018 and $0.033 each at API prices, and the check-only run $0.003.
+
+What these runs could not show is a real thread or review being read: no named source can be read under its host's `robots.txt` today, so no real quote was recorded, no reply Draft was offered, and no fetched text ever reached the model.
+The Evidence validator, the reply checks, and the handling of instructions planted in a fetched post are therefore shown only by the unit tests and the example sets, on synthetic fixtures (`src/tests/test_evidence.py`, `src/tests/test_work_cycle.py`, `src/examples/listening/`).
+How the named sources may be read is the Founder's decision, and nothing here reads a disallowed path.
+
+### Re-check after the review of Listening and outreach
+
+The review of that change removed parts of it and tightened others, so both checks were run again on the launcher as it now is.
+What changed that touches the boundary:
+
+- A message to a creator no longer rests on anything read over the network, so the creators' feeds and their host are gone: `config/guardrails/fetch.json` lists two hosts, `www.reddit.com` and `itunes.apple.com`.
+- The snapshot of what a run fetched is working data in `ledger/working/`, which git ignores: the agent reads it while the run is in progress, the launcher removes it when the run ends, and the records step never saves it.
+  Only a quote the agent recorded and the launcher validated is kept, with its link, the date read, and a hash of the document it came from.
+- The client fails a read, and never the run, on a redirect or an address it cannot parse or put on the wire, and reads a `robots.txt` that starts with a byte order mark as it reads any other.
+- The network probe's script takes its tool as its first argument, so a unit test can run the script itself against a stand-in.
+- `runtime.json`, the permission profile, the Codex flags, and the environment are unchanged, and the sandboxed agent still has no network.
+
+The `robots.txt` gate is as it was: the Founder decided on 2026-10-11 that each host's `robots.txt` stays binding for now, while the owners' terms are read first-hand.
+
+Both checks were run on 2026-10-11 with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261011T180322Z-on-demand-f6f3`: Codex logged ten patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox all three targets, the listener and the two hosts, were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+
+The weekly runs in the table above were not repeated in this round.
+They describe the launcher as it was before the review, with three hosts, the creators' feeds, and the "No hook found" line, none of which a run has now.
+
+### Re-check after the second review round
+
+A second review round changed the launcher again, outside the boundary itself, so both checks were repeated on the launcher as it now is.
+
+- A quote record the launcher refuses is removed and copied nowhere; its file name and the reasons are all that is kept, and no reason repeats the record's text.
+- Every package-change proposal declares `new_angle`, on the item the Founder reads: one that declares it adds or changes an Angle or Hook is queued only when its Evidence names, exactly, the record of a Listening quote the ledger holds, and one that declares it does not is queued whatever files it touches.
+- `runtime.json`, `fetch.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Both checks were run on 2026-10-11 with Codex CLI 0.160.0, from a linked worktree holding the round's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261011T183426Z-on-demand-6701`: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+
+### Re-check after the third review round
+
+A third review round removed one check from the launcher, so both checks were repeated on the launcher as it now is.
+
+- The launcher no longer reads a package-change proposal's ask to second-guess its declaration.
+  A proposal that declares it adds or changes an Angle or Hook is still queued only when its Evidence names, exactly, the record of a Listening quote the ledger holds; one that declares it does not is queued whatever it touches or says.
+  The declaration is on the item the Founder reads, and the Founder is the check on a wrong one.
+- `runtime.json`, `fetch.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Both checks were run on the evening of 2026-10-11, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the round's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T043052Z-on-demand-2306`, whose identifier carries the time in UTC: Codex logged ten patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+
+### Re-check after the wording fixes
+
+The launcher changed twice more after the third round's check, both times in what it writes and never in what it may do, so both checks were repeated on the launcher as it now is.
+
+- Four of the launcher's own lines were reworded: the brief's count of threads and reviews to read, a creator message item's disclosure line, the run report's count of listed hosts tried from inside the sandbox, and the run report's detail for a subreddit's rules page.
+- A creator message item says its sponsorship check was made only when it was.
+  When Mandu's `brand-rules.json` holds no `sponsorship_asks` list, or no brand rules were read at all, the item says that no phrase check ran and that the judgment is the Founder's.
+- `runtime.json`, `fetch.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Both checks were run on the evening of 2026-10-11, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the second of those changes before it was committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T055650Z-on-demand-0aed`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+
+Mandu's, RepToday's, and Immerse's HEAD, refs, git status, index, and every file digest were the same after the boundary check as before the preflight.
+
+### Re-check after the rebase onto the agent time limit
+
+The agent time limit (US-ME17) reached `main` while this work was in review, and this work was then put on top of it.
+The launcher now holds both pieces of work: every process it waits for starts through `process.py` with a time limit, and Listening, outreach, and rejection-reason coding run inside that cycle.
+Each had been checked only without the other, the time limit in its own section above and this work in the five sections before this one, so both checks were repeated on the launcher as it now is.
+
+- `runtime.json` is as it is on `main`, and `fetch.json` still lists the two hosts, `www.reddit.com` and `itunes.apple.com`.
+- The configuration fingerprint is the one this worktree had before the rebase, so the Codex command, environment, and version are as they were.
+
+Both checks were run on the evening of 2026-10-11, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree on the rebased code as committed, with nothing uncommitted, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, `ledger/` among them, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T064925Z-on-demand-5972`, whose identifier carries the time in UTC: Codex logged ten patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  The probe's agent ran 34.5 seconds of its 30 minute limit, all of them with the Mac awake.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the boundary check as before the preflight.
+
+### Re-check after the review of the rebased launcher
+
+A review of the rebased launcher changed it in five places, one of them on the network path, so both checks were repeated on the launcher as it now is.
+
+- The launcher's network read has a deadline for the whole exchange as well as a timeout for each wait: `config/guardrails/fetch.json` gained `read_deadline_seconds`, 60, beside `timeout_seconds`, 20, and once the deadline has passed `fetch.send` shuts the connection's socket, so a host that answers a byte at a time ends as a source not read.
+  Its hosts are still the two, `www.reddit.com` and `itunes.apple.com`, and a request is still one credential-free GET.
+- The launcher copies nothing it sets aside from Listening or from rejection-reason coding into the ledger: a discarded Angle or Hook proposal and a set-aside rejection code are removed, like a refused quote record, and leave a file name and the launcher's reasons.
+- The reply check also reads `/r/name` and `/u/name` as the mentions Reddit links, the `Rejection reasons coded` output is incomplete while a listed reason has no accepted code, and two counts are worded to agree with their number.
+- `runtime.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 664 tests in 329 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run shortly after midnight on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T073054Z-on-demand-6bdb`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client, through the read that now carries the deadline, sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 36.1 seconds of its 30 minute limit.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, and every file digest were the same after the boundary check as before the unit suite.
+
+### Re-check after the second review of the rebased launcher
+
+A second review of the rebased launcher changed one line of launcher code and the documents around the retention rule, so both checks were repeated on the launcher as it now is.
+
+- A decision record that cannot be read for its rejection reason is reported once: at the take-in `cycle.py` adds only the problems the run does not already list, so the run report's launcher problems and the notice's count hold one unreadable record once.
+- The copy the launcher makes of a file it sets aside from `workspace/review-queue/incoming/` is as it was, and the documents now say so.
+  `AGENTS.md`, `ledger/README.md`, and `docs/operations.md` list, as known gaps not yet decided by the Founder, the places where text the agent wrote, which can repeat a source's words, is committed today, and name the three things that leave a file name and the launcher's reasons only.
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 665 tests in 307 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run at about one in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T080716Z-on-demand-51bd`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 59.3 seconds of its 30 minute limit.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the boundary check as before the unit suite.
+
+### Re-check after the fix to the Instructions guard
+
+A third review of the rebased launcher changed the guard that puts `workspace/instructions/` back after every run, in `src/gr0wthlab/learning.py`, so both checks were repeated on the launcher as it now is.
+
+- A file is put back when the run left a folder where the file was: the guard clears the folders the run emptied after it removes what the run added and before it writes anything back.
+- An entry that could not be read before the run, which the run report names as not guarded, is left exactly as it is, and is no longer removed as added during the run.
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 667 tests in 323 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run at about half past one in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T083020Z-on-demand-3839`, whose identifier carries the time in UTC: Codex logged ten patch rejections where nine are needed, the unified log held eleven kernel Seatbelt denials naming the run, with one for each forbidden shell target, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 61.5 seconds of its 30 minute limit.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the boundary check as before the unit suite.
+
+### Re-check after outreach records that cannot be read
+
+A fourth review of the rebased launcher changed three launcher modules, one of them on the network path, so both checks were repeated on the launcher as it now is.
+
+- An open follow-up is withdrawn only on what a record that was read says (`outreach.py`, `cycle.py`).
+  When Mandu's `outreach/` folder cannot be read, or the record of a creator's first message is missing after a follow-up was queued from it, cannot be read, or is not valid, that follow-up is neither offered nor withdrawn, the run report names Mandu's outreach records as failed and the Outreach output as incomplete with the reason, and the notice a failed source gets is queued.
+- The pause the launcher's client keeps between its own requests to one host is always kept and is no longer compared to `max_wait_seconds` (`fetch.py`): only a wait the host asked for, a Crawl-delay in its `robots.txt` or a Retry-After, is compared to it, and a longer one still ends that host's reads with that reason.
+  `config/guardrails/fetch.json` is unchanged: its hosts are still the two, and a request is still one credential-free GET.
+- Code that was computed and read nowhere is removed from `outreach.py`, and three documents now say that the request log also holds the `robots.txt` rule lines of the group that applied to each host.
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 672 tests in 312 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run shortly after two in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T090814Z-on-demand-bf60`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, with one for each forbidden shell target, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client, through the wait that now keeps its own pause, sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 34.6 seconds of its 30 minute limit, and no attempt was refused by the model provider.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the boundary check as before the unit suite.
+
+### Re-check after messages whose sources cannot be read
+
+A fifth review of the rebased launcher changed how a message Draft is taken in, in `src/gr0wthlab/messages.py`, so both checks were repeated on the launcher as it now is.
+
+- An open message item is never withdrawn because a source its Draft is checked against cannot be read.
+  When the Angle bank, the checklist, or the brand rules cannot be used, or the Product's code cannot be read for a Draft that lists claims, an open ask, creator message, follow-up, or reply stands, not checked again, as an open post already did.
+  A Draft that fails a check the launcher could make is still blocked and its open item withdrawn, and with no open item a source that cannot be read still blocks the Draft.
+- The Outreach Drafts and Listening Evidence outputs name such a source and read incomplete (`outreach.py`, `listening.py`).
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 675 tests in 319 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run at about half past two in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T092806Z-on-demand-3f19`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, with one for each forbidden shell target, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 33.0 seconds of its 30 minute limit, and no attempt was refused by the model provider.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the boundary check as before the unit suite.
+
+### Re-check after a reply whose quote record cannot be read
+
+A sixth review of the rebased launcher changed how a message Draft's check names a source it could not read, so both checks were repeated on the launcher as it now is.
+
+- Each block that rests on a source that could not be read says so where the check raises it (`messages.py`, with the mark kept on the verdict in `drafts.py`): the Angle bank, the checklist, the brand rules, the Product's code, git's read of one file a claim names when it times out or cannot start (`codebase.py`), and the kept quote record a reply answers (`listening.py`, `evidence.py`).
+  An open message or reply whose verdict holds such a block stands, not checked again, and the list that was kept beside those blocks is gone.
+- A claim that names a file that is not there, and a reply whose quote record is absent altogether, still block the Draft and withdraw an open item.
+  What post Drafts and Beta Cohort recruiting Drafts do is as it was.
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 680 tests in 332 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run at about ten to three in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` was run twice, and both attempts are recorded here.
+  The first, run `20261012T095231Z-on-demand-7f37`, failed on one line only: Codex logged four patch rejections where nine are needed.
+  The run's `stderr.log` holds four refused patches, while the probe agent's own report lists all nine forbidden file-tool targets as refused: that fits nine targets sent in four patches, each refused whole, though the log does not name the targets of a patch.
+  Everything else in that run held: twelve kernel Seatbelt denials naming the run, with one for each forbidden shell target, no connection to either listener, 13 permitted files across all six areas, no sentinel escaped, nothing changed outside the areas, and the same network proof as below.
+  It was not a refusal by the model provider: the agent ran 64.2 seconds and made its tool calls.
+  The second, run `20261012T095404Z-on-demand-5e15`, passed: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, with one for each forbidden shell target, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 59.7 seconds of its 30 minute limit.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the second boundary check as before the unit suite.
+
+### Re-check after the read deadline that reaches a slow body
+
+The third live test round found that the read deadline cut slow headers and never a slow body, and the fix changed the launcher's network read, so both checks were repeated on the launcher as it now is.
+
+- `fetch.send` keeps the socket itself once the request is sent, and shuts that socket once the deadline has passed.
+  Until this fix it looked the socket up on the connection, and `http.client` lets go of it there as soon as it has read the headers of an answer that carries `Connection: close`, as both listed hosts answered a request for their `robots.txt` in that round.
+  So what the re-check after the review of the rebased launcher says of a host that answers a byte at a time held for its headers only.
+- Seen live with the committed limits, through a local stand-in for `www.reddit.com` over TLS: a feed whose 948-byte body came four bytes a second held one run for 340.8 seconds before the fix.
+  After it the stand-in saw the client leave at 60.8 seconds, the run report listed the source as failed with `no complete answer within 60 s`, and the run read its other sources and ended after 74.5 seconds.
+  Called directly with a 5 second deadline, `fetch.send` ended a slow body, slow headers, and a host that never answers after 5.0 to 5.2 seconds each, where the slow body after `Connection: close` was still being read at 20 seconds before the fix.
+- The unit test of the deadline drives the real `http.client` against a listener on the machine, once with slow headers and once with a slow body after headers that close the connection; the second fails on the launcher as it was.
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the client's unit tests, `tests.test_fetch`, passed under `/usr/bin/python3`, 35 tests.
+The full unit suite and ruff were not run in this round, a test phase held to targeted checks; CI runs both on the pull request.
+
+Both checks were run at about ten to four in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the fix before it was committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T104805Z-on-demand-56a4`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, with one for each forbidden shell target, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client, through the read that now keeps its socket, sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 42.0 seconds of its 30 minute limit, and no attempt was refused by the model provider.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and every file digest were the same after the boundary check as before the preflight.
+
 ### Re-check after filming (US-ME09)
 
 Filming added three launcher steps, all outside the sandbox.
@@ -453,7 +746,7 @@ A further commit, of documentation alone, corrected two sentences and noted them
 
 This work's 19 commits were then replayed onto `main` at commit `92d8bbe`, which had gained Beta Cohort recruiting (US-ME15) and the agent time limit (US-ME17) since the commit the work started from, `9f53d1c`.
 The replayed work ended at commit `c901933`, and every commit identifier this section gives for an earlier check or proof names a commit of the work before the replay, which the replayed history does not hold.
-`main` had taken version 4 of the Mandu exchange for the Beta Cohort's records, so what this work adds to the exchange is now version 5, in `exchange.py`, in `docs/mandu-exchange.md`, and in the PRD's note on this story.
+`main` had taken version 4 of the Mandu exchange for the Beta Cohort's records, so what this work adds to the exchange became version 5 at that point, in `exchange.py`, in `docs/mandu-exchange.md`, and in the PRD's note on this story; it is version 6 since the merge with `main` that the next section records.
 The replay left the files that plan, check, and cut video byte for byte as they were (`shots.py`, `edits.py`, `video.py`, `filming.py`, `posts.py`, `config/platforms.json`, and `workspace/instructions/filming.md`), and the agent's start is `main`'s, which this work does not change.
 The run around them is now `main`'s with this work's changes on it (`cycle.py`, `cli.py`, `exchange.py`, `queue.py`, `report.py`, and the task definition among them), and on that code the unit suite passed, 674 tests under `/usr/bin/python3` with none skipped, as did ruff.
 US-ME09's Validation Test was not run again on the replayed code at that point; it has been since, as the proof below records.
@@ -656,6 +949,32 @@ Two things in them were not the agent's.
 In its first two runs the agent listed day 1's Hook claim with no code, so the claim check blocked the Draft, as it should, and no video was cut; for the proof, the claim's citation was then written by hand (`ReadyViewModel.swift` lines 4 to 9 at `de0355d`), which `check-drafts` verified.
 Run `b6db` used a throwaway task definition that only re-runs the checks, so the agent could not rewrite that Draft; the edit record it rendered was the one the agent wrote in run `e095`.
 
+### Re-check after the merge of filming with Listening and outreach
+
+Filming (US-ME09) was merged with `main` at commit `28eff81`, which had gained Listening, outreach message Drafts, and rejection-reason coding (US-ME13, US-ME14) after `92d8bbe`, the commit filming was last brought up to.
+It is one merge commit on filming's branch, whose parents are `c2011d3` and `28eff81`, and the launcher it leaves is one that neither side's checks above had run on, so both checks were made again.
+
+- Both workflows are whole in the merged launcher.
+  The files that plan, check, and cut video are byte for byte as at `c2011d3`: `shots.py`, `edits.py`, `video.py`, `filming.py`, `footage.py`, `posts.py`, `config/platforms.json`, and `workspace/instructions/filming.md`.
+  The agent's start, the network client, and the Listening, outreach, and rejection-code modules are byte for byte `main`'s: `codex.py`, `boundary.py`, `launcher.py`, `probe.py`, `process.py`, `fetch.py`, `sources.py`, `listening.py`, `outreach.py`, `messages.py`, `learning.py`, `evidence.py`, `runtime.json`, `fetch.json`, and `config/sources.json`.
+- The files that hold both sides are `cycle.py`, `cli.py`, `report.py`, `queue.py`, `exchange.py`, `config/products.json`, `config/run.json`, and the task definition.
+  Before the agent starts, a run plans the post Drafts, then files the filming plan and lists the footage place, then plans the Beta Cohort's batch, then reads the network sources and plans Listening and outreach; after the agent, it takes in the posts with their videos, then the recruiting Drafts, then the quotes, messages, and rejection codes.
+  The task definition has one list of steps: filming stays step 6 and recruiting step 7, Listening, outreach, and the rejection codes are steps 8 to 10, and the checks and the summary are steps 11 and 12.
+- `main` had taken version 5 of the Mandu exchange for the outreach records and a proposal's `new_angle`, so what filming adds to the exchange is version 6, in `exchange.py`, in `docs/mandu-exchange.md`, and in the PRD's note on the story; Mandu's side must read version 6 before the Founder can approve a filming plan.
+  One test of `main`'s changed with it: a package-change proposal reads without `new_angle` at the versions before 5 and needs it at version 5 and at every later one, where the test had read every version before the latest without it.
+- `runtime.json`, `fetch.json`, the permission profile, the Codex flags, and the environment are unchanged, and the footage place is still not set.
+
+On the merged files the full unit suite passed under `/usr/bin/python3`, 844 tests with none skipped, as did ruff.
+US-ME09's Validation Test, the day 1 and day 8 proof, was not run again on the merged code.
+
+Both checks were run on the morning of 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from filming's own worktree on the merged files before the merge commit that records them here was made, with configuration fingerprint `bd4cdef99b6a61d6296ce8c3e0405d6b0863f3078ddb02e2ea8bd04c6eb97865`; their logs went to a folder in the Mac's temporary directory, named with `GR0WTHLAB_LOG_DIR`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T142328Z-on-demand-9978`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, with none of the forbidden shell targets left without one, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and nothing outside the areas changed.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused an address on a host that is not listed, unsent.
+
+Mandu's, RepToday's, and Immerse's HEAD, git status, index, refs, and every file digest were the same after the boundary check as before the preflight.
+
 ## Scheduled and on-demand runs share one configuration
 
 The scheduled path was tested with a temporary LaunchAgent, `gr0wthlab.us-me02-schedule-test`, generated by `src/bin/gr0wthlab launch-agent --once <time> --label gr0wthlab.us-me02-schedule-test --instruction src/checks/boundary-probe.md`.
@@ -693,6 +1012,7 @@ Records commits never touch code or Guardrail configuration, so G8 holds, and ea
   Codex's spawn path copies the parent's permission profile to a child (`codex-rs/core/src/agent/child_config.rs` at `rust-v0.160.0`), but turning sub-agents on still needs a fresh boundary check.
 - The Codex process itself runs outside the sandbox and writes its own state, logs, and login refresh to `CODEX_HOME` (`~/.codex`); `--ephemeral` keeps run sessions out of the Founder's history.
 - A Codex upgrade can change profile semantics; the per-run preflight fails closed, and the boundary check should be re-run after every upgrade.
+- The launcher's own network reads run outside the sandbox, as the launcher's other reads of Mandu and the Waitlist view do, so nothing in the sandbox bounds them: `fetch.py`, its contract tests, and the reviewed host list are the boundary, and the request log is the record.
 - A separate macOS user with no credentials would be a stronger boundary than unreadable credential files; nothing in v1 needs it.
 - Inside an area, the sandbox refuses a hard link to a file the run cannot read but allows a symbolic link to one.
   The launcher reads and commits files from `workspace/` outside the sandbox, so it never follows a link there: it opens agent-written files without following links, refuses any file with more than one link, and never commits a link.
@@ -703,11 +1023,11 @@ Records commits never touch code or Guardrail configuration, so G8 holds, and ea
 ## Repeat the check
 
 The live check needs the Founder's Mac, the Codex login, and the real checkouts, so CI cannot run it; CI runs the launcher's and configuration's unit tests instead.
-Re-run it after any change to the launcher, `config/guardrails/runtime.json`, or `config/products.json`, and after every Codex upgrade:
+Re-run it after any change to the launcher, `config/guardrails/runtime.json`, `config/guardrails/fetch.json`, or `config/products.json`, and after every Codex upgrade:
 
 ```sh
 src/bin/gr0wthlab show-config      # the resolved command, environment, policy, and fingerprint
-src/bin/gr0wthlab preflight        # the per-run sandbox proof, with no model
+src/bin/gr0wthlab preflight        # the per-run sandbox proof of writes and network, with no model
 src/bin/gr0wthlab boundary-check   # the US-ME02 validation test, on demand
 ```
 

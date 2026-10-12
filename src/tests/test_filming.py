@@ -197,7 +197,7 @@ class FilmingPlanTest(FilmingRunCase):
         text = self.item(entry)
         check = exchange.check_item(text, ["RepToday", "Immerse"], published=True)
         self.assertEqual(check.problems, [])
-        self.assertIn("exchange: 5\n", text)
+        self.assertIn(f"exchange: {exchange.EXCHANGE_VERSION}\n", text)
         self.assertIn("## Plan\n", text)
         self.assertIn(
             "RepToday window 1 needs footage for 10 assets, filmed in 3 sittings, for calendar days 1, 2, 3, 4, 5, 6,"

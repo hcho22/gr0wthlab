@@ -49,7 +49,7 @@ class RunConfigTest(unittest.TestCase):
         outputs = set(self.config["outputs"])
         reptoday = next(p for p in self.registry["products"] if p["name"] == "RepToday")
         sources = reptoday["go_to_market_package"]["sources"]
-        self.assertEqual(len(sources), 13)
+        self.assertEqual(len(sources), 14)
         for source in sources + self.config["sources_not_connected"]:
             self.assertLessEqual(set(source["needed_by"]), outputs, source)
 
