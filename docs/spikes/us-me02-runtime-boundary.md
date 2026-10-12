@@ -320,7 +320,7 @@ Once the agent has finished, it renders each edit record that passes its checks 
 `config/products.json` gained RepToday's footage place, unset, and `config/platforms.json` the shape a finished video is rendered at.
 The agent's start is unchanged: `codex.py`, `boundary.py`, `launcher.py`, the probe, and `runtime.json` are as they were, and `image_generation` stays among the disabled features.
 The footage place is never one of the locations the sandbox reads, and the launcher refuses to start if it overlaps the repository or any of those locations.
-Inside the sandbox, the new `check-edits` reads `config/products.json` and `runtime.json`, to find the areas as `check-drafts` does, the record the launcher wrote for the run in `ledger/run-reports/`, and the agent's own files in `workspace/`: each due day's edit record and post Draft.
+Inside the sandbox, the new `check-edits` reads `config/products.json` and `runtime.json`, to find the areas as `check-drafts` does, the record the launcher wrote for the run in `ledger/run-reports/`, the launcher's own record of each video a standing post shows, in `ledger/evidence/filming/assets/`, by which the pair check judges that video, and the agent's own files in `workspace/`: each due day's edit record and post Draft.
 It never opens the footage place.
 
 The review of this work then changed the launcher and its configuration again.
@@ -360,6 +360,7 @@ The fingerprint is computed from the command, its environment, and the Codex ver
 The checks ran on that worktree's files before the commit that records them here was made, so that commit is later than the run, and their logs went to a folder in the Mac's temporary directory, named with `GR0WTHLAB_LOG_DIR`, not to the default log folder.
 After them, and after the proof below, that commit gained this record and nothing else.
 A later commit reworded one passage of `docs/operations.md`, on what renaming a footage file means for a rebuild and for an edit record that names it, and noted it here; it changed no launcher code, configuration, task definition, guidance, or test, so neither check was made again for it.
+A further commit, of documentation alone, corrected two sentences and noted them here: this section's list of what `check-edits` reads, which had left out the videos' own records in `ledger/evidence/filming/assets/`, and the line of `ledger/README.md` on what such a record is for, which had left out the pair check; it too changed no launcher code, configuration, task definition, guidance, or test, so neither check was made again for it.
 
 - `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
 - `src/bin/gr0wthlab boundary-check` passed on its first attempt, as run `20261012T083653Z-on-demand-a36f`, and was not run again: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed, in the repository, Mandu, RepToday, or Immerse.
