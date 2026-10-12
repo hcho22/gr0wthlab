@@ -12,7 +12,20 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import beta, exchange, filming, learning, listening, outreach, package, posts, process, schedule, waitlist
+from . import (
+    attempts,
+    beta,
+    exchange,
+    filming,
+    learning,
+    listening,
+    outreach,
+    package,
+    posts,
+    process,
+    schedule,
+    waitlist,
+)
 from .exchange import plural
 from .package import SKIPPED
 from .state import Tally, run_tally
@@ -25,8 +38,8 @@ REVIEW_COMPLETE = "Review: complete"
 REVIEW_INCOMPLETE = "Review: incomplete"
 USAGE_FIELDS = ("input_tokens", "cached_input_tokens", "cache_write_input_tokens", "output_tokens")
 NOTICE_BODY_LIMIT = exchange.MAX_ITEM_CHARS // 2
-# Fewer seconds than this between the agent's wall-clock time and its awake time are the two clocks' own difference,
-# not the Mac asleep.
+# Fewer seconds than this between a wall-clock time and the awake time of the same span are the two clocks' own
+# difference, not the Mac asleep.
 ASLEEP_AT_LEAST = 5
 
 
@@ -120,6 +133,8 @@ class RunState:
     put_back: list[str] = field(default_factory=list)  # each change to them the launcher undid
     work_published: list[str] = field(default_factory=list)  # the items Listening and outreach queued this run
     check_work: str = ""  # the command the agent checks its Listening and outreach work with
+    attempt: attempts.Attempt | None = None  # a weekly scheduled run: which attempt at the run due, and those before
+    slept: float = 0.0  # about how many seconds the Mac was asleep from the run's start to its agent's end
 
     @property
     def lateness(self) -> timedelta | None:
@@ -149,13 +164,26 @@ class RunState:
     def asleep(self) -> float:
         """About how many seconds of the agent's time the Mac was asleep, its wall-clock time less its awake time; 0
         when the agent did not run or the Mac stayed awake."""
-        gap = float(self.agent.get("agent_seconds") or 0) - float(self.agent.get("agent_awake_seconds") or 0)
-        return gap if gap >= ASLEEP_AT_LEAST else 0.0
+        agent = self.agent
+        return asleep_for(float(agent.get("agent_seconds") or 0), float(agent.get("agent_awake_seconds") or 0))
 
     @property
     def stop(self) -> process.Stop:
         """What stopping a timed-out agent took, as the launcher's run record keeps it."""
         return process.Stop.from_json(self.agent.get("stopped") or {})
+
+    @property
+    def ending(self) -> str:
+        """How the run ended, as the record of the run due at its time keeps it. Only a weekly scheduled attempt is
+        asked whether its agent confirmed its review."""
+        return attempts.ending(self.agent, self.slept, self.attempt is None or self.review == REVIEW_COMPLETE)
+
+    @property
+    def again(self) -> bool:
+        """Whether a fresh run starts by itself after this one: only after a weekly scheduled attempt that the Mac's
+        sleep cut short, and only while the run due then may take another."""
+        attempt = self.attempt
+        return attempt is not None and self.ending == attempts.SLEPT and attempt.number < attempt.limit
 
     def agent_gap(self) -> str:
         """Why every output that needs the agent is incomplete this run, or "" when the agent finished."""
@@ -191,6 +219,13 @@ class RunState:
 
     def unusable_to_report(self) -> list[Unusable]:
         return [record for record in self.unusable if self.reports(record)]
+
+
+def asleep_for(seconds: float, awake: float) -> float:
+    """About how many of a span's seconds the Mac was asleep, its wall-clock time less its awake time; 0 when the Mac
+    stayed awake."""
+    gap = seconds - awake
+    return gap if gap >= ASLEEP_AT_LEAST else 0.0
 
 
 def wall_clock(moment: datetime) -> datetime:
@@ -259,17 +294,60 @@ def cost(usage: Mapping[str, int], prices: Mapping[str, float]) -> float:
     return total / 1_000_000
 
 
+def moment(when: datetime) -> str:
+    """A time on the Mac's wall clock, as every report line states one."""
+    return f"{when:%A %Y-%m-%d %H:%M}"
+
+
+def earlier_attempts(state: RunState) -> str:
+    """For a weekly scheduled run that is not the first attempt at the run due then: which attempt it is, and that
+    each earlier one was cut short by the Mac's sleep, since only that earns another."""
+    attempt = state.attempt
+    if attempt is None or not attempt.earlier:
+        return ""
+    starts = [moment(wall_clock(start)) for start in attempt.earlier]
+    if len(starts) == 1:
+        were = f"the attempt started {starts[0]} was"
+    else:
+        were = f"the attempts started {', '.join(starts[:-1])} and {starts[-1]} were"
+    return f" This is attempt {attempt.number} of at most {attempt.limit}: {were} cut short by the Mac's sleep."
+
+
 def start_line(state: RunState) -> str:
-    started = wall_clock(state.started).strftime("%A %Y-%m-%d %H:%M")
+    started = moment(wall_clock(state.started))
     if state.trigger != "scheduled":
         return f"On demand, started {started} (Mac local time)."
-    due = state.due.strftime("%A %Y-%m-%d %H:%M")
+    due = moment(state.due)
+    earlier = earlier_attempts(state)
     if state.late:
+        why = earlier or " The Mac was probably asleep or off when it was due."
+        return f"Started late: due {due}, started {started}, {duration(state.lateness)} after its time.{why}"
+    return f"Scheduled for {due}; started on time at {started}.{earlier}"
+
+
+def what_follows(state: RunState) -> str:
+    """For a weekly scheduled run that did not complete: whether a fresh run starts by itself, and what to do when
+    none does. Only the Mac's sleep earns another attempt, and only up to the limit; "" for any other run, a one-off
+    scheduled run included."""
+    attempt, ending = state.attempt, state.ending
+    if attempt is None or ending == attempts.COMPLETED:
+        return ""
+    if state.again:
         return (
-            f"Started late: due {due}, started {started}, {duration(state.lateness)} after its time. "
-            "The Mac was probably asleep or off when it was due."
+            f"The Mac's sleep cut this run short, so it does not count as the run due {moment(attempt.due)}: a fresh,"
+            " whole run starts by itself once the Mac is awake, and nothing is needed from you."
         )
-    return f"Scheduled for {due}; started on time at {started}."
+    if ending == attempts.SLEPT:
+        return (
+            f"The Mac's sleep cut this run short, and it was attempt {attempt.number} of at most {attempt.limit} at the"
+            f" run due {moment(attempt.due)}, so no further attempt starts by itself: start a run on demand while the"
+            " Mac stays awake (`src/bin/gr0wthlab run`). The limit is `schedule.attempts_per_week` in"
+            " `config/run.json`."
+        )
+    return (
+        "No run starts by itself after this one: only a run cut short by the Mac's sleep is run again, and this one"
+        f" {attempts.SAID[ending]}. Start one on demand once that is dealt with (`src/bin/gr0wthlab run`)."
+    )
 
 
 def cost_line(state: RunState) -> str:
@@ -515,8 +593,13 @@ def summary_lines(state: RunState) -> list[str]:
     agent = state.agent.get("exit_code")
     lines = [f"- {run_tally(state.tallies).line()}", f"- {start_line(state)}"]
     lines += [f"- {line}" for line in state.notes]
-    if agent == 0:
+    if agent == 0 and state.ending == attempts.COMPLETED:
         lines.append("- The run finished.")
+    elif agent == 0:
+        lines.append(
+            f"- The agent ended without an error, but the Mac slept during the run and {state.review_gap()}, so its"
+            " work this run may be incomplete."
+        )
     elif state.timed_out:
         lines.append(
             f"- The run timed out: the agent was still running at its {state.time_limit} time limit, so the launcher"
@@ -532,6 +615,10 @@ def summary_lines(state: RunState) -> list[str]:
             f"- The Mac was asleep for about {span_text(state.asleep)} while the agent ran, which counts toward the"
             " agent's time limit."
         )
+    elsewhere = state.slept - state.asleep
+    if state.attempt is not None and elsewhere >= ASLEEP_AT_LEAST:
+        lines.append(f"- The Mac was asleep for about {span_text(elsewhere)} of this run outside the agent's time.")
+    lines.append(f"- {what_follows(state)}" if what_follows(state) else "")
     refused = sum(1 for line in state.sources if line.status == waitlist.REFUSED)
     lines.append(
         f"- Sources: {len(failed)} failed"
@@ -659,6 +746,9 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
 
     A notice about one kind of problem says what it is in its title; a notice about several counts every problem.
     A run that timed out says so first, in its title and its text, whatever else went wrong.
+    A weekly scheduled run that the Mac's sleep cut short queues no notice for that alone while a fresh run follows
+    by itself, and its notice then leaves out the work its agent did not reach, which that run does again and reports
+    on itself; once the run due then has no attempt left, the notice lists everything and says so in its title.
     """
     day = wall_clock(state.started).strftime("%Y-%m-%d")
     sections: list[tuple[int, str, str]] = []  # how many problems, the title, the text
@@ -697,18 +787,18 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 + "\n".join(bullet(f"`{record.name}`: {'; '.join(record.problems)}") for record in others),
             )
         )
-    blocked = posts.notice_section(state.post_outcome, day)
+    blocked = posts.notice_section(state.post_outcome, day, state.again)
     if blocked:
         sections.append(blocked)
     unfilmed = filming.notice_section(state.filming, day)
     if unfilmed:
         sections.append(unfilmed)
-    recruiting = beta.notice_section(state.beta_outcome, day)
+    recruiting = beta.notice_section(state.beta_outcome, day, state.again)
     if recruiting:
         sections.append(recruiting)
     for section in (
         listening.notice_section(state.listening, state.listening_result, day),
-        outreach.notice_section(state.outreach, state.outreach_result, day),
+        outreach.notice_section(state.outreach, state.outreach_result, day, state.again),
         learning.notice_section(state.learning, day),
     ):
         if section:
@@ -724,11 +814,20 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
             )
         )
     agent = state.agent.get("exit_code")
+    follows = f" {what_follows(state)}" if what_follows(state) else ""
     if not state.agent.get("agent_started"):
         error = state.agent.get("error") or "see the run report"
-        sections.append((1, f"the agent did not start on {day}", f"The agent did not start: {error}."))
+        sections.append((1, f"the agent did not start on {day}", f"The agent did not start: {error}.{follows}"))
     elif state.timed_out:
         needs = ", ".join(state.agent_incomplete) or "nothing"
+        # A weekly scheduled run the Mac's sleep cut short needs no higher limit, so its notice does not point at one.
+        slept = state.attempt is not None and state.ending == attempts.SLEPT
+        limit = (
+            ""
+            if slept
+            else " The next run does this work again; if runs keep timing out, the limit is"
+            " `agent.time_limit_seconds` in `config/run.json`."
+        )
         sections.insert(
             0,
             (
@@ -737,8 +836,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 f"The agent was still running at its {state.time_limit} time limit, so the launcher stopped it and"
                 " finished the run without it. What the agent had written by then was checked as always: anything"
                 " queued from it passed every check, and anything unfinished was set aside or blocked. Incomplete this"
-                f" run: {needs}. The next run does this work again; if runs keep timing out, the limit is"
-                " `agent.time_limit_seconds` in `config/run.json`.",
+                f" run: {needs}.{limit}{follows}",
             ),
         )
     elif agent != 0:
@@ -746,7 +844,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
             (
                 1,
                 f"the agent stopped early on {day}",
-                f"The agent stopped with exit code {agent}, so this run's review may be incomplete.",
+                f"The agent stopped with exit code {agent}, so this run's review may be incomplete.{follows}",
             )
         )
     elif state.review.startswith(REVIEW_INCOMPLETE):
@@ -758,7 +856,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 "The Marketing Engineer did not finish reviewing the Go-To-Market Package"
                 + (f" ({why})" if why else "")
                 + ", so a contradiction it did not reach is not in the Review Queue yet; the next run reviews it"
-                " again.",
+                f" again.{follows}",
             )
         )
     elif state.review_gap():
@@ -768,7 +866,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 f"the package review was not confirmed finished on {day}",
                 "The Marketing Engineer did not confirm that it finished every pass of its review of the Go-To-Market"
                 " Package, so a contradiction it did not reach may not be in the Review Queue yet; the next run reviews"
-                " it again.",
+                f" it again.{follows}",
             )
         )
     if state.problems:
@@ -779,10 +877,14 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 "The launcher hit problems:\n" + "\n".join(bullet(problem) for problem in state.problems),
             )
         )
-    if not sections:
+    if not sections or (state.again and len(sections) == 1):
+        # A run the Mac's sleep cut short, with nothing else wrong, needs no notice while a fresh run follows by
+        # itself: its own report says what happened, and the fresh run does the work again.
         return None
     total = sum(count for count, _, _ in sections)
-    if len(sections) == 1:
+    if state.attempt is not None and state.ending == attempts.SLEPT and not state.again:
+        title = f"Notice: the Mac's sleep cut short every attempt at the run due {state.attempt.due:%Y-%m-%d}"
+    elif len(sections) == 1:
         title = f"Notice: {sections[0][1]}"
     elif state.timed_out:
         title = f"Notice: the run timed out on {day} and had {plural(total - 1, 'other problem')}"

@@ -216,8 +216,8 @@ Mandu's side presents that text as a quotation and acts only on the Founder's de
 }
 ```
 
-`next_run` is when the next weekly run is due on gr0wthlab's schedule, and every run that writes `queue.json` moves it forward.
-Once it has passed, that run was missed, started late, is still running, or was refused because another run was in progress.
+`next_run` is when the next weekly run is due on gr0wthlab's schedule, and every run that writes `queue.json` moves it forward, but for a run of the weekly schedule that the Mac's sleep cut short while it may take another attempt: that week's run is still owed and starts again by itself once the Mac is awake, so `next_run` stays at the time it was due.
+Once it has passed, that run was missed, started late, is still running, was refused because another run was in progress, or was cut short by the Mac's sleep and has yet to run again.
 `open` is already in presentation order: posts by nearest slot first, then posts with no slot yet by window and day, then the filming plan, messages, Weekly Read decisions, Dispatch requests, package-change proposals, and notices, oldest first within each kind.
 A post entry whose video is finished carries `asset`, the same path as in its item, and `asset_sha256`, the file's SHA-256.
 `carried_over` is `true` for an item that was open at an earlier sitting and left undecided, and `carried_over_from` then gives the date of the first such sitting.

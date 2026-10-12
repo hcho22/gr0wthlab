@@ -510,13 +510,17 @@ def report_lines(plan: Plan | None, result: Result | None, filing: str, problem:
     return lines
 
 
-def notice_section(plan: Plan | None, result: Result | None, day_text: str) -> tuple[int, str, str] | None:
-    """The outreach messages not offered, any taken back, and any record of the Founder's that could not be used."""
+def notice_section(
+    plan: Plan | None, result: Result | None, day_text: str, again: bool = False
+) -> tuple[int, str, str] | None:
+    """The outreach messages not offered, any taken back, and any record of the Founder's that could not be used.
+    again says a fresh, whole run follows this one by itself, which writes a message that has no Draft or reports on
+    it itself, so such a message is left out."""
     if plan is None or result is None:
         return None
     lines = []
     blocked = [outcome for outcome in result.outcomes if outcome.status == messages.BLOCKED]
-    missing = [outcome for outcome in result.outcomes if outcome.status == messages.MISSING]
+    missing = [] if again else [outcome for outcome in result.outcomes if outcome.status == messages.MISSING]
     taken_back = [outcome for outcome in result.outcomes if outcome.withdrawn and outcome.status != messages.BLOCKED]
     if blocked:
         lines.append("These outreach Drafts were not offered for approval; each line names what blocked it:")
