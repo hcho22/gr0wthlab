@@ -173,9 +173,10 @@ class RunTest(unittest.TestCase):
 class EveryWaitIsBoundedTest(FilmingRunCase):
     def test_a_whole_run_never_waits_without_a_time_limit_on_a_process_it_started(self):
         """A wait without one can last forever. This watches every process a run in the production clone starts, with
-        a day's Draft and its edit record due, so the records step's git, the claim checks' reads of a Product's
-        code, and the video tooling that measures the footage and cuts the day's video are among them. Each starts
-        through process.run, which is what stops one at its limit with every process it started."""
+        a day's Draft and its edit record due, so the run's three agent sessions, each with its preflight, the
+        records step's git, the claim checks' reads of a Product's code, and the video tooling that measures the
+        footage and cuts the day's video are among them. Each starts through process.run, which is what stops one at
+        its limit with every process it started."""
         fakes.keep_days(self.mandu, 1, 8)
         fakes.git(self.repo, "commit", "--quiet", "--all", "-m", "a window with days due, and footage", env=self.env)
         remote, clone = self.root / "remote.git", self.root / "production"
@@ -215,6 +216,9 @@ class EveryWaitIsBoundedTest(FilmingRunCase):
         self.assertIn("asset", next(entry for entry in self.queue(clone)["open"] if entry["kind"] == "post"))
         names = {Path(command[0]).name for command, _ in started}
         self.assertLessEqual({"codex", "git", "ffmpeg", "ffprobe"}, names)
+        agents = [command for command, _ in started if Path(command[0]).name == "codex" and command[1] == "exec"]
+        self.assertEqual(len(agents), 3, "the package review's, the post Drafts', and the Filming session's agents")
+        self.assertEqual(fakes.sessions_started(self.codex_dir), ["package-review", "post-drafts", "filming"])
         self.assertLessEqual({"fetch", "cat-file", "push"}, {word for command, _ in waits for word in command})
         self.assertEqual([command for command, bounded in waits if not bounded], [])
         self.assertEqual([command for command, through_run in started if not through_run], [])

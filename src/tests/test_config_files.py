@@ -4,7 +4,7 @@ import json
 import unittest
 from pathlib import Path
 
-from gr0wthlab import boundary
+from gr0wthlab import boundary, sessions
 
 REPO = Path(__file__).resolve().parents[2]
 HOME = Path("/Users/founder")
@@ -107,9 +107,16 @@ class RunConfigTest(unittest.TestCase):
         self.assertEqual((canvas.width, canvas.height, canvas.fps), (1080, 1920, 30))
         self.assertEqual(canvas.ratio.numerator * 16, canvas.ratio.denominator * 9)
 
-    def test_the_weekly_task_definition_is_reviewed_code(self):
-        self.assertTrue(self.config["instruction"].startswith("src/instructions/"))
-        self.assertTrue((REPO / self.config["instruction"]).is_file())
+    def test_no_task_definition_is_chosen_in_configuration(self):
+        # The weekly run's task definitions are the reviewed files the launcher puts together for each session
+        # (sessions.py); configuration names none, so no setting can swap one out.
+        self.assertNotIn("instruction", self.config)
+
+    def test_every_session_limit_is_inside_the_bound_on_the_whole_run(self):
+        agent = self.config["agent"]
+        self.assertLessEqual(set(agent["session_time_limit_seconds"]), set(sessions.KEYS))
+        limits = [agent["time_limit_seconds"], *agent["session_time_limit_seconds"].values()]
+        self.assertGreaterEqual(agent["run_time_limit_seconds"], max(limits))
 
 
 class RuntimeConfigTest(unittest.TestCase):

@@ -10,15 +10,15 @@ from dataclasses import dataclass
 from datetime import date, time, timedelta
 from pathlib import Path, PurePosixPath
 
-from . import schedule
+from . import schedule, sessions
 from .boundary import Boundary, ConfigError, canonical, is_within, load_json
 
 RUN_CONFIG = Path("config/run.json")
-INSTRUCTIONS = PurePosixPath("src/instructions")
 TAG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 # The Source and Fit answer of a sign-up the view cannot place; no configured tag or answer may take it.
 UNKNOWN = "unknown"
-# No agent time limit may pass a day: a longer one is no limit on a run that happens every week.
+# No time limit may pass a day, a session's or a whole run's: a longer one is no limit on a run that happens every
+# week.
 MAX_TIME_LIMIT = 24 * 60 * 60
 # The owed-run check comes at least once an hour, and a week's run takes at most this many attempts: more would be no
 # bound on a run that the Mac's sleep keeps cutting short.
@@ -52,15 +52,21 @@ class Window:
 
 @dataclass(frozen=True)
 class Agent:
-    """How long a run waits for its agent, in seconds, before it stops it and finishes as timed out."""
+    """How long a run waits for its agent, in seconds. time_limit is one session's limit, and the boundary check's;
+    session_limits holds the workflows that have another; run_time_limit bounds all of one run's sessions together."""
 
     time_limit: float
+    session_limits: Mapping[str, float]
+    run_time_limit: float
+
+    def limit(self, workflow: str) -> float:
+        """One workflow's session's own time limit."""
+        return self.session_limits.get(workflow, self.time_limit)
 
 
 @dataclass(frozen=True)
 class Settings:
     data: Mapping
-    instruction: Path
     weekly: tuple[str, str]
     late_after_minutes: int
     records: Records
@@ -95,14 +101,6 @@ def resolve_home_path(raw: object, name: str, env_name: str | None, env: Mapping
     raise ConfigError(f"{name} must start with ~/ or be absolute")
 
 
-def instruction_path(repo_root: Path, path: Path) -> Path:
-    """The run's task definition must be a reviewed file under src/instructions/, which the agent cannot edit."""
-    resolved = canonical(path if path.is_absolute() else repo_root / path)
-    if not is_within(resolved, canonical(repo_root / INSTRUCTIONS)) or not resolved.is_file():
-        raise ConfigError(f"the instruction must be a file under {INSTRUCTIONS}/; got {path}")
-    return resolved
-
-
 def iso_date(value: object) -> date | None:
     """A YYYY-MM-DD date, or None for anything else."""
     try:
@@ -131,17 +129,40 @@ def load_batch_size(data: object) -> int:
     return size
 
 
+def time_limit(value: object, name: str) -> float:
+    """One of config/run.json's time limits: a number of seconds above zero and at most a day."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < value <= MAX_TIME_LIMIT:
+        raise ConfigError(
+            f"{RUN_CONFIG}: {name} must be a number of seconds above zero and at most {MAX_TIME_LIMIT}, a day;"
+            f" got {value!r}"
+        )
+    return float(value)
+
+
 def load_agent(data: object) -> Agent:
-    """config/run.json's agent: the time limit every run puts on its agent, so that every run ends with its report."""
+    """config/run.json's agent: the time limit every session runs under, the workflows whose session has another, and
+    the bound on all of one run's sessions together, so that every run ends with its report."""
     if not isinstance(data, dict):
         raise ConfigError(f"{RUN_CONFIG}: agent must be an object that sets time_limit_seconds")
-    limit = data.get("time_limit_seconds")
-    if isinstance(limit, bool) or not isinstance(limit, (int, float)) or not 0 < limit <= MAX_TIME_LIMIT:
+    limit = time_limit(data.get("time_limit_seconds"), "agent.time_limit_seconds")
+    own = data.get("session_time_limit_seconds", {})
+    if not isinstance(own, dict):
+        raise ConfigError(f"{RUN_CONFIG}: agent.session_time_limit_seconds must map a workflow to its seconds")
+    unknown = sorted(set(own) - set(sessions.KEYS))
+    if unknown:
         raise ConfigError(
-            f"{RUN_CONFIG}: agent.time_limit_seconds must be a number of seconds above zero and at most"
-            f" {MAX_TIME_LIMIT}, a day; got {limit!r}"
+            f"{RUN_CONFIG}: agent.session_time_limit_seconds names {', '.join(unknown)}, which is no workflow with a"
+            f" session; they are {', '.join(sessions.KEYS)}"
         )
-    return Agent(float(limit))
+    limits = {key: time_limit(value, f"agent.session_time_limit_seconds.{key}") for key, value in own.items()}
+    whole = time_limit(data.get("run_time_limit_seconds"), "agent.run_time_limit_seconds")
+    longest = max([limit, *limits.values()])
+    if whole < longest:
+        raise ConfigError(
+            f"{RUN_CONFIG}: agent.run_time_limit_seconds, {whole:g}, is less than one session's limit, {longest:g};"
+            " a run's sessions together need at least as long as its longest session may take"
+        )
+    return Agent(limit, limits, whole)
 
 
 def load_count(schedule: object, key: str, most: int, what: str) -> int:
@@ -209,7 +230,6 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
         prices = {key: float(value) for key, value in data["cost"]["usd_per_million_tokens"].items()}
         outputs = dict(data["outputs"])
         not_connected = tuple(data.get("sources_not_connected") or ())
-        instruction = instruction_path(repo_root, Path(data["instruction"]))
         window = load_window(data["window"], weekly[0])
         live_since = load_live_since(data["waitlist"])
         batch_size = load_batch_size(data["beta_recruiting"])
@@ -227,7 +247,6 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
                 raise ConfigError(f"{RUN_CONFIG}: {source.get('name')} feeds unknown output {output}")
     return Settings(
         data,
-        instruction,
         weekly,
         late,
         resolved,

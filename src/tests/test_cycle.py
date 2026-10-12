@@ -67,7 +67,7 @@ class CycleTestCase(unittest.TestCase):
         reader = lambda policy: fakes.client(self.web, policy)  # noqa: E731
         runner = cycle.Cycle(repo or self.repo, self.env, self.home, out, self.clock, reader, clocks)
         kwargs = {"execve": execve} if execve else {}
-        code = runner.run(None, trigger, once, ["run"], **kwargs)
+        code = runner.run(trigger, once, ["run"], **kwargs)
         return code, out.getvalue()
 
     def workspace(self, repo=None):
@@ -84,8 +84,25 @@ class CycleTestCase(unittest.TestCase):
         reports = [path for path in reports if not path.name.endswith(".brief.md")]
         return reports[-1].read_text(encoding="utf-8")
 
-    def brief(self, repo=None):
-        return sorted((self.ledger(repo) / "run-reports").glob("*.brief.md"))[-1].read_text(encoding="utf-8")
+    def brief(self, repo=None, session=None):
+        """The brief the last run wrote for one workflow's session, or, with no session named, every brief of that
+        run one after another in the order of its sessions, so a test can say what the run's agents were told and
+        what none of them was."""
+        from gr0wthlab import sessions
+
+        folder = self.ledger(repo) / "run-reports"
+        run = sorted(folder.glob("*.brief.md"))[-1].name.split(".")[0]
+        keys = sessions.KEYS if session is None else (session,)
+        found = [folder / f"{run}.{key}.brief.md" for key in keys]
+        return "\n".join(path.read_text(encoding="utf-8") for path in found if path.is_file())
+
+    def run_record(self, session=None):
+        """The last run's record in the log folder, or what it holds of one of its sessions."""
+        runs = sorted(path for path in self.logs.glob("2*Z-*.json") if path.name.count(".") == 1)
+        run = json.loads(runs[-1].read_text(encoding="utf-8"))
+        if session is None:
+            return run
+        return next(found for found in run["sessions"] if found["workflow"] == session)
 
     def decide(self, item, decision, reason=None, note=None):
         folder = self.exchange / "decisions"
@@ -751,13 +768,16 @@ class FailuresTest(CycleTestCase):
         self.assertEqual(code, 1)
         kinds = [entry["kind"] for entry in self.queue()["open"]]
         self.assertEqual(kinds, ["package-change-proposal", "notice"])
-        self.assertIn("The agent stopped with exit code 1", self.report())
+        report = self.report()
+        self.assertIn("- The Package review session stopped with exit code 1; its work this run may be", report)
+        self.assertIn("| Package review | ended with exit code 1 |", report)
+        self.assertIn("| Package review (contradictions) | incomplete | its session ended with exit code 1 |", report)
 
     def test_a_review_the_agent_did_not_finish_is_incomplete_and_never_a_quiet_week(self):
         summary = "I could not complete this run's review, and I queued nothing."
         accounts = {
             "says it did not finish": (
-                f"{summary}\n\nReview: incomplete: the rules pass is unfinished.\n",
+                f"{summary}\n\nSession: incomplete: the rules pass is unfinished.\n",
                 "the agent did not finish its review: the rules pass is unfinished",
                 "did not finish reviewing the Go-To-Market Package (the rules pass is unfinished), so",
             ),
@@ -787,7 +807,7 @@ class FailuresTest(CycleTestCase):
                 self.assertIn(told, text)
 
     def test_a_finished_review_is_complete_however_long_the_summary(self):
-        summary = "Traced every recorded outcome.\n\n" + "x" * cycle.SUMMARY_LIMIT + "\n\nReview: complete\n"
+        summary = "Traced every recorded outcome.\n\n" + "x" * cycle.SUMMARY_LIMIT + "\n\nSession: complete\n"
         fakes.behave(self.codex_dir, {"summary": summary})
         code, out = self.run_cycle()
         self.assertEqual(code, 0, out)
@@ -830,12 +850,16 @@ class FailuresTest(CycleTestCase):
         next_run = datetime.fromisoformat(self.queue()["next_run"])
         self.assertEqual(next_run, datetime(2026, 10, 21, 9, 30).astimezone())
 
-    def test_the_run_refuses_a_task_definition_outside_src_instructions(self):
-        out = io.StringIO()
-        runner = cycle.Cycle(self.repo, self.env, self.home, out, self.clock)
-        code = runner.run(self.repo / "workspace/instructions/x.md", "on-demand", None, [])
-        self.assertEqual(code, 2)
-        self.assertIn("src/instructions", out.getvalue())
+    def test_the_run_refuses_to_start_when_a_part_of_a_task_definition_is_missing(self):
+        # Every session's definition is put together before anything else is done, so a run never starts some
+        # sessions and then finds another's definition gone.
+        (self.repo / "src/instructions/weekly-run/outreach.md").unlink()
+        code, out = self.run_cycle()
+        self.assertEqual(code, cycle.launcher.EXIT_CONFIG)
+        self.assertIn("refusing to start: the task definition part", out)
+        self.assertIn("src/instructions/weekly-run/outreach.md could not be read", out)
+        self.assertEqual(fakes.sessions_started(self.codex_dir), [])
+        self.assertFalse((self.ledger() / "run-reports").exists())
 
 
 class NotesTest(CycleTestCase):
@@ -867,11 +891,12 @@ class NotesTest(CycleTestCase):
             code, out = self.run_cycle(trigger="scheduled")
         self.assertEqual(code, cycle.EXIT_STOPPED)
         self.assertIn("the run stopped: [Errno 1] Operation not permitted", out)
-        [record] = self.logs.glob("2*Z-*.json")
+        [record] = self.logs.glob("2*Z-*.package-review.json")
         started = datetime.fromisoformat(json.loads(record.read_text(encoding="utf-8"))["started_at"])
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=30))
+        run = record.name.split(".")[0]
         self.assertIn(
-            f"Run {record.stem} (scheduled), started {cycle.report.wall_clock(started):%A %Y-%m-%d %H:%M}, stopped"
+            f"Run {run} (scheduled), started {cycle.report.wall_clock(started):%A %Y-%m-%d %H:%M}, stopped"
             " before it finished: [Errno 1] Operation not permitted.",
             self.report(),
         )
@@ -1167,7 +1192,7 @@ class ProductionCloneTest(CycleTestCase):
         self.assertIn(f"`workspace/instructions` {restored}", (self.ledger(self.clone) / notice["file"]).read_text())
 
     def test_a_clone_off_main_or_with_code_changes_refuses_to_start(self):
-        with (self.clone / "src/instructions/weekly-run.md").open("a") as handle:
+        with (self.clone / "src/instructions/weekly-run/common.md").open("a") as handle:
             handle.write("Unreviewed line.\n")
         code, out = self.run_cycle(repo=self.clone)
         self.assertEqual(code, cycle.EXIT_RECORDS)
@@ -1189,16 +1214,17 @@ class PostDraftsTest(CycleTestCase):
             return cli.check_drafts(run_id, out), out.getvalue()
 
     def run_with_check_drafts(self, at=None, meanwhile=None):
-        """Run a cycle whose agent, once it has written its files, runs check-drafts for its run while the run is
-        still in progress, as the brief tells it to; returns check-drafts's exit code and its output. meanwhile is
-        what happens outside the run while the agent works, before it runs check-drafts."""
+        """Run a cycle whose post Drafts session, once it has written its files, runs check-drafts for its run while
+        the run is still in progress, as its brief tells it to; returns check-drafts's exit code and its output.
+        meanwhile is what happens outside the run while that agent works, before it runs check-drafts."""
         launch, seen = cycle.launcher.run, []
 
         def agent(*args, **kwargs):
             result = launch(*args, **kwargs)
-            if meanwhile:
-                meanwhile()
-            seen.append(self.check_drafts(kwargs["run_id"]))
+            if kwargs["session"] == "post-drafts":
+                if meanwhile:
+                    meanwhile()
+                seen.append(self.check_drafts(kwargs["run_id"]))
             return result
 
         with mock.patch.object(cycle.launcher, "run", agent):

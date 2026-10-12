@@ -106,7 +106,7 @@ class ValidationTest(BetaCycleTestCase):
         self.assertEqual(list((ledger / "run-reports").glob("*.beta-plan.json")), [])
         self.assertEqual(self.messages(), [])
         brief = self.brief()
-        prompt = (self.codex_dir / "prompt.txt").read_text(encoding="utf-8")
+        prompt = fakes.prompts(self.codex_dir)
         self.assertNotIn("Beta", brief)
         self.assertNotIn("recruiting", brief)
         # The fixed task definition names the pass; nothing this run added to the prompt does.
@@ -178,7 +178,7 @@ class ValidationTest(BetaCycleTestCase):
         self.assertIn(
             f"| Beta invitation (`purpose: beta-invitation`) | `{self.workspace() / fakes.INVITATION}`", brief
         )
-        prompt = (self.codex_dir / "prompt.txt").read_text(encoding="utf-8")
+        prompt = fakes.prompts(self.codex_dir)
         plan = next((ledger / "run-reports").glob("*.beta-plan.json")).read_text(encoding="utf-8")
         for entry in fakes.WAITLIST_ENTRIES:
             self.assertNotIn(entry[0], brief.split("## Waitlist")[0] + brief.split("## Beta Cohort recruiting")[1])
@@ -326,6 +326,8 @@ class DraftChecksTest(BetaCycleTestCase):
 
         def agent(*args, **kwargs):
             result = launch(*args, **kwargs)
+            if kwargs["session"] != "beta-recruiting":
+                return result
             out = io.StringIO()
             with (
                 mock.patch.object(cli, "REPO_ROOT", self.repo),

@@ -9,6 +9,7 @@ from pathlib import Path
 from gr0wthlab import exchange, package, report
 from gr0wthlab.queue import SetAside
 from gr0wthlab.report import RunState, SourceLine
+from tests import fakes
 
 
 def local(*args):
@@ -79,14 +80,34 @@ class CostTest(unittest.TestCase):
 
     def test_the_report_says_when_the_cost_is_unknown(self):
         state = RunState("R", "on-demand", local(2026, 10, 11, 16), "i.md")
+        self.assertEqual(report.cost_line(state), "Approximate cost: none; no agent session was started.")
+        state.sessions = [fakes.session()]
         self.assertIn("unknown", report.cost_line(state))
+
+    def test_the_run_s_cost_is_the_sum_of_its_sessions_and_a_floor_when_one_reported_nothing(self):
+        usage = {"input_tokens": 1000, "cached_input_tokens": 400, "cache_write_input_tokens": 0, "output_tokens": 50}
+        state = RunState("R", "on-demand", local(2026, 10, 11, 16), "i.md")
+        state.sessions = [fakes.session(), fakes.session("post-drafts")]
+        for session in state.sessions:
+            session.usage, session.cost = usage, 0.004
+        self.assertEqual(
+            report.cost_line(state),
+            "Approximate cost: about $0.008 at API prices, for 2,000 input tokens (800 cached) and 100 output tokens,"
+            " over its 2 sessions.",
+        )
+        state.sessions.append(fakes.session("outreach", closing="", timed_out=True, exit_code=6))
+        self.assertEqual(
+            report.cost_line(state),
+            "Approximate cost: at least $0.008 at API prices, for the 2,000 input tokens (800 cached) and 100 output"
+            " tokens that Codex reported, over its 3 sessions; what the Outreach session used beyond that is not"
+            " available.",
+        )
 
 
 class NoticeTest(unittest.TestCase):
     def state(self):
         state = RunState("R", "on-demand", local(2026, 10, 11, 16), "i.md")
-        state.agent = {"agent_started": True, "exit_code": 0}
-        state.review = report.REVIEW_COMPLETE
+        state.sessions = [fakes.session()]
         return state
 
     def test_a_clean_run_has_no_notice(self):
@@ -94,7 +115,7 @@ class NoticeTest(unittest.TestCase):
 
     def test_a_review_the_agent_did_not_finish_is_a_problem(self):
         state = self.state()
-        state.review = "Review: incomplete: the rules pass is unfinished."
+        state.sessions = [fakes.session(closing="Session: incomplete: the rules pass is unfinished.")]
         title, body, _, _ = report.problems_notice(state, "run-reports/R.md")
         self.assertEqual(title, "Notice: the package review was not finished on 2026-10-11")
         self.assertTrue(
@@ -107,11 +128,16 @@ class NoticeTest(unittest.TestCase):
 
     def test_a_review_the_agent_never_confirmed_finishing_says_only_that(self):
         state = self.state()
-        state.review = "I traced every outcome."
+        state.sessions = [fakes.session(closing="I traced every outcome.")]
         title, body, _, _ = report.problems_notice(state, "run-reports/R.md")
         self.assertEqual(title, "Notice: the package review was not confirmed finished on 2026-10-11")
         self.assertTrue(body.startswith("The Marketing Engineer did not confirm that it finished every pass"), body)
-        self.assertNotIn("Review: complete", body)
+        self.assertNotIn("Session: complete", body)
+
+    def test_only_the_package_review_s_closing_line_is_a_problem_when_the_mac_stayed_awake(self):
+        state = self.state()
+        state.sessions.append(fakes.session("outreach", closing="Session: incomplete: one creator is left."))
+        self.assertIsNone(report.problems_notice(state, "run-reports/R.md"))
 
     def test_a_failed_source_names_what_it_leaves_incomplete(self):
         state = self.state()
@@ -125,15 +151,49 @@ class NoticeTest(unittest.TestCase):
 
     def test_an_agent_that_never_started_is_a_problem(self):
         state = self.state()
-        state.agent = {"agent_started": False, "exit_code": 3, "error": None}
+        state.sessions = [fakes.session(closing="", agent_started=False, exit_code=3, error=None)]
+        state.sessions[0].incomplete = ("Package review (contradictions)",)
         state.problems.append("the ledger could not be read")
         title, body, _, _ = report.problems_notice(state, "run-reports/R.md")
         self.assertEqual(title, "Notice: the run on 2026-10-11 had 2 problems")
-        self.assertIn("The agent did not start", body)
+        self.assertIn(
+            "The Package review session did not start: see the run report. Incomplete this run: Package review"
+            " (contradictions).",
+            body,
+        )
+
+    def test_each_session_that_fell_short_has_its_own_part_and_a_timed_out_one_leads(self):
+        state = self.state()
+        refused = fakes.session("post-drafts", closing="", exit_code=1)
+        refused.error = "exceeded retry limit, last status: 429 Too Many Requests"
+        refused.incomplete = ("Post Drafts",)
+        late = fakes.session("outreach", closing="", limit=600.0, timed_out=True, exit_code=6)
+        late.incomplete = ("Outreach Drafts",)
+        failed = fakes.session("learning", closing="", exit_code=2)
+        state.sessions += [refused, late, failed]
+        title, body, _, _ = report.problems_notice(state, "run-reports/R.md")
+        self.assertEqual(
+            title, "Notice: the Outreach session timed out on 2026-10-11, and the run had 2 other problems"
+        )
+        parts = body.split("\n\n")
+        self.assertTrue(parts[0].startswith("The Outreach session was still running at its 10 min time limit"), body)
+        self.assertIn("Incomplete this run: Outreach Drafts.", parts[0])
+        self.assertIn("`agent.session_time_limit_seconds`", parts[0])
+        self.assertEqual(
+            parts[1],
+            "The model's provider refused the Post Drafts session (exceeded retry limit, last status: 429 Too Many"
+            " Requests), so its agent did no work. Incomplete this run: Post Drafts. The next run does this work"
+            " again.",
+        )
+        self.assertEqual(
+            parts[2],
+            "The Rejection reasons session stopped with exit code 2, so its work this run may be incomplete: nothing.",
+        )
+        self.assertNotIn("Package review", body)
 
     def test_a_notice_about_several_kinds_of_problem_counts_every_problem(self):
         state = self.state()
-        state.review = "Review: incomplete: the rules pass is unfinished"
+        state.sessions = [fakes.session(closing="Session: incomplete: the rules pass is unfinished")]
         for name in ("a.md", "b.md", "c.json"):
             state.sources.append(SourceLine(f"RepToday package: `{name}`", package.FAILED, "missing.", ()))
         title, _, _, _ = report.problems_notice(state, "run-reports/R.md")
