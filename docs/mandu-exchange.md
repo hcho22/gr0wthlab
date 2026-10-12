@@ -82,8 +82,9 @@ The Draft or proposal itself.
   A version 2 post always had a slot and no window or day.
 - `supersedes` names an earlier item this one replaces; the earlier one has left `open` and is never presented again.
 - A package-change proposal also has `new_angle`, what the proposal declares of itself: `yes` when it adds or changes an Angle or Hook, which covers any change to a Hook, signal, or kill criterion, and `no` when it does neither.
-  gr0wthlab queues a `yes` proposal only when its Evidence names the record of at least one Listening quote it keeps, and never queues a `no` proposal whose ask plainly introduces an Angle or Hook.
-  Whether a `no` is true of everything else the proposal says is the Founder's to judge: when Mandu presents a package-change proposal, it says which the proposal declares, so a wrong label is seen at the sitting and can be rejected.
+  gr0wthlab queues a `yes` proposal only when its Evidence names the record of at least one Listening quote it keeps.
+  It queues a `no` proposal whatever the proposal touches or says, and never checks a declaration against the proposal's wording: the Founder is the check on a wrong declaration.
+  So when Mandu presents a package-change proposal, it says which the proposal declares, so that a wrong one is seen at the sitting and can be rejected.
   A proposal queued before version 4 has no `new_angle`.
 
 | `kind` | The section after the title | Options |

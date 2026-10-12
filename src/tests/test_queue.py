@@ -317,36 +317,24 @@ class OrderAndPersistenceTest(LedgerTestCase):
         queued = (self.store.root / entry["file"]).read_text(encoding="utf-8")
         self.assertIn("\nnew_angle: yes\n---\n", queued, "the declaration is on the item the Founder reads")
 
-    def test_a_proposal_that_declares_no_angle_or_hook_is_queued_whatever_it_touches(self):
+    def test_a_proposal_that_declares_no_angle_or_hook_is_queued_whatever_it_touches_or_says(self):
         for title, touches in (
             ("add the Hook's missing kill criterion to day 4", self.PAIRS),
             ("mark the new Hook on day 9 as frozen", self.PAIRS),
             ("record the cleared name in the Angle bank's caveat", self.BANK),
-            ("resolve the frozen Hook that fails the word cap", None),
-            ("add the cleared status so the Hook can ship", None),
+            ("add the Hook freeze date to the calendar", None),
+            ("add Angle P03's missing source link", self.BANK),
+            ("add hook-word-cap note to the brand guidelines", None),
+            ("introduce Angle P07 for desk workers", self.BANK),
         ):
             with self.subTest(title=title):
                 self.drop("fix.md", self.declared(title, "no", touches))
                 published, set_aside = self.take_kept()
                 self.assertEqual((len(published), set_aside), (1, []))
-                self.assertEqual(self.ledger.entries[published[0]]["new_angle"], "no")
-
-    def test_an_ask_that_plainly_introduces_an_angle_or_hook_cannot_declare_that_it_adds_none(self):
-        for title in (
-            "introduce Angle P07 for desk workers",
-            "propose an Angle about lunch breaks",
-            "add a new Angle for desk workers",
-            "adding a Hook: lunch breaks",
-        ):
-            for touches, evidence in ((None, ""), (self.BANK, f"- Sourced pain: `{self.KEPT}`")):
-                with self.subTest(title=title, touches=touches):
-                    self.drop("angle.md", self.declared(title, "no", touches, evidence))
-                    published, set_aside = self.take_kept()
-                    self.assertEqual(published, [])
-                    (problem,) = set_aside[0].problems
-                    self.assertIn("its ask introduces an Angle or Hook, yet it declares new_angle: no", problem)
-                    self.assertIn("declare new_angle: yes and name a Listening quote the launcher keeps", problem)
-                    self.assertIn("or reword the ask if it adds or changes no Angle, Hook, signal, or kill", problem)
+                entry = self.ledger.entries[published[0]]
+                self.assertEqual(entry["new_angle"], "no")
+                queued = (self.store.root / entry["file"]).read_text(encoding="utf-8")
+                self.assertIn("\nnew_angle: no\n---\n", queued, "the Founder reads what it declared")
 
     def test_no_item_the_agent_writes_supersedes_a_post(self):
         post = self.post("day-3", 3)

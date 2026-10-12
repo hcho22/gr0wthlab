@@ -11,7 +11,6 @@ An open item is carried over once the Founder has left it undecided at a sitting
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
@@ -31,12 +30,6 @@ ITEMS = "items"
 SET_ASIDE = "set-aside"
 QUEUE_FILE = "queue.json"
 MAX_SLUG = 60
-# An ask that plainly introduces an Angle or Hook: a verb of proposing with one as its object, never a possessive.
-INTRODUCES = re.compile(
-    r"\b(?:add|adds|adding|introduce|introduces|introducing|propose|proposes|proposing)\s+"
-    r"(?:(?:a|an|the|another|new)\s+)*(?:angle|hook)s?\b(?!['\u2019])",
-    re.IGNORECASE,
-)
 
 
 class QueueError(Exception):
@@ -62,21 +55,15 @@ class SetAside:
 def declaration_problem(item: exchange.Item, kept: Collection[str]) -> str | None:
     """Why a package-change proposal's declaration keeps it off the queue, if it does. One that declares it adds or
     changes an Angle or Hook needs sourced pain: an Evidence line that names, exactly, the record of a Listening
-    quote the launcher keeps. One that declares it does not is held to nothing but its own ask."""
-    if item.fields["new_angle"] == "yes":
-        if exchange.references(item.evidence).isdisjoint(kept):
-            return (
-                "it declares new_angle: yes, and a proposal that adds or changes an Angle or Hook, any Hook, signal,"
-                " or kill criterion included (FR-7), is queued only with sourced pain: no record its Evidence names is"
-                " a Listening quote the launcher keeps. Name one exactly in an Evidence line, as"
-                " `evidence/listening/quotes/<document id>.json`, or propose it in review-queue/angles/ with this"
-                " run's quotes under ## Sourced pain"
-            )
-    elif INTRODUCES.search(item.ask):
+    quote the launcher keeps. One that declares it does not is held to nothing more, whatever it touches or says:
+    the declaration is on the item, and the Founder is the check on a wrong one."""
+    if item.fields["new_angle"] == "yes" and exchange.references(item.evidence).isdisjoint(kept):
         return (
-            "its ask introduces an Angle or Hook, yet it declares new_angle: no: declare new_angle: yes and name a"
-            " Listening quote the launcher keeps in its Evidence, or reword the ask if it adds or changes no Angle,"
-            " Hook, signal, or kill criterion"
+            "it declares new_angle: yes, and a proposal that adds or changes an Angle or Hook, any Hook, signal, or"
+            " kill criterion included (FR-7), is queued only with sourced pain: no record its Evidence names is a"
+            " Listening quote the launcher keeps. Name one exactly in an Evidence line, as"
+            " `evidence/listening/quotes/<document id>.json`, or propose it in review-queue/angles/ with this run's"
+            " quotes under ## Sourced pain"
         )
     return None
 

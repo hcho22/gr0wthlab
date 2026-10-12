@@ -90,7 +90,7 @@ Every package-change proposal declares `new_angle`, and the Founder sees what yo
   It needs sourced pain: an Evidence line that names the record of at least one quote the launcher already keeps, exactly as `evidence/listening/quotes/<document id>.json`, or the launcher sets it aside.
   To rest a proposal on a quote you record this run, write it in the angles folder instead, as "Listening" describes.
 - `new_angle: no` when it does neither, whatever files it touches: a fix that brings stale text in the Angle bank or the A/B pairs file in line with the record is `no`.
-  The launcher sets a `no` proposal aside only when its ask itself introduces an Angle or Hook: then declare `yes` and cite a quote, or reword the ask.
+  The launcher queues a `no` proposal without checking the declaration against its wording, and the Founder is the check on a wrong one: declare what the proposal does, never what gets it queued.
 
 ## Writing a post Draft
 
