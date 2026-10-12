@@ -13,6 +13,10 @@ workspace/ the launcher only restores its owner's access to entries the agent le
 recruiting Drafts, removes a recruiting Draft that holds what looks like an email address, and reads and removes the
 incoming items it takes in. One run at a time per checkout holds the run lock in its ledger/ from the sync to the
 saved records; a run started meanwhile refuses to start, and the next report says so.
+
+A scheduled start comes first as a check (attempts.py): it begins a run only while the launcher's records show the
+run due is still owed and the Mac is fully awake, and every run notes there how it ended, so a run the Mac's sleep cut
+short is followed by a fresh one and no other run is.
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ from pathlib import Path
 from typing import TextIO
 
 from . import (
+    attempts,
     beta,
     dispatch,
     exchange,
@@ -151,6 +156,9 @@ class Cycle:
         self.store = Store(canonical(repo_root) / LEDGER)
         self.started: datetime | None = None
         self.run_id: str | None = None
+        self.due: datetime | None = None  # when a scheduled start's run was due, once its settings could be read
+        self.unsure = False  # the Mac did not say whether it was fully awake when a scheduled start asked
+        self.noted = False  # how this run ended is in the record of the run due at its time
 
     def say(self, message: str) -> None:
         print(f"gr0wthlab: {message}", file=self.out)
@@ -772,6 +780,74 @@ class Cycle:
             return None
         return handle
 
+    def owed(self, once: str | None) -> int | None:
+        """A scheduled start is first a check of the launcher's own records: None while the run due is still owed and
+        the Mac is fully awake, and otherwise the exit status of a start that begins nothing. The check takes no lock
+        and writes nothing, so the LaunchAgent can make it every few minutes, and it prints its reason only at a
+        terminal, so a LaunchAgent's log does not grow by a line each time."""
+        try:
+            config = settings.load(self.repo_root, self.env, self.home)
+        except ConfigError as error:
+            self.say(f"refusing to start: {error}")
+            return launcher.EXIT_CONFIG
+        now = self.now()
+        self.due = report.due_time(now, config.weekly, once)
+        record = attempts.load(self.store, self.due)
+        why = attempts.waiting(record, config.attempts_per_week, report.wall_clock(now))
+        if not why:
+            awake = attempts.fully_awake()
+            self.unsure = awake is None
+            why = "" if awake or self.unsure else "the Mac is not fully awake, and a run starts only while it is"
+        if why and self.out.isatty():
+            self.say(f"nothing to start: {why}")
+        return 0 if why else None
+
+    def claim(self, state: RunState, config: settings.Settings) -> attempts.Attempt | None:
+        """Under the run lock, note this scheduled attempt in the record of the run due at its time before anything
+        else is done, so that an attempt that never ends still counts; None when the record shows that no run is owed
+        after all, as when another start completed it meanwhile."""
+        record = attempts.load_to_write(self.store, state.due)
+        why = attempts.waiting(record, config.attempts_per_week, report.wall_clock(state.started))
+        if why:
+            self.say(f"nothing to start: {why}")
+            return None
+        if record.problem:
+            state.problems.append(
+                f"the record of the attempts at the run due {report.moment(state.due)} could not be used"
+                f" ({record.problem}); it was set aside and started again, so this run may repeat one already made"
+            )
+        if self.unsure:
+            state.problems.append(
+                "the Mac did not say whether it was fully awake, so this run started without knowing; a run started"
+                " in a dark wake is likely to be cut short by sleep"
+            )
+        self.due = state.due
+        return attempts.claim(self.store, record, config.attempts_per_week, state.started)
+
+    def note_ending(self, state: RunState, config: settings.Settings) -> None:
+        """Note how this run ended in the record of the run due at its time, which the next scheduled start reads to
+        tell whether a run is still owed. A run on demand is noted at the weekly time before it started, so one that
+        completed counts as that week's run."""
+        due = state.due if state.attempt else report.due_time(state.started, config.weekly)
+        attempts.finish(
+            self.store, due, state.trigger, state.started, state.run_id, state.ending, self.now(), state.asleep
+        )
+        self.noted = True
+        follows = report.what_follows(state)
+        if follows:
+            self.say(follows)
+
+    def note_no_report(self, trigger: str, ending: str) -> None:
+        """Note the ending of a scheduled start that never reached its report, refused or stopped by an error: it
+        does not earn another attempt, so the owed-run check does not start it again every few minutes."""
+        if trigger != attempts.SCHEDULED or self.due is None or self.noted:
+            return
+        try:
+            started = self.started or self.now()
+            attempts.finish(self.store, self.due, trigger, started, self.run_id, ending, self.now())
+        except (OSError, ConfigError) as error:
+            self.say(f"how this start ended could not be noted ({error})")
+
     def run(
         self,
         instruction: Path | None,
@@ -780,12 +856,18 @@ class Cycle:
         argv: Sequence[str],
         execve: Callable[[str, list[str], Mapping[str, str]], None] = os.execve,
     ) -> int:
+        if trigger == attempts.SCHEDULED and not self.env.get(PRE_RUN_ENV):
+            code = self.owed(once)
+            if code is not None:
+                return code
         lock = self.lock(trigger)
         if lock is None:
             return EXIT_BUSY
         with lock:
             try:
-                return self.locked_run(instruction, trigger, once, argv, execve)
+                for name, line in attempts.left_without_ending(self.store):
+                    self.leave_note(name, line)
+                code = self.locked_run(instruction, trigger, once, argv, execve)
             except (OSError, ConfigError) as error:
                 started = self.started or self.now()
                 run_id = self.run_id or launcher.new_run_id(trigger, started)
@@ -795,7 +877,11 @@ class Cycle:
                 )
                 self.leave_note(run_id, line)
                 self.say(f"the run stopped: {error}; the next run's report will say so")
+                self.note_no_report(trigger, attempts.STOPPED)
                 return EXIT_STOPPED
+            if code:
+                self.note_no_report(trigger, attempts.REFUSED)
+            return code
 
     def locked_run(
         self,
@@ -854,6 +940,9 @@ class Cycle:
         state.late_after = timedelta(minutes=config.late_after_minutes)
         if trigger == "scheduled":
             state.due = report.due_time(started, config.weekly, once)
+            state.attempt = self.claim(state, config)
+            if state.attempt is None:
+                return 0
         state.code = head(self.repo_root)
         try:
             _, boundary = load_boundary(self.repo_root, self.env, self.home)
@@ -987,7 +1076,8 @@ class Cycle:
         self.outputs(state, config, ledger_ok)
         if ledger_ok:
             ledger.mark_carried_over(sittings)
-            next_run = report.next_due(now, config.weekly)
+            # While a fresh run is to follow by itself, the next weekly run is the one already due.
+            next_run = state.due.astimezone() if state.again else report.next_due(now, config.weekly)
             try:
                 self.store.write_json(
                     ledger_path, ledger.as_json(run_id, now, self.store.relative(report_path), next_run)
@@ -1013,6 +1103,7 @@ class Cycle:
                 path.unlink()
             self.say(f"run report: {report_path}")
 
+        self.note_ending(state, config)
         saved = None
         if production and config.records.save_after_run:
             result = records.save(
@@ -1039,6 +1130,7 @@ class Cycle:
             records=saved,
             report=str(report_path),
             late=state.late,
+            ending=state.ending,
             usage=state.usage,
             cost_usd=state.cost,
             queued=state.published,

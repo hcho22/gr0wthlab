@@ -27,7 +27,7 @@ QUIET_WINDOW = {"number": 1, "first_sitting": "2099-01-04", "slot": "19:00"}
 # hang does its writing, starts its children, the first in a session of its own as Codex starts a shell command, notes
 # every process id in pids.txt, and then never exits and never reports its summary or its token counts. One told to
 # detach first leaves what a shell command that has finished can leave, noted last: a process in a session of its own
-# whose parent has ended.
+# whose parent has ended. One told to work takes that many seconds before it finishes.
 FAKE_CODEX = """#!{python}
 import json, os, re, shutil, signal, subprocess, sys, time
 from pathlib import Path
@@ -77,6 +77,7 @@ for line in behavior.get("events", []):
     print(line, flush=True)
 while behavior.get("hang"):
     time.sleep(600)
+time.sleep(behavior.get("work", 0))
 summary = behavior.get("summary", "Checked the package.\\n\\nReview: complete\\n")
 Path(args[args.index("--output-last-message") + 1]).write_text(summary)
 usage = {{"input_tokens": 200000, "cached_input_tokens": 150000, "cache_write_input_tokens": 0, "output_tokens": 4000}}

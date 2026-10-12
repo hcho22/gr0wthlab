@@ -147,8 +147,8 @@ Once the Founder approves one, Mandu hands that item, with the Founder's note if
 }
 ```
 
-`next_run` is when the next weekly run is due on gr0wthlab's schedule, and every run that writes `queue.json` moves it forward.
-Once it has passed, that run was missed, started late, is still running, or was refused because another run was in progress.
+`next_run` is when the next weekly run is due on gr0wthlab's schedule, and every run that writes `queue.json` moves it forward, but for a scheduled run that the Mac's sleep cut short: that week's run is still owed and starts again by itself once the Mac is awake, so `next_run` stays at the time it was due.
+Once it has passed, that run was missed, started late, is still running, was refused because another run was in progress, or was cut short by the Mac's sleep and has yet to run again.
 `open` is already in presentation order: posts by nearest slot first, then posts with no slot yet by window and day, then messages, Weekly Read decisions, Dispatch requests, package-change proposals, and notices, oldest first within each kind.
 `carried_over` is `true` for an item that was open at an earlier sitting and left undecided, and `carried_over_from` then gives the date of the first such sitting.
 An item queued after the latest sitting is not carried over, whichever run queued it.

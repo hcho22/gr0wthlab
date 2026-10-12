@@ -401,6 +401,82 @@ Nothing in the process table ties such a process to the agent, so the stop does 
 This is not particular to a timed-out run: in `20261011T183552Z-on-demand-5ac3` the agent started `/bin/sleep 621` the same way and the run ended with exit code 0 after 17 seconds; the launcher stopped nothing, and the process was still running 15 seconds later.
 A plain background job (`nohup sleep 617 >/dev/null 2>&1 &`, run `20261011T181728Z-on-demand-a19e`) left nothing: no reading of the process table during or after that run showed it.
 
+### Re-check after the owed-run check (US-ME17)
+
+Nothing holds the Mac awake for a run, as the Founder decided on 2026-10-11, so each week's run now happens when the Mac is awake ([operations](../operations.md#a-run-happens-when-the-mac-is-awake)).
+A scheduled start is first a check of the launcher's own records (`src/gr0wthlab/attempts.py`, `ledger/run-reports/attempts/`): it begins a run only while the week's run is still owed and the Mac is fully awake, and the weekly LaunchAgent makes that start every two minutes that the Mac is running as well as at the weekly time.
+How Codex is started is unchanged: at one checkout path, `show-config` gives the fingerprint `fdba77d0574276b59d79784db9bbd6d4b5952f686beb2ec4f7d159b1c35983c7` both at `92d8bbe`, before this work, and with it.
+The launcher starts one new process, `/usr/bin/pmset -g systemstate`, once in each scheduled start that finds a run owed; it reads the Mac's power state, goes through `process.py` with a time limit like every other process, and changes nothing.
+Nothing in the launcher, its configuration, the task definition, or a rendered LaunchAgent holds the Mac awake, wakes it, or schedules a wake, and `src/tests/test_attempts.py` keeps it so.
+
+Both checks were made on the final launcher on 2026-10-11, Mac local time, with Codex CLI 0.160.0, from this work's worktree at its final commit, against Mandu and the Product checkouts as they are; there the fingerprint is `004a906cd66214d6e0e3223f50e7627e01cb5bfe4eaa64c37de4b1c637eee705`, and the run identifier carries the UTC date.
+No change to the launcher came after them.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
+- `src/bin/gr0wthlab boundary-check` passed at its first attempt, as run `20261012T055304Z-on-demand-feb1`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+  The probe's agent ran 50 seconds of its 30 minute limit, all of them with the Mac awake.
+
+These replace one earlier pair of checks made the same day on this work, before a correction to the wording of a comment in `schedule.py`, the only change to the launcher between the two: the preflight passed the same way, and the boundary check passed at its first attempt as `20261012T054221Z-on-demand-8ed4`, with ten patch rejections where the check needs nine, eleven kernel denials, no connection, no escaped sentinel, and nothing changed outside the areas.
+No attempt at the boundary check failed.
+
+What happened before this work was established on the Founder's Mac the same day, not assumed.
+
+- The Mac sleeps after one minute idle (`pmset -g`: `sleep 1`), and while asleep it wakes by itself, with `powernap` on.
+  `pmset -g log` shows 74 dark wakes on 2026-10-10 and 2026-10-11, 45 seconds long at the median and 83 minutes at the longest; between the idle sleep at 12:22 and the next full wake at 17:44 on 2026-10-11 there were 23, each 45 to 153 seconds long.
+- launchd starts jobs in dark wakes, and an interval counts the time the Mac is running, dark wakes included.
+  The unified log shows an hourly interval job of another vendor (`com.google.GoogleUpdater.wake`, `StartInterval` 3600) ending at 23:41:33 on 2026-10-10, next at 06:35:47 inside the dark wake of 06:32:21 to 06:36:23, then hourly while the Mac was in use, then at 14:23:40 inside the dark wake of 14:23:00 to 14:23:45.
+  Each gap adds up to about an hour of running time once the dark wakes between are counted, so an interval that fell due during sleep is not started at once at the next wake.
+- For a calendar start the Mac slept through, `launchd.plist(5)` on macOS 26.6.2 says launchd starts the job the next time the computer wakes, once however many times it was missed.
+  This was not observed: the log held no calendar job's start inside a sleep.
+  Taken with the line above, such a start comes in a dark wake, within minutes to an hour of the weekly time and with nobody at the Mac.
+- A scheduled run the Mac sleeps through, on `main` at `92d8bbe`, in a throwaway production clone with a stand-in agent that never exits and a wall clock stepped forward 16 hours three seconds into the agent: run `20261011T230000Z-scheduled-623e` ended with exit code 6, its report said it timed out and that the Mac was asleep for about 16 hours, a notice was queued, `next_run` named the following Sunday, and nothing in `ledger/` said whether the week's run had completed.
+  Nothing followed, and each of two further scheduled starts ran a whole run again, since a scheduled start always did.
+
+The same clone, agent, and clock on the final launcher, through `src/bin/gr0wthlab` itself, started by a script that replaces only the names the launcher reads its clocks through, and the answer to whether the Mac is fully awake where a dark wake is meant.
+Each row is one requirement of this work, and every run named is a whole run with its report.
+
+| Requirement | Expected | Observed | Result |
+| --- | --- | --- | --- |
+| A start the Mac slept through runs once the Mac is fully awake and says how late | A start in a dark wake begins nothing; the first start with the Mac fully awake runs, and its report gives the due time, the start, and the lateness | Starts at Sunday 16:08 in a dark wake ended with exit code 0 and wrote nothing; the start at Sunday 19:40, run `20261012T024000Z-scheduled-c90f`, reported `Started late: due Sunday 2026-10-11 16:00, started Sunday 2026-10-11 19:40, 3 h 40 min after its time` | pass |
+| A run the Mac slept past its limit is timed out with the sleep named and does not count | Exit code 6, the report says timed out, how long the Mac slept, and that a fresh run follows; no notice; `next_run` stays at the due time | Run `…-c90f`, asleep 16 hours from three seconds into the agent: all of that, with the record `cut-short-by-sleep` | pass |
+| A fresh run follows by itself and completes, and says what happened | The next start with the Mac fully awake runs a whole run as attempt 2, and later starts begin nothing | A start at Monday 07:10 in a dark wake began nothing; the start at Monday 08:02, run `20261012T150200Z-scheduled-5516`, completed and reported `16 h 2 min after its time. This is attempt 2 of at most 3: the attempt started Sunday 2026-10-11 19:40 was cut short by the Mac's sleep`; the start at 08:04 began nothing and, at a terminal, said the run had completed | pass |
+| A run that timed out with the Mac awake earns no fresh run | Its report and notice say no run starts by itself; later starts begin nothing | Run `20261011T230000Z-scheduled-81b6`, with the limit lowered to 4 seconds for the lab: both, and starts two minutes and sixteen hours later began nothing | pass |
+| The attempt limit ends the fresh runs with a notice | After the last attempt a notice says so, and no start begins a run until the next weekly time | With the limit lowered to 2 for the lab, runs `20261018T230000Z-scheduled-e753` and `20261019T030100Z-scheduled-1063` were both cut short; the second queued `Notice: the Mac's sleep cut short every attempt at the run due 2026-10-18`, and the next start began nothing | pass |
+| Two starts at once leave one run | One run and one report | Two scheduled starts at the same moment on the Mac's real clock, with its real answer about its power state: `20261012T055504Z-scheduled-789c` ran, the other was refused with exit code 5 and is named in that run's report, and a third start afterwards began nothing | pass |
+| A fresh run queues nothing already queued or decided | The never-ask-twice and carry-over rules hold across attempts | Unit tests only: `AcrossAttemptsTest` runs a cut-short attempt that queues a proposal and a post, has the Founder approve one and leave the other at a sitting, and runs the fresh attempt with the agent writing both again | pass, not run live |
+| A run on demand is unchanged | It always runs, asks nothing about the Mac's power state, and reads as before | Runs `20261012T150500Z-on-demand-5583` and `20261019T151000Z-on-demand-54f2`, each after the week's scheduled run had ended without completing, ran and completed | pass |
+| Nothing holds the Mac awake | No source names a way to, no LaunchAgent key does, and no process a scheduled run starts does | `NothingHoldsTheMacAwakeTest`; `pmset -g assertions`, read while a scheduled run was in progress, listed no assertion held by the run's processes, only those of other processes on the Mac | pass |
+
+A scheduled start that begins nothing took 0.2 seconds and printed nothing.
+Every run in the table was made on the final launcher.
+The LaunchAgent and the run with the real agent below were made on this work before its last edits, to the wording of one notice in `report.py`, a sentence of explanation in `config/run.json`, and a comment in `schedule.py`; nothing else in the launcher differed.
+
+The scheduled path was exercised with a temporary LaunchAgent under its own label, `gr0wthlab.fm-run-when-awake-test`, rendered by `src/bin/gr0wthlab launch-agent --label …` in a throwaway production clone with the stand-in agent, its weekly time set four minutes ahead and its interval to one minute for the lab.
+launchd accepted the calendar time and the interval together (`run interval = 60 seconds`) and started the job eight times in eight minutes, each with exit code 0.
+The first start, a minute after loading, began the run owed from the week before and said how late it was (`20261012T052632Z-scheduled-65f2`); the next two began nothing and printed nothing; the start at the weekly time ran on time (`20261012T052903Z-scheduled-0730`).
+That run's record was then rewritten by hand to read as cut short by sleep, and the next interval start ran attempt 2 by itself (`20261012T053006Z-scheduled-2593`); the three after it began nothing.
+The LaunchAgent was removed with `launchctl bootout` and by deleting its plist: `launchctl print` no longer finds it, and no `gr0wthlab` entry remains in `~/Library/LaunchAgents` or `launchctl list`.
+The real weekly schedule was not installed.
+
+One whole run with the real agent went through the scheduled path in a throwaway production clone inside the worktree, against Mandu and the Product checkouts as they are: run `20261012T052606Z-scheduled-18ba` passed the check with the Mac's own answer that it was fully awake, its agent ran 2 minutes 31 seconds and ended with exit code 0, the run cost about $0.03, its records were pushed to the clone's own throwaway remote, its record reads `completed`, and a second scheduled start began nothing.
+
+Not exercised live:
+
+- A real sleep.
+  The Mac was held awake throughout, so no run was frozen by sleep: every cut-short run above came from a stepped wall clock, as in the time-limit tests.
+- What Codex does when the Mac sleeps in the middle of a model call and wakes within the limit.
+  The launcher counts such a run as cut short only if the agent then fails to finish.
+- launchd starting a calendar job the Mac slept through, as above.
+- What the Mac answers about its power state in a dark wake.
+  Fully awake, it lists the capability `Graphics`, and the root power domain's `System Capabilities` reads 15.
+  In `pmset -g log` every full wake of those two days is marked `[CDNVA]` and every dark wake `[CDNPB]` or `[CDNP]`, without the V; the launcher takes `Graphics` to be that V, which was not read in a dark wake.
+  A passive sampler ran beside this work and saw no dark wake, since the Mac did not sleep.
+  If the answer in a dark wake were not as expected, starts would begin in dark wakes, attempts would be cut short there, and the notice at the limit would say so.
+- A fresh run with the real agent after a cut-short attempt.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the first of these runs and after the last.
+The runs' outputs were removed from the worktree afterwards and are not part of this change.
+
 ## Scheduled and on-demand runs share one configuration
 
 The scheduled path was tested with a temporary LaunchAgent, `gr0wthlab.us-me02-schedule-test`, generated by `src/bin/gr0wthlab launch-agent --once <time> --label gr0wthlab.us-me02-schedule-test --instruction src/checks/boundary-probe.md`.
@@ -413,7 +489,7 @@ Each scheduled run's fingerprint matches the on-demand runs of the same configur
 ## Where the production run executes
 
 The production run executes from a dedicated, ordinary clone at `~/gr0wthlab` on `main`, outside firstmate's `projects/` clone and its worktrees.
-The weekly LaunchAgent is `gr0wthlab.weekly-run`, generated by `src/bin/gr0wthlab launch-agent`, which defaults to the Sunday 16:00 schedule in [`config/run.json`](../../config/run.json) (US-ME17).
+The weekly LaunchAgent is `gr0wthlab.weekly-run`, generated by `src/bin/gr0wthlab launch-agent`, which defaults to the Sunday 16:00 schedule in [`config/run.json`](../../config/run.json) and starts the launcher every two minutes as well, each start a check of whether the week's run is still owed (US-ME17).
 Setting up the clone and the schedule, and removing them: [operations](../operations.md).
 
 Merged code reaches the clone only from `origin`.
