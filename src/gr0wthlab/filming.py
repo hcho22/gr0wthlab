@@ -15,6 +15,10 @@ plan for, a record that fails a check renders nothing, and tooling that is missi
 never as a failed run. A finished asset lives outside git, in ledger/assets/, and its record in ledger/evidence/
 holds everything needed to rebuild it from the footage.
 
+One rule covers the two legs of an A/B pair: when a run ends, their two posts never both show a video unless the two
+videos show the same source ranges outside each one's opening. Filming.pair_check keeps it, once per pair, on what the
+run is about to leave standing, judging each video by its own record in the ledger.
+
 The plan's shot lists use one beat-sheet shape, a row per shot, adapted from skills/video/references/edit-anatomy.md of
 github.com/coreyhaines31/marketingskills at commit 1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff (MIT; see
 THIRD_PARTY_NOTICES.md).
@@ -58,6 +62,7 @@ NOT_FILED = "not filed"
 FINISHED = "finished"
 BLOCKED = "blocked"
 HELD = "not cut"
+WITHHELD = "not offered"
 NO_EDIT = "no edit record"
 READY = "ready to cut"
 SETTLED = "the Founder approved its post with its video, so nothing is cut again and its edit record stays as it is"
@@ -175,7 +180,7 @@ class DayEdit:
 @dataclass
 class Asset:
     """What the launcher made of one calendar day's edit record. The post-Draft workflow reads blocks, finished,
-    held, sha256, entry, and lines; everything else is for the run's own account."""
+    held, withheld, detail, sha256, entry, and lines; everything else is for the run's own account."""
 
     day: int
     status: str
@@ -193,7 +198,7 @@ class Asset:
     cuts: list[dict[str, object]] = field(default_factory=list)
     checks: list[str] = field(default_factory=list)
     parsed: edits.Edit | None = None
-    pair: str | None = None  # the SHA-256 of the other leg's edit record this day's was compared with
+    opening: list[list[float]] = field(default_factory=list)  # where its Draft puts a re-cut leg's opening
 
     @property
     def finished(self) -> bool:
@@ -203,6 +208,15 @@ class Asset:
     def held(self) -> bool:
         """An edit record that could not be cut this run for a reason outside it, such as missing tooling."""
         return self.status == HELD
+
+    @property
+    def withheld(self) -> bool:
+        """A video that was cut and is not offered, since it and the video of its pair's other leg differ."""
+        return self.status == WITHHELD
+
+    def shows(self) -> dict[str, object]:
+        """What a video cut from this record shows, as far as its record in the ledger tells the pair check."""
+        return {"day": self.day, "edit": {"record": self.parsed.as_json()}, "opening": self.opening}
 
     def entry(self) -> dict[str, object]:
         """What a post's Review Queue entry keeps of its video."""
@@ -214,7 +228,6 @@ class Asset:
             "asset_record": self.record,
             "edit": self.edit,
             "edit_sha256": self.edit_sha256,
-            "pair_edit_sha256": self.pair,
         }
 
     def lines(self) -> list[str]:
@@ -262,19 +275,7 @@ class Asset:
             "asset_record": self.record,
             "reused": self.reused,
             "checks": self.checks,
-            "pair_edit_sha256": self.pair,
         }
-
-
-@dataclass
-class Comparison:
-    """What an A/B leg's edit is compared with, or why it is not compared."""
-
-    edit: edits.Edit | None = None  # the other leg's edit record to compare with now
-    draft: posts.PostDraft | None = None  # that leg's Draft, which tells the opening of a re-cut pair
-    problem: str = ""  # why the leg cannot be compared and may not go uncompared, which blocks it
-    alone: str = ""  # what its checks say of its other leg when it is not compared in this run
-    pair: str | None = None  # the other leg's edit record its video is recorded as compared with, uncompared now
 
 
 @dataclass
@@ -303,7 +304,7 @@ class Filming:
     results: dict[int, Asset] = field(default_factory=dict)
     record: str | None = None
     env: Mapping[str, str] = field(default_factory=dict)  # what the video tooling runs with
-    passed: Mapping[int, posts.PostDraft] | None = None  # the Drafts that passed this run's checks, once made
+    apart: list[str] = field(default_factory=list)  # each pair whose two videos differ, as the Founder is told
 
     def edit_path(self, number: int) -> Path:
         return self.edits / f"day-{number:02d}.json"
@@ -322,8 +323,9 @@ class Filming:
         return path.exists() or path.is_symlink()
 
     def examine(self, number: int, areas: Areas, draft: posts.PostDraft | None = None) -> Asset:
-        """Every check of one day's edit record that needs no tooling, as the launcher and check-edits both run
-        them; an Asset that is READY passed them all."""
+        """Every check one day's edit record has on its own that needs no tooling, as the launcher and check-edits
+        both run them; an Asset that is READY passed them all. Whether it shows the same footage as its pair's other
+        leg is not one of them: that is judged on the two videos (pair_check)."""
         day = self.days.get(number)
         path = self.edit_path(number)
         relative = areas.relative(path)
@@ -358,134 +360,18 @@ class Filming:
         if all(segment.speed == 1 for segment in edit.segments):
             asset.checks.append("every cut plays at the speed it was recorded at")
         if not asset.blocks:
-            found = self.reference(day.spec, edit, draft, areas)
-            asset.pair = found.edit.sha256 if found.edit is not None else found.pair
-            if found.problem:
-                asset.blocks.append(Finding("pair-legs", "", found.problem))
-            elif found.edit is not None:
-                asset.blocks += edits.check_pair(edit, draft, found.edit, found.draft, day.spec)
-                where = "after the re-cut opening" if day.spec.recut else "from the first frame to the last"
-                asset.checks.append(f"the same source ranges as day {found.edit.day}'s leg {where}")
-            elif found.alone:
-                asset.checks.append(found.alone)
-        if not asset.blocks:
+            asset.opening = [list(window) for window in edits.opening_windows(draft, day.spec.hooks)]
             asset.status = READY
         return asset
-
-    def anew(self, number: int | None, areas: Areas) -> bool:
-        """Whether this run cuts a day's video anew: the day is due and not settled, an edit can be cut, and its
-        edit record is not the one the video of its standing post was cut from."""
-        day = self.days.get(number)
-        if day is None or not day.ready or self.due.get(number):
-            return False
-        edit, _ = read_edit(areas, self.edit_path(number))
-        return edit is not None and edit.sha256 != (self.posted.get(number) or {}).get("edit_sha256")
-
-    def draft_of(self, number: int, posted: Mapping[str, object], areas: Areas, queued: bool) -> posts.PostDraft | None:
-        """The Draft of a leg that tells a re-cut pair's opening: the Draft in place when it is the one the leg's
-        standing post was queued from, or, unless only that one will do (queued), when it passed this run's checks.
-        None when the Draft in place is neither. check-edits runs before any Draft is checked, so there a Draft that
-        can be read stands in for one that passed."""
-        draft, _ = posts.read_draft(areas, self.draft_path(number))
-        if draft is None or draft.problems:
-            return None
-        if draft.sha256 == posted.get("draft_sha256"):
-            return draft
-        return draft if not queued and (self.passed is None or number in self.passed) else None
-
-    def reference(self, spec: edits.DaySpec, edit: edits.Edit, draft: posts.PostDraft, areas: Areas) -> Comparison:
-        """What an A/B leg's edit must match outside its opening, or why it is not compared; the same rules as the
-        post-Draft check of the two legs' copy.
-
-        A leg is compared with the edit record its other leg's standing video was cut from, whether or not its own
-        video was already cut from its own record. When this run cuts the other leg anew, the two new records are
-        compared with each other instead, once, as the later day's check; a leg whose own video already stands is
-        then the reference and is not checked against a record no video was cut from.
-
-        In a re-cut pair the other leg's Draft tells its opening. A leg that is untouched, its edit record and its
-        Draft the ones its standing post was queued from, and recorded as paired reads that opening only from the
-        Draft the other leg's standing post was queued from: another Draft in place, whether or not it passed, never
-        judges it, since the changed leg is the one checked against it. Any other leg reads the Draft in place when
-        it is that one or passed this run's checks.
-
-        A leg that cannot be compared now goes uncompared only when its own video stands and the queue records the
-        two standing videos as the pair that was compared; any other leg is blocked, and nothing ever says a
-        comparison was made that was not."""
-        other = spec.other
-        if other is None:
-            return Comparison()
-        mine, posted = self.posted.get(spec.day) or {}, self.posted.get(other) or {}
-        current, _ = read_edit(areas, self.edit_path(other))
-        shown = mine.get("edit_sha256") == edit.sha256
-        standing = posted.get("edit_sha256")
-        known = standing if shown and paired(mine, posted) else None
-        untouched = known is not None and draft.sha256 == mine.get("draft_sha256")
-        replaced = f"day {other}'s edit record is no longer the one the video of `{posted.get('id')}` was cut from"
-
-        def apart(why: str) -> Comparison:
-            if known:
-                return Comparison(
-                    alone=f"it was not compared with day {other}'s leg again, since {why}: its video and the video"
-                    f" of `{posted['id']}` are recorded as the pair that was compared",
-                    pair=known,
-                )
-            if shown:
-                return Comparison(
-                    problem=f"{why}, and nothing records that this leg's video and the video of `{posted['id']}` were"
-                    " compared with each other, so the pair is not compared"
-                )
-            return Comparison(problem=f"{why}, so this leg cannot be compared with it")
-
-        if self.anew(other, areas):
-            if shown and standing and not known:
-                return apart(replaced)
-            if shown or other > spec.day:
-                return Comparison(
-                    alone=f"day {other}'s leg has a new edit record, which is compared with this one before any video"
-                    " is cut from it",
-                    pair=known,
-                )
-        elif not standing:
-            return Comparison(alone=f"day {other}, its pair's other leg, has no video to compare with yet")
-        elif current is None or current.sha256 != standing:
-            return apart(replaced)
-        if current.problems:
-            return Comparison(
-                problem=f"day {other}'s edit record does not follow the format, so this leg cannot be compared"
-            )
-        if not spec.recut:
-            return Comparison(current)
-        theirs = self.draft_of(other, posted, areas, untouched)
-        if theirs is None and untouched:
-            return apart(f"day {other}'s post Draft is no longer the one `{posted['id']}` was queued from")
-        if theirs is None:
-            return apart(f"day {other}'s post Draft, as it is now, is not one a video of that leg stands on")
-        return Comparison(current, theirs)
 
     def finish(self, drafts: Mapping[int, posts.PostDraft], areas: Areas, store: Store, now: datetime) -> None:
         """Turn the edit record of each day whose Draft passed into a finished asset when it passes every check:
         render it with the Draft's text drawn over it, measure it, and keep it only if it measures as the canvas
-        asks. Every record is checked, and the legs of a pair compared, before any video is cut. A failure outside
-        the edit record (the tooling, footage that changed while the run worked, a file that could not be written)
-        holds the day, as missing tooling does, and the run's notice says why.
-
-        The legs of a pair that this run cuts anew are offered together or not at all, so that two posts never
-        show videos that were not compared with each other: a leg is not cut once its other leg cannot be, and the
-        video already cut for a leg whose other leg then fails is not kept."""
-        self.passed = drafts
+        asks. A failure outside the edit record (the tooling, footage that changed while the run worked, a file that
+        could not be written) holds the day, as missing tooling does, and the run's notice says why."""
         for number in sorted(drafts):
-            self.results[number] = self.examine(number, areas, drafts[number])
-        pairs = {}
-        for number in drafts:
-            other = self.days[number].spec.other if number in self.days else None
-            if other is not None and self.anew(number, areas) and self.anew(other, areas):
-                pairs[number] = other
-        for number in sorted(drafts):
-            asset, other = self.results[number], self.results.get(pairs.get(number))
+            asset = self.results[number] = self.examine(number, areas, drafts[number])
             if asset.status != READY:
-                continue
-            if number in pairs and (other is None or other.status not in (READY, FINISHED)):
-                asset.status, asset.detail, asset.told = HELD, together(pairs[number]), True
                 continue
             try:
                 self.cut(asset, drafts[number], store, now)
@@ -497,14 +383,93 @@ class Filming:
                 asset.detail = (
                     f"a file could not be read or written while it was cut ({error.strerror or error}{where})"
                 )
-        for number, other in pairs.items():
-            asset = self.results[number]
-            if asset.finished and not self.results[other].finished:
-                if not asset.reused:
-                    store.path(asset.path).unlink()
-                    if read_json(store.path(asset.record)).get("made_by_run") == self.run:
-                        store.path(asset.record).unlink()
-                self.results[number] = Asset(number, HELD, together(other), asset.edit, asset.edit_sha256, told=True)
+
+    def leave(self, changed: Mapping[int, bool], store: Store) -> None:
+        """The pair check of a run, once the post-Draft workflow knows what it is about to queue and before it queues
+        anything: changed holds each day whose post is about to change, and whether the post is about to show the
+        video this run cut for it."""
+        self.pair_check(
+            {
+                number: read_json(store.path(self.results[number].record)) if shows else None
+                for number, shows in changed.items()
+            },
+            store,
+        )
+
+    def preview(self, areas: Areas, store: Store) -> None:
+        """Each due day's edit record as check-edits sees it before anything is cut: its own checks, then the pair
+        check on the videos a run that ended now would leave. A record that passes would be cut into a video for its
+        day's post, unless it is the record the video of the day's standing post was cut from, which stands."""
+        fresh = {}
+        for number in sorted(self.days):
+            asset = self.results[number] = self.examine(number, areas)
+            standing = self.standing_video(number, store) or {}
+            cut_from = (standing.get("edit") or {}).get("sha256"), standing.get("opening")
+            if asset.status == READY and cut_from != (asset.edit_sha256, asset.opening):
+                fresh[number] = asset.shows()
+        self.pair_check(fresh, store)
+
+    def pair_check(self, fresh: Mapping[int, Mapping | None], store: Store) -> None:
+        """The one rule of an A/B pair's videos: when a run ends, the two posts of a pair never both show a video
+        unless the two videos show the same source ranges outside each one's opening.
+
+        Checked once per pair, on what the run is about to leave standing. fresh holds each day whose post the run is
+        about to change, with the record of the video the post is about to show, or None when it is about to show
+        none; any other day keeps the video its standing post shows. Each video is judged by its own record in the
+        ledger, which holds the edit record it was cut from and where its opening is, never by the files in place.
+
+        When the two videos differ, nothing the run changed for the pair is offered, so what stood before stays, and
+        the run report and the notice name the pair and say why. A leg's checks say it shows the same source ranges
+        as its other leg only when the two were compared here and matched."""
+        for number in sorted(fresh):
+            day = self.days.get(number)
+            other = day.spec.other if day is not None else None
+            if fresh[number] is None or other is None or (fresh.get(other) is not None and other < number):
+                continue
+            theirs = fresh[other] if other in fresh else self.standing_video(other, store)
+            cut = [leg for leg in (number, other) if fresh.get(leg) is not None]
+            if theirs is None:
+                self.results[number].checks.append(
+                    f"day {other}, its pair's other leg, has no video to compare with yet"
+                )
+                continue
+            try:
+                differ = edits.unlike(fresh[number], theirs)
+            except (KeyError, TypeError, ValueError):
+                differ = None
+            if differ == "":
+                where = "after the re-cut opening" if day.spec.recut else "from the first frame to the last"
+                for leg in cut:
+                    self.results[leg].checks.append(
+                        f"the same source ranges as day {number + other - leg}'s leg {where}"
+                    )
+                continue
+            where = "after each one's opening" if day.spec.recut else "from the first frame to the last"
+            said = (
+                f"do not show the same footage {where} ({differ})"
+                if differ
+                else "could not be compared, since the ledger's record of one of them does not say what footage it"
+                " shows"
+            )
+            names = {
+                leg: f"the video cut for day {leg}"
+                if leg in cut
+                else f"the video in day {leg}'s post `{self.posted[leg]['id']}`"
+                for leg in (number, other)
+            }
+            for leg in cut:
+                asset = self.results[leg]
+                asset.status, asset.detail = WITHHELD, f"the video cut for it and {names[number + other - leg]} {said}"
+            first, second = sorted((number, other))
+            self.apart.append(
+                f"Pair {day.spec.pair}, days {first} and {second}: {names[first]} and {names[second]} {said}. Nothing"
+                " this run changed for either day is offered, and what stood before stays."
+            )
+
+    def standing_video(self, number: int, store: Store) -> dict | None:
+        """The record of the video a day's standing post shows, or None when it shows none."""
+        record = (self.posted.get(number) or {}).get("asset_record")
+        return read_json(store.path(str(record))) if record else None
 
     def hold(self, number: int, why: str) -> None:
         """Account for a day the post-Draft workflow asked no video of for a reason the Founder must be told."""
@@ -551,6 +516,7 @@ class Filming:
             "encoding": [*video.VIDEO_CODEC, *video.SOUND_CODEC, *video.REPEATABLE],
             "canvas": self.canvas.as_json(),
             "overlays": [overlay.__dict__ for overlay in overlays],
+            "opening": asset.opening,
             "cuts": [
                 dict(segment.as_json(), sha256=clip.sha256, bytes=clip.bytes, facts=clip.facts.as_json())
                 for segment, clip in zip(edit.segments, clips)
@@ -678,23 +644,6 @@ def from_record(data: object) -> Filming:
         )
     except (AttributeError, KeyError, TypeError, ValueError) as error:
         raise RecordError(f"it does not hold a run's filming standing ({type(error).__name__}: {error})") from error
-
-
-def paired(mine: Mapping[str, object], theirs: Mapping[str, object]) -> bool:
-    """Whether two legs' standing posts show the pair of videos that was compared: one of them records that its
-    video's edit record was compared with the one the other's video was cut from."""
-    return any(
-        bool(other.get("edit_sha256")) and leg.get("pair_edit_sha256") == other["edit_sha256"]
-        for leg, other in ((mine, theirs), (theirs, mine))
-    )
-
-
-def together(other: int) -> str:
-    """Why a pair leg has no new video while the other leg, cut anew in the same run, has none."""
-    return (
-        f"day {other}, its pair's other leg, has a new edit record too and no video was cut from it in this run, and"
-        " legs cut anew in one run are offered together or not at all"
-    )
 
 
 def read_json(path: Path) -> dict:
@@ -1262,16 +1211,20 @@ def report_lines(filming: Filming | None, skipped: str = "") -> list[str]:
         detail = result_line(asset) if asset else day.why
         names = ", ".join(shot.id for shot in day.spec.shots)
         lines.append(f"| {number} | {names} | {status} | {posts.cell(detail)} |")
+    if filming.apart:
+        lines += ["", "A/B pairs whose two videos differ:", ""]
+        lines += [f"- {line}" for line in filming.apart]
     return lines
 
 
 def notice_section(filming: Filming | None, day_text: str) -> tuple[int, str, str] | None:
     """What the Founder must know of this run's footage: each shot of an approved plan with no footage it can be
     cut from once footage has begun to arrive, each file that is footage of no shot or could not be measured, edits
-    skipped for want of tooling, and each video not cut for a reason outside its edit record; None when there is
-    nothing. Before any footage is in the window's folder nothing is missing yet, so no shot is named, and neither
-    is a shot of a day whose video the Founder already approved. An edit record that failed a check blocked its
-    day's post, so the post Drafts' part of the notice names it."""
+    skipped for want of tooling, each video not cut for a reason outside its edit record, and each A/B pair whose two
+    videos differ, so that nothing the run changed for it is offered; None when there is nothing. Before any footage
+    is in the window's folder nothing is missing yet, so no shot is named, and neither is a shot of a day whose video
+    the Founder already approved. An edit record that failed a check blocked its day's post, so the post Drafts' part
+    of the notice names it."""
     if filming is None:
         return None
     lines = []
@@ -1308,10 +1261,15 @@ def notice_section(filming: Filming | None, day_text: str) -> tuple[int, str, st
     for asset in sorted(filming.results.values(), key=lambda asset: asset.day):
         if asset.told:
             lines.append(f"- Day {asset.day}'s video was not cut: {asset.detail}.")
+    lines += [f"- {line}" for line in filming.apart]
     if not lines:
         return None
     title = f"{plural(len(lines), 'filming problem')} on {day_text}"
-    return len(lines), title, "These videos were not made, or these files not used:\n" + "\n".join(lines)
+    return (
+        len(lines),
+        title,
+        "These videos were not made or are not offered, or these files not used:\n" + "\n".join(lines),
+    )
 
 
 def tally(filming: Filming | None) -> Tally:
@@ -1321,10 +1279,10 @@ def tally(filming: Filming | None) -> Tally:
         return Tally("filming", 0, 0, "no active Product films")
     results = list(filming.results.values())
     examined = [asset for asset in results if asset.edit]
-    rendered = [asset for asset in results if asset.finished and not asset.reused]
+    rendered = [asset for asset in results if asset.sha256 and not asset.reused]
     counts = [
         f"{sum(1 for asset in results if asset.status == status)} {status}"
-        for status in (FINISHED, BLOCKED, HELD)
+        for status in (FINISHED, WITHHELD, BLOCKED, HELD)
         if any(asset.status == status for asset in results)
     ]
     note = (

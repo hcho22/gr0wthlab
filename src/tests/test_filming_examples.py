@@ -13,8 +13,9 @@ from tests import fakes
 EVALS = fakes.FILMING / "evals.json"
 PLAN_CHECKS = ("plan_is_one_item", "plan_films", "plan_reuses", "plan_on_camera", "plan_unplanned", "plan_sittings")
 TOOLING, CANVAS, WHY_NOT = fakes.real_video_tools()
-# The five cases every filming example set must cover, by the rule or the words that block each.
-MUST_BLOCK = ("pair-legs", "no-cut", "missing-shot", "footage-place")
+# The five cases every filming example set must cover: these by the rule that blocks each, a rendered asset that is
+# not 9:16 by the words of its finding, and a leg whose video differs from its other leg's by the check of the two.
+MUST_BLOCK = ("no-cut", "missing-shot", "footage-place")
 
 
 class FilmingExampleSetTest(unittest.TestCase):
@@ -59,14 +60,26 @@ class FilmingExampleSetTest(unittest.TestCase):
             parsed.append(edits.parse(text, name) if name.endswith(".json") else drafts.parse(text, name))
         return parsed
 
+    def spec(self, draft):
+        return filming.day_spec("RepToday", 1, draft.day, self.kit.days[draft.day].leg, self.found.job_for(draft.day))
+
     def findings(self, example):
-        edit, draft, *reference = self.read(example)
-        day = self.kit.days[draft.day]
-        spec = filming.day_spec("RepToday", 1, draft.day, day.leg, self.found.job_for(draft.day))
-        found = edits.check(edit, spec, self.clips, draft, CANVAS)
-        if reference and not found:
-            found += edits.check_pair(edit, draft, reference[0], reference[1], spec)
-        return found
+        edit, draft, *_ = self.read(example)
+        return edits.check(edit, self.spec(draft), self.clips, draft, CANVAS)
+
+    def legs_differ(self, example):
+        """How the video cut from an example's record and the video of its other leg differ, as the pair check reads
+        the two from their own records; "" when they show the same footage outside each one's opening."""
+        edit, draft, theirs, their_draft = self.read(example)
+        shown = [
+            {
+                "day": text.day,
+                "edit": {"record": record.as_json()},
+                "opening": [list(window) for window in edits.opening_windows(text, self.spec(text).hooks)],
+            }
+            for record, text in ((edit, draft), (theirs, their_draft))
+        ]
+        return edits.unlike(*shown)
 
     def test_the_set_has_the_evals_json_shape_and_covers_every_case_it_must(self):
         self.assertEqual(self.data["skill_name"], "filming")
@@ -84,6 +97,7 @@ class FilmingExampleSetTest(unittest.TestCase):
         for rule in MUST_BLOCK:
             self.assertIn(rule, blocked)
         self.assertTrue(any("not 9:16" in assertion.get("says", "") for assertion in checks))
+        self.assertTrue(any(assertion.get("check") == "legs_not_offered" for assertion in checks))
         self.assertTrue(any(assertion.get("check") == "legs_differ_only_in_the_opening" for assertion in checks))
 
     def test_no_media_file_is_in_the_repository(self):
@@ -111,8 +125,12 @@ class FilmingExampleSetTest(unittest.TestCase):
             return any(assertion["says"] in problem for problem in problems), problems
         found = self.findings(example)
         lines = [finding.line() for finding in found]
+        if check == "legs_not_offered":
+            differ = self.legs_differ(example)
+            return found == [] and assertion["says"] in differ, lines + [differ]
         if check == "edit_passes":
-            return found == [], lines
+            differ = self.legs_differ(example) if len(example["files"]) > 2 else ""
+            return found == [] and not differ, lines + [differ]
         if check == "blocked_by":
             return any(finding.rule == assertion["rule"] for finding in found), lines
         raise AssertionError(f"unknown check {check}")

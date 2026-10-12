@@ -50,10 +50,13 @@ The edit record's format is in the task definition, and the launcher's checks de
   When the table lists the pair's first shot as founder on camera, the Founder says the Hook in it: under the opening beats, that shot comes only from the leg's own take, and a leg whose own take is not in the footage place is not ready.
   Every segment after the opening is the other leg's, unchanged and in the same order.
 - When the other leg's video is already in an open or approved post, never change that leg's edit record to make the two match: change the newer leg.
-- When both legs are ready in one run and both have a new edit record, the launcher offers their videos together or not at all: if no video is cut from one leg's record in that run, the other leg's video waits for it.
-- A leg you leave untouched, whose edit record and Draft are the ones its post was queued from, is judged only by the edit record and the Draft its other leg's post was queued from.
-  If you change one leg's beats, only that leg is checked again, against the untouched one: whatever becomes of the changed Draft, the other leg's post stands and check-edits reports it as passing, so leave it as it is.
-  When you change both legs' Drafts, each is compared with the other's as it is now, once that one passes its checks.
+- The launcher compares the two legs as videos, never as files: for each leg the video it cuts in this run when that leg's post is about to show it, otherwise the video the leg's post already shows.
+  It reads what a video shows from its own record of that video, so a leg you leave alone is judged by the video its post shows, whatever you write for the other leg.
+- When the two videos show different source ranges outside their openings, nothing the run changed for either leg is offered: the posts that stood stay, and the run report and a notice name the pair with both videos' source ranges.
+  check-edits reports it beforehand as a problem on each leg whose video would not be offered; a leg it reports as passing needs no change.
+- To move both legs to other footage, change both edit records alike in the same run, so the two new videos match each other.
+  If only one of them is cut in that run, it is compared with the video the other leg's post still shows, differs, and is not offered; the next run compares the two again.
+- A leg the Founder approved with its video is settled: nothing is cut for it again, and its other leg is compared with the approved video.
 
 ## When a rule blocks an edit
 

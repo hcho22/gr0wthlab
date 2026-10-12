@@ -1,5 +1,6 @@
 """Edit records: the format the agent writes, and every check against the shot list, the footage, and the Draft."""
 
+import hashlib
 import json
 import os
 import tempfile
@@ -56,6 +57,25 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(edit.segments[0], edits.Segment("d01-s1", "window-1/d01-s1.mov", 2.0, 12.0))
         self.assertEqual(len(edit.sha256), 64)
         self.assertEqual(edits.parse(json.dumps(edit.as_json()), edit.path).segments, edit.segments)
+
+    def test_a_record_is_identified_by_what_it_says_not_by_the_bytes_it_was_saved_in(self):
+        text = fakes.edit_record(1, ("d01-s1", "d01-s1.mov", 2, 12))
+        edit = edits.parse(text, "x.json")
+        held = json.loads(text)
+        again = json.dumps(dict(reversed(list(held.items()))), indent=4).replace('"in": 2,', '"in": 2.0,') + "\n\n"
+        self.assertIn('"in": 2.0,', again)
+        self.assertNotEqual(again.encode("utf-8"), text.encode("utf-8"))
+        self.assertEqual(edits.parse(again, "x.json").sha256, edit.sha256)
+        self.assertNotEqual(edit.sha256, hashlib.sha256(text.encode("utf-8")).hexdigest())
+        # Another cut is another record, down to one moment of one source range.
+        other = edits.parse(fakes.edit_record(1, ("d01-s1", "d01-s1.mov", 2, 12.5)), "x.json")
+        self.assertEqual(other.problems, [])
+        self.assertNotEqual(other.sha256, edit.sha256)
+        # A record that does not follow the format says nothing a cut could be told by, so it is known by its text.
+        for broken in ("{}", "{ }", "not json"):
+            found = edits.parse(broken, "x.json")
+            self.assertTrue(found.problems)
+            self.assertEqual(found.sha256, hashlib.sha256(broken.encode("utf-8")).hexdigest())
 
     def test_a_segment_may_add_speed_and_nothing_else(self):
         edit = record(7, ("d07-s1", "d07-s1.mov", 0, 300, {"speed": 20}))
@@ -280,38 +300,38 @@ class OverlayTest(unittest.TestCase):
 
 
 class PairTest(EditTestCase):
-    def pair(self, mine, day, theirs, other):
-        found = edits.check_pair(mine, draft(day), theirs, draft(other), self.spec(day))
-        return [finding.line() for finding in found]
+    def shown(self, edit, day, hooks=None, text=None):
+        """A video cut from an edit record, as far as its own record in the ledger tells the pair check."""
+        hooks = self.spec(day).hooks if hooks is None else hooks
+        opening = [list(window) for window in edits.opening_windows(text or draft(day), hooks)]
+        return {"day": day, "edit": {"record": edit.as_json()}, "opening": opening}
 
-    def test_the_legs_of_a_plain_pair_share_every_source_range(self):
+    def pair(self, mine, day, theirs, other):
+        return edits.unlike(self.shown(mine, day), self.shown(theirs, other))
+
+    def test_the_videos_of_a_plain_pair_show_every_source_range_alike(self):
         day_1 = record(1, ("d01-s1", "d01-s1.mov", 2, 12))
-        self.assertEqual(self.pair(record(8, ("d01-s1", "d01-s1.mov", 2, 12)), 8, day_1, 1), [])
+        self.assertEqual(self.pair(record(8, ("d01-s1", "d01-s1.mov", 2, 12)), 8, day_1, 1), "")
         # The same range written as two segments that run on is the same range.
         self.assertEqual(
-            self.pair(record(8, ("d01-s1", "d01-s1.mov", 2, 5), ("d01-s1", "d01-s1.mov", 5, 12)), 8, day_1, 1), []
+            self.pair(record(8, ("d01-s1", "d01-s1.mov", 2, 5), ("d01-s1", "d01-s1.mov", 5, 12)), 8, day_1, 1), ""
         )
-        lines = self.pair(record(8, ("d01-s1", "d01-s1.mov", 3, 13)), 8, day_1, 1)
-        self.assertEqual(len(lines), 1)
-        self.assertIn(
-            "pair-legs: its source ranges differ from day 1's leg (`drafts/edits/window-1/day-01.json`) from its"
-            " first frame",
-            lines[0],
+        self.assertEqual(
+            self.pair(record(8, ("d01-s1", "d01-s1.mov", 3, 13)), 8, day_1, 1),
+            "day 8's shows `window-1/d01-s1.mov` 3-13s, and day 1's shows `window-1/d01-s1.mov` 2-12s",
         )
-        self.assertIn("this leg shows `window-1/d01-s1.mov` 3-13s, that leg `window-1/d01-s1.mov` 2-12s", lines[0])
-        self.assertIn("the legs of AB-1 share their footage", lines[0])
 
-    def test_a_plain_pair_s_legs_may_not_differ_even_in_their_first_seconds(self):
+    def test_the_videos_of_a_plain_pair_may_not_differ_even_in_their_first_seconds(self):
         day_1 = record(1, ("d01-s1", "d01-s1.mov", 2, 12))
         other_opening = record(8, ("d01-s1", "d01-s1.mov", 0, 3), ("d01-s1", "d01-s1.mov", 5, 12))
-        self.assertEqual(len(self.pair(other_opening, 8, day_1, 1)), 1)
+        self.assertEqual(self.shown(other_opening, 8)["opening"], [])
+        self.assertIn("day 8's shows `window-1/d01-s1.mov` 0-3s, ", self.pair(other_opening, 8, day_1, 1))
         # The same stretch of the timeline at another speed is another source range.
         faster = record(8, ("d01-s1", "d01-s1.mov", 2, 14, {"speed": 1.2}))
         self.assertAlmostEqual(faster.length, 10.0)
-        lines = self.pair(faster, 8, day_1, 1)
-        self.assertEqual(len(lines), 1)
-        self.assertIn(
-            "this leg shows `window-1/d01-s1.mov` 2-14s at 1.2x, that leg `window-1/d01-s1.mov` 2-12s", lines[0]
+        self.assertEqual(
+            self.pair(faster, 8, day_1, 1),
+            "day 8's shows `window-1/d01-s1.mov` 2-14s at 1.2x, and day 1's shows `window-1/d01-s1.mov` 2-12s",
         )
 
     def test_a_take_named_for_one_leg_is_only_that_leg_s_opening(self):
@@ -384,19 +404,32 @@ class PairTest(EditTestCase):
         day_1, day_8 = record(1, ("d01-s1", "d01-s1.mov", 2, 12)), record(8, ("d01-s1", "d01-s1.mov", 2, 12))
         for day, edit in ((1, day_1), (8, day_8)):
             self.assertEqual(edits.check(edit, legs[day], self.clips, draft(day), CANVAS), [])
-        self.assertEqual(edits.check_pair(day_8, draft(8), day_1, draft(1), legs[8]), [])
+        self.assertEqual(edits.unlike(self.shown(day_8, 8, hooks), self.shown(day_1, 1, hooks)), "")
+        # Each video's opening is its own: what day 8 shows under it is not held against day 1's.
+        own = record(8, ("d01-s1", "d01-s1.mov", 9, 12), ("d01-s1", "d01-s1.mov", 5, 12))
+        self.assertEqual(edits.unlike(self.shown(own, 8, hooks), self.shown(day_1, 1, hooks)), "")
+        self.assertTrue(edits.unlike(self.shown(own, 8, ()), self.shown(day_1, 1, ())))
 
-    def test_the_legs_of_a_re_cut_pair_share_every_source_range_after_the_opening(self):
+    def test_the_videos_of_a_re_cut_pair_show_every_source_range_alike_after_each_one_s_opening(self):
         tail = (("d02-s2", "d02-s2.mov", 2, 13), ("d02-s1", "d02-s1-closing.mov", 5, 11))
         day_2 = record(2, ("d02-s1", "d02-s1a-take-1.mov", 1, 4), *tail)
         day_9 = record(9, ("d02-s1", "d02-s1b-take-1.mov", 0.5, 3.5), *tail)
-        self.assertEqual(self.pair(day_9, 9, day_2, 2), [])
+        self.assertEqual(self.pair(day_9, 9, day_2, 2), "")
         moved = record(9, ("d02-s1", "d02-s1b-take-1.mov", 0.5, 3.5), ("d02-s2", "d02-s2.mov", 4, 15), tail[1])
-        lines = self.pair(moved, 9, day_2, 2)
-        self.assertIn(
-            "differ from day 2's leg (`drafts/edits/window-1/day-02.json`) after the re-cut opening", lines[0]
+        self.assertEqual(
+            self.pair(moved, 9, day_2, 2),
+            "day 9's shows `window-1/d02-s2.mov` 4-15s, `window-1/d02-s1-closing.mov` 5-11s, and day 2's shows"
+            " `window-1/d02-s2.mov` 2-13s, `window-1/d02-s1-closing.mov` 5-11s",
         )
-        self.assertIn("`window-1/d02-s2.mov` 4-15s", lines[0])
+        # One leg's hook beat runs a second longer than the other's: each video is read from the end of its own
+        # opening, so the two still show the same footage there.
+        base = draft(2)
+        beats = [replace(beat, start=beat.start + 1, end=beat.end + 1) for beat in base.beats[1:]]
+        longer = replace(base, beats=[replace(base.beats[0], end=base.beats[0].end + 1), *beats])
+        opened = self.shown(record(2, ("d02-s1", "d02-s1a-take-1.mov", 1, 5), *tail), 2, text=longer)
+        self.assertEqual(opened["opening"], [[0.0, 4.0]])
+        self.assertEqual(edits.unlike(self.shown(day_9, 9), opened), "")
+        self.assertTrue(edits.unlike(self.shown(day_9, 9), dict(opened, opening=[[0.0, 3.0]])))
 
     def test_a_range_that_starts_under_the_opening_is_compared_by_what_it_shows_after_it(self):
         # Each leg leaves its own take at another moment of the hook beat, so the screen recording both share starts
@@ -406,10 +439,10 @@ class PairTest(EditTestCase):
         day_9 = record(9, ("d02-s1", "d02-s1b-take-1.mov", 0, 2.5), ("d02-s2", "d02-s2.mov", 1.5, 13), closing)
         for day, edit in ((2, day_2), (9, day_9)):
             self.assertEqual(self.rules(edit, day), ([], []))
-        self.assertEqual(self.pair(day_9, 9, day_2, 2), [])
+        self.assertEqual(self.pair(day_9, 9, day_2, 2), "")
         later = record(9, ("d02-s1", "d02-s1b-take-1.mov", 0, 2.5), ("d02-s2", "d02-s2.mov", 2.5, 14), closing)
         self.assertEqual(self.rules(later, 9), ([], []))
-        self.assertIn("this leg shows `window-1/d02-s2.mov` 3-14s", self.pair(later, 9, day_2, 2)[0])
+        self.assertIn("day 9's shows `window-1/d02-s2.mov` 3-14s, ", self.pair(later, 9, day_2, 2))
 
     def test_the_opening_of_a_re_cut_leg_is_its_hook_beat_and_any_beat_that_shows_a_hook_of_the_pair(self):
         hooks = self.spec(9).hooks

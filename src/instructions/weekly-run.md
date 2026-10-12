@@ -215,11 +215,13 @@ Write it as the file `day-NN.json` (such as `day-01.json`) in the edits folder t
   When it says after its opening, the kit marks the pair as a re-cut: only the segments under the hook beat, and under any later beat that shows one of the pair's Hooks, may differ; every later segment is that leg's, unchanged and in the same order.
   Outside those opening beats, use only files with no leg letter in their name, since both legs must be able to use them.
   When the brief lists the pair's first shot as founder on camera, the Hook is said there: under those opening beats, show that shot only from the leg's own take, the file with the leg's letter after the shot's name, and at least once.
-  When both legs of a pair are ready in one run and both have a new edit record, their videos are offered together or not at all: neither leg gets a video in that run unless both do.
-  A leg is compared with the edit record its other leg's video was cut from.
-  In a re-cut pair the other leg's Draft tells its opening: a leg you left untouched, its edit record and its Draft the ones its post was queued from, is judged only by the Draft the other leg's post was queued from, and a leg you changed by the other leg's Draft as it is now, when that Draft passed this run's checks or is the one its post was queued from.
-  So a Draft you change is checked for its own leg alone, whether or not it passes: the untouched leg's post stands as long as the queue records the two videos as the pair that was compared, and check-edits reports that leg as passing.
-  Never change an untouched leg's edit record or Draft to answer a finding about its other leg.
+  The launcher keeps one rule for a pair's videos: when a run ends, the two posts of a pair never both show a video unless the two videos show the same source ranges outside each one's opening.
+  It checks this once per pair, on the two videos the run is about to leave in the pair's posts: for each leg the video cut in this run when the leg's post is about to show it, otherwise the video the leg's post already shows.
+  It reads what a video shows from its own record of that video, never from the edit record or the Draft in place, so nothing you write in one leg's files changes what the other leg's standing video is taken to show.
+  When the two videos differ, nothing this run changed for either leg is offered and the posts that stood stay as they were; the run report and a notice name the pair and the source ranges each video shows.
+  check-edits tells you beforehand: it reports a leg whose video would not be offered as a problem, with both videos' source ranges.
+  Fix the leg it names, and to move a pair to other footage change both legs' edit records alike in the same run.
+  A leg the Founder approved with its video is settled: nothing is cut for it again, and its other leg is compared with the approved video.
 
 ## Rules
 

@@ -208,15 +208,18 @@ def check_edits(run_id: str, out=sys.stdout) -> int:
     Everything is read from the record the launcher wrote for that run before the agent started: the footage it
     listed and measured, each due day's shot list, and where each day's post stands. The footage place itself is
     never opened here. Nothing is rendered either: the launcher renders a record that passes once the run ends, only
-    if the day's post Draft passes too, and then measures the result.
+    if the day's post Draft passes too, and then measures the result. The two legs of an A/B pair are compared as
+    the videos a run that ended now would leave: the one a new record that passes would be cut into, otherwise the
+    one the leg's post shows.
     """
     registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
     # As in check_drafts: reading the areas needs no git directories.
     boundary = resolve_boundary(
         REPO_ROOT, load_runtime_config(REPO_ROOT), registry, dict(os.environ), Path.home(), git=[]
     )
+    store = Store(LEDGER_DIR)
     try:
-        record = Store(LEDGER_DIR).path(cycle.RUN_REPORTS, filming.record_file(run_id))
+        record = store.path(cycle.RUN_REPORTS, filming.record_file(run_id))
         found = filming.from_record(json.loads(read_plain(record).decode("utf-8")))
     except (ConfigError, OSError, UnsafeFile, ValueError) as error:
         print(
@@ -225,12 +228,15 @@ def check_edits(run_id: str, out=sys.stdout) -> int:
             file=out,
         )
         return 1
-    areas = Areas(boundary)
+    found.preview(Areas(boundary), store)
     failed = 0
     for number, day in sorted(found.days.items()):
-        asset = found.examine(number, areas)
+        asset = found.results[number]
         if asset.status == filming.READY:
             print(f"OK day {number}: {asset.edit}: it passes; the launcher renders and measures it", file=out)
+        elif asset.withheld:
+            failed += 1
+            print(f"PROBLEM day {number}: {asset.edit} would not be offered: {asset.detail}", file=out)
         elif asset.status == filming.BLOCKED:
             failed += 1
             print(f"BLOCKED day {number}: {asset.edit or found.edit_path(number)}", file=out)

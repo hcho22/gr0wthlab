@@ -6,7 +6,7 @@
   "base_kit": "../post-drafts/files/mandu",
   "footage": "files/footage.json",
   "assertion_kinds": {
-    "deterministic": "check is one of: plan_is_one_item; plan_films, plan_reuses, plan_on_camera, plan_unplanned (days); plan_sittings (count); plan_quotes_formats; edit_passes; blocked_by (rule: a finding's rule); asset_blocked (says: words of the finding); asset_kept; renders and legs_differ_only_in_the_opening (needs: video tooling)",
+    "deterministic": "check is one of: plan_is_one_item; plan_films, plan_reuses, plan_on_camera, plan_unplanned (days); plan_sittings (count); plan_quotes_formats; edit_passes (with another leg's files: the two videos also show the same footage outside each one's opening); blocked_by (rule: a finding's rule); legs_not_offered (says: words of how the two legs' videos differ); asset_blocked (says: words of the finding); asset_kept; renders and legs_differ_only_in_the_opening (needs: video tooling)",
     "judged": "text is a statement a reviewer, or a model at US-ME16, judges true or false of the agent's edit record and summary"
   },
   "evals": [
@@ -131,12 +131,12 @@
     {
       "id": 4,
       "prompt": "Write the edit record for day 8; the candidate below starts its range a second later than day 1's.",
-      "expected_output": "The launcher blocks it: the leg differs from day 1's beyond the opening, so no asset is rendered and day 8 has no post.",
+      "expected_output": "The record passes its own checks, and the launcher does not offer the video cut from it: it and day 1's video do not show the same footage from the first frame to the last. Nothing changes for either leg, and the run report and a notice name the pair and what each video shows.",
       "assertions": [
         {
           "kind": "deterministic",
-          "check": "blocked_by",
-          "rule": "pair-legs"
+          "check": "legs_not_offered",
+          "says": "day 8's shows `window-1/d01-s1.mov` 3-13s, and day 1's shows `window-1/d01-s1.mov` 2-12s"
         }
       ],
       "files": [
@@ -348,12 +348,12 @@
     {
       "id": 17,
       "prompt": "Write the edit record for day 9; the candidate below also starts the screen recording two seconds later than day 2's.",
-      "expected_output": "The launcher blocks it: the legs' source ranges differ after the re-cut opening.",
+      "expected_output": "The record passes its own checks, and the launcher does not offer the video cut from it: it and day 2's video do not show the same footage after each one's opening. Nothing changes for either leg, and the run report and a notice name the pair and what each video shows.",
       "assertions": [
         {
           "kind": "deterministic",
-          "check": "blocked_by",
-          "rule": "pair-legs"
+          "check": "legs_not_offered",
+          "says": "day 9's shows `window-1/d02-s2.mov` 4-15s"
         }
       ],
       "files": [

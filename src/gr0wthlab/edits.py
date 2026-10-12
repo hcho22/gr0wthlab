@@ -8,10 +8,12 @@ words drawn over the video are not in it; they come from the day's post Draft, w
 The checks follow the shot list the launcher read from the kit: every source is a file of the footage place, named
 for the shot it is used as; a shot that may not be cut appears as one unbroken source range, with no other shot
 between its pieces; nothing runs at another speed unless its shot list says it is not real time; every shot of the
-list has footage; the length is the one the Format gives and the one the Draft's beats add up to; and the legs of an
-A/B pair use the same source ranges after their opening, from takes both legs can use, while a leg whose Hook the
-Founder says on camera opens on a take of its own. A record that fails any of them renders nothing: no footage is ever
-substituted for a shot.
+list has footage; the length is the one the Format gives and the one the Draft's beats add up to; and a leg of an A/B
+pair uses takes both legs can use after its opening, while a leg whose Hook the Founder says on camera opens on a take
+of its own. A record that fails any of them renders nothing: no footage is ever substituted for a shot.
+
+Whether the two legs of a pair show the same footage is not a check of one record: it is judged on the two finished
+videos, from what each one's own record in the ledger holds of the footage it was cut from (unlike).
 """
 
 from __future__ import annotations
@@ -67,7 +69,7 @@ class Segment:
 @dataclass
 class Edit:
     path: str
-    sha256: str
+    sha256: str  # of its content once it follows the format, so the same cut saved in other bytes is the same record
     product: str = ""
     window: int | None = None
     day: int | None = None
@@ -222,6 +224,8 @@ def parse(text: str, path: str) -> Edit:
             problems.append(f"{where}: speed is above 0 and at most {MAX_SPEED:g}")
         else:
             edit.segments.append(Segment(entry["shot"], entry["source"], start, end, speed))
+    if not problems:
+        edit.sha256 = hashlib.sha256(json.dumps(edit.as_json(), sort_keys=True).encode("utf-8")).hexdigest()
     return edit
 
 
@@ -446,31 +450,25 @@ def check(
     return found
 
 
-def check_pair(
-    edit: Edit,
-    draft: PostDraft,
-    reference: Edit,
-    reference_draft: PostDraft,
-    spec: DaySpec,
-) -> list[Finding]:
-    """An A/B leg's video differs from its reference leg's only in the opening: outside it, both timelines show the
-    same source ranges in the same order. In a pair the kit does not mark as a re-cut, nothing is opening: the legs
-    share every source range, and only the Hook drawn over them differs."""
-    hooks = spec.hooks if spec.recut else ()
-    mine = pieces(edit.segments, opening_windows(draft, hooks))
-    theirs = pieces(reference.segments, opening_windows(reference_draft, hooks))
-    if mine == theirs:
-        return []
-    after = "after the re-cut opening" if spec.recut else "from its first frame"
-    return [
-        Finding(
-            "pair-legs",
-            "",
-            f"its source ranges differ from day {reference.day}'s leg (`{reference.path}`) {after}: this leg shows"
-            f" {describe(mine)}, that leg {describe(theirs)}; the legs of {spec.pair} share their footage, so they"
-            " may differ only in the opening",
-        )
+def outside(video: Mapping) -> list[tuple]:
+    """The source ranges a finished video shows outside its opening, read from the video's own record: the parsed
+    edit record it was cut from, and where its opening is."""
+    segments = [
+        Segment(piece["shot"], piece["source"], piece["in"], piece["out"], piece["speed"])
+        for piece in video["edit"]["record"]["segments"]
     ]
+    return pieces(segments, [tuple(window) for window in video["opening"]])
+
+
+def unlike(one: Mapping, two: Mapping) -> str:
+    """How the videos of the two legs of an A/B pair differ outside each one's opening, or "" when both show the same
+    source ranges in the same order there; judged from the two videos' own records alone. In a pair the kit does not
+    mark as a re-cut neither video has an opening: the legs share every source range, and only the Hook drawn over
+    them differs."""
+    ours, theirs = outside(one), outside(two)
+    if ours == theirs:
+        return ""
+    return f"day {one['day']}'s shows {describe(ours)}, and day {two['day']}'s shows {describe(theirs)}"
 
 
 def describe(ranges: Sequence[tuple]) -> str:

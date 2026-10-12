@@ -1,18 +1,19 @@
 """The filming workflow, in whole runs with a fake Codex and fake video tooling: the plan as one Review Queue item,
 the footage place only ever read, and each edit record checked, rendered, measured, and shown in its day's post."""
 
-import hashlib
+import collections
 import io
 import json
 import os
 import shutil
 import subprocess
+import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
 from unittest import mock
 
-from gr0wthlab import boundary, cli, cycle, exchange, filming, footage, shots, video
+from gr0wthlab import boundary, cli, cycle, exchange, filming, footage, posts, shots, video
 from gr0wthlab.boundary import ConfigError
 from tests import fakes
 from tests.test_cycle import CycleTestCase
@@ -21,10 +22,19 @@ PLAN = "20261011-filming-plan-w1"
 ANGLES = "projects/RepToday/gtm/05-social-pmf/angles.md"
 CALENDAR = "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md"
 DAY_1 = ("d01-s1", "d01-s1.mov", 2, 12)
-TOGETHER = (
-    "day 4, its pair's other leg, has a new edit record too and no video was cut from it in this run, and legs cut"
-    " anew in one run are offered together or not at all"
-)
+LATER = ("d01-s1", "d01-s1.mov", 3, 13)
+WHOLE = "from the first frame to the last"
+OWN_CHECKS = [
+    "measured 1080x1920 (9:16) at 30 frames a second",
+    "d01-s1, which may not be cut, is one unbroken source range",
+    "every cut plays at the speed it was recorded at",
+]
+FAILURE = "ffmpeg did not finish the render (Error opening output files)"
+
+
+def shows(day, start):
+    """What the pair check says a day's video shows of the one file of days 1, 4, and 8, from a start point on."""
+    return f"day {day}'s shows `window-1/d01-s1.mov` {start}-{start + 10}s"
 
 
 class FilmingRunCase(CycleTestCase):
@@ -45,14 +55,64 @@ class FilmingRunCase(CycleTestCase):
         self.runs = 0
 
     def run_ok(self, writes=None, days=None):
-        """One more run, an hour after the last; writes is what the agent writes, days the calendar days kept."""
+        """One more run, an hour after the last; writes is what the agent writes, days the calendar days kept.
+        Whatever the run was given, it leaves the two posts of no A/B pair showing videos that differ."""
         if days is not None:
             fakes.keep_days(self.mandu, *days)
         fakes.behave(self.codex_dir, {"write": writes or {}})
         code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=self.runs))
         self.runs += 1
         self.assertEqual(code, 0, out)
+        self.matched = self.pairs_shown()
         return self.queue()
+
+    def videos(self):
+        """Each calendar day whose standing post shows a video, with that post: its open one, otherwise the one the
+        Founder approved."""
+        queue = self.queue()
+        found = {}
+        for status, entries in (("approved", queue["closed"]), ("open", queue["open"])):
+            for entry in entries:
+                if entry["kind"] == "post" and entry["status"] == status and (status == "open" or entry.get("asset")):
+                    found[entry["day"]] = entry
+        return {day: entry for day, entry in found.items() if entry.get("asset")}
+
+    def footage_shown(self, entry):
+        """Every quarter second of a post's video outside its opening, as the footage file and the moment of it shown
+        there, read from the record of the very file the post names."""
+        record = json.loads((self.ledger() / entry["asset_record"]).read_text(encoding="utf-8"))
+        self.assertEqual(
+            (record["asset"], record["sha256"], record["day"]), (entry["asset"], entry["asset_sha256"], entry["day"])
+        )
+        found, clock = [], 0.0
+        for piece in record["edit"]["record"]["segments"]:
+            steps = round((piece["out"] - piece["in"]) / piece["speed"] * 4)
+            for step in range(steps):
+                at = clock + step / 4
+                if not any(start <= at < end for start, end in record["opening"]):
+                    found.append((piece["source"], piece["in"] + step / 4 * piece["speed"]))
+            clock += steps / 4
+        return found
+
+    def pairs_shown(self):
+        """The one rule of an A/B pair's videos, asserted on what a run left: the two posts of a pair never both
+        show a video unless the two videos show the same footage outside each one's opening. Returns the pairs both
+        of whose posts show a video."""
+        registry = json.loads((self.repo / "config" / "products.json").read_text(encoding="utf-8"))
+        kit = posts.kit_config(registry)
+        legs = collections.defaultdict(list)
+        for day in posts.read_kit(self.mandu, kit[1])[0].days.values() if kit else ():
+            if day.pair:
+                legs[day.pair].append(day.day)
+        shown = self.videos()
+        both = [days for days in legs.values() if len(days) == 2 and all(day in shown for day in days)]
+        for first, second in both:
+            self.assertEqual(
+                self.footage_shown(shown[first]),
+                self.footage_shown(shown[second]),
+                f"the posts of days {first} and {second} show videos that differ outside their openings",
+            )
+        return both
 
     def entries(self, kind="post", status=None):
         queue = self.queue()
@@ -83,6 +143,34 @@ class FilmingRunCase(CycleTestCase):
         out = io.StringIO()
         with mock.patch.object(cli, "REPO_ROOT", self.repo), mock.patch.object(cli, "LEDGER_DIR", self.repo / "ledger"):
             return cli.check_edits(run_id, out), out.getvalue()
+
+    def posts_open(self):
+        return {entry["day"]: entry for entry in self.queue()["open"] if entry["kind"] == "post"}
+
+    def checks_of(self, day):
+        """What the latest run's filming Evidence says it checked of a day's video."""
+        run = self.queue()["updated_by_run"]
+        filmed = json.loads((self.ledger() / f"evidence/filming/{run}.json").read_text(encoding="utf-8"))
+        return next(entry for entry in filmed["days"] if entry["day"] == day)["checks"]
+
+    def one_week_pair(self):
+        """A kit that posts both legs of AB-1 in one week, days 1 and 4, so one run can cut both, with its plan
+        approved and its footage there; returns the two legs' Drafts as the agent writes them."""
+        calendar = self.mandu / CALENDAR
+        rows = calendar.read_text(encoding="utf-8").splitlines()
+        leg_b = next(row for row in rows if row.startswith("| 8 |")).replace("| 8 |", "| 4 |", 1)
+        moved = "\n".join(leg_b if row.startswith("| 4 |") else row for row in rows)
+        calendar.write_text(moved + "\n", encoding="utf-8")
+        self.approved_plan(days=(1, 4))
+        self.clip("d01-s1.mov")
+        return {
+            fakes.draft_path(1): fakes.filming_draft(1),
+            fakes.draft_path(4): fakes.filming_draft(8).replace("day: 8", "day: 4"),
+        }
+
+    @staticmethod
+    def both(edit):
+        return {fakes.edit_path(1): fakes.edit_record(1, edit), fakes.edit_path(4): fakes.edit_record(4, edit)}
 
 
 class FilmingPlanTest(FilmingRunCase):
@@ -739,8 +827,11 @@ class EditRunTest(FilmingRunCase):
         self.assertNotEqual(day_1["asset_sha256"], day_8["asset_sha256"])
         self.assertIn("the same source ranges as day 1's leg from the first frame to the last", self.item(day_8))
         self.assertEqual(fakes.tree_digest(self.footage), before)
-        # The queue records with each video which edit record of the other leg it was compared with.
-        self.assertEqual((day_1["pair_edit_sha256"], day_8["pair_edit_sha256"]), (None, day_1["edit_sha256"]))
+        self.assertEqual(self.pairs_shown(), [[1, 8]])
+        # Each video's own record says where its opening is: a pair the kit does not mark as a re-cut has none.
+        for entry in (day_1, day_8):
+            record = json.loads((self.ledger() / entry["asset_record"]).read_text(encoding="utf-8"))
+            self.assertEqual((record["opening"], record["checks"]), ([], OWN_CHECKS))
         # The slot moves, so day 8's post is replaced by one that shows the same video. No leg counts as compared
         # without being compared: it is checked against day 1's video again, and the item says so.
         fakes.set_window(self.repo, {"slot": "20:00"})
@@ -768,8 +859,8 @@ class EditRunTest(FilmingRunCase):
     def test_a_leg_offered_again_from_the_same_edit_record_is_compared_with_its_other_leg_s_video_again(self):
         self.day_1()
         queue = self.day_8()
-        day_1, day_8 = (next(entry for entry in queue["open"] if entry.get("day") == day) for day in (1, 8))
-        same = "the same source ranges as day 1's leg from the first frame to the last"
+        day_8 = next(entry for entry in queue["open"] if entry.get("day") == 8)
+        same = f"the same source ranges as day 1's leg {WHOLE}"
         # The Draft is written again, the same words in other bytes: a new post that shows the same video.
         queue = self.run_ok({fakes.draft_path(8): fakes.filming_draft(8) + "\n"})
         again = next(entry for entry in queue["open"] if entry.get("day") == 8)
@@ -778,8 +869,9 @@ class EditRunTest(FilmingRunCase):
         self.assertEqual((again["asset"], again["asset_sha256"]), (day_8["asset"], day_8["asset_sha256"]))
         self.assertIn(f"; {same}.", self.item(again))
         self.assertNotIn("has no video to compare with yet", self.item(again))
-        # The canvas changes, so the same edit record is rendered again as another file: that file's own record
-        # carries the same statement, and so does the post that shows it.
+        # The canvas changes, so the same edit record is rendered again as another file, which is compared with day
+        # 1's video before the post that shows it is queued. A video's own record holds the checks of that video
+        # alone; the comparison is the run's, and the post and the run's Evidence say it.
         platforms = self.repo / "config" / "platforms.json"
         data = json.loads(platforms.read_text(encoding="utf-8"))
         data["video"]["text"]["size"] = 60
@@ -792,58 +884,110 @@ class EditRunTest(FilmingRunCase):
         self.assertEqual(rendered["edit_sha256"], day_8["edit_sha256"])
         record = json.loads((self.ledger() / rendered["asset_record"]).read_text(encoding="utf-8"))
         self.assertEqual(record["made_by_run"], queue["updated_by_run"])
-        self.assertEqual(record["checks"][-1], same)
+        self.assertEqual(record["checks"], OWN_CHECKS)
         self.assertIn(f"; {same}.", self.item(rendered))
-        for text in (self.item(rendered), json.dumps(record["checks"])):
-            self.assertNotIn("has no video to compare with yet", text)
-        # A changed edit record is compared with day 1's video too, and differs: no video is offered from it.
-        queue = self.run_ok({fakes.edit_path(8): fakes.edit_record(8, ("d01-s1", "d01-s1.mov", 3, 13))})
-        self.assertEqual([entry["day"] for entry in queue["open"] if entry["kind"] == "post"], [1])
-        self.assertIn("- pair-legs: its source ranges differ from day 1's leg", self.report())
-        self.assertEqual(len(list((self.ledger() / "assets" / "window-1").glob("day-08-*"))), 2)
-        self.assertEqual(next(entry for entry in queue["open"] if entry.get("day") == 1)["id"], day_1["id"])
+        self.assertEqual(self.checks_of(8), [*OWN_CHECKS, same])
+        self.assertNotIn("has no video to compare with yet", self.item(rendered))
 
-    def test_a_leg_does_not_count_as_compared_because_its_own_video_was_cut_from_its_own_edit_record(self):
-        self.day_1()
-        queue = self.day_8()
-        day_8 = next(entry for entry in queue["open"] if entry.get("day") == 8)
-        # A queue as an earlier launcher could leave it: day 8's open post shows a video cut from other source
-        # ranges than day 1's, and day 8's edit record is the one that video was cut from.
-        other = fakes.edit_record(8, ("d01-s1", "d01-s1.mov", 3, 13))
-        path = self.ledger() / "review-queue" / "queue.json"
-        data = json.loads(path.read_text(encoding="utf-8"))
-        entry = next(entry for entry in data["open"] if entry["id"] == day_8["id"])
-        entry["edit_sha256"] = hashlib.sha256(other.encode("utf-8")).hexdigest()
-        path.write_text(json.dumps(data), encoding="utf-8")
-        queue = self.run_ok({fakes.edit_path(8): other})
-        self.assertEqual([entry["day"] for entry in queue["open"] if entry["kind"] == "post"], [1])
+    def test_a_leg_whose_video_differs_from_its_other_leg_s_is_not_offered_and_the_pair_is_named(self):
+        queue = self.day_1()
+        day_1 = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        queue = self.day_8(LATER)
+        self.assertEqual({day: entry["id"] for day, entry in self.posts_open().items()}, {1: day_1["id"]})
+        differ = f"do not show the same footage {WHOLE} ({shows(8, 3)}, and {shows(1, 2)})"
+        why = f"the video cut for it and the video in day 1's post `{day_1['id']}` {differ}"
+        named = (
+            f"- Pair AB-1, days 1 and 8: the video in day 1's post `{day_1['id']}` and the video cut for day 8"
+            f" {differ}. Nothing this run changed for either day is offered, and what stood before stays."
+        )
+        report, notice = self.report(), self.notice()
+        self.assertIn(f"| 8 | P01 / AB-1 leg B | not offered | {why} |", report)
+        self.assertIn(f"| 8 | d01-s1 | not offered | {why} |", report)
+        self.assertIn("- Post Drafts: 1 not offered.", report)
+        self.assertIn(f"A/B pairs whose two videos differ:\n\n{named}", report)
+        self.assertIn(f"These videos were not made or are not offered, or these files not used:\n{named}", notice)
+        # Nothing is blocked or withdrawn, and nothing says the two were compared and found alike.
+        self.assertNotIn("withdrawn", notice)
+        self.assertNotIn("blocked", report.split("## Post Drafts")[1].split("## Filming")[0])
+        self.assertEqual(self.checks_of(8), OWN_CHECKS)
+        for said in (report, notice):
+            self.assertNotIn("the same source ranges as day 1's leg", said)
+        # check-edits tells the agent the same of the files as they are, before a run ends.
+        code, said = self.check_edits(queue["updated_by_run"])
+        self.assertEqual(code, 1, said)
+        self.assertIn(f"PROBLEM day 8: drafts/edits/window-1/day-08.json would not be offered: {why}", said)
+        # Corrected, the leg is offered, and check-edits passes it.
+        queue = self.run_ok({fakes.edit_path(8): fakes.edit_record(8, DAY_1)})
+        day_8 = self.posts_open()[8]
+        self.assertIn(f"; the same source ranges as day 1's leg {WHOLE}.", self.item(day_8))
+        self.assertEqual(self.pairs_shown(), [[1, 8]])
+        code, said = self.check_edits(queue["updated_by_run"])
+        self.assertEqual(code, 0, said)
+        self.assertIn("OK day 8: drafts/edits/window-1/day-08.json: it passes", said)
+        # A record changed while the leg's post is open is not offered either, and the post that stood stays.
+        self.run_ok({fakes.edit_path(8): fakes.edit_record(8, LATER)})
+        standing = self.posts_open()
+        self.assertEqual({day: entry["id"] for day, entry in standing.items()}, {1: day_1["id"], 8: day_8["id"]})
+        self.assertEqual(standing[8]["asset_sha256"], day_8["asset_sha256"])
         report = self.report()
-        self.assertIn("| 8 | P01 / AB-1 leg B | blocked |", report)
         self.assertIn(
-            "- pair-legs: its source ranges differ from day 1's leg (`drafts/edits/window-1/day-01.json`) from its"
-            " first frame: this leg shows `window-1/d01-s1.mov` 3-13s, that leg `window-1/d01-s1.mov` 2-12s",
+            f"| 8 | P01 / AB-1 leg B | kept | `{day_8['id']}`; what this run changed is not offered, since {why}; the"
+            " open item stands |",
             report,
         )
-        self.assertIn(f"- The open post `{day_8['id']}` for day 8 is withdrawn", self.notice())
+        self.assertIn(named, self.notice())
+        self.assertNotIn("withdrawn", self.notice())
 
-    def one_week_pair(self):
-        """A kit that posts both legs of AB-1 in one week, days 1 and 4, so one run can cut both, with its plan
-        approved and its footage there; returns the two legs' Drafts as the agent writes them."""
-        calendar = self.mandu / CALENDAR
-        rows = calendar.read_text(encoding="utf-8").splitlines()
-        leg_b = next(row for row in rows if row.startswith("| 8 |")).replace("| 8 |", "| 4 |", 1)
-        moved = "\n".join(leg_b if row.startswith("| 4 |") else row for row in rows)
-        calendar.write_text(moved + "\n", encoding="utf-8")
-        self.approved_plan(days=(1, 4))
-        self.clip("d01-s1.mov")
-        return {
-            fakes.draft_path(1): fakes.filming_draft(1),
-            fakes.draft_path(4): fakes.filming_draft(8).replace("day: 8", "day: 4"),
-        }
+    def test_a_leg_is_not_offered_while_the_record_of_its_other_leg_s_video_cannot_be_read(self):
+        queue = self.day_1()
+        day_1 = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        record = self.ledger() / day_1["asset_record"]
+        held = record.read_text(encoding="utf-8")
+        record.write_text("{}", encoding="utf-8")
+        # What day 1's video shows cannot be told, so day 8's cannot be compared with it and is not offered.
+        self.day_8()
+        self.assertEqual({day: entry["id"] for day, entry in self.posts_open().items()}, {1: day_1["id"]})
+        apart = "could not be compared, since the ledger's record of one of them does not say what footage it shows"
+        self.assertIn(
+            f"- Pair AB-1, days 1 and 8: the video in day 1's post `{day_1['id']}` and the video cut for day 8 {apart}."
+            " Nothing this run changed for either day is offered, and what stood before stays.",
+            self.notice(),
+        )
+        self.assertIn(
+            f"| 8 | P01 / AB-1 leg B | not offered | the video cut for it and the video in day 1's post"
+            f" `{day_1['id']}` {apart} |",
+            self.report(),
+        )
+        self.assertEqual(self.checks_of(8), OWN_CHECKS)
+        # With the record back, the two are compared, and day 8 is offered.
+        record.write_text(held, encoding="utf-8")
+        self.run_ok()
+        self.assertIn(f"; the same source ranges as day 1's leg {WHOLE}.", self.item(self.posts_open()[8]))
+        self.assertEqual(self.pairs_shown(), [[1, 8]])
 
-    @staticmethod
-    def both(edit):
-        return {fakes.edit_path(1): fakes.edit_record(1, edit), fakes.edit_path(4): fakes.edit_record(4, edit)}
+    def test_a_leg_is_judged_against_the_video_the_founder_approved_for_its_other_leg(self):
+        queue = self.day_1()
+        day_1 = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.decide(day_1["id"], "approve")
+        # A week on, day 8's record shows other footage than the video the Founder approved for day 1.
+        self.day_8(LATER)
+        self.assertEqual(self.posts_open(), {})
+        why = (
+            f"the video cut for it and the video in day 1's post `{day_1['id']}` do not show the same footage {WHOLE}"
+            f" ({shows(8, 3)}, and {shows(1, 2)})"
+        )
+        self.assertIn(f"| 8 | P01 / AB-1 leg B | not offered | {why} |", self.report())
+        approved = self.entries(status="approved")
+        self.assertEqual(
+            [(entry["id"], entry["asset_sha256"]) for entry in approved], [(day_1["id"], day_1["asset_sha256"])]
+        )
+        # Day 1 is settled, so nothing is cut for it again whatever is written in its place; day 8, corrected, is
+        # compared with the approved video and offered.
+        self.run_ok({fakes.edit_path(1): fakes.edit_record(1, LATER), fakes.edit_path(8): fakes.edit_record(8, DAY_1)})
+        day_8 = self.posts_open()[8]
+        self.assertIn(f"; the same source ranges as day 1's leg {WHOLE}.", self.item(day_8))
+        self.assertEqual(len(list((self.ledger() / "assets" / "window-1").glob("day-01-*"))), 1)
+        self.assertEqual(self.pairs_shown(), [[1, 8]])
 
     def one_week_recut_pair(self):
         """A kit that posts both legs of the re-cut pair AB-3 in one week, days 2 and 5, with its plan approved and
@@ -867,32 +1011,25 @@ class EditRunTest(FilmingRunCase):
             }
         )
         first, second = (next(entry for entry in queue["open"] if entry.get("day") == day) for day in (2, 5))
-        self.assertIn("the same source ranges as day 2's leg after the re-cut opening", self.item(second))
-        self.assertEqual((first["pair_edit_sha256"], second["pair_edit_sha256"]), (None, first["edit_sha256"]))
+        self.assertIn("; the same source ranges as day 5's leg after the re-cut opening.", self.item(first))
+        self.assertIn("; the same source ranges as day 2's leg after the re-cut opening.", self.item(second))
+        self.assertEqual(self.pairs_shown(), [[2, 5]])
+        for entry in (first, second):
+            record = json.loads((self.ledger() / entry["asset_record"]).read_text(encoding="utf-8"))
+            self.assertEqual(record["opening"], [[0.0, 3.0]])
         return first, second
-
-    def posts_open(self):
-        return {entry["day"]: entry for entry in self.queue()["open"] if entry["kind"] == "post"}
-
-    def checks_of(self, day):
-        """What the latest run's filming Evidence says it checked of a day's video."""
-        run = self.queue()["updated_by_run"]
-        filmed = json.loads((self.ledger() / f"evidence/filming/{run}.json").read_text(encoding="utf-8"))
-        return next(entry for entry in filmed["days"] if entry["day"] == day)["checks"]
 
     def test_a_broken_draft_of_one_leg_does_not_withdraw_the_other_leg_of_a_plain_pair(self):
         drafts = self.one_week_pair()
         queue = self.run_ok(dict(drafts, **self.both(DAY_1)))
         first, second = (next(entry for entry in queue["open"] if entry.get("day") == day) for day in (1, 4))
-        # The agent breaks day 1's Draft and touches nothing else. A plain pair has no opening to read from a
-        # Draft, so day 4 is compared with day 1's video as ever, and its open post stands with the same video.
+        # The agent breaks day 1's Draft and touches nothing else. Day 1's post is withdrawn, so one video is left:
+        # day 4's open post stands with it, and nothing says the two were compared in this run.
         self.run_ok({fakes.draft_path(1): "not a Draft\n"})
         standing = self.posts_open()
         self.assertEqual({day: entry["id"] for day, entry in standing.items()}, {4: second["id"]})
         self.assertEqual(standing[4]["asset_sha256"], second["asset_sha256"])
-        self.assertEqual(
-            self.checks_of(4)[-1], "the same source ranges as day 1's leg from the first frame to the last"
-        )
+        self.assertEqual(self.checks_of(4), OWN_CHECKS)
         report = self.report()
         self.assertIn("| 1 | P01 / AB-1 leg A | blocked |", report)
         self.assertIn(
@@ -904,21 +1041,24 @@ class EditRunTest(FilmingRunCase):
         self.assertIn(f"- The open post `{first['id']}` for day 1 is withdrawn", notice)
         self.assertNotIn(second["id"], notice)
         self.assertNotIn("Day 4", notice)
+        self.assertNotIn("Pair AB-1", notice)
 
     def kept_beside(self, draft):
-        """Both legs of the re-cut pair stand with compared videos; the agent then leaves day 2 the given Draft and
-        touches nothing else. Day 2 is blocked for it, and day 5, untouched, keeps its open post and its video: the
-        opening is never read from a Draft no video stands on, and the queue records the pair as compared."""
+        """Both legs of the re-cut pair stand with videos that match; the agent then leaves day 2 the given Draft and
+        touches nothing else. Day 2 is blocked for it and its post withdrawn, so one video is left: day 5 keeps its
+        open post and its video, no Draft in day 2's place judges it, and nothing says the two were compared."""
         first, second = self.one_week_recut_pair()
         self.run_ok({fakes.draft_path(2): draft})
         standing = self.posts_open()
         self.assertEqual({day: entry["id"] for day, entry in standing.items()}, {5: second["id"]})
         self.assertEqual(standing[5]["asset_sha256"], second["asset_sha256"])
         self.assertEqual(
-            self.checks_of(5)[-1],
-            f"it was not compared with day 2's leg again, since day 2's post Draft is no longer the one `{first['id']}`"
-            f" was queued from: its video and the video of `{first['id']}` are recorded as the pair that was"
-            " compared",
+            self.checks_of(5),
+            [
+                "measured 1080x1920 (9:16) at 30 frames a second",
+                "d02-s2, which may not be cut, is one unbroken source range",
+                "every cut plays at the speed it was recorded at",
+            ],
         )
         report = self.report()
         self.assertIn("| 2 | P02 / AB-3 leg A | blocked |", report)
@@ -931,7 +1071,8 @@ class EditRunTest(FilmingRunCase):
         self.assertIn(f"- The open post `{first['id']}` for day 2 is withdrawn", notice)
         self.assertNotIn(second["id"], notice)
         self.assertNotIn("Day 5", notice)
-        # check-edits gives the agent the same verdict of the untouched leg, so nothing steers it to change it.
+        self.assertNotIn("Pair AB-3", notice)
+        # check-edits gives the agent the same verdict of the leg it did not touch, so nothing steers it to change it.
         _, said = self.check_edits(self.queue()["updated_by_run"])
         self.assertIn(
             "OK day 5: drafts/edits/window-1/day-05.json: it passes; the launcher renders and measures it", said
@@ -960,176 +1101,223 @@ class EditRunTest(FilmingRunCase):
         self.assertIn(
             "- length: the edit runs 20.00s, and the beats of `drafts/posts/window-1/day-02.md` end at 21s", report
         )
-        self.assertNotIn("its source ranges differ", report)
+        self.assertNotIn("do not show the same footage", report)
 
     def test_an_unreadable_draft_of_one_re_cut_leg_does_not_withdraw_the_other_leg(self):
         self.kept_beside("not a Draft\n")
 
-    def test_two_re_cut_legs_whose_drafts_both_changed_are_compared_with_each_other_as_they_are_now(self):
+    def test_re_cut_legs_whose_drafts_change_are_compared_again_as_their_videos_are_then(self):
         first, second = self.one_week_recut_pair()
-        # Both Drafts are written again, the same words in other bytes, so neither leg is untouched.
-        queue = self.run_ok(
-            {
-                fakes.draft_path(2): fakes.filming_draft(2) + "\n",
-                fakes.draft_path(5): fakes.filming_draft(9).replace("day: 9", "day: 5") + "\n",
-            }
+        after = "after the re-cut opening"
+        again = fakes.filming_draft(9).replace("day: 9", "day: 5") + "\n"
+        # Day 5's Draft is written again, the same words in other bytes: its post is replaced by one that shows the
+        # same video, compared with the video day 2's post shows, and day 2's post stands as it was.
+        self.run_ok({fakes.draft_path(5): again})
+        standing = self.posts_open()
+        self.assertEqual((standing[2]["id"], standing[5]["supersedes"]), (first["id"], second["id"]))
+        self.assertEqual(standing[5]["asset_sha256"], second["asset_sha256"])
+        self.assertIn(f"; the same source ranges as day 2's leg {after}.", self.item(standing[5]))
+        self.assertIn(
+            f"| 2 | P02 / AB-3 leg A | kept | `{first['id']}`; its Draft is unchanged and passes, and so is its"
+            " video |",
+            self.report(),
         )
+        # Both Drafts are written again: both posts are replaced, and each video is compared with the other.
+        queue = self.run_ok({fakes.draft_path(2): fakes.filming_draft(2) + "\n", fakes.draft_path(5): again + "\n"})
         third, fourth = (next(entry for entry in queue["open"] if entry.get("day") == day) for day in (2, 5))
-        self.assertEqual((third["supersedes"], fourth["supersedes"]), (first["id"], second["id"]))
+        self.assertEqual((third["supersedes"], fourth["supersedes"]), (first["id"], standing[5]["id"]))
         self.assertEqual(
             (third["asset_sha256"], fourth["asset_sha256"]), (first["asset_sha256"], second["asset_sha256"])
         )
-        self.assertIn("; the same source ranges as day 5's leg after the re-cut opening.", self.item(third))
-        self.assertIn("; the same source ranges as day 2's leg after the re-cut opening.", self.item(fourth))
-        self.assertEqual(
-            (third["pair_edit_sha256"], fourth["pair_edit_sha256"]), (second["edit_sha256"], first["edit_sha256"])
+        self.assertIn(f"; the same source ranges as day 5's leg {after}.", self.item(third))
+        self.assertIn(f"; the same source ranges as day 2's leg {after}.", self.item(fourth))
+        self.assertEqual(self.pairs_shown(), [[2, 5]])
+        # Day 5 changes what it shows after its opening: it is not offered, and both posts stand.
+        moved = fakes.edit_record(
+            5,
+            ("d02-s1", "d02-s1b-take-1.mov", 0.5, 3.5),
+            ("d02-s2", "d02-s2.mov", 4, 15),
+            ("d02-s1", "d02-s1-closing.mov", 5, 11),
+        )
+        self.run_ok({fakes.edit_path(5): moved})
+        standing = self.posts_open()
+        self.assertEqual({day: entry["id"] for day, entry in standing.items()}, {2: third["id"], 5: fourth["id"]})
+        self.assertIn(
+            f"- Pair AB-3, days 2 and 5: the video in day 2's post `{third['id']}` and the video cut for day 5 do not"
+            " show the same footage after each one's opening (day 5's shows `window-1/d02-s2.mov` 4-15s,"
+            " `window-1/d02-s1-closing.mov` 5-11s, and day 2's shows `window-1/d02-s2.mov` 2-13s,"
+            " `window-1/d02-s1-closing.mov` 5-11s). Nothing this run changed for either day is offered, and what stood"
+            " before stays.",
+            self.notice(),
         )
 
-    def test_a_leg_whose_pair_is_not_recorded_as_compared_and_cannot_be_compared_is_named_as_not_compared(self):
-        first, second = self.one_week_recut_pair()
-        # A queue as an earlier launcher could leave it: nothing records what either video was compared with.
-        path = self.ledger() / "review-queue" / "queue.json"
-        data = json.loads(path.read_text(encoding="utf-8"))
-        next(entry for entry in data["open"] if entry["id"] == second["id"])["pair_edit_sha256"] = None
-        path.write_text(json.dumps(data), encoding="utf-8")
-        # Day 2's Draft cannot be read, so its opening cannot be told and the two videos cannot be compared now.
-        self.run_ok({fakes.draft_path(2): "not a Draft\n"})
-        self.assertEqual(self.posts_open(), {})
-        named = (
-            "pair-legs: day 2's post Draft, as it is now, is not one a video of that leg stands on, and nothing"
-            f" records that this leg's video and the video of `{first['id']}` were compared with each other, so the"
-            " pair is not compared"
-        )
-        report, notice = self.report(), self.notice()
-        self.assertIn("| 5 | P02 / AB-3 leg B | blocked |", report)
-        self.assertIn(f"- {named}", report)
-        self.assertIn(f"- Day 5 (`drafts/posts/window-1/day-05.md`): {named}", notice)
-        self.assertIn(f"- The open post `{second['id']}` for day 5 is withdrawn", notice)
-        for text in (report, notice):
-            self.assertNotIn("the pair that was compared", text)
-            self.assertNotIn("the same source ranges as day 2's leg", text)
-
-    def test_the_earlier_leg_of_a_pair_cut_in_one_run_is_checked_alone_and_says_the_later_leg_is_compared_with_it(
-        self,
-    ):
+    def test_both_legs_cut_in_one_run_are_compared_with_each_other_and_each_post_says_so(self):
         drafts = self.one_week_pair()
-        later = "day 4's leg has a new edit record, which is compared with this one before any video is cut from it"
-        same = "the same source ranges as day 1's leg from the first frame to the last"
         queue = self.run_ok(dict(drafts, **self.both(DAY_1)))
         first, second = (next(entry for entry in queue["open"] if entry.get("day") == day) for day in (1, 4))
-        self.assertIn(f"; {later}.", self.item(first))
-        self.assertIn(f"; {same}.", self.item(second))
-        # Both records change: day 4's earlier video is in an open post, and day 1 is still not said to lack one.
-        queue = self.run_ok(self.both(("d01-s1", "d01-s1.mov", 3, 13)))
+        self.assertIn(f"; the same source ranges as day 4's leg {WHOLE}.", self.item(first))
+        self.assertIn(f"; the same source ranges as day 1's leg {WHOLE}.", self.item(second))
+        self.assertEqual(self.pairs_shown(), [[1, 4]])
+        # Both records change alike: both posts are replaced, each video compared with the other's new one.
+        queue = self.run_ok(self.both(LATER))
         third, fourth = (next(entry for entry in queue["open"] if entry.get("day") == day) for day in (1, 4))
         self.assertEqual((third["supersedes"], fourth["supersedes"]), (first["id"], second["id"]))
-        self.assertIn(f"; {later}.", self.item(third))
-        self.assertNotIn("has no video to compare with yet", self.item(third))
-        self.assertIn(f"; {same}.", self.item(fourth))
-        self.assertEqual(self.asset(third)["seeks"], self.asset(fourth)["seeks"])
-        # With nothing changed but the slot, each leg is compared with the other's video again.
+        self.assertIn(f"; the same source ranges as day 4's leg {WHOLE}.", self.item(third))
+        self.assertIn(f"; the same source ranges as day 1's leg {WHOLE}.", self.item(fourth))
+        self.assertEqual((self.asset(third)["seeks"], self.asset(fourth)["seeks"]), (["3.000000"], ["3.000000"]))
+        # With nothing changed both posts stand, and a run that compared nothing says of neither leg that it did.
+        self.run_ok()
+        standing = self.posts_open()
+        self.assertEqual({day: entry["id"] for day, entry in standing.items()}, {1: third["id"], 4: fourth["id"]})
+        self.assertEqual((self.checks_of(1), self.checks_of(4)), (OWN_CHECKS, OWN_CHECKS))
+        # With nothing changed but the slot, both posts are replaced and each video is compared with the other again.
         fakes.set_window(self.repo, fakes.window_from(date(2026, 10, 11)))
         queue = self.run_ok()
         fifth, sixth = (next(entry for entry in queue["open"] if entry.get("day") == day) for day in (1, 4))
+        self.assertEqual((fifth["supersedes"], sixth["supersedes"]), (third["id"], fourth["id"]))
         self.assertEqual(
             (fifth["asset_sha256"], sixth["asset_sha256"]), (third["asset_sha256"], fourth["asset_sha256"])
         )
-        self.assertIn("; the same source ranges as day 4's leg from the first frame to the last.", self.item(fifth))
-        self.assertIn(f"; {same}.", self.item(sixth))
+        self.assertIn(f"; the same source ranges as day 4's leg {WHOLE}.", self.item(fifth))
+        self.assertIn(f"; the same source ranges as day 1's leg {WHOLE}.", self.item(sixth))
         for entry in (fifth, sixth):
             self.assertNotIn("has no video to compare with yet", self.item(entry))
 
-    def test_legs_of_a_pair_cut_anew_in_one_run_are_offered_together_or_not_at_all(self):
+    def test_legs_cut_in_one_run_whose_videos_differ_are_both_left_as_they_stood(self):
+        drafts = self.one_week_pair()
+        differ = f"do not show the same footage {WHOLE} ({shows(1, 2)}, and {shows(4, 3)})"
+        named = (
+            f"- Pair AB-1, days 1 and 4: the video cut for day 1 and the video cut for day 4 {differ}. Nothing this run"
+            " changed for either day is offered, and what stood before stays."
+        )
+        # No post stood before, so none stands after: neither leg is offered, not even its copy.
+        writes = {fakes.edit_path(1): fakes.edit_record(1, DAY_1), fakes.edit_path(4): fakes.edit_record(4, LATER)}
+        queue = self.run_ok(dict(drafts, **writes))
+        self.assertEqual(self.posts_open(), {})
+        report = self.report()
+        self.assertIn(
+            f"| 1 | P01 / AB-1 leg A | not offered | the video cut for it and the video cut for day 4 {differ} |",
+            report,
+        )
+        self.assertIn(
+            f"| 4 | P01 / AB-1 leg B | not offered | the video cut for it and the video cut for day 1 {differ} |",
+            report,
+        )
+        self.assertIn(named, report)
+        self.assertIn(named, self.notice())
+        self.assertRegex(report, r"- filming: checked=4 acted=2 note=[^\n]*; edits: 2 not offered")
+        code, said = self.check_edits(queue["updated_by_run"])
+        self.assertEqual(code, 1, said)
+        for day in (1, 4):
+            self.assertIn(f"PROBLEM day {day}: drafts/edits/window-1/day-{day:02d}.json would not be offered", said)
+        # Made alike, both are offered: day 1's video was kept from the run before, and nothing is rendered twice.
+        queue = self.run_ok({fakes.edit_path(4): fakes.edit_record(4, DAY_1)})
+        first, second = (next(entry for entry in queue["open"] if entry.get("day") == day) for day in (1, 4))
+        self.assertIn(f"| 1 | d01-s1 | finished | `{first['asset']}`", self.report())
+        self.assertIn("kept from an earlier run", self.report().split("| 1 | d01-s1 |")[1].split("\n")[0])
+        self.assertEqual(self.pairs_shown(), [[1, 4]])
+        # Both posts stand and both records change, each to other footage than the other's: both posts stay.
+        writes = {
+            fakes.edit_path(1): fakes.edit_record(1, LATER),
+            fakes.edit_path(4): fakes.edit_record(4, ("d01-s1", "d01-s1.mov", 4, 14)),
+        }
+        self.run_ok(writes)
+        standing = self.posts_open()
+        self.assertEqual({day: entry["id"] for day, entry in standing.items()}, {1: first["id"], 4: second["id"]})
+        self.assertEqual(
+            (standing[1]["asset_sha256"], standing[4]["asset_sha256"]), (first["asset_sha256"], second["asset_sha256"])
+        )
+        differ = f"do not show the same footage {WHOLE} ({shows(1, 3)}, and {shows(4, 4)})"
+        report = self.report()
+        self.assertIn(
+            f"| 1 | P01 / AB-1 leg A | kept | `{first['id']}`; what this run changed is not offered, since the video"
+            f" cut for it and the video cut for day 4 {differ}; the open item stands |",
+            report,
+        )
+        self.assertIn(
+            f"| 4 | P01 / AB-1 leg B | kept | `{second['id']}`; what this run changed is not offered, since the video"
+            f" cut for it and the video cut for day 1 {differ}; the open item stands |",
+            report,
+        )
+
+    def test_a_leg_cut_alone_is_offered_only_when_its_video_matches_the_one_its_other_leg_s_post_shows(self):
         drafts = self.one_week_pair()
         queue = self.run_ok(dict(drafts, **self.both(DAY_1)))
         first, second = (next(entry for entry in queue["open"] if entry.get("day") == day) for day in (1, 4))
-        folder, records = self.ledger() / "assets" / "window-1", self.ledger() / "evidence" / "filming" / "assets"
-        kept = sorted(path.name for path in folder.iterdir()), sorted(path.name for path in records.iterdir())
-        self.assertEqual([len(names) for names in kept], [2, 2])
 
-        def posts_open():
-            return {entry["day"]: entry["id"] for entry in self.queue()["open"] if entry["kind"] == "post"}
+        def standing():
+            return {day: (entry["id"], entry["asset_sha256"]) for day, entry in self.posts_open().items()}
 
-        # Both edit records change and only day 4's render fails. Neither leg is offered anew: the two open posts
-        # still show the pair of videos that were compared, and what was rendered of day 1 is not kept.
-        failure = "ffmpeg did not finish the render (Error opening output files)"
-        (self.tools / "ffmpeg.json").write_text(json.dumps({"fail": "Error opening output files", "only": "day-04"}))
-        self.run_ok(self.both(("d01-s1", "d01-s1.mov", 3, 13)))
-        self.assertEqual(posts_open(), {1: first["id"], 4: second["id"]})
-        self.assertEqual(
-            (sorted(path.name for path in folder.iterdir()), sorted(path.name for path in records.iterdir())), kept
+        before = standing()
+        differ = f"do not show the same footage {WHOLE} ({shows(1, 3)}, and {shows(4, 2)})"
+        why = f"the video cut for it and the video in day 4's post `{second['id']}` {differ}"
+        named = (
+            f"- Pair AB-1, days 1 and 4: the video cut for day 1 and the video in day 4's post `{second['id']}`"
+            f" {differ}. Nothing this run changed for either day is offered, and what stood before stays."
         )
-        self.assertEqual(self.asset(first)["seeks"], self.asset(second)["seeks"])
+        # Both edit records change alike and only day 4's render fails. Day 1's new video shows other footage than
+        # the video day 4's post still shows, so it is not offered, and both posts stand as they were.
+        (self.tools / "ffmpeg.json").write_text(json.dumps({"fail": "Error opening output files", "only": "day-04"}))
+        self.run_ok(self.both(LATER))
+        self.assertEqual(standing(), before)
         report = self.report()
         self.assertIn(
-            f"| 1 | P01 / AB-1 leg A | kept | `{first['id']}`; its video was not cut again ({TOGETHER}); the open item"
-            " stands |",
+            f"| 1 | P01 / AB-1 leg A | kept | `{first['id']}`; what this run changed is not offered, since {why}; the"
+            " open item stands |",
             report,
         )
         self.assertIn(
-            f"| 4 | P01 / AB-1 leg B | kept | `{second['id']}`; its video was not cut again ({failure}); the open item"
+            f"| 4 | P01 / AB-1 leg B | kept | `{second['id']}`; its video was not cut again ({FAILURE}); the open item"
             " stands |",
             report,
         )
-        self.assertIn(f"| 1 | d01-s1 | not cut | {TOGETHER} |", report)
-        self.assertIn(f"| 4 | d01-s1 | not cut | {failure} |", report)
+        self.assertIn(f"| 1 | d01-s1 | not offered | {why} |", report)
+        self.assertIn(f"| 4 | d01-s1 | not cut | {FAILURE} |", report)
         notice = self.notice()
-        self.assertIn(f"- Day 1's video was not cut: {TOGETHER}.", notice)
-        self.assertIn(f"- Day 4's video was not cut: {failure}.", notice)
+        self.assertIn(f"- Day 4's video was not cut: {FAILURE}.", notice)
+        self.assertIn(named, notice)
         # The tooling works again and day 4's edit record goes back to the one its video was cut from. Day 1's new
-        # record is compared with that video and differs, so it is blocked: the two never stand side by side.
+        # video still differs from it, so both posts stand again.
         (self.tools / "ffmpeg.json").unlink()
-        self.run_ok({fakes.edit_path(4): fakes.edit_record(4, DAY_1)})
-        self.assertEqual(posts_open(), {4: second["id"]})
-        self.assertIn(
-            "- pair-legs: its source ranges differ from day 4's leg (`drafts/edits/window-1/day-04.json`) from its"
-            " first frame: this leg shows `window-1/d01-s1.mov` 3-13s, that leg `window-1/d01-s1.mov` 2-12s",
-            self.report(),
-        )
-        self.assertEqual(sorted(path.name for path in folder.iterdir()), kept[0])
-        # Both records are new again and both renders finish: both legs are offered, from the same source ranges.
-        queue = self.run_ok({fakes.edit_path(4): fakes.edit_record(4, ("d01-s1", "d01-s1.mov", 3, 13))})
+        queue = self.run_ok({fakes.edit_path(4): fakes.edit_record(4, DAY_1)})
+        self.assertEqual(standing(), before)
+        self.assertIn(named, self.notice())
+        # check-edits says the same of the files as they are: day 1's record is the problem, and day 4's passes.
+        code, said = self.check_edits(queue["updated_by_run"])
+        self.assertEqual(code, 1, said)
+        self.assertIn(f"PROBLEM day 1: drafts/edits/window-1/day-01.json would not be offered: {why}", said)
+        self.assertIn("OK day 4: drafts/edits/window-1/day-04.json: it passes", said)
+        # Day 4's record changes as day 1's did and its render finishes: both legs are offered.
+        queue = self.run_ok({fakes.edit_path(4): fakes.edit_record(4, LATER)})
         third, fourth = (next(entry for entry in queue["open"] if entry.get("day") == day) for day in (1, 4))
-        self.assertEqual(fourth["supersedes"], second["id"])
-        self.assertNotEqual(third["id"], first["id"])
+        self.assertEqual((third["supersedes"], fourth["supersedes"]), (first["id"], second["id"]))
         self.assertEqual((self.asset(third)["seeks"], self.asset(fourth)["seeks"]), (["3.000000"], ["3.000000"]))
+        self.assertIn(f"; the same source ranges as day 4's leg {WHOLE}.", self.item(third))
+        self.assertIn(f"; the same source ranges as day 1's leg {WHOLE}.", self.item(fourth))
 
-    def test_a_leg_is_not_cut_while_its_other_leg_has_a_new_edit_record_that_no_video_is_cut_from(self):
+    def test_a_leg_whose_other_leg_has_no_video_yet_is_offered_alone_and_the_other_is_compared_with_it_later(self):
         drafts = self.one_week_pair()
-        # Day 4 has an edit record and no Draft, so no video is cut from it in this run, and none from day 1.
+        # Day 4 has an edit record and no Draft, so no video is cut from it: day 1's is offered alone, and says so.
         queue = self.run_ok({fakes.draft_path(1): drafts[fakes.draft_path(1)], **self.both(DAY_1)})
         post = next(entry for entry in queue["open"] if entry["kind"] == "post")
-        self.assertEqual((post["day"], "asset" in post), (1, False))
-        self.assertIn(f"**Video file**: none yet ({TOGETHER}).", self.item(post))
-        self.assertIn(f"| 1 | d01-s1 | not cut | {TOGETHER} |", self.report())
-        self.assertIn(f"- Day 1's video was not cut: {TOGETHER}.", self.notice())
-        self.assertFalse((self.ledger() / "assets").exists())
-        # Day 4's Draft arrives: both legs are cut and offered in the same run.
-        queue = self.run_ok({fakes.draft_path(4): drafts[fakes.draft_path(4)]})
+        self.assertEqual((post["day"], "asset" in post), (1, True))
+        self.assertIn("; day 4, its pair's other leg, has no video to compare with yet.", self.item(post))
+        self.assertEqual(self.pairs_shown(), [])
+        # Day 4's Draft arrives and its render fails: its copy is offered with no video, and day 1's post stands.
+        (self.tools / "ffmpeg.json").write_text(json.dumps({"fail": "Error opening output files", "only": "day-04"}))
+        self.run_ok({fakes.draft_path(4): drafts[fakes.draft_path(4)]})
+        standing = self.posts_open()
+        self.assertEqual((standing[1]["id"], "asset" in standing[4]), (post["id"], False))
+        self.assertIn(f"**Video file**: none yet ({FAILURE}).", self.item(standing[4]))
+        self.assertEqual(self.pairs_shown(), [])
+        # The render works: day 4's video is compared with the one day 1's post shows, and offered.
+        (self.tools / "ffmpeg.json").unlink()
+        queue = self.run_ok()
         first, second = (next(entry for entry in queue["open"] if entry.get("day") == day) for day in (1, 4))
-        self.assertEqual(first["supersedes"], post["id"])
+        self.assertEqual((first["id"], second["supersedes"]), (post["id"], standing[4]["id"]))
+        self.assertIn(f"; the same source ranges as day 1's leg {WHOLE}.", self.item(second))
         self.assertEqual(self.asset(first)["seeks"], self.asset(second)["seeks"])
-
-    def test_a_leg_that_differs_beyond_the_opening_has_no_asset_and_no_post(self):
-        self.day_1()
-        queue = self.day_8(("d01-s1", "d01-s1.mov", 3, 13))
-        self.assertEqual([entry["day"] for entry in queue["open"] if entry["kind"] == "post"], [1])
-        self.assertEqual(len(list((self.ledger() / "assets" / "window-1").glob("day-08-*"))), 0)
-        report = self.report()
-        self.assertIn("| 8 | P01 / AB-1 leg B | blocked |", report)
-        self.assertIn(
-            "- pair-legs: its source ranges differ from day 1's leg (`drafts/edits/window-1/day-01.json`) from its"
-            " first frame: this leg shows `window-1/d01-s1.mov` 3-13s, that leg `window-1/d01-s1.mov` 2-12s",
-            report,
-        )
-        notice = self.notice()
-        self.assertIn(
-            "- Day 8 (`drafts/posts/window-1/day-08.md`): pair-legs: its source ranges differ from day 1's leg", notice
-        )
-        self.assertEqual(notice.count("pair-legs"), 1)  # named once, with the day's post
-        # Corrected, the leg is cut and offered.
-        queue = self.run_ok({fakes.edit_path(8): fakes.edit_record(8, DAY_1)})
-        self.assertEqual(sorted(entry["day"] for entry in queue["open"] if entry["kind"] == "post"), [1, 8])
+        self.assertEqual(self.pairs_shown(), [[1, 4]])
 
     def test_a_cut_inside_a_shot_that_may_not_be_cut_renders_nothing_and_withdraws_the_day_s_post(self):
         self.approved_plan()
@@ -1928,12 +2116,18 @@ class RecutRunTest(FilmingRunCase):
         queue = self.run_ok({fakes.draft_path(9): fakes.filming_draft(9), fakes.edit_path(9): moved})
         self.assertEqual([entry["day"] for entry in queue["open"] if entry["kind"] == "post"], [2])
         self.assertIn(
-            "pair-legs: its source ranges differ from day 2's leg (`drafts/edits/window-1/day-02.json`) after the"
-            " re-cut opening",
-            self.report(),
+            f"- Pair AB-3, days 2 and 9: the video in day 2's post `{first['id']}` and the video cut for day 9 do not"
+            " show the same footage after each one's opening (day 9's shows `window-1/d02-s2.mov` 4-15s,"
+            " `window-1/d02-s1-closing.mov` 5-11s, and day 2's shows `window-1/d02-s2.mov` 2-13s,"
+            " `window-1/d02-s1-closing.mov` 5-11s). Nothing this run changed for either day is offered, and what stood"
+            " before stays.",
+            self.notice(),
         )
+        # Day 9 is judged against the video day 2's post shows, by that video's own record: whatever has become of
+        # the edit record it was cut from, that file is not read for it.
         day_9 = fakes.edit_record(9, ("d02-s1", "d02-s1b-take-1.mov", 0.5, 3.5), *tail)
-        queue = self.run_ok({fakes.edit_path(9): day_9})
+        queue = self.run_ok({fakes.edit_path(9): day_9, fakes.edit_path(2): "not an edit record\n"})
+        self.assertEqual(self.pairs_shown(), [[2, 9]])
         second = next(entry for entry in queue["open"] if entry.get("day") == 9)
         self.assertIn("the same source ranges as day 2's leg after the re-cut opening", self.item(second))
         ours, theirs = self.asset(first), self.asset(second)
@@ -1946,23 +2140,202 @@ class RecutRunTest(FilmingRunCase):
         self.assertIn("`window-1/d02-s1b-take-1.mov` for d02-s1", day_9)
         self.assertNotIn("d02-s1a-take-1.mov", day_9)
 
-    def test_a_reference_leg_whose_edit_record_changed_since_its_video_cannot_be_compared_with(self):
+    def test_an_edit_record_saved_again_in_other_bytes_is_still_the_record_its_video_was_cut_from(self):
         self.approved_plan()
         self.clip("d01-s1.mov")
-        self.run_ok({fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): fakes.edit_record(1, DAY_1)})
-        fakes.set_window(self.repo, fakes.window_from(date(2026, 10, 4)))
-        writes = {
-            fakes.edit_path(1): fakes.edit_record(1, ("d01-s1", "d01-s1.mov", 3, 13)),
-            fakes.draft_path(8): fakes.filming_draft(8),
-            fakes.edit_path(8): fakes.edit_record(8, DAY_1),
-        }
-        queue = self.run_ok(writes)
-        self.assertEqual([entry["day"] for entry in queue["open"] if entry["kind"] == "post"], [1])
-        self.assertIn(
-            "pair-legs: day 1's edit record is no longer the one the video of `20261011-post-w1-day-01` was cut from,"
-            " so this leg cannot be compared with it",
-            self.report(),
+        written = fakes.edit_record(1, DAY_1)
+        queue = self.run_ok({fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): written})
+        day_1 = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        # The same record is saved again: its keys in another order, other spacing, and 2.0 where it said 2.
+        again = json.dumps(dict(reversed(list(json.loads(written).items()))), indent=4).replace(
+            '"in": 2,', '"in": 2.0,'
         )
+        self.assertIn('"in": 2.0,', again)
+        queue = self.run_ok({fakes.edit_path(1): again})
+        self.assertEqual((self.workspace() / fakes.edit_path(1)).read_text(encoding="utf-8"), again)
+        self.assertEqual([entry["id"] for entry in queue["open"] if entry["kind"] == "post"], [day_1["id"]])
+        report = self.report()
+        self.assertIn(
+            f"| 1 | P01 / AB-1 leg A | kept | `{day_1['id']}`; its Draft is unchanged and passes, and so is its"
+            " video |",
+            report,
+        )
+        self.assertIn(
+            f"| 1 | d01-s1 | finished | `{day_1['asset']}`, 10.00s, 1080x1920, 30 fps, no sound, kept", report
+        )
+        filmed = json.loads((self.ledger() / f"evidence/filming/{queue['updated_by_run']}.json").read_text())
+        self.assertEqual(filmed["days"][0]["edit_sha256"], day_1["edit_sha256"])
+        # Day 8, a week on, is compared with day 1's video and cut.
+        fakes.set_window(self.repo, fakes.window_from(date(2026, 10, 4)))
+        queue = self.run_ok(
+            {fakes.draft_path(8): fakes.filming_draft(8), fakes.edit_path(8): fakes.edit_record(8, DAY_1)}
+        )
+        day_8 = next(entry for entry in queue["open"] if entry.get("day") == 8)
+        self.assertIn("; the same source ranges as day 1's leg from the first frame to the last.", self.item(day_8))
+        self.assertEqual(self.pairs_shown(), [[1, 8]])
+
+    def test_a_changed_edit_record_put_back_is_again_the_record_its_first_video_was_cut_from(self):
+        self.approved_plan()
+        self.clip("d01-s1.mov")
+        written = fakes.edit_record(1, DAY_1)
+        queue = self.run_ok({fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): written})
+        first = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        held = json.loads((self.ledger() / first["asset_record"]).read_text(encoding="utf-8"))["edit"]
+        self.assertEqual(held["sha256"], first["edit_sha256"])
+        queue = self.run_ok({fakes.edit_path(1): fakes.edit_record(1, ("d01-s1", "d01-s1.mov", 3, 13))})
+        second = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.assertEqual(second["supersedes"], first["id"])
+        self.assertNotEqual((second["asset"], second["edit_sha256"]), (first["asset"], first["edit_sha256"]))
+        # The record is put back to what the first video's own record holds of it, in bytes the agent never wrote:
+        # it is the record that video was cut from, so the video is kept, not rendered again, and offered as that.
+        back = json.dumps(held["record"], sort_keys=True)
+        self.assertNotEqual(back, written)
+        queue = self.run_ok({fakes.edit_path(1): back})
+        third = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.assertEqual(third["supersedes"], second["id"])
+        for key in ("asset", "asset_sha256", "asset_record", "edit_sha256"):
+            self.assertEqual(third[key], first[key], key)
+        self.assertIn(
+            f"| 1 | d01-s1 | finished | `{first['asset']}`, 10.00s, 1080x1920, 30 fps, no sound, kept", self.report()
+        )
+        again = json.loads((self.ledger() / third["asset_record"]).read_text(encoding="utf-8"))["edit"]
+        self.assertEqual(again, held)
+
+
+class PairWalkTest(FilmingRunCase):
+    """The one rule of an A/B pair's videos, through whatever happens to a pair from one run to the next: every run
+    of every sequence ends with the two posts of the pair showing no two videos that differ (run_ok asserts it)."""
+
+    LEGS = (1, 4)
+    DRAFTS = {1: 1, 4: 8}  # each leg's Draft in the example set
+    # What can happen to a pair between two runs, as (what, leg).
+    EVENTS = (
+        ("a new edit record", 1),
+        ("a new edit record", 4),
+        ("a Draft changed", 1),
+        ("a Draft blocked", 1),
+        ("a Draft unreadable", 4),
+        ("a cut that fails", 1),
+        ("a cut that fails", 4),
+        ("an approval", 4),
+        ("a rejection", 1),
+        ("a record saved again", 4),
+    )
+    # The events a third run is walked for, after any two of them.
+    CORE = (("a new edit record", 1), ("a new edit record", 4), ("a cut that fails", 4))
+
+    def setUp(self):
+        super().setUp()
+        held = tempfile.TemporaryDirectory()
+        self.addCleanup(held.cleanup)
+        self.held = Path(held.name)
+        self.saves = 0
+        self.seen = collections.Counter()
+
+    def snapshot(self):
+        """Everything a run reads and writes, as it is now, to walk more than one way on from here."""
+        self.saves += 1
+        kept = self.held / str(self.saves)
+        shutil.copytree(str(self.root), str(kept), symlinks=True)
+        return kept, self.runs
+
+    def restore(self, snapshot):
+        kept, self.runs = snapshot
+        for entry in self.root.iterdir():
+            shutil.rmtree(str(entry)) if entry.is_dir() and not entry.is_symlink() else entry.unlink()
+        shutil.copytree(str(kept), str(self.root), symlinks=True, dirs_exist_ok=True)
+
+    def draft(self, leg):
+        return fakes.filming_draft(self.DRAFTS[leg]).replace(f"day: {self.DRAFTS[leg]}", f"day: {leg}")
+
+    def moved(self, leg):
+        """The leg's edit record with its one source range a second later, or back at the start once it reaches the
+        end of the file, so that the two legs' records come to differ and to agree again."""
+        start = json.loads((self.workspace() / fakes.edit_path(leg)).read_text(encoding="utf-8"))["segments"][0]["in"]
+        start = 2 + (start - 1) % 3
+        return {fakes.edit_path(leg): fakes.edit_record(leg, ("d01-s1", "d01-s1.mov", start, start + 10))}
+
+    def happen(self, what, leg):
+        """One event, then the run that meets it."""
+        self.saves += 1
+        failing = self.tools / "ffmpeg.json"
+        failing.unlink(missing_ok=True)
+        post = self.posts_open().get(leg)
+        writes = {}
+        if what == "a new edit record":
+            writes = self.moved(leg)
+        elif what == "a Draft changed":
+            writes = {fakes.draft_path(leg): self.draft(leg) + "\n" * self.saves}
+        elif what == "a Draft blocked":
+            hook = "Open it and the session is already waiting."
+            writes = {
+                fakes.draft_path(leg): self.draft(leg).replace(f"## Hook\n\n{hook}", "## Hook\n\nNo Hook of the kit.")
+            }
+            self.assertNotEqual(writes[fakes.draft_path(leg)], self.draft(leg))
+        elif what == "a Draft unreadable":
+            writes = {fakes.draft_path(leg): "not a Draft\n"}
+        elif what == "a cut that fails":
+            writes = self.moved(leg)
+            failing.write_text(json.dumps({"fail": "Error opening output files", "only": f"day-{leg:02d}"}))
+        elif what in ("an approval", "a rejection") and post is not None:
+            approve = what == "an approval"
+            self.decide(post["id"], "approve" if approve else "reject", None if approve else "Not this one.")
+        elif what == "a record saved again":
+            path = self.workspace() / fakes.edit_path(leg)
+            writes = {fakes.edit_path(leg): json.dumps(json.loads(path.read_text(encoding="utf-8")), indent=self.saves)}
+        self.run_ok(writes)
+        report = self.report()
+        drafted = report.split("## Post Drafts")[1].split("## Filming")[0]
+        self.seen["both posts show a video"] += len(self.matched)
+        self.seen["a video not offered"] += "A/B pairs whose two videos differ:" in report
+        self.seen["a post replaced"] += "| queued | " in drafted and "replaces `" in drafted
+        self.seen["a post withdrawn"] += " was withdrawn" in drafted
+        self.seen["a cut that failed"] += FAILURE in report
+        self.seen["a leg settled"] += "the Founder approved it, so it is not asked again" in drafted
+        self.seen["a Draft not asked again"] += "| not queued again | " in drafted
+        self.seen["a compared leg"] += f"the same source ranges as day {self.LEGS[0]}'s leg" in json.dumps(
+            self.checks_of(self.LEGS[1])
+        )
+
+    def test_no_sequence_of_pair_events_leaves_two_posts_showing_videos_that_differ(self):
+        drafts = self.one_week_pair()
+        self.run_ok(dict(drafts, **self.both(DAY_1)))
+        self.assertEqual(self.pairs_shown(), [[1, 4]])
+        start = self.snapshot()
+        walked = 0
+        for first in self.EVENTS:
+            self.restore(start)
+            with self.subTest(events=(first,)):
+                self.happen(*first)
+                walked += 1
+                after_one = self.snapshot()
+                for second in self.EVENTS:
+                    self.restore(after_one)
+                    with self.subTest(events=(first, second)):
+                        self.happen(*second)
+                        walked += 1
+                        if first not in self.CORE or second not in self.CORE:
+                            continue
+                        after_two = self.snapshot()
+                        for third in self.CORE:
+                            self.restore(after_two)
+                            with self.subTest(events=(first, second, third)):
+                                self.happen(*third)
+                                walked += 1
+        count, core = len(self.EVENTS), len(self.CORE)
+        self.assertEqual(walked, count + count**2 + core**3)
+        # The walk met every way a pair's posts can come out of a run, so the rule was tried against each.
+        for outcome in (
+            "both posts show a video",
+            "a video not offered",
+            "a post replaced",
+            "a post withdrawn",
+            "a cut that failed",
+            "a leg settled",
+            "a Draft not asked again",
+            "a compared leg",
+        ):
+            self.assertGreater(self.seen[outcome], 0, outcome)
 
 
 class RealToolingRunTest(FilmingRunCase):
