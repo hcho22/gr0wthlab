@@ -42,7 +42,7 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
    The launcher never checks a declaration against a proposal's wording: the Founder is the check on a wrong declaration, at the sitting.
    The package review counts as complete only when the agent's summary ends with the line `Review: complete`; otherwise the run report marks it incomplete and the notice says so.
    It checks each post Draft the agent wrote in `workspace/drafts/posts/` and queues a post only for one that passes; a blocked Draft is named in the run report and the notice with every failing rule or checklist line, and every check is kept in `ledger/evidence/post-drafts/`.
-   It files the brand lint's word-list proposal once, and never again whatever the Founder decides.
+   It files each reviewed proposal in `src/proposals/` once, and never again whatever the Founder decides: the brand lint's word lists, and, in a run with outreach messages to offer, the loss-framing and sponsorship-ask lists.
    It puts back any change the run made in `workspace/instructions/`, and names it in the run report.
    It keeps each quote record whose words stand in the text it fetched from that record's link (`ledger/evidence/listening/quotes/`), and refuses every other: a refused record is removed, and only its file name and the reasons are kept.
    Once the agent's work is taken in and the run ends, it removes the snapshot.

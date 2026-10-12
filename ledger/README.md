@@ -22,6 +22,7 @@ Each run's records step commits this folder to `main` together with `workspace/`
   A quote record the launcher refused is named there with the reasons and kept nowhere: no copy of it is made.
 - `evidence/outreach/<run id>.json`: every check of every outreach message that run, and what the Founder's records in Mandu said of each creator.
 - `evidence/learning/ledger.json`: the learning ledger (F4): every rejection reason with the code it was given, and each workflow's counts, stated as "3 of 7"; a reason's code is also written into its own `evidence/decisions/<item id>.json`, beside the Founder's words.
+- `evidence/learning/set-aside/<run id>/`: each proposed code the launcher did not take in that run, kept for the record and named with its reasons in that run's report and notice.
 - `run-reports/<run id>.requests.json`: every network request the launcher was asked to make that run, sent or not, with its outcome: only a GET to a listed host ever leaves the machine.
 - `run-reports/<run id>.work-plan.json`: what the launcher fixed for that run's Listening and outreach before the agent started (which subreddits the Founder confirmed, which messages may be offered and how their items stand), which `check-work --run <run id>` reads instead of working it out again.
 - `run-reports/<run id>.md`: the run report: every source checked with its result, every failure and skip with its reason, whether a scheduled run started late, and the run's approximate cost; its first line counts what the run checked and acted on (`checked=N acted=N note=...`).

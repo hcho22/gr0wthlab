@@ -22,7 +22,7 @@ Add these keys to `projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.j
 ```
 
 What each does: a `loss_framing` phrase blocks a Draft in every field of copy, a post's as well as a message's; a `sponsorship_asks` phrase blocks only a message to a creator, and no post is read for it.
-A phrase matches as whole words in any letter case, however its apostrophe is typed, and a single word also matches its plural.
+A phrase matches as whole words in any letter case, however its apostrophe is typed, and a `sponsorship_asks` phrase also matches its plural.
 
 To decide: whether each phrase is one Rep Today would never say, and what is missing.
 The lists are the Marketing Engineer's own first wording, taken from no other source, so trim or extend them freely before Mandu applies them; the lint reads only what this file holds.
