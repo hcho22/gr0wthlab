@@ -445,8 +445,13 @@ def check_lines(draft: MessageDraft, target: Target, context: Context, verdict: 
             f"- The Source link is `{target.source_link}`, as `{target.link_source}` defines it, and there is no other"
             " link: checked."
         )
-    else:
+    elif rules and rules.has("sponsorship_asks"):
         lines.append("- No sponsorship ask the brand rules list: checked.")
+    else:
+        lines.append(
+            "- Sponsorship asks: Mandu holds no sponsorship list yet, so no phrase check ran; whether it asks for one"
+            " is yours to judge."
+        )
     lines.append("- No email address: checked.")
     waiting = [line for line in verdict.checklist if line.status not in (DONE, BLOCKS)]
     if waiting:

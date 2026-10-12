@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from gr0wthlab import exchange, learning, lint, messages, outreach, proposals
+from gr0wthlab import drafts, exchange, learning, lint, messages, outreach, proposals
 from gr0wthlab.boundary import ConfigError
 from tests import fakes
 
@@ -223,6 +223,37 @@ class OutreachListsProposalTest(unittest.TestCase):
             [f.rule for f in rules.check([lint.Copy("TikTok caption", "You are falling behind.")])], ["loss_framing"]
         )
         self.assertEqual(lint.Rules({}).creator_pending(), ["sponsorship asks"])
+
+
+class CheckLinesTest(unittest.TestCase):
+    CHECKED = "- No sponsorship ask the brand rules list: checked."
+    NOT_CHECKED = (
+        "- Sponsorship asks: Mandu holds no sponsorship list yet, so no phrase check ran; whether it asks for one is"
+        " yours to judge."
+    )
+
+    def lines(self, rules, purpose):
+        """A creator message item's check lines under the given brand rules; None is no brand rules read at all."""
+        draft = messages.parse(fakes.message(purpose, "slow-strength", fakes.CREATOR_BODY), "x.md")
+        context = drafts.Context("RepToday", 1, None, rules, None if rules else "not JSON", {}, None, {})
+        target = messages.Target(purpose, "slow-strength", "Slow Strength")
+        return messages.check_lines(draft, target, context, drafts.Verdict())
+
+    def test_with_mandu_s_sponsorship_list_the_item_says_the_check_was_made(self):
+        rules = lint.Rules({"sponsorship_asks": ["sponsor"]})
+        for purpose in messages.TO_CREATOR:
+            with self.subTest(purpose=purpose):
+                lines = self.lines(rules, purpose)
+                self.assertIn(self.CHECKED, lines)
+                self.assertNotIn(self.NOT_CHECKED, lines)
+
+    def test_without_the_list_or_any_brand_rules_the_item_says_no_phrase_check_ran(self):
+        for rules in (lint.Rules({"loss_framing": ["falling behind"]}), None):
+            for purpose in messages.TO_CREATOR:
+                with self.subTest(rules=rules is not None, purpose=purpose):
+                    lines = self.lines(rules, purpose)
+                    self.assertIn(self.NOT_CHECKED, lines)
+                    self.assertNotIn(self.CHECKED, lines)
 
 
 class CodesTest(unittest.TestCase):

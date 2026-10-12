@@ -509,6 +509,7 @@ class OutreachCycleTest(WorkCycleTestCase):
         self.assertIn("| your personal network, ask | `purpose: network-ask`, `to: network` |", brief)
         self.assertIn("| Slow Strength, the one follow-up | `purpose: creator-follow-up`, `to: slow-strength` |", brief)
         self.assertIn("It offers early access and asks for nothing: no sponsorship, no post, no reply owed.", slow)
+        self.assertIn("- No sponsorship ask the brand rules list: checked.", slow)
         self.assertIn("exactly as `src/dispatches/reptoday-waitlist.md` defines it", brief)
         self.assertEqual(self.read("run-reports/state/outreach.json")["targets"], {})
 
@@ -657,6 +658,8 @@ class OutreachCycleTest(WorkCycleTestCase):
         slow = self.item_text("20261011-message-creator-slow-strength")
         pending = "rule types still waiting for their lists in Mandu, so yours to judge: loss framing, sponsorship asks"
         self.assertIn(pending, slow)
+        self.assertIn("- Sponsorship asks: Mandu holds no sponsorship list yet, so no phrase check ran;", slow)
+        self.assertNotIn("- No sponsorship ask the brand rules list: checked.", slow)
         self.assertIn(
             "Pending until Mandu adds their lists, so yours to keep by judgment: loss framing, sponsorship asks.",
             self.brief(),
