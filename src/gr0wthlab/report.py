@@ -135,6 +135,8 @@ class RunState:
     learning_problem: str = ""  # why the rejection reasons were not read or coded, when they were not
     guidance: learning.Guidance | None = None  # the agent's Instructions as they were before it started
     put_back: list[str] = field(default_factory=list)  # each change to them the launcher undid
+    # what a stopped boundary check had left in the areas, removed before the Instructions were remembered
+    probe_files_removed: list[str] = field(default_factory=list)
     work_published: list[str] = field(default_factory=list)  # the items Listening and outreach queued this run
     check_work: str = ""  # the command the agent checks its Listening and outreach work with
     attempt: attempts.Attempt | None = None  # a weekly scheduled run: which attempt at the run due, and those before
@@ -382,6 +384,14 @@ def span_text(seconds: float) -> str:
     minutes, rest = divmod(int(round(seconds)), 60)
     hours, minutes = divmod(minutes, 60)
     return " ".join([f"{hours} h"] * bool(hours) + [f"{minutes} min"] * bool(hours or minutes) + [f"{rest} s"])
+
+
+def probe_files_removed(state: RunState) -> list[str]:
+    """What a stopped boundary check had left in the areas and this run removed, as paths from the repository: the
+    production clone's pre-run step removes it before its records step can commit it, and every run before it
+    remembers the agent's Instructions and again before its preflight."""
+    before_records = (state.sync or {}).get("probe_files_removed") or []
+    return [*before_records, *state.probe_files_removed, *(state.agent.get("probe_files_removed") or [])]
 
 
 def left_running(stop: process.Stop) -> str | None:
@@ -766,6 +776,12 @@ def render_report(state: RunState) -> str:
     lines += ["", "## Outputs", ""] + table(["Output", "Status", "Detail"], state.outputs)
     lines += ["", "## Agent's work", ""] + work_lines(state)
     lines += ["", "## Agent", ""]
+    removed = probe_files_removed(state)
+    if removed:
+        lines.append(
+            "- Removed boundary probe files left in the areas, before the agent started: "
+            + ", ".join(f"`{path}`" for path in removed)
+        )
     preflight = state.agent.get("preflight") or {}
     if preflight:
         lines.append(

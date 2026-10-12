@@ -10,6 +10,7 @@ import hashlib
 import json
 import os
 import pwd
+import re
 import shutil
 import tempfile
 from collections.abc import Mapping, Sequence
@@ -24,6 +25,93 @@ LANG = "en_US.UTF-8"
 PREFLIGHT_PREFIX = ".gr0wthlab-preflight-"
 # The directories an environment names; a Codex change that made any of them writable would widen writes.
 ENVIRONMENT_DIRS = ("HOME", "TMPDIR", "CODEX_HOME")
+
+
+# Codex's log filter (RUST_LOG): its errors, as by default, plus the records it keeps of each tool call. Every run
+# starts with it, so the boundary check judges the same configuration a weekly run has.
+LOG_FILTER = "error,codex_otel.log_only=info"
+# How every record in Codex's log starts; a line that starts another way continues the record before it.
+LOG_RECORD = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d+Z +(?:TRACE|DEBUG|INFO|WARN|ERROR) ", re.MULTILINE)
+TOOL_RESULT = re.compile(
+    r'\S+ +INFO codex_otel\.log_only: event\.name="codex\.tool_result" tool_result_seq=(?P<seq>\d+)'
+    r" tool_name=(?P<tool>\S+) tool_namespace=\S* call_id=\S+ duration_ms=\d+ success=(?P<success>true|false)"
+    r" output_truncated=(?:true|false) agent_name=\S* arguments="
+)
+# What follows a tool call's output in its record, on one line: the fields Codex ends the record with.
+TOOL_RESULT_END = re.compile(r" mcp_server=\S* mcp_server_origin=\S* event\.timestamp=[^\n]*\Z")
+
+
+@dataclass(frozen=True)
+class ToolResult:
+    """One tool call as Codex recorded it: the tool, whether it succeeded, and the rest of the record, which is the
+    call's arguments, its output, and Codex's closing fields.
+
+    The arguments and the output are the agent's and the tool's own text, unescaped, so nothing in the record says
+    for certain where one ends; `gave` matches the whole of it against an expected call instead of splitting it.
+    """
+
+    seq: int
+    tool: str
+    success: bool
+    body: str
+
+    def gave(self, output: str) -> str | None:
+        """The call's arguments if its record ends with exactly this output and Codex's closing fields, else None."""
+        closing = TOOL_RESULT_END.search(self.body)
+        ending = " output=" + output
+        if closing is None or not self.body[: closing.start()].endswith(ending):
+            return None
+        return self.body[: closing.start() - len(ending)]
+
+    def said(self) -> str:
+        """About what the call returned, on one line, for a message only: a guess at where the output starts."""
+        closing = TOOL_RESULT_END.search(self.body)
+        output = self.body[: closing.start() if closing else len(self.body)].rpartition(" output=")[2]
+        return " ".join(output.split())[:200] or "nothing"
+
+
+def tool_results(log: str) -> tuple[list[ToolResult], list[str]]:
+    """Every tool call Codex recorded in its log, in order, and what is wrong with the record as a whole.
+
+    Codex numbers the calls from 1 and may write two that ran together out of order; a number missing or repeated
+    means a record was lost or is not what it seems, and the log cannot be taken as the whole record of what the
+    agent did.
+    """
+    starts = [match.start() for match in LOG_RECORD.finditer(log)] + [len(log)]
+    results = []
+    for start, end in zip(starts, starts[1:]):
+        record = log[start:end].rstrip("\n")
+        match = TOOL_RESULT.match(record)
+        if match:
+            results.append(
+                ToolResult(int(match["seq"]), match["tool"], match["success"] == "true", record[match.end() :])
+            )
+    numbers = sorted(result.seq for result in results)
+    problems = []
+    if numbers != list(range(1, len(numbers) + 1)):
+        problems.append(f"its {len(numbers)} tool calls are numbered {numbers}, not 1 to {len(numbers)} once each")
+    return results, problems
+
+
+def last_error(events: str) -> str | None:
+    """The last error Codex reported in its event stream, the --json output a run keeps as events.jsonl, on one line;
+    None if it reported none."""
+    found = None
+    for line in events.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        kind = event.get("type") if isinstance(event, dict) else None
+        if kind == "error":
+            message = event.get("message")
+        elif kind == "turn.failed" and isinstance(event.get("error"), dict):
+            message = event["error"].get("message")
+        else:
+            continue
+        if isinstance(message, str) and message.strip():
+            found = " ".join(message.split())[:300]
+    return found
 
 
 def toml_string(value: str) -> str:
@@ -89,6 +177,7 @@ def child_environment(home: Path, codex_bin: Path, temp_dir: str) -> dict[str, s
         "TMPDIR": temp_dir,
         "PATH": os.pathsep.join((str(codex_bin.parent),) + SYSTEM_PATH),
         "CODEX_HOME": str(home / ".codex"),
+        "RUST_LOG": LOG_FILTER,
     }
 
 
