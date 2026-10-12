@@ -14,9 +14,10 @@ recruiting Drafts, removes a recruiting Draft that holds what looks like an emai
 incoming items it takes in. One run at a time per checkout holds the run lock in its ledger/ from the sync to the
 saved records; a run started meanwhile refuses to start, and the next report says so.
 
-A scheduled start comes first as a check (attempts.py): it begins a run only while the launcher's records show the
-run due is still owed and the Mac is fully awake, and every run notes there how it ended, so a run the Mac's sleep cut
-short is followed by a fresh one and no other run is.
+A weekly scheduled start comes first as a check (attempts.py): it begins a run only while the launcher's records show
+the week's run is still owed and the Mac is fully awake, and every run notes there how it ended, so a weekly run the
+Mac's sleep cut short, wherever in it the sleep fell, is followed by a fresh one and no other run is. A one-off
+scheduled start (--once) always runs, as a run on demand does.
 """
 
 from __future__ import annotations
@@ -147,24 +148,39 @@ class Cycle:
         home: Path,
         out: TextIO,
         clock: Callable[[], datetime],
+        clocks: process.Clock = process.CLOCK,
     ):
         self.repo_root = repo_root
         self.env = env
         self.home = home
         self.out = out
         self.clock = clock
+        self.clocks = clocks
         self.store = Store(canonical(repo_root) / LEDGER)
         self.started: datetime | None = None
         self.run_id: str | None = None
-        self.due: datetime | None = None  # when a scheduled start's run was due, once its settings could be read
-        self.unsure = False  # the Mac did not say whether it was fully awake when a scheduled start asked
+        self.due: datetime | None = None  # when a weekly start's run was due, once its settings could be read
+        self.unsure = False  # the Mac did not say whether it was fully awake when a weekly start asked
         self.noted = False  # how this run ended is in the record of the run due at its time
+        self.since: Callable[[], tuple[float, float]] | None = None  # the clocks' reading from this start's beginning
+        self.before = (0.0, 0.0)  # what this start had taken when it restarted on new code, as taken() gives it
 
     def say(self, message: str) -> None:
         print(f"gr0wthlab: {message}", file=self.out)
 
     def now(self) -> datetime:
         return self.clock()
+
+    def taken(self) -> tuple[float, float]:
+        """The seconds since this start began, then those of them the Mac was awake, a restart on new code included,
+        on the clocks every time limit is measured on."""
+        seconds, awake = self.since()
+        return self.before[0] + seconds, self.before[1] + awake
+
+    def asleep(self) -> float:
+        """About how many seconds the Mac has been asleep since this start began, by the measure and the tolerance of
+        the agent's own time; 0 when it stayed awake."""
+        return report.asleep_for(*self.taken())
 
     def snapshot(self, state: RunState, config: settings.Settings, boundary: Boundary, registry) -> None:
         mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
@@ -780,20 +796,19 @@ class Cycle:
             return None
         return handle
 
-    def owed(self, once: str | None) -> int | None:
-        """A scheduled start is first a check of the launcher's own records: None while the run due is still owed and
-        the Mac is fully awake, and otherwise the exit status of a start that begins nothing. The check takes no lock
-        and writes nothing, so the LaunchAgent can make it every few minutes, and it prints its reason only at a
-        terminal, so a LaunchAgent's log does not grow by a line each time."""
+    def owed(self) -> int | None:
+        """A weekly scheduled start is first a check of the launcher's own records: None while the week's run is still
+        owed and the Mac is fully awake, and otherwise the exit status of a start that begins nothing. The check takes
+        no lock and writes nothing, so the LaunchAgent can make it every few minutes, and it prints its reason only at
+        a terminal, so a LaunchAgent's log does not grow by a line each time."""
         try:
             config = settings.load(self.repo_root, self.env, self.home)
         except ConfigError as error:
             self.say(f"refusing to start: {error}")
             return launcher.EXIT_CONFIG
-        now = self.now()
-        self.due = report.due_time(now, config.weekly, once)
+        self.due = report.due_time(self.now(), config.weekly)
         record = attempts.load(self.store, self.due)
-        why = attempts.waiting(record, config.attempts_per_week, report.wall_clock(now))
+        why = attempts.waiting(record, config.attempts_per_week)
         if not why:
             awake = attempts.fully_awake()
             self.unsure = awake is None
@@ -803,11 +818,11 @@ class Cycle:
         return 0 if why else None
 
     def claim(self, state: RunState, config: settings.Settings) -> attempts.Attempt | None:
-        """Under the run lock, note this scheduled attempt in the record of the run due at its time before anything
-        else is done, so that an attempt that never ends still counts; None when the record shows that no run is owed
-        after all, as when another start completed it meanwhile."""
+        """Under the run lock, note this weekly scheduled attempt in the record of the run due at its time before
+        anything else is done, so that an attempt that never ends still counts; None when the record shows that no run
+        is owed after all, as when another start completed it meanwhile."""
         record = attempts.load_to_write(self.store, state.due)
-        why = attempts.waiting(record, config.attempts_per_week, report.wall_clock(state.started))
+        why = attempts.waiting(record, config.attempts_per_week)
         if why:
             self.say(f"nothing to start: {why}")
             return None
@@ -825,26 +840,31 @@ class Cycle:
         return attempts.claim(self.store, record, config.attempts_per_week, state.started)
 
     def note_ending(self, state: RunState, config: settings.Settings) -> None:
-        """Note how this run ended in the record of the run due at its time, which the next scheduled start reads to
-        tell whether a run is still owed. A run on demand is noted at the weekly time before it started, so one that
-        completed counts as that week's run."""
-        due = state.due if state.attempt else report.due_time(state.started, config.weekly)
-        attempts.finish(
-            self.store, due, state.trigger, state.started, state.run_id, state.ending, self.now(), state.asleep
-        )
+        """Note how this run ended in the record of the run due at its time, which the next weekly start reads to
+        tell whether a run is still owed. A run on demand or a one-off scheduled run is noted at the weekly time
+        before it started and is never an attempt, so one that completed counts as that week's run."""
+        if state.attempt:
+            due, kind = state.due, attempts.SCHEDULED
+        else:
+            due = report.due_time(state.started, config.weekly)
+            kind = attempts.ONE_OFF if state.trigger == attempts.SCHEDULED else attempts.ON_DEMAND
+        attempts.finish(self.store, due, kind, state.started, state.run_id, state.ending, self.now(), state.slept)
         self.noted = True
         follows = report.what_follows(state)
         if follows:
             self.say(follows)
 
     def note_no_report(self, trigger: str, ending: str) -> None:
-        """Note the ending of a scheduled start that never reached its report, refused or stopped by an error: it
-        does not earn another attempt, so the owed-run check does not start it again every few minutes."""
+        """Note the ending of a weekly scheduled start that never reached its report, refused or stopped by an error.
+        One the Mac slept during was cut short by sleep, as a run that reached its report would be; any other does not
+        earn another attempt, so the owed-run check does not start it again every few minutes."""
         if trigger != attempts.SCHEDULED or self.due is None or self.noted:
             return
         try:
             started = self.started or self.now()
-            attempts.finish(self.store, self.due, trigger, started, self.run_id, ending, self.now())
+            asleep = self.asleep()
+            ending = attempts.SLEPT if asleep else ending
+            attempts.finish(self.store, self.due, trigger, started, self.run_id, ending, self.now(), asleep)
         except (OSError, ConfigError) as error:
             self.say(f"how this start ended could not be noted ({error})")
 
@@ -856,8 +876,9 @@ class Cycle:
         argv: Sequence[str],
         execve: Callable[[str, list[str], Mapping[str, str]], None] = os.execve,
     ) -> int:
-        if trigger == attempts.SCHEDULED and not self.env.get(PRE_RUN_ENV):
-            code = self.owed(once)
+        self.since = self.clocks.start()
+        if trigger == attempts.SCHEDULED and once is None and not self.env.get(PRE_RUN_ENV):
+            code = self.owed()
             if code is not None:
                 return code
         lock = self.lock(trigger)
@@ -894,6 +915,8 @@ class Cycle:
         pre = json.loads(self.env[PRE_RUN_ENV]) if self.env.get(PRE_RUN_ENV) else None
         started = datetime.fromisoformat(pre["started_at"]) if pre else self.now()
         self.started, self.run_id = started, None
+        if pre:
+            self.before = tuple(pre.get("taken", self.before))
         try:
             config = settings.load(self.repo_root, self.env, self.home)
             task = config.instruction if instruction is None else settings.instruction_path(self.repo_root, instruction)
@@ -928,7 +951,7 @@ class Cycle:
             if result.code_changed:
                 # Run the reviewed code just fetched, not the code already loaded in this process.
                 entry = str(entry_point(self.repo_root))
-                carried = json.dumps({"started_at": started.isoformat(), "sync": sync})
+                carried = json.dumps({"started_at": started.isoformat(), "sync": sync, "taken": self.taken()})
                 for stream in (self.out, sys.stdout, sys.stderr):
                     stream.flush()  # execve discards anything still buffered
                 execve(entry, [entry, *argv], dict(self.env, **{PRE_RUN_ENV: carried}))
@@ -940,9 +963,10 @@ class Cycle:
         state.late_after = timedelta(minutes=config.late_after_minutes)
         if trigger == "scheduled":
             state.due = report.due_time(started, config.weekly, once)
-            state.attempt = self.claim(state, config)
-            if state.attempt is None:
-                return 0
+            if once is None:
+                state.attempt = self.claim(state, config)
+                if state.attempt is None:
+                    return 0
         state.code = head(self.repo_root)
         try:
             _, boundary = load_boundary(self.repo_root, self.env, self.home)
@@ -1017,6 +1041,7 @@ class Cycle:
             )
         except OSError as error:
             state.agent = {"exit_code": launcher.EXIT_CONFIG, "agent_started": False, "error": str(error)}
+        state.slept = self.asleep()
         log_dir = launcher.default_log_dir(self.env, self.home)
         last_message = log_dir / f"{run_id}.last-message.md"
         if last_message.is_file():

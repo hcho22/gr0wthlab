@@ -7,7 +7,7 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
 ## What one run does
 
 `src/bin/gr0wthlab run` does the whole run, scheduled or on demand.
-A run on demand always does it; a scheduled start does it only while the week's run is still owed and the Mac is fully awake, and otherwise ends at once ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
+A run on demand always does it, and so does a one-off scheduled start (`--once`); a start of the weekly schedule does it only while the week's run is still owed and the Mac is fully awake, and otherwise ends at once ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
 
 1. In the production clone only, it fetches `origin` and fast-forwards `main`, then restarts itself on the new code.
    Before that, it restores its owner's read and write access to anything under `workspace/` left without it.
@@ -44,11 +44,11 @@ A run on demand always does it; a scheduled start does it only while the week's 
    It replaces an open invitation that holds a sign-up who left the Waitlist with the batch made again without them, and withdraws it when that batch cannot be made.
    It replaces an open Waitlist ask whose stated gap changed with one that states the current gap, and withdraws it once the cohort can reach its minimum.
 8. It writes `ledger/review-queue/queue.json`, each workflow's run state (`ledger/run-reports/state/`), and the run report (`ledger/run-reports/<run id>.md`), whose first line is `checked=N acted=N note=...` even when nothing happened.
-   It notes how the run ended in the record of the week's run (`ledger/run-reports/attempts/`), which the next scheduled start reads.
+   It notes how the run ended in the record of the week's run (`ledger/run-reports/attempts/`), which the next start of the weekly schedule reads.
 9. In the production clone only, it commits the changed `workspace/` and `ledger/` paths and pushes them to `main`, never anything else and never by force; a change to a README in either is put back, since only a reviewed pull request changes documentation.
    If `origin/main` moved meanwhile, it replays the records commit on top and retries once; a commit that cannot be pushed stays local and goes with the next run, and the run log says why the replay failed.
 
-The schedule, how often a scheduled start checks whether the week's run is owed, how many attempts it may take, the agent's time limit, the production clone's path, and the records step are in [`config/run.json`](../config/run.json).
+The schedule, how often a start of the weekly schedule checks whether the week's run is owed, how many attempts it may take, the agent's time limit, the production clone's path, and the records step are in [`config/run.json`](../config/run.json).
 Launcher logs, Codex's event stream, and each run's record go to `~/Library/Logs/gr0wthlab/`.
 
 ## Set up the production clone (once, after merge)
@@ -89,7 +89,7 @@ A window's `first_sitting`, once set, must fall on the sitting's day, so a chang
 Nothing in gr0wthlab holds the Mac awake, wakes it, or schedules a wake, and a sleeping Mac runs nothing.
 So each week's run happens when the Mac is awake: at the weekly time if the Mac is fully awake then, and otherwise once it next is, Sunday night or Monday morning alike.
 
-Every scheduled start is first a check, and most of them begin nothing.
+Every start of the weekly schedule is first a check, and most of them begin nothing.
 The LaunchAgent starts the launcher at the weekly time and again every `schedule.check_every_minutes` minutes that the Mac is running, 2 today.
 Each start reads the launcher's own record of the week's run, `ledger/run-reports/attempts/<due>.json`, and begins a run only while all of this holds:
 
@@ -113,7 +113,7 @@ What a week looks like:
 - The Mac is asleep or off at 16:00: the run starts within about two minutes of the Mac next being fully awake, and its report says when it was due, when it started, and how long after its time that was.
 - The Mac goes to sleep in the middle of a run: the run is frozen while the Mac sleeps and goes on whenever the Mac is running, a dark wake included.
   If it finishes that way, it is the week's run.
-  If its agent is stopped at its time limit, or ends with an error, the run does not count as the week's run: its report says that the Mac's sleep cut it short and for about how long the Mac slept, and a fresh, whole run starts by itself once the Mac is fully awake.
+  If it does not, whatever ended it and wherever in the run the Mac slept, the run does not count as the week's run: its report, where it has one, says that the Mac's sleep cut it short and for about how long the Mac slept, and a fresh, whole run starts by itself once the Mac is fully awake.
   The fresh run's report says when the run was due, when it started, which attempt it is, and when each attempt before it started.
 
 A fresh run is a whole run under the same rules as any other: it queues nothing an earlier attempt already queued, asks again nothing the Founder decided, and keeps what was carried over.
@@ -121,10 +121,28 @@ An attempt that a fresh run is to follow queues no notice for being cut short, s
 While a fresh run is owed, `next_run` in the Review Queue stays at the time the week's run was due, so Mandu says at a sitting that the week's run has not finished.
 After the last attempt a week's run may take, a notice asks the Founder to start a run on demand while the Mac stays awake, and no further run starts by itself until the next weekly time.
 
-Only sleep earns another attempt.
-A run that timed out with the Mac awake, whose agent stopped early or never started, that was refused before it started, or that an error stopped is reported as it was before and waits for the Founder: its report, where it has one, says that no run starts by itself after it.
-So does an attempt that left no ending, as when the Mac was restarted in the middle of it; the next run's report names it.
-Start a run on demand once the cause is dealt with; the next scheduled run is otherwise the next week's.
+Which endings earn another attempt:
+
+- An attempt that completed is the week's run, whether or not the Mac slept during it, and nothing follows it.
+- An attempt that did not complete and during which the Mac slept was cut short by sleep, and earns another.
+  The sleep counts wherever it fell: during the pre-run fetch in the production clone, while the launcher asked git for the checkout's boundary, during Codex's version probe or the boundary preflight, or while the agent ran.
+  It counts however the attempt then ended: refused before it started, stopped by an error, with its agent never started, stopped at its time limit, or ended with an error.
+  Such an attempt does not block the week.
+  A fresh, whole run follows by itself, within `schedule.attempts_per_week`, and that run's report names it as it names any earlier attempt.
+- An attempt that did not complete with the Mac awake throughout earns none and waits for the Founder.
+  That covers a run that timed out, whose agent stopped early or never started, that was refused before it started, or that an error stopped.
+  Its report, where it has one, says that no run starts by itself after it.
+- An attempt that left no ending, as when the Mac was restarted in the middle of it, earns none either, whether or not the Mac slept; the next run's report names it.
+
+The launcher tells sleep the same way for a whole attempt as for the agent's own time.
+It reads the Mac's two clocks as a start begins: the wall clock, which goes on while the Mac sleeps, and awake time, which does not.
+It reads them again once the agent has ended, or when a start ends before it has a report.
+A difference of 5 seconds or more between the two is the Mac asleep; anything less is the clocks' own difference.
+A start that restarts itself on newly fetched code carries its reading across the restart, so the fetch counts.
+An attempt that ended before its report has no report of its own to say that the Mac slept.
+The record of the week's run says so (`cut-short-by-sleep`, with `asleep_seconds`), and the fresh run's report names the attempt.
+
+After an attempt that earns none, start a run on demand once the cause is dealt with; the next scheduled run is otherwise the next week's.
 
 ## Set the 14-day window
 
@@ -163,8 +181,16 @@ A post queued from that date on says the Waitlist is live; an open post keeps th
 A run on demand is not checked against the record of the week's run and does not ask whether the Mac is awake: it always runs.
 One that completes counts as that week's run, so no scheduled run follows it that week.
 
+The launcher treats a one-off scheduled run the same way.
+`src/bin/gr0wthlab run --trigger scheduled --once <time>` starts one, by hand or from a one-off LaunchAgent (`launch-agent --once <time>`), which launchd starts once, at its time or at the next wake after it, a dark wake included.
+It always runs and is never an attempt at the week's run; the launcher notes it in the record of the week's run as it notes a run on demand.
+Its report gives its own due time and says whether it started late, never that a fresh run follows.
+Its notice is queued as any run's is, and `next_run` in the Review Queue stays the weekly time.
+One that completes counts as that week's run, exactly as a completed run on demand does.
+One that the Mac's sleep cut short is not run again by itself, and leaves the week's run as owed as it was.
+
 Only one run works at a time in each checkout: a run started while another is in progress in the same checkout, scheduled or on demand, refuses to start with exit code 5, and that checkout's next run report says it was refused.
-A scheduled start refused that way has made no attempt, so the next check starts the run once the other has ended, if it is still owed.
+A start of the weekly schedule refused that way has made no attempt, so the next check starts the run once the other has ended, if it is still owed.
 A run that cannot finish, for example because a file it must write cannot be written, stops with exit code 6 instead of a crash, and the next run report says so too, as it does when a run could not write its report.
 A run whose agent was stopped at its time limit also ends with exit code 6, after it has written its own report, which says it timed out.
 Each checkout keeps its run lock (`ledger/run.lock`, never committed) and these notes for its next report (`ledger/notes/`) in its own `ledger/`, so a run in a firstmate worktree never blocks or hides a production run.
@@ -185,15 +211,16 @@ What the Founder sees after a timed-out run:
 
 - The run report's summary says `The run timed out`, and its Agent section says how long the agent ran by the wall clock, how many processes were asked to stop or forced, and whether any of them is still running.
 - If the Mac slept while the agent ran, in this or any other run, the summary and the Agent section say for about how long.
+  The summary of an attempt of the weekly schedule also says for about how long the Mac slept in the run outside the agent's time.
 - Each output that needed the agent, such as the package review and the post Drafts of a run with a day due, is marked incomplete with the reason; what the launcher does alone is complete as usual.
 - Whatever the agent had written is checked as always: an item or Draft that passes every check is queued, and one cut off mid-way fails its checks and is set aside or blocked, named in the report.
 - One notice in the Review Queue leads with the timeout and lists what it left incomplete; a second timed-out run the same day adds no second notice while the first is open.
-  A scheduled run that the Mac's sleep cut short queues no notice for the timeout alone while a fresh run is to follow.
+  A run of the weekly schedule that the Mac's sleep cut short queues no notice for the timeout alone while a fresh run is to follow.
 - The cost line says the cost is not available, or gives the part Codex had reported before the stop as a floor; it never says zero.
 - The run saves its records and releases the run lock, so the next run starts as usual and does the unfinished work again; the run itself ends with exit code 6.
 
-A scheduled run that timed out because the Mac slept needs nothing from the Founder: a fresh run starts by itself once the Mac is fully awake ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
-A run that timed out with the Mac awake, scheduled or on demand, is not run again by itself, and neither is a run on demand that the Mac slept through: start one on demand if the sitting needs the missing work.
+A run of the weekly schedule that timed out on a Mac that slept during it needs nothing from the Founder: a fresh run starts by itself once the Mac is fully awake ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
+A run that timed out with the Mac awake, scheduled or on demand, is not run again by itself, and neither is a run on demand or a one-off scheduled run that the Mac slept through: start one on demand if the sitting needs the missing work.
 If healthy runs come near the limit, or runs keep timing out though the agent was working, raise `agent.time_limit_seconds` through a reviewed pull request; the report's `Agent time` line shows how long each run's agent took.
 A run that timed out because the Mac slept past the limit needs no higher limit.
 The value must be above zero and at most 86400 (a day); a run refuses to start on any other value and says why.

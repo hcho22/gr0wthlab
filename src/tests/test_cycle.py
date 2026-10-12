@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
-from gr0wthlab import attempts, cli, cycle, exchange, launcher, lint, package
+from gr0wthlab import attempts, cli, cycle, exchange, launcher, lint, package, process
 from gr0wthlab.areas import Store
 from gr0wthlab.report import next_due
 from tests import fakes
@@ -59,13 +59,13 @@ class CycleTestCase(unittest.TestCase):
                     os.chmod(path, 0o755)
         self.tmp.cleanup()
 
-    def run_cycle(self, repo=None, trigger="on-demand", execve=None, at=None):
+    def run_cycle(self, repo=None, trigger="on-demand", execve=None, at=None, once=None, clocks=process.CLOCK):
         if at is not None:
             self.clock.set(at)
         out = io.StringIO()
-        runner = cycle.Cycle(repo or self.repo, self.env, self.home, out, self.clock)
+        runner = cycle.Cycle(repo or self.repo, self.env, self.home, out, self.clock, clocks)
         kwargs = {"execve": execve} if execve else {}
-        code = runner.run(None, trigger, None, ["run"], **kwargs)
+        code = runner.run(None, trigger, once, ["run"], **kwargs)
         return code, out.getvalue()
 
     def workspace(self, repo=None):

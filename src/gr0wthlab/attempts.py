@@ -1,13 +1,14 @@
-"""Whether the scheduled run due at one time is still owed, told from the launcher's own records, never from memory.
+"""Whether the week's scheduled run is still owed, told from the launcher's own records, never from memory.
 
 Nothing holds the Mac awake for a run, so a run happens when the Mac is awake: at its scheduled time if the Mac is
 fully awake then, and otherwise once it next is. The LaunchAgent starts the launcher at the weekly time and again
 every few minutes the Mac is running, and each such start is first a check of ledger/run-reports/attempts/<due>.json,
 the record of every run made since that time fell due: each scheduled attempt, noted before its agent starts, and each
-run on demand, noted as it ends. A run starts only while that record shows the run still owed: none has completed,
-every scheduled attempt so far was cut short by the Mac's sleep, and fewer attempts were made than config/run.json
-allows. Only sleep earns another attempt: one that timed out with the Mac awake, failed for another reason, or left no
-ending waits for the Founder.
+run on demand or one-off scheduled run, noted as it ends. A run starts only while that record shows the run still
+owed: none has completed, every scheduled attempt so far was cut short by the Mac's sleep, and fewer attempts were made
+than config/run.json allows. Only sleep earns another attempt, wherever in the attempt it fell: an attempt that did not
+complete with the Mac awake throughout, or that left no ending, waits for the Founder. A one-off scheduled run
+(--once) is no part of this: it always runs, as a run on demand does, and is never an attempt.
 
 A sleeping Mac wakes by itself every few minutes, for about a minute with its display off, to do its own housekeeping
 (a dark wake), and launchd starts jobs then as at any other time. A run takes longer than a dark wake lasts, so one
@@ -33,6 +34,7 @@ FORMAT = 1
 FOLDER = ("run-reports", "attempts")
 SCHEDULED = "scheduled"
 ON_DEMAND = "on-demand"
+ONE_OFF = "one-off"
 
 # How a run ended, as the record keeps it.
 COMPLETED = "completed"
@@ -82,7 +84,7 @@ class Record:
 
     @property
     def attempts(self) -> list[dict[str, object]]:
-        """The scheduled attempts, in order; a run on demand is never one."""
+        """The scheduled attempts, in order; a run on demand or a one-off scheduled run is never one."""
         return [run for run in self.runs if run["trigger"] == SCHEDULED]
 
 
@@ -104,8 +106,8 @@ def parse(data: object, due: datetime) -> list[dict[str, object]]:
     if not isinstance(runs, list) or not all(isinstance(run, dict) for run in runs):
         raise ValueError("runs must list records")
     for run in runs:
-        if run.get("trigger") not in (SCHEDULED, ON_DEMAND):
-            raise ValueError("a run is neither scheduled nor on demand")
+        if run.get("trigger") not in (SCHEDULED, ON_DEMAND, ONE_OFF):
+            raise ValueError("a run is not a scheduled attempt, a run on demand, or a one-off run")
         if run.get("ending") is not None and run["ending"] not in SAID:
             raise ValueError(f"a run has the unknown ending {run['ending']!r}")
         if started(run).tzinfo is None:
@@ -139,11 +141,9 @@ def save(store: Store, record: Record) -> None:
     store.write_json(path(store, record.due), data)
 
 
-def waiting(record: Record, limit: int, now: datetime) -> str:
-    """Why no scheduled run starts by itself for this due time, or "" while one is owed. now is the Mac's local
-    wall-clock time. Only an attempt cut short by sleep leaves the run owed, and only while attempts remain."""
-    if record.due > now:
-        return f"the run is not due until {record.due:%A %Y-%m-%d %H:%M}"
+def waiting(record: Record, limit: int) -> str:
+    """Why no scheduled run starts by itself for this due time, or "" while one is owed. Only an attempt cut short by
+    sleep leaves the run owed, and only while attempts remain."""
     done = next((run for run in record.runs if run.get("ending") == COMPLETED), None)
     if done:
         return f"the run due {record.due:%A %Y-%m-%d %H:%M} completed as run {done.get('run')}"
@@ -181,8 +181,9 @@ def finish(
     ended: datetime,
     asleep: float = 0.0,
 ) -> None:
-    """Note how a run ended, under the run lock: a scheduled attempt in the entry it claimed, and a run on demand, or
-    a scheduled start that never came to claim one, in an entry of its own."""
+    """Note how a run ended, under the run lock: a scheduled attempt in the entry it claimed, and a run on demand, a
+    one-off scheduled run, or a scheduled start that never came to claim an attempt, in an entry of its own. asleep is
+    about how many seconds the Mac slept during the run."""
     record = load_to_write(store, due)
     entry = next((run for run in record.attempts if run.get("ending") is None), None) if trigger == SCHEDULED else None
     if entry is None:
@@ -223,14 +224,15 @@ def left_without_ending(store: Store) -> list[tuple[str, str]]:
 
 def ending(agent: Mapping[str, object], asleep: float) -> str:
     """How a run that reached its report ended, from the launcher's record of its agent and the seconds the Mac slept
-    while the agent ran. A run whose agent did not finish counts as cut short by sleep whenever the Mac slept during
-    the agent's time, whether the agent was then stopped at its limit or ended with an error."""
+    from the run's start to its agent's end. A run whose agent did not finish counts as cut short by sleep whenever
+    the Mac slept in that time, wherever the sleep fell: whether the agent then never started, was stopped at its
+    limit, or ended with an error."""
     if agent.get("exit_code") == 0:
         return COMPLETED
-    if not agent.get("agent_started"):
-        return NOT_STARTED
     if asleep:
         return SLEPT
+    if not agent.get("agent_started"):
+        return NOT_STARTED
     return TIMED_OUT if agent.get("timed_out") else FAILED
 
 

@@ -14,6 +14,7 @@ import sys
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[2]
 AREAS = ("evidence", "drafts", "review-queue", "weekly-reads", "run-reports", "instructions")
@@ -245,6 +246,47 @@ def stepped_clock(step: float, after: float = 1.0):
         return time.time() + (step if now - first >= after else 0)
 
     return process.Clock(time.monotonic, wall)
+
+
+class Mac:
+    """The two clocks of a Mac that sleeps where a test says: awake time is real, and the wall clock is ahead of it by
+    every second the Mac has slept."""
+
+    def __init__(self):
+        self.slept = 0.0
+
+    def wall(self) -> float:
+        return time.time() + self.slept
+
+    @property
+    def clocks(self):
+        from gr0wthlab import process
+
+        return process.Clock(time.monotonic, self.wall)
+
+    def asleep_in(self, word: str, seconds: float, after: float = 0.0):
+        """A patch under which every process the launcher waits for is timed on this Mac's clocks, and the Mac falls
+        asleep `after` seconds into the first one whose command line has `word`, to wake `seconds` later."""
+        from gr0wthlab import process
+
+        real, left = process.run, [seconds]
+
+        def run(command, timeout, **kwargs):
+            clocks = self.clocks
+            if left and word in command:
+                begun = []
+
+                def wall() -> float:
+                    if not begun:
+                        begun.append(time.monotonic())
+                    elif left and time.monotonic() - begun[0] >= after:
+                        self.slept += left.pop()
+                    return self.wall()
+
+                clocks = process.Clock(time.monotonic, wall)
+            return real(command, timeout, **dict(kwargs, clock=clocks))
+
+        return mock.patch.object(process, "run", run)
 
 
 SUNDAY_RUN = datetime(2026, 10, 11, 23, 0, tzinfo=timezone.utc)

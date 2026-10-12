@@ -26,12 +26,16 @@ def parser() -> argparse.ArgumentParser:
 
     run = commands.add_parser(
         "run",
-        help="start one run: sync, snapshot, agent, Review Queue, report, records; a scheduled start runs only while"
-        " the run due is still owed and the Mac is fully awake",
+        help="start one run: sync, snapshot, agent, Review Queue, report, records; a weekly scheduled start runs only"
+        " while the week's run is still owed and the Mac is fully awake",
     )
     run.add_argument("--instruction", type=Path, help="a task definition under src/instructions/ (default: run.json's)")
     run.add_argument("--trigger", choices=launcher.TRIGGERS, default="on-demand")
-    run.add_argument("--once", metavar="YYYY-MM-DDTHH:MM", help="the one-off time a scheduled run was due at")
+    run.add_argument(
+        "--once",
+        metavar="YYYY-MM-DDTHH:MM",
+        help="the one-off time a scheduled run was due at; such a run always runs, as a run on demand does",
+    )
 
     commands.add_parser("show-config", help="print the resolved run configuration and its fingerprint")
     commands.add_parser("preflight", help="prove the write boundary in the sandbox, with no model")

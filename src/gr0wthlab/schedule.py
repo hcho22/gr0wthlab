@@ -2,8 +2,9 @@
 
 The launcher only prints the plist; installing it in ~/Library/LaunchAgents is a deliberate step outside the repository.
 The weekly LaunchAgent starts the launcher at the weekly time and again at an interval, and every such start is the
-owed-run check of attempts.py, which ends at once when nothing is owed. Nothing in the plist holds the Mac awake,
-wakes it, or keeps a process running.
+owed-run check of attempts.py, which ends at once when nothing is owed. A one-off LaunchAgent starts the launcher
+once, at its time, and that start always runs. Nothing in the plist holds the Mac awake, wakes it, or keeps a process
+running.
 """
 
 from __future__ import annotations

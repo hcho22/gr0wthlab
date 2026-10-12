@@ -1,7 +1,6 @@
-"""Each week's run completes while the Mac is awake: a scheduled start is a check of the launcher's own records, a run
+"""Each week's run completes while the Mac is awake: a weekly start is a check of the launcher's own records, a run
 the Mac's sleep cut short is followed by a fresh one, nothing else is, and nothing holds the Mac awake (US-ME17)."""
 
-import functools
 import io
 import json
 import plistlib
@@ -10,7 +9,6 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import time
 import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -27,8 +25,10 @@ from tests.test_cycle import CycleTestCase
 DUE = datetime(2026, 10, 11, 16, 0)
 RECORD = "run-reports/attempts/20261011T1600.json"
 ITEM = "review-queue/incoming/name-status-stale.md"
-# How long the Mac sleeps in these tests when it sleeps past the agent's 30 minute time limit.
+# How long the Mac sleeps in these tests when it sleeps past a time limit, the agent's 30 minutes included.
 ASLEEP = 3 * 3600
+# A one-off scheduled run's time, on the Tuesday after the run of the week fell due.
+ONCE = "2026-10-13T09:05"
 
 
 def at(**after) -> datetime:
@@ -36,39 +36,40 @@ def at(**after) -> datetime:
     return (DUE + timedelta(**after)).astimezone().astimezone(timezone.utc)
 
 
-def woken_after(seconds: float) -> process.Clock:
-    """The clocks of a Mac that falls asleep as the agent starts and wakes that many seconds later, before the agent's
-    time limit: every reading of the wall clock but the first is that much ahead, and awake time is real."""
-    readings = []
-
-    def wall() -> float:
-        readings.append(None)
-        return time.time() + (seconds if len(readings) > 1 else 0)
-
-    return process.Clock(time.monotonic, wall)
-
-
 class OwedRunTestCase(CycleTestCase):
     # What the stand-in agent does in a run a test does not set up otherwise.
     behavior: dict = {}
+
+    def setUp(self):
+        super().setUp()
+        self.mac = fakes.Mac()
 
     def tearDown(self):
         fakes.stop_leftovers(self.codex_dir)
         super().tearDown()
 
-    def scheduled(self, clock=None, **after):
-        """One scheduled start, as the LaunchAgent makes it, that long after the run fell due."""
-        run = functools.partial(cycle.launcher.run, clock=clock) if clock else cycle.launcher.run
-        with mock.patch.object(cycle.launcher, "run", run):
-            return self.run_cycle(trigger="scheduled", at=at(**after))
+    def scheduled(self, repo=None, once=None, **after):
+        """One scheduled start, as a LaunchAgent makes it, that long after the run fell due, timed on the Mac's
+        clocks; with once, the start of a one-off run due at that time."""
+        return self.run_cycle(repo=repo, trigger="scheduled", at=at(**after), once=once, clocks=self.mac.clocks)
 
-    def slept_through(self, **after):
+    def slept_through(self, once=None, **after):
         """A scheduled start whose agent the Mac sleeps through, past its time limit: the agent does its writing, the
         Mac sleeps two seconds in, and the wall clock reads three hours on when it wakes."""
         fakes.behave(self.codex_dir, dict(self.behavior, hang=True))
-        result = self.scheduled(clock=fakes.stepped_clock(ASLEEP, after=2.0), **after)
+        with self.mac.asleep_in("exec", ASLEEP, after=2.0):
+            result = self.scheduled(once=once, **after)
         fakes.behave(self.codex_dir, self.behavior)
         return result
+
+    def production(self):
+        """The remote and a production clone of the checkout, which syncs with it before a run and saves to it after."""
+        remote, clone = self.root / "remote.git", self.root / "production"
+        fakes.git(self.root, "init", "--quiet", "--bare", str(remote), env=self.env)
+        fakes.git(self.repo, "remote", "add", "origin", str(remote), env=self.env)
+        fakes.git(self.repo, "push", "--quiet", "origin", "main", env=self.env)
+        fakes.git(self.root, "clone", "--quiet", str(remote), str(clone), env=self.env)
+        return remote, clone
 
     def record(self, repo=None):
         return json.loads((self.ledger(repo) / RECORD).read_text(encoding="utf-8"))
@@ -139,7 +140,7 @@ class SleptThroughTest(OwedRunTestCase):
         self.assertEqual(datetime.fromisoformat(self.queue()["next_run"]), DUE.astimezone())
         [attempt] = self.record()["runs"]
         self.assertEqual((attempt["attempt"], attempt["ending"]), (1, attempts.SLEPT))
-        self.assertTrue(ASLEEP - 60 < attempt["asleep_seconds"] <= ASLEEP, attempt)
+        self.assertLess(abs(attempt["asleep_seconds"] - ASLEEP), 60, attempt)
         self.assertTrue(self.reports()[0].name.startswith(attempt["run"]))
 
         # A check that comes in a dark wake starts nothing; the first one with the Mac fully awake does.
@@ -169,7 +170,8 @@ class SleptThroughTest(OwedRunTestCase):
 
     def test_an_agent_that_ends_with_an_error_after_the_mac_slept_was_cut_short_by_sleep_too(self):
         fakes.behave(self.codex_dir, {"exit": 1})
-        code, out = self.scheduled(clock=woken_after(600), minutes=1)
+        with self.mac.asleep_in("exec", 600):
+            code, out = self.scheduled(minutes=1)
         self.assertEqual(code, 1, out)
         text = self.report()
         self.assertIn("- The agent stopped with exit code 1; its work this run may be incomplete.\n", text)
@@ -283,11 +285,7 @@ class OnlySleepEarnsAnotherRunTest(OwedRunTestCase):
         self.assertRegex(self.report(other), r"\n- Run \S+ \(scheduled\), started .*, stopped before it finished: ")
 
     def test_a_production_clone_that_refuses_to_start_is_not_fetched_again_every_few_minutes(self):
-        remote, clone = self.root / "remote.git", self.root / "production"
-        fakes.git(self.root, "init", "--quiet", "--bare", str(remote), env=self.env)
-        fakes.git(self.repo, "remote", "add", "origin", str(remote), env=self.env)
-        fakes.git(self.repo, "push", "--quiet", "origin", "main", env=self.env)
-        fakes.git(self.root, "clone", "--quiet", str(remote), str(clone), env=self.env)
+        _, clone = self.production()
         with (clone / "src/instructions/weekly-run.md").open("a") as handle:
             handle.write("Unreviewed line.\n")
         code, out = self.run_cycle(repo=clone, trigger="scheduled", at=at(minutes=1))
@@ -316,6 +314,94 @@ class OnlySleepEarnsAnotherRunTest(OwedRunTestCase):
         self.assertEqual(self.endings(), [("scheduled", attempts.NO_REPORT), ("on-demand", attempts.COMPLETED)])
         self.run_cycle(at=at(hours=2))
         self.assertNotIn("left no report", self.report())
+
+
+class SleepAnywhereTest(OwedRunTestCase):
+    """An attempt that did not complete was cut short by the Mac's sleep wherever in it the Mac slept, before its agent
+    started as much as while the agent ran; one the Mac stayed awake through still waits for the Founder."""
+
+    FOLLOWS = (
+        "- The Mac's sleep cut this run short, so it does not count as the run due Sunday 2026-10-11 16:00: a fresh,"
+        " whole run starts by itself once the Mac is awake, and nothing is needed from you.\n"
+    )
+
+    def fresh_run_follows(self, repo=None):
+        """The next start with the Mac fully awake is a whole run that names the attempt before it, and the last."""
+        code, out = self.scheduled(repo=repo, hours=3, minutes=5)
+        self.assertEqual(code, 0, out)
+        self.assertIn(
+            " This is attempt 2 of at most 3: the attempt started Sunday 2026-10-11 16:01 was cut short by the Mac's"
+            " sleep.\n- The run finished.\n",
+            self.report(repo),
+        )
+        self.assertEqual(self.endings(repo), [("scheduled", attempts.SLEPT), ("scheduled", attempts.COMPLETED)])
+        self.assertEqual(self.scheduled(repo=repo, hours=3, minutes=7), (0, ""))
+
+    def test_a_start_the_mac_sleeps_through_in_its_pre_run_fetch_is_run_again(self):
+        """The fetch is stopped at its time limit when the Mac wakes, and the production clone refuses to start."""
+        _, clone = self.production()
+        with self.mac.asleep_in("fetch", ASLEEP):
+            code, out = self.scheduled(repo=clone, minutes=1)
+        self.assertEqual(code, cycle.EXIT_RECORDS, out)
+        self.assertIn("pre-run: refused: git fetch --quiet origin main failed: timed out after 120s\n", out)
+        self.assertIn("refusing to start; the production clone needs attention first", out)
+        self.assertFalse((self.codex_dir / "prompt.txt").exists())
+        [cut_short] = self.record(clone)["runs"]
+        self.assertEqual((cut_short["attempt"], cut_short["ending"], cut_short["run"]), (1, attempts.SLEPT, None))
+        self.assertLess(abs(cut_short["asleep_seconds"] - ASLEEP), 60, cut_short)
+        self.fresh_run_follows(clone)
+
+    def test_an_attempt_the_mac_sleeps_through_while_git_is_asked_for_its_boundary_is_run_again(self):
+        """The attempt is already claimed when the launcher asks git where the checkout keeps its git directories."""
+        with self.mac.asleep_in("--git-dir", ASLEEP):
+            code, out = self.scheduled(minutes=1)
+        self.assertEqual(code, cycle.launcher.EXIT_CONFIG, out)
+        self.assertIn("refusing to start: git did not answer for", out)
+        [cut_short] = self.record()["runs"]
+        self.assertEqual((cut_short["attempt"], cut_short["ending"]), (1, attempts.SLEPT))
+        self.assertRegex(cut_short["run"], r"-scheduled-")
+        self.assertEqual(self.reports(), [])
+        self.fresh_run_follows()
+
+    def test_an_attempt_the_mac_sleeps_through_before_its_agent_starts_is_run_again_and_its_report_says_so(self):
+        self.exchange.mkdir()
+        other = fakes.make_repo(self.root / "other", self.env)
+        for word, repo, code, why in (
+            ("--version", self.repo, cycle.launcher.EXIT_CONFIG, "--version did not finish within 1 min"),
+            ("sandbox", other, cycle.launcher.EXIT_BOUNDARY, "codex sandbox did not finish within 1 min"),
+        ):
+            with self.subTest(asleep_in=word):
+                with self.mac.asleep_in(word, ASLEEP):
+                    ended, out = self.scheduled(repo=repo, minutes=1)
+                self.assertEqual(ended, code, out)
+                self.assertIn(why, out)
+                self.assertIn(
+                    "- The agent did not start; see Agent below. Everything the launcher does alone still ran.\n"
+                    "- The Mac was asleep for about 3 h 0 min 0 s of this run outside the agent's time.\n"
+                    + self.FOLLOWS,
+                    self.report(repo),
+                )
+                self.assertIn(f"gr0wthlab: {self.FOLLOWS[2:]}", out)
+                self.assertEqual(self.queue(repo)["open"], [])
+                self.assertEqual(datetime.fromisoformat(self.queue(repo)["next_run"]), DUE.astimezone())
+                [cut_short] = self.record(repo)["runs"]
+                self.assertEqual((cut_short["attempt"], cut_short["ending"]), (1, attempts.SLEPT))
+                self.assertLess(abs(cut_short["asleep_seconds"] - ASLEEP), 60, cut_short)
+                self.fresh_run_follows(repo)
+
+    def test_a_start_refused_with_the_mac_awake_throughout_still_earns_no_further_attempt(self):
+        """Refused where the attempt above was, with the Mac asleep before this start and never during it."""
+        (self.repo / ".git").rename(self.root / "git-moved-away")
+        self.mac.slept += ASLEEP
+        code, out = self.scheduled(hours=3)
+        self.assertEqual(code, cycle.launcher.EXIT_CONFIG, out)
+        self.assertIn("is not a git checkout", out)
+        [refused] = self.record()["runs"]
+        self.assertEqual((refused["attempt"], refused["ending"]), (1, attempts.REFUSED))
+        self.assertNotIn("asleep_seconds", refused)
+        self.assertEqual(self.scheduled(hours=3, minutes=2), (0, ""))
+        self.assertEqual(self.scheduled(days=2), (0, ""))
+        self.assertFalse((self.codex_dir / "prompt.txt").exists())
 
 
 class AttemptLimitTest(OwedRunTestCase):
@@ -494,9 +580,8 @@ class OnDemandTest(OwedRunTestCase):
 
     def test_a_run_on_demand_the_mac_sleeps_through_reads_as_before_and_leaves_the_week_s_run_owed(self):
         fakes.behave(self.codex_dir, {"hang": True})
-        slept = functools.partial(cycle.launcher.run, clock=fakes.stepped_clock(ASLEEP, after=2.0))
-        with mock.patch.object(cycle.launcher, "run", slept):
-            code, out = self.run_cycle(at=at(minutes=1))
+        with self.mac.asleep_in("exec", ASLEEP, after=2.0):
+            code, out = self.run_cycle(at=at(minutes=1), clocks=self.mac.clocks)
         self.assertEqual(code, cycle.EXIT_STOPPED, out)
         text = self.report()
         self.assertIn("- The Mac was asleep for about 3 h 0 min 0 s while the agent ran", text)
@@ -541,22 +626,6 @@ class StartTest(OwedRunTestCase):
             "gr0wthlab: nothing to start: the Mac is not fully awake, and a run starts only while it is\n",
         )
 
-    def test_a_one_off_run_starts_once_its_time_has_come_and_only_once(self):
-        def once(moment, **after):
-            self.clock.set(at(**after))
-            out = io.StringIO()
-            runner = cycle.Cycle(self.repo, self.env, self.home, out, self.clock)
-            return runner.run(None, "scheduled", moment, ["run"]), out.getvalue()
-
-        self.assertEqual(once("2026-10-13T09:05", days=1), (0, ""))
-        self.assertFalse((self.ledger() / "run-reports").exists())
-        code, out = once("2026-10-13T09:05", days=1, hours=17, minutes=6)
-        self.assertEqual(code, 0, out)
-        self.assertIn("- Scheduled for Tuesday 2026-10-13 09:05; started on time at Tuesday 2026-10-13", self.report())
-        self.assertTrue((self.ledger() / "run-reports/attempts/20261013T0905.json").is_file())
-        self.assertEqual(once("2026-10-13T09:05", days=1, hours=17, minutes=8), (0, ""))
-        self.assertEqual(len(self.reports()), 1)
-
     def test_a_mac_that_does_not_say_whether_it_is_awake_still_runs_and_the_report_says_so(self):
         self.awake.return_value = None
         code, out = self.scheduled(minutes=1)
@@ -583,23 +652,91 @@ class StartTest(OwedRunTestCase):
         self.assertEqual(self.scheduled(minutes=3), (0, ""))
 
 
+class OneOffTest(OwedRunTestCase):
+    """A one-off scheduled run always runs, as a run on demand does, and is never an attempt at the week's run."""
+
+    ON_TIME = "- Scheduled for Tuesday 2026-10-13 09:05; started on time at Tuesday 2026-10-13 09:06.\n"
+
+    def test_a_one_off_start_runs_in_a_dark_wake_and_every_time_it_is_started(self):
+        """launchd starts a one-off job the Mac slept through in a dark wake, and nothing starts it a second time."""
+        self.awake.return_value = False
+        code, out = self.scheduled(once=ONCE, days=1, hours=17, minutes=6)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.awake.call_count, 0)
+        self.assertIn(f"{self.ON_TIME}- The run finished.\n", self.report())
+        self.assertNotIn("attempt", self.report())
+
+        code, out = self.scheduled(once=ONCE, days=1, hours=20)
+        self.assertEqual(code, 0, out)
+        self.assertIn(
+            "- Started late: due Tuesday 2026-10-13 09:05, started Tuesday 2026-10-13 12:00, 2 h 55 min after its time."
+            " The Mac was probably asleep or off when it was due.\n- The run finished.\n",
+            self.report(),
+        )
+        self.assertEqual(len(self.reports()), 2)
+        self.assertEqual(self.awake.call_count, 0)
+        self.assertEqual(self.endings(), [("one-off", attempts.COMPLETED)] * 2)
+        records = [path.name for path in (self.ledger() / "run-reports/attempts").iterdir()]
+        self.assertEqual(records, ["20261011T1600.json"])
+
+    def test_a_one_off_run_the_mac_sleeps_through_reports_as_a_run_on_demand_does_and_claims_no_attempt(self):
+        self.exchange.mkdir()
+        code, out = self.slept_through(once=ONCE, days=1, hours=17, minutes=6)
+        self.assertEqual(code, cycle.EXIT_STOPPED, out)
+        text = self.report()
+        self.assertIn(
+            f"{self.ON_TIME}- The run timed out: the agent was still running at its 30 min time limit, so the", text
+        )
+        self.assertIn("- The Mac was asleep for about 3 h 0 min 0 s while the agent ran", text)
+        self.assertNotIn("starts by itself", text + out)
+        self.assertNotIn("attempt", text + out)
+        self.assertEqual([entry["ask"] for entry in self.notices()], ["Notice: the run timed out on 2026-10-13"])
+        self.assertTrue(
+            self.notice().split("## Notice\n\n")[1].split("\n\n")[0].endswith("in `config/run.json`."), self.notice()
+        )
+        self.assertIn(f"- Problems this run are listed in the notice `{self.notices()[0]['id']}`.", text)
+        self.assertEqual(datetime.fromisoformat(self.queue()["next_run"]), (DUE + timedelta(days=7)).astimezone())
+        [noted] = self.record()["runs"]
+        self.assertEqual((noted["trigger"], noted["ending"], "attempt" in noted), ("one-off", attempts.SLEPT, False))
+
+        # Nothing follows the one-off run by itself, and the week's run is owed as before: its first attempt.
+        code, out = self.scheduled(days=1, hours=21)
+        self.assertEqual(code, 0, out)
+        self.assertIn("- Started late: due Sunday 2026-10-11 16:00, started Tuesday 2026-10-13 13:00,", self.report())
+        self.assertNotIn("This is attempt", self.report())
+        self.assertEqual(self.endings(), [("one-off", attempts.SLEPT), ("scheduled", attempts.COMPLETED)])
+        self.assertEqual(self.record()["runs"][1]["attempt"], 1)
+
+    def test_a_one_off_run_that_completes_counts_as_the_week_s_run_so_the_weekly_start_owes_nothing(self):
+        code, out = self.scheduled(once=ONCE, days=1, hours=17, minutes=6)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.endings(), [("one-off", attempts.COMPLETED)])
+        self.assertEqual(datetime.fromisoformat(self.queue()["next_run"]), (DUE + timedelta(days=7)).astimezone())
+
+        self.assertEqual(self.scheduled(days=1, hours=18), (0, ""))
+        self.assertEqual(len(self.reports()), 1)
+        self.assertEqual(self.endings(), [("one-off", attempts.COMPLETED)])
+
+
 class RestartTest(OwedRunTestCase):
-    def test_a_scheduled_run_that_restarts_on_new_reviewed_code_is_one_attempt(self):
-        remote, clone = self.root / "remote.git", self.root / "production"
-        fakes.git(self.root, "init", "--quiet", "--bare", str(remote), env=self.env)
-        fakes.git(self.repo, "remote", "add", "origin", str(remote), env=self.env)
-        fakes.git(self.repo, "push", "--quiet", "origin", "main", env=self.env)
-        fakes.git(self.root, "clone", "--quiet", str(remote), str(clone), env=self.env)
+    def restarting(self, **kwargs):
+        """A scheduled start in a production clone that finds new reviewed code on its remote: the clone, the remote,
+        and what the start handed the code it restarted on."""
+        remote, clone = self.production()
         (self.repo / "config" / "note.txt").write_text("reviewed change\n")
         fakes.git(self.repo, "add", "--all", env=self.env)
         fakes.git(self.repo, "commit", "--quiet", "-m", "reviewed", env=self.env)
         fakes.git(self.repo, "push", "--quiet", "origin", "main", env=self.env)
         calls = []
         self.clock.set(at(minutes=1))
-        code, out = self.run_cycle(repo=clone, trigger="scheduled", execve=lambda *args: calls.append(args))
+        code, out = self.run_cycle(repo=clone, trigger="scheduled", execve=lambda *args: calls.append(args), **kwargs)
         self.assertEqual(len(calls), 1, out)
         self.assertEqual(calls[0][1][1:], ["run"])
         self.assertFalse((self.ledger(clone) / RECORD).exists())
+        return clone, remote, calls
+
+    def test_a_scheduled_run_that_restarts_on_new_reviewed_code_is_one_attempt(self):
+        clone, remote, calls = self.restarting()
 
         # The restarted launcher is not asked whether the run is owed again: the start it continues already was.
         self.env[cycle.PRE_RUN_ENV] = calls[0][2][cycle.PRE_RUN_ENV]
@@ -614,6 +751,21 @@ class RestartTest(OwedRunTestCase):
         self.assertEqual(fakes.git(clone, "status", "--porcelain", env=self.env), "")
         pushed = fakes.git(remote, "show", f"HEAD:ledger/{RECORD}", env=self.env)
         self.assertEqual(json.loads(pushed)["runs"], [attempt])
+
+    def test_the_mac_s_sleep_before_the_restart_counts_in_the_attempt_that_restarted(self):
+        """The Mac sleeps a minute and a half in the fetch, which still finishes within its time limit."""
+        with self.mac.asleep_in("fetch", 90):
+            clone, _, calls = self.restarting(clocks=self.mac.clocks)
+        self.env[cycle.PRE_RUN_ENV] = calls[0][2][cycle.PRE_RUN_ENV]
+        fakes.behave(self.codex_dir, {"exit": 1})
+        code, out = self.run_cycle(repo=clone, trigger="scheduled", clocks=self.mac.clocks)
+        self.assertEqual(code, 1, out)
+        text = self.report(clone)
+        self.assertIn("- The agent stopped with exit code 1; its work this run may be incomplete.\n", text)
+        self.assertIn("- The Mac was asleep for about 1 min 30 s of this run outside the agent's time.\n", text)
+        self.assertIn("- The Mac's sleep cut this run short, so it does not count as the run due", text)
+        [attempt] = self.record(clone)["runs"]
+        self.assertEqual((attempt["attempt"], attempt["ending"], attempt["asleep_seconds"]), (1, attempts.SLEPT, 90))
 
 
 class RecordTest(unittest.TestCase):
@@ -630,25 +782,20 @@ class RecordTest(unittest.TestCase):
         return attempts.Record(DUE, runs)
 
     def test_a_run_is_owed_only_while_none_completed_and_every_attempt_was_cut_short_by_sleep(self):
-        now = DUE + timedelta(hours=1)
-        self.assertEqual(attempts.waiting(attempts.Record(DUE), 3, now), "")
-        self.assertEqual(attempts.waiting(self.record(attempts.SLEPT), 3, now), "")
-        self.assertEqual(attempts.waiting(self.record(attempts.SLEPT, attempts.SLEPT), 3, now), "")
+        self.assertEqual(attempts.waiting(attempts.Record(DUE), 3), "")
+        self.assertEqual(attempts.waiting(self.record(attempts.SLEPT), 3), "")
+        self.assertEqual(attempts.waiting(self.record(attempts.SLEPT, attempts.SLEPT), 3), "")
         self.assertEqual(
-            attempts.waiting(self.record(attempts.SLEPT, attempts.SLEPT, attempts.SLEPT), 3, now),
+            attempts.waiting(self.record(attempts.SLEPT, attempts.SLEPT, attempts.SLEPT), 3),
             "the Mac's sleep cut short all of the 3 attempts this run may take",
         )
         self.assertEqual(
-            attempts.waiting(self.record(attempts.SLEPT, attempts.COMPLETED), 3, now),
+            attempts.waiting(self.record(attempts.SLEPT, attempts.COMPLETED), 3),
             "the run due Sunday 2026-10-11 16:00 completed as run R1",
         )
         self.assertEqual(
-            attempts.waiting(self.record(None), 3, now),
+            attempts.waiting(self.record(None), 3),
             "attempt 1 is in progress, or was stopped before it could note how it ended",
-        )
-        self.assertEqual(
-            attempts.waiting(attempts.Record(DUE), 3, DUE - timedelta(minutes=1)),
-            "the run is not due until Sunday 2026-10-11 16:00",
         )
         for ending in (
             attempts.TIMED_OUT,
@@ -659,20 +806,20 @@ class RecordTest(unittest.TestCase):
             attempts.NO_REPORT,
         ):
             with self.subTest(ending=ending):
-                said = attempts.waiting(self.record(attempts.SLEPT, ending), 3, now)
+                said = attempts.waiting(self.record(attempts.SLEPT, ending), 3)
                 self.assertEqual(
                     said,
                     f"attempt 2 {attempts.SAID[ending]}, and only an attempt cut short by the Mac's sleep is run again",
                 )
 
-    def test_a_run_on_demand_never_counts_as_an_attempt_and_completes_the_run_when_it_finishes(self):
-        now = DUE + timedelta(hours=1)
-        for ending in (attempts.SLEPT, attempts.TIMED_OUT, attempts.FAILED, attempts.NOT_STARTED):
-            with self.subTest(ending=ending):
-                on_demand = self.record(ending, ending, ending, ending, trigger="on-demand")
-                self.assertEqual((on_demand.attempts, attempts.waiting(on_demand, 3, now)), ([], ""))
-        done = self.record(attempts.COMPLETED, trigger="on-demand")
-        self.assertIn("completed as run R0", attempts.waiting(done, 3, now))
+    def test_a_run_on_demand_or_a_one_off_run_never_counts_as_an_attempt_and_completes_the_run_when_it_finishes(self):
+        for trigger in (attempts.ON_DEMAND, attempts.ONE_OFF):
+            for ending in (attempts.SLEPT, attempts.TIMED_OUT, attempts.FAILED, attempts.NOT_STARTED):
+                with self.subTest(trigger=trigger, ending=ending):
+                    other = self.record(ending, ending, ending, ending, trigger=trigger)
+                    self.assertEqual((other.attempts, attempts.waiting(other, 3)), ([], ""))
+            done = self.record(attempts.COMPLETED, trigger=trigger)
+            self.assertIn("completed as run R0", attempts.waiting(done, 3))
 
     def test_an_attempt_is_noted_before_it_does_anything_and_its_ending_goes_in_the_same_entry(self):
         first = attempts.claim(self.store, attempts.load(self.store, DUE), 3, at(minutes=1))
@@ -688,20 +835,22 @@ class RecordTest(unittest.TestCase):
         )
         attempts.finish(self.store, DUE, "scheduled", at(minutes=1), "R1", attempts.SLEPT, at(hours=3), 10740.4)
         attempts.finish(self.store, DUE, "on-demand", at(hours=4), "R2", attempts.FAILED, at(hours=4, minutes=1))
-        second = attempts.claim(self.store, attempts.load(self.store, DUE), 3, at(hours=5))
+        attempts.finish(self.store, DUE, "one-off", at(hours=4, minutes=30), "R3", attempts.SLEPT, at(hours=8), 12600.0)
+        second = attempts.claim(self.store, attempts.load(self.store, DUE), 3, at(hours=9))
         self.assertEqual(second, attempts.Attempt(DUE, 2, 3, (at(minutes=1),)))
-        attempts.finish(self.store, DUE, "scheduled", at(hours=5), "R3", attempts.COMPLETED, at(hours=5, minutes=2))
+        attempts.finish(self.store, DUE, "scheduled", at(hours=9), "R4", attempts.COMPLETED, at(hours=9, minutes=2))
         runs = attempts.load(self.store, DUE).runs
         self.assertEqual(
             [(run["trigger"], run.get("attempt"), run["run"], run["ending"]) for run in runs],
             [
                 ("scheduled", 1, "R1", attempts.SLEPT),
                 ("on-demand", None, "R2", attempts.FAILED),
-                ("scheduled", 2, "R3", attempts.COMPLETED),
+                ("one-off", None, "R3", attempts.SLEPT),
+                ("scheduled", 2, "R4", attempts.COMPLETED),
             ],
         )
         self.assertEqual((runs[0]["asleep_seconds"], runs[0]["ended_at"]), (10740, at(hours=3).isoformat()))
-        self.assertNotIn("asleep_seconds", runs[2])
+        self.assertNotIn("asleep_seconds", runs[3])
 
     def test_a_scheduled_start_that_never_claimed_an_attempt_is_noted_as_one(self):
         attempts.finish(self.store, DUE, "scheduled", at(minutes=1), None, attempts.REFUSED, at(minutes=1))
@@ -720,7 +869,7 @@ class RecordTest(unittest.TestCase):
             (json.dumps({"format": 1, "due": "2026-10-11T16:00", "runs": {}}), "runs must list records"),
             (
                 json.dumps({"format": 1, "due": "2026-10-11T16:00", "runs": [dict(run, trigger="hourly")]}),
-                "neither scheduled nor on demand",
+                "not a scheduled attempt, a run on demand, or a one-off run",
             ),
             (
                 json.dumps({"format": 1, "due": "2026-10-11T16:00", "runs": [dict(run, ending="fine")]}),
@@ -768,7 +917,9 @@ class RecordTest(unittest.TestCase):
             ({"agent_started": True, "exit_code": 6, "timed_out": True}, 0.0, attempts.TIMED_OUT),
             ({"agent_started": True, "exit_code": 1}, 600.0, attempts.SLEPT),
             ({"agent_started": True, "exit_code": 1}, 0.0, attempts.FAILED),
+            ({"agent_started": False, "exit_code": 3}, 10800.0, attempts.SLEPT),
             ({"agent_started": False, "exit_code": 3}, 0.0, attempts.NOT_STARTED),
+            ({}, 10800.0, attempts.SLEPT),
             ({}, 0.0, attempts.NOT_STARTED),
         ):
             with self.subTest(agent=agent, asleep=asleep):
@@ -780,15 +931,18 @@ ENDINGS = ("COMPLETED", "SLEPT", "TIMED_OUT", "FAILED", "NOT_STARTED", "REFUSED"
 
 
 class ReportTest(unittest.TestCase):
-    def state(self, number=1, limit=3, earlier=(), **agent):
+    def state(self, number=1, limit=3, earlier=(), slept=0.0, **agent):
         state = RunState("R", "scheduled", (DUE + timedelta(minutes=1)).astimezone(), "i.md", due=DUE)
         state.attempt = attempts.Attempt(DUE, number, limit, tuple(earlier))
         state.agent = dict({"agent_started": True, "exit_code": 0, "time_limit_seconds": 1800.0}, **agent)
+        state.slept = slept
         state.review = report.REVIEW_COMPLETE
         return state
 
     def slept(self, **kwargs):
-        return self.state(exit_code=6, timed_out=True, agent_seconds=10805.0, agent_awake_seconds=5.0, **kwargs)
+        """A run whose agent the Mac slept through, past its time limit."""
+        agent = {"exit_code": 6, "timed_out": True, "agent_seconds": 10805.0, "agent_awake_seconds": 5.0}
+        return self.state(slept=10800.0, **agent, **kwargs)
 
     def test_a_first_attempt_that_completes_reads_as_any_scheduled_run(self):
         state = self.state()
@@ -804,6 +958,8 @@ class ReportTest(unittest.TestCase):
         self.assertFalse(self.slept(number=1, limit=1).again)
         awake = self.state(exit_code=6, timed_out=True, agent_seconds=1803.0, agent_awake_seconds=1803.0)
         self.assertEqual((awake.again, awake.ending), (False, attempts.TIMED_OUT))
+        noise = self.state(exit_code=1, slept=report.asleep_for(1803.0 + report.ASLEEP_AT_LEAST - 1, 1803.0))
+        self.assertEqual((noise.again, noise.ending), (False, attempts.FAILED))
         on_demand = self.slept()
         on_demand.trigger, on_demand.attempt, on_demand.due = "on-demand", None, None
         self.assertEqual((on_demand.again, on_demand.ending), (False, attempts.SLEPT))
@@ -823,6 +979,32 @@ class ReportTest(unittest.TestCase):
         title, body, _, _ = report.problems_notice(with_more, "run-reports/R.md")
         self.assertEqual(title, "Notice: the run timed out on 2026-10-11 and had 1 other problem")
         self.assertIn("a fresh, whole run starts by itself once the Mac is awake", body)
+
+    def test_sleep_outside_the_agent_s_time_cuts_a_scheduled_run_short_and_the_report_says_for_how_long(self):
+        before = self.state(exit_code=3, agent_started=False, slept=600.0)
+        self.assertEqual((before.again, before.ending), (True, attempts.SLEPT))
+        self.assertIsNone(report.problems_notice(before, "run-reports/R.md"))
+        outside = "- The Mac was asleep for about 10 min 0 s of this run outside the agent's time.\n"
+        self.assertIn(f"{outside}- The Mac's sleep cut this run short, so it does not", report.render_report(before))
+
+        both = self.slept()
+        both.slept += 600.0
+        text = report.render_report(both)
+        self.assertIn("- The Mac was asleep for about 3 h 0 min 0 s while the agent ran, which counts toward", text)
+        self.assertIn(outside, text)
+        self.assertNotIn("outside the agent's time", report.render_report(self.slept()))
+
+        last = self.state(number=3, exit_code=3, agent_started=False, slept=600.0)
+        title, body, _, _ = report.problems_notice(last, "run-reports/R.md")
+        self.assertEqual(title, "Notice: the Mac's sleep cut short every attempt at the run due 2026-10-11")
+        self.assertIn("The agent did not start: see the run report. The Mac's sleep cut this run short, and it", body)
+
+        for trigger in ("on-demand", "scheduled"):
+            other = self.state(exit_code=3, agent_started=False, slept=600.0)
+            other.trigger, other.attempt = trigger, None
+            self.assertEqual((other.again, other.ending, report.what_follows(other)), (False, attempts.SLEPT, ""))
+            self.assertNotIn("asleep", report.render_report(other))
+            self.assertEqual(report.problems_notice(other, "r.md")[0], "Notice: the agent did not start on 2026-10-11")
 
     def test_a_run_on_demand_reads_and_notifies_as_before(self):
         state = self.slept()
@@ -900,7 +1082,7 @@ class NothingHoldsTheMacAwakeTest(OwedRunTestCase):
     """The run happens when the Mac is awake; the launcher never keeps it awake, wakes it, or schedules a wake."""
 
     # What would hold a Mac awake or wake it: the command-line tools, and the power assertions, activities, and wake
-    # requests of the system frameworks, by the names code would have to use.
+    # requests of the system frameworks, by the names a process would have to be started with.
     FORBIDDEN = (
         "caffeinate",
         "systemsetup",
@@ -919,16 +1101,6 @@ class NothingHoldsTheMacAwakeTest(OwedRunTestCase):
         "sleepnow",
         "wakeorpoweron",
     )
-    # Everything the launcher, the agent's task, or a LaunchAgent is made from; the docs and the tests only describe.
-    SOURCES = (
-        "src/gr0wthlab",
-        "src/bin",
-        "src/instructions",
-        "src/checks",
-        "src/dispatches",
-        "src/proposals",
-        "config",
-    )
     # Every key a rendered LaunchAgent may hold: none keeps a job running, wakes the Mac, or starts a job at login.
     LAUNCH_AGENT_KEYS = {
         "EnvironmentVariables",
@@ -942,28 +1114,6 @@ class NothingHoldsTheMacAwakeTest(OwedRunTestCase):
         "StartInterval",
         "WorkingDirectory",
     }
-
-    def sources(self):
-        found = [path for folder in self.SOURCES for path in sorted((fakes.REPO / folder).rglob("*"))]
-        files = [path for path in found if path.is_file() and "__pycache__" not in path.parts]
-        self.assertGreater(len(files), 30)
-        return [(str(path.relative_to(fakes.REPO)), path.read_text(encoding="utf-8")) for path in files]
-
-    def test_no_launcher_code_configuration_or_task_definition_names_a_way_to_hold_the_mac_awake(self):
-        for name, text in self.sources():
-            for word in self.FORBIDDEN:
-                with self.subTest(file=name, word=word):
-                    self.assertNotIn(word.lower(), text.lower())
-
-    def test_the_one_thing_the_launcher_asks_about_the_mac_s_power_only_reads_it(self):
-        lines = [(name, line.strip()) for name, text in self.sources() for line in text.splitlines()]
-        self.assertEqual(
-            [found for found in lines if "pmset" in found[1].lower()],
-            [
-                ("src/gr0wthlab/attempts.py", 'PMSET = "/usr/bin/pmset"'),
-                ("src/gr0wthlab/attempts.py", 'asked = process.run([PMSET, "-g", "systemstate"], process.QUICK)'),
-            ],
-        )
 
     def test_the_launch_agents_hold_nothing_awake_and_keep_no_process_running(self):
         entry = Path("/srv/gr0wthlab/src/bin/gr0wthlab")
