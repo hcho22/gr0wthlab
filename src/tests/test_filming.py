@@ -500,6 +500,20 @@ class FilmingPlanTest(FilmingRunCase):
         self.assertIn(f"Nothing could be planned this run: the kit could not be read: `{ANGLES}` (", report)
         self.assertIn("| Filming plan and edits | incomplete | the kit could not be read:", report)
 
+    def test_an_open_plan_stands_under_its_id_while_the_kit_it_is_compared_with_cannot_be_read(self):
+        queue = self.run_ok(days=(1, 8))
+        (plan,) = [entry for entry in queue["open"] if entry["kind"] == "filming-plan"]
+        angles = self.mandu / ANGLES
+        text = angles.read_text(encoding="utf-8")
+        angles.write_text("# Angle bank\n\nNo table here.\n", encoding="utf-8")
+        self.run_ok()
+        self.assert_stands(plan, "Filming plan and edits", f"the kit could not be read: `{ANGLES}` (")
+        self.assertIn(f"The open plan `{plan['id']}` stands as it is.", self.report())
+        angles.write_text(text, encoding="utf-8")
+        self.run_ok()
+        self.assert_never_asked_again(plan)
+        self.assertIn(f"- Filming plan: open as `{plan['id']}`.", self.report())
+
     def test_a_run_whose_product_does_not_film_files_no_plan(self):
         fakes.set_filming(self.repo, False)
         queue = self.run_ok()
@@ -1838,6 +1852,83 @@ class EditRunTest(FilmingRunCase):
         self.decide(PLAN, "approve")
         queue = self.run_ok()
         self.assertIn("asset", next(entry for entry in queue["open"] if entry["kind"] == "post"))
+
+    def test_an_open_post_stands_under_its_id_while_its_edit_record_cannot_be_read(self):
+        queue = self.day_1()
+        post = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.assertIn("asset", post)
+        record = self.workspace() / fakes.edit_path(1)
+        written = record.read_bytes()
+        record.write_bytes(b"\xff\xfe not text")
+        self.run_ok()
+        unread = "`drafts/edits/window-1/day-01.json` could not be read ("
+        self.assert_stands(post, "Post Drafts", unread)
+        report = self.report()
+        self.assertRegex(report, r"\| Filming plan and edits \| incomplete \| `drafts/edits/window-1/day-01\.json`")
+        self.assertIn(f"| 1 | P01 / AB-1 leg A | kept | `{post['id']}`; not checked again, since {unread}", report)
+        self.assertNotIn("its edit record does not pass", self.notices())
+        self.assertTrue((self.ledger() / post["asset"]).is_file())
+        record.write_bytes(written)
+        self.run_ok()
+        self.assert_never_asked_again(post)
+        self.assertIn("its Draft is unchanged and passes, and so is its video |", self.report())
+
+    def test_an_open_post_stands_under_its_id_while_a_footage_file_its_edit_names_cannot_be_measured(self):
+        self.approved_plan()
+        self.clip("d01-s1.mov")
+        take = self.clip("d01-s1-take-2.mov")
+        edit = fakes.edit_record(1, ("d01-s1", "d01-s1-take-2.mov", 2, 12))
+        queue = self.run_ok({fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): edit})
+        post = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.assertIn("asset", post)
+        measured = take.read_bytes()
+        take.write_bytes(b"not a video any more")
+        self.run_ok()
+        unread = "the footage file `window-1/d01-s1-take-2.mov` could not be measured ("
+        self.assert_stands(post, "Post Drafts", unread)
+        self.assertRegex(
+            self.report(), r"\| Filming plan and edits \| incomplete \| the footage file `window-1/d01-s1-ta"
+        )
+        self.assertNotIn("its edit record does not pass", self.notices())
+        take.write_bytes(measured)
+        self.run_ok()
+        self.assert_never_asked_again(post)
+        self.assertIn("its Draft is unchanged and passes, and so is its video |", self.report())
+
+    def test_an_edit_that_names_a_footage_file_no_longer_in_the_footage_place_still_withdraws_the_day_s_post(self):
+        self.approved_plan()
+        self.clip("d01-s1.mov")
+        take = self.clip("d01-s1-take-2.mov")
+        edit = fakes.edit_record(1, ("d01-s1", "d01-s1-take-2.mov", 2, 12))
+        queue = self.run_ok({fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): edit})
+        post = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        take.unlink()
+        self.run_ok()
+        self.assertTrue(self.entry(post["id"])["withdrawn"])
+        notice = self.notice()
+        self.assertIn("footage-place: the footage place holds no file 'window-1/d01-s1-take-2.mov'", notice)
+        self.assertIn(f"- The open post `{post['id']}` for day 1 is withdrawn, since its edit record does not", notice)
+        self.assertNotIn("left exactly as it is", notice)
+
+    def test_an_open_post_stands_under_its_id_while_the_record_of_its_video_cannot_be_read(self):
+        """Cut again without it, a video could come out as another file and take the open post's place."""
+        queue = self.day_1()
+        post = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        record = self.ledger() / post["asset_record"]
+        kept = record.read_text(encoding="utf-8")
+        record.write_text("{", encoding="utf-8")
+        asset = self.ledger() / post["asset"]
+        stamp = asset.stat().st_mtime_ns
+        self.run_ok()
+        unread = f"`{post['asset_record']}`, the record of the video cut from it, could not be read"
+        self.assert_stands(post, "Post Drafts", unread)
+        self.assertEqual(asset.stat().st_mtime_ns, stamp, "nothing was cut again")
+        self.assertEqual(record.read_text(encoding="utf-8"), "{", "and the record was not written over")
+        self.assertIn(f"- Day 1's video could not be cut again: {unread}, so nothing was cut again; ", self.notice())
+        record.write_text(kept, encoding="utf-8")
+        self.run_ok()
+        self.assert_never_asked_again(post)
+        self.assertIn("its Draft is unchanged and passes, and so is its video |", self.report())
 
     def test_an_unchanged_asset_is_kept_not_rendered_again_and_its_post_stands(self):
         queue = self.day_1()

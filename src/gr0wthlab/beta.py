@@ -22,6 +22,10 @@ left out is recorded as not reported, never as zero. A pool too small to reach t
 the size of the gap, and the agent is asked for the Waitlist ask that helps close it. An open ask states that gap, so
 it is replaced when the gap changes and withdrawn once the gap closes.
 
+Only what the launcher could read takes an open recruiting item back (queue.stands). While a report of the Founder's
+cannot be read, no count ends recruiting and the open ask stands, since its gap rests on those counts; a Draft or a
+package line it cites that cannot be read leaves its open item as it is, not checked again.
+
 Three of these follow the recruiting patterns of the marketingskills library, considered for this story: batches
 that are throttled, a selection rule that is written down and neutral, and no invented scarcity. Its survey benchmark
 is not adopted, since the package's K8 rubric governs the first sessions. No text of the library is used here.
@@ -42,7 +46,7 @@ from .areas import Areas, Store, UnsafeFile, read_plain
 from .beta_drafts import INVITATION, WAITLIST_ASK, Context, MessageDraft, evaluate, parse
 from .boundary import Boundary, ConfigError
 from .drafts import Verdict
-from .queue import APPROVED, OPEN, REJECTED, Ledger
+from .queue import APPROVED, OPEN, REJECTED, Ledger, stands
 from .settings import Settings
 from .state import INVITED, OFFERED, BetaRecruitingState
 
@@ -267,18 +271,32 @@ class Counts:
         }
 
 
-def read_reports(product: str, found: Sequence[Raw]) -> tuple[list[tuple[exchange.BetaReport, Path, str]], list[str]]:
-    """Each usable report of the Product's, oldest first, and every record that could not be used with its reason."""
-    usable, problems = [], []
+def read_reports(
+    product: str, found: Sequence[Raw]
+) -> tuple[list[tuple[exchange.BetaReport, Path, str]], list[str], list[str]]:
+    """Each usable report of the Product's, oldest first, every record that could not be used with its reason, and,
+    of those, each file that could not be read as a report at all, so what it counts is unknown."""
+    usable, problems, unread = [], [], []
     for name, path, data in found:
         record, issues = read_record(data, exchange.parse_beta_report, name[: -len(".json")])
         if record is None:
             problems.append(f"{mandu_file(REPORTS, name)}: {'; '.join(issues)}")
+            unread.append(mandu_file(REPORTS, name))
         elif record.product != product:
             problems.append(f"{mandu_file(REPORTS, name)}: it names a Product whose Beta Cohort is not being recruited")
         else:
             usable.append((record, path, hashlib.sha256(data).hexdigest()))
-    return sorted(usable, key=lambda found: found[0].day), problems
+    return sorted(usable, key=lambda found: found[0].day), problems, unread
+
+
+def reports_unread(failure: str | None, unread: Sequence[str]) -> str:
+    """Why the Founder's counts may not be whole this run, or "" when every report was read: the folder could not
+    be listed, or a file in it could not be read as a report."""
+    if failure:
+        return f"`{REPORTS}/` in Mandu's exchange folder could not be read ({failure})"
+    if unread:
+        return f"{', '.join(unread)} in Mandu's exchange folder could not be read as the Founder's report"
+    return ""
 
 
 def standing(reports: Sequence[exchange.BetaReport]) -> Counts:
@@ -381,6 +399,7 @@ class Batch:
     candidates: tuple[waitlist.Candidate, ...] = ()
     open: Mapping[str, object] | None = None
     ended: bool = False  # recruiting is over, so no open recruiting item stands
+    unread: str = ""  # why a count that would end recruiting is not acted on: a report that could not be read
     stale: bool = False  # the open batch holds an entry that may no longer be invited, so it cannot stand
 
     @property
@@ -399,6 +418,7 @@ def decide(
     entries: Sequence[Mapping[str, object]],
     held: Mapping[str, Mapping[str, str]],
     counts: Counts,
+    unread: str = "",
 ) -> Batch:
     """The run's one decision about the batch, from the gate, the view, the batches queued so far, and the counts.
 
@@ -406,7 +426,9 @@ def decide(
     batch stands while every entry in it may still be invited, and is made again when one left the Waitlist or its
     opt-in. Otherwise the next batch holds the next entries in invitation order that no batch holds, as many as the
     batch size and the room left in the cohort allow. While the Founder has not reported how many accepted, the
-    cohort cannot be larger than the entries invited, so that number stands in for it, never zero."""
+    cohort cannot be larger than the entries invited, so that number stands in for it, never zero. unread says why
+    a report of the Founder's could not be read, when one could not: a later report may correct a count, so no count
+    ends recruiting then, and nothing open is taken back on one."""
     current = next((entry for entry in entries if entry["status"] == OPEN), None)
     accepted = counts.accepted
     if gate.stopped:
@@ -414,6 +436,9 @@ def decide(
     if accepted is not None and accepted >= rules.maximum:
         day = counts.stated["accepted"][1]
         why = f"the Beta Cohort reached {rules.maximum} people: {accepted} accepted, as the Founder reported on {day}"
+        if unread:
+            why += f"; {unread}, so recruiting is not ended on that count this run"
+            return Batch(NONE, why, open=current, unread=unread)
         return Batch(NONE, why, open=current, ended=True)
     if reading is None or reading.status != package.READ:
         return Batch(
@@ -496,6 +521,7 @@ class Plan:
     new_reports: list[str] = field(default_factory=list)
     report_problems: list[str] = field(default_factory=list)
     reports_failure: str | None = None
+    reports_unread: str = ""  # why the Founder's counts may not be whole: a report that could not be read
     held: dict[str, dict[str, str]] = field(default_factory=dict)
     notes: list[str] = field(default_factory=list)  # where the run state disagreed with the Review Queue
     batch: Batch | None = None
@@ -580,19 +606,24 @@ def prepare(
     store: Store,
     run_id: str,
     now: datetime,
+    unreadable: Sequence[str] = (),
 ) -> Plan:
-    """The run's recruiting plan. Before the gate it holds the gate alone, and nothing is read, chosen, or written."""
+    """The run's recruiting plan. Before the gate it holds the gate alone, and nothing is read, chosen, or written.
+    unreadable names each file among the Founder's reports whose bytes could not be read at all."""
     plan = Plan(rules, gate, run_id)
     if not plan.active:
         return plan
     plan.changed = gate.sha256 != previous.build
-    usable, plan.report_problems = read_reports(rules.product, reports or ())
+    usable, plan.report_problems, unread = read_reports(rules.product, reports or ())
     plan.reports, plan.reports_failure = len(reports or ()), reports_failure
+    plan.reports_unread = reports_unread(reports_failure, [mandu_file(REPORTS, name) for name in unreadable] + unread)
     plan.new_reports = keep_reports(store, usable, run_id, now)
     plan.counts = standing([report for report, _, _ in usable])
     plan.held, plan.notes = held_entries(previous, ledger.entries, rules.product)
     plan.reading, plan.waitlist_file = reading, waitlist_file
-    plan.batch = decide(rules, gate, reading, batches(ledger.entries, rules.product), plan.held, plan.counts)
+    plan.batch = decide(
+        rules, gate, reading, batches(ledger.entries, rules.product), plan.held, plan.counts, plan.reports_unread
+    )
     if reading is not None and reading.status == package.READ:
         plan.pool = sum(1 for candidate in reading.candidates if candidate.entry not in plan.held)
     plan.gap = None if plan.batch.ended else gap(rules, reading, plan.held, plan.counts)
@@ -636,10 +667,11 @@ class PlanError(ValueError):
 
 def cannot_stand(plan: Plan, due: DraftPlan) -> bool:
     """Whether a Draft's open item cannot stand, whatever becomes of the Draft: an open batch that holds an entry who
-    may no longer be invited, or an open ask that states a gap the pool no longer has."""
+    may no longer be invited, or an open ask that states a gap the pool no longer has. The gap rests on the
+    Founder's counts, so an open ask is never judged by it while a report could not be read."""
     if due.purpose == INVITATION:
         return plan.batch.action == REBUILD
-    return due.open is not None and due.open.get("gap") != plan.gap
+    return due.open is not None and due.open.get("gap") != plan.gap and not plan.reports_unread
 
 
 def plan_file(run_id: str) -> str:
@@ -699,6 +731,12 @@ class DraftResult:
     verdict: Verdict | None = None
     withdrawn: str | None = None  # the open item this result took off the queue
     removed: bool = False  # the Draft file held what looks like an address, so the launcher removed it
+    unread: list[str] = field(default_factory=list)  # each source its check needs that could not be read this run
+
+    @property
+    def stood(self) -> bool:
+        """Whether its open item was left as it is because a source its standing rests on could not be read."""
+        return self.status == KEPT and bool(self.unread)
 
 
 @dataclass
@@ -713,6 +751,11 @@ class Outcome:
     @property
     def withdrawn(self) -> list[str]:
         return [result.withdrawn for result in self.results if result.withdrawn]
+
+    @property
+    def unread(self) -> list[str]:
+        """Each source a recruiting item could not be checked against this run, once."""
+        return list(dict.fromkeys(reason for result in self.results for reason in result.unread))
 
 
 def read_draft(areas: Areas, path: Path) -> tuple[MessageDraft | None, str]:
@@ -775,7 +818,10 @@ def take(
         return outcome
     if batch.action == NONE:
         current = str(batch.open["id"]) if batch.open else None
-        if current and not batch.stale:
+        kept = stands(batch.open, [batch.unread] if batch.unread else [])
+        if kept:
+            outcome.results.append(DraftResult(INVITATION, KEPT, kept.detail, kept.item, unread=list(kept.unread)))
+        elif current and not batch.stale:
             outcome.results.append(DraftResult(INVITATION, KEPT, batch.why, current))
         else:
             outcome.results.append(DraftResult(INVITATION, NOT_DUE, batch.why, withdrawn=current))
@@ -783,7 +829,10 @@ def take(
         outcome.results.append(take_draft(plan, due, areas, store, ledger, run_id, now, products, outcome))
     if plan.gap == 0:
         current = draft_plan(WAITLIST_ASK, plan.folder, ledger.entries, plan.product).open
-        if current is not None:
+        kept = stands(current, [plan.reports_unread] if plan.reports_unread else [])
+        if kept:
+            outcome.results.append(DraftResult(WAITLIST_ASK, KEPT, kept.detail, kept.item, unread=list(kept.unread)))
+        elif current is not None:
             why = f"the Beta Cohort can now reach its minimum of {plan.rules.minimum}, so the ask is no longer needed"
             outcome.results.append(DraftResult(WAITLIST_ASK, NOT_DUE, why, withdrawn=str(current["id"])))
     return outcome
@@ -803,10 +852,18 @@ def take_draft(
     purpose = due.purpose
     stale = cannot_stand(plan, due)
     current = str(due.open["id"]) if due.open else None
+    # An open item that can stand is taken back only by a Draft the launcher could read and check.
+    standing = None if stale else due.open
+    kept = stands(standing, [plan.reports_unread] if purpose == WAITLIST_ASK and plan.reports_unread else [])
+    if kept:
+        return DraftResult(purpose, KEPT, kept.detail, kept.item, unread=list(kept.unread))
     draft, problem = read_draft(areas, due.path)
     if draft is None:
+        kept = stands(standing, [problem] if problem else [])
+        if kept:
+            return DraftResult(purpose, KEPT, kept.detail, kept.item, unread=list(kept.unread))
         if problem:
-            return DraftResult(purpose, BLOCKED, problem, withdrawn=current)
+            return DraftResult(purpose, BLOCKED, problem, withdrawn=current, unread=[problem])
         if current and not stale:
             return DraftResult(purpose, KEPT, "no new Draft; the open item stands", current)
         if purpose == WAITLIST_ASK and due.approved:
@@ -820,12 +877,13 @@ def take_draft(
         # FR-11: the file leaves the workspace before the records step can save it, and nothing in it is quoted.
         areas.remove(due.path)
         result.removed = True
-    elif current and not stale and plan.context.rules is None:
-        # The open item passed when it was queued; brand rules that cannot be read now do not withdraw it.
-        result.status, result.item = KEPT, current
-        result.detail = "not checked again, since brand-rules.json could not be used; the open item stands"
-        return result
     result.verdict, item = check_draft(plan, due, draft, products)
+    result.unread = list(result.verdict.unread)
+    kept = stands(standing, result.unread)
+    if kept:
+        # The open item passed when it was queued; a source that cannot be read now does not withdraw it.
+        result.status, result.item, result.detail = KEPT, kept.item, kept.detail
+        return result
     if not result.verdict.passed:
         result.withdrawn = current
         return result
@@ -1096,6 +1154,7 @@ def record(plan: Plan, outcome: Outcome, store: Store, run_id: str, now: datetim
                 "detail": result.detail,
                 "item": result.item,
                 "withdrawn": result.withdrawn,
+                "unread": result.unread,
                 "draft": result.draft,
                 "draft_sha256": result.sha256,
                 "removed": result.removed,
@@ -1290,7 +1349,8 @@ def report_lines(plan: Plan | None, outcome: Outcome | None, problem: str = "") 
 
 def gaps(plan: Plan | None, outcome: Outcome | None, problem: str, agent_gap: str) -> list[str]:
     """Why recruiting is incomplete this run: a Draft the run asked for is missing, the brand rules or the view could
-    not be used, or the agent or the take-in fell short. A blocked Draft is the check working, not a gap."""
+    not be used, a Draft, a package line it cites, or a report of the Founder's could not be read, or the agent or
+    the take-in fell short. A Draft blocked by a check the launcher could make is the check working, not a gap."""
     if plan is None or not plan.active:
         return []
     found = [problem] if problem else []
@@ -1300,6 +1360,7 @@ def gaps(plan: Plan | None, outcome: Outcome | None, problem: str, agent_gap: st
         found.append("brand-rules.json could not be used")
     if plan.reading is not None and plan.reading.status == waitlist.REFUSED:
         found.append("the Waitlist view was refused, so no entry could be chosen")
+    found += [reason for reason in (outcome.unread if outcome else ()) if reason not in found]
     for result in outcome.results if outcome else ():
         if result.status == MISSING:
             found.append(f"no {LABELS[result.purpose]} Draft")

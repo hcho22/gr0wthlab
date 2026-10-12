@@ -146,6 +146,26 @@ class IncomingTest(LedgerTestCase):
         self.assertEqual(published, [])
         self.assertIn("not an open item", set_aside[0].problems[0])
 
+    def test_supersedes_never_withdraws_an_open_item_whose_item_file_could_not_be_read(self):
+        """Its fingerprint is then unknown, so nothing shows the newer item is not the same ask over again."""
+        self.drop("first.md", fakes.PROPOSAL)
+        self.take()
+        self.drop("second.md", fakes.proposal(extra="supersedes: 20261011-first\n", title="record it another way"))
+        lost = {"20261011-first": "`review-queue/items/20261011-first.md`, its item file, could not be read"}
+        published, set_aside = self.ledger.take_incoming(self.areas, self.store, PRODUCTS, "RUN2", NOW, {}, (), lost)
+        self.assertEqual(published, [])
+        self.assertEqual(
+            set_aside[0].problems,
+            (
+                "supersedes 20261011-first, which stays as it is: `review-queue/items/20261011-first.md`, its item"
+                " file, could not be read, so nothing shows this item asks anything else",
+            ),
+        )
+        self.assertEqual(self.ledger.entries["20261011-first"]["status"], OPEN)
+        self.assertEqual(
+            [(kept.item, kept.unread) for kept in self.ledger.stood], [("20261011-first", (lost["20261011-first"],))]
+        )
+
     def test_an_item_the_launcher_filed_from_reviewed_text_is_never_superseded(self):
         request = exchange.check_item(fakes.proposal("dispatch-request"), PRODUCTS).item
         filed = self.ledger.publish(self.store, request, "waitlist", "RUN1", NOW, origin="dispatch/waitlist")

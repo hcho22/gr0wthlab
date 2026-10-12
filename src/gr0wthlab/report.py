@@ -91,6 +91,10 @@ class RunState:
     waitlist_file: str = ""  # the Waitlist Evidence this run wrote, relative to ledger/
     breach_notice: str | None = None
     dispatches: list = field(default_factory=list)  # dispatch.Filing, one per reviewed Dispatch request
+    dispatch_unread: list[str] = field(default_factory=list)  # each file a request's filing rests on that was unread
+    # Each open item left as it was on a read that could not be made: (its output's title, queue.Stands).
+    stood: list = field(default_factory=list)
+    queue_title: str = ""  # the Review Queue output's title, which a Dispatch request's item counts under
     tallies: list[Tally] = field(default_factory=list)
     state_notes: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
@@ -695,6 +699,20 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 "Some records in Mandu could not be used, so nothing was taken from them; a decision already taken"
                 " stands, and Mandu need not change them. Each is reported once, and again only if it changes:\n"
                 + "\n".join(bullet(f"`{record.name}`: {'; '.join(record.problems)}") for record in others),
+            )
+        )
+    if state.stood:
+        count = len(state.stood)
+        sections.append(
+            (
+                count,
+                f"{plural(count, 'open item')} not checked again on {day}",
+                "Something the check of these open items needs could not be read this run, so each was left exactly"
+                " as it is: nothing was withdrawn or replaced on that account, each keeps its identifier, and the next"
+                " run checks it again:\n"
+                + "\n".join(
+                    bullet(f"`{kept.item}` ({title}): {'; '.join(kept.unread)}") for title, kept in state.stood
+                ),
             )
         )
     blocked = posts.notice_section(state.post_outcome, day)

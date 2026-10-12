@@ -6,6 +6,7 @@ An item is queued once, under an identifier that never changes, and is closed by
 or rejected) or by a newer item that supersedes it; a closed item never returns to the open list. A decision the
 Founder took on an item a newer one had already superseded is kept on that item, which stays superseded.
 An open item is carried over once the Founder has left it undecided at a sitting.
+A read that could not be made never closes or supersedes one: stands, below, is where every workflow weighs it.
 """
 
 from __future__ import annotations
@@ -55,6 +56,33 @@ class SetAside:
     problems: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class Stands:
+    """An open item a run left exactly as it was, since a read its standing rests on could not be made."""
+
+    item: str
+    unread: tuple[str, ...]  # each source that could not be read, with the reason
+
+    @property
+    def detail(self) -> str:
+        return f"not checked again, since {'; '.join(self.unread)}; the open item stands"
+
+
+def stands(current: Mapping[str, object] | None, unread: Sequence[str]) -> Stands | None:
+    """The one place a read that could not be made is weighed against an open item, for every workflow.
+
+    Only what a record the launcher could read says ever withdraws, closes, or supersedes an open item. current is
+    the open item a workflow is about to judge, and unread each source that judgment needs and that could not be
+    read this run: a file that is missing where it must exist, unreadable, or not in its format, or a git read that
+    failed. With both, the item stands under its identifier, not checked again, whatever else the check found, and
+    the workflow reports each unread source as its gap; with either missing, the workflow goes on to its own
+    decision, which then rests on readable records alone.
+    """
+    if current is None or not unread:
+        return None
+    return Stands(str(current["id"]), tuple(dict.fromkeys(unread)))
+
+
 def declaration_problem(item: exchange.Item, kept: Collection[str]) -> str | None:
     """Why a package-change proposal's declaration keeps it off the queue, if it does. One that declares it adds or
     changes an Angle or Hook needs sourced pain: an Evidence line that names, exactly, the record of a Listening
@@ -78,6 +106,7 @@ def slug_of(name: str) -> str:
 class Ledger:
     def __init__(self, entries: Sequence[Mapping[str, object]] = ()):
         self.entries: dict[str, dict[str, object]] = {str(entry["id"]): dict(entry) for entry in entries}
+        self.stood: list[Stands] = []  # each open item the take-in left as it was on a read that could not be made
 
     @classmethod
     def load(cls, path: Path) -> Ledger:
@@ -193,12 +222,14 @@ class Ledger:
         now: datetime,
         seen: dict[str, str] | None = None,
         kept: Collection[str] = (),
+        unread: Mapping[str, str] | None = None,
     ) -> tuple[list[str], list[SetAside]]:
         """Queue every valid item the agent wrote to incoming/; set every other file aside with its problems.
 
         seen maps each queued item's fingerprint to its identifier; an item that asks the same thing as one already
         open or decided is set aside, so nothing decided is ever asked again under another name. kept holds the
-        record of each Listening quote the launcher keeps, as a path in ledger/.
+        record of each Listening quote the launcher keeps, as a path in ledger/. unread holds each queued item whose
+        fingerprint is not in seen, since its item file could not be read, with the reason.
         """
         seen = {} if seen is None else seen
         incoming = areas.path("review_queue", INCOMING)
@@ -208,7 +239,7 @@ class Ledger:
         superseding: list[tuple[str, str]] = []
         for path in list(areas.files(incoming)):
             name = areas.relative(path)[len("review-queue/incoming/") :]
-            item, problems = self.check_incoming(path, name, products, seen, kept)
+            item, problems = self.check_incoming(path, name, products, seen, kept, unread or {})
             if item is None:
                 set_aside.append(self.set_aside(areas, store, path, name, run_id, problems))
                 continue
@@ -236,6 +267,7 @@ class Ledger:
         products: Sequence[str],
         seen: Mapping[str, str],
         kept: Collection[str] = (),
+        unread: Mapping[str, str] | None = None,
     ) -> tuple[exchange.Item | None, list[str]]:
         """Every rule a file in incoming/ must pass to be queued, for the launcher and the agent's own check alike:
         its name, the item format, a kind the launcher does not render from a Draft, sourced pain behind a proposal
@@ -243,8 +275,9 @@ class Ledger:
         from reviewed text nor queued from a Draft, and no repeat of an item queued or decided.
 
         name is the file's path inside incoming/; seen maps each queued item's fingerprint to its identifier, and
-        kept holds the record of each Listening quote the launcher keeps. The item comes back only when there is no
-        problem.
+        kept holds the record of each Listening quote the launcher keeps. unread holds each queued item whose item
+        file could not be read, so that seen lacks its fingerprint: nothing then shows an item that supersedes it is
+        not that same ask over again, so the open item stands. The item comes back only when there is no problem.
         """
         problems: list[str] = []
         slug = slug_of(name)
@@ -283,6 +316,14 @@ class Ledger:
                 f"supersedes {target}, a {kind} the launcher queued from its Draft; only a change to that Draft in"
                 f" {FROM_DRAFT[kind]} replaces it"
             )
+        else:
+            lost = (unread or {}).get(target or "")
+            stood = stands(replaced or None, [lost] if lost else [])
+            if stood:
+                self.stood.append(stood)
+                problems.append(
+                    f"supersedes {target}, which stays as it is: {lost}, so nothing shows this item asks anything else"
+                )
         fingerprint = exchange.item_hash(item)
         if fingerprint in seen:
             earlier = self.entries.get(seen[fingerprint])

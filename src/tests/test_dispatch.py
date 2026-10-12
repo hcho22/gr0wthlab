@@ -239,8 +239,12 @@ class FilingTest(unittest.TestCase):
         self.revert()
         (third,) = self.file(14)
         self.assertEqual((third.status, third.replaced), (dispatch.REPLACED, second.identifier))
-        texts = [dispatch.queued_text(self.store, self.ledger.entries[f.identifier], PRODUCTS) for f in (first, third)]
+        texts = [
+            dispatch.queued_text(self.store, self.ledger.entries[filing.identifier], PRODUCTS)[0]
+            for filing in (first, third)
+        ]
         self.assertEqual(texts[0], texts[1])
+        self.assertTrue(texts[0])
 
     def test_an_approval_of_an_item_already_replaced_counts_and_leaves_the_replacement_open(self):
         (first,) = self.file()

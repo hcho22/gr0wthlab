@@ -817,6 +817,79 @@ class WeekByWeekTest(BetaCycleTestCase):
             "| Beta Cohort recruiting | incomplete | Waitlist anonymous view could not be read |", self.report()
         )
 
+    def test_an_open_invitation_stands_under_its_id_while_its_draft_cannot_be_read(self):
+        self.next_week()
+        invitation = self.invitation()
+        path = self.workspace() / fakes.INVITATION
+        written = path.read_bytes()
+        self.write(ask=fakes.beta_draft("waitlist-ask-clean"))
+        path.unlink()
+        (self.root / "elsewhere.md").write_bytes(written)
+        path.symlink_to(self.root / "elsewhere.md")
+        self.next_week()
+        self.assert_stands(invitation, "Beta Cohort recruiting", f"`{fakes.INVITATION}` could not be read (")
+        self.assertEqual(sorted(self.recruiting_state()["entries"]), sorted(invitation["candidates"]))
+        path.unlink()
+        path.write_bytes(written)
+        self.next_week()
+        self.assert_never_asked_again(invitation)
+        self.assertIn(
+            f"| Beta invitation | kept | `{invitation['id']}`; its Draft is unchanged and passes |", self.report()
+        )
+
+    def test_an_open_invitation_stands_under_its_id_while_a_package_file_it_cites_cannot_be_read(self):
+        self.next_week()
+        invitation = self.invitation()
+        cited = self.mandu / "projects/RepToday/gtm/07-thesis/investment-thesis.md"
+        cited.chmod(0)
+        self.next_week()
+        unread = "`projects/RepToday/gtm/07-thesis/investment-thesis.md` line 12 in Mandu could not be read (Permission"
+        self.assert_stands(invitation, "Beta Cohort recruiting", unread)
+        self.assertNotIn("is withdrawn", self.notices())
+        cited.chmod(0o644)
+        self.next_week()
+        self.assert_never_asked_again(invitation)
+
+    def test_an_open_invitation_is_still_withdrawn_once_a_package_line_it_cites_no_longer_holds_its_quote(self):
+        self.next_week()
+        invitation = self.invitation()
+        cited = self.mandu / "projects/RepToday/gtm/07-thesis/investment-thesis.md"
+        text = cited.read_text(encoding="utf-8")
+        cited.write_text(
+            text.replace("record moderated first-run sessions", "hold first-run sessions"), encoding="utf-8"
+        )
+        self.next_week()
+        self.assertTrue(self.entry(invitation["id"])["withdrawn"])
+        self.assertIn(
+            "source-quote: `projects/RepToday/gtm/07-thesis/investment-thesis.md` line 12 does not hold", self.report()
+        )
+        self.assertNotIn("left exactly as it is", self.notices())
+
+    def test_no_count_takes_an_open_item_back_while_a_report_of_the_founder_s_cannot_be_read(self):
+        """A later report may correct a count, so recruiting is not ended, and no gap judged, on the ones read."""
+        self.next_week()
+        invitation, (ask,) = self.invitation(), self.asks()
+        self.report_counts("2026-10-24", invitations_sent=60, accepted=50, sessions_booked=30)
+        later = self.exchange / beta.REPORTS / "RepToday-2026-10-25.json"
+        later.write_text("{not json", encoding="utf-8")
+        self.next_week()
+        unread = "`beta-reports/RepToday-2026-10-25.json` in Mandu's exchange folder could not be read as the Founder's"
+        for item in (invitation, ask):
+            self.assert_stands(item, "Beta Cohort recruiting", unread)
+        self.assertIn("so recruiting is not ended on that count this run", self.report())
+        fakes.write_record(later.parent, later.name, fakes.beta_report("2026-10-25", accepted=3))
+        self.next_week()
+        for item in (invitation, ask):
+            self.assert_never_asked_again(item)
+        # With every report read, the count the Founder reports still ends recruiting and takes both back.
+        later.unlink()
+        self.next_week()
+        self.assertEqual(self.messages(), [])
+        why = "the Beta Cohort reached 50 people: 50 accepted, as the Founder reported on 2026-10-24"
+        for item in (invitation, ask):
+            self.assertTrue(self.entry(item["id"])["withdrawn"])
+            self.assertIn(f"- The open `{item['id']}` is withdrawn: {why}.", self.notices())
+
     def test_brand_rules_that_cannot_be_read_block_a_new_draft_and_keep_an_open_one(self):
         rules = self.mandu / "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json"
         text = rules.read_text(encoding="utf-8")

@@ -63,7 +63,7 @@ from . import (
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
-from .queue import INCOMING, OPEN, QUEUE_FILE, REVIEW_QUEUE, SET_ASIDE, SUPERSEDED, Ledger, QueueError
+from .queue import INCOMING, OPEN, QUEUE_FILE, REVIEW_QUEUE, SET_ASIDE, SUPERSEDED, Ledger, QueueError, Stands
 from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLine, Unusable
 
 PRE_RUN_ENV = "GR0WTHLAB_PRE_RUN"
@@ -77,6 +77,7 @@ SNAPSHOTS = "package-snapshots"
 SUMMARY_LIMIT = 4000
 WAITLIST_NEEDS = ("waitlist-counts", "weekly-read", "beta-recruiting")
 WORKING = "working"
+STRAY = "only <name>.json record files belong here"  # a file that is no record, which is not a read that failed
 # The folders, each inside one of the agent's areas, that the launcher takes the agent's work in from.
 INTAKE = (
     ("evidence", listening.QUOTES_IN),
@@ -128,7 +129,7 @@ def read_records(directory: Path) -> tuple[list[tuple[str, Path, bytes]], list[U
             continue
         try:
             if not name.endswith(".json") or package.file_type(path) != stat.S_IFREG:
-                problems.append(unusable(f"{directory.name}/{name}", ["only <name>.json record files belong here"]))
+                problems.append(unusable(f"{directory.name}/{name}", [STRAY]))
                 continue
             found.append((name, path, path.read_bytes()))
         except OSError as error:
@@ -364,6 +365,7 @@ class Cycle:
         requests, problems = dispatch.load(self.repo_root, products)
         state.problems += problems
         state.dispatches = dispatch.file(ledger, self.store, requests, products, seen, state.run_id, self.now())
+        state.dispatch_unread = dispatch.unread(problems, state.dispatches)
         state.published += [str(filing.identifier) for filing in state.dispatches if filing.acted]
 
     def queue_notice(
@@ -486,6 +488,7 @@ class Cycle:
                 len(filed),
                 "; ".join(filing.account() for filing in state.dispatches)
                 or ("no reviewed Dispatch request" if ledger_ok else "none filed: the Review Queue could not be read"),
+                "; ".join(state.dispatch_unread),
             ),
             self.post_tally(state),
             self.filming_tally(state),
@@ -559,8 +562,9 @@ class Cycle:
 
     def post_gaps(self, state: RunState) -> list[str]:
         """Why the post Drafts are incomplete this run: a kit file, the code, or the brand rules could not be used,
-        a due day has no Draft, or the agent or the take-in fell short. A blocked Draft is the check working, not a
-        gap."""
+        a Draft could not be checked because something its check needs could not be read, a due day has no Draft, or
+        the agent or the take-in fell short. A Draft blocked by a check the launcher could make is the check working,
+        not a gap."""
         plan, outcome = state.posts, state.post_outcome
         if plan is None:
             return [state.posts_problem] if state.posts_problem else []
@@ -568,12 +572,45 @@ class Cycle:
         if outcome is None:
             gaps.append(state.posts_problem or "the Drafts were not taken in")
         else:
+            gaps += [reason for reason in outcome.unread if reason not in gaps]
             missing = [str(result.day) for result in outcome.results if result.status == posts.MISSING]
             if missing:
                 gaps.append(f"no Draft for day {', '.join(missing)}")
         if plan.days and state.agent_gap():
             gaps.append(state.agent_gap())
         return gaps
+
+    def queue_gaps(self, state: RunState) -> list[str]:
+        """Why the Review Queue is incomplete this run though the ledger was read: an item file could not be, so a
+        reviewed Dispatch request, or an item the agent wrote to take an open item's place, could not be compared
+        with the item it would replace, which therefore stands."""
+        review_queue = [reason for title, kept in state.stood if title == state.queue_title for reason in kept.unread]
+        return list(dict.fromkeys(state.dispatch_unread + review_queue))
+
+    def left_standing(self, state: RunState, config: settings.Settings, ledger: Ledger) -> None:
+        """Gather each open item this run left exactly as it was because a read its standing rests on could not be
+        made, with the output it belongs to: what every workflow decided through queue.stands, in one list, so the
+        run's notice names each item and the read that failed."""
+        state.queue_title = output_titles(config, ("review-queue",))[0]
+        found: list[tuple[str, Stands]] = []
+
+        def add(key: str, results: Sequence) -> None:
+            title = output_titles(config, (key,))[0]
+            found.extend((title, Stands(str(result.item), tuple(result.unread))) for result in results if result.stood)
+
+        add("post-drafts", state.post_outcome.results if state.post_outcome else ())
+        if state.filming is not None and state.filming.stood:
+            found.append((output_titles(config, ("filming-plan",))[0], state.filming.stood))
+        add(beta.WORKFLOW, state.beta_outcome.results if state.beta_outcome else ())
+        add("listening", state.listening_result.replies if state.listening_result else ())
+        add("outreach-drafts", state.outreach_result.outcomes if state.outreach_result else ())
+        found += [
+            (state.queue_title, Stands(str(filing.identifier), (filing.unread,)))
+            for filing in state.dispatches
+            if filing.unread
+        ]
+        found += [(state.queue_title, kept) for kept in ledger.stood]
+        state.stood = found
 
     def outputs(self, state: RunState, config: settings.Settings, ledger_ok: bool) -> None:
         """Each output's status: a built output is incomplete when a failed source it needs names it, or when its own
@@ -600,7 +637,7 @@ class Cycle:
             "package-review": ([review_gap] if review_gap else [], "the agent finished its review"),
             "decisions": ([] if ledger_ok else ["the ledger could not be read; no decision was matched"], decisions),
             "review-queue": (
-                [] if ledger_ok else ["the ledger could not be read; the queue was left as it was"],
+                self.queue_gaps(state) if ledger_ok else ["the ledger could not be read; the queue was left as it was"],
                 queued,
             ),
             "waitlist-counts": (
@@ -799,12 +836,13 @@ class Cycle:
             state.beta = beta.Plan(rules, gate, state.run_id)
             state.beta_problem = "not prepared: the Review Queue could not be read"
         else:
-            reports, reports_failure = None, None
+            reports, reports_failure, unreadable = None, None, []
             if gate.recorded:
                 reports, problems, reports_failure = read_records(folder / beta.REPORTS)
                 for record in problems:
                     name = beta.mandu_file(beta.REPORTS, Path(record.name).name)
                     state.problems.append(f"{name} could not be used ({'; '.join(record.problems)})")
+                unreadable = [Path(record.name).name for record in problems if record.problems != (STRAY,)]
             try:
                 state.beta = beta.prepare(
                     rules,
@@ -820,6 +858,7 @@ class Cycle:
                     self.store,
                     state.run_id,
                     self.now(),
+                    unreadable,
                 )
                 if state.beta.active:
                     record = self.store.path(RUN_REPORTS, beta.plan_file(state.run_id))
@@ -1336,7 +1375,14 @@ class Cycle:
         published: list[str] = []
         if ledger_ok:
             kept = evidence.records(self.store)
-            published, state.set_aside = ledger.take_incoming(areas, self.store, products, run_id, now, seen, kept)
+            lost = {
+                identifier: f"`{entry['file']}`, its item file, could not be read"
+                for identifier, entry in ledger.entries.items()
+                if identifier not in hashes
+            }
+            published, state.set_aside = ledger.take_incoming(
+                areas, self.store, products, run_id, now, seen, kept, lost
+            )
             state.published += published
         incoming = len(published) + len(state.set_aside)
         if ledger_ok:
@@ -1365,6 +1411,7 @@ class Cycle:
                     " report is the only place it is told"
                 )
         state.queue_after = ledger.ordered()
+        self.left_standing(state, config, ledger)
         self.outputs(state, config, ledger_ok)
         notice = report.problems_notice(state, self.store.relative(report_path))
         if notice and ledger_ok:
