@@ -409,8 +409,8 @@ How Codex is started is unchanged: at one checkout path, `show-config` gives the
 The launcher starts one new process, `/usr/bin/pmset -g systemstate`, once in each scheduled start that finds a run owed; it reads the Mac's power state, goes through `process.py` with a time limit like every other process, and changes nothing.
 Nothing in the launcher, its configuration, the task definition, or a rendered LaunchAgent holds the Mac awake, wakes it, or schedules a wake, and `src/tests/test_attempts.py` keeps it so.
 
-Both checks were made on the final launcher on 2026-10-11, Mac local time, with Codex CLI 0.160.0, from this work's worktree at its final commit, against Mandu and the Product checkouts as they are; there the fingerprint is `004a906cd66214d6e0e3223f50e7627e01cb5bfe4eaa64c37de4b1c637eee705`, and the run identifier carries the UTC date.
-No change to the launcher came after them.
+Both checks were made on the final launcher on 2026-10-11, Mac local time, with Codex CLI 0.160.0, from this work's worktree, against Mandu and the Product checkouts as they are; there the fingerprint is `004a906cd66214d6e0e3223f50e7627e01cb5bfe4eaa64c37de4b1c637eee705`, and the run identifier carries the UTC date.
+No change to the launcher came after them; `config/run.json` changed afterwards only in the wording of the explanation beside the schedule, which the launcher does not use.
 
 - `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
 - `src/bin/gr0wthlab boundary-check` passed at its first attempt, as run `20261012T055304Z-on-demand-feb1`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
@@ -449,7 +449,7 @@ Each row is one requirement of this work, and every run named is a whole run wit
 
 A scheduled start that begins nothing took 0.2 seconds and printed nothing.
 Every run in the table was made on the final launcher.
-The LaunchAgent and the run with the real agent below were made on this work before its last edits, to the wording of one notice in `report.py`, a sentence of explanation in `config/run.json`, and a comment in `schedule.py`; nothing else in the launcher differed.
+The LaunchAgent and the run with the real agent below were made on this work before its last edits, to the wording of one notice in `report.py`, the explanation beside the schedule in `config/run.json`, and a comment in `schedule.py`; nothing else in the launcher differed.
 
 The scheduled path was exercised with a temporary LaunchAgent under its own label, `gr0wthlab.fm-run-when-awake-test`, rendered by `src/bin/gr0wthlab launch-agent --label …` in a throwaway production clone with the stand-in agent, its weekly time set four minutes ahead and its interval to one minute for the lab.
 launchd accepted the calendar time and the interval together (`run interval = 60 seconds`) and started the job eight times in eight minutes, each with exit code 0.

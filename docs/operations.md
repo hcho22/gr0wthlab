@@ -103,8 +103,8 @@ It prints nothing either, so the LaunchAgent's log does not grow by a line every
 Started by hand in a terminal, `src/bin/gr0wthlab run --trigger scheduled` says why it began nothing, and begins the run if one is owed.
 
 Fully awake means awake as when someone has woken the Mac, not in a dark wake.
-A sleeping Mac wakes by itself with its display off, every few minutes to an hour and for about a minute at a time, and launchd starts jobs then as at any other time.
-A run takes from under a minute to about four minutes, so one begun in a dark wake would be frozen again before it could finish, and would use up an attempt.
+A sleeping Mac wakes by itself with its display off, every few minutes to an hour and usually for under a minute, and launchd starts jobs then as at any other time.
+A run takes minutes, far longer than a dark wake usually lasts, so one begun in a dark wake would as a rule be frozen again before it could finish, and would use up an attempt.
 The launcher asks the Mac for its power state (`pmset -g systemstate`), which only reads it; if the Mac does not answer, the run starts anyway and its report says so.
 
 What a week looks like:
