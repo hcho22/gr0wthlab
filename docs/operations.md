@@ -24,6 +24,8 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
    A reviewed change that brings back a text the Founder rejected, while another text is open, files the rejected text again in that open item's place.
    An approval the Founder gave an item that a reviewed change had already replaced still counts as the request's approval, though Mandu hands no superseded item to firstmate: the replacement stays open for the Founder to decide, no reviewed change replaces it any more, nothing is filed after it, and the run report says so.
 6. It reads the 14-day kit from Mandu, works out which calendar days need post Drafts this run, now that the Founder's decisions are in, and fixes RepToday's `main` to one commit for claim checks.
+   From the same kit it reads each asset's shot list and files the filming plan, one item per window, unless one is open or decided and the kit has not changed what must be filmed.
+   It lists the footage place, read-only, and measures every file there with `ffprobe`; the agent never opens the footage, and learns each file's name and measured facts from the brief.
    It reads the Founder's Beta Build record in Mandu's exchange folder (`beta-builds/RepToday.json`), which is the only thing it takes as an approval.
    Until that record exists it does nothing more about the Beta Cohort, and the run report lists the approval as not recorded.
    Once it exists, it takes in the Founder's Beta Cohort reports (`ledger/evidence/beta-recruiting/reports/`) and fixes the run's next invitation batch: the next sign-ups that asked for a beta invitation and that no batch holds, good Fit first, then by sign-up date, at most the batch size in `config/run.json`.
@@ -49,6 +51,13 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
    The launcher never checks a declaration against a proposal's wording: the Founder is the check on a wrong declaration, at the sitting.
    The package review counts as complete only when the agent's summary ends with the line `Review: complete`; otherwise the run report marks it incomplete and the notice says so.
    It checks each post Draft the agent wrote in `workspace/drafts/posts/` and queues a post only for one that passes; a blocked Draft is named in the run report and the notice with every failing rule or checklist line, and every check is kept in `ledger/evidence/post-drafts/`.
+   For a Draft that passes, it checks the day's edit record in `workspace/drafts/edits/`, if the agent wrote one, against the shot list and the footage, renders it with `ffmpeg` into `ledger/assets/` with the Draft's text drawn over it, and measures the result; the day's post then shows the finished video.
+   An edit record that fails a check renders nothing and blocks the day's post, naming the rule; missing video tooling is reported as a skipped edit, never as a failed run; every check is kept in `ledger/evidence/filming/`.
+   A cut that fails for a reason outside the edit record (a tooling error, footage that changed while the run worked, a record that could not be written) holds the video as missing tooling does: nothing is blocked, an open post stands, and the run's notice names the failure.
+   Where the day's post shows a video when the run ends, the notice and the run report say that the video could not be cut again and that the post keeps the video it shows; they say a day has no video only when its post shows none.
+   The brief and `check-edits` tell the agent the same beforehand: the edit record of a day whose open post shows a video stays as it is while the video cannot be cut again, and is never reported as a problem to fix.
+   Before it queues any post, it compares the two videos each A/B pair's posts are about to show, reading each from its own record in `ledger/evidence/filming/assets/`, which knows every footage file by its fingerprint and not by its name: when they show different footage outside their openings, nothing the run changed for the pair is offered, the posts that stood stay, and the run report and the notice name the pair.
+   A day whose copy the Founder approved before its video existed gets its video only while its Draft is still that copy; otherwise no video is cut and the notice says so.
    It files each reviewed proposal in `src/proposals/` once, and never again whatever the Founder decides: the brand lint's word lists, and, in a run with outreach messages to offer, the loss-framing and sponsorship-ask lists.
    It checks each recruiting Draft the brief asked for in `workspace/drafts/beta-recruiting/`, and queues the invitation, with its batch attached, or the Waitlist ask only from a Draft that passes; a blocked Draft is named in the run report and the notice with every failing rule.
    A recruiting Draft that holds anything that looks like an email address is removed from `workspace/`, so the records step never saves it.
@@ -89,10 +98,12 @@ The request log also holds the `robots.txt` rule lines of the group that applied
 Nothing else the agent writes is checked against what was fetched, so text of its own that repeats a source's words is committed today in each of these places.
 They are known gaps, not yet decided by the Founder:
 
-- A file the launcher sets aside from `workspace/review-queue/incoming/` is copied whole to `ledger/review-queue/set-aside/<run id>/`: a package-change proposal that declares `new_angle: yes` and names no kept quote, a file that fails the item format, and a post or a message written there.
+- A file the launcher sets aside from `workspace/review-queue/incoming/` is copied whole to `ledger/review-queue/set-aside/<run id>/`: a package-change proposal that declares `new_angle: yes` and names no kept quote, a file that fails the item format, and a post, a message, or a filming plan written there.
 - A Draft the agent wrote, a reply that failed its checks included, stays in `workspace/` and is committed as written until it passes or is rewritten, as is any other file the agent leaves in `workspace/` that the launcher neither takes in nor puts back.
 - The reasons in a run report or a notice can repeat pieces of a file's text: a front matter line, up to 80 characters of an Evidence line, the headings found.
   The reasons a Draft's checks give, kept with the Evidence of those checks, can quote the Draft.
+  The reasons an edit record's checks give can quote its `shot` and `source` values whole.
+  They are kept in the run's filming Evidence (`ledger/evidence/filming/<run id>.json`), in the day's post verdict in the post Drafts Evidence (`ledger/evidence/post-drafts/<run id>.json`), and in the run report and notice.
 - The run report quotes the agent's own summary, up to 4,000 characters.
 - What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, and the line that says why a rejection code fits.
 
@@ -142,6 +153,78 @@ Which sitting that is, and the window's one fixed posting slot, are the Founder'
 Until `first_sitting` is set, every run prepares calendar days 1 to 7 as the first batch, with no slot on the posts.
 Once it is set, each run prepares the calendar days from the next day through the end of the week after the coming sitting (on the sitting's own day, exactly that week), skipping any day already approved, and each post's slot is its date at `slot`.
 A changed slot reaches an open post at the next run, which replaces the post with one that carries it.
+A post that shows a video keeps it through that change even when the video cannot be cut again in that run, for example while its footage is away or `ffmpeg` is missing: the post that replaces it shows the same finished file, as long as its Draft and its edit record are the ones it was made from and the file is still the one its record names.
+Otherwise the open post stands as it is, the run report says so, and the slot reaches it once the video is cut again.
+
+## Set the footage place
+
+The footage place is the one folder where the Founder drops raw footage for gr0wthlab to cut.
+It is unset until the Founder sets it, in `filming.footage.local_path` for RepToday in [`config/products.json`](../config/products.json), through a reviewed pull request:
+
+```json
+"footage": {"local_path": "~/Movies/gr0wthlab-footage", "env": "GR0WTHLAB_FOOTAGE_DIR", "access": "read-only"}
+```
+
+`~/Movies/gr0wthlab-footage` is the proposed place.
+It is outside the production clone, Mandu, and every Product checkout, it is not a folder iCloud syncs, and macOS lets the scheduled run read `~/Movies` without the consent prompt that guards the Desktop, Documents, and Downloads folders.
+The launcher refuses to start if the place overlaps this repository, Mandu, a Product checkout, or anything else the sandbox reads, since the agent could then open the footage.
+`GR0WTHLAB_FOOTAGE_DIR` overrides it on one machine, for example to try a run against test clips.
+The change touches `config/products.json`, so it needs the boundary check below.
+
+gr0wthlab only ever reads the footage place: it fingerprints and measures each file and cuts finished videos from them, and nothing in it writes, renames, moves, or deletes anything there.
+The sandboxed agent never opens it.
+Keep the footage there for as long as its videos may need rebuilding.
+Leave a file as it is, under the name it has, once a video was cut from it.
+Another recording put in its place under the same name is other footage: the later leg of an A/B pair cut from it is not offered beside a video cut from the first, the notice names the file, and `rebuild-asset` refuses it.
+To the pair check a file that is only renamed is still the same footage, since that check knows footage by its fingerprint.
+`rebuild-asset` and every edit record find a file by its name, so a renamed file cannot be rebuilt from, and a run that checks an edit record still naming it blocks that day and withdraws its open post; the day stays blocked until the record is written again.
+So keep a file under its name for as long as a post or a rebuild needs it.
+
+Name each file for its shot in the approved filming plan, in one folder per 14-day window:
+
+```text
+~/Movies/gr0wthlab-footage/
+  window-1/
+    d01-s1.mov           shot d01-s1 of the plan: day 1's first shot
+    d01-s1-take-2.mov    another take: anything may follow the shot's name after a hyphen, space, or underscore
+    d06-s1a.mov          leg A's own opening take of a pair whose opening is re-cut
+    d06-s1b.mov          leg B's
+    d06-s1.mov           everything after that pair's opening, filmed once for both legs
+```
+
+- A file's name starts with its shot, `d<two-digit day>-s<number>`, exactly as the plan writes it, in upper or lower case; `.mov`, `.mp4`, and `.m4v` files are read.
+- A later leg of an A/B pair adds no shot of its own: day 8 is cut from the footage of `d01`.
+  Only a pair whose opening is re-cut has a take per leg, marked `a` or `b` right after the shot's name, and a take marked for one leg is used only in that leg's video, for its opening.
+  Everything after the opening is shared by both legs, so it is filmed once, in a take with no leg letter: a pair filmed only as lettered takes has no video, and the run's notice names the shot that needs the shared take.
+  When the Founder is on camera in the pair's first shot, each leg's Hook is said there, so each leg also needs its own take of that shot: a leg without one has no video, and the run's notice and report name the take, such as `d06-s1b.mov`.
+  A pair that opens on a screen recording needs no take per leg.
+- Files sit directly in the window's folder.
+  A folder, a link, a file of another type, and a file named for no shot of the plan are left alone and named in the run report.
+- Film upright; any resolution and frame rate is taken, and the finished video is always 1080x1920 at 30 frames a second.
+  A recording of another shape is shown whole, scaled down with black beside it, and never cropped.
+  HDR footage is converted when the installed `ffmpeg` has the `zscale` and `tonemap` filters; with a build that lacks them, a day cut from HDR footage has no video, and the run's notice says why.
+- Sound is decided by rule, not in the edit: a cut that plays at the speed it was recorded at keeps its recording's sound, and a cut that plays at another speed, such as a timelapse, is silent.
+  A video none of whose cuts carries sound has no sound stream.
+- Nothing is cut from a shot's footage until a plan that holds the shot, as the package has it now, is approved in Mandu.
+
+## Video tooling and finished videos
+
+Rendering and measuring use `ffmpeg` and `ffprobe`, as the package's launch-video build does; `brew install ffmpeg` installs both.
+The launcher looks on its `PATH`, then in `/opt/homebrew/bin` and `/usr/local/bin`; `GR0WTHLAB_FFMPEG_BIN` and `GR0WTHLAB_FFPROBE_BIN` name them outright.
+A run that cannot find them, or finds a build without a filter or the font it needs, says so in its report and skips every edit; everything else still runs.
+
+A finished video is `ledger/assets/window-<n>/day-<nn>-<recipe>.mp4` in the clone that made it.
+It never enters git: `.gitignore` leaves the folder out, and the records step refuses any file under it.
+Its name ends in a fingerprint of everything it was made from, so a changed edit makes a new file and never overwrites one a post already shows.
+Its record, `ledger/evidence/filming/assets/window-<n>-day-<nn>-<recipe>.json`, is committed, and holds the edit record, the text drawn, each source file's fingerprint, and the tooling: everything needed to make it again from the footage.
+
+```sh
+~/gr0wthlab/src/bin/gr0wthlab rebuild-asset evidence/filming/assets/window-1-day-01-0a1b2c3d4e5f.json
+```
+
+The command renders the video again beside where its record says it was, measures it, and puts it in place only if it came out byte for byte the file its record names.
+Anything else, such as a render by other tooling, which can encode the same frames differently, is reported and discarded, and whatever is at that path stays as it was.
+A video no open or approved post names can simply be deleted.
 
 ## Mark the Waitlist live
 
@@ -154,7 +237,7 @@ That is a fact only the Founder sets, in `waitlist` in [`config/run.json`](../co
 
 It is never inferred from whether a source is connected or what a source is called.
 While `live_since` is `null`, or a date still ahead, every post item, the run brief, and the run report say that nothing can be published until the Waitlist is live.
-A post queued from that date on says the Waitlist is live; an open post keeps the line it was queued with until its Draft or slot changes and the launcher replaces it.
+A post queued from that date on says the Waitlist is live; an open post keeps the line it was queued with until the launcher replaces it, and [the ledger's README](../ledger/README.md) says when it replaces a post.
 
 ## Run on demand
 
@@ -196,7 +279,7 @@ The value must be above zero and at most 86400 (a day); a run refuses to start o
 If the report names a process that could not be stopped, end it by hand (`kill -9 <process id>`) before the next run.
 
 There is one limit, on the agent's total time, and none on silence: Codex's event stream reports only whole steps, and the longest recorded run went 35 seconds without an event while it worked, so a long step and a stalled stream look the same from outside until the step ends.
-Every other process the launcher starts (git, Codex's version and sandbox probes, the boundary check's kernel-log query) has a fixed time limit of its own, counted on the same two clocks; one that passes it is stopped the same way, and the step that needed it fails with the reason or, where it can do without the answer, goes on with what it has.
+Every other process the launcher starts (git, Codex's version and sandbox probes, the boundary check's kernel-log query, and the `ffmpeg` and `ffprobe` that measure footage and cut video) has a fixed time limit of its own, counted on the same two clocks; one that passes it is stopped the same way, and the step that needed it fails with the reason or, where it can do without the answer, goes on with what it has.
 
 ## When RepToday's Waitlist build lands
 
@@ -218,7 +301,8 @@ To stop immediately without a pull request, remove the schedule as above.
 
 ## After a change to the launcher or configuration
 
-A change to `src/bin/gr0wthlab` or the launcher's package, `config/guardrails/runtime.json`, `config/guardrails/fetch.json`, or `config/products.json` needs a fresh check on the Founder's Mac, which CI cannot run:
+A change to `src/bin/gr0wthlab` or the launcher's package, `config/guardrails/runtime.json`, `config/guardrails/fetch.json`, or `config/products.json` needs a fresh check on the Founder's Mac, which CI cannot run.
+Setting the footage place is one such change: the place is never one of the locations the sandbox reads, so the check should show the same policy as before.
 
 ```sh
 cd ~/gr0wthlab && src/bin/gr0wthlab preflight && src/bin/gr0wthlab boundary-check

@@ -115,6 +115,17 @@ def set_window(repo: Path, window: dict) -> None:
     set_run(repo, "window", window)
 
 
+def set_filming(repo: Path, films: bool) -> None:
+    """Whether any Product films in a throwaway checkout: with films, the registry is the real one; without, no
+    Product has a filming block, so a run files no filming plan."""
+    path = repo / "config" / "products.json"
+    registry = json.loads((REPO / "config" / "products.json").read_text(encoding="utf-8"))
+    if not films:
+        for product in registry["products"]:
+            product.pop("filming", None)
+    path.write_text(json.dumps(registry, indent=2), encoding="utf-8")
+
+
 def set_sources(repo: Path, data: dict) -> None:
     """config/sources.json in a throwaway checkout."""
     (repo / "config" / "sources.json").write_text(json.dumps(data, indent=2), encoding="utf-8")
@@ -134,12 +145,14 @@ def sources_with(subreddits=(), app_store: bool = False) -> dict:
     return data
 
 
-def make_repo(path: Path, env: dict[str, str], window: dict | None = None) -> Path:
+def make_repo(path: Path, env: dict[str, str], window: dict | None = None, films: bool = False) -> Path:
     """A gr0wthlab checkout with the real configuration, task definition, proposals, and area READMEs, committed on
-    main; its window is QUIET_WINDOW unless a test gives another, and it reads no network source and prepares no
-    outreach message unless a test gives it some (set_sources, set_run)."""
+    main; its window is QUIET_WINDOW unless a test gives another, no Product films unless a test says so, so a run
+    that is not about filming files no filming plan, and it reads no network source and prepares no outreach message
+    unless a test gives it some (set_sources, set_run)."""
     shutil.copytree(str(REPO / "config"), str(path / "config"))
     set_window(path, QUIET_WINDOW if window is None else window)
+    set_filming(path, films)
     set_sources(path, SOURCES_QUIET)
     set_run(path, "outreach", {"network_ask_source": None, "creators": []})
     shutil.copytree(str(REPO / "src" / "instructions"), str(path / "src" / "instructions"))
@@ -416,7 +429,7 @@ def recut_mandu(path: Path) -> Path:
     """A Mandu whose synthetic calendar marks AB-1, days 1 and 8, as a re-cut pair."""
     calendar = make_mandu(path) / "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md"
     text = calendar.read_text(encoding="utf-8")
-    calendar.write_text(text.replace("only the hook changes", "re-cut opening"), encoding="utf-8")
+    calendar.write_text(text.replace("with only its hook swapped", "re-cut opening"), encoding="utf-8")
     return path
 
 
@@ -576,6 +589,180 @@ def beta_plan(root: Path, scenario: dict, view: dict | None):
         started,
     )
     return plan, store, ledger
+
+
+# Filming (US-ME09): the filming example set's synthetic kit, laid over the post-Draft one, and video tooling.
+
+FILMING = REPO / "src" / "examples" / "filming"
+FAKE_FFMPEG_VERSION = "ffmpeg version 0.0-fake"
+
+# Stands in for ffprobe. A test's footage file is a small JSON text of the facts ffprobe would measure, and so is
+# what the fake ffmpeg renders; this prints those facts as ffprobe's own JSON, and fails on anything else.
+FAKE_FFPROBE = """#!{python}
+import json, sys
+try:
+    facts = json.loads(open(sys.argv[-1]).read())
+except (OSError, ValueError):
+    sys.stderr.write(sys.argv[-1] + ": Invalid data found when processing input\\n")
+    sys.exit(1)
+picture = {{
+    "codec_type": "video", "codec_name": facts.get("codec", "h264"), "pix_fmt": facts.get("pix_fmt", "yuv420p"),
+    "width": facts["width"], "height": facts["height"], "avg_frame_rate": str(facts.get("fps", 30)) + "/1",
+    "duration": str(facts["duration"]), "sample_aspect_ratio": "1:1", "color_transfer": facts.get("transfer", ""),
+}}
+streams = [picture] + ([{{"codec_type": "audio", "codec_name": "aac"}}] if facts.get("sound") else [])
+print(json.dumps({{"streams": streams, "format": {{"duration": str(facts["duration"])}}}}))
+"""
+
+# Stands in for ffmpeg. It answers the version and the listings a run checks, and "renders" by writing the facts of
+# the asset the command asks for, with the command's inputs and the text file it was given, so a test can read what
+# a render was made from, and with a digest of each input's bytes, so that other footage renders as another file, as
+# it does for real. ffmpeg.json beside it overrides the facts written, or makes the render fail part way, as
+# ffmpeg does: with half a file already at the output, whose path it then adds to partial.log beside it. With "only",
+# just the renders whose output path holds that text fail.
+FAKE_FFMPEG = """#!{python}
+import hashlib, json, re, sys
+from pathlib import Path
+
+here = Path(__file__).resolve().parent
+args = sys.argv[1:]
+behavior = json.loads((here / "ffmpeg.json").read_text()) if (here / "ffmpeg.json").exists() else {{}}
+if "-version" in args:
+    print("{version} Copyright (c) the tests")
+    sys.exit(0)
+if "-filters" in args:
+    for name in {filters!r}:
+        if name not in behavior.get("lacks", []):
+            print(" ... " + name + " V->V a filter")
+    sys.exit(0)
+if "-encoders" in args:
+    for name in ("libx264", "aac"):
+        print(" V....D " + name + " an encoder")
+    sys.exit(0)
+if behavior.get("fail") and behavior.get("only", "") in args[-1]:
+    Path(args[-1]).write_text("half of a render that did not finish")
+    with (here / "partial.log").open("a") as log:
+        log.write(args[-1] + "\\n")
+    sys.stderr.write(behavior["fail"] + "\\n")
+    sys.exit(1)
+graph = args[args.index("-filter_complex") + 1]
+width, height = re.search(r"pad=(\\d+):(\\d+)", graph).groups()
+inputs = [args[i + 1] for i, arg in enumerate(args) if arg == "-i"]
+facts = {{
+    "duration": float(args[len(args) - 4]), "width": int(width), "height": int(height),
+    "fps": int(re.search(r"fps=(\\d+)", graph).group(1)), "codec": "h264", "pix_fmt": "yuv420p",
+    "sound": "[ac]" in graph, "inputs": inputs,
+    "footage": [hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in inputs],
+    "seeks": [args[i + 1] for i, arg in enumerate(args) if arg == "-ss"], "graph": graph,
+    "text": Path("overlay.ass").read_text() if Path("overlay.ass").exists() else "",
+}}
+facts.update(behavior.get("facts", {{}}))
+Path(args[-1]).write_text(json.dumps(facts))
+"""
+
+
+def filming_mandu(path: Path) -> Path:
+    """A Mandu whose kit is the filming example set's: the post-Draft one with Formats that name each recording, a
+    founder-on-camera pair whose opening is re-cut (AB-3, days 2 and 9), and the rule for every screen recording."""
+    shutil.copytree(str(FILMING / "files" / "mandu"), str(make_mandu(path)), dirs_exist_ok=True)
+    return path
+
+
+def filming_kit(root: Path):
+    """The filming example set's kit, parsed as a run parses it, with each role's path."""
+    from gr0wthlab import posts
+
+    registry = json.loads((REPO / "config" / "products.json").read_text(encoding="utf-8"))
+    _, roles = posts.kit_config(registry)
+    parsed, _, _, _ = posts.read_kit(filming_mandu(root), roles)
+    return parsed, dict(roles)
+
+
+def install_video_tools(directory: Path) -> dict[str, str]:
+    """A fake ffmpeg and ffprobe, and the environment that points a run at them."""
+    from gr0wthlab import video
+
+    directory.mkdir(parents=True, exist_ok=True)
+    names = video.FILTERS + video.SOUND_FILTERS + video.HDR_FILTERS
+    scripts = {
+        "ffmpeg": FAKE_FFMPEG.format(python=sys.executable, version=FAKE_FFMPEG_VERSION, filters=names),
+        "ffprobe": FAKE_FFPROBE.format(python=sys.executable),
+    }
+    for name, text in scripts.items():
+        (directory / name).write_text(text, encoding="utf-8")
+        (directory / name).chmod(0o755)
+    return {"GR0WTHLAB_FFMPEG_BIN": str(directory / "ffmpeg"), "GR0WTHLAB_FFPROBE_BIN": str(directory / "ffprobe")}
+
+
+def fake_clip(path: Path, duration: float, width: int = 886, height: int = 1920, fps: int = 60, **more) -> Path:
+    """A footage file for the fake tooling: the facts the fake ffprobe reports of it, plainly labelled."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    facts = dict(test_input="not footage: facts for the fake ffprobe", duration=duration, width=width, height=height)
+    path.write_text(json.dumps(dict(facts, fps=fps, **more)), encoding="utf-8")
+    return path
+
+
+def edit_record(day: int, *segments: tuple, window: int = 1, product: str = "RepToday") -> str:
+    """An edit record whose segments are (shot, file name in the window's folder, in, out[, more keys])."""
+    pieces = []
+    for shot, source, start, end, *more in segments:
+        name = source if "/" in source else f"window-{window}/{source}"
+        pieces.append(dict({"shot": shot, "source": name, "in": start, "out": end}, **(more[0] if more else {})))
+    return json.dumps({"edit": 1, "product": product, "window": window, "day": day, "segments": pieces}, indent=1)
+
+
+def edit_path(day: int, window: int = 1) -> str:
+    """Where the agent writes a day's edit record, relative to workspace/."""
+    return f"drafts/edits/window-{window}/day-{day:02d}.json"
+
+
+def filming_draft(day: int) -> str:
+    """The filming example set's post Draft for a calendar day, which passes every post-Draft check on its kit."""
+    return (FILMING / "files" / "drafts" / f"day-{day:02d}.md").read_text(encoding="utf-8")
+
+
+def tree_digest(root: Path) -> dict[str, tuple]:
+    """Every entry under a folder with its bytes' SHA-256, size, mode, and modification time, so a test can show a
+    run left the folder exactly as it was."""
+    import hashlib
+
+    found = {}
+    for path in sorted(root.rglob("*")):
+        info = path.lstat()
+        digest = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() and not path.is_symlink() else None
+        found[str(path.relative_to(root))] = (digest, info.st_size, info.st_mode, info.st_mtime_ns)
+    return found
+
+
+def real_video_tools():
+    """The real ffmpeg and ffprobe with the canvas the repository configures, or the reason a test that needs them
+    is skipped where they, or the canvas's font, are not installed."""
+    from gr0wthlab import video
+
+    canvas = video.load_canvas(json.loads((REPO / "config" / "platforms.json").read_text(encoding="utf-8")))
+    tooling = video.find(dict(os.environ), canvas)
+    return (
+        (tooling, canvas, "")
+        if tooling.ok
+        else (tooling, canvas, f"the video tooling is not usable here: {tooling.problem}")
+    )
+
+
+def make_test_clip(
+    tooling, path: Path, duration: float, width: int, height: int, fps: int, sound: bool = False
+) -> Path:
+    """A real video file made from ffmpeg's own test pattern, labelled on every frame as test input: a stand-in for
+    footage, with a running clock so a cut would show."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    label = "drawbox=y=ih/2-60:w=iw:h=120:color=black@0.7:t=fill"
+    command = [str(tooling.ffmpeg), "-nostdin", "-hide_banner", "-loglevel", "error", "-y"]
+    command += ["-f", "lavfi", "-i", f"testsrc2=size={width}x{height}:rate={fps}:duration={duration}"]
+    if sound:
+        command += ["-f", "lavfi", "-i", f"sine=frequency=440:duration={duration}"]
+    command += ["-vf", label, "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p"]
+    command += (["-c:a", "aac", "-shortest"] if sound else []) + [str(path)]
+    subprocess.run(command, check=True, capture_output=True)
+    return path
 
 
 # The web the launcher's client reads, without a network.

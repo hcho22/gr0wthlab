@@ -52,6 +52,7 @@
             "path": "projects/RepToday/gtm/05-social-pmf/ab-pairs.md",
             "needed_by": [
               "post-drafts",
+              "filming-plan",
               "weekly-read"
             ]
           },
@@ -141,7 +142,7 @@
           "brand_rules": "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json",
           "checklist": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md",
           "competitors": "projects/RepToday/gtm/01-research/",
-          "note": "Which package file plays each part in the post-Draft checks (US-ME08); each is one of the sources above, so every run snapshots it. The competitors are the ones the research names in its files that start with competitor."
+          "note": "Which package file plays each part in the post-Draft checks (US-ME08); each is one of the sources above, so every run snapshots it. The competitors are the ones the research names in its files that start with competitor. The filming plan (US-ME09) reads its shot lists from the same calendar, angles, and pairs files."
         },
         "listening": {
           "fit": "projects/RepToday/gtm/02-brand/positioning.md",
@@ -151,6 +152,15 @@
           "channel_plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
           "note": "The package file that names the personal-network ask and the creators worth writing to (US-ME14); one of the sources above covers it. A run drafts a message only for a creator in config/run.json that this file still names."
         }
+      },
+      "filming": {
+        "footage": {
+          "local_path": null,
+          "env": "GR0WTHLAB_FOOTAGE_DIR",
+          "access": "read-only",
+          "note": "The agreed place where the Founder drops raw footage: a folder outside this repository holding one window-<n>/ folder per 14-day window, each file named for its shot of the filming plan (docs/operations.md has the naming). null until the Founder sets it through a reviewed change, and never inferred. The launcher only ever reads it, to fingerprint and measure each file and to cut finished assets from it; nothing in gr0wthlab writes, renames, or deletes anything there, and the sandboxed agent never opens it, so it must lie outside this repository and every location the sandbox reads; the launcher refuses to start otherwise."
+        },
+        "note": "Filming (US-ME09). Which assets need the Founder or a real device, their shot lists, and their sittings come from the kit in Mandu every run. Finished assets go to ledger/assets/, outside git; the canvas they are finished at is in config/platforms.json."
       },
       "waitlist": {
         "view": {

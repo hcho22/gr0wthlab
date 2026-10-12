@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import beta, exchange, learning, listening, outreach, package, posts, process, schedule, waitlist
+from . import beta, exchange, filming, learning, listening, outreach, package, posts, process, schedule, waitlist
 from .exchange import plural
 from .package import SKIPPED
 from .state import Tally, run_tally
@@ -99,6 +99,8 @@ class RunState:
     posts_problem: str = ""  # why the post Drafts were not prepared or not taken in, when they were not
     filing: str = ""  # where the proposed brand-rules lists stand
     filed: str | None = None  # the brand-rules proposal, when this run filed it
+    filming: filming.Filming | None = None
+    filming_problem: str = ""  # why filming was not planned, when a Product films and it was not
     beta: beta.Plan | None = None  # Beta Cohort recruiting: the gate, and once it is recorded, the run's plan
     beta_outcome: beta.Outcome | None = None
     beta_problem: str = ""  # why recruiting was not prepared or not taken in, when it was not
@@ -472,6 +474,8 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
         lines += waitlist_brief(state.waitlist, evidence)
     if state.posts is not None:
         lines += [""] + posts.brief_lines(state.posts, repo_root)[:-1]
+    if state.filming is not None:
+        lines += [""] + filming.brief_lines(state.filming, repo_root)[:-1]
     if state.beta is not None and not state.beta_problem:
         recruiting = beta.brief_lines(state.beta, repo_root)
         lines += [""] * bool(recruiting) + recruiting[:-1]
@@ -550,6 +554,8 @@ def summary_lines(state: RunState) -> list[str]:
         lines.append(f"- Post Drafts: {', '.join(counts) or 'no calendar day was due'}.")
     elif state.posts_problem:
         lines.append(f"- Post Drafts: {state.posts_problem}")
+    if state.filming is not None or state.filming_problem:
+        lines.append(f"- Filming: {state.filming_problem or filming.tally(state.filming, state.agent_gap()).note}.")
     recruiting = beta.summary(state.beta, state.beta_outcome, state.beta_problem)
     if recruiting:
         lines.append(f"- {recruiting}")
@@ -589,6 +595,8 @@ def render_report(state: RunState) -> str:
     for item in state.set_aside:
         lines.append(f"- Set aside, not queued: `{item.name}`: {'; '.join(item.problems)}")
     lines += [""] + posts.report_lines(state.posts, state.post_outcome, state.filing, state.posts_problem)
+    if state.filming is not None or state.filming_problem:
+        lines += [""] + filming.report_lines(state.filming, state.filming_problem)
     recruiting = beta.report_lines(state.beta, state.beta_outcome, state.beta_problem)
     lines += [""] * bool(recruiting) + recruiting
     lines += [""] + listening.report_lines(
@@ -692,6 +700,9 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     blocked = posts.notice_section(state.post_outcome, day)
     if blocked:
         sections.append(blocked)
+    unfilmed = filming.notice_section(state.filming, day)
+    if unfilmed:
+        sections.append(unfilmed)
     recruiting = beta.notice_section(state.beta_outcome, day)
     if recruiting:
         sections.append(recruiting)

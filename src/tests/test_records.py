@@ -199,6 +199,24 @@ class SaveTest(RecordsTestCase):
         for name in ("link.md", "hard.md", ".gitattributes", "big.md"):
             self.assertIn(name, excluded)
 
+    def test_a_finished_asset_is_never_committed_though_its_record_is(self):
+        asset = "ledger/assets/window-1/day-01-0a1b2c3d4e5f.mp4"
+        record = "ledger/evidence/filming/assets/window-1-day-01-0a1b2c3d4e5f.json"
+        self.write(asset, "video")
+        self.write(record, "{}\n")
+        result = self.save()
+        self.assertEqual(result.status, records.PUSHED, result.detail)
+        self.assertEqual(self.remote_files(), [record])
+        self.assertEqual(result.excluded, [])
+        self.assertTrue((self.clone / asset).is_file())
+        # Were the ignore rule ever lost, the records step itself still leaves a finished asset out.
+        (self.clone / ".gitignore").write_text("__pycache__/\n")
+        self.write("ledger/run-reports/later.md")
+        result = self.save()
+        self.assertEqual(result.status, records.PUSHED, result.detail)
+        self.assertEqual(self.remote_files(), ["ledger/run-reports/later.md"])
+        self.assertEqual(result.excluded, [f"{asset} (a finished asset, which never enters git)"])
+
     @unittest.skipIf(os.geteuid() == 0, "root can read any file")
     def test_an_unreadable_record_is_left_out_then_restored_before_the_next_run(self):
         self.write("workspace/drafts/locked.md").chmod(0)

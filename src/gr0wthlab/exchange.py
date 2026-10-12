@@ -13,13 +13,14 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
-EXCHANGE_VERSION = 5
+EXCHANGE_VERSION = 6
 # The version that added the Beta Build record and the Beta Cohort report; neither exists at an earlier one.
 BETA_SINCE = 4
 
 # Each kind's body heading, in the order a week's non-post items are presented; posts come first by nearest slot.
 KINDS = {
     "post": "Draft",
+    "filming-plan": "Plan",
     "message": "Draft",
     "weekly-read-decision": "Recommendation",
     "dispatch-request": "Request",
@@ -32,7 +33,9 @@ OPTIONS = {
     "notice": ("Acknowledge, optionally with a note", "Reject, with a one-line reason"),
     "default": ("Approve, optionally with a note", "Reject, with a one-line reason"),
 }
-ITEM_KEYS = ("exchange", "id", "kind", "product", "new_angle", "window", "day", "slot", "supersedes")
+ITEM_KEYS = ("exchange", "id", "kind", "product", "new_angle", "window", "day", "slot", "asset", "supersedes")
+# A post's finished video, by its path under ledger/: always a file of the launcher's own assets folder.
+ASSET_PATTERN = re.compile(r"assets/(?:[A-Za-z0-9][A-Za-z0-9._-]*/)*[A-Za-z0-9][A-Za-z0-9._-]*\.mp4")
 # What a package-change proposal declares: yes when it adds or changes an Angle or Hook, which any change to a Hook,
 # signal, or kill criterion is (FR-7), and no when it does neither. A proposal queued before version 5 declares nothing.
 DECLARATIONS = ("yes", "no")
@@ -171,10 +174,14 @@ def check_fields(fields: Mapping[str, str], products: Sequence[str], published: 
             for key in ("window", "day"):
                 if not re.fullmatch(r"[1-9][0-9]*", fields.get(key, "")):
                     problems.append(f"a post needs {key}: a whole number from 1")
+        # Version 6: a post whose video is finished names it by its path under ledger/.
+        asset = fields.get("asset")
+        if asset is not None and not ASSET_PATTERN.fullmatch(asset):
+            problems.append("asset must be the finished video's path under ledger/, such as assets/window-1/day-03.mp4")
     else:
-        for key in ("slot", "window", "day"):
+        for key in ("slot", "window", "day", "asset"):
             if fields.get(key) is not None:
-                problems.append(f"only a post has a {key}")
+                problems.append(f"only a post has {'an' if key == 'asset' else 'a'} {key}")
     supersedes = fields.get("supersedes")
     if supersedes is not None and not ID_PATTERN.fullmatch(supersedes):
         problems.append("supersedes must name an item id")

@@ -1,0 +1,26 @@
+{
+  "edit": 1,
+  "product": "RepToday",
+  "window": 1,
+  "day": 2,
+  "segments": [
+    {
+      "shot": "d02-s1",
+      "source": "window-1/d02-s1a-take-1.mov",
+      "in": 1.0,
+      "out": 4.0
+    },
+    {
+      "shot": "d02-s1",
+      "source": "window-1/d02-s1-closing.mov",
+      "in": 0.0,
+      "out": 15.0
+    },
+    {
+      "shot": "d02-s1",
+      "source": "window-1/d02-s1-closing.mov",
+      "in": 0.0,
+      "out": 2.0
+    }
+  ]
+}

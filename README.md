@@ -59,7 +59,7 @@ The PRD's Guardrails section says what enforces each one.
 | [`workspace/weekly-reads/`](workspace/weekly-reads/) | Weekly Read memos | Yes |
 | [`workspace/run-reports/`](workspace/run-reports/) | Notes the agent writes during a run | Yes |
 | [`workspace/instructions/`](workspace/instructions/) | The Marketing Engineer's Instructions | Yes |
-| [`ledger/`](ledger/) | The launcher's records: the published Review Queue, the launcher's own Evidence, run reports, and run state | No |
+| [`ledger/`](ledger/) | The launcher's records: the published Review Queue, the launcher's own Evidence, run reports, and run state; and, outside git, the finished videos it renders | No |
 | [`src/`](src/) | Code | No |
 | [`config/`](config/) | Guardrail configuration, the Product registry, the run's settings, platform facts, and the network sources | No |
 | `docs/`, `CONTEXT.md`, this README | Specification and decision records | No |
@@ -73,5 +73,6 @@ The agent has no network: before it starts, the launcher itself reads the fixed 
 The weekly run is scheduled for Sunday afternoon, before the Founder's Sunday evening sitting; [`config/run.json`](config/run.json) holds the schedule and the step that saves each run's `workspace/` and `ledger/` records to `main`.
 Setting up the production clone and the schedule, and removing them: [operations](docs/operations.md).
 How the Review Queue reaches Mandu and the Founder's decisions come back: [the Mandu exchange](docs/mandu-exchange.md).
+Where the Founder drops raw footage and how to name it, and where finished videos are: [operations](docs/operations.md).
 Why Codex, how the boundary is enforced, and the refused-write evidence: [the US-ME02 spike note](docs/spikes/us-me02-runtime-boundary.md).
 Text adapted from other projects, and its licenses: [third-party notices](THIRD_PARTY_NOTICES.md).

@@ -62,6 +62,47 @@ class ItemCheckTest(unittest.TestCase):
         slotted = published + "slot: 2026-10-14T19:00-07:00\n"
         self.assertEqual(exchange.check_item(item("post", extra_fields=slotted), PRODUCTS, published=True).problems, [])
 
+    def test_a_post_whose_video_is_finished_names_it_under_the_ledger_s_assets(self):
+        post = "window: 1\nday: 3\n"
+        named = post + "asset: assets/window-1/day-03-0a1b2c3d4e5f.mp4\n"
+        check = exchange.check_item(item("post", extra_fields=named), PRODUCTS)
+        self.assertEqual(check.problems, [])
+        self.assertEqual(check.item.fields["asset"], "assets/window-1/day-03-0a1b2c3d4e5f.mp4")
+        rendered = exchange.render_item(
+            dict(check.item.fields, exchange=str(exchange.EXCHANGE_VERSION), id="20261011-post-w1-day-03"),
+            "Ask",
+            "B",
+            "T",
+            "E",
+        )
+        self.assertIn("day: 3\nasset: assets/window-1/day-03-0a1b2c3d4e5f.mp4\n---", rendered)
+        for elsewhere in (
+            "/Users/founder/Movies/day-03.mp4",
+            "assets/../../Movies/day-03.mp4",
+            "review-queue/items/day-03.mp4",
+            "assets/window-1/day-03.mov",
+            "assets/.hidden/day-03.mp4",
+        ):
+            with self.subTest(asset=elsewhere):
+                check = exchange.check_item(item("post", extra_fields=post + f"asset: {elsewhere}\n"), PRODUCTS)
+                self.assertEqual(
+                    check.problems,
+                    ["asset must be the finished video's path under ledger/, such as assets/window-1/day-03.mp4"],
+                )
+        other = exchange.check_item(item(extra_fields="asset: assets/window-1/day-03.mp4\n"), PRODUCTS)
+        self.assertEqual(other.problems, ["only a post has an asset"])
+
+    def test_the_filming_plan_is_its_own_kind_presented_after_the_posts(self):
+        self.assertEqual(list(exchange.KINDS)[:3], ["post", "filming-plan", "message"])
+        self.assertEqual(exchange.KINDS["filming-plan"], "Plan")
+        check = exchange.check_item(item("filming-plan"), PRODUCTS)
+        self.assertEqual(check.problems, [])
+        self.assertEqual(exchange.options("filming-plan")[0], "Approve, optionally with a note")
+        self.assertEqual(
+            exchange.check_item(item("filming-plan", extra_fields="day: 3\n"), PRODUCTS).problems,
+            ["only a post has a day"],
+        )
+
     def test_only_a_post_has_a_window_a_day_or_a_slot(self):
         for key, value in (("window", "1"), ("day", "3"), ("slot", "2026-10-14T19:00-07:00")):
             with self.subTest(key=key):
@@ -172,9 +213,13 @@ class ItemCheckTest(unittest.TestCase):
         self.assertEqual(exchange.check_item(text, PRODUCTS, published=True).item.fields["new_angle"], "yes")
         undeclared = text.replace("new_angle: yes\n", "")
         self.assertIsNone(exchange.check_item(undeclared, PRODUCTS, published=True).item)
-        for version in range(1, exchange.EXCHANGE_VERSION):
+        for version in exchange.UNDECLARED_VERSIONS:
             earlier = undeclared.replace(f"exchange: {exchange.EXCHANGE_VERSION}\n", f"exchange: {version}\n")
             self.assertEqual(exchange.check_item(earlier, PRODUCTS, published=True).problems, [], version)
+        # Version 5 added the declaration, so a proposal of that version or a later one needs it.
+        for version in range(len(exchange.UNDECLARED_VERSIONS) + 1, exchange.EXCHANGE_VERSION + 1):
+            later = undeclared.replace(f"exchange: {exchange.EXCHANGE_VERSION}\n", f"exchange: {version}\n")
+            self.assertIsNone(exchange.check_item(later, PRODUCTS, published=True).item, version)
 
     def test_evidence_names_each_record_exactly_as_it_is_written_in_backticks(self):
         text = (

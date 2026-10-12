@@ -172,7 +172,7 @@ class Ledger:
             "published_by_run": run_id,
             "status": OPEN,
         }
-        for key in ("product", "new_angle", "slot", "supersedes"):
+        for key in ("product", "new_angle", "slot", "asset", "supersedes"):
             if item.fields.get(key):
                 entry[key] = item.fields[key]
         for key in ("window", "day"):
@@ -263,6 +263,8 @@ class Ledger:
                 f"a {item.kind} is queued only from its Draft in {FROM_DRAFT[item.kind]}, after the launcher's checks;"
                 " never write one here"
             )
+        if item.kind == "filming-plan":
+            problems.append("the filming plan is filed only by the launcher, from the kit; never write one here")
         problem = declaration_problem(item, kept) if item.kind == "package-change-proposal" else None
         if problem:
             problems.append(problem)

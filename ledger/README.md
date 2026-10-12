@@ -7,7 +7,8 @@ Each run's records step commits this folder to `main` together with `workspace/`
 - `review-queue/queue.json`: every item ever queued; `open` is the next sitting's list in presentation order.
   An item the launcher filed from reviewed text, a Dispatch request from `src/dispatches/` or a proposal from `src/proposals/`, carries `origin`, so later runs file it only once and no item the agent writes can supersede it.
   No item the agent writes is a post or a message, and none can supersede one: the launcher queues each of those kinds only from a Draft that passed its checks, and sets aside any written to `incoming/`.
-  It replaces a post only when its Draft or its slot changes, and a Beta Cohort invitation or a Waitlist ask, which carry `beta`, only when its recruiting Draft, its batch, or its gap changes.
+  It replaces a post only when its Draft, its slot, or its video changes, and a Beta Cohort invitation or a Waitlist ask, which carry `beta`, only when its recruiting Draft, its batch, or its gap changes.
+  The filming plan carries `origin` too, with a fingerprint of what must be filmed, so it is filed once per window and replaced only when the kit changes that.
 - `review-queue/items/<id>.md`: each queued item, under an identifier that never changes.
 - `review-queue/set-aside/<run id>/`: what the launcher refused to queue that run from `workspace/review-queue/incoming/`, each file copied whole and named in that run's notice.
   A proposed Angle or Hook the launcher discards from `workspace/review-queue/angles/` is not copied here.
@@ -17,6 +18,11 @@ Each run's records step commits this folder to `main` together with `workspace/`
 - `evidence/waitlist/<run id>.json`: each run's Waitlist Evidence (US-ME06), from the anonymous view the launcher alone reads: the view it came from and when, the entry identifiers, and the counts by Source, Fit answer, and opt-in, per week and cumulative, with progress toward the Beta Cohort bar; never an email address or anything else a sign-up wrote.
   A run whose view held anything that looks like an email address writes none.
 - `evidence/post-drafts/<run id>.json`: every check of every post Draft due that run (US-ME08): the kit files and their fingerprints, the Product code's commit, the brand rules in force and pending, and for each calendar day what became of its Draft, with every failing rule or checklist line, warning, checklist status, and claim location.
+- `evidence/filming/<run id>.json`: each run's account of filming (US-ME09): the filming plan's jobs and sittings, every footage file listed with its fingerprint and measured facts, the video tooling found, and for each calendar day due what became of its edit record, with every failing rule.
+- `evidence/filming/assets/<name>.json`: one record per finished video, written once: its path, SHA-256, and measured facts, the edit record it was cut by, the text drawn over it, each source file's name and fingerprint, and the tooling, so it can be rebuilt from the footage with `rebuild-asset`.
+  It is also what the pair check knows a video by: each cut's source range with the fingerprint of its file, and where a re-cut leg's opening is.
+- `assets/window-<n>/day-<nn>-<recipe>.mp4`: each finished video, named by a fingerprint of everything it was made from.
+  The folder is never committed: `.gitignore` leaves it out, and the records step refuses any file under it.
 - `evidence/beta-recruiting/<run id>.json`: each run's Evidence of Beta Cohort recruiting (US-ME15), written only once the Founder's Beta Build record exists in Mandu: that record's dates and its source, the Founder's counts, the cohort's size, the selection rule and the batch size, the run's batch by entry identifier, who is invited and who is offered as the run leaves the Review Queue, the size of the gap when the pool cannot reach the cohort's minimum, and every check of every recruiting Draft; entry identifiers and counts only.
 - `evidence/beta-recruiting/reports/<Product>-<date>.json`: each Beta Cohort report the Founder made through Mandu: the three counts, invitations sent, accepted, and sessions booked, when the Founder reported them, its source, and when it was taken in, and nothing else the record held.
   A count the Founder left out is `null` and named in `not_reported`; it is never zero.
@@ -28,6 +34,8 @@ Each run's records step commits this folder to `main` together with `workspace/`
   A file set aside from `workspace/review-queue/incoming/` is copied whole to `review-queue/set-aside/<run id>/`.
   A Draft stays in `workspace/` and is committed as written until it passes or is rewritten, as is any other file the agent leaves in `workspace/` that the launcher neither takes in nor puts back.
   The reasons in a run report or a notice can repeat pieces of a file's text (a front matter line, up to 80 characters of an Evidence line, the headings found), and the reasons a Draft's checks give, kept with the Evidence of those checks, can quote the Draft.
+  The reasons an edit record's checks give can quote its `shot` and `source` values whole.
+  They are kept in that run's filming Evidence (`evidence/filming/<run id>.json`), in the day's post verdict in the post Drafts Evidence (`evidence/post-drafts/<run id>.json`), and in the run report and notice.
   The run report quotes the agent's own summary, up to 4,000 characters.
   What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, and the line that says why a rejection code fits.
   Three things are removed and leave their file name and the launcher's reasons only, with no copy made: a quote record the launcher refuses, a proposed Angle or Hook it discards from `workspace/review-queue/angles/`, and a rejection code it sets aside.
@@ -45,6 +53,8 @@ Each run's records step commits this folder to `main` together with `workspace/`
   `check-drafts --run <run id>`, the command the brief gives the agent, reads it instead of working the standing out again, since `queue.json` is saved only when the run ends; without a readable record it checks no Draft and says so.
   It checks every claim at the recorded commit, whatever has landed on the Product's branch since, and names each kit file that is no longer as the launcher read it, since it can check only against what Mandu holds now.
   A day due that the calendar no longer holds is named too, and its Draft is not checked.
+- `run-reports/<run id>.filming.json`: what the launcher fixed for that run's edit records before the agent started: the footage it listed and measured, each due day's shot list and whether an edit can be cut, where each day's post stands, and each due day's approved and rejected posts.
+  `check-edits --run <run id>`, the command the brief gives the agent, reads it, since the footage place is outside what the sandbox reads.
 - `run-reports/<run id>.beta-plan.json`: which recruiting Drafts that run asked the agent for, with the fingerprints of the Drafts the Founder already rejected, written once the Founder's gate is recorded; `check-beta-drafts --run <run id>` reads it, and it never names a Waitlist entry.
 - `run-reports/state/<workflow>.json`: each workflow's run state - Review Queue items decided, those carried over with the sitting they were left undecided at, and the Mandu records already reported as unusable; Listening threads and reviews already read; outreach targets and their follow-up waits, rebuilt every run from the Founder's records in Mandu; the Waitlist entries an invitation batch holds, invited once the Founder approved the batch or offered while it is open - by identifier and hash only, never a name, address, or URL.
   The launcher checks it every run against the Review Queue and Mandu's decision records, which win any disagreement.

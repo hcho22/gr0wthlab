@@ -17,6 +17,7 @@ from . import (
     evidence,
     exchange,
     fetch,
+    filming,
     launcher,
     learning,
     listening,
@@ -70,6 +71,15 @@ def parser() -> argparse.ArgumentParser:
         help="the run in progress, as its brief's check-beta-drafts command names it",
     )
 
+    edits = commands.add_parser("check-edits", help="check a run's edit records in drafts/edits/ as the launcher will")
+    edits.add_argument(
+        "--run",
+        required=True,
+        metavar="RUN_ID",
+        help="the run in progress, as its brief's check-edits command names it",
+    )
+    rebuild = commands.add_parser("rebuild-asset", help="render a finished asset again from its record and the footage")
+    rebuild.add_argument("record", help="the asset's record under ledger/, such as evidence/filming/assets/<name>.json")
     work = commands.add_parser(
         "check-work", help="check a run's quote records, Angle and Hook proposals, messages, and rejection codes"
     )
@@ -209,12 +219,17 @@ def check_drafts(run_id: str, out=sys.stdout) -> int:
             )
             continue
         verdict = posts.check_day(plan, day_plan, draft, areas, products)[0]
-        rejected = posts.rejected_as(day_plan, draft) if verdict.passed else None
+        edits_folder = areas.path("drafts", filming.EDITS, f"window-{plan.window.number}")
+        edit = filming.read_edit(areas, edits_folder / f"day-{number:02d}.json")[0]
+        rejected = None
+        if verdict.passed:
+            rejected = posts.refused(day_plan.rejected, draft.sha256, edit.sha256 if edit else None)
         failed += not verdict.passed or bool(rejected)
         if rejected:
+            changes = "the Draft or its edit record changes" if rejected.get("asset_sha256") else "it changes"
             print(
                 f"REJECTED day {number}: {draft.path}: the Founder rejected this Draft as {rejected['id']}, so it is"
-                " not asked again until it changes",
+                f" not asked again until {changes}",
                 file=out,
             )
             continue
@@ -228,6 +243,104 @@ def check_drafts(run_id: str, out=sys.stdout) -> int:
     due = len(plan.days) + len(gone)
     print(f"{due} day{'' if due == 1 else 's'} due, {failed} with problems", file=out)
     return 1 if failed else 0
+
+
+def check_edits(run_id: str, out=sys.stdout) -> int:
+    """The launcher's own checks of each edit record due in a run, for the agent to use before it finishes.
+
+    Everything is read from the record the launcher wrote for that run before the agent started: the footage it
+    listed and measured, each due day's shot list, and where each day's post stands. The footage place itself is
+    never opened here. Nothing is rendered either: the launcher renders a record that passes once the run ends, only
+    if the day's post Draft passes too, and then measures the result. The two legs of an A/B pair are compared as
+    the videos a run that ended now would leave: the one a new record that passes would be cut into, otherwise the
+    one the leg's post shows. A record that cannot be cut this run, for a day whose open post shows a video, is no
+    problem to fix: the record stays as it is, and so does the post's video while its Draft is unchanged.
+    """
+    registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
+    # As in check_drafts: reading the areas needs no git directories.
+    boundary = resolve_boundary(
+        REPO_ROOT, load_runtime_config(REPO_ROOT), registry, dict(os.environ), Path.home(), git=[]
+    )
+    store = Store(LEDGER_DIR)
+    try:
+        record = store.path(cycle.RUN_REPORTS, filming.record_file(run_id))
+        found = filming.from_record(json.loads(read_plain(record).decode("utf-8")))
+    except (ConfigError, OSError, UnsafeFile, ValueError) as error:
+        print(
+            f"PROBLEM the filming record of run {run_id} could not be read ({error}), so no edit record was checked;"
+            " the launcher checks every one once you finish.",
+            file=out,
+        )
+        return 1
+    areas = Areas(boundary)
+    found.preview(areas, store)
+    failed = 0
+    for number, day in sorted(found.days.items()):
+        asset = found.results[number]
+        draft = posts.read_draft(areas, found.draft_path(number))[0] if asset.status == filming.READY else None
+        approved = found.approved.get(number) or {}
+        video_posts = [entry for entry in found.rejected.get(number, ()) if entry.get("asset_sha256")]
+        rejected = draft and posts.refused(video_posts, draft.sha256, asset.edit_sha256)
+        if draft and approved and draft.sha256 != approved.get("draft_sha256"):
+            failed += 1
+            print(
+                f"PROBLEM day {number}: {asset.edit} will not be cut this run: the Founder approved its copy as"
+                f" {approved['id']}, and its Draft is no longer that copy",
+                file=out,
+            )
+        elif rejected:
+            failed += 1
+            print(
+                f"REJECTED day {number}: {asset.edit}: the Founder rejected the post made from this edit record and"
+                f" its Draft as {rejected['id']}, so it is not asked again until the Draft or the edit record"
+                " changes",
+                file=out,
+            )
+        elif asset.status == filming.READY:
+            print(f"OK day {number}: {asset.edit}: it passes; the launcher renders and measures it", file=out)
+        elif asset.withheld:
+            failed += 1
+            print(f"PROBLEM day {number}: {asset.edit} would not be offered: {asset.detail}", file=out)
+        elif asset.status == filming.BLOCKED:
+            failed += 1
+            print(f"BLOCKED day {number}: {asset.edit or found.edit_path(number)}", file=out)
+            for finding in asset.blocks:
+                print(f"  - {finding.line()}", file=out)
+        elif asset.edit and found.waits(number):
+            current, unread = posts.read_draft(areas, found.draft_path(number))
+            queued_from = found.posted[number].get("draft_sha256")
+            keeps = (current is None and not unread) or (current is not None and current.sha256 == queued_from)
+            then = (
+                "the day's post keeps the video it shows"
+                if keeps
+                else "the day's video is cut from it again once it can be"
+            )
+            print(
+                f"KEPT day {number}: {asset.edit}: it cannot be cut this run ({asset.detail}), so leave it as it is:"
+                f" {then}",
+                file=out,
+            )
+        elif asset.edit:
+            failed += 1
+            print(f"PROBLEM day {number}: {asset.edit} will not be cut this run: {asset.detail}", file=out)
+        elif day.ready:
+            failed += 1
+            print(f"PROBLEM day {number}: it is ready for an edit record and has none", file=out)
+        else:
+            print(f"SKIP day {number}: no edit record is due: {asset.detail}", file=out)
+    print(f"{len(found.days)} day{'' if len(found.days) == 1 else 's'} checked, {failed} with problems", file=out)
+    return 1 if failed else 0
+
+
+def rebuild_asset(record: str, env: dict[str, str], home: Path, out=sys.stdout) -> int:
+    """Render a finished asset again from its record under ledger/ and the footage place, and say how it compares."""
+    registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
+    boundary = resolve_boundary(REPO_ROOT, load_runtime_config(REPO_ROOT), registry, env, home)
+    where = filming.place(registry, boundary, env, home)
+    ok, lines = filming.rebuild(Store(LEDGER_DIR), record, where.path if where else None, env)
+    for line in lines:
+        print(line, file=out)
+    return 0 if ok else 1
 
 
 def check_beta_drafts(run_id: str, out=sys.stdout) -> int:
@@ -424,6 +537,10 @@ def main(argv: list[str] | None = None) -> int:
             return check_incoming()
         if args.command == "check-drafts":
             return check_drafts(args.run)
+        if args.command == "check-edits":
+            return check_edits(args.run)
+        if args.command == "rebuild-asset":
+            return rebuild_asset(args.record, env, home)
         if args.command == "check-beta-drafts":
             return check_beta_drafts(args.run)
         if args.command == "check-work":

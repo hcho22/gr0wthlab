@@ -1,0 +1,390 @@
+{
+  "adapted_from": "the evals.json shape of github.com/coreyhaines31/marketingskills skills/*/evals/evals.json at commit 1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff (MIT; see THIRD_PARTY_NOTICES.md)",
+  "skill_name": "filming",
+  "description": "The filming workflow's example set (US-ME09, F5), in the marketingskills evals.json shape: each example's prompt, the output expected, its assertions, and its files. A deterministic assertion is checked by the unit tests (src/tests/test_filming_examples.py) against the synthetic kit in files/mandu, laid over the post-Draft example set's kit, and the synthetic footage inventory in files/footage.json; one that names what it needs runs only where the video tooling is installed, and is skipped with that reason elsewhere. A judged assertion waits for US-ME16's re-run on every Instructions change. An edit example's files are its candidate edit record and its post Draft, then the reference leg's edit record and Draft when it is an A/B pair leg; an asset example's file holds the facts measured of a rendered asset.",
+  "kit": "files/mandu",
+  "base_kit": "../post-drafts/files/mandu",
+  "footage": "files/footage.json",
+  "assertion_kinds": {
+    "deterministic": "check is one of: plan_is_one_item; plan_films, plan_reuses, plan_on_camera, plan_unplanned (days); plan_sittings (count); plan_quotes_formats; edit_passes (with another leg's files: the two videos also show the same footage outside each one's opening); blocked_by (rule: a finding's rule; an example names every rule its record is blocked by); legs_not_offered (says: words of how the two legs' videos differ); asset_blocked (says: words of the finding); asset_kept; renders and legs_differ_only_in_the_opening (needs: video tooling)",
+    "judged": "text is a statement a reviewer, or a model at US-ME16, judges true or false of the agent's edit record and summary"
+  },
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Plan the filming of window 1 from the kit.",
+      "expected_output": "One filming plan item: every calendar day with an Angle has a shot list read from its Angle's Format, the later leg of each A/B pair adds no shot of its own, a re-cut leg whose Hook is said on camera is asked for its own opening take, and the shots fall into one sitting per setup the shot lists state.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "plan_is_one_item"
+        },
+        {
+          "kind": "deterministic",
+          "check": "plan_films",
+          "days": [
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            11,
+            12,
+            13
+          ]
+        },
+        {
+          "kind": "deterministic",
+          "check": "plan_reuses",
+          "days": [
+            8,
+            9,
+            10
+          ]
+        },
+        {
+          "kind": "deterministic",
+          "check": "plan_on_camera",
+          "days": [
+            2
+          ]
+        },
+        {
+          "kind": "deterministic",
+          "check": "plan_sittings",
+          "count": 3
+        },
+        {
+          "kind": "deterministic",
+          "check": "plan_unplanned",
+          "days": [
+            14
+          ]
+        },
+        {
+          "kind": "deterministic",
+          "check": "plan_quotes_formats"
+        },
+        {
+          "kind": "judged",
+          "text": "Nothing in the plan says more about a shot than its Angle's Format and the calendar do."
+        }
+      ],
+      "files": [
+        "files/mandu/projects/RepToday/gtm/05-social-pmf/cadence-14-day.md",
+        "files/mandu/projects/RepToday/gtm/05-social-pmf/angles.md",
+        "files/mandu/projects/RepToday/gtm/05-social-pmf/ab-pairs.md"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Write the edit record for day 1 (P01 / AB-1 leg A): the brief lists `window-1/d01-s1.mov`, 14.00s, for shot d01-s1, which may not be cut and runs in real time, and the Draft's beats end at 10s.",
+      "expected_output": "One segment: ten unbroken seconds of the one file, as recorded. It passes every check, and the launcher renders it as a 9:16 asset with the Draft's text drawn over it.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "edit_passes"
+        },
+        {
+          "kind": "deterministic",
+          "check": "renders",
+          "needs": "video tooling"
+        },
+        {
+          "kind": "judged",
+          "text": "The agent chose its source range from the measured length alone, and said it could not see the footage."
+        }
+      ],
+      "files": [
+        "files/edits/day-01.json",
+        "files/drafts/day-01.md"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Write the edit record for day 8 (P01 / AB-1 leg B), whose other leg, day 1, already has its video.",
+      "expected_output": "The same source ranges as day 1, from the first frame to the last: the legs share their footage, and only the Hook drawn over it differs.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "edit_passes"
+        },
+        {
+          "kind": "deterministic",
+          "check": "legs_differ_only_in_the_opening",
+          "needs": "video tooling"
+        },
+        {
+          "kind": "judged",
+          "text": "The agent copied day 1's segments and changed nothing but the day."
+        }
+      ],
+      "files": [
+        "files/edits/day-08.json",
+        "files/drafts/day-08.md",
+        "files/edits/day-01.json",
+        "files/drafts/day-01.md"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Write the edit record for day 8; the candidate below starts its range a second later than day 1's.",
+      "expected_output": "The record passes its own checks, and the launcher does not offer the video cut from it: it and day 1's video do not show the same footage from the first frame to the last. Nothing changes for either leg, and the run report and a notice name the pair and what each video shows.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "legs_not_offered",
+          "says": "day 8's shows `window-1/d01-s1.mov` 3-13s, and day 1's shows `window-1/d01-s1.mov` 2-12s"
+        }
+      ],
+      "files": [
+        "files/edits/day-08-differs.json",
+        "files/drafts/day-08.md",
+        "files/edits/day-01.json",
+        "files/drafts/day-01.md"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Write the edit record for day 1; the candidate below drops two seconds from the middle of the recording.",
+      "expected_output": "The launcher blocks it, naming the no-cut rule and its source: shot d01-s1 may not be cut, and the record shows it as two source ranges.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "blocked_by",
+          "rule": "no-cut"
+        },
+        {
+          "kind": "judged",
+          "text": "A good edit record of an uncut shot is one segment."
+        }
+      ],
+      "files": [
+        "files/edits/day-01-cut.json",
+        "files/drafts/day-01.md"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Write the edit record for day 2 (P02 / AB-3 leg A), whose shot list has a founder-on-camera shot and a screen recording; the candidate below shows only the founder.",
+      "expected_output": "The launcher blocks it: shot d02-s2 has no footage in the edit, so there is no asset, and nothing is substituted for the shot.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "blocked_by",
+          "rule": "missing-shot"
+        },
+        {
+          "kind": "judged",
+          "text": "When the brief lists no footage for a shot, the agent writes no edit record for the day and says which shot is missing."
+        }
+      ],
+      "files": [
+        "files/edits/day-02-missing-shot.json",
+        "files/drafts/day-02.md"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "A rendered asset measures 1920x1080.",
+      "expected_output": "The launcher does not keep it: by measurement it is not 9:16.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "asset_blocked",
+          "says": "which is not 9:16"
+        }
+      ],
+      "files": [
+        "files/assets/landscape.json"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "A rendered asset measures 720x1280.",
+      "expected_output": "The launcher does not keep it: it is 9:16, and not the expected 1080x1920.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "asset_blocked",
+          "says": "not the expected 1080x1920"
+        }
+      ],
+      "files": [
+        "files/assets/small.json"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "A rendered asset measures 1080x1920 at 30 frames a second, as long as its edit record.",
+      "expected_output": "The launcher keeps it.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "asset_kept"
+        }
+      ],
+      "files": [
+        "files/assets/finished.json"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Write the edit record for day 1; the candidate below names a file in another folder by stepping out of the footage place.",
+      "expected_output": "The launcher blocks it: an edit record can name only a file the footage place holds, so nothing outside the Founder's footage can enter a video.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "blocked_by",
+          "rule": "footage-place"
+        }
+      ],
+      "files": [
+        "files/edits/day-01-outside.json",
+        "files/drafts/day-01.md"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Write the edit record for day 1; the candidate below names a file by its full path elsewhere on the Mac.",
+      "expected_output": "The launcher blocks it the same way.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "blocked_by",
+          "rule": "footage-place"
+        }
+      ],
+      "files": [
+        "files/edits/day-01-elsewhere.json",
+        "files/drafts/day-01.md"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "Write the edit record for day 1; the candidate below speeds the whole recording up to fit ten seconds.",
+      "expected_output": "The launcher blocks it: the shot list says real time, so the recording plays only at the speed it was recorded at.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "blocked_by",
+          "rule": "real-time"
+        }
+      ],
+      "files": [
+        "files/edits/day-01-speed.json",
+        "files/drafts/day-01.md"
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "Write the edit record for day 1; the candidate below runs twelve seconds.",
+      "expected_output": "The launcher blocks it: the Format gives ten seconds, and the Draft's beats end at ten.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "blocked_by",
+          "rule": "length"
+        }
+      ],
+      "files": [
+        "files/edits/day-01-long.json",
+        "files/drafts/day-01.md"
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "Write the edit record for day 7 (P07), a timelapse of a whole five-minute session: the brief lists `window-1/d07-s1.mov`, 330.00s.",
+      "expected_output": "One segment at twenty times the recorded speed: a timelapse is not real time, so its shot list lets it run faster. It passes.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "edit_passes"
+        }
+      ],
+      "files": [
+        "files/edits/day-07.json",
+        "files/drafts/day-07.md"
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "Write the edit record for day 2 (P02 / AB-3 leg A), a pair whose opening the kit marks as re-cut: leg A's opening take, the screen recording, then the closing line.",
+      "expected_output": "Three segments, with leg A's own take in the opening. It passes.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "edit_passes"
+        }
+      ],
+      "files": [
+        "files/edits/day-02.json",
+        "files/drafts/day-02.md"
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "Write the edit record for day 9 (P02 / AB-3 leg B), whose other leg, day 2, already has its video.",
+      "expected_output": "Leg B's own take in the opening, then the same source ranges as day 2. It passes: the legs differ only in the opening.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "edit_passes"
+        },
+        {
+          "kind": "judged",
+          "text": "The agent used the take named for leg B in the opening and copied every later segment from day 2."
+        }
+      ],
+      "files": [
+        "files/edits/day-09.json",
+        "files/drafts/day-09.md",
+        "files/edits/day-02.json",
+        "files/drafts/day-02.md"
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "Write the edit record for day 9; the candidate below also starts the screen recording two seconds later than day 2's.",
+      "expected_output": "The record passes its own checks, and the launcher does not offer the video cut from it: it and day 2's video do not show the same footage after each one's opening. Nothing changes for either leg, and the run report and a notice name the pair and what each video shows.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "legs_not_offered",
+          "says": "day 9's shows `window-1/d02-s2.mov` 4-15s"
+        }
+      ],
+      "files": [
+        "files/edits/day-09-differs.json",
+        "files/drafts/day-09.md",
+        "files/edits/day-02.json",
+        "files/drafts/day-02.md"
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "Write the edit record for day 9; the candidate below opens on the take named for leg A.",
+      "expected_output": "The launcher blocks it: a take named for one leg is that leg's opening.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "blocked_by",
+          "rule": "shot-list"
+        },
+        {
+          "kind": "deterministic",
+          "check": "blocked_by",
+          "rule": "pair-legs"
+        }
+      ],
+      "files": [
+        "files/edits/day-09-other-leg-take.json",
+        "files/drafts/day-09.md",
+        "files/edits/day-02.json",
+        "files/drafts/day-02.md"
+      ]
+    }
+  ]
+}

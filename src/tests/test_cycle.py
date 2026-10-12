@@ -215,7 +215,11 @@ class DecisionRoundTripTest(CycleTestCase):
         fakes.behave(self.codex_dir, {"write": writes})
         self.assertEqual(self.run_cycle()[0], 0)
         first = self.queue()
-        self.assertEqual([entry["kind"] for entry in first["open"]], list(exchange.KINDS))
+        # Every kind but the filming plan, which only the launcher files, and only when a Product films
+        # (test_filming).
+        self.assertEqual(
+            [entry["kind"] for entry in first["open"]], [kind for kind in exchange.KINDS if kind != "filming-plan"]
+        )
         ids = {entry["kind"]: entry["id"] for entry in first["open"]}
         self.assertEqual(ids["post"], "20261011-post-w1-day-01")
 
