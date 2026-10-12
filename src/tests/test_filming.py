@@ -916,8 +916,8 @@ class EditRunTest(FilmingRunCase):
         self.assertEqual(standing[5]["asset_sha256"], second["asset_sha256"])
         self.assertEqual(
             self.checks_of(5)[-1],
-            "it was not compared with day 2's leg again, since day 2's post Draft, as it is now, is not one a video"
-            f" of that leg stands on: its video and the video of `{first['id']}` are recorded as the pair that was"
+            f"it was not compared with day 2's leg again, since day 2's post Draft is no longer the one `{first['id']}`"
+            f" was queued from: its video and the video of `{first['id']}` are recorded as the pair that was"
             " compared",
         )
         report = self.report()
@@ -931,6 +931,14 @@ class EditRunTest(FilmingRunCase):
         self.assertIn(f"- The open post `{first['id']}` for day 2 is withdrawn", notice)
         self.assertNotIn(second["id"], notice)
         self.assertNotIn("Day 5", notice)
+        # check-edits gives the agent the same verdict of the untouched leg, so nothing steers it to change it.
+        _, said = self.check_edits(self.queue()["updated_by_run"])
+        self.assertIn(
+            "OK day 5: drafts/edits/window-1/day-05.json: it passes; the launcher renders and measures it", said
+        )
+        self.assertNotIn("BLOCKED day 5", said)
+        self.assertNotIn("PROBLEM day 5", said)
+        return report
 
     def test_a_changed_draft_of_one_re_cut_leg_that_does_not_pass_does_not_withdraw_the_other_leg(self):
         longer = fakes.filming_draft(2).replace("### Beat 1 (hook): 0-3s", "### Beat 1 (hook): 0-4s")
@@ -938,8 +946,44 @@ class EditRunTest(FilmingRunCase):
         self.assertEqual(longer.count("0-4s") + longer.count("4-14s"), 2)
         self.kept_beside(longer)
 
+    def test_a_changed_draft_of_one_re_cut_leg_that_passes_while_its_edit_no_longer_fits_does_not_withdraw_the_other(
+        self,
+    ):
+        # The hook beat runs a second longer and the later beats move with it, each as long as before, so the Draft
+        # passes the post-Draft checks; the leg's own edit record no longer runs as long as its beats.
+        shifted = fakes.filming_draft(2)
+        beats = (("1 (hook): 0-3s", "1 (hook): 0-4s"), ("2: 3-14s", "2: 4-15s"), ("3: 14-20s", "3: 15-21s"))
+        for before, after in beats:
+            self.assertEqual(shifted.count(f"### Beat {before}"), 1)
+            shifted = shifted.replace(f"### Beat {before}", f"### Beat {after}")
+        report = self.kept_beside(shifted)
+        self.assertIn(
+            "- length: the edit runs 20.00s, and the beats of `drafts/posts/window-1/day-02.md` end at 21s", report
+        )
+        self.assertNotIn("its source ranges differ", report)
+
     def test_an_unreadable_draft_of_one_re_cut_leg_does_not_withdraw_the_other_leg(self):
         self.kept_beside("not a Draft\n")
+
+    def test_two_re_cut_legs_whose_drafts_both_changed_are_compared_with_each_other_as_they_are_now(self):
+        first, second = self.one_week_recut_pair()
+        # Both Drafts are written again, the same words in other bytes, so neither leg is untouched.
+        queue = self.run_ok(
+            {
+                fakes.draft_path(2): fakes.filming_draft(2) + "\n",
+                fakes.draft_path(5): fakes.filming_draft(9).replace("day: 9", "day: 5") + "\n",
+            }
+        )
+        third, fourth = (next(entry for entry in queue["open"] if entry.get("day") == day) for day in (2, 5))
+        self.assertEqual((third["supersedes"], fourth["supersedes"]), (first["id"], second["id"]))
+        self.assertEqual(
+            (third["asset_sha256"], fourth["asset_sha256"]), (first["asset_sha256"], second["asset_sha256"])
+        )
+        self.assertIn("; the same source ranges as day 5's leg after the re-cut opening.", self.item(third))
+        self.assertIn("; the same source ranges as day 2's leg after the re-cut opening.", self.item(fourth))
+        self.assertEqual(
+            (third["pair_edit_sha256"], fourth["pair_edit_sha256"]), (second["edit_sha256"], first["edit_sha256"])
+        )
 
     def test_a_leg_whose_pair_is_not_recorded_as_compared_and_cannot_be_compared_is_named_as_not_compared(self):
         first, second = self.one_week_recut_pair()

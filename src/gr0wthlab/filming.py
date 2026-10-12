@@ -358,7 +358,7 @@ class Filming:
         if all(segment.speed == 1 for segment in edit.segments):
             asset.checks.append("every cut plays at the speed it was recorded at")
         if not asset.blocks:
-            found = self.reference(day.spec, edit, areas)
+            found = self.reference(day.spec, edit, draft, areas)
             asset.pair = found.edit.sha256 if found.edit is not None else found.pair
             if found.problem:
                 asset.blocks.append(Finding("pair-legs", "", found.problem))
@@ -381,27 +381,32 @@ class Filming:
         edit, _ = read_edit(areas, self.edit_path(number))
         return edit is not None and edit.sha256 != (self.posted.get(number) or {}).get("edit_sha256")
 
-    def draft_of(self, number: int, posted: Mapping[str, object], areas: Areas) -> posts.PostDraft | None:
-        """The Draft a leg's video stands on when the run ends: the one that passed this run's checks, else the one
-        its standing post was queued from when that is still the Draft in place. None when the Draft in place is
-        neither, so a Draft no video stands on never tells a pair's opening. check-edits runs before any Draft is
-        checked, so there a Draft that can be read stands in for one that passed."""
-        if self.passed is not None and number in self.passed:
-            return self.passed[number]
+    def draft_of(self, number: int, posted: Mapping[str, object], areas: Areas, queued: bool) -> posts.PostDraft | None:
+        """The Draft of a leg that tells a re-cut pair's opening: the Draft in place when it is the one the leg's
+        standing post was queued from, or, unless only that one will do (queued), when it passed this run's checks.
+        None when the Draft in place is neither. check-edits runs before any Draft is checked, so there a Draft that
+        can be read stands in for one that passed."""
         draft, _ = posts.read_draft(areas, self.draft_path(number))
         if draft is None or draft.problems:
             return None
-        return draft if self.passed is None or draft.sha256 == posted.get("draft_sha256") else None
+        if draft.sha256 == posted.get("draft_sha256"):
+            return draft
+        return draft if not queued and (self.passed is None or number in self.passed) else None
 
-    def reference(self, spec: edits.DaySpec, edit: edits.Edit, areas: Areas) -> Comparison:
+    def reference(self, spec: edits.DaySpec, edit: edits.Edit, draft: posts.PostDraft, areas: Areas) -> Comparison:
         """What an A/B leg's edit must match outside its opening, or why it is not compared; the same rules as the
         post-Draft check of the two legs' copy.
 
-        A leg is compared with the edit record its other leg's standing video was cut from, and, in a re-cut pair,
-        with the opening the Draft that video stands on gives, whether or not its own video was already cut from its
-        own record. When this run cuts the other leg anew, the two new records are compared with each other
-        instead, once, as the later day's check; a leg whose own video already stands is then the reference and is
-        not checked against a record no video was cut from.
+        A leg is compared with the edit record its other leg's standing video was cut from, whether or not its own
+        video was already cut from its own record. When this run cuts the other leg anew, the two new records are
+        compared with each other instead, once, as the later day's check; a leg whose own video already stands is
+        then the reference and is not checked against a record no video was cut from.
+
+        In a re-cut pair the other leg's Draft tells its opening. A leg that is untouched, its edit record and its
+        Draft the ones its standing post was queued from, and recorded as paired reads that opening only from the
+        Draft the other leg's standing post was queued from: another Draft in place, whether or not it passed, never
+        judges it, since the changed leg is the one checked against it. Any other leg reads the Draft in place when
+        it is that one or passed this run's checks.
 
         A leg that cannot be compared now goes uncompared only when its own video stands and the queue records the
         two standing videos as the pair that was compared; any other leg is blocked, and nothing ever says a
@@ -414,6 +419,7 @@ class Filming:
         shown = mine.get("edit_sha256") == edit.sha256
         standing = posted.get("edit_sha256")
         known = standing if shown and paired(mine, posted) else None
+        untouched = known is not None and draft.sha256 == mine.get("draft_sha256")
         replaced = f"day {other}'s edit record is no longer the one the video of `{posted.get('id')}` was cut from"
 
         def apart(why: str) -> Comparison:
@@ -449,10 +455,12 @@ class Filming:
             )
         if not spec.recut:
             return Comparison(current)
-        draft = self.draft_of(other, posted, areas)
-        if draft is None:
+        theirs = self.draft_of(other, posted, areas, untouched)
+        if theirs is None and untouched:
+            return apart(f"day {other}'s post Draft is no longer the one `{posted['id']}` was queued from")
+        if theirs is None:
             return apart(f"day {other}'s post Draft, as it is now, is not one a video of that leg stands on")
-        return Comparison(current, draft)
+        return Comparison(current, theirs)
 
     def finish(self, drafts: Mapping[int, posts.PostDraft], areas: Areas, store: Store, now: datetime) -> None:
         """Turn the edit record of each day whose Draft passed into a finished asset when it passes every check:

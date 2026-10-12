@@ -216,8 +216,10 @@ Write it as the file `day-NN.json` (such as `day-01.json`) in the edits folder t
   Outside those opening beats, use only files with no leg letter in their name, since both legs must be able to use them.
   When the brief lists the pair's first shot as founder on camera, the Hook is said there: under those opening beats, show that shot only from the leg's own take, the file with the leg's letter after the shot's name, and at least once.
   When both legs of a pair are ready in one run and both have a new edit record, their videos are offered together or not at all: neither leg gets a video in that run unless both do.
-  A leg is compared with the edit record its other leg's video was cut from, and a re-cut pair's opening is read only from a Draft a video of that leg stands on: one that passed this run's checks, or the one its post was queued from.
-  So a Draft that does not pass blocks its own leg alone: the other leg's post stands as long as the queue records the two videos as the pair that was compared.
+  A leg is compared with the edit record its other leg's video was cut from.
+  In a re-cut pair the other leg's Draft tells its opening: a leg you left untouched, its edit record and its Draft the ones its post was queued from, is judged only by the Draft the other leg's post was queued from, and a leg you changed by the other leg's Draft as it is now, when that Draft passed this run's checks or is the one its post was queued from.
+  So a Draft you change is checked for its own leg alone, whether or not it passes: the untouched leg's post stands as long as the queue records the two videos as the pair that was compared, and check-edits reports that leg as passing.
+  Never change an untouched leg's edit record or Draft to answer a finding about its other leg.
 
 ## Rules
 

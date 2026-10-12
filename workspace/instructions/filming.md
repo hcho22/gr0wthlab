@@ -51,8 +51,9 @@ The edit record's format is in the task definition, and the launcher's checks de
   Every segment after the opening is the other leg's, unchanged and in the same order.
 - When the other leg's video is already in an open or approved post, never change that leg's edit record to make the two match: change the newer leg.
 - When both legs are ready in one run and both have a new edit record, the launcher offers their videos together or not at all: if no video is cut from one leg's record in that run, the other leg's video waits for it.
-- The launcher reads a re-cut pair's opening only from a Draft a video of that leg stands on: one that passed this run's checks, or the one its post was queued from.
-  If you change one leg's beats, the changed Draft must pass its own pair check before it counts; until it does, only that leg is blocked, and the other leg's post stands.
+- A leg you leave untouched, whose edit record and Draft are the ones its post was queued from, is judged only by the edit record and the Draft its other leg's post was queued from.
+  If you change one leg's beats, only that leg is checked again, against the untouched one: whatever becomes of the changed Draft, the other leg's post stands and check-edits reports it as passing, so leave it as it is.
+  When you change both legs' Drafts, each is compared with the other's as it is now, once that one passes its checks.
 
 ## When a rule blocks an edit
 
