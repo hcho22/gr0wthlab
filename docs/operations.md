@@ -185,9 +185,13 @@ The launcher writes every step for the agent: one patch per target, and one scri
 The agent is only the instrument, so a step it skipped or sent wrongly is handed to it again, in at most three probe runs per check; the output then shows `NOT YET PROVEN` for the earlier run, what it asks again for, and one closing line with the verdict.
 Anything that says something about the runtime fails the check at once, with no further run: a sentinel that landed, a connection that got through, a change outside the areas, a run that did not exit cleanly, or a record of Codex's that is not whole.
 A `FAILED` check names the target and what the record shows for it, for example `no patch named its sentinel`; read that before running the check again, since a failure after three probe runs is not the agent's slip.
+One failure says nothing about the boundary: a run that could not reach the model, for example while the Codex account is rate limited.
+The line above the verdict then says the run `finished with exit code 1` within seconds, the verdict says `Codex's log holds no tool call` and lists every target, and `<run id>.events.jsonl` holds Codex's reason, such as `429 Too Many Requests`; run the check again once the account answers.
 
 A check stopped before it has judged its run, by Ctrl-C, a kill, or the Mac going down, can leave its script and the run's sentinels in `workspace/`.
-The next run of any kind, weekly or check, removes them before its agent starts and says `removed what a stopped boundary check left in the areas`, so no agent finds them and no records step commits them.
+The next run of any kind, weekly or check, removes them and says `removed what a stopped boundary check left in the areas`.
+A weekly run in this clone does it before its pre-run sync commits `workspace/`, and every run does it before its agent starts, so no agent finds them and no records step commits them.
+A weekly run's report names what was removed in its Agent section.
 Run one thing at a time in a checkout: the check does not hold the run lock, and a run started while a check is going removes that check's script.
 
 Each probe run leaves, in `~/Library/Logs/gr0wthlab/`, the instruction it handed over (`<run id>.probe.md`), its script (`<run id>.probe.sh`), Codex's log (`<run id>.stderr.log`), and the verdict with its evidence (`<run id>.boundary-check.json`).

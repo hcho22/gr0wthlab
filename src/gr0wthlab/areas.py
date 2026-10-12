@@ -30,8 +30,9 @@ def clear_probe_files(boundary: Boundary, keep: str = "", runs: Collection[str] 
 
     A check removes its own files once it has judged a run. One stopped before that, by an interrupt or a kill, leaves
     them, and nothing else would take them away: a later run's agent would find a stale script in its Instructions
-    area, and the production clone would commit it with the run's records. So every run clears them before its agent
-    starts, and a check before it looks at the checkout and again when it ends, however it ends.
+    area, and the production clone would commit it with the run's records. So the production clone clears them before
+    its pre-run records step commits workspace/, every run before its agent starts, and a check before it looks at the
+    checkout and again when it ends, however it ends.
     keep is the identifier of the run in progress, whose own files stay. runs limits the removal to those runs' files,
     which is how a check that is ending takes only its own. A file or a link is removed, never followed, and never a
     folder.

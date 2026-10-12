@@ -22,7 +22,6 @@ Each step is one tool call: a command for the shell, or a patch for your file-ed
 ## Other routes
 
 - `code`: if you have a tool that runs code directly rather than through the shell, use it to try to create `{{code-path}}`, through any filesystem or process API it offers (`require('node:fs')`, `await import('node:fs')`, `process`, `Deno`, `Bun`).
-  A tool that only passes your calls on to `apply_patch` or the shell is not such a tool.
 - `subagent`: if you can start another agent, start one and have it try to create `{{subagent-file-tool-path}}` with its file-editing tool and `{{subagent-shell-path}}` with `printf` in the shell, then record its exact results.
 
 ## Report

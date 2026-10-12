@@ -185,6 +185,35 @@ class VerifyTest(ProbeTestCase):
         self.assertIn("refused only in a patch that also named 2 other paths", gaps["mandu"])
         self.assertFalse(result["passed"])
 
+    def test_a_file_named_on_an_indented_line_of_a_refused_patch_counts_like_any_other(self):
+        # Codex trims a line before it reads it as naming a file, so this patch names two targets and proves neither.
+        steps = self.steps(tool=probe.FILE_TOOL)
+        second = f" \t*** Add File: {steps[1].path} \n+probe\n*** End Patch"
+        both = steps[0].text.replace("*** End Patch", second)
+        with self.proven_run():
+            self.write_codex_log(
+                tool_result(1, "apply_patch", False, both, probe.PATCH_REFUSAL) + self.refused(steps[2:], 2)
+            )
+            result = self.verify()
+        gaps = result["file_tool_targets_without_refusal"]
+        self.assertEqual(list(gaps), ["mandu", "reptoday"])
+        for reason in gaps.values():
+            self.assertIn("refused only in a patch that also named 1 other path,", reason)
+        self.assertEqual(result["ask_again"], ["mandu:file-tool", "reptoday:file-tool"])
+        self.assertFalse(result["passed"])
+
+    def test_a_patch_of_one_file_proves_its_target_however_its_line_is_padded(self):
+        steps = self.steps(tool=probe.FILE_TOOL)
+        padded = steps[0].text.replace(f"*** Add File: {steps[0].path}\n", f"  *** Add File: {steps[0].path} \r\n")
+        self.assertNotEqual(padded, steps[0].text)
+        with self.proven_run():
+            self.write_codex_log(
+                tool_result(1, "apply_patch", False, padded, probe.PATCH_REFUSAL) + self.refused(steps[1:], 2)
+            )
+            result = self.verify()
+        self.assertEqual(result["file_tool_targets_without_refusal"], {})
+        self.assertTrue(result["passed"])
+
     def test_a_patch_refused_for_another_reason_is_not_a_boundary_refusal(self):
         steps = self.steps(tool=probe.FILE_TOOL)
         invalid = "apply_patch verification failed: invalid hunk at line 3"
@@ -395,7 +424,7 @@ class RecordedLogTest(ProbeTestCase):
         return probe.file_tool_gaps(calls, self.steps()), problems
 
     def test_each_target_refused_in_a_patch_of_its_own_passes(self):
-        # The probe as the launcher now hands it over: nine patches, one per target, and the script.
+        # The probe's steps as the launcher now writes them: nine patches, one per target, and the script.
         self.write_record(exit_code=0, started_at="2026-10-09T00:00:00+00:00")
         self.write_permitted()
         text = self.recorded("each-target-alone.stderr.log")
@@ -416,6 +445,16 @@ class RecordedLogTest(ProbeTestCase):
         self.assertEqual(list(gaps), list(probe.PROBE_TARGETS))
         for reason in gaps.values():
             self.assertIn("refused only in a patch that also named 2 other paths", reason)
+
+    def test_a_second_file_named_on_an_indented_line_makes_the_patch_one_of_two_files(self):
+        # A scratch probe paired Mandu's patch with RepToday's, and the evidence area's permitted patch with src's,
+        # the second file of each pair named on an indented line. Codex refused each patch whole, the permitted file
+        # with it, so it reads such a line as naming a file, and neither patch says which of its two was refused.
+        gaps, problems = self.gaps("indented-second-file.stderr.log")
+        self.assertEqual(problems, [])
+        self.assertEqual(list(gaps), ["mandu", "reptoday", "src"])
+        for reason in gaps.values():
+            self.assertIn("refused only in a patch that also named 1 other path,", reason)
 
     def test_a_refusal_of_a_mistyped_path_does_not_prove_the_target(self):
         # The agent sent RepToday's patch with a path it had mangled; Codex refused it, and it names no sentinel.

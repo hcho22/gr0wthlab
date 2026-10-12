@@ -9,7 +9,8 @@ a post for each Draft it wrote that passes every check (posts.take), the recruit
 (beta.take), and the reviewed brand-rules proposal when it needs filing; write the Review Queue and the run report;
 commit and push workspace/ and ledger/. Every step but the agent is deterministic code outside the sandbox. The
 launcher's records live in ledger/, which the agent can read and never write, so nothing it does can change them; in
-workspace/ the launcher only restores its owner's access to entries the agent left without it, reads the post and
+workspace/ the launcher only restores its owner's access to entries the agent left without it, removes what a stopped
+boundary check left at the top of the areas, before the first records step can commit it, reads the post and
 recruiting Drafts, removes a recruiting Draft that holds what looks like an email address, and reads and removes the
 incoming items it takes in. One run at a time per checkout holds the run lock in its ledger/ from the sync to the
 saved records; a run started meanwhile refuses to start, and the next report says so.
@@ -44,7 +45,7 @@ from . import (
     waitlist,
 )
 from . import state as run_state
-from .areas import Areas, Store, UnsafeFile, read_plain
+from .areas import Areas, Store, UnsafeFile, clear_probe_files, read_plain
 from .boundary import LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
 from .queue import INCOMING, OPEN, QUEUE_FILE, REVIEW_QUEUE, SET_ASIDE, SUPERSEDED, Ledger, QueueError
 from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLine, Unusable
@@ -747,6 +748,19 @@ class Cycle:
         except (OSError, ConfigError) as error:
             state.problems.append(f"the Beta Cohort recruiting Evidence could not be written ({error})")
 
+    def clear_probe_files(self) -> list[str]:
+        """Remove what a stopped boundary check left in the areas before the pre-run records step commits workspace/,
+        and return it. A checkout whose boundary cannot be resolved is left as it is: no check could start in it
+        either, and whether this run starts is for the code the sync brings to say."""
+        try:
+            _, boundary = load_boundary(self.repo_root, self.env, self.home)
+        except ConfigError:
+            return []
+        left = clear_probe_files(boundary)
+        if left:
+            self.say(f"pre-run: removed what a stopped boundary check left in the areas: {', '.join(left)}")
+        return left
+
     def leave_note(self, run_id: str, line: str) -> None:
         """A one-line note in ledger/notes/, which the next run's report shows."""
         self.store.write_text(self.store.path(NOTES_DIR, f"{run_id}.txt"), line + "\n")
@@ -826,6 +840,7 @@ class Cycle:
         elif not config.records.sync_before_run:
             sync = {"status": "off", "detail": "the pre-run sync is turned off in config/run.json"}
         else:
+            removed = self.clear_probe_files()
             result = records.prepare(
                 self.repo_root,
                 config.records.remote,
@@ -838,7 +853,7 @@ class Cycle:
             if not result.ok_to_run:
                 self.say("refusing to start; the production clone needs attention first")
                 return EXIT_RECORDS
-            sync = result.as_json()
+            sync = dict(result.as_json(), probe_files_removed=removed)
             if result.code_changed:
                 # Run the reviewed code just fetched, not the code already loaded in this process.
                 entry = str(entry_point(self.repo_root))

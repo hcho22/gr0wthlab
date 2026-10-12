@@ -281,6 +281,14 @@ def span_text(seconds: float) -> str:
     return " ".join([f"{hours} h"] * bool(hours) + [f"{minutes} min"] * bool(hours or minutes) + [f"{rest} s"])
 
 
+def probe_files_removed(state: RunState) -> list[str]:
+    """What a stopped boundary check had left in the areas and this run removed, as paths from the repository: the
+    production clone's pre-run step removes it before its records step can commit it, and every run before its
+    preflight."""
+    before_records = (state.sync or {}).get("probe_files_removed") or []
+    return [*before_records, *(state.agent.get("probe_files_removed") or [])]
+
+
 def left_running(stop: process.Stop) -> str | None:
     """The launcher problem a stop leaves when it could not show that none of the processes it found is still running;
     the process ids stay in the run report's Agent section, so the same problem reads the same at every run."""
@@ -563,6 +571,12 @@ def render_report(state: RunState) -> str:
         lines += [f"- {note}" for note in state.state_notes]
     lines += ["", "## Outputs", ""] + table(["Output", "Status", "Detail"], state.outputs)
     lines += ["", "## Agent", ""]
+    removed = probe_files_removed(state)
+    if removed:
+        lines.append(
+            "- Removed what a stopped boundary check left in the areas, before the agent started: "
+            + ", ".join(f"`{path}`" for path in removed)
+        )
     preflight = state.agent.get("preflight") or {}
     if preflight:
         lines.append(

@@ -52,8 +52,8 @@ SANDBOX_LOG_PREDICATE = (
 )
 # All Codex says when it refuses a patch that would write outside the permission profile, under approval policy never.
 PATCH_REFUSAL = "patch rejected: writing outside of the project; rejected by user approval settings"
-# The lines of a patch that name the files it would write.
-PATCH_FILE = re.compile(r"^\*\*\* (?:Add File|Update File|Delete File|Move to): (.*)$", re.MULTILINE)
+# A line of a patch that names a file it would write, once trimmed: Codex trims a line before it looks for one.
+PATCH_FILE = re.compile(r"\*\*\* (?:Add File|Update File|Delete File|Move to): (.*)")
 # The probe's forbidden targets, by their keys in forbidden_dirs; each needs the runtime's record of a refused attempt
 # per tool.
 PROBE_TARGETS = ("mandu", "reptoday", "repo-root", "workspace-root", "ledger", "src", "config", "guardrails", "git")
@@ -366,7 +366,10 @@ def sandbox_denials(run_id: str, log: str, listeners: Sequence[Listener] = ()) -
 
 
 def patch_files(patch: str) -> list[str]:
-    return PATCH_FILE.findall(patch)
+    """The files a patch names, read as Codex reads a patch: line by line, each trimmed first, so a file named on an
+    indented line counts like any other."""
+    named = (PATCH_FILE.fullmatch(line.strip()) for line in patch.split("\n"))
+    return [match[1] for match in named if match]
 
 
 def refused_alone(call: codex.ToolResult, path: str) -> bool:

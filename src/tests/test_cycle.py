@@ -16,7 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 from gr0wthlab import cli, cycle, exchange, launcher, lint, package
-from gr0wthlab.areas import Store
+from gr0wthlab.areas import PROBE_PREFIX, Store
 from gr0wthlab.report import next_due
 from tests import fakes
 
@@ -1096,6 +1096,82 @@ class ProductionCloneTest(CycleTestCase):
         self.assertNotIn("ledger/run.lock", changed)
         self.assertEqual((self.clone / "workspace/drafts/README.md").read_text(encoding="utf-8"), "# drafts\n")
         self.assertEqual(fakes.git(self.clone, "status", "--porcelain", env=self.env), "")
+
+    def leave_probe_files(self, repo):
+        """What a boundary check killed mid-run leaves at the top of the areas: its script and a sentinel."""
+        left = [
+            repo / "workspace/drafts" / f"{PROBE_PREFIX}20261001T000000Z-on-demand-0001-permitted-shell.txt",
+            repo / "workspace/instructions" / f"{PROBE_PREFIX}20261001T000000Z-on-demand-0001-shell-steps.sh",
+        ]
+        for path in left:
+            path.write_text("left behind\n", encoding="utf-8")
+        return left, ", ".join(str(path.relative_to(repo)) for path in left)
+
+    def committed_probe_files(self):
+        """Every path any commit holds, in the clone or on the remote, that a boundary check names its files by."""
+        for repo in (self.clone, self.remote):
+            history = fakes.git(repo, "log", "--all", "--name-only", "--format=", env=self.env).split("\n")
+            yield from (path for path in history if PROBE_PREFIX in path)
+
+    def test_what_a_stopped_boundary_check_left_is_removed_before_a_records_step_can_commit_it(self):
+        left, names = self.leave_probe_files(self.clone)
+        fakes.behave(self.codex_dir, {"write": {"drafts/day-3.md": "a Draft\n"}})
+        code, out = self.run_cycle(repo=self.clone)
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"pre-run: removed what a stopped boundary check left in the areas: {names}\n", out)
+        self.assertLess(out.index("pre-run: removed what"), out.index("pre-run: current"))
+        self.assertEqual(out.count("removed what"), 1, "nothing was left for the run's own clearing")
+        self.assertEqual([path for path in left if path.exists()], [])
+        self.assertIn("records: pushed: pushed 1 records commit", out)
+        changed = fakes.git(self.remote, "diff", "--name-only", "HEAD~1", "HEAD", env=self.env).split()
+        self.assertIn("workspace/drafts/day-3.md", changed)
+        self.assertEqual(list(self.committed_probe_files()), [])
+        quoted = ", ".join(f"`{path.relative_to(self.clone)}`" for path in left)
+        self.assertIn(
+            "## Agent\n\n- Removed what a stopped boundary check left in the areas, before the agent started: "
+            f"{quoted}\n- Boundary preflight: passed",
+            self.report(self.clone),
+        )
+
+    def test_a_run_restarted_on_new_code_reports_what_was_removed_before_the_sync(self):
+        (self.repo / "config" / "note.txt").write_text("reviewed change\n")
+        fakes.git(self.repo, "add", "--all", env=self.env)
+        fakes.git(self.repo, "commit", "--quiet", "-m", "reviewed", env=self.env)
+        fakes.git(self.repo, "push", "--quiet", "origin", "main", env=self.env)
+        left, names = self.leave_probe_files(self.clone)
+        calls = []
+        code, out = self.run_cycle(repo=self.clone, execve=lambda *args: calls.append(args))
+        self.assertEqual(len(calls), 1, out)
+        self.assertIn(f"pre-run: removed what a stopped boundary check left in the areas: {names}\n", out)
+        self.assertEqual([path for path in left if path.exists()], [])
+        self.env[cycle.PRE_RUN_ENV] = calls[0][2][cycle.PRE_RUN_ENV]
+        code, out = self.run_cycle(repo=self.clone)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("removed what", out)
+        self.assertIn(
+            "- Removed what a stopped boundary check left in the areas, before the agent started: `workspace/drafts/",
+            self.report(self.clone),
+        )
+        self.assertEqual(list(self.committed_probe_files()), [])
+
+    def test_with_the_sync_off_the_run_itself_removes_it_before_the_agent_and_the_save(self):
+        fakes.set_run(self.repo, "records", {"sync_before_run": False})
+        fakes.git(self.repo, "commit", "--quiet", "-am", "reviewed", env=self.env)
+        fakes.git(self.repo, "push", "--quiet", "origin", "main", env=self.env)
+        fakes.git(self.clone, "pull", "--quiet", env=self.env)
+        left, names = self.leave_probe_files(self.clone)
+        fakes.behave(self.codex_dir, {"write": {"drafts/day-3.md": "a Draft\n"}})
+        code, out = self.run_cycle(repo=self.clone)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("pre-run:", out)
+        self.assertIn(f"gr0wthlab: removed what a stopped boundary check left in the areas: {names}\n", out)
+        self.assertLess(out.index("removed what"), out.index("preflight refused"))
+        self.assertIn("records: pushed", out)
+        self.assertEqual(list(self.committed_probe_files()), [])
+        self.assertIn(
+            "- Removed what a stopped boundary check left in the areas, before the agent started: `workspace/drafts/",
+            self.report(self.clone),
+        )
 
     def test_new_reviewed_code_is_fast_forwarded_and_the_run_restarts_on_it(self):
         (self.repo / "config" / "note.txt").write_text("reviewed change\n")

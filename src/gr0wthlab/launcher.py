@@ -116,7 +116,8 @@ def run(
     facts are extra header lines for the prompt, which the configuration fingerprint does not cover.
     record["agent_started"] says whether Codex itself was started, after the preflight passed.
     record["probe_files_removed"] names what a stopped boundary check had left in the areas, removed before the
-    preflight so that no agent finds it and no records step commits it.
+    preflight so that no agent finds it and the records step after the run cannot commit it. The production clone's
+    pre-run records step comes before this, so the cycle clears the areas ahead of it as well.
     time_limit is how many seconds the agent has, by the wall clock or awake, whichever the clock shows first. One
     still running then is stopped with every process the process table shows it started: record["timed_out"] is True,
     record["exit_code"] is EXIT_STOPPED whatever status the stopped agent left, and record["stopped"] names the
