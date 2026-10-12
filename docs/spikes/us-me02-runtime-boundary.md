@@ -1114,6 +1114,43 @@ Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest
 The same held before the first run made after the review changes and after the last.
 The runs' outputs were removed from the worktree afterwards and are not part of this change; the clones of the later runs sat in the Mac's per-user temporary folder and were removed from it.
 
+### Re-check after the merge of the owed-run check with Listening, outreach, and filming
+
+The owed-run check (US-ME17) was merged with `main` at commit `48b9c2d`, which had gained Listening, outreach message Drafts, and rejection-reason coding (US-ME13, US-ME14) and then filming (US-ME09) after `92d8bbe`, the commit this work was made on.
+It is one merge commit on this work's branch, `a9fd244`, whose parents are `64b2487` and `48b9c2d`, and the launcher it leaves is one that neither side's checks above had run on, so both checks were made again.
+
+- Both sides are whole in the merged launcher.
+  The files only this work touches are byte for byte as at `64b2487`: `attempts.py`, `schedule.py`, `settings.py`, and `src/tests/test_attempts.py`.
+  Every file this work does not touch is byte for byte `main`'s, among them `codex.py`, `boundary.py`, `launcher.py`, `probe.py`, `process.py`, `fetch.py`, `runtime.json`, `fetch.json`, `config/products.json`, `config/sources.json`, and the task definition.
+- The files that hold both sides are `cycle.py`, `report.py`, `cli.py`, `config/run.json`, the tests' fixtures and `test_cycle.py`, and the documents.
+  A start of the weekly schedule is first the owed-run check, before the run lock and before anything is read from the network, so a start that begins nothing still fetches nothing and writes nothing.
+  A run that does begin reads its network sources as on `main`, and what it fetched is discarded when it ends, whether it finished, was refused, or stopped on an error; a weekly start that was refused or stopped is noted in the week's record after that.
+  The Mac's sleep is counted from the run's start to its agent's end, so sleep during the launcher's own network reads counts as sleep anywhere else in the attempt does.
+- The Mandu exchange is `main`'s version 6.
+  This work adds no field to it, and its sentences on `next_run` stand beside `main`'s on the queue's order and on a post's finished video.
+- `runtime.json`, `fetch.json`, the permission profile, the Codex flags, and the environment are as on `main`; this work never changed them.
+
+On the merged files the full unit suite passed under `/usr/bin/python3`, 897 tests, as did ruff.
+
+The scenarios at the heart of this work were run again on the merged launcher, as in the tables above: a throwaway production clone of the merge commit with a throwaway remote of its own, a synthetic Mandu and Product checkout, no network source listed, the stand-in agent, and a clock stepped forward to stand for the Mac's sleep.
+A start of the weekly schedule in a dark wake began nothing and left `ledger/` as it was.
+Run `20261012T024000Z-scheduled-e8d8`, which the Mac slept through for 16 hours from six seconds in, ended with exit code 6, said it timed out and for how long the Mac slept, queued no notice, left `next_run` at the time the run was due in a queue of exchange version 6, and is noted `cut-short-by-sleep`.
+A start in a dark wake then began nothing, run `20261012T150200Z-scheduled-5d90` followed as attempt 2 and completed, and the start after it began nothing.
+In a second clone a one-off run started in a dark wake ran (`20261013T160600Z-scheduled-0a60`) and is noted `one-off`, the weekly start after it began nothing, and a run on demand ran (`20261013T161200Z-on-demand-1723`).
+Each clone was left with a clean git status and no fetched working data.
+The other rows of the tables above, sleep before the agent starts, the attempt limit, a timeout with the Mac awake, a refused start, and two starts at once, were not run again live on the merged launcher; their unit tests pass on it.
+No LaunchAgent was loaded.
+
+Both checks were run on the morning of 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from this work's worktree on the merge commit as committed, with nothing uncommitted, where the configuration fingerprint is `004a906cd66214d6e0e3223f50e7627e01cb5bfe4eaa64c37de4b1c637eee705`, as it was in that worktree before the merge.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T172512Z-on-demand-06b5`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and nothing outside the areas changed.
+  Its network proof: the control reached the listener; inside the sandbox the listener and the two hosts were refused; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused an address on a host that is not listed, unsent.
+  The probe's agent ran 38 seconds of its 30 minute limit, all of them with the Mac awake.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same after the boundary check as before it.
+The runs' outputs are not part of this change; the clones sat in the Mac's temporary folder.
+
 ## Scheduled and on-demand runs share one configuration
 
 The scheduled path was tested with a temporary LaunchAgent, `gr0wthlab.us-me02-schedule-test`, generated by `src/bin/gr0wthlab launch-agent --once <time> --label gr0wthlab.us-me02-schedule-test --instruction src/checks/boundary-probe.md`.
