@@ -379,6 +379,7 @@ When either cannot be taken, for example in a folder left closed, neither the Dr
 The counts inform the Founder and gate nothing: nothing is queued, blocked, or marked incomplete because of one, and every check of an item or a Draft is what it was.
 The launcher still reads the agent's closing line itself in two places, and the counts change neither: the package review's row is complete only on the line `Review: complete`, and a weekly attempt the Mac slept during is the week's run only when the agent ended without an error and its summary ends with that line ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
 A count that cannot be made is listed as a launcher problem, and the run goes on without it; that holds for the one reading the launcher makes for a count before the agent starts as well.
+The run's notice lists that problem like any other launcher problem, so a run that would have queued no notice queues one for it.
 The run's log record in `~/Library/Logs/gr0wthlab/` holds the same counts under `work`, with the name of every package file not read.
 
 What the counts looked like when they were introduced, on 2026-10-11, against Mandu and RepToday as they were.
@@ -396,6 +397,18 @@ One more run, made after the table's ten, read 10 of the 24 in 10 min 31 s and s
 A first run and then a second run in one clone each read all 24, and the second session wrote all seven Drafts again, so its Draft claims line counted all seven.
 [The US-ME02 spike note](spikes/us-me02-runtime-boundary.md#re-check-after-the-agents-reasoning-effort-and-the-work-counts-us-me17) lists every run and says what the sample does not show.
 
+Every run above was made before Listening, outreach, and filming joined the session.
+One run was timed on 2026-10-12 on the launcher that has them, once: a start of the weekly schedule at high effort in a throwaway production clone, against a synthetic package of 18 short files and not the real one.
+
+| What was due | How the run ended | Agent time | Package files read | Draft claims naming code | Proposals queued | Cost |
+| --- | --- | --- | --- | --- | --- | --- |
+| The package review; post Drafts for days 1 to 7; an edit record for each of those days, with footage in place; the Beta Cohort invitation and the Waitlist ask; the personal-network ask and a first message to each of three creators. Listening had nothing to read | The agent ended by itself with exit code 0 and the words `Review: complete`; the run ended with exit code 0 and no launcher problem, on a Mac that stayed awake | 4 min 35 s of the 30 minute limit | 18 of 18 | 5 of 7, in the 7 of 7 Drafts due | 1 | $0.038 |
+
+The launcher queued five posts with their finished video, the invitation and the Waitlist ask, and the four messages, and blocked two post Drafts whose one claim no code supports.
+Listening read nothing because `www.reddit.com`'s `robots.txt` disallows every listed address and the synthetic research cites no App Store page, so the session had no quote, proposed Angle or Hook, or reply to write.
+It is one reading, on a package far smaller than the real one: it shows that the added work takes minutes, and not how long a session on the real package takes with that work in it.
+[The spike note](spikes/us-me02-runtime-boundary.md#the-weekly-run-timed-on-the-merged-launcher) has the set-up and what the run does not show.
+
 ## When a run times out
 
 Every run ends with its report, so the agent has a time limit: `agent.time_limit_seconds` in [`config/run.json`](../config/run.json), 1800 seconds (30 minutes) today.
@@ -404,7 +417,9 @@ Nothing keeps the Mac awake for a run, and a sleeping Mac runs nothing, so the s
 Awake time is counted as well, and the agent is stopped at whichever count reaches the limit first, so a wall clock set back cannot extend a run; one set forward can end a run early.
 At high reasoning effort the agent took 283 to 1,122 seconds, median 646, in the ten runs measured on 2026-10-11, each a package review and one batch of post Drafts, most with four or five sessions running at once on the Mac.
 A healthy run on a Mac that stays awake therefore ends inside the limit, the longest measured at 62 percent of it; at Codex's default medium effort the 46 runs recorded before took 18 to 218 seconds.
-Those ten runs were made before Listening, outreach, and filming joined the session, and no run at high effort that carries them has been measured yet, so watch the report's `Agent time` line in the first runs that do.
+Those ten runs were made before Listening, outreach, and filming joined the session.
+One run at high effort that carries them was timed on 2026-10-12, with post Drafts, edit records, recruiting Drafts, and outreach messages all due beside the review: its agent took 275 seconds, 15 percent of the limit, and ended by itself ([Reading the agent's work](#reading-the-agents-work)).
+That run read a synthetic package far smaller than the real one and had no Listening document to read, and it is a single reading, so watch the report's `Agent time` line in the first weekly runs on the real package.
 An agent still running at the limit, for example because its model stream stalled, is stopped with every process the Mac's process table shows it started, which is its descendants and every process in a session one of them leads: each is asked to stop, and any still running after 10 seconds of awake time is forced.
 The launcher then reads the process table again to confirm that none of them is left, and finishes the run as it finishes any run.
 The stop does not find a process the agent detached earlier in the run: one in a session of its own whose parent has already ended, as a shell command that has finished can leave.

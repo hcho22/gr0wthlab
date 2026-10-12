@@ -1385,7 +1385,9 @@ It is one merge commit on this work's branch, `f0047c4`, whose parents are `056d
 - `main` reads the agent's closing line itself: a weekly attempt the Mac slept during is the week's run only when the agent ended without an error and its summary ends with `Review: complete`, and a run that a fresh one follows leaves the work its agent did not reach out of its notice.
   This work never changes that line or what the launcher reads from it.
   It quotes the line in the report beside the counts and rewords the detail of the package review's row, so the owed-run check decides exactly as on `main`; the one test of `main`'s that named the row's old detail now names the new one.
-  The counts add no section to a notice and gate nothing, so they change neither which attempt counts nor what a notice lists.
+  The counts themselves add nothing to a notice and gate nothing, so they do not change which attempt counts.
+  A count that cannot be made is another matter: it is a launcher problem, and a notice lists it like any other.
+  It adds a line to the run's notice, queues a notice on a run that would have had none, and does so on a cut-short attempt that a fresh run follows as well, since such an attempt queues no notice only when how its agent ended is all the notice would say.
 - The counting starts no process: it reads Codex's event stream, the Drafts, `incoming/`, and the package files, so `main`'s rule that every launcher process starts through `process.py` is untouched.
   A reading it cannot take is a launcher problem and no count; it withdraws nothing and blocks nothing.
 - One count is named more narrowly than before the merge.
@@ -1393,7 +1395,8 @@ It is one merge commit on this work's branch, `f0047c4`, whose parents are `056d
   The proposals count is of `workspace/review-queue/incoming/` alone, so its line now reads `Proposals this session wrote to incoming/`, and the summary line the same, where the reports quoted above read `Proposals this session wrote`.
   What a session proposes from Listening is accounted for in the report's Listening section and is not in the count.
 - The note on the agent's time limit in `config/run.json` holds this work's measured basis at high effort and `main`'s account of what follows a run cut at the limit.
-  The ten runs behind that basis carried the package review and the post Drafts only: they were made before Listening, outreach, and filming joined the session, and no run at high effort that carries them has been measured.
+  The ten runs behind that basis carried the package review and the post Drafts only: they were made before Listening, outreach, and filming joined the session.
+  One run at high effort that carries them was timed on the merged launcher afterwards, as recorded [below](#the-weekly-run-timed-on-the-merged-launcher).
 
 On the merged files the full unit suite passed under `/usr/bin/python3`, 943 tests, as did ruff.
 Two faults of the merge were in tests alone and were corrected there: the tests' Mandu now lists 16 package files where it listed 14, and the attempt test named the review row's old detail.
@@ -1407,8 +1410,97 @@ Both checks were run on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0
 
 Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same after the boundary check as before it.
 
-Not run live on the merged launcher: the weekly run itself with the real agent.
-Every live run in the section above was made before the merge, so the first run at high effort that also carries Listening, outreach, and filming, and its agent time against the 30 minute limit, is still to be seen.
+The weekly run itself, with the real agent, was not run on the merged launcher for these two checks; it was run afterwards, once, as the next section records.
+
+### The weekly run timed on the merged launcher
+
+Review of the merge asked whether the agent's 30 minute limit still holds for the session the merge makes, since every run behind the limit's basis was made before Listening, outreach, and filming joined it.
+So one whole weekly run was made with the real agent at high effort on the merged launcher, on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0.
+It was made once.
+
+It ran in a throwaway production clone of this branch at `06eee70`, with a throwaway remote of its own, a synthetic Mandu and Product checkout, the Mac's real clocks and its own answer about its power state, the real ffmpeg, and the launcher's own client on the real network.
+The clone's configuration was the committed one but for the window, whose first sitting was set to Sunday 2026-10-18 with a 19:00 slot, so that days 1 to 7 fell due.
+The synthetic Mandu held the package files of the post-Draft, Beta Cohort, and filming example sets, 18 files in the snapshot, with the synthetic kit's one blocking checklist line checked off and the three creators of `config/run.json` named in its channel plan.
+
+The week was set up first, with no model:
+
+- An earlier run in the same clone filed the filming plan and the Waitlist Dispatch request and queued no notice.
+  It had the stand-in agent, a clock set to Saturday 2026-10-10 16:00, and outreach and the source list turned off, so it prepared no message and sent nothing onto the network.
+- The plan was then approved by a simulated decision record, and a file for every shot of days 1 to 7 was put in the footage place: ten real video files, 1.0 GB in all, which the Mac's ffmpeg made from its own test pattern.
+- A Beta Build record with recruiting open was put in the exchange folder, and a Waitlist view generated an hour earlier where the launcher reads it.
+- One commit on the throwaway remote put the outreach settings and the source list back as committed.
+
+The timed run was one start of the weekly schedule, `src/bin/gr0wthlab run --trigger scheduled`, on Monday 2026-10-12 at 13:04 local time, as run `20261012T200426Z-scheduled-3205`.
+Its own pre-run sync fast-forwarded the clone to that commit, and its report says it started 21 h 4 min late; it was attempt 1 at the run due Sunday 2026-10-11 16:00.
+
+What its brief gave the one session to do:
+
+| Work | Due in this run |
+| --- | --- |
+| Package review | 18 package files, none changed since the earlier run |
+| Post Drafts | Days 1 to 7, each with its slot |
+| Edit records | Days 1 to 7, all seven marked ready, from the 10 footage files |
+| Beta Cohort recruiting | The invitation and the Waitlist ask |
+| Outreach | The personal-network ask and a first message to each of the three creators; no follow-up was due |
+| Listening | Nothing: no thread or review could be read |
+| Founder decisions | One taken in, the plan's approval; no rejection to code |
+
+Listening read whatever its sources allowed, which was nothing.
+The launcher sent one request, a GET for `www.reddit.com`'s `robots.txt`, which disallows every address for automated readers, so the six subreddit sources were never asked for and the report lists them as failed.
+The synthetic research cites no App Store page, so no review feed was asked for and `itunes.apple.com` was not contacted.
+The brief therefore told the agent to write no quote record, no proposed Angle or Hook, and no reply Draft.
+
+How it ended: the agent ended by itself, with exit code 0, after 4 min 35 s of its 30 minute limit, which is 275 seconds, 15 percent of the limit, and its summary ends with `Review: complete`.
+The run ended with exit code 0 after 295 seconds in all and no launcher problem, its attempt is recorded as `completed`, and the Mac was awake throughout.
+Its summary lines on the agent's work and the cost, and its count lines:
+
+```text
+- The agent's work, as the launcher counted it: 18 of 18 package files read, 5 of 7 Draft claims with a code location in the 7 of 7 due Drafts this session wrote or changed, 1 proposal this session wrote to incoming/ queued, in 4 min 35 s of agent time. The agent's own word: "Review: complete".
+- Approximate cost: about $0.038 at API prices, for 1,721,822 input tokens (1,623,808 cached) and 24,457 output tokens.
+
+- Agent time: 4 min 35 s of its 30 min limit, with `gpt-6-luna` at `high` reasoning effort.
+- Package files read: 18 of the 18 the brief listed, counting a file as read when at least half of its lines came back in output the model was shown.
+- Draft claims in the 7 of 7 due Drafts this session wrote or changed: 7 listed, 5 name a code location and 2 name none.
+- Proposals this session wrote to incoming/: 1 queued.
+```
+
+The same run in the columns of the tables in the section above:
+
+| Run | Agent's own word | Agent time | Package files read | Claims naming code | Proposals queued | Cost |
+| --- | --- | --- | --- | --- | --- | --- |
+| `20261012T200426Z-scheduled-3205` | complete | 4 min 35 s | 18 of 18 | 5 of 7 | 1 | $0.038 |
+
+What the launcher made of the session's files:
+
+- The session wrote a post Draft and an edit record for each of the seven days.
+  The posts of days 1 to 5 were queued, each with a finished video the real ffmpeg rendered in this run.
+  Days 6 and 7 were blocked, each because no code supports its one claim, and no video was cut for them, since a video is cut only from a Draft that passes.
+- The invitation, with its batch of 8 entries, and the Waitlist ask were queued.
+- The personal-network ask and the three creator messages were queued.
+- The one proposal was queued, and nothing was set aside.
+- One notice was queued, of 8 problems: the six sources that could not be read and the two blocked Drafts.
+
+The clone was left with a clean git status, its records pushed to its own remote, and no fetched working data.
+
+What this one run shows, and what it does not:
+
+- With post Drafts, edit records, recruiting Drafts, and outreach messages all due in one session beside the review, the agent's time was 275 seconds, under the 283 seconds of the shortest of the ten runs above.
+- It is not a reading of the real package.
+  The synthetic package is 18 short files, 11,179 characters in all, five of them a single line, where one command of run `a2d7` above printed 314,707 characters of the real one.
+  So the ten runs remain the measure of the review and the post Drafts on the real package, 283 to 1,122 seconds, and this run is the measure of the work those ten did not carry: seven edit records, two recruiting Drafts, and four outreach messages.
+  All of that, with a small review and seven Drafts, took 275 seconds.
+  Added whole to the longest of the ten, that gives 1,397 seconds, which is a sum over two different sessions and not a measurement.
+- It is a single reading, on one day.
+- It does not show Listening with anything to read.
+  Quote records, proposed Angles and Hooks, and reply Drafts were not due, and that is the part of the session the listed hosts' `robots.txt` leaves out today.
+- It does not show a rejection to code, a follow-up message, or the window's second week with the second legs of its A/B pairs.
+
+The limit stays at 1800 seconds.
+Nothing in the launcher changed for this run or after it.
+The change made with it is to documents and to the wording of the note on the limit in `config/run.json`, which the configuration fingerprint does not cover, so the two checks above stand and neither was made again.
+With that change in place the full unit suite passed under `/usr/bin/python3`, 943 tests, as did ruff.
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the clone was built as after the run.
+The clone, its remote, the synthetic checkouts, and the footage sat in the Mac's per-user temporary folder and were removed from it.
 
 ## Scheduled and on-demand runs share one configuration
 
