@@ -40,7 +40,8 @@ The edit record's format is in the task definition, and the launcher's checks de
 
 ## Pair legs
 
-- The legs of an A/B pair are cut from the same footage, so the later leg films nothing new.
+- The legs of an A/B pair are cut from the same footage, so the later leg adds no shot of its own.
+  In a re-cut pair it can still need a take of its own for the opening, as below.
 - When the table says a day uses the same source ranges as its other leg from the first frame to the last, copy that leg's segments and change only the day.
   The two videos then differ only in the Hook the launcher draws over them.
 - When it says after its opening, the kit marks the pair as a re-cut.

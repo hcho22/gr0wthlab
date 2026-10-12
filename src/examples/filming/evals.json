@@ -13,7 +13,7 @@
     {
       "id": 1,
       "prompt": "Plan the filming of window 1 from the kit.",
-      "expected_output": "One filming plan item: every calendar day with an Angle has a shot list read from its Angle's Format, the later leg of each A/B pair films nothing new, and the shots fall into one sitting per setup the shot lists state.",
+      "expected_output": "One filming plan item: every calendar day with an Angle has a shot list read from its Angle's Format, the later leg of each A/B pair adds no shot of its own, a re-cut leg whose Hook is said on camera is asked for its own opening take, and the shots fall into one sitting per setup the shot lists state.",
       "assertions": [
         {
           "kind": "deterministic",

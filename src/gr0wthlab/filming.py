@@ -675,7 +675,9 @@ def plan_item(filming: Filming, previous: Mapping[str, object] | None = None) ->
         f" {plural(len(groups), 'sitting')}, for calendar {'days' if len(days) > 1 else 'day'} {listed(days)}."
         + (
             f" {'Days' if many else 'Day'} {listed(reuse)} {'are' if many else 'is'} cut from an earlier day's"
-            f" footage with only the opening changed, so {'they film' if many else 'it films'} nothing new."
+            f" footage with only the opening changed, so {'they add' if many else 'it adds'} no shot of"
+            f" {'their' if many else 'its'} own to film; any opening take a leg records for itself is named with its"
+            " shot list below."
             if reuse
             else ""
         ),
@@ -870,24 +872,30 @@ def gate(filming: Filming, job: shots.Job) -> str:
 def lacking(
     inventory: footage.Inventory, wanted: Sequence[shots.Shot], leg: str | None, recut: bool
 ) -> tuple[list[str], list[str], list[str], list[str]]:
-    """The shots of a day no edit can be cut from yet: those with no footage, those whose only footage could not be
+    """The shots of a day no edit can be cut from yet: those with no footage, those whose footage could not be
     measured, for a pair leg those with no take both legs can use, and the opening shot of a leg that must open on a
     take of its own and has none. The legs of a pair share their footage, so a take named for one leg is only that
     leg's opening in a re-cut pair: the first shot of several can do with one, and every other shot needs a take
     named without a leg letter. Where the Founder is on camera in that first shot, each leg needs its own take of it
-    too, since its Hook is said there."""
+    too, since its Hook is said there: once the footage place holds any take of that shot, a leg without its own is
+    told so, whether or not a take both legs can use is there."""
     missing, unread, unshared, unopened = [], [], [], []
     own = edits.own_opening(wanted, leg, recut)
     for index, shot in enumerate(wanted):
         usable = inventory.for_shot(shot.id, leg)
         unmeasured = inventory.for_shot(shot.id, leg, measured=False)
         opening = recut and index == 0 and len(wanted) > 1
-        if not usable:
-            (unread if unmeasured else missing).append(shot.id)
+        owed = shot == own and any(clip.shot == shot.id for clip in inventory.clips.values())
+        lacks = []
+        if owed and not any(clip.leg for clip in usable):
+            lacks.append(unread if any(clip.leg for clip in unmeasured) else unopened)
+        if not usable and not owed:
+            lacks.append(unread if unmeasured else missing)
         elif leg and not opening and all(clip.leg for clip in usable):
-            (unread if any(not clip.leg for clip in unmeasured) else unshared).append(shot.id)
-        elif shot == own and not any(clip.leg for clip in usable):
-            (unread if any(clip.leg for clip in unmeasured) else unopened).append(shot.id)
+            lacks.append(unread if any(not clip.leg for clip in unmeasured) else unshared)
+        for group in lacks:
+            if shot.id not in group:
+                group.append(shot.id)
     return missing, unread, unshared, unopened
 
 

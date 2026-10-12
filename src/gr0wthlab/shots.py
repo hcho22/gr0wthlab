@@ -7,8 +7,9 @@ list never says more than the kit does: a fact the Format does not state is "not
 calendar's own checklist for every asset may add what holds for every screen recording.
 
 requirements groups the calendar's days into filming jobs: the legs of an A/B pair are cut from one job's footage, so
-the later leg films nothing. sittings then groups every shot into the fewest sittings the shot lists allow: shots that
-state the same setup share one sitting, and nothing else in a shot list asks for another.
+the later leg adds no shot of its own; an opening take it records for itself is a take of the job's first shot.
+sittings then groups every shot into the fewest sittings the shot lists allow: shots that state the same setup share
+one sitting, and nothing else in a shot list asks for another.
 
 Nothing here is kept beyond the run, and nothing names a day, an Angle, or a device of its own: the kit decides.
 """
@@ -193,7 +194,7 @@ class Requirements:
         return [(job, shot) for job in self.jobs for shot in job.shots]
 
     def on_camera_days(self) -> list[int]:
-        """The days whose own footage puts the Founder on camera; a later leg reuses footage and films nothing."""
+        """The days whose own shots put the Founder on camera; a later leg is cut from those shots and adds none."""
         return sorted(job.films for job in self.jobs if job.on_camera())
 
     def reuse_days(self) -> list[int]:

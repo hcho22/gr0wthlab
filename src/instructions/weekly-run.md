@@ -30,7 +30,8 @@ The launcher has already done the deterministic work before you start, and does 
    Read the kit files the brief names, the brand guidelines, and the Product's code at the commit the brief gives.
    The run is not finished until every listed day has a Draft, or your summary says why it has none.
 6. Write an edit record for every calendar day the brief's Filming table marks ready, as "Writing an edit record" describes, and for no other day.
-   A day is ready once the Founder approved a filming plan that holds its shots and the footage place has a file for every one of them; the table says why any other day is not.
+   A day is ready once the Founder approved a filming plan that holds its shots and the footage place has every take the day needs: a file for each shot, and for a pair leg a take both legs can use wherever the legs share their footage, and its own opening take where the Founder says the Hook on camera.
+   The table says why any other day is not.
    When the brief has no Filming section, or marks no day ready, write no edit record.
 7. Check your items with the brief's check-incoming command, your Drafts with its check-drafts command, and your edit records with its check-edits command, and fix every problem any of them reports that the Draft or the edit record can fix.
    A Draft blocked by the package itself (a frozen Hook that fails a brand rule or says the app does something no code supports, or an open checklist line) stays as the package requires: never change a Hook, signal, or kill criterion to pass a check; write a package-change proposal that cites both sides instead, unless one is already open or decided.

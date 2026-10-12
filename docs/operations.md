@@ -120,7 +120,7 @@ Name each file for its shot in the approved filming plan, in one folder per 14-d
 ```
 
 - A file's name starts with its shot, `d<two-digit day>-s<number>`, exactly as the plan writes it, in upper or lower case; `.mov`, `.mp4`, and `.m4v` files are read.
-- A later leg of an A/B pair films nothing: day 8 is cut from the footage of `d01`.
+- A later leg of an A/B pair adds no shot of its own: day 8 is cut from the footage of `d01`.
   Only a pair whose opening is re-cut has a take per leg, marked `a` or `b` right after the shot's name, and a take marked for one leg is used only in that leg's video, for its opening.
   Everything after the opening is shared by both legs, so it is filmed once, in a take with no leg letter: a pair filmed only as lettered takes has no video, and the run's notice names the shot that needs the shared take.
   When the Founder is on camera in the pair's first shot, each leg's Hook is said there, so each leg also needs its own take of that shot: a leg without one has no video, and the run's notice and report name the take, such as `d06-s1b.mov`.
