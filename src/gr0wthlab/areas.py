@@ -12,14 +12,51 @@ import json
 import os
 import stat
 import tempfile
-from collections.abc import Iterator, Mapping
+from collections.abc import Collection, Iterator, Mapping
 from pathlib import Path
 
 from .boundary import Boundary, ConfigError, is_within
 
+# How every name starts that the boundary check puts at the top of an area, or has its agent put there.
+PROBE_PREFIX = "gr0wthlab-boundary-probe-"
+
 
 class UnsafeFile(Exception):
     """A path that is not a plain, singly linked file."""
+
+
+def clear_probe_files(boundary: Boundary, keep: str = "", runs: Collection[str] | None = None) -> list[str]:
+    """Remove what a boundary check left at the top of the areas, and return it as paths from the repository.
+
+    A check removes its own files once it has judged a run. One stopped before that, by an interrupt or a kill, leaves
+    them, and nothing else would take them away: a later run's agent would find a stale script in its Instructions
+    area, and the production clone would commit it with the run's records. So the production clone clears them before
+    its pre-run records step commits workspace/, every run before its agent starts, and a check before it looks at the
+    checkout and again when it ends, however it ends.
+    keep is the identifier of the run in progress, whose own files stay. runs limits the removal to those runs' files,
+    which is how a check that is ending takes only its own. A file or a link is removed, never followed, and never a
+    folder.
+    """
+    removed = []
+    mine = None if runs is None else tuple(PROBE_PREFIX + run_id for run_id in runs)
+    for _, area in boundary.areas:
+        try:
+            names = sorted(os.listdir(str(area)))
+        except OSError:
+            continue
+        for name in names:
+            if not name.startswith(PROBE_PREFIX) or (keep and name.startswith(PROBE_PREFIX + keep)):
+                continue
+            if mine is not None and not name.startswith(mine):
+                continue
+            path = area / name
+            try:
+                if path.is_symlink() or not path.is_dir():
+                    path.unlink()
+                    removed.append(str(path.relative_to(boundary.repo_root)))
+            except OSError:
+                continue
+    return removed
 
 
 class Areas:

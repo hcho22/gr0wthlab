@@ -23,6 +23,9 @@ REQUIRED_AREAS = ("evidence", "drafts", "review_queue", "weekly_reads", "run_rep
 WORKSPACE = PurePosixPath("workspace")
 # The launcher's own records, outside every area: a run reads them and never writes them.
 LEDGER = "ledger"
+# The reasoning efforts Codex's model catalog lists for the run's model. Codex passes any other text on, and the model's
+# service refuses it only once the agent starts, after everything a run does before its agent.
+REASONING_EFFORTS = ("low", "medium", "high", "xhigh", "max")
 
 
 class ConfigError(Exception):
@@ -71,6 +74,12 @@ def load_runtime_config(repo_root: Path) -> dict:
     config = load_json(repo_root / RUNTIME_CONFIG)
     if config.get("runtime") != "codex":
         raise ConfigError("runtime must be 'codex', the runtime chosen in US-ME02")
+    codex = config.get("codex")
+    effort = codex.get("reasoning_effort") if isinstance(codex, dict) else None
+    if not isinstance(effort, str) or effort not in REASONING_EFFORTS:
+        raise ConfigError(
+            f"{RUNTIME_CONFIG}: codex.reasoning_effort must be one of {', '.join(REASONING_EFFORTS)}; got {effort!r}"
+        )
     return config
 
 

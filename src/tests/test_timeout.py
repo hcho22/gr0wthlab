@@ -161,7 +161,7 @@ class EntryPointTest(TimeLimitTestCase):
         self.assertIn("- The run finished.", clean)
         self.assertNotIn("- The run timed out", clean)
         self.assertNotIn("- Timed out:", clean)
-        self.assertIn("| Package review (contradictions) | complete | the agent finished its review |", clean)
+        self.assertIn(f"| Package review (contradictions) | complete | {cycle.REVIEW_SAID_COMPLETE} |", clean)
         self.assertRegex(clean, rf"\n- Agent time: \d+ s; time limit {LIMIT} s\.\n")
         self.assertEqual(sorted(entry.get("day", 0) for entry in self.queue()["open"]), [0, 0, 1, 2])
         self.assertEqual(self.notices(), [queued["notice"]])
@@ -392,7 +392,8 @@ class LimitSettingTest(unittest.TestCase):
     def test_the_committed_limit_has_headroom_over_every_recorded_run(self):
         config = settings.load(fakes.REPO, {}, Path("/Users/founder"))
         self.assertEqual(config.agent, settings.Agent(1800.0))
-        self.assertGreaterEqual(config.agent.time_limit, 8 * 218)
+        # The longest run recorded at high reasoning effort took 1,122 seconds; at medium, 218.
+        self.assertGreaterEqual(config.agent.time_limit, 1.5 * 1122)
 
     def test_a_limit_is_a_number_of_seconds_above_zero_and_at_most_a_day(self):
         self.assertEqual(settings.load_agent({"time_limit_seconds": 2.5}), settings.Agent(2.5))

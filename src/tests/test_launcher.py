@@ -14,6 +14,7 @@ from pathlib import Path
 from unittest import mock
 
 from gr0wthlab import boundary, cli, launcher
+from tests import fakes
 from tests.test_boundary import CONFIG, REGISTRY
 
 REPO = Path(__file__).resolve().parents[2]
@@ -75,6 +76,66 @@ class FailClosedTest(unittest.TestCase):
     def test_unknown_trigger_is_rejected(self):
         with self.assertRaises(boundary.ConfigError):
             launcher.run(REPO, Path("x"), "hourly", {}, Path(self.tmp.name), time_limit=60)
+
+
+class LeftoverTest(unittest.TestCase):
+    """A boundary check that was killed mid-run cannot clean up; the next run of any kind does, before its agent."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name).resolve()
+        self.home = root / "home"
+        self.repo = fakes.make_repo(self.home / "gr0wthlab", fakes.git_env(root))
+        self.env = {
+            "GR0WTHLAB_LOG_DIR": str(root / "logs"),
+            "GR0WTHLAB_CODEX_BIN": str(fakes.install_codex(root / "bin")),
+        }
+        for name in ("Mandu", "RepToday", "Immerse"):
+            (self.home / name).mkdir()
+            self.env[f"GR0WTHLAB_{name.upper()}_DIR"] = str(self.home / name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_a_run_removes_what_a_stopped_boundary_check_left_before_its_agent_starts(self):
+        stale = (
+            self.repo / "workspace/instructions/gr0wthlab-boundary-probe-20261001T000000Z-on-demand-0001-shell-steps.sh"
+        )
+        stale.write_text("#!/bin/sh\n", encoding="utf-8")
+        mine = (
+            self.repo / "workspace/instructions/gr0wthlab-boundary-probe-20261009T000000Z-on-demand-abcd-shell-steps.sh"
+        )
+        mine.write_text("#!/bin/sh\n", encoding="utf-8")
+        task = self.repo / "src/instructions/weekly-run.md"
+        facts = [f"Run brief, read it first: {self.repo / 'ledger/run-reports/brief.md'}"]
+        out = io.StringIO()
+        record = launcher.run(
+            self.repo,
+            task,
+            "on-demand",
+            self.env,
+            self.home,
+            out,
+            None,
+            facts,
+            "20261009T000000Z-on-demand-abcd",
+            time_limit=60,
+        )
+        self.assertEqual((record["exit_code"], record["agent_started"]), (0, True))
+        self.assertEqual(record["probe_files_removed"], [str(stale.relative_to(self.repo))])
+        self.assertIn(f"removed boundary probe files left in the areas: {stale.relative_to(self.repo)}", out.getvalue())
+        self.assertLess(out.getvalue().index("removed boundary probe files"), out.getvalue().index("preflight refused"))
+        self.assertFalse(stale.exists())
+        self.assertTrue(mine.is_file(), "the run in progress keeps its own files")
+
+    def test_a_run_with_nothing_left_behind_says_nothing_of_it(self):
+        task = self.repo / "src/instructions/weekly-run.md"
+        facts = [f"Run brief, read it first: {self.repo / 'ledger/run-reports/brief.md'}"]
+        out = io.StringIO()
+        record = launcher.run(self.repo, task, "on-demand", self.env, self.home, out, None, facts, time_limit=60)
+        self.assertEqual(record["exit_code"], 0)
+        self.assertNotIn("probe_files_removed", record)
+        self.assertNotIn("removed boundary probe files", out.getvalue())
 
 
 class CliTest(unittest.TestCase):

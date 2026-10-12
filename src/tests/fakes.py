@@ -6,6 +6,7 @@ import dataclasses
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import stat
@@ -14,6 +15,7 @@ import sys
 import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from unittest import mock
 
 REPO = Path(__file__).resolve().parents[2]
 AREAS = ("evidence", "drafts", "review-queue", "weekly-reads", "run-reports", "instructions")
@@ -27,7 +29,7 @@ QUIET_WINDOW = {"number": 1, "first_sitting": "2099-01-04", "slot": "19:00"}
 # hang does its writing, starts its children, the first in a session of its own as Codex starts a shell command, notes
 # every process id in pids.txt, and then never exits and never reports its summary or its token counts. One told to
 # detach first leaves what a shell command that has finished can leave, noted last: a process in a session of its own
-# whose parent has ended.
+# whose parent has ended. One told to work takes that many seconds before it finishes.
 FAKE_CODEX = """#!{python}
 import json, os, re, shutil, signal, subprocess, sys, time
 from pathlib import Path
@@ -82,6 +84,7 @@ for line in behavior.get("events", []):
     print(line, flush=True)
 while behavior.get("hang"):
     time.sleep(600)
+time.sleep(behavior.get("work", 0))
 summary = behavior.get("summary", "Checked the package.\\n\\nReview: complete\\n")
 Path(args[args.index("--output-last-message") + 1]).write_text(summary)
 usage = {{"input_tokens": 200000, "cached_input_tokens": 150000, "cache_write_input_tokens": 0, "output_tokens": 4000}}
@@ -209,6 +212,59 @@ def behave(directory: Path, behavior: dict) -> None:
     (directory / "behavior.json").write_text(json.dumps(behavior), encoding="utf-8")
 
 
+# Codex's event stream, as `codex exec --json` writes it: one line for each step that ran to its end.
+
+
+def command_event(command: str, output: str = "", exit_code: int = 0) -> str:
+    """One finished shell command, with all of its output, as the stream holds it whatever the model was shown."""
+    item = {
+        "id": "item_1",
+        "type": "command_execution",
+        "command": f"/bin/zsh -lc {shlex.quote(command)}",
+        "aggregated_output": output,
+        "exit_code": exit_code,
+        "status": "completed",
+    }
+    return json.dumps({"type": "item.completed", "item": item})
+
+
+def read_event(*paths: Path) -> str:
+    """The agent reading files whole, one after another, in one command."""
+    output = "".join(path.read_text(encoding="utf-8") for path in paths)
+    return command_event("cat " + " ".join(str(path) for path in paths), output)
+
+
+def edit_event(*paths: str) -> str:
+    """One finished file edit; the stream names the files and never holds their text."""
+    item = {
+        "id": "item_2",
+        "type": "file_change",
+        "changes": [{"path": path, "kind": "add"} for path in paths],
+        "status": "completed",
+    }
+    return json.dumps({"type": "item.completed", "item": item})
+
+
+def write_events(path: Path, *lines: str) -> Path:
+    """A session's event stream on disk, opened and closed as Codex opens and closes one."""
+    stream = [json.dumps({"type": "thread.started", "thread_id": "t"}), json.dumps({"type": "turn.started"}), *lines]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(stream) + "\n", encoding="utf-8")
+    return path
+
+
+def package_files(mandu: Path) -> list[Path]:
+    """Every package file a run's brief lists for the throwaway Mandu, in the registry's order."""
+    registry = json.loads((REPO / "config" / "products.json").read_text(encoding="utf-8"))
+    found = []
+    for product in registry["products"]:
+        for source in (product.get("go_to_market_package") or {}).get("sources", []):
+            target = mandu / source["path"]
+            prefix = source.get("files_starting_with", "")
+            found += sorted(target.glob(f"{prefix}*")) if source["path"].endswith("/") else [target]
+    return [path for path in found if path.is_file()]
+
+
 def agent_pids(directory: Path) -> list[int]:
     """The fake agent's own process id, its children's, and last that of a process it detached, as its last run
     noted them."""
@@ -284,6 +340,47 @@ def stepped_clock(step: float, after: float = 1.0):
         return time.time() + (step if now - first >= after else 0)
 
     return process.Clock(time.monotonic, wall)
+
+
+class Mac:
+    """The two clocks of a Mac that sleeps where a test says: awake time is real, and the wall clock is ahead of it by
+    every second the Mac has slept."""
+
+    def __init__(self):
+        self.slept = 0.0
+
+    def wall(self) -> float:
+        return time.time() + self.slept
+
+    @property
+    def clocks(self):
+        from gr0wthlab import process
+
+        return process.Clock(time.monotonic, self.wall)
+
+    def asleep_in(self, word: str, seconds: float, after: float = 0.0):
+        """A patch under which every process the launcher waits for is timed on this Mac's clocks, and the Mac falls
+        asleep `after` seconds into the first one whose command line has `word`, to wake `seconds` later."""
+        from gr0wthlab import process
+
+        real, left = process.run, [seconds]
+
+        def run(command, timeout, **kwargs):
+            clocks = self.clocks
+            if left and word in command:
+                begun = []
+
+                def wall() -> float:
+                    if not begun:
+                        begun.append(time.monotonic())
+                    elif left and time.monotonic() - begun[0] >= after:
+                        self.slept += left.pop()
+                    return self.wall()
+
+                clocks = process.Clock(time.monotonic, wall)
+            return real(command, timeout, **dict(kwargs, clock=clocks))
+
+        return mock.patch.object(process, "run", run)
 
 
 SUNDAY_RUN = datetime(2026, 10, 11, 23, 0, tzinfo=timezone.utc)

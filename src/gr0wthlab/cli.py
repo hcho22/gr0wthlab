@@ -44,10 +44,18 @@ def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(prog="gr0wthlab", description="Start and check Marketing Engineer runs.")
     commands = root.add_subparsers(dest="command", required=True)
 
-    run = commands.add_parser("run", help="start one run: sync, snapshot, agent, Review Queue, report, records")
+    run = commands.add_parser(
+        "run",
+        help="start one run: sync, snapshot, agent, Review Queue, report, records; a weekly scheduled start runs only"
+        " while the week's run is still owed and the Mac is fully awake",
+    )
     run.add_argument("--instruction", type=Path, help="a task definition under src/instructions/ (default: run.json's)")
     run.add_argument("--trigger", choices=launcher.TRIGGERS, default="on-demand")
-    run.add_argument("--once", metavar="YYYY-MM-DDTHH:MM", help="the one-off time a scheduled run was due at")
+    run.add_argument(
+        "--once",
+        metavar="YYYY-MM-DDTHH:MM",
+        help="the one-off time a scheduled run was due at; such a run always runs, as a run on demand does",
+    )
 
     commands.add_parser("show-config", help="print the resolved run configuration and its fingerprint")
     commands.add_parser(
@@ -559,9 +567,17 @@ def main(argv: list[str] | None = None) -> int:
                 key: value for key, value in env.items() if key.startswith("GR0WTHLAB_") and key != cycle.PRE_RUN_ENV
             }
             overrides["GR0WTHLAB_CODEX_BIN"] = str(codex.resolve_codex_binary(env))
+            # Only the weekly run is checked again at an interval; a one-off job starts once, at its time.
+            weekly = not args.once and not args.boundary_check
             sys.stdout.buffer.write(
                 schedule.launch_agent(
-                    args.label, program, REPO_ROOT, calendar, overrides, launcher.default_log_dir(env, home)
+                    args.label,
+                    program,
+                    REPO_ROOT,
+                    calendar,
+                    overrides,
+                    launcher.default_log_dir(env, home),
+                    config.check_every_minutes * 60 if weekly else None,
                 )
             )
             return 0

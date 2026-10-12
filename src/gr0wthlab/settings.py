@@ -20,6 +20,10 @@ TAG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 UNKNOWN = "unknown"
 # No agent time limit may pass a day: a longer one is no limit on a run that happens every week.
 MAX_TIME_LIMIT = 24 * 60 * 60
+# The owed-run check comes at least once an hour, and a week's run takes at most this many attempts: more would be no
+# bound on a run that the Mac's sleep keeps cutting short.
+MAX_CHECK_MINUTES = 60
+MAX_ATTEMPTS = 7
 
 
 @dataclass(frozen=True)
@@ -67,6 +71,9 @@ class Settings:
     waitlist_live_since: date | None
     beta_batch_size: int
     agent: Agent
+    check_every_minutes: int
+    attempts_per_week: int
+    shown_output_chars: int
 
     def waitlist_live(self, today: date) -> bool:
         """Whether the Waitlist is live: only once a reviewed change has set the date it went live."""
@@ -137,6 +144,26 @@ def load_agent(data: object) -> Agent:
     return Agent(float(limit))
 
 
+def load_count(schedule: object, key: str, most: int, what: str) -> int:
+    """One of config/run.json's schedule counts: a whole number from 1 to most."""
+    value = schedule.get(key) if isinstance(schedule, dict) else None
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= most:
+        raise ConfigError(
+            f"{RUN_CONFIG}: schedule.{key} must be a whole number from 1 to {most}, {what}; got {value!r}"
+        )
+    return value
+
+
+def load_shown_output(data: object) -> int:
+    """config/run.json's work_counts.shown_output_characters: how much of one command's output Codex shows the model,
+    which the run report's counts of the agent's work are made with. It describes Codex and is not passed to it: the
+    launcher sets no output limit of its own."""
+    shown = data.get("shown_output_characters") if isinstance(data, dict) else None
+    if isinstance(shown, bool) or not isinstance(shown, int) or shown < 2:
+        raise ConfigError(f"{RUN_CONFIG}: work_counts.shown_output_characters must be a whole number from 2")
+    return shown
+
+
 def load_window(data: object, sitting_day: str) -> Window:
     """config/run.json's window; its first sitting, on the schedule's day, and its slot stay unset until the Founder
     sets them, and are never inferred."""
@@ -187,6 +214,11 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
         live_since = load_live_since(data["waitlist"])
         batch_size = load_batch_size(data["beta_recruiting"])
         agent = load_agent(data.get("agent"))
+        check = load_count(
+            data["schedule"], "check_every_minutes", MAX_CHECK_MINUTES, "the minutes between owed-run checks"
+        )
+        tries = load_count(data["schedule"], "attempts_per_week", MAX_ATTEMPTS, "the attempts one week's run may take")
+        shown_output = load_shown_output(data.get("work_counts"))
     except (KeyError, TypeError, ValueError, schedule.ScheduleError) as error:
         raise ConfigError(f"{RUN_CONFIG} is incomplete or malformed: {error}") from error
     for source in not_connected:
@@ -206,6 +238,9 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
         live_since,
         batch_size,
         agent,
+        check,
+        tries,
+        shown_output,
     )
 
 

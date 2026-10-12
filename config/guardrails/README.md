@@ -4,7 +4,7 @@ Configuration that enforces Guardrails G1 to G8 through the tools the Marketing 
 It changes only through firstmate's reviewed pull requests, and the Marketing Engineer cannot change it.
 The PRD's Guardrails section lists each Guardrail and what enforces it.
 
-- [`runtime.json`](runtime.json): the runtime and its write boundary (G1, G2, G8): the six writable areas, read grants, network, and the Codex settings the launcher pins.
+- [`runtime.json`](runtime.json): the runtime and its write boundary (G1, G2, G8): the six writable areas, read grants, network, and the Codex settings the launcher pins, among them the model and the reasoning effort the agent runs at (`codex.reasoning_effort`, with its why beside it).
   The sandboxed agent's network is off, and stays off.
   Re-run `src/bin/gr0wthlab boundary-check` after any change to it.
 - [`fetch.json`](fetch.json): the launcher's own outbound reads (G5, G8), made outside the sandbox before the agent starts: the hosts it may read, the User-Agent it sends, and its limits.
