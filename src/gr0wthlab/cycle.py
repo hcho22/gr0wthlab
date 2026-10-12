@@ -6,11 +6,12 @@ that need filing; plan the post Drafts from the 14-day kit (posts.prepare); read
 and, only once it exists, plan the Beta Cohort's next invitation batch (beta.prepare); brief the agent and run it
 inside the sandbox (launcher.run); queue the items it wrote to workspace/review-queue/incoming/ that pass the format,
 a post for each Draft it wrote that passes every check (posts.take), the recruiting Drafts that pass theirs
-(beta.take), and the reviewed brand-rules proposal when it needs filing; write the Review Queue and the run report;
-commit and push workspace/ and ledger/. Every step but the agent is deterministic code outside the sandbox. The
-launcher's records live in ledger/, which the agent can read and never write, so nothing it does can change them; in
-workspace/ the launcher only restores its owner's access to entries the agent left without it, reads the post and
-recruiting Drafts, removes a recruiting Draft that holds what looks like an email address, and reads and removes the
+(beta.take), and the reviewed brand-rules proposal when it needs filing; count what the agent's session did, for the
+report to show beside the agent's own word (work.py); write the Review Queue and the run report; commit and push
+workspace/ and ledger/. Every step but the agent is deterministic code outside the sandbox. The launcher's records
+live in ledger/, which the agent can read and never write, so nothing it does can change them; in workspace/ the
+launcher only restores its owner's access to entries the agent left without it, reads the post and recruiting Drafts
+and the items in incoming/, removes a recruiting Draft that holds what looks like an email address, and removes the
 incoming items it takes in. One run at a time per checkout holds the run lock in its ledger/ from the sync to the
 saved records; a run started meanwhile refuses to start, and the next report says so.
 """

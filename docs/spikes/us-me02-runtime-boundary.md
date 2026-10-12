@@ -411,17 +411,19 @@ Once the agent has ended it reads Codex's event stream in the launcher's log fol
 Before the agent starts it reads the post Drafts due once, the same way, and the files in `workspace/review-queue/incoming/`, as the take-in reads them, so that it can tell afterwards which of them this session wrote or changed; a file it cannot read then is a launcher problem, the Draft claims and the proposals are not counted, and the run starts as it would have.
 It writes nothing in `workspace/`, Mandu, or a Product checkout; the counts go into the run report in `ledger/` and the run's log record.
 
-Both checks were made on the final launcher, as review left it, on 2026-10-12, Mac local time, with Codex CLI 0.160.0, from the linked worktree the review was made in, against Mandu and the Product checkouts as they are.
-The configuration fingerprint there is `791a5a98da39278e8541c16fdd49eb0748a2fd4005fb2aa965cb712b97459f83`, and no change to the launcher or its configuration came after them.
+Both checks were made on the final launcher on 2026-10-12, Mac local time, with Codex CLI 0.160.0, from the linked worktree the review was made in, against Mandu and the Product checkouts as they are.
+They came after the one change made to the launcher's package once review had ended, which changed no statement: the description at the head of `cycle.py` now lists the count among a run's steps and the read of `incoming/` among what the launcher does in `workspace/`.
+The configuration fingerprint there is `791a5a98da39278e8541c16fdd49eb0748a2fd4005fb2aa965cb712b97459f83`, as it was when review ended, and no change to the launcher or its configuration came after them.
 Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the two checks and after them.
 
 - `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
-- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T074058Z-on-demand-ab41`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files, 13 of them, landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
-  The probe's agent ran 53 seconds at high effort, all of them with the Mac awake.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T082632Z-on-demand-5d3a`: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners and a second for the Mandu target, which the probe's agent tried twice, neither listener received a connection, the permitted files, 13 of them, landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+  The probe's agent ran 83 seconds at high effort, all of them with the Mac awake.
 
-Both had also passed three times before, on the launcher as it then was, each time with the boundary check at its first and only attempt.
+Both had also passed four times before, on the launcher as it then was, each time with the boundary check at its first and only attempt.
 Before review, from the worktree the change was made in, it passed as run `20261012T055318Z-on-demand-8727`, whose agent ran 37 seconds.
 After review's first and second rounds, with the same fingerprint as above, it passed as runs `20261012T062443Z-on-demand-6c97` and `20261012T070050Z-on-demand-e49a`, whose agents ran 58 seconds each.
+On the launcher as review left it, before the description in `cycle.py` changed, it passed under that fingerprint as run `20261012T074058Z-on-demand-ab41`, with eleven kernel denials; its agent ran 53 seconds.
 
 Three facts about Codex that the change rests on were measured on 2026-10-11 with the real agent, started with the launcher's own Codex command from a throwaway clone.
 
