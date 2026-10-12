@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import exchange, package, posts, process, schedule, waitlist
+from . import beta, exchange, package, posts, process, schedule, waitlist
 from .state import Tally, run_tally
 
 SKIPPED = "skipped"
@@ -98,6 +98,9 @@ class RunState:
     posts_problem: str = ""  # why the post Drafts were not prepared or not taken in, when they were not
     filing: str = ""  # where the proposed brand-rules lists stand
     filed: str | None = None  # the brand-rules proposal, when this run filed it
+    beta: beta.Plan | None = None  # Beta Cohort recruiting: the gate, and once it is recorded, the run's plan
+    beta_outcome: beta.Outcome | None = None
+    beta_problem: str = ""  # why recruiting was not prepared or not taken in, when it was not
 
     @property
     def lateness(self) -> timedelta | None:
@@ -409,7 +412,7 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
     lines += table(["File", "This run"], rows) + ["", "## Changes since the previous snapshot", ""]
     lines += package_changes(state)
     lines += ["", "## Failed sources", ""]
-    failed = state.failed_sources()
+    failed = [line for line in state.failed_sources() if line.name not in beta.LAUNCHER_SOURCES]
     if failed:
         lines += [
             "A failed source blocks only the work that needs it: never guess what it says, and do everything else.",
@@ -428,8 +431,8 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
     if state.queue_before:
         lines += [
             "Do not queue these again; to change one, write a new item with `supersedes: <id>`.",
-            "An item filed by the launcher changes only through a reviewed change to its source text, and a post only"
-            " through its Draft, so an item that supersedes either is refused.",
+            "An item filed by the launcher changes only through a reviewed change to its source text, and a post or a"
+            " message only through its Draft, so an item that supersedes any of them is refused.",
         ]
         for entry in state.queue_before:
             filed = ", filed by the launcher" if entry.get("origin") else ""
@@ -456,6 +459,9 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
         lines += waitlist_brief(state.waitlist, evidence)
     if state.posts is not None:
         lines += [""] + posts.brief_lines(state.posts, repo_root)[:-1]
+    if state.beta is not None and not state.beta_problem:
+        recruiting = beta.brief_lines(state.beta, repo_root)
+        lines += [""] * bool(recruiting) + recruiting[:-1]
     lines += [
         "",
         "## Where to write",
@@ -516,6 +522,9 @@ def summary_lines(state: RunState) -> list[str]:
         lines.append(f"- Post Drafts: {', '.join(counts) or 'no calendar day was due'}.")
     elif state.posts_problem:
         lines.append(f"- Post Drafts: {state.posts_problem}")
+    recruiting = beta.summary(state.beta, state.beta_outcome, state.beta_problem)
+    if recruiting:
+        lines.append(f"- {recruiting}")
     if state.notice:
         lines.append(f"- Problems this run are listed in the notice `{state.notice}`.")
     lines.append(f"- {cost_line(state)}")
@@ -545,6 +554,8 @@ def render_report(state: RunState) -> str:
     for item in state.set_aside:
         lines.append(f"- Set aside, not queued: `{item.name}`: {'; '.join(item.problems)}")
     lines += [""] + posts.report_lines(state.posts, state.post_outcome, state.filing, state.posts_problem)
+    recruiting = beta.report_lines(state.beta, state.beta_outcome, state.beta_problem)
+    lines += [""] * bool(recruiting) + recruiting
     lines += ["", "## Run state", ""]
     lines += [f"- {tally.workflow}: {tally.line()}" for tally in state.tallies]
     if state.state_notes:
@@ -632,6 +643,9 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     blocked = posts.notice_section(state.post_outcome, day)
     if blocked:
         sections.append(blocked)
+    recruiting = beta.notice_section(state.beta_outcome, day)
+    if recruiting:
+        sections.append(recruiting)
     if state.set_aside:
         sections.append(
             (

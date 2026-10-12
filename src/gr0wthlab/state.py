@@ -5,7 +5,8 @@ only after a non-reply, and leave nothing unaccounted for.
 State is a convenience, never the record.
 The Review Queue ledger and Mandu's decision records say what was decided and who was contacted; each run checks
 the state against them, repairs any difference in their favor, and says so in the run report.
-Entries hold identifiers, dates, counts, and SHA-256 hashes only: never a URL, a name, or any personal data.
+Entries hold identifiers, dates, counts, and SHA-256 hashes only: never a URL, a name, or any personal data; a Waitlist
+entry is held by its random entry identifier, which is never an address or an encoding of one.
 The files live in ledger/run-reports/state/, which only the launcher writes and the agent can only read.
 """
 
@@ -22,13 +23,15 @@ from urllib.parse import urlsplit
 
 from . import exchange
 from .areas import Store, UnsafeFile, read_plain
+from .waitlist import ENTRY_PATTERN, encodes_address
 
 STATE_FORMAT = 1
 STATE_DIR = "state"
 REVIEW_QUEUE = "review-queue"
 LISTENING = "listening"
 OUTREACH = "outreach"
-WORKFLOWS = (REVIEW_QUEUE, LISTENING, OUTREACH)
+BETA_RECRUITING = "beta-recruiting"
+WORKFLOWS = (REVIEW_QUEUE, LISTENING, OUTREACH, BETA_RECRUITING)
 HASH_PATTERN = re.compile(r"[0-9a-f]{64}")
 CLOSED_OUTCOMES = ("approved", "rejected", "superseded")
 
@@ -266,6 +269,43 @@ class OutreachState:
         self.targets[target_key(identifier)]["follow_ups"] = 1
 
 
+# Beta Cohort recruiting: each Waitlist entry an invitation batch holds, by entry identifier, with the batch item and
+# whether the Founder approved it (invited) or has yet to decide (offered); an invited entry is never offered again.
+
+INVITED = "invited"
+OFFERED = "offered"
+
+
+@dataclass
+class BetaRecruitingState:
+    entries: dict[str, dict[str, str]] = field(default_factory=dict)
+    build: str = ""  # the fingerprint of the Beta Build record last read, so a changed record is reported as changed
+
+    @classmethod
+    def from_json(cls, data: Mapping) -> BetaRecruitingState:
+        state = cls()
+        build = data.get("build", "")
+        state.build = hash_value(build, "the Beta Build record") if build else ""
+        for identifier, entry in entries(data, "entries").items():
+            if not ENTRY_PATTERN.fullmatch(identifier) or encodes_address(identifier):
+                raise StateError("an entry is not a Waitlist entry identifier")
+            if entry.get("status") not in (INVITED, OFFERED):
+                raise StateError(f"entry {identifier} is neither {INVITED} nor {OFFERED}")
+            item = entry.get("item")
+            if not isinstance(item, str) or not exchange.ID_PATTERN.fullmatch(item):
+                raise StateError(f"entry {identifier} names no batch item")
+            state.entries[identifier] = {"status": str(entry["status"]), "item": item}
+        return state
+
+    def as_json(self) -> dict[str, object]:
+        return {"entries": dict(sorted(self.entries.items())), "build": self.build}
+
+    @property
+    def unused(self) -> bool:
+        """Nothing to keep yet: recruiting never started, so no file is written for it."""
+        return not self.entries and not self.build
+
+
 # The files.
 
 
@@ -274,12 +314,23 @@ class States:
     review_queue: ReviewQueueState = field(default_factory=ReviewQueueState)
     listening: ListeningState = field(default_factory=ListeningState)
     outreach: OutreachState = field(default_factory=OutreachState)
+    beta_recruiting: BetaRecruitingState = field(default_factory=BetaRecruitingState)
 
-    def by_workflow(self) -> dict[str, ReviewQueueState | ListeningState | OutreachState]:
-        return {REVIEW_QUEUE: self.review_queue, LISTENING: self.listening, OUTREACH: self.outreach}
+    def by_workflow(self) -> dict[str, ReviewQueueState | ListeningState | OutreachState | BetaRecruitingState]:
+        return {
+            REVIEW_QUEUE: self.review_queue,
+            LISTENING: self.listening,
+            OUTREACH: self.outreach,
+            BETA_RECRUITING: self.beta_recruiting,
+        }
 
 
-PARSERS = {REVIEW_QUEUE: ReviewQueueState, LISTENING: ListeningState, OUTREACH: OutreachState}
+PARSERS = {
+    REVIEW_QUEUE: ReviewQueueState,
+    LISTENING: ListeningState,
+    OUTREACH: OutreachState,
+    BETA_RECRUITING: BetaRecruitingState,
+}
 
 
 def state_path(store: Store, workflow: str) -> Path:
@@ -307,7 +358,11 @@ def load(store: Store) -> tuple[States, list[tuple[str, Path, str]]]:
 
 
 def save(store: Store, states: States, run_id: str, at: str) -> None:
+    """Write every workflow's state; one that has never held anything, as Beta Cohort recruiting before the Founder's
+    gate, writes no file until it does."""
     for workflow, state in states.by_workflow().items():
+        if getattr(state, "unused", False) and not state_path(store, workflow).exists():
+            continue
         record = {"format": STATE_FORMAT, "workflow": workflow, "updated_by_run": run_id, "updated_at": at}
         record.update(state.as_json())
         store.write_json(state_path(store, workflow), record)

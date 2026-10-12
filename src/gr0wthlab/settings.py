@@ -65,6 +65,7 @@ class Settings:
     not_connected: tuple[Mapping, ...]
     window: Window
     waitlist_live_since: date | None
+    beta_batch_size: int
     agent: Agent
 
     def waitlist_live(self, today: date) -> bool:
@@ -112,6 +113,15 @@ def load_live_since(data: object) -> date | None:
     if value is not None and iso_date(value) is None:
         raise ConfigError(f"{RUN_CONFIG}: waitlist.live_since must be null or a YYYY-MM-DD date")
     return iso_date(value)
+
+
+def load_batch_size(data: object) -> int:
+    """config/run.json's beta_recruiting.batch_size: how many Waitlist entries one invitation batch offers, the
+    Founder's call, set through a reviewed change."""
+    size = data.get("batch_size") if isinstance(data, dict) else None
+    if isinstance(size, bool) or not isinstance(size, int) or size < 1:
+        raise ConfigError(f"{RUN_CONFIG}: beta_recruiting.batch_size must be a whole number from 1")
+    return size
 
 
 def load_agent(data: object) -> Agent:
@@ -175,6 +185,7 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
         instruction = instruction_path(repo_root, Path(data["instruction"]))
         window = load_window(data["window"], weekly[0])
         live_since = load_live_since(data["waitlist"])
+        batch_size = load_batch_size(data["beta_recruiting"])
         agent = load_agent(data.get("agent"))
     except (KeyError, TypeError, ValueError, schedule.ScheduleError) as error:
         raise ConfigError(f"{RUN_CONFIG} is incomplete or malformed: {error}") from error
@@ -183,7 +194,18 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
             if output not in outputs:
                 raise ConfigError(f"{RUN_CONFIG}: {source.get('name')} feeds unknown output {output}")
     return Settings(
-        data, instruction, weekly, late, resolved, prices, outputs, not_connected, window, live_since, agent
+        data,
+        instruction,
+        weekly,
+        late,
+        resolved,
+        prices,
+        outputs,
+        not_connected,
+        window,
+        live_since,
+        batch_size,
+        agent,
     )
 
 

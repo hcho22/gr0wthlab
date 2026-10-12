@@ -16,6 +16,7 @@ from gr0wthlab import cycle, exchange, process, report, settings
 from gr0wthlab.boundary import ConfigError
 from gr0wthlab.report import RunState
 from tests import fakes
+from tests.test_beta_cycle import BetaCycleTestCase
 from tests.test_cycle import CycleTestCase
 
 # Long enough for the fake agent to start and write what a test gives it to write, short enough for the suite.
@@ -288,6 +289,28 @@ class TimedOutRunTest(TimeLimitTestCase):
         )
         self.assertFalse((self.codex_dir / "prompt.txt").exists())
         self.assertFalse((self.ledger() / "run-reports").exists())
+
+
+class TimedOutRecruitingTest(BetaCycleTestCase, TimeLimitTestCase):
+    def test_a_timed_out_run_that_asked_for_recruiting_drafts_marks_recruiting_incomplete_and_its_notice_names_it(self):
+        self.approve_build()
+        fakes.behave(self.codex_dir, {"write": {fakes.INVITATION: fakes.beta_draft()}, "hang": True})
+        code, out = self.run_cycle()
+        self.assertEqual(code, cycle.EXIT_STOPPED, out)
+        self.assertTrue(fakes.all_gone(fakes.agent_pids(self.codex_dir)))
+
+        # The invitation the agent had written passes its checks and is queued with its batch; the ask it never
+        # reached is missing.
+        self.assertEqual(self.invitation()["candidates"], fakes.GOOD_FIT_OPT_INS + fakes.OTHER_OPT_INS)
+        self.assertEqual(self.asks(), [])
+        text = self.report()
+        gap = f"the agent was stopped at its {LIMIT} s time limit"
+        self.assertIn(f"| Beta Cohort recruiting | incomplete | no Waitlist ask Draft; {gap} |", text)
+        self.assertRegex(text, rf"\n- beta-recruiting: checked=8 acted=1 .*; incomplete: .*; {gap}\n")
+        notice = self.notice()
+        self.assertEqual(incomplete_for(text, gap), ["Package review (contradictions)", "Beta Cohort recruiting"])
+        self.assertIn("Incomplete this run: Package review (contradictions), Beta Cohort recruiting.", notice)
+        self.assertIn("- The Waitlist ask has no Draft, so it was not offered this run.", notice)
 
 
 class TimedOutProductionRunTest(TimeLimitTestCase):

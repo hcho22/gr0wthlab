@@ -1,0 +1,90 @@
+{
+ "view": 1,
+ "generated_at": "2026-10-11T22:00:00+00:00",
+ "entries": [
+  {
+   "entry": "Qm7tLx2a",
+   "source": "tiktok",
+   "fit": "lost-the-routine",
+   "beta_opt_in": true,
+   "signed_up_on": "2026-09-29"
+  },
+  {
+   "entry": "Vb3kPz9w",
+   "source": "tiktok",
+   "fit": "lost-the-routine",
+   "beta_opt_in": false,
+   "signed_up_on": "2026-10-01"
+  },
+  {
+   "entry": "Hc8nRy4e",
+   "source": "tiktok",
+   "fit": "exercises-regularly",
+   "beta_opt_in": true,
+   "signed_up_on": "2026-10-06"
+  },
+  {
+   "entry": "Jd2wGs6u",
+   "source": "tiktok",
+   "fit": "lost-the-routine",
+   "beta_opt_in": true,
+   "signed_up_on": "2026-10-08"
+  },
+  {
+   "entry": "Ne5qTb1o",
+   "source": "youtube",
+   "fit": "never-had-a-routine",
+   "beta_opt_in": true,
+   "signed_up_on": "2026-09-30"
+  },
+  {
+   "entry": "Xf9mKa3i",
+   "source": "youtube",
+   "fit": "lost-the-routine",
+   "beta_opt_in": true,
+   "signed_up_on": "2026-10-07"
+  },
+  {
+   "entry": "Ug4vWc7y",
+   "source": "youtube",
+   "fit": null,
+   "beta_opt_in": false,
+   "signed_up_on": "2026-10-09"
+  },
+  {
+   "entry": "Ps1hDe8t",
+   "source": "reddit",
+   "fit": "exercises-regularly",
+   "beta_opt_in": false,
+   "signed_up_on": "2026-10-02"
+  },
+  {
+   "entry": "Lr6jFq5s",
+   "source": "reddit",
+   "fit": "lost-the-routine",
+   "beta_opt_in": true,
+   "signed_up_on": "2026-10-10"
+  },
+  {
+   "entry": "Ka0zMn2p",
+   "source": "network",
+   "fit": "lost-the-routine",
+   "beta_opt_in": true,
+   "signed_up_on": "2026-10-03"
+  },
+  {
+   "entry": "Yt3bHv9r",
+   "source": "network",
+   "fit": "never-had-a-routine",
+   "beta_opt_in": false,
+   "signed_up_on": "2026-10-11"
+  },
+  {
+   "entry": "Wi7cJx4l",
+   "source": "unknown",
+   "fit": null,
+   "beta_opt_in": true,
+   "signed_up_on": "2026-10-05"
+  }
+ ]
+}
