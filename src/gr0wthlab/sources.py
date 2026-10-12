@@ -284,6 +284,9 @@ def link_key(link: str) -> str:
     return f"{parts.netloc.lower()}{parts.path.rstrip('/')}?{parts.query}#{parts.fragment}"
 
 
+DOCUMENT_ID = re.compile(r"d-[0-9a-f]{12}")
+
+
 def document_id(link: str) -> str:
     return "d-" + hashlib.sha256(link_key(link).encode("utf-8")).hexdigest()[:12]
 

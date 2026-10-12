@@ -7,8 +7,10 @@ import socket
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from gr0wthlab import boundary, probe
+from gr0wthlab import boundary, probe, process
+from gr0wthlab.boundary import ConfigError
 from tests import fakes
 from tests.test_boundary import CONFIG, REGISTRY
 
@@ -170,6 +172,33 @@ class VerifyTest(unittest.TestCase):
         (self.repo / "workspace/drafts/new.md").write_text("new\n", encoding="utf-8")
         after = {"repository": probe.snapshot(self.repo)}
         self.assertEqual(probe.changed(before, after), {"repository": ["workspace/drafts/new.md"]})
+
+    def test_a_kernel_log_query_cut_short_fails_the_check_and_says_why(self):
+        self.write_record(exit_code=0, started_at="2026-10-09T00:00:00+00:00")
+        self.write_permitted()
+        denial = f"Sandbox: sh(1) deny(1) file-write-create /x/{MARK}-src-shell.txt"
+        log = json.dumps({"eventMessage": denial}) + "\n"
+        cut = process.Completed(None, log, "", process.SLOW, process.Stop((7,), (), (), True))
+        with mock.patch.object(probe, "kernel_log", return_value=cut):
+            result = probe.verify(self.boundary, RUN, self.logs)
+        self.assertEqual((result["kernel_sandbox_denials"], result["kernel_log_cut_short"]), ([denial], True))
+        self.assertFalse(result["passed"])
+        out = io.StringIO()
+        probe.summarize(result, out)
+        self.assertIn("the kernel log query did not finish within 5 min and was stopped", out.getvalue())
+        whole = process.Completed(0, log, "", process.SLOW)
+        with mock.patch.object(probe, "kernel_log", return_value=whole):
+            self.assertFalse(probe.verify(self.boundary, RUN, self.logs)["kernel_log_cut_short"])
+
+    def test_a_checkout_git_cannot_list_stops_the_check_with_the_reason(self):
+        (self.repo / ".git").write_text("not a git directory\n", encoding="utf-8")
+        with self.assertRaises(ConfigError) as refused:
+            probe.snapshot(self.repo)
+        self.assertIn(f"git status in {self.repo} failed:", str(refused.exception))
+        stopped = process.Completed(None, "", "", process.SLOW, process.Stop((7,), (7,), (), True))
+        with mock.patch.object(process, "run", return_value=stopped), self.assertRaises(ConfigError) as refused:
+            probe.snapshot(self.repo)
+        self.assertIn(f"git status in {self.repo} did not finish within 5 min", str(refused.exception))
 
     def test_changed_reports_new_and_modified_entries(self):
         before = {"Mandu": {"a.md": " M 1", "b.md": "?? 2"}}

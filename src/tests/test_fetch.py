@@ -5,9 +5,14 @@ to a listed host, never a path the host's robots.txt disallows, and in a unit te
 beyond this machine, so the whole runs in test_work_cycle show that nothing but this client tries to.
 """
 
+import contextlib
 import http.client
 import json
+import socket
+import threading
+import time
 import unittest
+from functools import partial
 from pathlib import Path
 from unittest import mock
 
@@ -23,6 +28,7 @@ POLICY = {
     "max_requests_per_run": 6,
     "seconds_between_requests_per_host": 2,
     "timeout_seconds": 5,
+    "read_deadline_seconds": 15,
     "max_response_bytes": 2048,
     "max_wait_seconds": 30,
 }
@@ -32,10 +38,39 @@ def client(web, **overrides):
     return fakes.client(web, dict(POLICY, **overrides))
 
 
+class Trickle(http.client.HTTPConnection):
+    """The real http.client, connected to a listener on this machine in place of the host. The listener answers one
+    byte at a time and never finishes: its headers, or, when slow is "body", its body, after headers sent at once
+    that close the connection, as both listed hosts answer."""
+
+    def __init__(self, slow, host, port, timeout=None, context=None):
+        self.slow, self.listener = slow, socket.create_server(("127.0.0.1", 0))
+        super().__init__(*self.listener.getsockname(), timeout=timeout)
+        threading.Thread(target=self.answer, daemon=True).start()
+
+    def answer(self):
+        with contextlib.suppress(OSError):
+            far, _ = self.listener.accept()
+            with far:
+                far.recv(4096)  # the request
+                if self.slow == "body":
+                    far.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 100000\r\nConnection: close\r\n\r\n")
+                else:
+                    far.sendall(b"HTTP/1.1 200 OK\r\nX-Slow: ")
+                while True:
+                    far.send(b"x")
+                    time.sleep(0.01)
+
+    def close(self):
+        super().close()
+        self.listener.close()
+
+
 class PolicyTest(unittest.TestCase):
     def test_the_committed_policy_lists_two_public_hosts_and_an_honest_reader(self):
         policy = fetch.load_policy(REPO)
         self.assertEqual(policy.hosts, ("www.reddit.com", "itunes.apple.com"))
+        self.assertEqual((policy.timeout, policy.deadline), (20.0, 60.0))
         self.assertEqual(policy.token, "growthlab-reader")
         self.assertIn("github.com/hcho22", policy.user_agent)
         self.assertLessEqual(policy.max_requests, 30)
@@ -73,6 +108,8 @@ class PolicyTest(unittest.TestCase):
             ("max_requests_per_run", 201),
             ("seconds_between_requests_per_host", 0),
             ("timeout_seconds", True),
+            ("read_deadline_seconds", 0),
+            ("read_deadline_seconds", None),
             ("max_response_bytes", "big"),
             ("max_wait_seconds", -1),
         ):
@@ -128,7 +165,7 @@ class OnlyListedReadsTest(unittest.TestCase):
 
         class Connection:
             def __init__(self, host, port, timeout=None, context=None):
-                self.host, self.port, self.context, self.calls = host, port, context, []
+                self.host, self.port, self.context, self.calls, self.sock = host, port, context, [], None
                 connections.append(self)
 
             def request(self, method, url, body=None, headers=None, **more):
@@ -208,6 +245,23 @@ class OnlyListedReadsTest(unittest.TestCase):
         self.assertEqual([result.ok for result in results], [True] * 3 + [False] * 7)
         self.assertEqual(len(web.requests), 4)
         self.assertIn("limit of 4 requests is used up", results[3].detail)
+
+    def test_a_host_that_answers_a_byte_at_a_time_is_cut_at_the_read_deadline(self):
+        for slow in ("headers", "body"):
+            reader = fakes.client(None, dict(POLICY, read_deadline_seconds=1, max_response_bytes=1024))
+            reader.transport = tests.REAL_SEND
+            reader.robots["forum.example.com"] = fetch.Robots("forum.example.com", "none")
+            started = time.monotonic()
+            with self.subTest(slow=slow), mock.patch.object(http.client, "HTTPSConnection", partial(Trickle, slow)):
+                result = reader.get("https://forum.example.com/threads.xml", "threads")
+                self.assertLess(
+                    time.monotonic() - started, 2.5, "each byte came well inside the 5 s wait on the socket"
+                )
+                self.assertEqual((result.status, result.body), (fetch.FAILED, b""))
+                self.assertEqual(
+                    result.detail, "forum.example.com could not be read: TimeoutError: no complete answer within 1 s"
+                )
+                self.assertEqual([(entry["sent"], entry["outcome"]) for entry in reader.log], [(True, fetch.FAILED)])
 
     def test_a_network_failure_is_a_failed_read_with_its_reason(self):
         web = fakes.Web({"https://forum.example.com/x": OSError("connection reset")})
@@ -360,6 +414,30 @@ class PaceTest(unittest.TestCase):
         self.assertIn("asked for a wait of 600 s between requests, longer than this run waits", result.detail)
         self.assertEqual((web.slept, len(web.requests)), ([], 1))
 
+    def test_the_client_s_own_pause_is_kept_whatever_the_longest_wait_for_a_host_is(self):
+        for longest in (0, 1):
+            web = fakes.Web({"https://forum.example.com/a": "a", "https://forum.example.com/b": "b"})
+            reader = client(web, max_wait_seconds=longest)
+            self.assertTrue(reader.get("https://forum.example.com/a", "a").ok, longest)
+            self.assertTrue(reader.get("https://forum.example.com/b", "b").ok, longest)
+            self.assertEqual(web.slept, [2.0, 2.0], "the 2 s between requests to one host is kept")
+
+    def test_a_host_that_asks_for_a_longer_wait_than_the_run_waits_is_not_read_and_the_reason_is_its_own_ask(self):
+        pages = {"https://forum.example.com/a": "a"}
+        web = fakes.Web(pages, robots={"forum.example.com": "User-agent: *\nCrawl-delay: 5\nAllow: /\n"})
+        result = client(web, max_wait_seconds=1).get("https://forum.example.com/a", "a")
+        self.assertEqual(result.status, fetch.FAILED)
+        self.assertIn(
+            "forum.example.com asked for a wait of 5 s between requests, longer than this run waits (1 s)",
+            result.detail,
+        )
+        self.assertEqual(web.requests, ["https://forum.example.com/robots.txt"])
+        web = fakes.Web({"https://forum.example.com/a": [(429, {"retry-after": "7"}, ""), "a"]})
+        result = client(web, max_wait_seconds=0).get("https://forum.example.com/a", "a")
+        self.assertEqual(result.status, fetch.FAILED)
+        self.assertIn("forum.example.com answered HTTP 429 and asked this reader to wait for 7 s", result.detail)
+        self.assertEqual(web.requests.count("https://forum.example.com/a"), 1)
+
     def test_a_short_retry_after_is_waited_for_once(self):
         web = fakes.Web({"https://forum.example.com/a": [(429, {"retry-after": "7"}, ""), "a"]})
         reader = client(web)
@@ -427,12 +505,12 @@ class OnlyOneDoorTest(unittest.TestCase):
 
     def test_the_client_s_own_send_is_replaced_by_a_refusal(self):
         with self.assertRaises(AssertionError):
-            fetch.send("forum.example.com", "/robots.txt", {}, 1.0, 10)
+            fetch.send("forum.example.com", "/robots.txt", {}, 1.0, 10, 5.0)
 
     def test_the_real_send_is_stopped_before_it_leaves_this_machine(self):
         tried = len(tests.ATTEMPTS)
         with self.assertRaises(AssertionError):
-            tests.REAL_SEND("forum.example.com", "/robots.txt", {}, 1.0, 10)
+            tests.REAL_SEND("forum.example.com", "/robots.txt", {}, 1.0, 10, 5.0)
         self.assertEqual(tests.ATTEMPTS[tried:], ["forum.example.com"])
         del tests.ATTEMPTS[tried:]
 

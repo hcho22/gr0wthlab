@@ -195,12 +195,13 @@ class LedgerTest(unittest.TestCase):
         quote, _ = evidence.check(record, taken, {}, "RepToday", True, "run-1")
         with tempfile.TemporaryDirectory() as folder:
             store = Store(Path(os.path.realpath(folder)))
-            self.assertEqual(evidence.load(store), ({}, []))
+            self.assertEqual(evidence.load(store), ({}, {}))
             self.assertEqual(evidence.keep(store, quote), f"evidence/listening/quotes/{post.id}.json")
             (store.root / "evidence/listening/quotes/broken.json").write_text("{", encoding="utf-8")
             quotes, problems = evidence.load(store)
             self.assertEqual(quotes, {post.id: quote})
-            self.assertIn("`evidence/listening/quotes/broken.json` could not be read", problems[0])
+            self.assertEqual(list(problems), ["broken"])
+            self.assertIn("`evidence/listening/quotes/broken.json` could not be read", problems["broken"])
         self.assertEqual(
             evidence.cite(quote),
             f"- A thread, theme `lost-the-routine`, read 2026-10-11: {fakes.THREAD}\n"

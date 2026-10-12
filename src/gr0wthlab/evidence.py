@@ -245,10 +245,11 @@ def document_problems(record: Record, document: Document, link: str, recorded: M
 # The ledger's quotes.
 
 
-def load(store: Store) -> tuple[dict[str, Quote], list[str]]:
-    """Every quote the launcher has kept, by identifier, and each record there that could not be read."""
+def load(store: Store) -> tuple[dict[str, Quote], dict[str, str]]:
+    """Every quote the launcher has kept, by identifier, and why each record there that could not be read could not,
+    by the identifier its file is named for."""
     quotes: dict[str, Quote] = {}
-    problems: list[str] = []
+    problems: dict[str, str] = {}
     folder = store.path(*QUOTES)
     for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
         try:
@@ -256,7 +257,7 @@ def load(store: Store) -> tuple[dict[str, Quote], list[str]]:
             quote = Quote(**{key: data[key] for key in Quote.__dataclass_fields__})
             quotes[quote.id] = quote
         except (OSError, UnsafeFile, ValueError, KeyError, TypeError) as error:
-            problems.append(f"`{store.relative(path)}` could not be read as Listening Evidence ({error})")
+            problems[path.stem] = f"`{store.relative(path)}` could not be read as Listening Evidence ({error})"
     return quotes, problems
 
 

@@ -7,7 +7,8 @@
   "max_requests_per_run": 30,
   "seconds_between_requests_per_host": 2,
   "timeout_seconds": 20,
+  "read_deadline_seconds": 60,
   "max_response_bytes": 2000000,
   "max_wait_seconds": 60,
-  "limits_why": "A small bounded number of requests per run, spaced out on each host. A host that asks for a wait (Retry-After, or a Crawl-delay in robots.txt) is waited for once when the wait is at most max_wait_seconds; a longer wait, like any refusal, ends that host's reads for the run, and its sources are reported as failed. No request carries a cookie, a credential, or a body, and a redirect is followed only to a listed host, under the same rules."
+  "limits_why": "A small bounded number of requests per run, spaced out on each host. Each wait on a host ends after timeout_seconds, and each whole read, from the request to the last byte, after read_deadline_seconds, however slowly the host answers; a read cut either way is reported as that source not read, with the reason. A host that asks for a wait (Retry-After, or a Crawl-delay in robots.txt) is waited for once when the wait is at most max_wait_seconds; a longer wait, like any refusal, ends that host's reads for the run, and its sources are reported as failed. No request carries a cookie, a credential, or a body, and a redirect is followed only to a listed host, under the same rules."
 }

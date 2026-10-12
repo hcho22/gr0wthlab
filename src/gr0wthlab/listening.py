@@ -33,7 +33,7 @@ from .boundary import ConfigError
 from .drafts import Context
 from .exchange import plural
 from .package import FAILED, READ, SKIPPED
-from .queue import APPROVED, REJECTED, REVIEW_QUEUE, SET_ASIDE, Ledger
+from .queue import APPROVED, REJECTED, Ledger
 from .sources import App, Document, Snapshot
 from .state import ListeningState, Tally
 
@@ -105,7 +105,7 @@ class Plan:
     fit_readable: bool
     limits: messages.Limits
     quotes: dict[str, evidence.Quote] = field(default_factory=dict)  # every quote earlier runs kept
-    problems: list[str] = field(default_factory=list)
+    problems: dict[str, str] = field(default_factory=dict)  # Evidence id: why its kept record could not be read
     confirmed: dict[str, str] = field(default_factory=dict)  # subreddit: the rules notice the Founder acknowledged
     rules: dict[str, str] = field(default_factory=dict)  # subreddit: where its rules notice stands, in words
     filed: list[str] = field(default_factory=list)  # the rules notices this run filed
@@ -150,7 +150,8 @@ def rules_notice(name: str, document: Document, read_on: str, fields: Mapping[st
     if shown:
         body += exchange.third_party("\n\n".join(shown))
     if left_out:
-        body += ["", f"{plural(left_out, 'more rule')} is too long to quote here; read it in the full list."]
+        rest = "is too long to quote here; read it" if left_out == 1 else "are too long to quote here; read them"
+        body += ["", f"{plural(left_out, 'more rule')} {rest} in the full list."]
     if parts:
         names = "; ".join(messages.excerpt(part.splitlines()[0], 80) for part in parts[:25])
         body += ["", f"All {plural(len(parts), 'rule')}, by name."] + exchange.third_party(names)
@@ -327,7 +328,7 @@ def check_proposal(
         problems.append("a proposed Hook names the Angle it belongs to, as angle: in the front matter")
     elif kind == "hook" and context is not None and "angles" not in context.kit.problems:
         if angle not in context.kit.angles:
-            problems.append(f"Angle {angle} is not in the Angle bank; a Hook belongs to exactly one Angle")
+            problems.append("its angle: names no Angle in the Angle bank; a Hook belongs to exactly one Angle")
     elif kind == "angle" and angle:
         problems.append("a proposed Angle has no angle: of its own; the Founder numbers it when approving")
     if not proposal.title or len(proposal.title) > exchange.MAX_TITLE:
@@ -342,9 +343,10 @@ def check_proposal(
             "it cites no sourced pain: an Angle or Hook is proposed only with at least one validated Listening"
             " Evidence record under ## Sourced pain"
         )
-    unknown = [name for name in cited if name not in quotes]
-    for name in unknown:
-        problems.append(f"it cites `{name or 'nothing'}`, which is not validated Listening Evidence")
+    for name in cited:
+        if name not in quotes:
+            what = f"`{name}`" if sources.DOCUMENT_ID.fullmatch(name) else "an entry that is no document id"
+            problems.append(f"it cites {what}, which is not validated Listening Evidence")
     if problems:
         return None, problems
     found = [quotes[name] for name in cited]
@@ -436,7 +438,8 @@ def take_proposals(
     result: Result,
     publish: bool,
 ) -> None:
-    """Queue each proposed Angle or Hook that cites validated sourced pain; discard every other, with a note."""
+    """Queue each proposed Angle or Hook that cites validated sourced pain. Every other is discarded with a note:
+    its file is removed, and nothing of it is kept but its name and the reasons."""
     for path, name in md_files(areas, areas.path("review_queue", *ANGLES_IN)):
         problems: list[str] = []
         item = None
@@ -457,11 +460,6 @@ def take_proposals(
         if problems or item is None:
             result.discarded.append((name, problems))
             if publish:
-                target = store.path(REVIEW_QUEUE, SET_ASIDE, run_id, f"angles--{name.replace('/', '--')}")
-                try:
-                    store.write_bytes(target, read_plain(path))
-                except (UnsafeFile, OSError):
-                    pass
                 areas.remove(path)
             continue
         identifier = name
@@ -479,6 +477,7 @@ def reply_target(plan: Plan, key: str, quotes: Mapping[str, evidence.Quote]) -> 
     quote = quotes.get(key)
     target = messages.Target(messages.REPLY, key, key, quote=quote)
     if quote is None:
+        target.unread = plan.problems.get(key, "")
         return target
     name = quote.source.split(":", 1)[1] if quote.source.startswith("reddit:") else ""
     if quote.kind != sources.POST or not name:
@@ -523,7 +522,9 @@ def take_replies(
             continue  # approved earlier: its Draft stays where it is, and the thread is never asked about again
         if context is None:
             detail = "the kit could not be read, so no message was checked"
-            result.replies.append(messages.Outcome(target, messages.BLOCKED, detail, draft=areas.relative(path)))
+            outcome = messages.Outcome(target, messages.BLOCKED, detail, draft=areas.relative(path))
+            outcome.unread.append("the kit could not be read")
+            result.replies.append(outcome)
             continue
         outcome = messages.take(slot, context, plan.limits, areas, store, ledger, run_id, now, products, publish)
         if outcome is None:
@@ -590,9 +591,9 @@ def theme_rows(quotes: Mapping[str, evidence.Quote]) -> list[dict[str, object]]:
     ]
 
 
-def gaps(plan: Plan | None, result: Result | None, problem: str, agent_finished: bool) -> list[str]:
+def gaps(plan: Plan | None, result: Result | None, problem: str, agent_gap: str) -> list[str]:
     """Why Listening is incomplete this run beyond a failed source, which the run report already names: a refused
-    record is the check working, not a gap."""
+    record is the check working, not a gap, and a reply Draft that could not be checked is one."""
     if plan is None:
         return [problem] if problem else []
     found = []
@@ -600,17 +601,19 @@ def gaps(plan: Plan | None, result: Result | None, problem: str, agent_finished:
         found.append(plan.research_problem)
     if not plan.fit_readable:
         found.append(f"the Fit definition `{plan.fit_path}` could not be read, so no Fit was scored")
-    found += plan.problems
+    found += plan.problems.values()
     if result is None:
         found.append(problem or "the agent's Listening work was not taken in")
-    if plan.heard() and not agent_finished:
-        found.append("the agent did not finish")
+    else:
+        found += [why for why in messages.unread(result.replies) if why not in found]
+    if plan.heard() and agent_gap:
+        found.append(agent_gap)
     return found
 
 
-def tally(plan: Plan | None, result: Result | None, problem: str, agent_finished: bool) -> Tally:
+def tally(plan: Plan | None, result: Result | None, problem: str, agent_gap: str) -> Tally:
     """What Listening checked and acted on this run, so a run that read nothing still says so."""
-    incomplete = "; ".join(gaps(plan, result, problem, agent_finished))
+    incomplete = "; ".join(gaps(plan, result, problem, agent_gap))
     if plan is None:
         return Tally(WORKFLOW, 0, 0, problem or "no active Product listens", incomplete)
     readings = plan.snapshot.readings
@@ -718,7 +721,7 @@ def report_lines(plan: Plan | None, result: Result | None, requests: str, proble
         lines.append(f"- {plan.research_problem[0].upper()}{plan.research_problem[1:]}.")
     lines += [f"- Replies in r/{name}: {status}." for name, status in plan.rules.items()]
     lines += [f"- Rules notice filed: `{identifier}`." for identifier in plan.filed]
-    lines += [f"- {entry}." for entry in plan.problems]
+    lines += [f"- {entry}." for entry in plan.problems.values()]
     if result is None:
         return lines + ["", problem or "The agent's Listening work was not taken in this run."]
     if result.record:

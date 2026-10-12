@@ -5,8 +5,9 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from gr0wthlab import codebase
+from gr0wthlab import codebase, process
 from tests import fakes
 
 
@@ -75,6 +76,20 @@ class CodeTest(unittest.TestCase):
         no_branch = codebase.open_code("RepToday", self.checkout, "release", self.env)
         self.assertIn("has no branch release", no_branch.problem)
         self.assertEqual(no_branch.verify("App/ReadyScreen.swift:9", "SessionList"), no_branch.problem)
+
+    def test_a_read_git_never_finishes_gives_the_reason_even_where_the_process_table_cannot_be_read(self):
+        """check-drafts makes these reads inside the agent's sandbox, where the process table may not be readable."""
+        stalled = self.root / "git"
+        stalled.write_text("#!/bin/sh\nexec /bin/sleep 600\n")
+        stalled.chmod(0o755)
+        with mock.patch.object(process, "table", return_value=None):
+            code = codebase.open_code("RepToday", self.checkout, "main", self.env)
+            self.assertIsNone(code.verify("App/ReadyScreen.swift:9", "SessionList(session:   session)"))
+            with mock.patch.object(codebase, "CLT_GIT", stalled), mock.patch.object(codebase, "TIMEOUT", 1):
+                unread_file = code.verify("Engine/ConsistencyScore.swift:7", "max(floorValue")
+                unread = codebase.open_code("RepToday", self.checkout, "main", self.env)
+        self.assertRegex(unread_file, r"^git could not read it \(.* timed out after 1 seconds\)$")
+        self.assertRegex(unread.problem, r"^git could not read the RepToday checkout \(.* timed out after 1 seconds\)$")
 
     def test_reading_writes_nothing_in_the_checkout(self):
         before = digest_tree(self.checkout / ".git")

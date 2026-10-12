@@ -54,7 +54,6 @@ TO_PROPOSAL = "proposal"
 DECISIONS = ("evidence", "decisions")
 FOLDER = ("evidence", "learning")
 LEDGER_FILE = (*FOLDER, "ledger.json")
-SET_ASIDE = (*FOLDER, "set-aside")
 CODES_IN = ("learning",)  # under workspace/evidence/
 FRONT_KEYS = ("item", "code")
 FORMAT = 1
@@ -88,6 +87,8 @@ def workflow_of(entry: Mapping[str, object]) -> str:
     if item_kind == "post":
         return "post-drafts"
     if item_kind == "message":
+        if entry.get("beta"):
+            return "beta-recruiting"
         purpose = (entry.get("message") or {}).get("purpose")
         return "listening" if purpose == "reply" else "outreach"
     if item_kind == "package-change-proposal":
@@ -210,7 +211,7 @@ def check_code(
     if code not in CODES:
         problems.append(f"code must be one of: {', '.join(CODES)}")
     if item not in open_reasons:
-        problems.append(f"`{item}` is not a rejected item whose reason still needs a code")
+        problems.append("its item: names no rejected item whose reason still needs a code")
     if not why or len(why) > MAX_WHY:
         problems.append(f"after the front matter, say in one line of at most {MAX_WHY} characters why the code fits")
     if looks_like_address(why):
@@ -228,7 +229,8 @@ def take(
     publish: bool = True,
 ) -> Result:
     """Take in each code the agent proposed, write it into its decision's Evidence, and rebuild the learning ledger.
-    With publish off nothing is written, and the result says what a run would do."""
+    A proposed code that fails its check is set aside: its file is removed, and nothing of it is kept but its name
+    and the reasons. With publish off nothing is written, and the result says what a run would do."""
     result = Result()
     result.reasons, result.problems = reasons(store, ledger)
     waiting = {reason.item: reason for reason in result.reasons if not reason.code}
@@ -244,10 +246,6 @@ def take(
         if proposed is None:
             result.set_aside.append((name, problems))
             if publish:
-                try:
-                    store.write_bytes(store.path(*SET_ASIDE, run_id, name.replace("/", "--")), read_plain(path))
-                except (UnsafeFile, OSError):
-                    pass
                 areas.remove(path)
             continue
         item, code, why = proposed
@@ -320,9 +318,25 @@ def count_lines(found: Sequence[Reason]) -> list[str]:
     return lines
 
 
-def tally(result: Result | None) -> Tally:
+def gaps(result: Result | None, problem: str, agent_gap: str) -> list[str]:
+    """Why the coding of rejection reasons is incomplete this run: the reasons could not be read, or a reason the
+    brief listed ends the run with no accepted code, whether the agent left it uncoded, was stopped first, or
+    proposed a code the launcher set aside. A reason left without a code is asked for again at the next run."""
     if result is None:
-        return Tally(WORKFLOW, 0, 0, "the rejection reasons were not read")
+        return [problem or "the rejection reasons were not read"]
+    found = list(result.problems)
+    waiting = result.uncoded()
+    if waiting:
+        found.append(f"no accepted code for {', '.join(f'`{reason.item}`' for reason in waiting)}")
+        if agent_gap:
+            found.append(agent_gap)
+    return found
+
+
+def tally(result: Result | None, problem: str, agent_gap: str) -> Tally:
+    incomplete = "; ".join(gaps(result, problem, agent_gap))
+    if result is None:
+        return Tally(WORKFLOW, 0, 0, "no rejection reason was coded", incomplete)
     waiting, owed = len(result.uncoded()), len(result.owed())
     total = len(result.reasons)
     note = f"{plural(total, 'rejection reason')}, {of(total - waiting, total)} coded" if total else "no rejection yet"
@@ -330,7 +344,7 @@ def tally(result: Result | None) -> Tally:
         note += f"; {len(result.coded)} coded this run"
     if owed:
         note += f"; {plural(owed, 'strategy reason')} still without a package-change proposal"
-    return Tally(WORKFLOW, len(result.coded) + len(result.set_aside), len(result.coded), note)
+    return Tally(WORKFLOW, len(result.coded) + len(result.set_aside), len(result.coded), note, incomplete)
 
 
 # What the agent and the Founder are told.
@@ -417,9 +431,11 @@ def notice_section(result: Result | None, day_text: str) -> tuple[int, str, str]
 
 @dataclass
 class Guidance:
-    """What workspace/instructions/ held before the agent started: each plain file's content, by its path there."""
+    """What workspace/instructions/ held before the agent started: each plain file's content, by its path there, and
+    the path of each entry that could not be read, which is not guarded."""
 
     files: dict[str, bytes] = field(default_factory=dict)
+    unread: set[str] = field(default_factory=set)
     problems: list[str] = field(default_factory=list)
 
 
@@ -432,6 +448,7 @@ def remember(areas: Areas) -> Guidance:
         try:
             guidance.files[name] = read_plain(path)
         except (UnsafeFile, OSError) as error:
+            guidance.unread.add(name)
             guidance.problems.append(f"`{name}` could not be read before the run ({error}), so it is not guarded")
     return guidance
 
@@ -452,14 +469,16 @@ def write_back(areas: Areas, path: Path, data: bytes) -> None:
 
 def put_back(guidance: Guidance, areas: Areas) -> list[str]:
     """Undo every change the run made to the agent's Instructions, and say what was undone. No run may change its
-    Instructions until US-ME16 builds the reviewed way to; a strategy reason never may."""
+    Instructions until US-ME16 builds the reviewed way to; a strategy reason never may. An entry that could not be
+    read before the run is left exactly as it is."""
     lines = []
     folder = areas.paths["instructions"]
     now: dict[str, Path] = {areas.relative(path): path for path in list(areas.files(folder))}
     for name, path in sorted(now.items()):
-        if name not in guidance.files:
+        if name not in guidance.files and name not in guidance.unread:
             areas.remove(path)
             lines.append(f"`{name}` was added during the run and removed")
+    areas.remove_empty_folders(folder)
     for name, data in sorted(guidance.files.items()):
         path = areas.workspace / name
         try:

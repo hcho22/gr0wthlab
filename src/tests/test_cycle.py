@@ -1295,7 +1295,10 @@ class PostDraftsTest(CycleTestCase):
             report,
         )
         self.assertIn("| 3 | P03 / AB-2 leg A | kept |", report)
-        self.assertIn("and a post only through its Draft, so an item that supersedes either is refused.", self.brief())
+        self.assertIn(
+            "and a post or a message only through its Draft, so an item that supersedes any of them is refused.",
+            self.brief(),
+        )
 
     def test_a_withdrawn_post_is_counted_once_and_leaves_the_report_s_count_of_open_items(self):
         self.first_batch()

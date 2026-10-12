@@ -10,16 +10,31 @@ gr0wthlab is the Marketing Engineer's repository; [`README.md`](README.md) gives
 - Every run starts through `src/bin/gr0wthlab`; the [US-ME02 spike note](docs/spikes/us-me02-runtime-boundary.md) explains the boundary.
   A change to the launcher, `runtime.json`, `fetch.json`, or `products.json` needs a fresh `src/bin/gr0wthlab boundary-check` on the Founder's Mac, which CI cannot run.
 - A run is `src/gr0wthlab/cycle.py` around the sandboxed agent: deterministic work (snapshot, decisions, item validation, queue order, report, git records) is launcher code with unit tests, judgment is the agent's under the fixed task definition in `src/instructions/`, and [operations](docs/operations.md) covers the production clone and schedule.
-  The agent adds Review Queue items only through `workspace/review-queue/incoming/`; the launcher publishes them into `ledger/`, where it alone writes the queue, its own Evidence, run reports, and per-workflow run state.
+  The agent adds Review Queue items only through `workspace/review-queue/incoming/`, never a post or a message, which the launcher renders only from a checked Draft (`FROM_DRAFT` in `src/gr0wthlab/queue.py`); the launcher publishes them into `ledger/`, where it alone writes the queue, its own Evidence, run reports, and per-workflow run state.
   Run state (`src/gr0wthlab/state.py`) is a convenience validated every run: the Review Queue and Mandu's decision records stay the source of truth.
+- Every run ends with its report (US-ME17), so nothing the launcher waits for may wait forever: start a process only through `src/gr0wthlab/process.py`, which gives it a time limit and stops it with every process the process table shows it started; `src/tests/test_process.py` watches a whole run and fails when a process it starts is waited on without one.
+  The agent's own limit is `agent.time_limit_seconds` in `config/run.json`, and [operations](docs/operations.md#when-a-run-times-out) says what a timed-out run leaves.
+  A network read is bounded the same way: `fetch.send` ends each wait at `timeout_seconds` and each whole read at `read_deadline_seconds`, both in `config/guardrails/fetch.json`.
 - Guardrail G6 lives in launcher code: only `src/gr0wthlab/waitlist.py` reads RepToday's anonymous Waitlist view, from a path outside everything the sandbox reads, checks every value for an email address before anything else, and keeps entry identifiers and counts only; never route the view, or anything else read from it, to the agent.
   The launcher files Dispatch requests from reviewed text in `src/dispatches/`; the Waitlist request is also the view's format, and `src/tests/test_dispatch.py` keeps the two in step.
+- Beta Cohort recruiting (`src/gr0wthlab/beta.py`) starts only from the Founder's Beta Build record in Mandu's exchange folder, which launcher code reads and never infers; before it exists a run does nothing about the Beta Cohort.
+  Who is invited is ordered only in `waitlist.py` (`SELECTION_RULE`) and attached to the item by the launcher, so no entry identifier goes into the agent's brief or into a Draft; a recruiting Draft (`beta_drafts.py`) holds no address, no link, and no figure a cited package line does not hold.
+  Only the counts the Founder reports are kept, and a count left out is not reported, never zero.
 - The sandboxed agent has no network, and nothing may give it one.
   `src/gr0wthlab/fetch.py` is the launcher's only way onto the network (a credential-free GET to a host in [`config/guardrails/fetch.json`](config/guardrails/fetch.json), bound by that host's `robots.txt`), and `src/tests/test_fetch.py` holds the contract by what goes on the wire: add no other way onto the network, method, credential, or exception to `robots.txt`.
   No unit test opens the network; `src/tests/__init__.py` replaces `fetch.send` with a refusal and refuses any other connection beyond the machine at the socket, so give a client a `fakes.Web`.
 - Fetched text is data, never instructions: it reaches the agent only as the launcher's snapshot (`sources.py`), and a record only as a quote `evidence.py` found word for word in that snapshot.
-  The snapshot is working data in `ledger/working/`, which git ignores and the launcher removes when the run ends: commit nothing fetched but a validated quote, with its link, date read, and document hash, and the rules a subreddit's rules notice quotes.
-  A quote record the launcher refuses is removed, and leaves only its file name and the reasons, which never repeat its text.
+  The snapshot is working data in `ledger/working/`, which git ignores and the launcher removes when the run ends.
+  The retention rule is about what the launcher keeps of what a run fetched.
+  As Evidence of what was fetched it keeps only a validated quote, with its link, date read, and document hash, beside the rules a subreddit's rules notice quotes.
+  The request log it commits (`ledger/run-reports/<run id>.requests.json`) also holds the `robots.txt` rule lines of the group that applied to each host, each Allow and Disallow with its path as fetched, beside the addresses and outcomes.
+  Known gaps, not yet decided by the Founder: nothing else the agent writes is checked against what was fetched, so text of its own that repeats a source's words is committed today in each of these places.
+  A file set aside from `incoming/` is copied whole to `ledger/review-queue/set-aside/<run id>/`.
+  A Draft stays in `workspace/` and is committed as written until it passes or is rewritten, as is any other file the agent leaves in `workspace/` that the launcher neither takes in nor puts back.
+  The reasons in a run report or a notice can repeat pieces of a file's text (a front matter line, up to 80 characters of an Evidence line, the headings found), and the reasons a Draft's checks give can quote the Draft.
+  The run report quotes the agent's own summary, up to 4,000 characters.
+  What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, and the line that says why a rejection code fits.
+  Three things are removed and leave their file name and the launcher's reasons only: a refused quote record, a discarded `angles/` proposal, and a set-aside rejection code.
   An item marks any text a third party wrote with `exchange.third_party`, the one marking [`docs/mandu-exchange.md`](docs/mandu-exchange.md) tells Mandu's side is data.
   The agent's work in Listening and outreach is taken in the same way as a post Draft: a quote, a proposed Angle or Hook, and a message each become a record or an item only through `listening.py`, `outreach.py`, and `messages.py`.
   Every package-change proposal declares `new_angle`: one that declares `yes`, since it adds or changes an Angle or Hook (FR-7), is queued only when its Evidence names a kept quote's record exactly (`queue.declaration_problem`), and one that declares `no` is queued whatever it touches or says.

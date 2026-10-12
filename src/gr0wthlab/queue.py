@@ -30,6 +30,9 @@ ITEMS = "items"
 SET_ASIDE = "set-aside"
 QUEUE_FILE = "queue.json"
 MAX_SLUG = 60
+# The kinds the launcher renders only from a Draft that passed its checks, each with the folders its Drafts are
+# written in. No file of these kinds is taken from incoming/, and no item written there supersedes one.
+FROM_DRAFT = {"post": "drafts/posts/", "message": "drafts/messages/ or drafts/beta-recruiting/"}
 
 
 class QueueError(Exception):
@@ -235,9 +238,9 @@ class Ledger:
         kept: Collection[str] = (),
     ) -> tuple[exchange.Item | None, list[str]]:
         """Every rule a file in incoming/ must pass to be queued, for the launcher and the agent's own check alike:
-        its name, the item format, sourced pain behind a proposal that declares it adds or changes an Angle or Hook,
-        an open item to supersede that the launcher neither filed from reviewed text nor queued from a Draft, and no
-        repeat of an item queued or decided.
+        its name, the item format, a kind the launcher does not render from a Draft, sourced pain behind a proposal
+        that declares it adds or changes an Angle or Hook, an open item to supersede that the launcher neither filed
+        from reviewed text nor queued from a Draft, and no repeat of an item queued or decided.
 
         name is the file's path inside incoming/; seen maps each queued item's fingerprint to its identifier, and
         kept holds the record of each Listening quote the launcher keeps. The item comes back only when there is no
@@ -255,15 +258,10 @@ class Ledger:
         item = check.item
         if item is None:
             return None, problems
-        if item.kind == "post":
+        if item.kind in FROM_DRAFT:
             problems.append(
-                "a post is queued only from its Draft in drafts/posts/, after the launcher's checks; never write one"
-                " here"
-            )
-        if item.kind == "message":
-            problems.append(
-                "a message is queued only from its Draft in drafts/messages/, after the launcher's checks; never"
-                " write one here"
+                f"a {item.kind} is queued only from its Draft in {FROM_DRAFT[item.kind]}, after the launcher's checks;"
+                " never write one here"
             )
         problem = declaration_problem(item, kept) if item.kind == "package-change-proposal" else None
         if problem:
@@ -277,11 +275,11 @@ class Ledger:
                 f"supersedes {target}, which the launcher filed from reviewed text; only a reviewed change to that"
                 " text replaces it"
             )
-        elif replaced.get("kind") in ("post", "message"):
-            folder = "drafts/posts/" if replaced["kind"] == "post" else "drafts/messages/"
+        elif replaced.get("kind") in FROM_DRAFT:
+            kind = replaced["kind"]
             problems.append(
-                f"supersedes {target}, a {replaced['kind']} the launcher queued from its Draft; only a change to that"
-                f" Draft in {folder} replaces it"
+                f"supersedes {target}, a {kind} the launcher queued from its Draft; only a change to that Draft in"
+                f" {FROM_DRAFT[kind]} replaces it"
             )
         fingerprint = exchange.item_hash(item)
         if fingerprint in seen:

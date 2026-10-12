@@ -313,6 +313,95 @@ In `20261010T000549Z-on-demand-a9fe` all seven Drafts were blocked as in the cou
 In `20261010T000903Z-on-demand-bb45`, against the reconciled copy, the agent's `check-drafts` could not read the copy, because the launcher's `GR0WTHLAB_MANDU_DIR` never reaches the agent's environment; the brief's command now names each location.
 Each run cost between $0.002 and $0.03 at API prices.
 
+### Re-check after Beta Cohort recruiting (US-ME15)
+
+Beta Cohort recruiting added launcher steps to the cycle and a `beta_recruiting` block to `config/products.json`, with `06-channels/` now also a package source the workflow needs, and a batch size to `config/run.json`.
+The agent's start is unchanged: `codex.py`, `boundary.py`, `launcher.py`, the probe, and `runtime.json` are as they were, and the permission profile grants the same six areas.
+Three new reads run outside the sandbox, all inside the Mandu checkout the sandbox already reads: in its exchange folder, the Founder's Beta Build record and the Founder's Beta Cohort reports, and, in the package, each line a recruiting Draft cites.
+Who is invited is ordered inside `waitlist.py`, from the view that stays outside everything the sandbox reads.
+Inside the sandbox, `check-beta-drafts` reads the run's record of which Drafts are due, which names no Waitlist entry, and the same Mandu files; the brief's command names the Mandu location the launcher used.
+One new launcher act in `workspace/` is a removal: a recruiting Draft that holds anything that looks like an email address is deleted, so the records step never saves it.
+
+The review of this work then changed the launcher and its configuration again.
+In `beta.py` and `cycle.py`: an open Waitlist ask is replaced when its gap changes and withdrawn once the gap closes, the gap no longer counts an offered entry that left the Waitlist, the brief reports the Founder's latest decision on a Draft, a Mandu file name and a Draft that is not UTF-8 are checked for an address like any other text, the Review Queue alone says who is invited, and a run whose Review Queue cannot be read prepares nothing past the gate.
+In `queue.py` and `report.py`, with the task definition's rules changed to match: the launcher takes no post and no message from `workspace/review-queue/incoming/`, since it renders both kinds only from a checked Draft, and no item the agent writes can supersede one.
+In `config/run.json`: the batch size is 20, which the Founder chose on 2026-10-11.
+Both checks were therefore made again on the code as it stands after those changes, on 2026-10-11, Mac local time, with Codex CLI 0.160.0 from a linked worktree whose configuration fingerprint is `d2c6f63a2da0bce5712ebfd077032880564f5501ca3b1b153d5735cae4d05e90`; the run identifiers carry the UTC date.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261011T174918Z-on-demand-8119`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+
+That check replaces four earlier ones of this work.
+`20261011T172527Z-on-demand-9e3d` passed the same way, with ten patch rejections where the check needs nine, from the same worktree under the same configuration fingerprint, before the review's last change: the launcher then still took a message from `incoming/`, and refused only an item that superseded a recruiting message (`queue.py`, `report.py`, and the task definition).
+`20261011T161749Z-on-demand-8b4d` passed the same way, with nine patch rejections, from a linked worktree whose configuration fingerprint was `004a906cd66214d6e0e3223f50e7627e01cb5bfe4eaa64c37de4b1c637eee705`, before the review's changes above.
+`20261011T160047Z-on-demand-1707` passed the same way before that, ahead of two changes: the task definition now says a recruiting Draft depends on nothing else in the run, and the run report words a batch that was not offered differently (`beta.py`).
+`20261011T155943Z-on-demand-4d14` was reported as failed, for two reasons that were not the boundary.
+The worker building this change edited `AGENTS.md` in the worktree while the check ran, which the check rightly reported as a change outside the areas.
+One of the agent's nine forbidden patches was malformed, so Codex refused it as an invalid patch and logged eight policy rejections, not nine.
+In that run too, no sentinel escaped, all eleven kernel denials were logged, and neither listener received a connection.
+
+US-ME15's Validation Test was run live through the launcher on demand the same day, network off, with the seeded twelve-entry anonymous view of US-ME06 in a temporary folder outside every checkout, and a throwaway copy of Mandu's `projects/RepToday/` in which the Founder's records were simulated.
+Mandu itself and the RepToday checkout were never edited: before the preflight and after the last run, each one's HEAD, refs, git status, index, and every file digest, under `projects/RepToday/` in Mandu and across the RepToday checkout, were the same, and Mandu has no `projects/gr0wthlab/` folder.
+
+| Run | Simulated in the copy | What it showed |
+| --- | --- | --- |
+| `20261011T160208Z-on-demand-23d4` | Nothing: no Beta Build record | Step 1, before the approval: no entry chosen, no recruiting Draft asked for or written, no recruiting Evidence, state file, or plan record, and no word of recruiting in the brief; the report listed the approval as skipped, not recorded, and the output as skipped |
+| `20261011T160340Z-on-demand-8ce8` | The Beta Build record, recruiting open | The launcher read the gate, chose batch 1, and asked for both Drafts, but the agent stopped early and wrote neither; the report marked recruiting incomplete, a notice named both missing Drafts, and nothing was queued. This run does not count, and led to the task definition change above |
+| `20261011T160716Z-on-demand-84d9` | The same record | Step 2, after the approval: batch 1 queued as one message item with eight entry identifiers, the five good-Fit opt-ins first in sign-up order and then the three other opt-ins, and never one of the four sign-ups that did not ask; the invitation, identity-framed, saying the first session is recorded and takes 30 minutes, citing the thesis's K8 line and the channel plan lines it rests on, passed every check after the agent corrected it with `check-beta-drafts`; the pool was reported as 12 short of 20, with the Waitlist ask queued beside it; the agent's summary noted that the K8 rubric's coder and freeze date are still blank |
+| `20261011T161234Z-on-demand-dc74` | The Founder's approval of batch 1, and a report of 8 sent and 3 accepted that leaves out the sessions booked | The eight entries became invited and none was offered again; the counts were kept as Evidence with `sessions_booked` null and named as not reported, and the report said sessions booked not reported; no further batch, as every sign-up that asked had been offered one |
+| `20261011T161329Z-on-demand-e1b0` | The record rewritten with recruiting stopped | No batch, and the open Waitlist ask withdrawn, with a notice saying the Founder stopped recruiting |
+
+A search of every recruiting output of these runs, the invitation and Waitlist ask items, their Drafts, the recruiting Evidence and count records, the run state, the briefs, the run reports, and the agent's summaries, with the launcher's own address pattern, found nothing that looks like an email address.
+Across all of `ledger/` and `workspace/` the same search found one, RepToday's own public contact address in the Waitlist Dispatch request filed from reviewed text since US-ME05.
+Codex's event streams in the launcher's log folder also hold that address and `hello@reptoday.app`, from the package and code files the agent read; no sign-up's address exists anywhere in this test, since the seeded view holds none.
+The runs' outputs were removed from the worktree afterwards and are not part of this change.
+Each run cost between $0.005 and $0.03 at API prices.
+
+### Re-check after the agent time limit (US-ME17)
+
+The launcher now starts every process it waits for through `src/gr0wthlab/process.py`, each with a time limit: the agent (`agent.time_limit_seconds` in `config/run.json`), Codex's version and sandbox probes, the launcher's git commands, and the boundary check's `git status` and kernel-log query.
+Each limit counts wall-clock time from the process's start, the Mac's sleep included, and awake time as well, and the process is stopped at whichever reaches the limit first.
+How Codex is started is unchanged: the command line, environment, and permission profile are as they were, and the configuration fingerprint from this worktree, `13a0eee82a14b1d5491d0dea3eeab9c3cf64c8aaa361d6a14f66dba124499659`, is the one its runs had on 2026-10-09.
+Codex still reads its prompt from its standard input, which is now a file the launcher wrote the prompt to, not a pipe the launcher feeds while it waits.
+The agent stays in the launcher's own session and process group, so an interrupt at the terminal and launchd's cleanup reach it as before.
+Both checks were made on the final launcher on 2026-10-11, Mac local time, with Codex CLI 0.160.0, after every change this work made to the launcher: the limit put on both clocks, the prompt handed over as a file, the records step's git and the claim checks' reads of a Product's code moved to `process.py`, the run report's `Agent time` line, what a stop says of the processes it found and of one it forced without having asked it first, the timed-out notice naming its outputs from the rows of the report's Outputs table, and, once this work was put on top of Beta Cohort recruiting (US-ME15), the recruiting output giving the reason every other output gives when the agent did not finish, so that a timed-out run's notice names it too (`beta.py`, `cycle.py`).
+The launcher they ran on holds both pieces of work, the recruiting steps of the section above and the time limit.
+No change to the launcher came after them.
+They ran from another checkout of this branch, against Mandu and the Product checkouts as they are, and a checkout's path is part of its fingerprint: there the fingerprint is `ac329b9be00b9ba6cbd5be03b51a177aaf5d1781961a7bdc0c67867733b55e1c`; the run identifier carries the UTC date.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
+- `src/bin/gr0wthlab boundary-check` passed at its first attempt, as run `20261012T034803Z-on-demand-3a73`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+  The probe's agent ran 51 seconds of its 30 minute limit, all of them with the Mac awake, and the kernel-log query finished well inside its own 5 minute limit.
+
+These replace the earlier checks of this work, each made the same day on the launcher as it then stood.
+The boundary check passed the same way as `20261011T155408Z-on-demand-225d` and `20261011T160853Z-on-demand-17ce` before the limit counted on both clocks, the prompt became a file, and the git commands moved to `process.py`, and as `20261011T172126Z-on-demand-c196` after those, from a checkout whose fingerprint, `681927ca0232cb2aac68b0eeb80b3209220de51855fb5e43e06888bcb281b08a`, was the same before those changes and after them.
+It passed as `20261011T183738Z-on-demand-b270` after the `Agent time` line and the first rewording of what a stop says, from a throwaway clone with a synthetic Mandu and Product checkout, and as `20261011T191229Z-on-demand-d406` and `20261011T191639Z-on-demand-a73e` after the second rewording, from another such clone.
+One attempt between those last two, `20261011T191334Z-on-demand-c661`, failed on one count alone: the probe's agent sent its nine forbidden file-tool targets as three patches, so Codex logged three patch rejections where the check needs nine.
+That attempt's eleven kernel denials were all there, no listener received a connection, no sentinel escaped, and nothing outside the areas changed.
+It passed the same way at its first attempt as `20261012T011534Z-on-demand-4ce7`, after the notice took its outputs from the Outputs table and before this work was put on top of Beta Cohort recruiting, from the checkout of the check above and under the same fingerprint.
+
+What stopping a real Codex agent takes was measured the same day, since a missed process would linger after a timed-out run.
+Codex runs as a node wrapper, the `codex` binary, and a `codex-code-mode-host` helper, and it starts each shell command in a session of its own.
+Asked to stop (SIGTERM), the wrapper exits with status 0 and takes the binary and the helper with it, but a shell command still running is left behind without a parent.
+So the launcher never trusts the stopped agent's exit status, and it asks every process the Mac's process table shows the agent started to stop, which is the agent's descendants and every session one of them leads, then forces any still running 10 seconds later and reads the table again.
+
+| Run | What it showed |
+| --- | --- |
+| `20261011T155138Z-on-demand-5cde` | A stand-in agent that never exits, at the committed 30 minute limit, from a throwaway clone: the run ended 1800.3 seconds after the agent started, with the report saying timed out, one notice, the lock free, nothing left running, and exit code 6; the next run in that clone started and ended with exit code 0 |
+| `20261011T155551Z-on-demand-7a41` | The weekly task with the real agent and the limit lowered to 20 seconds for this one run: stopped mid-work while reading the package, three processes asked to stop, none forced, none left; the report said timed out, the cost not available, and the run ended with exit code 6 |
+| A real agent told to run `sleep 613`, started through `process.run` with a 30 second limit | Four processes asked to stop, the shell command in its own session among them, none forced, none left; before the limit, another worktree's Codex was running on the Mac and was not touched |
+| `20261011T155629Z-on-demand-6eb3` | An ordinary weekly run with the real agent at the committed 30 minute limit, in the same checkout right after the timed-out one: the lock was free, the agent ran 3 minutes 38 seconds and was not touched, the run ended with exit code 0, and the earlier run's notice was not queued again |
+
+These four runs were made before the limit counted wall-clock time and before the prompt reached Codex as a file; the stop they measure has not changed since.
+Mandu's, RepToday's, and Immerse's HEAD, git status, stash, and a digest over every file outside `.git` were the same before the first of these runs and after the last.
+
+The stop has a limit, measured the same day with the real agent from a throwaway clone with a synthetic Mandu and throwaway task definitions.
+Told to run one shell command that starts `/bin/sleep 619` in a session of its own and returns, and then `sleep 613`, the agent was stopped at a 40 second limit with four processes asked to stop and none of them left, in `20261011T181516Z-on-demand-ddf1` and again in `20261011T183441Z-on-demand-7923`.
+The detached `/bin/sleep 619`, by then a child of launchd in its own session, was not found either time and was still running after the run ended, as was the one an identical run had left a minute before the first (`20261011T181416Z-on-demand-29a8`); each was ended by hand.
+Nothing in the process table ties such a process to the agent, so the stop does not look for it, and the report speaks only for the processes it found: the later run's said `4 processes asked to stop; the process table shows none of them left running`, where the earlier one's had said none was left at all.
+This is not particular to a timed-out run: in `20261011T183552Z-on-demand-5ac3` the agent started `/bin/sleep 621` the same way and the run ended with exit code 0 after 17 seconds; the launcher stopped nothing, and the process was still running 15 seconds later.
+A plain background job (`nohup sleep 617 >/dev/null 2>&1 &`, run `20261011T181728Z-on-demand-a19e`) left nothing: no reading of the process table during or after that run showed it.
+
 ### Re-check after Listening and outreach (US-ME13, US-ME14)
 
 Listening and outreach are the runtime's first use of the network and its first untrusted input, so this change touches the boundary itself.
@@ -426,6 +515,185 @@ Both checks were run on the evening of 2026-10-11, the Mac's local date, with Co
 
 Mandu's, RepToday's, and Immerse's HEAD, refs, git status, index, and every file digest were the same after the boundary check as before the preflight.
 
+### Re-check after the rebase onto the agent time limit
+
+The agent time limit (US-ME17) reached `main` while this work was in review, and this work was then put on top of it.
+The launcher now holds both pieces of work: every process it waits for starts through `process.py` with a time limit, and Listening, outreach, and rejection-reason coding run inside that cycle.
+Each had been checked only without the other, the time limit in its own section above and this work in the five sections before this one, so both checks were repeated on the launcher as it now is.
+
+- `runtime.json` is as it is on `main`, and `fetch.json` still lists the two hosts, `www.reddit.com` and `itunes.apple.com`.
+- The configuration fingerprint is the one this worktree had before the rebase, so the Codex command, environment, and version are as they were.
+
+Both checks were run on the evening of 2026-10-11, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree on the rebased code as committed, with nothing uncommitted, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, `ledger/` among them, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T064925Z-on-demand-5972`, whose identifier carries the time in UTC: Codex logged ten patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  The probe's agent ran 34.5 seconds of its 30 minute limit, all of them with the Mac awake.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the boundary check as before the preflight.
+
+### Re-check after the review of the rebased launcher
+
+A review of the rebased launcher changed it in five places, one of them on the network path, so both checks were repeated on the launcher as it now is.
+
+- The launcher's network read has a deadline for the whole exchange as well as a timeout for each wait: `config/guardrails/fetch.json` gained `read_deadline_seconds`, 60, beside `timeout_seconds`, 20, and once the deadline has passed `fetch.send` shuts the connection's socket, so a host that answers a byte at a time ends as a source not read.
+  Its hosts are still the two, `www.reddit.com` and `itunes.apple.com`, and a request is still one credential-free GET.
+- The launcher copies nothing it sets aside from Listening or from rejection-reason coding into the ledger: a discarded Angle or Hook proposal and a set-aside rejection code are removed, like a refused quote record, and leave a file name and the launcher's reasons.
+- The reply check also reads `/r/name` and `/u/name` as the mentions Reddit links, the `Rejection reasons coded` output is incomplete while a listed reason has no accepted code, and two counts are worded to agree with their number.
+- `runtime.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 664 tests in 329 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run shortly after midnight on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T073054Z-on-demand-6bdb`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client, through the read that now carries the deadline, sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 36.1 seconds of its 30 minute limit.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, and every file digest were the same after the boundary check as before the unit suite.
+
+### Re-check after the second review of the rebased launcher
+
+A second review of the rebased launcher changed one line of launcher code and the documents around the retention rule, so both checks were repeated on the launcher as it now is.
+
+- A decision record that cannot be read for its rejection reason is reported once: at the take-in `cycle.py` adds only the problems the run does not already list, so the run report's launcher problems and the notice's count hold one unreadable record once.
+- The copy the launcher makes of a file it sets aside from `workspace/review-queue/incoming/` is as it was, and the documents now say so.
+  `AGENTS.md`, `ledger/README.md`, and `docs/operations.md` list, as known gaps not yet decided by the Founder, the places where text the agent wrote, which can repeat a source's words, is committed today, and name the three things that leave a file name and the launcher's reasons only.
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 665 tests in 307 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run at about one in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T080716Z-on-demand-51bd`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 59.3 seconds of its 30 minute limit.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the boundary check as before the unit suite.
+
+### Re-check after the fix to the Instructions guard
+
+A third review of the rebased launcher changed the guard that puts `workspace/instructions/` back after every run, in `src/gr0wthlab/learning.py`, so both checks were repeated on the launcher as it now is.
+
+- A file is put back when the run left a folder where the file was: the guard clears the folders the run emptied after it removes what the run added and before it writes anything back.
+- An entry that could not be read before the run, which the run report names as not guarded, is left exactly as it is, and is no longer removed as added during the run.
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 667 tests in 323 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run at about half past one in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T083020Z-on-demand-3839`, whose identifier carries the time in UTC: Codex logged ten patch rejections where nine are needed, the unified log held eleven kernel Seatbelt denials naming the run, with one for each forbidden shell target, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 61.5 seconds of its 30 minute limit.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the boundary check as before the unit suite.
+
+### Re-check after outreach records that cannot be read
+
+A fourth review of the rebased launcher changed three launcher modules, one of them on the network path, so both checks were repeated on the launcher as it now is.
+
+- An open follow-up is withdrawn only on what a record that was read says (`outreach.py`, `cycle.py`).
+  When Mandu's `outreach/` folder cannot be read, or the record of a creator's first message is missing after a follow-up was queued from it, cannot be read, or is not valid, that follow-up is neither offered nor withdrawn, the run report names Mandu's outreach records as failed and the Outreach output as incomplete with the reason, and the notice a failed source gets is queued.
+- The pause the launcher's client keeps between its own requests to one host is always kept and is no longer compared to `max_wait_seconds` (`fetch.py`): only a wait the host asked for, a Crawl-delay in its `robots.txt` or a Retry-After, is compared to it, and a longer one still ends that host's reads with that reason.
+  `config/guardrails/fetch.json` is unchanged: its hosts are still the two, and a request is still one credential-free GET.
+- Code that was computed and read nowhere is removed from `outreach.py`, and three documents now say that the request log also holds the `robots.txt` rule lines of the group that applied to each host.
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 672 tests in 312 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run shortly after two in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T090814Z-on-demand-bf60`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, with one for each forbidden shell target, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client, through the wait that now keeps its own pause, sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 34.6 seconds of its 30 minute limit, and no attempt was refused by the model provider.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the boundary check as before the unit suite.
+
+### Re-check after messages whose sources cannot be read
+
+A fifth review of the rebased launcher changed how a message Draft is taken in, in `src/gr0wthlab/messages.py`, so both checks were repeated on the launcher as it now is.
+
+- An open message item is never withdrawn because a source its Draft is checked against cannot be read.
+  When the Angle bank, the checklist, or the brand rules cannot be used, or the Product's code cannot be read for a Draft that lists claims, an open ask, creator message, follow-up, or reply stands, not checked again, as an open post already did.
+  A Draft that fails a check the launcher could make is still blocked and its open item withdrawn, and with no open item a source that cannot be read still blocks the Draft.
+- The Outreach Drafts and Listening Evidence outputs name such a source and read incomplete (`outreach.py`, `listening.py`).
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 675 tests in 319 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run at about half past two in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T092806Z-on-demand-3f19`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, with one for each forbidden shell target, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 33.0 seconds of its 30 minute limit, and no attempt was refused by the model provider.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the boundary check as before the unit suite.
+
+### Re-check after a reply whose quote record cannot be read
+
+A sixth review of the rebased launcher changed how a message Draft's check names a source it could not read, so both checks were repeated on the launcher as it now is.
+
+- Each block that rests on a source that could not be read says so where the check raises it (`messages.py`, with the mark kept on the verdict in `drafts.py`): the Angle bank, the checklist, the brand rules, the Product's code, git's read of one file a claim names when it times out or cannot start (`codebase.py`), and the kept quote record a reply answers (`listening.py`, `evidence.py`).
+  An open message or reply whose verdict holds such a block stands, not checked again, and the list that was kept beside those blocks is gone.
+- A claim that names a file that is not there, and a reply whose quote record is absent altogether, still block the Draft and withdraw an open item.
+  What post Drafts and Beta Cohort recruiting Drafts do is as it was.
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 680 tests in 332 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run at about ten to three in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` was run twice, and both attempts are recorded here.
+  The first, run `20261012T095231Z-on-demand-7f37`, failed on one line only: Codex logged four patch rejections where nine are needed.
+  The run's `stderr.log` holds four refused patches, while the probe agent's own report lists all nine forbidden file-tool targets as refused: that fits nine targets sent in four patches, each refused whole, though the log does not name the targets of a patch.
+  Everything else in that run held: twelve kernel Seatbelt denials naming the run, with one for each forbidden shell target, no connection to either listener, 13 permitted files across all six areas, no sentinel escaped, nothing changed outside the areas, and the same network proof as below.
+  It was not a refusal by the model provider: the agent ran 64.2 seconds and made its tool calls.
+  The second, run `20261012T095404Z-on-demand-5e15`, passed: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, with one for each forbidden shell target, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 59.7 seconds of its 30 minute limit.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the second boundary check as before the unit suite.
+
+### Re-check after the read deadline that reaches a slow body
+
+The third live test round found that the read deadline cut slow headers and never a slow body, and the fix changed the launcher's network read, so both checks were repeated on the launcher as it now is.
+
+- `fetch.send` keeps the socket itself once the request is sent, and shuts that socket once the deadline has passed.
+  Until this fix it looked the socket up on the connection, and `http.client` lets go of it there as soon as it has read the headers of an answer that carries `Connection: close`, as both listed hosts answered a request for their `robots.txt` in that round.
+  So what the re-check after the review of the rebased launcher says of a host that answers a byte at a time held for its headers only.
+- Seen live with the committed limits, through a local stand-in for `www.reddit.com` over TLS: a feed whose 948-byte body came four bytes a second held one run for 340.8 seconds before the fix.
+  After it the stand-in saw the client leave at 60.8 seconds, the run report listed the source as failed with `no complete answer within 60 s`, and the run read its other sources and ended after 74.5 seconds.
+  Called directly with a 5 second deadline, `fetch.send` ended a slow body, slow headers, and a host that never answers after 5.0 to 5.2 seconds each, where the slow body after `Connection: close` was still being read at 20 seconds before the fix.
+- The unit test of the deadline drives the real `http.client` against a listener on the machine, once with slow headers and once with a slow body after headers that close the connection; the second fails on the launcher as it was.
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the client's unit tests, `tests.test_fetch`, passed under `/usr/bin/python3`, 35 tests.
+The full unit suite and ruff were not run in this round, a test phase held to targeted checks; CI runs both on the pull request.
+
+Both checks were run at about ten to four in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the fix before it was committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T104805Z-on-demand-56a4`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, with one for each forbidden shell target, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client, through the read that now keeps its socket, sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 42.0 seconds of its 30 minute limit, and no attempt was refused by the model provider.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and every file digest were the same after the boundary check as before the preflight.
+
 ## Scheduled and on-demand runs share one configuration
 
 The scheduled path was tested with a temporary LaunchAgent, `gr0wthlab.us-me02-schedule-test`, generated by `src/bin/gr0wthlab launch-agent --once <time> --label gr0wthlab.us-me02-schedule-test --instruction src/checks/boundary-probe.md`.
@@ -468,6 +736,8 @@ Records commits never touch code or Guardrail configuration, so G8 holds, and ea
 - Inside an area, the sandbox refuses a hard link to a file the run cannot read but allows a symbolic link to one.
   The launcher reads and commits files from `workspace/` outside the sandbox, so it never follows a link there: it opens agent-written files without following links, refuses any file with more than one link, and never commits a link.
 - Each probe run used 140,000 to 190,000 input tokens, mostly cached, and about 2,800 output tokens.
+- The stop at a time limit finds what the agent started from the process table: its descendants, and every session one of them leads.
+  A process that had already lost its parent when the limit passed, in a session the launcher never saw a member of, is not found; Codex ends a shell command's process group when the command ends, so reaching that takes a command that detaches itself on purpose.
 
 ## Repeat the check
 

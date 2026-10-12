@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import os
 import re
-import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
+
+from . import process
 
 MAX_SPAN = 40
 MIN_EXCERPT = 4
@@ -44,21 +45,19 @@ class Code:
     problem: str | None = None
     env: Mapping[str, str] = field(default_factory=dict)
     files: dict[str, list[str] | str] = field(default_factory=dict)
+    failed: set[str] = field(default_factory=set)  # each path git could not read, which is not a file that is not there
 
     @property
     def short(self) -> str:
         return (self.commit or "")[:7]
 
-    def git(self, *args: str) -> subprocess.CompletedProcess:
+    def git(self, *args: str) -> process.Completed:
         git = str(CLT_GIT) if CLT_GIT.is_file() else "git"
-        return subprocess.run(
-            [git, "--no-optional-locks", "-C", str(self.checkout), *args],
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-            env=environment(self.env),
-            timeout=TIMEOUT,
-        )
+        command = [git, "--no-optional-locks", "-C", str(self.checkout), *args]
+        completed = process.run(command, TIMEOUT, env=environment(self.env))
+        if completed.timed_out:
+            raise TimeoutError(f"Command '{command}' timed out after {TIMEOUT} seconds")
+        return completed
 
     def lines(self, path: str) -> list[str] | str:
         """A file's lines at the commit, or why it cannot be read there."""
@@ -69,9 +68,10 @@ class Code:
             else:
                 try:
                     completed = self.git("cat-file", "blob", f"{self.commit}:{pure}")
-                except (OSError, ValueError, subprocess.SubprocessError) as error:
+                except (OSError, ValueError) as error:
                     completed = None
                     self.files[path] = f"git could not read it ({error})"
+                    self.failed.add(path)
                 if completed is not None:
                     self.files[path] = (
                         completed.stdout.splitlines()
@@ -102,6 +102,16 @@ class Code:
             return f"{path} lines {start}-{end} at {self.short} do not contain {squash(excerpt)!r}"
         return None
 
+    def unread(self, location: str) -> str:
+        """Why the code a verified claim's location names could not be read at all: the checkout, or git's read of
+        that one file. "" when it was read, or when the file is not there."""
+        if self.problem:
+            return f"{self.name}'s code could not be read"
+        match = LOCATION.fullmatch(location.strip())
+        if match and match.group(1) in self.failed:
+            return f"git could not read `{match.group(1)}` in {self.name}'s code"
+        return ""
+
 
 def open_code(name: str, checkout: Path, branch: str, env: Mapping[str, str]) -> Code:
     """The checkout's branch resolved to one commit, or the reason it cannot be."""
@@ -114,7 +124,7 @@ def open_code(name: str, checkout: Path, branch: str, env: Mapping[str, str]) ->
         return code
     try:
         completed = code.git("rev-parse", "--verify", "--quiet", f"refs/heads/{branch}^{{commit}}")
-    except (OSError, subprocess.SubprocessError) as error:
+    except OSError as error:
         code.problem = f"git could not read the {name} checkout ({error})"
         return code
     if completed.returncode != 0 or not COMMIT.fullmatch(completed.stdout.strip()):

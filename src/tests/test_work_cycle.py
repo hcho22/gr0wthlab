@@ -4,6 +4,7 @@ it keeps of the agent's work, and what it refuses, whatever the agent wrote."""
 import io
 import json
 import os
+import shutil
 import unittest
 from datetime import timedelta
 from unittest import mock
@@ -173,6 +174,18 @@ class ListeningCycleTest(WorkCycleTestCase):
         self.assertIn("| r/fitness30plus threads | read | 1 document, 0 not read by an earlier run |", report)
         self.assertIn("| r/fitness30plus rules | read | 1 document |", report, "a rules page is read at every run")
 
+    def test_a_rules_notice_counts_the_rules_it_leaves_out_in_words_that_agree(self):
+        def rules(count):
+            return fakes.rules_json([(f"No promotion, part {n}", "No promotion here. " * 78) for n in range(count)])
+
+        self.web.pages["https://www.reddit.com/r/fitness30plus/about/rules.json"] = rules(4)
+        self.web.pages["https://www.reddit.com/r/getdisciplined/about/rules.json"] = rules(5)
+        self.go()
+        one = self.item_text(RULES_FIT)
+        two = self.item_text("20261011-notice-rules-getdisciplined")
+        self.assertIn("\n1 more rule is too long to quote here; read it in the full list.\n", one)
+        self.assertIn("\n2 more rules are too long to quote here; read them in the full list.\n", two)
+
     def test_a_rules_notice_is_filed_once_and_the_founder_s_answer_stands(self):
         other = "20261011-notice-rules-getdisciplined"
         self.go()
@@ -244,7 +257,10 @@ class ListeningCycleTest(WorkCycleTestCase):
         notice = self.item_text(self.items("notice")[-1]["id"])
         self.assertIn("These proposed Angles or Hooks were discarded", notice)
         self.assertEqual(list((self.workspace() / "review-queue/angles").iterdir()), [])
-        self.assertTrue(list((self.ledger() / "review-queue/set-aside").glob("*/angles--lunch-breaks.md")))
+        self.assertFalse((self.ledger() / "review-queue/set-aside").exists(), "a discarded proposal is copied nowhere")
+        (record,) = (self.ledger() / "evidence/listening/runs").glob("*.json")
+        discarded = json.loads(record.read_text(encoding="utf-8"))["proposals_discarded"]
+        self.assertEqual(sorted(entry["file"] for entry in discarded), ["invented.md", "lunch-breaks.md"])
         self.assertIn("2 quotes kept, 0 refused; 1 Angle or Hook proposal queued, 2 discarded;", report)
 
     def test_an_incoming_proposal_that_declares_a_new_hook_rests_on_a_quote_the_ledger_holds(self):
@@ -324,6 +340,81 @@ class ListeningCycleTest(WorkCycleTestCase):
         self.assertEqual(self.items("message"), [], "the open reply is withdrawn once its Draft carries a link")
         self.assertIn("no-link: a reply carries no link of any kind; found 'reptoday.app' (message)", report)
         self.assertIn(f"the open `{message['id']}` was withdrawn", report)
+
+        self.agent(reply_file(body=fakes.REPLY_BODY + "\nThere is more of this in /r/bodyweightfitness."))
+        report = self.go(weeks=3)
+        self.assertEqual(self.items("message"), [], "a slash before the subreddit's name is the same mention")
+        self.assertIn("no-link: '/r/bodyweightfitness' becomes a link when it is posted (message)", report)
+
+    def test_an_open_reply_stands_under_its_id_while_the_brand_rules_cannot_be_read(self):
+        self.agent(dict(quote_file(intent="asking"), **reply_file()))
+        self.go()
+        self.decide(RULES_FIT, "approve")
+        self.agent()
+        self.go(weeks=1)
+        reply = f"20261018-message-reply-{POST}"
+        self.assertEqual([entry["id"] for entry in self.items("message")], [reply])
+        rules = self.mandu / "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json"
+        valid = rules.read_text(encoding="utf-8")
+        rules.write_text("{", encoding="utf-8")
+        self.agent()
+        report = self.go(weeks=2)
+        self.assertEqual([entry["id"] for entry in self.items("message")], [reply], "it is not withdrawn")
+        stands = "not checked again, since brand-rules.json could not be used; the open item stands"
+        self.assertIn(f"- Reply Draft for `{POST}` (r/fitness30plus): kept: `{reply}`; {stands}", report)
+        self.assertRegex(report, r"\| Listening Evidence \| incomplete \| [^|]*brand-rules\.json could not be used")
+        rules.write_text(valid, encoding="utf-8")
+        self.agent()
+        self.go(weeks=3)
+        queue = self.queue()
+        replies = [entry["id"] for entry in queue["open"] + queue["closed"] if "message-reply" in entry["id"]]
+        self.assertEqual(replies, [reply], "it keeps its id and is never queued again")
+        self.assertEqual([entry["id"] for entry in self.items("message")], [reply])
+
+    def test_an_open_reply_stands_under_its_id_while_the_quote_record_it_answers_cannot_be_read(self):
+        self.agent(dict(quote_file(intent="asking"), **reply_file()))
+        self.go()
+        self.decide(RULES_FIT, "approve")
+        self.agent()
+        self.go(weeks=1)
+        reply = f"20261018-message-reply-{POST}"
+        self.assertEqual([entry["id"] for entry in self.items("message")], [reply])
+        record = self.ledger() / f"evidence/listening/quotes/{POST}.json"
+        kept = record.read_text(encoding="utf-8")
+        record.write_text("{", encoding="utf-8")
+        self.agent()
+        report = self.go(weeks=2)
+        self.assertEqual([entry["id"] for entry in self.items("message")], [reply], "it is not withdrawn")
+        self.assertEqual([entry["id"] for entry in self.queue()["closed"] if entry.get("withdrawn")], [])
+        unread = f"`evidence/listening/quotes/{POST}.json` could not be read as Listening Evidence ("
+        self.assertIn(f"kept: `{reply}`; not checked again, since {unread}", report)
+        self.assertIn("; the open item stands", report)
+        self.assertNotIn("is not validated Listening Evidence", report)
+        self.assertIn(f"| Listening Evidence | incomplete | {unread}", report)
+        for notice in self.items("notice"):
+            self.assertNotIn(reply, self.item_text(notice["id"]), "no notice says the reply is taken back")
+        record.write_text(kept, encoding="utf-8")
+        self.agent()
+        self.go(weeks=3)
+        queue = self.queue()
+        replies = [entry["id"] for entry in queue["open"] + queue["closed"] if "message-reply" in entry["id"]]
+        self.assertEqual(replies, [reply], "it keeps its id and is never queued again")
+
+    def test_a_reply_whose_quote_record_is_gone_is_still_blocked_and_its_open_item_withdrawn(self):
+        self.agent(dict(quote_file(intent="asking"), **reply_file()))
+        self.go()
+        self.decide(RULES_FIT, "approve")
+        self.agent()
+        self.go(weeks=1)
+        reply = f"20261018-message-reply-{POST}"
+        (self.ledger() / f"evidence/listening/quotes/{POST}.json").unlink()
+        self.agent()
+        report = self.go(weeks=2)
+        self.assertEqual(self.items("message"), [])
+        self.assertIn(
+            f"reply-evidence: '{POST}' is not validated Listening Evidence, so nothing shows the thread", report
+        )
+        self.assertIn(f"the open `{reply}` was withdrawn", report)
 
     def test_a_reply_is_never_offered_for_a_thread_the_product_does_not_answer(self):
         self.agent(dict(quote_file(answerable="no"), **reply_file()))
@@ -585,6 +676,141 @@ class OutreachCycleTest(WorkCycleTestCase):
         self.assertIn(f"- The open `{follow_up}` is withdrawn: Slow Strength replied on 2026-10-27;", notice)
         self.assertIn(f"the open `{follow_up}` was withdrawn", report)
 
+    def open_follow_ups(self, ids, *keys):
+        """Record each creator's first message as sent, and queue the one follow-up to each, two weeks on."""
+        for key in keys:
+            self.sent(ids[key], "2026-10-12")
+        self.agent(self.follow_ups(*keys))
+        self.go(weeks=2)
+        return [f"20261025-message-follow-up-{key}" for key in keys]
+
+    def ever_queued(self, key):
+        queue = self.queue()
+        return [entry["id"] for entry in queue["open"] + queue["closed"] if f"follow-up-{key}" in entry["id"]]
+
+    def test_a_follow_up_stays_open_under_its_id_while_the_records_cannot_be_read(self):
+        ids = self.first_messages()
+        (follow_up,) = self.open_follow_ups(ids, self.SLOW)
+        item = self.item_text(follow_up)
+        folder = self.exchange / "outreach"
+        os.chmod(str(folder), 0)
+        try:
+            self.agent()
+            report = self.go(weeks=3)
+        finally:
+            os.chmod(str(folder), 0o755)
+        self.assertIn(follow_up, [entry["id"] for entry in self.items("message")])
+        self.assertEqual(self.item_text(follow_up), item)
+        self.assertEqual([entry["id"] for entry in self.queue()["closed"] if entry.get("withdrawn")], [])
+        self.assertIn(f"| Mandu outreach records | failed | `{folder}` could not be read: Permission denied. |", report)
+        unread = (
+            "Slow Strength, the one follow-up: Mandu's outreach records could not be read (Permission denied), so the"
+            f" open `{follow_up}` stays as it is"
+        )
+        self.assertIn(f"| Outreach Drafts | incomplete | Mandu outreach records could not be read; {unread}; ", report)
+        self.assertIn(f"- Not prepared: {unread}.", self.section("Outreach"))
+        self.assertIn(f"- Not prepared: {unread}.", self.brief())
+        self.assertNotIn("is not recorded as sent", report + self.brief())
+        notice = self.item_text(self.items("notice")[-1]["id"])
+        self.assertIn("# Notice: 1 source could not be read on", notice)
+        self.assertIn(f"- Mandu outreach records: `{folder}` could not be read: Permission denied.", notice)
+        self.assertIn("Incomplete: Outreach Drafts.", notice)
+
+        self.agent()
+        report = self.go(weeks=4)
+        self.assertEqual(self.ever_queued(self.SLOW), [follow_up], "it keeps its id and is never queued twice")
+        self.assertIn(follow_up, [entry["id"] for entry in self.items("message")])
+        self.assertIn("| Mandu outreach records | read | 1 record |", report)
+        self.assertIn(f"| Slow Strength | the one follow-up | kept | `{follow_up}`; its Draft is unchanged", report)
+
+    def test_a_follow_up_stays_open_when_the_folder_its_record_was_in_is_gone(self):
+        ids = self.first_messages()
+        (follow_up,) = self.open_follow_ups(ids, self.SLOW)
+        shutil.rmtree(str(self.exchange / "outreach"))
+        self.agent()
+        report = self.go(weeks=3)
+        self.assertEqual(self.ever_queued(self.SLOW), [follow_up])
+        self.assertIn(follow_up, [entry["id"] for entry in self.items("message")])
+        unread = (
+            f"Slow Strength, the one follow-up: `outreach/{ids[self.SLOW]}.json`, the Founder's record of the first"
+            f" message, is missing, so the open `{follow_up}` stays as it is"
+        )
+        self.assertIn(f"| Mandu outreach records | failed | {unread}. |", report)
+        self.assertIn(f"| Outreach Drafts | incomplete | Mandu outreach records could not be read; {unread} |", report)
+        self.assertNotIn("the first message to Slow Strength is not recorded as sent", report)
+        self.assertIn(
+            "| Desk Reset | the one follow-up | not due | the first message to Desk Reset is not recorded as sent in"
+            " Mandu yet |",
+            report,
+        )
+        notice = self.item_text(self.items("notice")[-1]["id"])
+        self.assertIn(f"- Mandu outreach records: {unread}. Incomplete: Outreach Drafts.", notice)
+
+    def test_only_the_follow_up_resting_on_a_record_that_cannot_be_used_is_left_alone(self):
+        ids = self.first_messages()
+        slow, hallway = self.open_follow_ups(ids, self.SLOW, self.HALLWAY)
+        (self.exchange / "outreach" / f"{ids[self.SLOW]}.json").write_text("{", encoding="utf-8")
+        self.sent(ids[self.HALLWAY], "2026-10-12", replied_on="2026-10-27")
+        self.agent()
+        report = self.go(weeks=3)
+        self.assertEqual([e["id"] for e in self.items("message") if "follow-up" in e["id"]], [slow])
+        closed = {entry["id"]: entry for entry in self.queue()["closed"]}
+        self.assertTrue(closed[hallway]["withdrawn"], "a record that was read still takes its follow-up back")
+        self.assertIn(
+            "| Hallway Moves | the one follow-up | not due | Hallway Moves replied on 2026-10-27; a follow-up goes only"
+            f" to a non-reply; the open `{hallway}` was withdrawn |",
+            report,
+        )
+        unread = (
+            "Slow Strength, the one follow-up: the Founder's record of the first message could not be used"
+            f" (`outreach/{ids[self.SLOW]}.json`: not JSON: "
+        )
+        self.assertIn(f"| Mandu outreach records | failed | {unread}", report)
+        self.assertIn(f"| Outreach Drafts | incomplete | Mandu outreach records could not be read; {unread}", report)
+        self.assertIn(f"so the open `{slow}` stays as it is", report)
+        self.assertNotIn("the first message to Slow Strength is not recorded as sent", report)
+        self.assertEqual(self.ever_queued(self.SLOW), [slow])
+
+    def test_open_messages_stand_under_their_ids_while_the_brand_rules_cannot_be_read(self):
+        self.agent(self.drafts())
+        self.go()
+        queued = [entry["id"] for entry in self.items("message")]
+        self.assertEqual(len(queued), 4)
+        rules = self.mandu / "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json"
+        valid = rules.read_text(encoding="utf-8")
+        rules.write_text("{", encoding="utf-8")
+        self.agent()
+        report = self.go(weeks=1)
+        self.assertEqual([entry["id"] for entry in self.items("message")], queued, "each keeps its id")
+        self.assertEqual([entry["id"] for entry in self.queue()["closed"] if entry.get("withdrawn")], [])
+        stands = "not checked again, since brand-rules.json could not be used; the open item stands"
+        self.assertIn(
+            f"| Slow Strength | first message | kept | `20261011-message-creator-slow-strength`; {stands} |", report
+        )
+        self.assertIn(f"| your personal network | ask | kept | `20261011-message-network-ask`; {stands} |", report)
+        self.assertRegex(report, r"\| Outreach Drafts \| incomplete \| [^|]*brand-rules\.json could not be used")
+        rules.write_text(valid, encoding="utf-8")
+        self.agent()
+        report = self.go(weeks=2)
+        queue = self.queue()
+        messages_ever = sorted(entry["id"] for entry in queue["open"] + queue["closed"] if entry["kind"] == "message")
+        self.assertEqual(messages_ever, sorted(queued), "none is queued again under a new id")
+        self.assertIn("| Outreach Drafts | complete | 7 messages: 4 kept, 3 not due |", report)
+
+    def test_with_every_source_read_a_draft_changed_to_fail_a_check_still_withdraws_its_open_item(self):
+        self.agent(self.drafts())
+        self.go()
+        slow = "20261011-message-creator-slow-strength"
+        sponsor = fakes.message("creator", self.SLOW, fakes.CREATOR_BODY + "\nI would like to sponsor a video.")
+        self.agent({fakes.message_path("creator", self.SLOW): sponsor})
+        report = self.go(weeks=1)
+        self.assertNotIn(slow, [entry["id"] for entry in self.items("message")])
+        closed = {entry["id"]: entry for entry in self.queue()["closed"]}
+        self.assertTrue(closed[slow]["withdrawn"])
+        self.assertIn("sponsorship_asks: sponsorship ask 'sponsor' (message)", report)
+        self.assertIn(f"the open `{slow}` was withdrawn", report)
+        self.assertIn("| Outreach Drafts | complete | 7 messages: 3 kept, 1 blocked, 3 not due |", report)
+
     def test_a_blocked_message_names_its_rule_and_a_missing_one_is_a_gap(self):
         loss = fakes.NETWORK_BODY + "\nStop wasting your mornings."
         sponsor = fakes.CREATOR_BODY + "\nI would like to sponsor a video."
@@ -801,11 +1027,71 @@ class LearningCycleTest(WorkCycleTestCase):
         self.assertIn(
             f"- Proposed code set aside: `{self.FIRST}.md`: code must be one of: tone, length, factual-slip,", learned
         )
-        self.assertIn("`20261011-never-queued` is not a rejected item whose reason still needs a code", learned)
+        self.assertIn(
+            "- Proposed code set aside: `20261011-never-queued.md`: its item: names no rejected item whose reason"
+            " still needs a code",
+            learned,
+        )
         self.assertIn("- package-review: 2 rejections, 0 of 2 coded.", learned)
         self.assertNotIn("code", self.read(f"evidence/decisions/{self.FIRST}.json"))
         self.assertIn("3 proposed rejection codes not taken in on", self.item_text(self.items("notice")[-1]["id"]))
-        self.assertIn("| Rejection reasons coded | complete | 2 rejection reasons, 0 of 2 coded |", report)
+        self.assertFalse((self.ledger() / "evidence/learning/set-aside").exists(), "a set-aside code is copied nowhere")
+        self.assertEqual(list((self.workspace() / "evidence/learning").iterdir()), [])
+        gap = f"no accepted code for `{self.SECOND}`, `{self.FIRST}`"
+        self.assertIn(f"| Rejection reasons coded | incomplete | {gap} |", report)
+        self.assertIn(
+            f"- learning: checked=3 acted=0 note=2 rejection reasons, 0 of 2 coded; incomplete: {gap}\n", report
+        )
+
+    def test_a_reason_the_agent_leaves_uncoded_marks_the_coding_incomplete_until_it_is_coded(self):
+        self.rejected()
+        self.agent(self.code_file(self.FIRST, "length"))
+        report = self.go(weeks=1)
+        gap = f"no accepted code for `{self.SECOND}`"
+        self.assertIn(f"| Rejection reasons coded | incomplete | {gap} |", report)
+        self.assertIn(
+            "- learning: checked=1 acted=1 note=2 rejection reasons, 1 of 2 coded; 1 coded this run;"
+            f" incomplete: {gap}\n",
+            report,
+        )
+        self.agent(self.code_file(self.SECOND, "tone"))
+        report = self.go(weeks=2)
+        self.assertIn(f'- `{self.SECOND}` (package-review): "This is not who the app is for."', self.brief())
+        self.assertIn(
+            "| Rejection reasons coded | complete | 2 rejection reasons, 2 of 2 coded; 1 coded this run |", report
+        )
+
+    def test_a_decision_record_that_cannot_be_read_marks_the_coding_incomplete(self):
+        self.rejected()
+        self.agent()
+        self.go(weeks=1)
+        (self.ledger() / f"evidence/decisions/{self.FIRST}.json").write_text("{", encoding="utf-8")
+        self.agent(self.code_file(self.SECOND, "tone"))
+        report = self.go(weeks=2)
+        self.assertIn(
+            f"| Rejection reasons coded | incomplete | `evidence/decisions/{self.FIRST}.json` could not be read for its"
+            " rejection reason (",
+            report,
+        )
+        self.assertIn("- learning: checked=1 acted=1 note=1 rejection reason, 1 of 1 coded; 1 coded this run;", report)
+
+    def test_a_decision_record_that_cannot_be_read_is_one_launcher_problem(self):
+        self.rejected()
+        self.agent()
+        self.go(weeks=1)
+        (self.ledger() / f"evidence/decisions/{self.FIRST}.json").write_text("{", encoding="utf-8")
+        self.agent(self.code_file(self.SECOND, "tone"))
+        report = self.go(weeks=2)
+        unreadable = f"`evidence/decisions/{self.FIRST}.json` could not be read for its rejection reason ("
+        problems = report.partition("\n## Launcher problems\n")[2]
+        self.assertEqual(problems.count(unreadable), 1, problems)
+        notice = self.items("notice")[-1]
+        self.assertIn("Notice: the launcher hit 1 problem on ", notice["ask"])
+        self.assertEqual(self.item_text(notice["id"]).count(unreadable), 1)
+
+    def test_with_no_rejection_to_code_the_coding_is_complete(self):
+        report = self.go()
+        self.assertIn("| Rejection reasons coded | complete | no rejection yet |", report)
 
 
 class CheckWorkTest(WorkCycleTestCase):
@@ -877,7 +1163,9 @@ class CheckWorkTest(WorkCycleTestCase):
 
 class RetentionTest(WorkCycleTestCase):
     """What a run fetched is working data: the agent reads it while the run is in progress, the records step never
-    saves it, and it is gone when the run ends. Only what the agent quoted is kept."""
+    saves it, and it is gone when the run ends. A quote record the launcher refuses, a proposal it discards from
+    angles/, and a rejection code it sets aside each leave a name and reasons only. A file set aside from incoming/
+    is not covered here: the launcher copies it whole."""
 
     def setUp(self):
         super().setUp()
@@ -945,6 +1233,50 @@ class RetentionTest(WorkCycleTestCase):
         kept = self.kept()
         for words in (QUOTE, "Part 7 of a long post", "I deleted it that night", "One missed day and the app put me"):
             self.assertNotIn(words, kept, "nothing a refused record held is in any record")
+
+    def test_a_proposal_discarded_from_angles_and_a_set_aside_code_leave_names_and_reasons_only(self):
+        pasted = ANGLE.replace(
+            "Add an Angle: the first session starts with no plan to pick.", "I deleted it that night."
+        )
+        hook = ANGLE.replace("proposal: angle", "proposal: hook\nangle: and never opened it again")
+        writes = quote_file()
+        writes["review-queue/angles/pasted.md"] = (
+            pasted + "- d-000000000000\n- One missed day and the app put me back to zero.\n"
+        )
+        writes["review-queue/angles/pasted-hook.md"] = hook + f"- {POST}\n"
+        writes["evidence/learning/a-code.md"] = (
+            "---\nitem: I used to lift four days a week\ncode: tone\n---\n\nThen the baby came, and I stopped.\n"
+        )
+        self.agent(writes)
+        out, _ = self.go_reading(self.clone)
+        self.assertIn("records: pushed", out)
+        (record,) = (self.clone / "ledger/evidence/listening/runs").glob("*.json")
+        discarded = {
+            entry["file"]: entry["problems"] for entry in json.loads(record.read_text())["proposals_discarded"]
+        }
+        self.assertEqual(
+            discarded,
+            {
+                "pasted.md": [
+                    "it cites `d-000000000000`, which is not validated Listening Evidence",
+                    "it cites an entry that is no document id, which is not validated Listening Evidence",
+                ],
+                "pasted-hook.md": ["its angle: names no Angle in the Angle bank; a Hook belongs to exactly one Angle"],
+            },
+        )
+        self.assertIn(
+            "- Proposed code set aside: `a-code.md`: name the file <item id>.md, after the rejected item it codes; its"
+            " item: names no rejected item whose reason still needs a code",
+            self.report(self.clone),
+        )
+        saved = fakes.git(self.remote, "ls-tree", "-r", "--name-only", "HEAD", env=self.env).splitlines()
+        self.assertEqual([path for path in saved if "set-aside" in path], [], "neither is copied into the ledger")
+        self.assertEqual([path for path in saved if "/angles/" in path or "/evidence/learning/a-code" in path], [])
+        self.assertEqual(fakes.git(self.clone, "status", "--porcelain", env=self.env), "")
+        kept = self.kept()
+        self.assertIn(QUOTE, kept)
+        for words in ("I deleted it that night", "never opened it again", "One missed day", "I used to lift", "baby"):
+            self.assertNotIn(words, kept, "nothing a discarded proposal or a set-aside code held is in any record")
 
     def test_a_snapshot_a_killed_run_left_behind_is_never_saved_and_never_read_again(self):
         left = self.clone / "ledger/working/20261004T230000Z-scheduled-dead.sources.json"

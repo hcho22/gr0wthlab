@@ -17,7 +17,6 @@ import hashlib
 import json
 import os
 import socket
-import subprocess
 import sys
 import tempfile
 from collections.abc import Iterator, Mapping, Sequence
@@ -27,9 +26,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TextIO
 
-from . import codex, fetch, launcher
+from . import codex, fetch, launcher, process, settings
 from .areas import UnsafeFile, read_plain
-from .boundary import Boundary, canonical, load_boundary
+from .boundary import Boundary, ConfigError, canonical, load_boundary
 
 PROBE_INSTRUCTION = Path("src/checks/boundary-probe.md")
 PREFIX = "gr0wthlab-boundary-probe-"
@@ -146,13 +145,14 @@ def snapshot(path: Path) -> dict[str, str]:
     """Each changed or untracked path in a checkout, with a digest of its content, or a marker if it cannot be read."""
     if not (path / ".git").exists():
         return {}
-    output = subprocess.run(
-        ["git", "--no-optional-locks", "-C", str(path), "status", "--porcelain=v1", "-z", "--untracked-files=all"],
-        check=True,
-        capture_output=True,
-    ).stdout.decode("utf-8", "surrogateescape")
+    command = ["git", "--no-optional-locks", "-C", str(path), "status", "--porcelain=v1", "-z", "--untracked-files=all"]
+    listed = process.run(command, process.SLOW, errors="surrogateescape")
+    if listed.timed_out:
+        raise ConfigError(f"git status in {path} did not finish within {process.limit_text(listed.limit)}")
+    if listed.returncode != 0:
+        raise ConfigError(f"git status in {path} failed: {' '.join(listed.stderr.split()) or 'no output'}")
     entries = {}
-    for entry in filter(None, output.split("\0")):
+    for entry in filter(None, listed.stdout.split("\0")):
         status, name = entry[:2], entry[3:]
         target = path / name
         try:
@@ -179,16 +179,20 @@ def changed(before: Mapping[str, Mapping[str, str]], after: Mapping[str, Mapping
     return result
 
 
-def denial_messages(started_at: str) -> list[str]:
-    """Every kernel Seatbelt denial logged since a moment."""
+def kernel_log(started_at: str) -> process.Completed:
+    """The kernel's sandbox log since a run started; a query that does not finish in time is stopped, and what it had
+    read by then still counts."""
     start = datetime.fromisoformat(started_at).astimezone().strftime("%Y-%m-%d %H:%M:%S")
-    completed = subprocess.run(
+    return process.run(
         ["/usr/bin/log", "show", "--style", "ndjson", "--start", start, "--predicate", SANDBOX_LOG_PREDICATE],
-        capture_output=True,
-        text=True,
+        process.SLOW,
     )
+
+
+def denial_messages(log: str) -> list[str]:
+    """Every kernel Seatbelt denial in the log."""
     messages = []
-    for line in completed.stdout.splitlines():
+    for line in log.splitlines():
         try:
             message = json.loads(line).get("eventMessage", "")
         except ValueError:
@@ -198,11 +202,11 @@ def denial_messages(started_at: str) -> list[str]:
     return messages
 
 
-def sandbox_denials(run_id: str, started_at: str, listeners: Sequence[Listener] = ()) -> list[str]:
-    """Kernel Seatbelt denials that name this run's sentinels or refuse a connection to its listeners."""
+def sandbox_denials(run_id: str, log: str, listeners: Sequence[Listener] = ()) -> list[str]:
+    """Kernel Seatbelt denials in the log that name this run's sentinels or refuse a connection to its listeners."""
     marker = PREFIX + run_id
     denials = []
-    for message in denial_messages(started_at):
+    for message in denial_messages(log):
         named = marker in message or any(listener.refused_in(message) for listener in listeners)
         if named and message not in denials:
             denials.append(message)
@@ -315,7 +319,9 @@ def verify(
         for path in files:
             path.unlink()
 
-    denials = sandbox_denials(run_id, record["started_at"], listeners or ()) if record.get("started_at") else []
+    log = kernel_log(record["started_at"]) if record.get("started_at") else None
+    denials = sandbox_denials(run_id, log.stdout, listeners or ()) if log else []
+    network_log = kernel_log(str(network["started_at"])) if network is not None else None
     rejections = patch_rejections(log_dir, run_id)
     marker = PREFIX + run_id
     unproven = [
@@ -343,6 +349,7 @@ def verify(
         "agent_report": str(kept_report) if kept_report else None,
         "codex_patch_rejections": rejections,
         "kernel_sandbox_denials": denials,
+        "kernel_log_cut_short": any(found is not None and found.timed_out for found in (log, network_log)),
         "shell_targets_without_kernel_denial": unproven,
         "local_listeners": listened,
         "changed_outside_areas": changed(before, snapshots(boundary)) if before is not None else None,
@@ -351,7 +358,7 @@ def verify(
     if network is not None:
         local = next(listener.address for listener in listeners or () if listener.label == "localhost-tcp")
         network["kernel_denials"] = [
-            message for message in denial_messages(str(network["started_at"])) if "network-outbound" in message
+            message for message in denial_messages(network_log.stdout) if "network-outbound" in message
         ]
         network["problems"] = network_verdict(network, network["kernel_denials"], local)
     result["passed"] = (
@@ -388,6 +395,11 @@ def summarize(result: Mapping[str, object], out: TextIO) -> None:
         lines.append(f"  areas that could not be listed: {unlistable}")
     lines.append(f"  Codex patch rejections: {result['codex_patch_rejections']} (need {len(PROBE_TARGETS)})")
     lines.append(f"  kernel Seatbelt denials naming this run: {len(result['kernel_sandbox_denials'])}")
+    if result.get("kernel_log_cut_short"):
+        lines.append(
+            f"  the kernel log query did not finish within {process.limit_text(process.SLOW)} and was stopped, so later"
+            " denials were not read"
+        )
     unproven = result["shell_targets_without_kernel_denial"]
     if unproven:
         lines.append(f"  shell targets with no kernel denial: {', '.join(unproven)}")
@@ -428,6 +440,7 @@ def main(
     trigger: str = "on-demand",
 ) -> int:
     _, boundary = load_boundary(repo_root, env, home)
+    limit = settings.load(repo_root, env, home).agent.time_limit
     log_dir = launcher.default_log_dir(env, home)
     if verify_run_id:
         result = verify(boundary, verify_run_id, log_dir)
@@ -438,7 +451,9 @@ def main(
             tcp = next(listener for listener in listeners if listener.label == "localhost-tcp")
             network = network_proof(repo_root, resolved, tcp, datetime.now(timezone.utc) - timedelta(seconds=5))
             facts = [f"Local listener {listener.label}: {listener.address}" for listener in listeners]
-            record = launcher.run(repo_root, repo_root / PROBE_INSTRUCTION, trigger, env, home, out=out, facts=facts)
+            record = launcher.run(
+                repo_root, repo_root / PROBE_INSTRUCTION, trigger, env, home, out=out, facts=facts, time_limit=limit
+            )
             result = verify(boundary, str(record["run_id"]), log_dir, before, listeners, network)
     summarize(result, out)
     print(f"  evidence: {log_dir / (str(result['run_id']) + '.boundary-check.json')}", file=out)

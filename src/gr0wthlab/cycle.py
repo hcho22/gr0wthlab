@@ -2,19 +2,22 @@
 
 Order: bring the production clone up to origin's main; snapshot the Go-To-Market Package; take in the Founder's
 decisions from Mandu; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests
-that need filing; plan the post Drafts from the 14-day kit (posts.prepare); read the fixed list of network sources
-into one snapshot (fetch.Client, the launcher's only way onto the network), which is working data removed when the run
-ends, and plan Listening from it and outreach from the Founder's records; brief the agent and run it inside the
-sandbox, which has no network (launcher.run); put back any change the run made to its own Instructions; queue the
-items it wrote to workspace/review-queue/incoming/ that pass the format, a post for each Draft it wrote that passes
-every check (posts.take), the quotes, proposals, and messages that pass theirs (listening.take, outreach.take), the
-code it proposed for each rejection reason (learning.take), and the reviewed proposals that need filing; write the
-Review Queue and the run report; commit and push workspace/ and ledger/. Every step but the agent is deterministic
-code outside the sandbox. The launcher's records live in ledger/, which the agent can read and never write, so
-nothing it does can change them; in workspace/ the launcher only restores its owner's access to entries the agent
-left without it, reads the Drafts, reads and removes the items, quote records, proposals, and codes it takes in, and
-puts the agent's Instructions back as they were. One run at a time per checkout holds the run lock in its ledger/
-from the sync to the saved records; a run started meanwhile refuses to start, and the next report says so.
+that need filing; plan the post Drafts from the 14-day kit (posts.prepare); read the Founder's Beta Build record
+and, only once it exists, plan the Beta Cohort's next invitation batch (beta.prepare); read the fixed list of network
+sources into one snapshot (fetch.Client, the launcher's only way onto the network), which is working data removed
+when the run ends, and plan Listening from it and outreach from the Founder's records; brief the agent and run it
+inside the sandbox, which has no network (launcher.run); put back any change the run made to its own Instructions;
+queue the items it wrote to workspace/review-queue/incoming/ that pass the format, a post for each Draft it wrote that
+passes every check (posts.take), the recruiting Drafts that pass theirs (beta.take), the quotes, proposals, and
+messages that pass theirs (listening.take, outreach.take), the code it proposed for each rejection reason
+(learning.take), and the reviewed proposals that need filing; write the Review Queue and the run report; commit and
+push workspace/ and ledger/. Every step but the agent is deterministic code outside the sandbox. The launcher's
+records live in ledger/, which the agent can read and never write, so nothing it does can change them; in workspace/
+the launcher only restores its owner's access to entries the agent left without it, reads the Drafts, removes a
+recruiting Draft that holds what looks like an email address, reads and removes the items, quote records, proposals,
+and codes it takes in, and puts the agent's Instructions back as they were. One run at a time per checkout holds the
+run lock in its ledger/ from the sync to the saved records; a run started meanwhile refuses to start, and the next
+report says so.
 """
 
 from __future__ import annotations
@@ -26,7 +29,6 @@ import os
 import shlex
 import shutil
 import stat
-import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
@@ -35,6 +37,7 @@ from pathlib import Path
 from typing import TextIO
 
 from . import (
+    beta,
     dispatch,
     evidence,
     exchange,
@@ -46,6 +49,7 @@ from . import (
     outreach,
     package,
     posts,
+    process,
     proposals,
     records,
     report,
@@ -62,7 +66,7 @@ from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLi
 PRE_RUN_ENV = "GR0WTHLAB_PRE_RUN"
 EXIT_RECORDS = 4
 EXIT_BUSY = 5
-EXIT_STOPPED = 6
+EXIT_STOPPED = launcher.EXIT_STOPPED
 LOCK_FILE = "run.lock"
 NOTES_DIR = "notes"
 RUN_REPORTS = "run-reports"
@@ -87,11 +91,10 @@ def entry_point(repo_root: Path) -> Path:
 
 def head(repo_root: Path) -> str:
     try:
-        return subprocess.run(
-            ["git", "-C", str(repo_root), "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True
-        ).stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
+        asked = process.run(["git", "-C", str(repo_root), "rev-parse", "--short", "HEAD"], process.QUICK)
+    except OSError:
         return "unknown"
+    return asked.stdout.strip() if asked.ok else "unknown"
 
 
 def output_titles(config: settings.Settings, keys: Sequence[str]) -> tuple[str, ...]:
@@ -418,6 +421,8 @@ class Cycle:
         """Bring the Review Queue state into line with the ledger, note every difference, and save every state."""
         hashes, _ = run_state.item_hashes(self.store.root, ledger.entries, products, states.review_queue)
         states.review_queue, state.state_notes = run_state.reconcile(states.review_queue, ledger.entries, hashes)
+        if state.beta is not None:
+            state.state_notes += state.beta.notes
         run_state.save(self.store, states, state.run_id, now.isoformat())
 
     def tallies(self, state: RunState, ledger: Ledger, incoming: int, ledger_ok: bool) -> list[run_state.Tally]:
@@ -434,8 +439,9 @@ class Cycle:
         # (Weekly Reads), its items count under the Review Queue with the launcher's notices.
         outcome = state.post_outcome
         drafting = set(outcome.published if outcome else ()) | ({state.filed} if state.filed else set())
+        drafting |= set(state.beta_outcome.published if state.beta_outcome else ())
         drafting |= set(state.work_published)  # counted by Listening and outreach, each under its own workflow
-        finished = state.agent.get("exit_code") == 0
+        agent_gap = state.agent_gap()
         proposals = sum(
             1 for entry in queued if entry["kind"] == "package-change-proposal" and entry["id"] not in drafting
         )
@@ -477,9 +483,10 @@ class Cycle:
                 or ("no reviewed Dispatch request" if ledger_ok else "none filed: the Review Queue could not be read"),
             ),
             self.post_tally(state),
-            listening.tally(state.listening, state.listening_result, state.listening_problem, finished),
-            outreach.tally(state.outreach, state.outreach_result, state.outreach_problem, finished),
-            learning.tally(state.learning),
+            self.beta_tally(state),
+            listening.tally(state.listening, state.listening_result, state.listening_problem, agent_gap),
+            outreach.tally(state.outreach, state.outreach_result, state.outreach_problem, agent_gap),
+            learning.tally(state.learning, state.learning_problem, agent_gap),
         ]
 
     def waitlist_tally(self, state: RunState, breach: str | None) -> run_state.Tally:
@@ -515,6 +522,30 @@ class Cycle:
             note += "; the brand-rules proposal filed"
         return run_state.Tally("post-drafts", checked, acted, note, "; ".join(gaps))
 
+    def beta_tally(self, state: RunState) -> run_state.Tally:
+        """What Beta Cohort recruiting checked and acted on: the sign-ups that asked for an invitation, and each item
+        queued or withdrawn. Before the Founder's gate it checks and acts on nothing, and says why."""
+        plan, outcome = state.beta, state.beta_outcome
+        if plan is None:
+            return run_state.Tally(beta.WORKFLOW, 0, 0, "no Product recruits a Beta Cohort")
+        if not plan.active:
+            why = (
+                "no Beta Build approval is recorded in Mandu"
+                if plan.gate.status == beta.NOT_RECORDED
+                else "the Beta Build record in Mandu could not be used"
+            )
+            return run_state.Tally(beta.WORKFLOW, 0, 0, f"not started: {why}")
+        reading = plan.reading
+        checked = len(reading.candidates) if reading is not None and reading.status == package.READ else 0
+        acted = len(outcome.published) + len(outcome.withdrawn) if outcome else 0
+        note = state.beta_problem or beta.batch_line(plan, outcome)
+        if plan.gap:
+            note += f"; the pool is {plan.gap} short of {plan.rules.minimum}"
+        return run_state.Tally(beta.WORKFLOW, checked, acted, note, "; ".join(self.beta_gaps(state)))
+
+    def beta_gaps(self, state: RunState) -> list[str]:
+        return beta.gaps(state.beta, state.beta_outcome, state.beta_problem, state.agent_gap())
+
     def post_gaps(self, state: RunState) -> list[str]:
         """Why the post Drafts are incomplete this run: a kit file, the code, or the brand rules could not be used,
         a due day has no Draft, or the agent or the take-in fell short. A blocked Draft is the check working, not a
@@ -529,14 +560,17 @@ class Cycle:
             missing = [str(result.day) for result in outcome.results if result.status == posts.MISSING]
             if missing:
                 gaps.append(f"no Draft for day {', '.join(missing)}")
-        if plan.days and state.agent.get("exit_code") != 0:
-            gaps.append("the agent did not finish")
+        if plan.days and state.agent_gap():
+            gaps.append(state.agent_gap())
         return gaps
 
     def outputs(self, state: RunState, config: settings.Settings, ledger_ok: bool) -> None:
         """Each output's status: a built output is incomplete when a failed source it needs names it, or when its own
-        step fell short."""
+        step fell short. A step that needed the agent names the agent's not finishing among its gaps, and the outputs
+        whose rows hold that gap are the ones the run's notice names; the rows are therefore worked out before that
+        notice is written, and again once the Review Queue holds it."""
         failed = state.failed_sources()
+        agent_gap = state.agent_gap()
         decisions = next((line.detail for line in state.sources if line.name == "Mandu decisions"), "")
         queued = report.plural(len(state.queue_after), "open item") + (
             f"; {len(state.set_aside)} set aside" if state.set_aside else ""
@@ -544,7 +578,10 @@ class Cycle:
         review_gap = state.review_gap()
         reading = state.waitlist
         skipped = {"waitlist-counts": reading.detail} if reading and reading.status == SKIPPED else {}
-        finished = state.agent.get("exit_code") == 0
+        if state.beta is None or state.beta.gate.status == beta.NOT_RECORDED:
+            skipped[beta.WORKFLOW] = (
+                "the Founder has recorded no approved Beta Build in Mandu" if state.beta else "no Product recruits one"
+            )
         own = {
             "package-snapshot": ([], f"`{state.snapshot_file}`"),
             "package-review": ([review_gap] if review_gap else [], "the agent finished its review"),
@@ -560,17 +597,21 @@ class Cycle:
                 f"`{state.waitlist_file}`",
             ),
             "post-drafts": (self.post_gaps(state), self.post_tally(state).note),
+            beta.WORKFLOW: (self.beta_gaps(state), self.beta_tally(state).note),
             "listening": (
-                listening.gaps(state.listening, state.listening_result, state.listening_problem, finished),
-                listening.tally(state.listening, state.listening_result, state.listening_problem, finished).note,
+                listening.gaps(state.listening, state.listening_result, state.listening_problem, agent_gap),
+                listening.tally(state.listening, state.listening_result, state.listening_problem, agent_gap).note,
             ),
             "outreach-drafts": (
-                outreach.gaps(state.outreach, state.outreach_result, state.outreach_problem, finished),
-                outreach.tally(state.outreach, state.outreach_result, state.outreach_problem, finished).note,
+                outreach.gaps(state.outreach, state.outreach_result, state.outreach_problem, agent_gap),
+                outreach.tally(state.outreach, state.outreach_result, state.outreach_problem, agent_gap).note,
             ),
-            "rejection-codes": ([], learning.tally(state.learning).note),
+            "rejection-codes": (
+                learning.gaps(state.learning, state.learning_problem, agent_gap),
+                learning.tally(state.learning, state.learning_problem, agent_gap).note,
+            ),
         }
-        rows = []
+        rows, agent_incomplete = [], []
         for key, output in config.outputs.items():
             title = str(output.get("title", key))
             if not output.get("built"):
@@ -580,9 +621,12 @@ class Cycle:
                 rows.append([title, SKIPPED, skipped[key]])
                 continue
             gaps, done = own.get(key, ([], ""))
+            if agent_gap and agent_gap in gaps:
+                agent_incomplete.append(title)
             gaps = [f"{line.name} could not be read" for line in failed if title in line.needed_by] + gaps
             rows.append([title, INCOMPLETE if gaps else COMPLETE, "; ".join(gaps) or done])
         state.outputs = rows
+        state.agent_incomplete = tuple(agent_incomplete)
 
     def prepare_posts(
         self, state: RunState, config: settings.Settings, registry, boundary: Boundary, ledger: Ledger
@@ -650,6 +694,99 @@ class Cycle:
         elif filing.status == proposals.UNUSABLE:
             state.problems.append(f"`{filing.source}` could not be filed: {filing.detail}")
         state.filing = proposals.describe(filing, ledger)
+
+    def prepare_beta(
+        self,
+        state: RunState,
+        config: settings.Settings,
+        rules: beta.Rules | None,
+        folder: Path,
+        registry,
+        boundary: Boundary,
+        ledger: Ledger,
+        ledger_ok: bool,
+        areas: Areas,
+        previous: run_state.BetaRecruitingState,
+    ) -> None:
+        """Read the Founder's Beta Build record, the gate, as one of the run's sources. Before it exists nothing else
+        happens here: the Founder's reports are not read, no entry is chosen, and nothing is written. Once it does,
+        fix the run's recruiting plan and record which Drafts are due for check-beta-drafts. A run whose Review Queue
+        could not be read stops at the gate as well, since only the Review Queue says who is invited or offered."""
+        if rules is None:
+            return
+        needs = output_titles(config, (beta.WORKFLOW,))
+        found, problems, failure = read_records(folder / beta.BUILDS)
+        unusable = [(Path(record.name).name, "; ".join(record.problems)) for record in problems]
+        gate = beta.read_gate(rules.product, found, unusable, failure)
+        if gate.recorded and not ledger_ok:
+            state.beta = beta.Plan(rules, gate, state.run_id)
+            state.beta_problem = "not prepared: the Review Queue could not be read"
+        else:
+            reports, reports_failure = None, None
+            if gate.recorded:
+                reports, problems, reports_failure = read_records(folder / beta.REPORTS)
+                for record in problems:
+                    name = beta.mandu_file(beta.REPORTS, Path(record.name).name)
+                    state.problems.append(f"{name} could not be used ({'; '.join(record.problems)})")
+            try:
+                state.beta = beta.prepare(
+                    rules,
+                    gate,
+                    reports,
+                    reports_failure,
+                    registry,
+                    boundary,
+                    ledger,
+                    previous,
+                    state.waitlist,
+                    state.waitlist_file,
+                    self.store,
+                    state.run_id,
+                    self.now(),
+                )
+                if state.beta.active:
+                    record = self.store.path(RUN_REPORTS, beta.plan_file(state.run_id))
+                    self.store.write_json(record, beta.plan_record(state.beta, areas))
+            except (ConfigError, OSError) as error:
+                state.beta = beta.Plan(rules, gate, state.run_id)
+                state.beta_problem = f"not prepared: {error}"
+                state.problems.append(f"Beta Cohort recruiting could not be prepared ({error})")
+        for name, status, detail in beta.source_lines(state.beta):
+            state.sources.append(SourceLine(name, status, detail, needs))
+
+    def take_beta(
+        self,
+        state: RunState,
+        areas: Areas,
+        ledger: Ledger,
+        products: Sequence[str],
+        run_id: str,
+        now: datetime,
+    ) -> None:
+        """Queue each recruiting Draft that passes, the invitation with its batch attached, and record every check."""
+        plan = state.beta
+        if plan is None or not plan.active or plan.batch is None or state.beta_problem:
+            return
+        try:
+            state.beta_outcome = beta.take(plan, areas, self.store, ledger, run_id, now, products)
+            state.published += state.beta_outcome.published
+        except (OSError, ConfigError) as error:
+            state.beta_problem = f"not taken in: {error}"
+            state.problems.append(f"the Beta Cohort recruiting Drafts could not be taken in ({error})")
+
+    def settle_beta(
+        self, state: RunState, ledger: Ledger, states: run_state.States, run_id: str, now: datetime
+    ) -> None:
+        """Once the run's notice exists: take the recruiting items that no longer stand off the queue, bring the run
+        state to where the Review Queue now stands, and keep the run's recruiting Evidence."""
+        if state.beta_outcome is None:
+            return
+        beta.withdraw(ledger, state.beta_outcome, state.notice, run_id, now)
+        states.beta_recruiting = beta.settle(states.beta_recruiting, ledger.entries, state.beta)
+        try:
+            beta.record(state.beta, state.beta_outcome, self.store, run_id, now)
+        except (OSError, ConfigError) as error:
+            state.problems.append(f"the Beta Cohort recruiting Evidence could not be written ({error})")
 
     def research_apps(
         self, state: RunState, config: sources.Config, mandu: Path
@@ -759,47 +896,51 @@ class Cycle:
             )
             if state.listening is not None:
                 state.listening.skipped, state.listening.research_problem = skipped, research_problem
-                state.problems += state.listening.problems
+                state.problems += state.listening.problems.values()
                 state.published += state.listening.filed
                 state.work_published += state.listening.filed
         except (OSError, ConfigError, sources.SourceError) as error:
             state.listening_problem = f"not prepared: {error}"
             state.problems.append(f"Listening could not be prepared ({error})")
         try:
-            usable: list[exchange.Outreach] = []
+            records, counted = outreach.Records(), ""
             if ledger is not None and package.file_type(folder / "outreach") == stat.S_IFDIR:
                 found, problems, failure = read_records(folder / "outreach")
                 parsed, more = parse_records(found, exchange.parse_outreach)
-                usable = [record for record, _, _ in parsed]
-                bad = [f"`{record.name}`: {'; '.join(record.problems)}" for record in problems + more]
-                detail = failure or f"{report.plural(len(found), 'record')}" + (
-                    f", {len(bad)} could not be used" if bad else ""
-                )
-                status = package.FAILED if failure else package.READ
+                bad = {Path(record.name).name: "; ".join(record.problems) for record in problems + more}
+                records = outreach.Records(tuple(record for record, _, _ in parsed), bad, failure or "")
+                counted = report.plural(len(found), "record") + (f", {len(bad)} could not be used" if bad else "")
+            try:
+                if ledger is not None:
+                    state.outreach, states.outreach = outreach.prepare(
+                        canonical(self.repo_root),
+                        outreach_settings,
+                        registry,
+                        mandu,
+                        ledger,
+                        records,
+                        states.outreach,
+                        areas,
+                        self.now(),
+                        state.run_id,
+                        config.waitlist_live(today),
+                    )
+                else:
+                    state.outreach_problem = "not prepared: the Review Queue could not be read"
+            finally:
+                unread = state.outreach.unread if state.outreach is not None else []
                 needs = output_titles(config, ("outreach-drafts",))
-                state.sources.append(SourceLine("Mandu outreach records", status, detail, needs))
-            else:
-                bad = []
-                detail = "no message has been recorded as sent yet"
-                state.sources.append(SourceLine("Mandu outreach records", SKIPPED, detail))
-            if ledger is not None:
-                state.outreach, states.outreach = outreach.prepare(
-                    canonical(self.repo_root),
-                    outreach_settings,
-                    registry,
-                    mandu,
-                    ledger,
-                    usable,
-                    states.outreach,
-                    areas,
-                    self.now(),
-                    state.run_id,
-                    config.waitlist_live(today),
-                )
-                if state.outreach is not None:
-                    state.outreach.record_problems += bad
-            else:
-                state.outreach_problem = "not prepared: the Review Queue could not be read"
+                if records.failure:
+                    detail = f"`{folder / 'outreach'}` could not be read: {records.failure}."
+                    line = SourceLine("Mandu outreach records", package.FAILED, detail, needs)
+                elif unread:
+                    detail = "; ".join(f"{who}: {why}" for who, why in unread) + "."
+                    line = SourceLine("Mandu outreach records", package.FAILED, detail, needs)
+                elif counted:
+                    line = SourceLine("Mandu outreach records", package.READ, counted, needs)
+                else:
+                    line = SourceLine("Mandu outreach records", SKIPPED, "no message has been recorded as sent yet")
+                state.sources.append(line)
         except (OSError, ConfigError, run_state.StateError) as error:
             state.outreach_problem = f"not prepared: {error}"
             state.problems.append(f"the outreach messages could not be prepared ({error})")
@@ -847,6 +988,7 @@ class Cycle:
             unread = "not taken in: the Review Queue could not be read"
             state.listening_problem = state.listening_problem or unread
             state.outreach_problem = state.outreach_problem or unread
+            state.learning_problem = "the rejection reasons were not read: the Review Queue could not be read"
             return
         context = state.posts.context if state.posts else None
         if state.listening is not None:
@@ -877,9 +1019,10 @@ class Cycle:
             self.file_outreach_lists(state, context, ledger, products, run_id, now, seen)
         try:
             state.learning = learning.take(areas, self.store, ledger, products, run_id, now)
-            state.problems += state.learning.problems
+            state.problems += [problem for problem in state.learning.problems if problem not in state.problems]
         except (OSError, ConfigError, ValueError) as error:
-            state.problems.append(f"the rejection reasons could not be coded ({error})")
+            state.learning_problem = f"the rejection reasons could not be coded ({error})"
+            state.problems.append(state.learning_problem)
 
     def file_outreach_lists(self, state: RunState, context, ledger: Ledger, products, run_id, now, seen) -> None:
         """File the loss-framing and sponsorship lists proposal unless it ever was, or Mandu's file holds them."""
@@ -1021,6 +1164,7 @@ class Cycle:
             registry = load_json(self.repo_root / "config" / "products.json")
             folder = settings.exchange_dir(registry, boundary, self.env, self.home)
             rules = settings.waitlist(registry, boundary, self.env, self.home)
+            beta_rules = beta.rules(registry, config)
             policy = fetch.load_policy(canonical(self.repo_root))
             network = (policy, sources.load(canonical(self.repo_root), policy), outreach.settings(config.data))
         except ConfigError as error:
@@ -1066,6 +1210,9 @@ class Cycle:
             if entry["kind"] == "package-change-proposal" and entry["status"] != OPEN
         ]
         self.prepare_posts(state, config, registry, boundary, ledger)
+        self.prepare_beta(
+            state, config, beta_rules, folder, registry, boundary, ledger, ledger_ok, areas, states.beta_recruiting
+        )
         areas.ensure_folder(areas.path("review_queue", INCOMING))
         self.prepare_work(
             state, config, registry, boundary, areas, ledger if ledger_ok else None, states, folder, network
@@ -1088,6 +1235,7 @@ class Cycle:
                 now=started,
                 facts=[f"Run brief, read it first: {brief}"],
                 run_id=run_id,
+                time_limit=config.agent.time_limit,
             )
         except OSError as error:
             state.agent = {"exit_code": launcher.EXIT_CONFIG, "agent_started": False, "error": str(error)}
@@ -1100,6 +1248,9 @@ class Cycle:
         state.usage = report.token_usage(log_dir / f"{run_id}.events.jsonl")
         if state.usage:
             state.cost = report.cost(state.usage, config.prices)
+        left = report.left_running(state.stop) if state.timed_out else None
+        if left:
+            state.problems.append(left)
         state.problems += records.restore_access(canonical(self.repo_root))
 
         now = self.now()
@@ -1111,6 +1262,7 @@ class Cycle:
         incoming = len(published) + len(state.set_aside)
         if ledger_ok:
             self.take_posts(state, areas, ledger, products, run_id, now, seen)
+            self.take_beta(state, areas, ledger, products, run_id, now)
         elif state.posts is not None:
             state.posts_problem = "not taken in: the Review Queue could not be read"
         self.take_work(state, areas, ledger, ledger_ok, products, run_id, now, seen)
@@ -1134,6 +1286,7 @@ class Cycle:
                     " report is the only place it is told"
                 )
         state.queue_after = ledger.ordered()
+        self.outputs(state, config, ledger_ok)
         notice = report.problems_notice(state, self.store.relative(report_path))
         if notice and ledger_ok:
             state.notice = self.queue_notice(
@@ -1145,6 +1298,7 @@ class Cycle:
             taken_back = list(state.listening_result.replies if state.listening_result else ())
             taken_back += list(state.outreach_result.outcomes if state.outreach_result else ())
             messages.withdraw(ledger, taken_back, state.notice, run_id, now)
+            self.settle_beta(state, ledger, states, run_id, now)
         state.queue_after = ledger.ordered()
         self.outputs(state, config, ledger_ok)
         if ledger_ok:

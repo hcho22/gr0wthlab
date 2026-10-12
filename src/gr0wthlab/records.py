@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import os
 import stat
-import subprocess
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from . import process
 from .boundary import LEDGER
 from .report import plural
 
@@ -41,13 +41,13 @@ NOTHING = "nothing to save"
 NOT_PUSHED = "not pushed"
 
 
-def said(completed: subprocess.CompletedProcess) -> str:
+def said(completed: process.Completed) -> str:
     """Everything git said, on one line, so a report keeps the cause and not only git's closing hint."""
     return " ".join((completed.stderr or completed.stdout or "").split()) or "no output"
 
 
 class GitError(Exception):
-    def __init__(self, command: Sequence[str], completed: subprocess.CompletedProcess | None, detail: str = ""):
+    def __init__(self, command: Sequence[str], completed: process.Completed | None, detail: str = ""):
         super().__init__(f"git {' '.join(command)} failed: {detail or (said(completed) if completed else 'no output')}")
 
 
@@ -91,12 +91,11 @@ class Git:
         # Never prompt, treat every pathspec literally, and run no hooks.
         self.env = dict(env, GIT_TERMINAL_PROMPT="0", GIT_LITERAL_PATHSPECS="1", LC_ALL="C")
 
-    def run(self, *args: str, timeout: int = LOCAL_TIMEOUT, check: bool = True) -> subprocess.CompletedProcess:
+    def run(self, *args: str, timeout: int = LOCAL_TIMEOUT, check: bool = True) -> process.Completed:
         command = ["git", "-C", str(self.repo), "-c", "core.hooksPath=/dev/null", "-c", "commit.gpgSign=false", *args]
-        try:
-            completed = subprocess.run(command, capture_output=True, text=True, env=self.env, timeout=timeout)
-        except subprocess.TimeoutExpired as error:
-            raise GitError(args, None, f"timed out after {timeout}s") from error
+        completed = process.run(command, timeout, env=self.env, errors="strict")
+        if completed.timed_out:
+            raise GitError(args, None, f"timed out after {timeout}s")
         if check and completed.returncode != 0:
             raise GitError(args, completed)
         return completed

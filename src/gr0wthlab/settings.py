@@ -18,6 +18,8 @@ INSTRUCTIONS = PurePosixPath("src/instructions")
 TAG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 # The Source and Fit answer of a sign-up the view cannot place; no configured tag or answer may take it.
 UNKNOWN = "unknown"
+# No agent time limit may pass a day: a longer one is no limit on a run that happens every week.
+MAX_TIME_LIMIT = 24 * 60 * 60
 
 
 @dataclass(frozen=True)
@@ -45,6 +47,13 @@ class Window:
 
 
 @dataclass(frozen=True)
+class Agent:
+    """How long a run waits for its agent, in seconds, before it stops it and finishes as timed out."""
+
+    time_limit: float
+
+
+@dataclass(frozen=True)
 class Settings:
     data: Mapping
     instruction: Path
@@ -56,6 +65,8 @@ class Settings:
     not_connected: tuple[Mapping, ...]
     window: Window
     waitlist_live_since: date | None
+    beta_batch_size: int
+    agent: Agent
 
     def waitlist_live(self, today: date) -> bool:
         """Whether the Waitlist is live: only once a reviewed change has set the date it went live."""
@@ -102,6 +113,28 @@ def load_live_since(data: object) -> date | None:
     if value is not None and iso_date(value) is None:
         raise ConfigError(f"{RUN_CONFIG}: waitlist.live_since must be null or a YYYY-MM-DD date")
     return iso_date(value)
+
+
+def load_batch_size(data: object) -> int:
+    """config/run.json's beta_recruiting.batch_size: how many Waitlist entries one invitation batch offers, the
+    Founder's call, set through a reviewed change."""
+    size = data.get("batch_size") if isinstance(data, dict) else None
+    if isinstance(size, bool) or not isinstance(size, int) or size < 1:
+        raise ConfigError(f"{RUN_CONFIG}: beta_recruiting.batch_size must be a whole number from 1")
+    return size
+
+
+def load_agent(data: object) -> Agent:
+    """config/run.json's agent: the time limit every run puts on its agent, so that every run ends with its report."""
+    if not isinstance(data, dict):
+        raise ConfigError(f"{RUN_CONFIG}: agent must be an object that sets time_limit_seconds")
+    limit = data.get("time_limit_seconds")
+    if isinstance(limit, bool) or not isinstance(limit, (int, float)) or not 0 < limit <= MAX_TIME_LIMIT:
+        raise ConfigError(
+            f"{RUN_CONFIG}: agent.time_limit_seconds must be a number of seconds above zero and at most"
+            f" {MAX_TIME_LIMIT}, a day; got {limit!r}"
+        )
+    return Agent(float(limit))
 
 
 def load_window(data: object, sitting_day: str) -> Window:
@@ -152,13 +185,28 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
         instruction = instruction_path(repo_root, Path(data["instruction"]))
         window = load_window(data["window"], weekly[0])
         live_since = load_live_since(data["waitlist"])
+        batch_size = load_batch_size(data["beta_recruiting"])
+        agent = load_agent(data.get("agent"))
     except (KeyError, TypeError, ValueError, schedule.ScheduleError) as error:
         raise ConfigError(f"{RUN_CONFIG} is incomplete or malformed: {error}") from error
     for source in not_connected:
         for output in source.get("needed_by", ()):
             if output not in outputs:
                 raise ConfigError(f"{RUN_CONFIG}: {source.get('name')} feeds unknown output {output}")
-    return Settings(data, instruction, weekly, late, resolved, prices, outputs, not_connected, window, live_since)
+    return Settings(
+        data,
+        instruction,
+        weekly,
+        late,
+        resolved,
+        prices,
+        outputs,
+        not_connected,
+        window,
+        live_since,
+        batch_size,
+        agent,
+    )
 
 
 def exchange_dir(registry: Mapping, boundary: Boundary, env: Mapping[str, str], home: Path) -> Path:

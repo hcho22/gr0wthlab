@@ -18,7 +18,7 @@ from gr0wthlab import fetch  # noqa: E402
 REAL_SEND = fetch.send
 
 
-def no_network(host, target, headers, timeout, limit):
+def no_network(host, target, headers, timeout, limit, deadline):
     raise AssertionError(f"a unit test tried to open the network: GET https://{host}{target}")
 
 

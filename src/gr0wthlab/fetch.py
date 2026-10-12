@@ -11,6 +11,8 @@ reviewed pull request changes (Guardrail G8):
   a robots.txt that cannot be read refuses the whole host for the run, since nothing shows what it allows;
 - a small bounded number of requests per run, spaced out on each host, and a wait a host asks for (Retry-After, or
   Crawl-delay in its robots.txt) is kept once when it is short, never worked around when it is long;
+- no read waits forever: each wait on a host ends at a timeout, and each whole read at a deadline, however slowly
+  the host answers, so no host can hold the run;
 - a redirect is followed only to a listed host, each hop checked like a first request;
 - every request the run asked for, sent or not, is in the request log with its outcome.
 
@@ -19,9 +21,12 @@ A refusal is an answer: the caller reports the source as not read, with the reas
 
 from __future__ import annotations
 
+import contextlib
 import http.client
 import re
+import socket
 import ssl
+import threading
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
@@ -64,6 +69,7 @@ class Policy:
     max_requests: int
     interval: float
     timeout: float
+    deadline: float
     max_bytes: int
     max_wait: float
 
@@ -103,6 +109,7 @@ def policy_from(data: Mapping) -> Policy:
         whole(data, "max_requests_per_run", 1, 200),
         float(whole(data, "seconds_between_requests_per_host", 1, 60)),
         float(whole(data, "timeout_seconds", 1, 120)),
+        float(whole(data, "read_deadline_seconds", 1, 600)),
         whole(data, "max_response_bytes", 1024, 20_000_000),
         float(whole(data, "max_wait_seconds", 0, 600)),
     )
@@ -122,23 +129,52 @@ class Response:
     body: bytes
 
 
-Transport = Callable[[str, str, Mapping[str, str], float, int], Response]
+Transport = Callable[[str, str, Mapping[str, str], float, int, float], Response]
 
 
-def send(host: str, target: str, headers: Mapping[str, str], timeout: float, limit: int) -> Response:
-    """Send one GET with no body to host:443 over verified TLS and read at most limit + 1 bytes of the answer.
+def send(host: str, target: str, headers: Mapping[str, str], timeout: float, limit: int, deadline: float) -> Response:
+    """Send one GET with no body to host:443 over verified TLS and read at most limit + 1 bytes of the answer. Each
+    wait on the socket ends after timeout seconds and the whole exchange after deadline seconds: once the deadline
+    has passed, the connection's socket is shut, so a host that answers a byte at a time ends in a TimeoutError.
 
     The only place the launcher opens a network connection. http.client follows no redirect, keeps no cookie, and
     reads no proxy or credential from the environment or from any file.
     """
     connection = http.client.HTTPSConnection(host, PORT, timeout=timeout, context=ssl.create_default_context())
+    over, late = threading.Event(), threading.Event()
+    # The socket itself, kept once the request is sent: http.client lets go of it as soon as it has read the headers
+    # of an answer that closes the connection, and the response alone then reads the body from it.
+    kept: socket.socket | None = None
+
+    def cut() -> None:
+        if over.wait(deadline):
+            return
+        late.set()
+        while True:
+            sock = connection.sock if kept is None else kept
+            if sock is not None:
+                with contextlib.suppress(OSError):
+                    socket.socket.shutdown(sock, socket.SHUT_RDWR)
+            if over.wait(0.05):
+                return
+
+    threading.Thread(target=cut, daemon=True).start()
+    answer = None
     try:
         connection.request(METHOD, target, headers=dict(headers))
+        kept = connection.sock
         response = connection.getresponse()
         body = response.read(limit + 1)
-        return Response(response.status, {name.lower(): value for name, value in response.getheaders()}, body)
+        answer = Response(response.status, {name.lower(): value for name, value in response.getheaders()}, body)
+    except (OSError, http.client.HTTPException):
+        if not late.is_set():
+            raise
     finally:
+        over.set()
         connection.close()
+    if late.is_set():
+        raise TimeoutError(f"no complete answer within {deadline:.0f} s")
+    return answer
 
 
 # robots.txt.
@@ -386,16 +422,18 @@ class Client:
         return Result(FAILED, f"more than {MAX_REDIRECTS} redirects", short(url, 300))
 
     def wait_for(self, host: str) -> str | None:
-        """Wait until the host may be asked again; why it is not asked at all when the wait is too long."""
+        """Wait until the host may be asked again; why it is not asked at all when the wait its robots.txt asks for
+        is too long. The pause this client keeps between its own requests is always kept, whatever max_wait is."""
         if host in self.closed:
             return self.closed[host]
-        wait = self.ready.get(host, 0.0) - self.clock()
-        if wait > self.policy.max_wait:
+        asked = self.robots[host].delay if host in self.robots else 0.0
+        if asked > self.policy.max_wait:
             self.closed[host] = (
-                f"{host} asked for a wait of {wait:.0f} s between requests, longer than this run waits"
+                f"{host} asked for a wait of {asked:.0f} s between requests, longer than this run waits"
                 f" ({self.policy.max_wait:.0f} s), so it was not asked again"
             )
             return self.closed[host]
+        wait = self.ready.get(host, 0.0) - self.clock()
         if wait > 0:
             self.sleep(wait)
         return None
@@ -420,7 +458,9 @@ class Client:
                 return None, detail
             self.sent += 1
             try:
-                response = (self.transport or send)(host, target, headers, self.policy.timeout, limit)
+                response = (self.transport or send)(
+                    host, target, headers, self.policy.timeout, limit, self.policy.deadline
+                )
             except (OSError, http.client.HTTPException, ValueError) as error:
                 detail = f"{host} could not be read: {type(error).__name__}: {short(error)}"
                 self.ready[host] = self.clock() + self.policy.interval

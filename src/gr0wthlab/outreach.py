@@ -10,7 +10,8 @@ that record and the Review Queue every run, and any difference is repaired in th
 
 After the agent finishes, each Draft is checked (messages.check) and queued only if it passes. A message whose
 follow-up is not due, or whose creator replied, is never offered, whatever a Draft says, and an item still open for
-it is taken back.
+it is taken back. Only a record that could be read takes an item back: a follow-up whose record of the first message
+is missing or could not be used is neither offered nor taken back that run.
 """
 
 from __future__ import annotations
@@ -107,6 +108,16 @@ def package_role(registry: Mapping) -> tuple[str, str] | None:
 # Before the agent.
 
 
+@dataclass(frozen=True)
+class Records:
+    """The Founder's outreach records as a run read them from Mandu's exchange folder: those in the format, why each
+    other file there could not be used, by its name, and why the folder could not be read, if it could not."""
+
+    read: tuple[exchange.Outreach, ...] = ()
+    unusable: Mapping[str, str] = field(default_factory=dict)
+    failure: str = ""
+
+
 @dataclass
 class Plan:
     """Everything the run knows about its outreach before the agent starts."""
@@ -119,9 +130,10 @@ class Plan:
     slots: list[messages.Slot] = field(default_factory=list)
     skipped: list[tuple[str, str]] = field(default_factory=list)  # who gets no message this run, and why
     records: dict[str, exchange.Outreach] = field(default_factory=dict)  # the Founder's usable records, by item
-    record_problems: list[str] = field(default_factory=list)
+    record_problems: dict[str, str] = field(default_factory=dict)  # why a record changes nothing, by its item
+    records_failure: str = ""  # why none of the records could be read
     record_lines: list[str] = field(default_factory=list)  # what the records say of each creator
-    notes: list[str] = field(default_factory=list)  # where the saved run state disagreed with the records
+    unread: list[tuple[str, str]] = field(default_factory=list)  # whose follow-up no record could settle, and why
     problem: str = ""  # why nothing could be prepared at all
 
     def due(self) -> list[messages.Slot]:
@@ -129,22 +141,25 @@ class Plan:
 
 
 def usable_records(
-    records: Sequence[exchange.Outreach], ledger: Ledger, today: date
-) -> tuple[dict[str, exchange.Outreach], list[str]]:
-    """The Founder's outreach records that name an approved message, and why each other one changes nothing."""
+    records: Records, ledger: Ledger, today: date
+) -> tuple[dict[str, exchange.Outreach], dict[str, str]]:
+    """The Founder's outreach records that name an approved message, and why each other one changes nothing, by the
+    item its file is named for."""
     usable: dict[str, exchange.Outreach] = {}
-    problems = []
-    for record in records:
+    problems: dict[str, str] = {}
+    for record in records.read:
         entry = ledger.entries.get(record.item)
         name = f"`outreach/{record.item}.json`"
         if entry is None or entry["kind"] != "message":
-            problems.append(f"{name} names no message in the Review Queue")
+            problems[record.item] = f"{name} names no message in the Review Queue"
         elif APPROVED not in (entry["status"], entry.get("decided")):
-            problems.append(f"{name} records a message as sent that the Founder has not approved")
+            problems[record.item] = f"{name} records a message as sent that the Founder has not approved"
         elif record.sent_on > (today + timedelta(days=1)).isoformat():
-            problems.append(f"{name} gives a sent_on date that has not come yet")
+            problems[record.item] = f"{name} gives a sent_on date that has not come yet"
         else:
             usable[record.item] = record
+    for name, why in records.unusable.items():
+        problems[name[: -len(".json")] if name.endswith(".json") else name] = f"`outreach/{name}`: {why}"
     return usable, problems
 
 
@@ -154,7 +169,7 @@ def prepare(
     registry: Mapping,
     mandu: Path,
     ledger: Ledger,
-    records: Sequence[exchange.Outreach],
+    records: Records,
     saved: OutreachState,
     areas: Areas,
     now: datetime,
@@ -173,6 +188,7 @@ def prepare(
     limits, links = messages.run_limits(repo_root, registry, waitlist_live)
     plan = Plan(product, run_id, plan_path, limits, areas.path("drafts", *FOLDER))
     plan.records, plan.record_problems = usable_records(records, ledger, today)
+    plan.records_failure = records.failure
     state = OutreachState()
     if config.network_source is None and not config.creators:
         return plan, state  # nothing to prepare, so the plan in Mandu need not be read
@@ -210,8 +226,9 @@ def prepare(
         )
         first = messages.slot_for(ledger, product, target, plan.folder / f"creator-{creator.key}.md")
         plan.slots.append(first)
-        plan.slots.append(follow_up(plan, creator, first, ledger, state, today, config.wait_days))
-    plan.notes = differences(saved, state)
+        second = follow_up(plan, creator, first, ledger, state, today, config.wait_days)
+        if second is not None:
+            plan.slots.append(second)
     return plan, state
 
 
@@ -223,16 +240,34 @@ def follow_up(
     state: OutreachState,
     today: date,
     wait_days: int,
-) -> messages.Slot:
-    """The one follow-up a creator may get, and why it may not be offered now, if it may not."""
+) -> messages.Slot | None:
+    """The one follow-up a creator may get, and why it may not be offered now, if it may not. None when the Founder's
+    record of the first message is missing or could not be used: the plan then says why, and nothing is offered or
+    taken back for it, since only a record that was read may take an open item back."""
     key = f"creator:{creator.key}"
-    record = plan.records.get(str(first.approved["id"])) if first.approved else None
+    sent = str(first.approved["id"]) if first.approved else ""
+    record = plan.records.get(sent)
     target = messages.Target(messages.FOLLOW_UP, creator.key, creator.name, plan=plan.plan_path)
-    path = plan.folder / f"follow-up-{creator.key}.md"
-    if first.approved is None:
+    slot = messages.slot_for(ledger, plan.product, target, plan.folder / f"follow-up-{creator.key}.md")
+    if not sent:
         target.reason = f"the first message to {creator.name} is not approved yet"
     elif record is None:
-        target.reason = f"the first message to {creator.name} is not recorded as sent in Mandu yet"
+        lost = ""
+        if plan.records_failure:
+            lost = f"Mandu's outreach records could not be read ({plan.records_failure})"
+        elif sent in plan.record_problems:
+            lost = f"the Founder's record of the first message could not be used ({plan.record_problems[sent]})"
+        elif slot.open:
+            lost = f"`outreach/{sent}.json`, the Founder's record of the first message, is missing"
+        if lost and not slot.approved:
+            stays = f"the open `{slot.open['id']}` stays as it is" if slot.open else "no follow-up is offered"
+            plan.unread.append((f"{creator.name}, the one follow-up", f"{lost}, so {stays}"))
+            return None
+        target.reason = (
+            "the one follow-up was already approved; no further contact"
+            if lost
+            else f"the first message to {creator.name} is not recorded as sent in Mandu yet"
+        )
     else:
         wait = record.wait_days or wait_days
         state.record_contact(key, date.fromisoformat(record.sent_on), wait)
@@ -251,22 +286,12 @@ def follow_up(
         )
         replied = f"replied {record.replied_on}" if record.replied_on else "no reply recorded"
         plan.record_lines.append(f"{creator.name}: first message sent {record.sent_on}, {replied}; {after}")
-    slot = messages.slot_for(ledger, plan.product, target, path, required=not target.reason)
+    slot.required = not target.reason
     if slot.approved and record is not None:
         # The one follow-up is used: nothing further is ever offered for this creator.
         state.targets[target_key(key)]["follow_ups"] = 1
         target.reason = target.reason or "the one follow-up was already approved; no further contact"
     return slot
-
-
-def differences(saved: OutreachState, rebuilt: OutreachState) -> list[str]:
-    """Where the saved run state disagreed with what the Founder's records and the Review Queue say now."""
-    changed = sum(
-        1 for key in set(saved.targets) | set(rebuilt.targets) if saved.targets.get(key) != rebuilt.targets.get(key)
-    )
-    if not changed or not saved.targets:
-        return []
-    return [f"the outreach state differed from Mandu's records for {plural(changed, 'target')}; the records win"]
 
 
 # The plan's record, for the agent's own check.
@@ -299,7 +324,7 @@ def plan_record(plan: Plan, areas: Areas) -> dict[str, object]:
         "problem": plan.problem,
         "limits": dict(plan.limits.__dict__),
         "slots": [slot_json(slot, areas) for slot in plan.slots],
-        "skipped": [list(entry) for entry in plan.skipped],
+        "skipped": [list(entry) for entry in plan.skipped + plan.unread],
     }
 
 
@@ -361,15 +386,15 @@ def take(
         result.outcomes.append(outcome)
         if outcome.status == messages.QUEUED and outcome.item:
             result.published.append(outcome.item)
-    if publish and (plan.slots or plan.skipped or plan.record_problems):
+    if publish and (plan.slots or plan.skipped or plan.unread or plan.record_problems):
         data = {
             "run": run_id,
             "at": now.isoformat(),
             "product": plan.product,
             "channel_plan": plan.plan_path,
-            "skipped": [{"who": who, "why": why} for who, why in plan.skipped],
+            "skipped": [{"who": who, "why": why} for who, why in plan.skipped + plan.unread],
             "records": plan.record_lines,
-            "record_problems": plan.record_problems,
+            "record_problems": list(plan.record_problems.values()),
             "messages": [messages.record(outcome) for outcome in result.outcomes],
         }
         path = store.path("evidence", EVIDENCE, f"{run_id}.json")
@@ -386,26 +411,30 @@ def kind_of(target: messages.Target) -> str:
     }[target.purpose]
 
 
-def gaps(plan: Plan | None, result: Result | None, problem: str, agent_finished: bool) -> list[str]:
-    """Why the outreach Drafts are incomplete this run. A blocked Draft is the check working, not a gap."""
+def gaps(plan: Plan | None, result: Result | None, problem: str, agent_gap: str) -> list[str]:
+    """Why the outreach Drafts are incomplete this run: a source a Draft is checked against could not be read, a
+    Draft is missing, or the plan, the records, the take-in, or the agent fell short. A Draft blocked by a check the
+    launcher could make is the check working, not a gap."""
     if plan is None:
         return [problem] if problem else []
     found = [plan.problem] if plan.problem else []
     found += [f"{who}: {why}" for who, why in plan.skipped if who == "the personal-network ask"]
+    found += [f"{who}: {why}" for who, why in plan.unread]
     if result is None:
         found.append(problem or "the Drafts were not taken in")
     else:
+        found += messages.unread(result.outcomes)
         missing = [o.target.label for o in result.outcomes if o.status == messages.MISSING]
         if missing:
             found.append(f"no Draft for {', '.join(missing)}")
-    if plan.due() and not agent_finished:
-        found.append("the agent did not finish")
+    if plan.due() and agent_gap:
+        found.append(agent_gap)
     return found
 
 
-def tally(plan: Plan | None, result: Result | None, problem: str, agent_finished: bool) -> Tally:
+def tally(plan: Plan | None, result: Result | None, problem: str, agent_gap: str) -> Tally:
     """What the outreach workflow checked and acted on this run."""
-    incomplete = "; ".join(gaps(plan, result, problem, agent_finished))
+    incomplete = "; ".join(gaps(plan, result, problem, agent_gap))
     if plan is None:
         return Tally(WORKFLOW, 0, 0, problem or "no active Product has a channel plan", incomplete)
     if result is None:
@@ -453,7 +482,7 @@ def brief_lines(plan: Plan | None, context: Context | None, mandu: Path, check: 
     )
     if context is not None:
         lines += messages.describe_rules(context, creator=True)
-    lines += [f"- Not prepared: {who}: {why}." for who, why in plan.skipped]
+    lines += [f"- Not prepared: {who}: {why}." for who, why in plan.skipped + plan.unread]
     return lines
 
 
@@ -463,9 +492,9 @@ def report_lines(plan: Plan | None, result: Result | None, filing: str, problem:
         return lines + [problem or "No active Product has a channel plan, so no outreach message was prepared."]
     if plan.problem:
         lines.append(f"{plan.problem[0].upper()}{plan.problem[1:]}.")
-    lines += [f"- Not prepared: {who}: {why}." for who, why in plan.skipped]
+    lines += [f"- Not prepared: {who}: {why}." for who, why in plan.skipped + plan.unread]
     lines += [f"- From the Founder's records in Mandu: {line}." for line in plan.record_lines]
-    lines += [f"- A record in Mandu could not be used: {line}." for line in plan.record_problems]
+    lines += [f"- A record in Mandu could not be used: {line}." for line in plan.record_problems.values()]
     if filing:
         lines.append(f"- Proposed loss-framing and sponsorship lists: {filing}")
     if result is None:
@@ -502,9 +531,10 @@ def notice_section(plan: Plan | None, result: Result | None, day_text: str) -> t
         )
     for outcome in taken_back:
         lines.append(f"- The open `{outcome.withdrawn}` is withdrawn: {outcome.detail}.")
-    for problem in plan.record_problems:
+    for problem in plan.record_problems.values():
         lines.append(f"- A record in Mandu could not be used, so it changed nothing: {problem}.")
     if not lines:
         return None
     count = len(blocked) + len(missing) + len(taken_back) + len(plan.record_problems)
-    return count, f"{plural(count, 'outreach message or record')} needs a look on {day_text}", "\n".join(lines)
+    what = "1 outreach message or record needs" if count == 1 else f"{count} outreach messages or records need"
+    return count, f"{what} a look on {day_text}", "\n".join(lines)

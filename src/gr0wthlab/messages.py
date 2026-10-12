@@ -67,8 +67,8 @@ LINK = re.compile(
     re.IGNORECASE,
 )
 MARKDOWN_LINK = re.compile(r"\]\(")
-# Reddit turns r/name and u/name into links wherever they are typed.
-MENTION = re.compile(r"(?<![\w/])[ru]/[A-Za-z0-9_-]{2,}")
+# Reddit turns r/name and u/name into links wherever they are typed, with or without a slash before them.
+MENTION = re.compile(r"(?<![\w/])/?[ru]/[A-Za-z0-9_-]{2,}")
 
 
 # A Source link as the Waitlist Dispatch request writes it: `site/tag`, in backticks.
@@ -197,6 +197,7 @@ class Target:
     wait_days: int = 0  # a creator: the waiting period before the one follow-up
     sent_on: str = ""  # a follow-up: when the Founder recorded the first message as sent
     plan: str = ""  # the package file that names this kind of outreach
+    unread: str = ""  # a reply: why the kept Evidence record it answers could not be read, when it could not
 
     @property
     def public(self) -> bool:
@@ -268,7 +269,9 @@ def check_purpose(draft: MessageDraft, target: Target, verdict: Verdict) -> None
     """What only one kind of message must hold."""
     if draft.purpose == REPLY:
         quote = target.quote
-        if quote is None:
+        if quote is None and target.unread:
+            verdict.block("reply-evidence", target.unread, unread=target.unread)
+        elif quote is None:
             verdict.block(
                 "reply-evidence", f"{draft.to!r} is not validated Listening Evidence, so nothing shows the thread"
             )
@@ -308,14 +311,19 @@ def checklist_status(draft: MessageDraft, context: Context, public: bool) -> lis
 
 
 def check(draft: MessageDraft, context: Context, target: Target, limits: Limits) -> Verdict:
-    """Every deterministic check of one message Draft; it is offered only when nothing blocks it."""
+    """Every deterministic check of one message Draft; it is offered only when nothing blocks it. A block that rests
+    on a source that could not be read (the Angle bank, the checklist, the brand rules, the Product's code, or a
+    reply's Evidence record) names it as unread where it is raised."""
     verdict = Verdict()
     kit = context.kit
     for role in ("angles", "checklist"):
         if role in kit.problems:
-            verdict.block("kit", f"{context.paths.get(role, role)} could not be used: {kit.problems[role]}")
+            path = context.paths.get(role, role)
+            lost = f"`{path}` could not be used"
+            verdict.block("kit", f"{path} could not be used: {kit.problems[role]}", unread=lost)
     if context.rules is None:
-        verdict.block("brand-rules.json", f"could not be used: {context.rules_problem}")
+        lost = "brand-rules.json could not be used"
+        verdict.block("brand-rules.json", f"could not be used: {context.rules_problem}", unread=lost)
     if draft.problems:
         for problem in draft.problems:
             verdict.block("format", problem)
@@ -352,8 +360,11 @@ def check(draft: MessageDraft, context: Context, target: Target, limits: Limits)
         unsupported = none(claim.location)
         problem = "no code supports it" if unsupported else context.code.verify(claim.location, claim.excerpt)
         verdict.claims.append(ClaimResult(claim, problem))
-        if problem:
-            verdict.block("claim-unsupported" if unsupported else "claim-location", f"{claim.text!r}: {problem}")
+        if unsupported:
+            verdict.block("claim-unsupported", f"{claim.text!r}: {problem}")
+        elif problem:
+            lost = context.code.unread(claim.location)
+            verdict.block("claim-location", f"{claim.text!r}: {problem}", unread=lost)
     verdict.checklist = checklist_status(draft, context, target.public)
     checklist = context.paths.get("checklist", "the pre-publication checklist")
     for line in verdict.checklist:
@@ -549,6 +560,7 @@ class Outcome:
     sha256: str | None = None
     verdict: Verdict | None = None
     withdrawn: str | None = None
+    unread: list[str] = field(default_factory=list)  # each source its check needs that could not be read this run
 
 
 def marker(target: Target) -> dict[str, str]:
@@ -601,8 +613,9 @@ def take(
     products: Sequence[str],
     publish: bool = True,
 ) -> Outcome | None:
-    """Check one message's Draft and queue it when it passes; None when it has no Draft and none is due. With
-    publish off nothing is written, and the outcome says what a run would do."""
+    """Check one message's Draft and queue it when it passes; None when it has no Draft and none is due. An open
+    item passed when it was queued, so a source that cannot be read now does not withdraw it: it stands, not checked
+    again. With publish off nothing is written, and the outcome says what a run would do."""
     target = slot.target
     if slot.approved:
         detail = "the Founder approved it, so it is not asked again"
@@ -618,7 +631,11 @@ def take(
             return Outcome(target, KEPT, "no new Draft; the open item stands", str(slot.open["id"]))
         return Outcome(target, MISSING, f"no Draft at `{areas.relative(slot.path)}`") if slot.required else None
     verdict = check(draft, context, target, limits)
-    outcome = Outcome(target, BLOCKED, "", None, draft.path, draft.sha256, verdict)
+    outcome = Outcome(target, BLOCKED, "", None, draft.path, draft.sha256, verdict, unread=verdict.unread)
+    if slot.open and outcome.unread:
+        outcome.status, outcome.item = KEPT, str(slot.open["id"])
+        outcome.detail = f"not checked again, since {'; '.join(outcome.unread)}; the open item stands"
+        return outcome
     item = None
     if verdict.passed:
         item = render(draft, verdict, context, target, limits)
@@ -675,6 +692,11 @@ def failing(outcome: Outcome) -> list[str]:
     return [
         f"{rule}: {detail}" + (f" ({', '.join(fields)})" if fields else "") for (rule, detail), fields in lines.items()
     ]
+
+
+def unread(outcomes: Sequence[Outcome]) -> list[str]:
+    """Each source a message could not be checked against this run, once."""
+    return list(dict.fromkeys(reason for outcome in outcomes for reason in outcome.unread))
 
 
 def counts(outcomes: Sequence[Outcome]) -> list[str]:

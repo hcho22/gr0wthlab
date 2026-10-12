@@ -239,7 +239,7 @@ class OutreachExamplesTest(ExampleSet, unittest.TestCase):
             self.registry,
             fakes.EXAMPLES / "files" / "mandu",
             ledger,
-            records,
+            outreach.Records(tuple(records)),
             OutreachState(),
             self.areas,
             now,

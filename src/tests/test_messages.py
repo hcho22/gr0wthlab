@@ -4,10 +4,13 @@ import json
 import os
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
+from unittest import mock
 
-from gr0wthlab import drafts, exchange, learning, lint, messages, outreach, proposals
+from gr0wthlab import codebase, drafts, exchange, learning, lint, messages, outreach, proposals
 from gr0wthlab.boundary import ConfigError
+from gr0wthlab.queue import Ledger
 from tests import fakes
 
 PRODUCTS = ["RepToday", "Immerse"]
@@ -55,6 +58,10 @@ class LinksTest(unittest.TestCase):
         self.assertEqual(
             messages.MENTION.findall("see r/fitness30plus and u/someone, or your/their and/or"),
             ["r/fitness30plus", "u/someone"],
+        )
+        self.assertEqual(
+            messages.MENTION.findall("see /r/bodyweightfitness, (/u/someone) and/or a path like src/u/notes"),
+            ["/r/bodyweightfitness", "/u/someone"],
         )
 
 
@@ -153,6 +160,19 @@ class OutreachSettingsTest(unittest.TestCase):
                     ]
                 }
             )
+
+
+class OutreachNoticeTest(unittest.TestCase):
+    def test_the_notice_s_count_reads_right_for_one_and_for_more(self):
+        plan = outreach.Plan("RepToday", "run", "channel-plan.md", messages.Limits(), Path("drafts"))
+        missing = [
+            messages.Outcome(messages.Target(messages.CREATOR, key, name), messages.MISSING)
+            for key, name in fakes.KIT_CREATORS[:2]
+        ]
+        one = outreach.notice_section(plan, outreach.Result(missing[:1]), "2026-10-11")
+        two = outreach.notice_section(plan, outreach.Result(missing), "2026-10-11")
+        self.assertEqual(one[:2], (1, "1 outreach message or record needs a look on 2026-10-11"))
+        self.assertEqual(two[:2], (2, "2 outreach messages or records need a look on 2026-10-11"))
 
 
 class OutreachRecordTest(unittest.TestCase):
@@ -256,6 +276,59 @@ class CheckLinesTest(unittest.TestCase):
                     self.assertNotIn(self.CHECKED, lines)
 
 
+class UnreadCodeTest(unittest.TestCase):
+    """An open message item stands when git could not read the file a claim names, and is withdrawn when the file is
+    not there: only the second is a check of the Draft."""
+
+    OPEN = "20261011-message-creator-slow-strength"
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(os.path.realpath(self.tmp.name))
+        self.env = fakes.git_env(self.root)
+        self.context = fakes.kit_context(fakes.make_code(self.root / "code", self.env), self.env)
+        self.areas = fakes.workspace_areas(self.root / "repo")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def take(self, **parts):
+        """What a run would do with a creator message whose earlier Draft is open in the Review Queue."""
+        path = self.areas.workspace / fakes.message_path("creator", "slow-strength")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(fakes.message("creator", "slow-strength", fakes.CREATOR_BODY, **parts), encoding="utf-8")
+        target = messages.Target(messages.CREATOR, "slow-strength", "Slow Strength")
+        slot = messages.Slot(target, path, open={"id": self.OPEN, "draft_sha256": "an earlier Draft"})
+        now = datetime(2026, 10, 18, 23, 0, tzinfo=timezone.utc)
+        return messages.take(
+            slot, self.context, messages.Limits(), self.areas, None, Ledger(), "run", now, PRODUCTS, publish=False
+        )
+
+    def test_a_claim_whose_file_git_could_not_read_keeps_the_open_item(self):
+        with mock.patch.object(codebase.Code, "git", side_effect=OSError("git could not start")):
+            outcome = self.take()
+        self.assertEqual((outcome.status, outcome.item, outcome.withdrawn), (messages.KEPT, self.OPEN, None))
+        self.assertEqual(
+            outcome.detail,
+            "not checked again, since git could not read `Engine/ConsistencyScore.swift` in RepToday's code; the open"
+            " item stands",
+        )
+        self.assertEqual(
+            messages.unread([outcome]), ["git could not read `Engine/ConsistencyScore.swift` in RepToday's code"]
+        )
+
+    def test_a_claim_whose_file_is_not_there_still_withdraws_the_open_item(self):
+        claims = fakes.CLAIM.replace("Engine/ConsistencyScore.swift", "Engine/NoSuchFile.swift")
+        outcome = self.take(claims=claims)
+        self.assertEqual((outcome.status, outcome.withdrawn), (messages.BLOCKED, self.OPEN))
+        self.assertIn("claim-location:", messages.failing(outcome)[0])
+        self.assertIn("there is no file Engine/NoSuchFile.swift at", messages.failing(outcome)[0])
+        self.assertEqual(messages.unread([outcome]), [])
+
+    def test_with_the_file_read_the_same_draft_passes(self):
+        self.assertEqual(self.take().status, messages.QUEUED)
+
+
 class CodesTest(unittest.TestCase):
     def test_the_split_between_execution_and_strategy_is_fixed_in_code(self):
         self.assertEqual(learning.EXECUTION, ("tone", "length", "factual-slip", "format"))
@@ -291,6 +364,7 @@ class CodesTest(unittest.TestCase):
             ({"kind": "post"}, "post-drafts"),
             ({"kind": "message", "message": {"purpose": "reply"}}, "listening"),
             ({"kind": "message", "message": {"purpose": "creator"}}, "outreach"),
+            ({"kind": "message", "beta": "beta-invitation"}, "beta-recruiting"),
             ({"kind": "package-change-proposal", "listening": {"proposal": "angle"}}, "listening"),
             ({"kind": "package-change-proposal"}, "package-review"),
             ({"kind": "dispatch-request"}, "dispatch-requests"),
@@ -358,6 +432,43 @@ class InstructionsGuardTest(unittest.TestCase):
         self.assertFalse((self.folder / "sub").is_symlink())
         self.assertEqual((self.folder / "sub" / "notes.md").read_text(encoding="utf-8"), "Notes.\n")
         self.assertEqual(list(elsewhere.iterdir()), [], "nothing was written through the link")
+
+    def test_a_folder_left_in_place_of_a_file_is_cleared_and_the_file_is_put_back(self):
+        (self.folder / "listening.md").unlink()
+        (self.folder / "listening.md" / "deep").mkdir(parents=True)
+        (self.folder / "listening.md" / "deep" / "added.md").write_text("Added.\n", encoding="utf-8")
+        (self.folder / "sub" / "notes.md").unlink()
+        (self.folder / "sub" / "notes.md").mkdir()
+        lines = learning.put_back(self.before, self.areas)
+        self.assertEqual(
+            lines,
+            [
+                "`instructions/listening.md/deep/added.md` was added during the run and removed",
+                "`instructions/listening.md` was removed during the run and put back as it was",
+                "`instructions/sub/notes.md` was removed during the run and put back as it was",
+            ],
+        )
+        self.assertEqual((self.folder / "listening.md").read_text(encoding="utf-8"), "Quote, never paraphrase.\n")
+        self.assertEqual((self.folder / "sub" / "notes.md").read_text(encoding="utf-8"), "Notes.\n")
+        self.assertEqual(self.areas.problems, [])
+        self.assertEqual(learning.put_back(self.before, self.areas), [])
+
+    def test_an_entry_that_could_not_be_read_before_the_run_is_left_as_it_is_and_stays_reported(self):
+        outside = self.root / "outside.md"
+        outside.write_text("Linked from elsewhere.\n", encoding="utf-8")
+        os.link(str(outside), str(self.folder / "linked.md"))
+        before = learning.remember(self.areas)
+        unguarded = [
+            "`instructions/linked.md` could not be read before the run (has 2 hard links), so it is not guarded"
+        ]
+        self.assertEqual(before.problems, unguarded)
+        self.assertEqual(sorted(before.files), ["instructions/listening.md", "instructions/sub/notes.md"])
+        (self.folder / "listening.md").write_text("Paraphrase freely.\n", encoding="utf-8")
+        lines = learning.put_back(before, self.areas)
+        self.assertEqual(lines, ["`instructions/listening.md` was changed during the run and put back as it was"])
+        self.assertEqual((self.folder / "linked.md").read_text(encoding="utf-8"), "Linked from elsewhere.\n")
+        self.assertTrue(os.path.samefile(str(outside), str(self.folder / "linked.md")), "it is still the same entry")
+        self.assertEqual(learning.remember(self.areas).problems, unguarded)
 
 
 if __name__ == "__main__":

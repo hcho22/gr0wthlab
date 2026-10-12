@@ -8,6 +8,10 @@ holds one in an encoding, the whole read is discarded, nothing from it is kept, 
 Founder.
 No message, report, or record ever repeats what the view holds, except entry identifiers, dates, and the approved
 Source tags and Fit answers; Waitlist Evidence holds entry identifiers and counts only.
+
+The order Beta Cohort invitations go out in (US-ME15) is worked out here too, so the view has one reader: of each
+sign-up that asked for an invitation, only its entry identifier and whether its Fit answer is good Fit leave this
+module.
 """
 
 from __future__ import annotations
@@ -236,6 +240,30 @@ def weekly(entries: Sequence[Entry], rules: Waitlist, run_week: date) -> list[di
     return weeks
 
 
+# The order Beta Cohort invitations go out in.
+
+SELECTION_RULE = (
+    "Only a sign-up that asked for a beta invitation is a candidate. Good-Fit sign-ups come first; within each group"
+    " the earliest sign-up date comes first, and the view's own order settles a tie. Nothing else is read: never the"
+    " Source, and never anything that guesses who would answer well."
+)
+
+
+@dataclass(frozen=True)
+class Candidate:
+    """A sign-up that asked for a Beta Build invitation: its entry identifier and whether it is good Fit."""
+
+    entry: str
+    good_fit: bool
+
+
+def invitation_order(entries: Sequence[Entry], rules: Waitlist) -> tuple[Candidate, ...]:
+    """Every sign-up that opted in, in the order SELECTION_RULE gives; a sign-up that did not opt in is never one."""
+    opted_in = [(position, entry) for position, entry in enumerate(entries) if entry.opted_in]
+    opted_in.sort(key=lambda found: (found[1].fit not in rules.good_fit, found[1].day, found[0]))
+    return tuple(Candidate(entry.entry, entry.fit in rules.good_fit) for _, entry in opted_in)
+
+
 # One read.
 
 
@@ -259,6 +287,7 @@ class Reading:
     places: tuple[str, ...] = ()
     this_week: dict[str, object] = field(default_factory=dict)
     age: timedelta | None = None
+    candidates: tuple[Candidate, ...] = ()  # who a Beta Cohort invitation may go to, in invitation order
 
     @property
     def good_fit_opt_ins(self) -> int:
@@ -349,6 +378,7 @@ def read(rules: Waitlist | None, started: datetime) -> Reading:
         cumulative,
         this_week=next(week for week in weeks if week["week_of"] == run_week.isoformat()),
         age=started - view.generated_at,
+        candidates=invitation_order(entries, rules),
     )
 
 

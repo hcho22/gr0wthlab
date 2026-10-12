@@ -172,8 +172,9 @@ class ItemCheckTest(unittest.TestCase):
         self.assertEqual(exchange.check_item(text, PRODUCTS, published=True).item.fields["new_angle"], "yes")
         undeclared = text.replace("new_angle: yes\n", "")
         self.assertIsNone(exchange.check_item(undeclared, PRODUCTS, published=True).item)
-        earlier = undeclared.replace(f"exchange: {exchange.EXCHANGE_VERSION}\n", "exchange: 3\n")
-        self.assertEqual(exchange.check_item(earlier, PRODUCTS, published=True).problems, [])
+        for version in range(1, exchange.EXCHANGE_VERSION):
+            earlier = undeclared.replace(f"exchange: {exchange.EXCHANGE_VERSION}\n", f"exchange: {version}\n")
+            self.assertEqual(exchange.check_item(earlier, PRODUCTS, published=True).problems, [], version)
 
     def test_evidence_names_each_record_exactly_as_it_is_written_in_backticks(self):
         text = (

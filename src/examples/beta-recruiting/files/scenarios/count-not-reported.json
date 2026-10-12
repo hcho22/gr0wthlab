@@ -1,0 +1,37 @@
+{
+ "note": "Synthetic scenario for gr0wthlab's Beta Cohort recruiting example set; no real sign-up, build, or report.",
+ "run_started": "2026-10-11T23:00:00+00:00",
+ "view": "files/waitlist-view.json",
+ "beta_build": {
+  "exchange": 4,
+  "product": "RepToday",
+  "approved_on": "2026-10-09",
+  "build": "1.0 (42)",
+  "recruiting": "open",
+  "stopped_on": null,
+  "recorded_at": "2026-10-10T19:40:00-07:00"
+ },
+ "batch_size": 2,
+ "batches": [
+  {
+   "id": "20261004-beta-invitation-batch-01",
+   "status": "approved",
+   "batch": 1,
+   "candidates": [
+    "Qm7tLx2a",
+    "Ka0zMn2p"
+   ],
+   "published_at": "2026-10-04T23:10:00+00:00"
+  }
+ ],
+ "reports": [
+  {
+   "exchange": 4,
+   "product": "RepToday",
+   "date": "2026-10-04",
+   "invitations_sent": 2,
+   "accepted": 1,
+   "recorded_at": "2026-10-04T19:55:00-07:00"
+  }
+ ]
+}
