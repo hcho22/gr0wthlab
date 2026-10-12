@@ -1288,7 +1288,7 @@ def report_lines(plan: Plan | None, outcome: Outcome | None, problem: str = "") 
     return lines
 
 
-def gaps(plan: Plan | None, outcome: Outcome | None, problem: str, agent_finished: bool) -> list[str]:
+def gaps(plan: Plan | None, outcome: Outcome | None, problem: str, agent_gap: str) -> list[str]:
     """Why recruiting is incomplete this run: a Draft the run asked for is missing, the brand rules or the view could
     not be used, or the agent or the take-in fell short. A blocked Draft is the check working, not a gap."""
     if plan is None or not plan.active:
@@ -1303,8 +1303,8 @@ def gaps(plan: Plan | None, outcome: Outcome | None, problem: str, agent_finishe
     for result in outcome.results if outcome else ():
         if result.status == MISSING:
             found.append(f"no {LABELS[result.purpose]} Draft")
-    if plan.drafts and not agent_finished:
-        found.append("the agent did not finish")
+    if plan.drafts and agent_gap:
+        found.append(agent_gap)
     return found
 
 

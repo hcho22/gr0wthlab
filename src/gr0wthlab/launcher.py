@@ -1,25 +1,28 @@
 """Start one Marketing Engineer run: resolve the boundary, prove it, then hand Codex the instruction.
 
 The weekly LaunchAgent and an on-demand run both call run(); only the prompt's header differs, never the configuration.
+The agent has a time limit: one still running at it is stopped with every process the process table shows it started,
+and the run record says so.
 """
 
 from __future__ import annotations
 
 import json
 import secrets
-import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TextIO
 
-from . import codex
+from . import codex, process
 from .boundary import Boundary, ConfigError, filesystem_policy, load_boundary
 
 TRIGGERS = ("on-demand", "scheduled")
 EXIT_CONFIG = 2
 EXIT_BOUNDARY = 3
+# A run that could not finish its work: one stopped by an error, or one whose agent was stopped at its time limit.
+EXIT_STOPPED = 6
 
 
 def default_log_dir(env: Mapping[str, str], home: Path) -> Path:
@@ -103,11 +106,20 @@ def run(
     now: datetime | None = None,
     facts: Sequence[str] = (),
     run_id: str | None = None,
+    *,
+    time_limit: float,
+    clock: process.Clock = process.CLOCK,
 ) -> dict[str, object]:
     """Run the agent once and return the run record; record["exit_code"] is the launcher's exit status.
 
     facts are extra header lines for the prompt, which the configuration fingerprint does not cover.
     record["agent_started"] says whether Codex itself was started, after the preflight passed.
+    time_limit is how many seconds the agent has, by the wall clock or awake, whichever the clock shows first. One
+    still running then is stopped with every process the process table shows it started: record["timed_out"] is True,
+    record["exit_code"] is EXIT_STOPPED whatever status the stopped agent left, and record["stopped"] names the
+    processes asked to stop, forced, and left running.
+    record["agent_seconds"] is the agent's wall-clock time, and record["agent_awake_seconds"] how much of it the Mac
+    was awake.
     """
     if trigger not in TRIGGERS:
         raise ConfigError(f"trigger must be one of {', '.join(TRIGGERS)}")
@@ -153,22 +165,41 @@ def run(
     prompt = compose_prompt(
         resolved.boundary, run_id, trigger, started.isoformat(), instruction_path, instruction, facts
     )
-    record["agent_started"] = True
+    record.update(agent_started=True, time_limit_seconds=time_limit)
     write_json(record_path, record)
     with (
         (log_dir / f"{run_id}.events.jsonl").open("w", encoding="utf-8") as events,
         (log_dir / f"{run_id}.stderr.log").open("w", encoding="utf-8") as errors,
     ):
-        completed = subprocess.run(
+        completed = process.run(
             resolved.command,
+            time_limit,
             input=prompt,
             stdout=events,
             stderr=errors,
-            text=True,
             env=resolved.environment,
             cwd=str(resolved.boundary.working_directory),
+            clock=clock,
         )
-    record.update(exit_code=completed.returncode, finished_at=datetime.now(timezone.utc).isoformat())
+    record.update(
+        exit_code=completed.returncode,
+        agent_seconds=round(completed.seconds, 1),
+        agent_awake_seconds=round(completed.awake, 1),
+        finished_at=datetime.now(timezone.utc).isoformat(),
+    )
+    if completed.stop is None:
+        print(f"gr0wthlab: run {run_id} finished with exit code {completed.returncode}; logs in {log_dir}", file=out)
+    else:
+        record.update(
+            exit_code=EXIT_STOPPED,
+            timed_out=True,
+            agent_exit_code=completed.returncode,
+            stopped=completed.stop.as_json(),
+        )
+        print(
+            f"gr0wthlab: run {run_id} timed out: the agent was still running at its {process.limit_text(time_limit)}"
+            f" time limit and was stopped; {completed.stop.describe()}; logs in {log_dir}",
+            file=out,
+        )
     write_json(record_path, record)
-    print(f"gr0wthlab: run {run_id} finished with exit code {completed.returncode}; logs in {log_dir}", file=out)
     return record

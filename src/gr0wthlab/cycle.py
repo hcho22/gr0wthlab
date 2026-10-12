@@ -22,7 +22,6 @@ import hashlib
 import json
 import os
 import stat
-import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
@@ -30,7 +29,20 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TextIO
 
-from . import beta, dispatch, exchange, launcher, package, posts, proposals, records, report, settings, waitlist
+from . import (
+    beta,
+    dispatch,
+    exchange,
+    launcher,
+    package,
+    posts,
+    process,
+    proposals,
+    records,
+    report,
+    settings,
+    waitlist,
+)
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
@@ -40,7 +52,7 @@ from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLi
 PRE_RUN_ENV = "GR0WTHLAB_PRE_RUN"
 EXIT_RECORDS = 4
 EXIT_BUSY = 5
-EXIT_STOPPED = 6
+EXIT_STOPPED = launcher.EXIT_STOPPED
 LOCK_FILE = "run.lock"
 NOTES_DIR = "notes"
 RUN_REPORTS = "run-reports"
@@ -55,11 +67,10 @@ def entry_point(repo_root: Path) -> Path:
 
 def head(repo_root: Path) -> str:
     try:
-        return subprocess.run(
-            ["git", "-C", str(repo_root), "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True
-        ).stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
+        asked = process.run(["git", "-C", str(repo_root), "rev-parse", "--short", "HEAD"], process.QUICK)
+    except OSError:
         return "unknown"
+    return asked.stdout.strip() if asked.ok else "unknown"
 
 
 def output_titles(config: settings.Settings, keys: Sequence[str]) -> tuple[str, ...]:
@@ -504,7 +515,7 @@ class Cycle:
         return run_state.Tally(beta.WORKFLOW, checked, acted, note, "; ".join(self.beta_gaps(state)))
 
     def beta_gaps(self, state: RunState) -> list[str]:
-        return beta.gaps(state.beta, state.beta_outcome, state.beta_problem, state.agent.get("exit_code") == 0)
+        return beta.gaps(state.beta, state.beta_outcome, state.beta_problem, state.agent_gap())
 
     def post_gaps(self, state: RunState) -> list[str]:
         """Why the post Drafts are incomplete this run: a kit file, the code, or the brand rules could not be used,
@@ -520,14 +531,17 @@ class Cycle:
             missing = [str(result.day) for result in outcome.results if result.status == posts.MISSING]
             if missing:
                 gaps.append(f"no Draft for day {', '.join(missing)}")
-        if plan.days and state.agent.get("exit_code") != 0:
-            gaps.append("the agent did not finish")
+        if plan.days and state.agent_gap():
+            gaps.append(state.agent_gap())
         return gaps
 
     def outputs(self, state: RunState, config: settings.Settings, ledger_ok: bool) -> None:
         """Each output's status: a built output is incomplete when a failed source it needs names it, or when its own
-        step fell short."""
+        step fell short. A step that needed the agent names the agent's not finishing among its gaps, and the outputs
+        whose rows hold that gap are the ones the run's notice names; the rows are therefore worked out before that
+        notice is written, and again once the Review Queue holds it."""
         failed = state.failed_sources()
+        agent_gap = state.agent_gap()
         decisions = next((line.detail for line in state.sources if line.name == "Mandu decisions"), "")
         queued = report.plural(len(state.queue_after), "open item") + (
             f"; {len(state.set_aside)} set aside" if state.set_aside else ""
@@ -556,7 +570,7 @@ class Cycle:
             "post-drafts": (self.post_gaps(state), self.post_tally(state).note),
             beta.WORKFLOW: (self.beta_gaps(state), self.beta_tally(state).note),
         }
-        rows = []
+        rows, agent_incomplete = [], []
         for key, output in config.outputs.items():
             title = str(output.get("title", key))
             if not output.get("built"):
@@ -566,9 +580,12 @@ class Cycle:
                 rows.append([title, SKIPPED, skipped[key]])
                 continue
             gaps, done = own.get(key, ([], ""))
+            if agent_gap and agent_gap in gaps:
+                agent_incomplete.append(title)
             gaps = [f"{line.name} could not be read" for line in failed if title in line.needed_by] + gaps
             rows.append([title, INCOMPLETE if gaps else COMPLETE, "; ".join(gaps) or done])
         state.outputs = rows
+        state.agent_incomplete = tuple(agent_incomplete)
 
     def prepare_posts(
         self, state: RunState, config: settings.Settings, registry, boundary: Boundary, ledger: Ledger
@@ -907,6 +924,7 @@ class Cycle:
                 now=started,
                 facts=[f"Run brief, read it first: {brief}"],
                 run_id=run_id,
+                time_limit=config.agent.time_limit,
             )
         except OSError as error:
             state.agent = {"exit_code": launcher.EXIT_CONFIG, "agent_started": False, "error": str(error)}
@@ -919,6 +937,9 @@ class Cycle:
         state.usage = report.token_usage(log_dir / f"{run_id}.events.jsonl")
         if state.usage:
             state.cost = report.cost(state.usage, config.prices)
+        left = report.left_running(state.stop) if state.timed_out else None
+        if left:
+            state.problems.append(left)
         state.problems += records.restore_access(canonical(self.repo_root))
 
         now = self.now()
@@ -952,6 +973,7 @@ class Cycle:
                     " report is the only place it is told"
                 )
         state.queue_after = ledger.ordered()
+        self.outputs(state, config, ledger_ok)
         notice = report.problems_notice(state, self.store.relative(report_path))
         if notice and ledger_ok:
             state.notice = self.queue_notice(

@@ -7,9 +7,11 @@ import json
 import os
 import re
 import shutil
+import signal
 import stat
 import subprocess
 import sys
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -21,9 +23,13 @@ BETA_EXAMPLES = REPO / "src" / "examples" / "beta-recruiting"
 QUIET_WINDOW = {"number": 1, "first_sitting": "2099-01-04", "slot": "19:00"}
 
 # Stands in for codex. `codex sandbox` answers the preflight as an enforcing sandbox would, without running anything;
-# `codex exec` plays the agent from behavior.json beside it, writing straight into the workspace.
+# `codex exec` plays the agent from behavior.json beside it, writing straight into the workspace. An agent told to
+# hang does its writing, starts its children, the first in a session of its own as Codex starts a shell command, notes
+# every process id in pids.txt, and then never exits and never reports its summary or its token counts. One told to
+# detach first leaves what a shell command that has finished can leave, noted last: a process in a session of its own
+# whose parent has ended.
 FAKE_CODEX = """#!{python}
-import json, os, re, shutil, sys
+import json, os, re, shutil, signal, subprocess, sys, time
 from pathlib import Path
 
 here = Path(__file__).resolve().parent
@@ -54,6 +60,23 @@ for relative, target in behavior.get("symlink", {{}}).items():
     (workspace / relative).symlink_to(target)
 for relative, mode in behavior.get("chmod", {{}}).items():
     os.chmod(workspace / relative, int(mode, 8))
+children = [
+    subprocess.Popen(["/bin/sleep", "600"], start_new_session=number == 0).pid
+    for number in range(behavior.get("children", 0))
+]
+if behavior.get("detach"):
+    detach = (
+        "import subprocess; sleep = ['/bin/sleep', '600']; "
+        "print(subprocess.Popen(sleep, start_new_session=True, stdout=subprocess.DEVNULL).pid)"
+    )
+    children.append(int(subprocess.run([sys.executable, "-c", detach], stdout=subprocess.PIPE, text=True).stdout))
+if behavior.get("ignore_stop"):
+    signal.signal(signal.SIGTERM, signal.SIG_IGN)
+(here / "pids.txt").write_text(" ".join(str(pid) for pid in [os.getpid(), *children]))
+for line in behavior.get("events", []):
+    print(line, flush=True)
+while behavior.get("hang"):
+    time.sleep(600)
 summary = behavior.get("summary", "Checked the package.\\n\\nReview: complete\\n")
 Path(args[args.index("--output-last-message") + 1]).write_text(summary)
 usage = {{"input_tokens": 200000, "cached_input_tokens": 150000, "cache_write_input_tokens": 0, "output_tokens": 4000}}
@@ -79,7 +102,7 @@ def set_run(repo: Path, section: str, values: dict) -> None:
     """One section of config/run.json in a throwaway checkout."""
     path = repo / "config" / "run.json"
     data = json.loads(path.read_text(encoding="utf-8"))
-    data[section] = dict(data[section], **values)
+    data[section] = dict(data.get(section, {}), **values)
     path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
@@ -146,6 +169,52 @@ def behave(directory: Path, behavior: dict) -> None:
     (directory / "behavior.json").write_text(json.dumps(behavior), encoding="utf-8")
 
 
+def agent_pids(directory: Path) -> list[int]:
+    """The fake agent's own process id, its children's, and last that of a process it detached, as its last run
+    noted them."""
+    return [int(pid) for pid in (directory / "pids.txt").read_text(encoding="utf-8").split()]
+
+
+def running(pid: int) -> bool:
+    """Whether a process is still running; one that has ended and only waits to be collected is not."""
+    from gr0wthlab import process
+
+    rows = process.table()
+    return rows is not None and pid in rows and not rows[pid][1].startswith(process.ZOMBIE)
+
+
+def all_gone(pids, within: float = 10.0) -> bool:
+    """Whether every one of these processes ends within a few seconds."""
+    deadline = time.monotonic() + within
+    while any(running(pid) for pid in pids):
+        if time.monotonic() > deadline:
+            return False
+        time.sleep(0.05)
+    return True
+
+
+def stop_leftovers(directory: Path) -> None:
+    """End whatever a test's processes left running, so a failing test never leaves one behind; only a process that
+    still shows a command line the tests start is touched."""
+    from gr0wthlab import process
+
+    try:
+        pids = agent_pids(directory)
+    except (OSError, ValueError):
+        return
+    for pid in pids:
+        shown = subprocess.run([process.PS, "-p", str(pid), "-o", "command="], capture_output=True, text=True).stdout
+        if (
+            str(directory) in shown
+            or "signal.SIG_IGN" in shown
+            or shown.strip() in ("/bin/sleep 600", "/bin/sleep 599")
+        ):
+            try:
+                os.kill(pid, signal.SIGKILL)
+            except OSError:
+                pass
+
+
 class Clock:
     """A clock that starts where a test says and moves a second per reading."""
 
@@ -158,6 +227,23 @@ class Clock:
     def __call__(self) -> datetime:
         self.moment += timedelta(seconds=1)
         return self.moment
+
+
+def stepped_clock(step: float, after: float = 1.0):
+    """The two clocks of a Mac whose wall clock steps once it has been read for `after` seconds: forward by `step`
+    seconds, as it reads when the Mac wakes from that long a sleep, or back, as when it is set back. Awake time is
+    real."""
+    from gr0wthlab import process
+
+    first = None
+
+    def wall() -> float:
+        nonlocal first
+        now = time.monotonic()
+        first = now if first is None else first
+        return time.time() + (step if now - first >= after else 0)
+
+    return process.Clock(time.monotonic, wall)
 
 
 SUNDAY_RUN = datetime(2026, 10, 11, 23, 0, tzinfo=timezone.utc)

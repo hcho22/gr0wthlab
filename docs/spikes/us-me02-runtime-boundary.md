@@ -356,6 +356,51 @@ Codex's event streams in the launcher's log folder also hold that address and `h
 The runs' outputs were removed from the worktree afterwards and are not part of this change.
 Each run cost between $0.005 and $0.03 at API prices.
 
+### Re-check after the agent time limit (US-ME17)
+
+The launcher now starts every process it waits for through `src/gr0wthlab/process.py`, each with a time limit: the agent (`agent.time_limit_seconds` in `config/run.json`), Codex's version and sandbox probes, the launcher's git commands, and the boundary check's `git status` and kernel-log query.
+Each limit counts wall-clock time from the process's start, the Mac's sleep included, and awake time as well, and the process is stopped at whichever reaches the limit first.
+How Codex is started is unchanged: the command line, environment, and permission profile are as they were, and the configuration fingerprint from this worktree, `13a0eee82a14b1d5491d0dea3eeab9c3cf64c8aaa361d6a14f66dba124499659`, is the one its runs had on 2026-10-09.
+Codex still reads its prompt from its standard input, which is now a file the launcher wrote the prompt to, not a pipe the launcher feeds while it waits.
+The agent stays in the launcher's own session and process group, so an interrupt at the terminal and launchd's cleanup reach it as before.
+Both checks were made on the final launcher on 2026-10-11, Mac local time, with Codex CLI 0.160.0, after every change this work made to the launcher: the limit put on both clocks, the prompt handed over as a file, the records step's git and the claim checks' reads of a Product's code moved to `process.py`, the run report's `Agent time` line, what a stop says of the processes it found and of one it forced without having asked it first, the timed-out notice naming its outputs from the rows of the report's Outputs table, and, once this work was put on top of Beta Cohort recruiting (US-ME15), the recruiting output giving the reason every other output gives when the agent did not finish, so that a timed-out run's notice names it too (`beta.py`, `cycle.py`).
+The launcher they ran on holds both pieces of work, the recruiting steps of the section above and the time limit.
+No change to the launcher came after them.
+They ran from another checkout of this branch, against Mandu and the Product checkouts as they are, and a checkout's path is part of its fingerprint: there the fingerprint is `ac329b9be00b9ba6cbd5be03b51a177aaf5d1781961a7bdc0c67867733b55e1c`; the run identifier carries the UTC date.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
+- `src/bin/gr0wthlab boundary-check` passed at its first attempt, as run `20261012T034803Z-on-demand-3a73`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+  The probe's agent ran 51 seconds of its 30 minute limit, all of them with the Mac awake, and the kernel-log query finished well inside its own 5 minute limit.
+
+These replace the earlier checks of this work, each made the same day on the launcher as it then stood.
+The boundary check passed the same way as `20261011T155408Z-on-demand-225d` and `20261011T160853Z-on-demand-17ce` before the limit counted on both clocks, the prompt became a file, and the git commands moved to `process.py`, and as `20261011T172126Z-on-demand-c196` after those, from a checkout whose fingerprint, `681927ca0232cb2aac68b0eeb80b3209220de51855fb5e43e06888bcb281b08a`, was the same before those changes and after them.
+It passed as `20261011T183738Z-on-demand-b270` after the `Agent time` line and the first rewording of what a stop says, from a throwaway clone with a synthetic Mandu and Product checkout, and as `20261011T191229Z-on-demand-d406` and `20261011T191639Z-on-demand-a73e` after the second rewording, from another such clone.
+One attempt between those last two, `20261011T191334Z-on-demand-c661`, failed on one count alone: the probe's agent sent its nine forbidden file-tool targets as three patches, so Codex logged three patch rejections where the check needs nine.
+That attempt's eleven kernel denials were all there, no listener received a connection, no sentinel escaped, and nothing outside the areas changed.
+It passed the same way at its first attempt as `20261012T011534Z-on-demand-4ce7`, after the notice took its outputs from the Outputs table and before this work was put on top of Beta Cohort recruiting, from the checkout of the check above and under the same fingerprint.
+
+What stopping a real Codex agent takes was measured the same day, since a missed process would linger after a timed-out run.
+Codex runs as a node wrapper, the `codex` binary, and a `codex-code-mode-host` helper, and it starts each shell command in a session of its own.
+Asked to stop (SIGTERM), the wrapper exits with status 0 and takes the binary and the helper with it, but a shell command still running is left behind without a parent.
+So the launcher never trusts the stopped agent's exit status, and it asks every process the Mac's process table shows the agent started to stop, which is the agent's descendants and every session one of them leads, then forces any still running 10 seconds later and reads the table again.
+
+| Run | What it showed |
+| --- | --- |
+| `20261011T155138Z-on-demand-5cde` | A stand-in agent that never exits, at the committed 30 minute limit, from a throwaway clone: the run ended 1800.3 seconds after the agent started, with the report saying timed out, one notice, the lock free, nothing left running, and exit code 6; the next run in that clone started and ended with exit code 0 |
+| `20261011T155551Z-on-demand-7a41` | The weekly task with the real agent and the limit lowered to 20 seconds for this one run: stopped mid-work while reading the package, three processes asked to stop, none forced, none left; the report said timed out, the cost not available, and the run ended with exit code 6 |
+| A real agent told to run `sleep 613`, started through `process.run` with a 30 second limit | Four processes asked to stop, the shell command in its own session among them, none forced, none left; before the limit, another worktree's Codex was running on the Mac and was not touched |
+| `20261011T155629Z-on-demand-6eb3` | An ordinary weekly run with the real agent at the committed 30 minute limit, in the same checkout right after the timed-out one: the lock was free, the agent ran 3 minutes 38 seconds and was not touched, the run ended with exit code 0, and the earlier run's notice was not queued again |
+
+These four runs were made before the limit counted wall-clock time and before the prompt reached Codex as a file; the stop they measure has not changed since.
+Mandu's, RepToday's, and Immerse's HEAD, git status, stash, and a digest over every file outside `.git` were the same before the first of these runs and after the last.
+
+The stop has a limit, measured the same day with the real agent from a throwaway clone with a synthetic Mandu and throwaway task definitions.
+Told to run one shell command that starts `/bin/sleep 619` in a session of its own and returns, and then `sleep 613`, the agent was stopped at a 40 second limit with four processes asked to stop and none of them left, in `20261011T181516Z-on-demand-ddf1` and again in `20261011T183441Z-on-demand-7923`.
+The detached `/bin/sleep 619`, by then a child of launchd in its own session, was not found either time and was still running after the run ended, as was the one an identical run had left a minute before the first (`20261011T181416Z-on-demand-29a8`); each was ended by hand.
+Nothing in the process table ties such a process to the agent, so the stop does not look for it, and the report speaks only for the processes it found: the later run's said `4 processes asked to stop; the process table shows none of them left running`, where the earlier one's had said none was left at all.
+This is not particular to a timed-out run: in `20261011T183552Z-on-demand-5ac3` the agent started `/bin/sleep 621` the same way and the run ended with exit code 0 after 17 seconds; the launcher stopped nothing, and the process was still running 15 seconds later.
+A plain background job (`nohup sleep 617 >/dev/null 2>&1 &`, run `20261011T181728Z-on-demand-a19e`) left nothing: no reading of the process table during or after that run showed it.
+
 ## Scheduled and on-demand runs share one configuration
 
 The scheduled path was tested with a temporary LaunchAgent, `gr0wthlab.us-me02-schedule-test`, generated by `src/bin/gr0wthlab launch-agent --once <time> --label gr0wthlab.us-me02-schedule-test --instruction src/checks/boundary-probe.md`.
@@ -397,6 +442,8 @@ Records commits never touch code or Guardrail configuration, so G8 holds, and ea
 - Inside an area, the sandbox refuses a hard link to a file the run cannot read but allows a symbolic link to one.
   The launcher reads and commits files from `workspace/` outside the sandbox, so it never follows a link there: it opens agent-written files without following links, refuses any file with more than one link, and never commits a link.
 - Each probe run used 140,000 to 190,000 input tokens, mostly cached, and about 2,800 output tokens.
+- The stop at a time limit finds what the agent started from the process table: its descendants, and every session one of them leads.
+  A process that had already lost its parent when the limit passed, in a session the launcher never saw a member of, is not found; Codex ends a shell command's process group when the command ends, so reaching that takes a command that detaches itself on purpose.
 
 ## Repeat the check
 

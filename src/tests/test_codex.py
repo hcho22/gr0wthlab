@@ -7,8 +7,9 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from gr0wthlab import boundary, codex
+from gr0wthlab import boundary, codex, process
 from gr0wthlab.boundary import ConfigError
 from tests.test_boundary import CONFIG, REGISTRY
 
@@ -188,6 +189,25 @@ class PreflightTest(CodexTestCase):
         self.assertFalse(result.ok)
         self.assertTrue(any("policy error" in failure for failure in result.failures))
         self.assertTrue(json.dumps(result.failures))
+
+    def test_a_sandbox_probe_that_never_finishes_is_stopped_and_fails_the_preflight(self):
+        self.install_fake_codex('#!/bin/sh\necho "WROTE $9"\nexec /bin/sleep 600\n')
+        with mock.patch.object(process, "QUICK", 1):
+            result = codex.run_preflight(CODEX_CONFIG, self.boundary, self.codex_bin, self.environment, "t3")
+        self.assertFalse(result.ok)
+        self.assertIn("codex sandbox did not finish within 1 s and was stopped", result.failures)
+
+    def test_a_codex_that_never_answers_its_version_refuses_the_run(self):
+        self.install_fake_codex("#!/bin/sh\nexec /bin/sleep 600\n")
+        with mock.patch.object(process, "QUICK", 1), self.assertRaises(ConfigError) as refused:
+            codex.codex_version(self.codex_bin, self.environment)
+        self.assertIn("--version did not finish within 1 s", str(refused.exception))
+        self.codex_bin.write_text("#!/bin/sh\necho 'no such option' >&2\nexit 64\n", encoding="utf-8")
+        with self.assertRaises(ConfigError) as refused:
+            codex.codex_version(self.codex_bin, self.environment)
+        self.assertIn("--version exited 64: no such option", str(refused.exception))
+        self.codex_bin.write_text("#!/bin/sh\necho 'codex-cli 1.2.3'\n", encoding="utf-8")
+        self.assertEqual(codex.codex_version(self.codex_bin, self.environment), "codex-cli 1.2.3")
 
 
 if __name__ == "__main__":

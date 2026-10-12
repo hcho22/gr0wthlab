@@ -57,7 +57,7 @@ class FailClosedTest(unittest.TestCase):
     def run_launcher(self, env, instruction):
         out = io.StringIO()
         env = dict(env, GR0WTHLAB_LOG_DIR=str(self.logs))
-        record = launcher.run(REPO, instruction, "on-demand", env, Path(self.tmp.name), out=out)
+        record = launcher.run(REPO, instruction, "on-demand", env, Path(self.tmp.name), out=out, time_limit=60)
         return record, out.getvalue()
 
     def test_missing_codex_refuses_to_start_and_records_why(self):
@@ -74,7 +74,7 @@ class FailClosedTest(unittest.TestCase):
 
     def test_unknown_trigger_is_rejected(self):
         with self.assertRaises(boundary.ConfigError):
-            launcher.run(REPO, Path("x"), "hourly", {}, Path(self.tmp.name))
+            launcher.run(REPO, Path("x"), "hourly", {}, Path(self.tmp.name), time_limit=60)
 
 
 class CliTest(unittest.TestCase):
