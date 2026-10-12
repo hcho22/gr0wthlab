@@ -107,8 +107,11 @@ The change touches `config/products.json`, so it needs the boundary check below.
 gr0wthlab only ever reads the footage place: it fingerprints and measures each file and cuts finished videos from them, and nothing in it writes, renames, moves, or deletes anything there.
 The sandboxed agent never opens it.
 Keep the footage there for as long as its videos may need rebuilding.
-Leave a file as it is once a video was cut from it, since a file is known by its content: another recording put in its place under the same name is other footage, so the later leg of an A/B pair cut from it is not offered beside a video cut from the first, the notice names the file, and `rebuild-asset` refuses it.
-A file that is only renamed is still the same footage.
+Leave a file as it is, under the name it has, once a video was cut from it.
+Another recording put in its place under the same name is other footage: the later leg of an A/B pair cut from it is not offered beside a video cut from the first, the notice names the file, and `rebuild-asset` refuses it.
+To the pair check a file that is only renamed is still the same footage, since that check knows footage by its fingerprint.
+`rebuild-asset` and every edit record find a file by its name, so a renamed file cannot be rebuilt from, and a run that checks an edit record still naming it blocks that day and withdraws its open post; the day stays blocked until the record is written again.
+So keep a file under its name for as long as a post or a rebuild needs it.
 
 Name each file for its shot in the approved filming plan, in one folder per 14-day window:
 
