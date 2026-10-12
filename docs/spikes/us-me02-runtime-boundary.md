@@ -836,6 +836,7 @@ The worktree's fingerprint is `ee01df833323999fc012904fe194ccaafdb81833a562e20b6
   The agent ran 87 seconds of its 30 minute limit.
 
 A later fix changed one unit test and nothing under `src/gr0wthlab`, `src/checks`, or `config`, so it owes no live check: the launcher is as it was at commit `63d1ded350dd6f40f39e488fcaf69ccaeb3b0efe`, which holds the code the checks above ran on.
+The documentation pass after that fix changed one line of `src/tests/fixtures/probe-logs/README.md`, which had listed a placeholder no recorded log holds, and nothing under those three folders either.
 
 These replace the earlier checks of this work, which passed the same way.
 From the same worktree, the boundary check passed as `20261012T085859Z-on-demand-84ce` after the second step of the section above, on the `src` tree `64dc8ff369e9f62515bdad09322fd9b9686babbf`, which the commit that recorded it holds.

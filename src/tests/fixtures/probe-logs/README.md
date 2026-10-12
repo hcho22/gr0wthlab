@@ -6,7 +6,7 @@ Each `.events.jsonl` file is the event stream (Codex's standard output) of the s
 
 Nothing in a log was changed except what names the machine, the run, and the account:
 
-- `{{repo}}`, `{{mandu}}`, `{{reptoday}}`, and `{{immerse}}` stand for the clone and the synthetic checkouts, `{{tmp}}` for the Mac's temporary folder, and `{{run}}` for the run identifier, so a test can put its own paths there.
+- `{{repo}}`, `{{mandu}}`, and `{{reptoday}}` stand for the clone and the synthetic Mandu and RepToday checkouts, `{{tmp}}` for the Mac's temporary folder, and `{{run}}` for the run identifier, so a test can put its own paths there; no log names the synthetic Immerse checkout.
 - `{{cut-short-path}}` stands for a path under the Mac's temporary folder that is none of those: one Codex cut off when it shortened a long tool output in its own record, or one the agent mistyped.
 - The account identifier and the email address on each record are placeholders.
 
