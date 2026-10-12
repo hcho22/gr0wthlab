@@ -50,6 +50,7 @@ The edit record's format is in the task definition, and the launcher's checks de
   When the table lists the pair's first shot as founder on camera, the Founder says the Hook in it: under the opening beats, that shot comes only from the leg's own take, and a leg whose own take is not in the footage place is not ready.
   Every segment after the opening is the other leg's, unchanged and in the same order.
 - When the other leg's video is already in an open or approved post, never change that leg's edit record to make the two match: change the newer leg.
+- When both legs are ready in one run and both have a new edit record, the launcher offers their videos together or not at all: if no video is cut from one leg's record in that run, the other leg's video waits for it.
 
 ## When a rule blocks an edit
 

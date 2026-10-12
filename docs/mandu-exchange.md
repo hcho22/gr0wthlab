@@ -100,6 +100,7 @@ gr0wthlab queues a post only from a Draft that passed every check; a Draft that 
 Once a post's video is finished, its `## Draft` also holds a Video file block: the file's path, length, measured shape, and SHA-256, the source range of the Founder's footage each part was cut from, and the checks it passed.
 gr0wthlab offers a video only after measuring it as 9:16 at the expected resolution and checking its cuts against the shot list, and every frame of it is the Founder's footage with text drawn over it.
 A post queued before its video existed is replaced by one that shows it; a day whose copy the Founder approved before its video existed is offered once more with the video, and that item says so.
+The two legs of an A/B pair show videos gr0wthlab compared with each other: when one run cuts both legs anew, their videos are offered in that run together or not at all.
 
 A filming plan asks the Founder to approve what a 14-day window must film before any of it is filmed: the sittings, and one shot list per asset, each stating what to record, on which device, in real time or not, and what may not be cut, in the words of the Angle's Format in the package.
 gr0wthlab files it from the package, one item per window, and never asks it again once decided; a new plan replaces it, naming it in `supersedes`, only when the package changes what must be filmed.

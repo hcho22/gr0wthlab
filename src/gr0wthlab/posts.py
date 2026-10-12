@@ -575,28 +575,25 @@ def take(
     video=None,
 ) -> Outcome:
     """Check every Draft of the run's days and queue each that passes; nothing else ever becomes a post item.
-    video is the filming workflow when the run films: it turns a day's edit record into the asset its post shows."""
+    video is the filming workflow when the run films: it turns a day's edit record into the asset its post shows,
+    and every day's before any post is queued, since the videos of an A/B pair's legs are offered together."""
     outcome = Outcome()
     for number, why in plan.skipped:
         outcome.results.append(DayResult(number, NOT_PREPARED, why))
-    for day_plan in plan.days:
-        outcome.results.append(take_day(plan, day_plan, areas, store, ledger, run_id, now, products, outcome, video))
+    read = [(day_plan, read_day(plan, day_plan, areas, video)) for day_plan in plan.days]
+    if video is not None:
+        passed = {day.day.day: found[0] for day, found in read if isinstance(found, tuple) and found[1].passed}
+        video.finish(passed, areas, store, now)
+    for day_plan, found in read:
+        if isinstance(found, tuple):
+            found = queue_day(plan, day_plan, *found, store, ledger, run_id, now, products, outcome, video)
+        outcome.results.append(found)
     outcome.results.sort(key=lambda result: result.day)
     return outcome
 
 
-def take_day(
-    plan: Plan,
-    day_plan: DayPlan,
-    areas: Areas,
-    store: Store,
-    ledger: Ledger,
-    run_id: str,
-    now: datetime,
-    products: Sequence[str],
-    outcome: Outcome,
-    video=None,
-) -> DayResult:
+def read_day(plan: Plan, day_plan: DayPlan, areas: Areas, video=None) -> DayResult | tuple[PostDraft, Verdict]:
+    """A day's Draft with every check of it, or what became of the day when it has no Draft to check."""
     number = day_plan.day.day
     approved = day_plan.approved
     # A day approved with its video is settled. One approved before its video existed is taken up again only once
@@ -623,13 +620,30 @@ def take_day(
         if day_plan.open:
             return DayResult(number, KEPT, "no new Draft; the open item stands", str(day_plan.open["id"]))
         return DayResult(number, MISSING, f"no Draft at `{areas.relative(plan.draft_path(number))}`")
-    verdict = judge(plan, day_plan, draft, areas)
+    return draft, judge(plan, day_plan, draft, areas)
+
+
+def queue_day(
+    plan: Plan,
+    day_plan: DayPlan,
+    draft: PostDraft,
+    verdict: Verdict,
+    store: Store,
+    ledger: Ledger,
+    run_id: str,
+    now: datetime,
+    products: Sequence[str],
+    outcome: Outcome,
+    video=None,
+) -> DayResult:
+    number = day_plan.day.day
+    approved = day_plan.approved
     asset = None
     if video is not None and verdict.passed:
         # The day's video is cut only from a Draft that passes, since its text is drawn over it; an edit record
         # that fails a check blocks the day's post like any failing Draft check, and a cut that fails for a reason
         # outside the record holds the video and blocks nothing.
-        asset = video.finish(number, draft, areas, store, now)
+        asset = video.results[number]
         verdict.blocks += asset.blocks
     item = offer(plan, day_plan, draft, verdict, products, asset)
     result = DayResult(number, BLOCKED, "", None, draft.path, draft.sha256, verdict, asset=asset)

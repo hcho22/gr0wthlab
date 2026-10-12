@@ -365,7 +365,8 @@ print(json.dumps({{"streams": streams, "format": {{"duration": str(facts["durati
 # Stands in for ffmpeg. It answers the version and the listings a run checks, and "renders" by writing the facts of
 # the asset the command asks for, with the command's inputs and the text file it was given, so a test can read what
 # a render was made from. ffmpeg.json beside it overrides the facts written, or makes the render fail part way, as
-# ffmpeg does: with half a file already at the output, whose path it then adds to partial.log beside it.
+# ffmpeg does: with half a file already at the output, whose path it then adds to partial.log beside it. With "only",
+# just the renders whose output path holds that text fail.
 FAKE_FFMPEG = """#!{python}
 import json, re, sys
 from pathlib import Path
@@ -385,7 +386,7 @@ if "-encoders" in args:
     for name in ("libx264", "aac"):
         print(" V....D " + name + " an encoder")
     sys.exit(0)
-if behavior.get("fail"):
+if behavior.get("fail") and behavior.get("only", "") in args[-1]:
     Path(args[-1]).write_text("half of a render that did not finish")
     with (here / "partial.log").open("a") as log:
         log.write(args[-1] + "\\n")

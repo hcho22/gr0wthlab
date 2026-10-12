@@ -215,6 +215,7 @@ Write it as the file `day-NN.json` (such as `day-01.json`) in the edits folder t
   When it says after its opening, the kit marks the pair as a re-cut: only the segments under the hook beat, and under any later beat that shows one of the pair's Hooks, may differ; every later segment is that leg's, unchanged and in the same order.
   Outside those opening beats, use only files with no leg letter in their name, since both legs must be able to use them.
   When the brief lists the pair's first shot as founder on camera, the Hook is said there: under those opening beats, show that shot only from the leg's own take, the file with the leg's letter after the shot's name, and at least once.
+  When both legs of a pair are ready in one run and both have a new edit record, their videos are offered together or not at all: neither leg gets a video in that run unless both do.
 
 ## Rules
 
