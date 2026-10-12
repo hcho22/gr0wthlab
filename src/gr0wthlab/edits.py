@@ -9,8 +9,9 @@ The checks follow the shot list the launcher read from the kit: every source is 
 for the shot it is used as; a shot that may not be cut appears as one unbroken source range, with no other shot
 between its pieces; nothing runs at another speed unless its shot list says it is not real time; every shot of the
 list has footage; the length is the one the Format gives and the one the Draft's beats add up to; and the legs of an
-A/B pair use the same source ranges after their opening, from takes both legs can use. A record that fails any of them
-renders nothing: no footage is ever substituted for a shot.
+A/B pair use the same source ranges after their opening, from takes both legs can use, while a leg whose Hook the
+Founder says on camera opens on a take of its own. A record that fails any of them renders nothing: no footage is ever
+substituted for a shot.
 """
 
 from __future__ import annotations
@@ -24,12 +25,12 @@ from itertools import groupby
 from . import shots as shot_lists
 from .drafts import PostDraft, none, norm
 from .lint import Finding
-from .video import FITS, Canvas, Facts, Overlay
+from .video import Canvas, Facts, Overlay
 
 EDIT_FORMAT = 1
 TOP_KEYS = ("edit", "product", "window", "day", "segments")
 SEGMENT_KEYS = ("shot", "source", "in", "out")
-OPTIONAL_KEYS = ("speed", "fit", "mute")
+OPTIONAL_KEYS = ("speed",)
 # Times in an edit record are the agent's own decimals, so they are compared to the millisecond.
 EPSILON = 0.001
 # How far an edit's length may sit from the length its Draft's beats give: within one frame of a 30 fps asset.
@@ -48,8 +49,6 @@ class Segment:
     start: float
     end: float
     speed: float = 1.0
-    fit: str = FITS[0]
-    mute: bool = False
 
     @property
     def length(self) -> float:
@@ -62,8 +61,6 @@ class Segment:
             "in": self.start,
             "out": self.end,
             "speed": self.speed,
-            "fit": self.fit,
-            "mute": self.mute,
         }
 
 
@@ -223,20 +220,8 @@ def parse(text: str, path: str) -> Edit:
             problems.append(f"{where}: in, out, and speed are numbers, in seconds")
         elif not 0 < speed <= MAX_SPEED:
             problems.append(f"{where}: speed is above 0 and at most {MAX_SPEED:g}")
-        elif entry.get("fit", FITS[0]) not in FITS or not isinstance(entry.get("mute", False), bool):
-            problems.append(f"{where}: fit is one of {', '.join(FITS)}, and mute is true or false")
         else:
-            edit.segments.append(
-                Segment(
-                    entry["shot"],
-                    entry["source"],
-                    start,
-                    end,
-                    speed,
-                    entry.get("fit", FITS[0]),
-                    entry.get("mute", False),
-                )
-            )
+            edit.segments.append(Segment(entry["shot"], entry["source"], start, end, speed))
     return edit
 
 
@@ -257,7 +242,7 @@ def inside(source: str) -> bool:
 
 def pieces(segments: Sequence[Segment], opening: Sequence[tuple[float, float]] = ()) -> list[tuple]:
     """The source ranges a timeline shows outside its opening, in order, with neighbours that run on from each other
-    joined: (source, start, end, speed, fit, mute), each time to the millisecond."""
+    joined: (source, start, end, speed), each time to the millisecond."""
     found: list[list] = []
     clock = 0.0
     for segment in segments:
@@ -275,21 +260,37 @@ def pieces(segments: Sequence[Segment], opening: Sequence[tuple[float, float]] =
             start = segment.start + (low - begins) * segment.speed
             end = segment.start + (high - begins) * segment.speed
             last = found[-1] if found else None
-            same = (
-                last is not None
-                and last[0] == segment.source
-                and last[3:]
-                == [
-                    segment.speed,
-                    segment.fit,
-                    segment.mute,
-                ]
-            )
+            same = last is not None and (last[0], last[3]) == (segment.source, segment.speed)
             if same and abs(last[2] - start) <= EPSILON:
                 last[2] = end
             else:
-                found.append([segment.source, start, end, segment.speed, segment.fit, segment.mute])
-    return [(piece[0], round(piece[1], 3), round(piece[2], 3), *piece[3:]) for piece in found]
+                found.append([segment.source, start, end, segment.speed])
+    return [(source, round(start, 3), round(end, 3), speed) for source, start, end, speed in found]
+
+
+def under(segments: Sequence[Segment], opening: Sequence[tuple[float, float]]) -> list[Segment]:
+    """The pieces of a timeline that play, in whole or in part, under its opening."""
+    found = []
+    clock = 0.0
+    for segment in segments:
+        begins, clock = clock, clock + segment.length
+        if any(min(clock, end) - max(begins, start) > EPSILON for start, end in opening):
+            found.append(segment)
+    return found
+
+
+def own_opening(shots: Sequence[shot_lists.Shot], leg: str | None, recut: bool) -> shot_lists.Shot | None:
+    """The shot a pair leg must open on a take of its own, or None: the first shot of a re-cut pair when the Founder
+    is on camera in it, since each leg's Hook is then said to the camera, not only drawn over footage both share."""
+    first = shots[0] if shots else None
+    if recut and leg and first is not None and first.kind == shot_lists.FOUNDER_ON_CAMERA:
+        return first
+    return None
+
+
+def own_take(shot: str, leg: str) -> str:
+    """What a leg's own take of a shot is named for: the shot, then the leg's letter, as in d02-s1b."""
+    return f"{shot}{leg.lower()}"
 
 
 def opening_windows(draft: PostDraft, hooks: Collection[str]) -> list[tuple[float, float]]:
@@ -427,6 +428,21 @@ def check(
                         f"`{clip.name}` is leg {clip.leg}'s own take, and {where} the legs of {spec.pair} share their"
                         " footage; use a take named without a leg letter there",
                     )
+        first = own_opening(spec.shots, spec.leg, spec.recut)
+        if first is not None:
+            opened = [
+                clips[segment.source]
+                for segment in under(edit.segments, opening_windows(draft, spec.hooks))
+                if segment.shot == first.id and segment.source in clips
+            ]
+            if not opened or any(clip.leg != spec.leg for clip in opened):
+                others = sorted({f"`{clip.name}`" for clip in opened if clip.leg != spec.leg})
+                block(
+                    "pair-legs",
+                    f"the Founder is on camera in shot {first.id}, where each leg of {spec.pair} opens on its own"
+                    f" Hook, so under its opening leg {spec.leg} shows that shot only from its own take, a file named"
+                    f" `{own_take(first.id, spec.leg)}`; this edit shows {', '.join(others) or 'no take of it'} there",
+                )
     return found
 
 
@@ -463,5 +479,5 @@ def describe(ranges: Sequence[tuple]) -> str:
         return "nothing"
     return ", ".join(
         f"`{source}` {start:g}-{end:g}s" + (f" at {speed:g}x" if speed != 1 else "")
-        for source, start, end, speed, _, _ in ranges[:4]
+        for source, start, end, speed in ranges[:4]
     ) + (f" and {len(ranges) - 4} more" if len(ranges) > 4 else "")

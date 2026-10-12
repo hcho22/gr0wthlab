@@ -167,9 +167,7 @@ class FilmingExampleSetTest(unittest.TestCase):
             spec = filming.day_spec("RepToday", 1, draft.day, day.leg, self.found.job_for(draft.day))
             self.assertEqual(edits.check(edit, spec, found.clips, draft, CANVAS), [])
             cuts = [
-                video.Cut(
-                    found.path(found.clips[cut.source]), cut.start, cut.end, cut.speed, cut.fit, cut.mute, measured
-                )
+                video.Cut(found.path(found.clips[cut.source]), cut.start, cut.end, cut.speed, measured)
                 for cut in edit.segments
             ]
             assets[draft.day] = self.root / "assets" / f"day-{draft.day:02d}.mp4"

@@ -364,7 +364,8 @@ print(json.dumps({{"streams": streams, "format": {{"duration": str(facts["durati
 
 # Stands in for ffmpeg. It answers the version and the listings a run checks, and "renders" by writing the facts of
 # the asset the command asks for, with the command's inputs and the text file it was given, so a test can read what
-# a render was made from. ffmpeg.json beside it overrides the facts written, or makes the render fail.
+# a render was made from. ffmpeg.json beside it overrides the facts written, or makes the render fail part way, as
+# ffmpeg does: with half a file already at the output, whose path it then adds to partial.log beside it.
 FAKE_FFMPEG = """#!{python}
 import json, re, sys
 from pathlib import Path
@@ -385,10 +386,13 @@ if "-encoders" in args:
         print(" V....D " + name + " an encoder")
     sys.exit(0)
 if behavior.get("fail"):
+    Path(args[-1]).write_text("half of a render that did not finish")
+    with (here / "partial.log").open("a") as log:
+        log.write(args[-1] + "\\n")
     sys.stderr.write(behavior["fail"] + "\\n")
     sys.exit(1)
 graph = args[args.index("-filter_complex") + 1]
-width, height = re.search(r"(?:pad|crop)=(\\d+):(\\d+)", graph).groups()
+width, height = re.search(r"pad=(\\d+):(\\d+)", graph).groups()
 facts = {{
     "duration": float(args[len(args) - 4]), "width": int(width), "height": int(height),
     "fps": int(re.search(r"fps=(\\d+)", graph).group(1)), "codec": "h264", "pix_fmt": "yuv420p",

@@ -57,13 +57,17 @@ class ParseTest(unittest.TestCase):
         self.assertEqual(len(edit.sha256), 64)
         self.assertEqual(edits.parse(json.dumps(edit.as_json()), edit.path).segments, edit.segments)
 
-    def test_a_segment_may_add_speed_fit_and_mute_and_nothing_else(self):
-        edit = record(7, ("d07-s1", "d07-s1.mov", 0, 300, {"speed": 20, "fit": "cover", "mute": True}))
+    def test_a_segment_may_add_speed_and_nothing_else(self):
+        edit = record(7, ("d07-s1", "d07-s1.mov", 0, 300, {"speed": 20}))
         self.assertEqual(edit.problems, [])
-        self.assertEqual((edit.segments[0].speed, edit.segments[0].fit, edit.segments[0].mute), (20.0, "cover", True))
+        self.assertEqual(edit.segments[0], edits.Segment("d07-s1", "window-1/d07-s1.mov", 0.0, 300.0, 20.0))
         self.assertEqual(edit.length, 15.0)
-        bad = record(7, ("d07-s1", "d07-s1.mov", 0, 300, {"filter": "blur"}))
-        self.assertIn("segment 1 holds the keys shot, source, in, out, and may add speed, fit, mute", bad.problems)
+        # How a cut fits the frame and whether it has sound are the launcher's rules, never a key of the record.
+        for more in ({"filter": "blur"}, {"fit": "cover"}, {"mute": True}):
+            with self.subTest(more=more):
+                bad = record(7, ("d07-s1", "d07-s1.mov", 0, 300, more))
+                self.assertEqual(bad.problems, ["segment 1 holds the keys shot, source, in, out, and may add speed"])
+                self.assertEqual(bad.segments, [])
 
     def test_what_does_not_follow_the_format_is_named(self):
         for text, problem in (
@@ -73,7 +77,6 @@ class ParseTest(unittest.TestCase):
             (fakes.edit_record(1), "segments must list at least one piece of the timeline"),
             (fakes.edit_record(1, ("d01-s1", "d01-s1.mov", "2", 12)), "segment 1: in, out, and speed are numbers"),
             (fakes.edit_record(1, ("d01-s1", "d01-s1.mov", True, 12)), "segment 1: in, out, and speed are numbers"),
-            (fakes.edit_record(1, ("d01-s1", "d01-s1.mov", 2, 12, {"fit": "stretch"})), "fit is one of contain, cover"),
             (fakes.edit_record(1, ("d01-s1", "d01-s1.mov", 2, 12)).replace('"day": 1', '"day": "one"'), "day must be"),
         ):
             with self.subTest(problem=problem):
@@ -100,9 +103,10 @@ class CheckTest(EditTestCase):
             "",
         ):
             with self.subTest(source=source):
-                rules, lines = self.rules(record(1, ("d01-s1", source or "/", 2, 12)), 1)
+                base = record(1, ("d01-s1", "d01-s1.mov", 2, 12))
+                rules, lines = self.rules(replace(base, segments=[replace(base.segments[0], source=source)]), 1)
                 self.assertIn("footage-place", rules)
-                self.assertTrue(any("names a source outside the footage place" in line for line in lines), lines)
+                self.assertIn(f"footage-place: {source!r} names a source outside the footage place (segment 1)", lines)
 
     def test_a_file_the_footage_place_does_not_hold_cannot_be_used(self):
         rules, lines = self.rules(record(1, ("d01-s1", "d01-s1-take-9.mov", 2, 12)), 1)
@@ -151,8 +155,9 @@ class CheckTest(EditTestCase):
         self.assertIn("as 2 source ranges, not one unbroken range", lines[0])
         gap = record(
             2,
+            ("d02-s1", "d02-s1a-take-1.mov", 1, 4),
             ("d02-s2", "d02-s2.mov", 2, 8),
-            ("d02-s1", "d02-s1-closing.mov", 0, 9),
+            ("d02-s1", "d02-s1-closing.mov", 0, 6),
             ("d02-s2", "d02-s2.mov", 9, 14),
         )
         self.assertEqual(self.rules(gap, 2)[0], ["no-cut"])
@@ -175,8 +180,9 @@ class CheckTest(EditTestCase):
         self.assertIn("d01-s1 plays at 1.4x, and its shot list says real time", lines[0])
         founder = record(
             2,
-            ("d02-s1", "d02-s1-closing.mov", 0, 15, {"speed": 1.5}),
-            ("d02-s2", "d02-s2.mov", 2, 12),
+            ("d02-s1", "d02-s1a-take-1.mov", 0, 4.5, {"speed": 1.5}),
+            ("d02-s2", "d02-s2.mov", 2, 13),
+            ("d02-s1", "d02-s1-closing.mov", 5, 11),
         )
         rules, lines = self.rules(founder, 2)
         self.assertEqual(rules, ["real-time"])
@@ -252,8 +258,9 @@ class CheckTest(EditTestCase):
             ("d02-s1", "d02-s1-closing.mov", 5, 11),
         )
         rules, lines = self.rules(other, 9)
-        self.assertEqual(rules, ["shot-list"])
+        self.assertEqual(rules, ["shot-list", "pair-legs"])
         self.assertIn("`window-1/d02-s1a-take-1.mov` is leg A's take, and day 9 is leg B", lines[0])
+        self.assertIn("a file named `d02-s1b`; this edit shows `window-1/d02-s1a-take-1.mov` there", lines[1])
 
 
 class OverlayTest(unittest.TestCase):
@@ -298,8 +305,14 @@ class PairTest(EditTestCase):
         day_1 = record(1, ("d01-s1", "d01-s1.mov", 2, 12))
         other_opening = record(8, ("d01-s1", "d01-s1.mov", 0, 3), ("d01-s1", "d01-s1.mov", 5, 12))
         self.assertEqual(len(self.pair(other_opening, 8, day_1, 1)), 1)
-        muted = record(8, ("d01-s1", "d01-s1.mov", 2, 12, {"mute": True}))
-        self.assertEqual(len(self.pair(muted, 8, day_1, 1)), 1)
+        # The same stretch of the timeline at another speed is another source range.
+        faster = record(8, ("d01-s1", "d01-s1.mov", 2, 14, {"speed": 1.2}))
+        self.assertAlmostEqual(faster.length, 10.0)
+        lines = self.pair(faster, 8, day_1, 1)
+        self.assertEqual(len(lines), 1)
+        self.assertIn(
+            "this leg shows `window-1/d01-s1.mov` 2-14s at 1.2x, that leg `window-1/d01-s1.mov` 2-12s", lines[0]
+        )
 
     def test_a_take_named_for_one_leg_is_only_that_leg_s_opening(self):
         opening = ("d02-s1", "d02-s1a-take-1.mov", 1, 4)
@@ -330,9 +343,48 @@ class PairTest(EditTestCase):
             ],
         )
         # A day outside any pair shares nothing, so the letter in a take's name means nothing there.
-        solo = replace(self.clips["window-1/d01-s1.mov"], name="window-1/d04-s1a.mov", shot="d04-s1", leg="A")
-        found = edits.check(record(4, ("d04-s1", "d04-s1a.mov", 2, 12)), self.spec(4), {solo.name: solo}, None, CANVAS)
-        self.assertEqual(found, [])
+        self.assertEqual((self.spec(7).pair, self.spec(7).other), (None, None))
+        solo = replace(self.clips["window-1/d07-s1.mov"], name="window-1/d07-s1a.mov", leg="A")
+        lapse = record(7, ("d07-s1", "d07-s1a.mov", 5, 325, {"speed": 20}))
+        self.assertEqual(edits.check(lapse, self.spec(7), {solo.name: solo}, draft(7), CANVAS), [])
+        # The same take in a pair, checked with the same Draft, is refused: the rule is the pair's, not the name's.
+        paired = replace(self.spec(7), pair="AB-9", leg="A", other=13)
+        found = edits.check(lapse, paired, {solo.name: solo}, draft(7), CANVAS)
+        self.assertEqual([finding.rule for finding in found], ["pair-legs"])
+
+    def test_a_re_cut_leg_whose_hook_is_said_on_camera_opens_on_its_own_take(self):
+        screen = ("d02-s2", "d02-s2.mov", 2, 13)
+        closing = ("d02-s1", "d02-s1-closing.mov", 5, 11)
+        self.assertEqual(self.rules(record(9, ("d02-s1", "d02-s1b-take-1.mov", 0.5, 3.5), screen, closing), 9)[0], [])
+        said = (
+            "pair-legs: the Founder is on camera in shot d02-s1, where each leg of AB-3 opens on its own Hook, so"
+            " under its opening leg B shows that shot only from its own take, a file named `d02-s1b`; this edit shows"
+        )
+        # The shared take under the opening would show the other leg's Hook being said, with this leg's drawn over.
+        rules, lines = self.rules(record(9, ("d02-s1", "d02-s1-closing.mov", 0, 3), screen, closing), 9)
+        self.assertEqual(rules, ["pair-legs"])
+        self.assertEqual(lines[0], f"{said} `window-1/d02-s1-closing.mov` there")
+        # Its own take for a part of the opening does not make the rest of the opening its own.
+        mixed = record(
+            9, ("d02-s1", "d02-s1b-take-1.mov", 0, 1), ("d02-s1", "d02-s1-closing.mov", 1, 3), screen, closing
+        )
+        self.assertEqual(self.rules(mixed, 9), (["pair-legs"], [f"{said} `window-1/d02-s1-closing.mov` there"]))
+        # An opening that never shows the shot has no take of it at all.
+        screen_first = record(9, ("d02-s2", "d02-s2.mov", 2, 16), closing)
+        rules, lines = self.rules(screen_first, 9)
+        self.assertEqual(rules, ["pair-legs"])
+        self.assertEqual(lines[0], f"{said} no take of it there")
+
+    def test_a_re_cut_pair_that_opens_on_a_screen_recording_needs_no_take_per_leg(self):
+        hooks = tuple(hook.text for hook in self.found.job_for(1).hooks)
+        self.assertEqual(len(hooks), 2)
+        legs = {day: replace(self.spec(day), recut=True, hooks=hooks) for day in (1, 8)}
+        self.assertIsNone(edits.own_opening(legs[8].shots, legs[8].leg, legs[8].recut))
+        self.assertEqual(edits.opening_windows(draft(8), hooks), [(0.0, 3.0)])
+        day_1, day_8 = record(1, ("d01-s1", "d01-s1.mov", 2, 12)), record(8, ("d01-s1", "d01-s1.mov", 2, 12))
+        for day, edit in ((1, day_1), (8, day_8)):
+            self.assertEqual(edits.check(edit, legs[day], self.clips, draft(day), CANVAS), [])
+        self.assertEqual(edits.check_pair(day_8, draft(8), day_1, draft(1), legs[8]), [])
 
     def test_the_legs_of_a_re_cut_pair_share_every_source_range_after_the_opening(self):
         tail = (("d02-s2", "d02-s2.mov", 2, 13), ("d02-s1", "d02-s1-closing.mov", 5, 11))
@@ -346,16 +398,18 @@ class PairTest(EditTestCase):
         )
         self.assertIn("`window-1/d02-s2.mov` 4-15s", lines[0])
 
-    def test_a_re_cut_opening_may_be_cut_from_the_take_the_rest_runs_on_from(self):
-        # One leg opens on its own take; the other's opening and what follows are one unbroken take.
-        day_2 = record(2, ("d02-s1", "d02-s1-closing.mov", 0, 9), ("d02-s2", "d02-s2.mov", 2, 13))
-        day_9 = record(
-            9,
-            ("d02-s1", "d02-s1b-take-1.mov", 0, 3),
-            ("d02-s1", "d02-s1-closing.mov", 3, 9),
-            ("d02-s2", "d02-s2.mov", 2, 13),
-        )
+    def test_a_range_that_starts_under_the_opening_is_compared_by_what_it_shows_after_it(self):
+        # Each leg leaves its own take at another moment of the hook beat, so the screen recording both share starts
+        # under the opening at another point of its file; from the end of the opening on, the two are one range.
+        closing = ("d02-s1", "d02-s1-closing.mov", 5, 11)
+        day_2 = record(2, ("d02-s1", "d02-s1a-take-1.mov", 1, 3), ("d02-s2", "d02-s2.mov", 1, 13), closing)
+        day_9 = record(9, ("d02-s1", "d02-s1b-take-1.mov", 0, 2.5), ("d02-s2", "d02-s2.mov", 1.5, 13), closing)
+        for day, edit in ((2, day_2), (9, day_9)):
+            self.assertEqual(self.rules(edit, day), ([], []))
         self.assertEqual(self.pair(day_9, 9, day_2, 2), [])
+        later = record(9, ("d02-s1", "d02-s1b-take-1.mov", 0, 2.5), ("d02-s2", "d02-s2.mov", 2.5, 14), closing)
+        self.assertEqual(self.rules(later, 9), ([], []))
+        self.assertIn("this leg shows `window-1/d02-s2.mov` 3-14s", self.pair(later, 9, day_2, 2)[0])
 
     def test_the_opening_of_a_re_cut_leg_is_its_hook_beat_and_any_beat_that_shows_a_hook_of_the_pair(self):
         hooks = self.spec(9).hooks
@@ -368,17 +422,20 @@ class PairTest(EditTestCase):
 
     def test_source_ranges_outside_the_opening_are_read_to_the_millisecond(self):
         segments = record(1, ("d01-s1", "d01-s1.mov", 2, 12)).segments
-        self.assertEqual(edits.pieces(segments), [("window-1/d01-s1.mov", 2.0, 12.0, 1.0, "contain", False)])
-        self.assertEqual(edits.pieces(segments, [(0, 3)]), [("window-1/d01-s1.mov", 5.0, 12.0, 1.0, "contain", False)])
+        self.assertEqual(edits.pieces(segments), [("window-1/d01-s1.mov", 2.0, 12.0, 1.0)])
+        self.assertEqual(edits.pieces(segments, [(0, 3)]), [("window-1/d01-s1.mov", 5.0, 12.0, 1.0)])
         self.assertEqual(
             edits.pieces(segments, [(0, 3), (5, 6)]),
-            [
-                ("window-1/d01-s1.mov", 5.0, 7.0, 1.0, "contain", False),
-                ("window-1/d01-s1.mov", 8.0, 12.0, 1.0, "contain", False),
-            ],
+            [("window-1/d01-s1.mov", 5.0, 7.0, 1.0), ("window-1/d01-s1.mov", 8.0, 12.0, 1.0)],
         )
         fast = record(7, ("d07-s1", "d07-s1.mov", 0, 300, {"speed": 20})).segments
-        self.assertEqual(edits.pieces(fast, [(0, 3)]), [("window-1/d07-s1.mov", 60.0, 300.0, 20.0, "contain", False)])
+        self.assertEqual(edits.pieces(fast, [(0, 3)]), [("window-1/d07-s1.mov", 60.0, 300.0, 20.0)])
+        # Neighbours that run on from each other join only at one speed.
+        run_on = record(7, ("d07-s1", "d07-s1.mov", 0, 100, {"speed": 20}), ("d07-s1", "d07-s1.mov", 100, 300))
+        self.assertEqual(
+            edits.pieces(run_on.segments),
+            [("window-1/d07-s1.mov", 0.0, 100.0, 20.0), ("window-1/d07-s1.mov", 100.0, 300.0, 1.0)],
+        )
 
 
 if __name__ == "__main__":

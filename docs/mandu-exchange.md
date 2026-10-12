@@ -78,7 +78,8 @@ The Draft or proposal itself.
   A version 2 post always had a slot and no window or day.
 - A post whose video is finished also has `asset`: the video file's path under `~/gr0wthlab/ledger/`, such as `asset: assets/window-1/day-03-0a1b2c3d4e5f.mp4`.
   Play that file for the Founder with the item, so the video and its copy are approved together.
-  A post with no `asset` has no video yet, and its `## Draft` says so: approving it approves its copy and beat plan only, and the video comes back for approval in a later post item for the same day.
+  A post with no `asset` has no video yet: approving it approves its copy and beat plan only.
+  When the run prepared filming for the post's Product, its `## Draft` says there is none yet and why, and the video comes back for approval in a later post item for the same day; a post of a Product that does not film, or of a run that could not prepare filming, says nothing of a video.
 - `supersedes` names an earlier item this one replaces; the earlier one has left `open` and is never presented again.
 
 | `kind` | The section after the title | Options |
@@ -102,7 +103,9 @@ A post queued before its video existed is replaced by one that shows it; a day w
 
 A filming plan asks the Founder to approve what a 14-day window must film before any of it is filmed: the sittings, and one shot list per asset, each stating what to record, on which device, in real time or not, and what may not be cut, in the words of the Angle's Format in the package.
 gr0wthlab files it from the package, one item per window, and never asks it again once decided; a new plan replaces it, naming it in `supersedes`, only when the package changes what must be filmed.
-gr0wthlab cuts a video only from footage of a shot in a plan the Founder approved, so an undecided or rejected plan means no video.
+gr0wthlab cuts a video only from footage of a shot list that a plan the Founder approved holds as the package has it now.
+A shot list no approved plan holds has no video while its plan is undecided or rejected.
+One that an earlier approved plan holds unchanged is still cut while the plan that replaced it is undecided or rejected, since the Founder already approved filming it.
 
 A Dispatch request asks the Founder to approve a change to the Product it names in `product`, which firstmate then builds through that Product's normal reviewed path.
 gr0wthlab never sends a Dispatch request anywhere itself.

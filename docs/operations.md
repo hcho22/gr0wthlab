@@ -123,10 +123,16 @@ Name each file for its shot in the approved filming plan, in one folder per 14-d
 - A later leg of an A/B pair films nothing: day 8 is cut from the footage of `d01`.
   Only a pair whose opening is re-cut has a take per leg, marked `a` or `b` right after the shot's name, and a take marked for one leg is used only in that leg's video, for its opening.
   Everything after the opening is shared by both legs, so it is filmed once, in a take with no leg letter: a pair filmed only as lettered takes has no video, and the run's notice names the shot that needs the shared take.
+  When the Founder is on camera in the pair's first shot, each leg's Hook is said there, so each leg also needs its own take of that shot: a leg without one has no video, and the run's notice and report name the take, such as `d06-s1b.mov`.
+  A pair that opens on a screen recording needs no take per leg.
 - Files sit directly in the window's folder.
   A folder, a link, a file of another type, and a file named for no shot of the plan are left alone and named in the run report.
-- Film upright; any resolution and frame rate is taken, HDR included, and the finished video is always 1080x1920 at 30 frames a second.
-  Nothing is cut from a shot's footage until the plan that holds the shot is approved in Mandu.
+- Film upright; any resolution and frame rate is taken, and the finished video is always 1080x1920 at 30 frames a second.
+  A recording of another shape is shown whole, scaled down with black beside it, and never cropped.
+  HDR footage is converted when the installed `ffmpeg` has the `zscale` and `tonemap` filters; with a build that lacks them, a day cut from HDR footage has no video, and the run's notice says why.
+- Sound is decided by rule, not in the edit: a cut that plays at the speed it was recorded at keeps its recording's sound, and a cut that plays at another speed, such as a timelapse, is silent.
+  A video none of whose cuts carries sound has no sound stream.
+- Nothing is cut from a shot's footage until a plan that holds the shot, as the package has it now, is approved in Mandu.
 
 ## Video tooling and finished videos
 

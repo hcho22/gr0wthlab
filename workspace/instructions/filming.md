@@ -19,7 +19,7 @@ The edit record's format is in the task definition, and the launcher's checks de
 
 - Read the brief's Filming table: it lists, for each calendar day due, the shots the edit must show, the length the Format gives, the files the footage place holds for each shot with what was measured, and whether the day is ready.
 - Write an edit record only for a day marked ready.
-  A day is not ready while its filming plan is not approved, while a shot has no file, or while the video tooling is missing; the table says which, and so should your summary.
+  A day is not ready while its filming plan is not approved, while a shot has no file or lacks a take the day needs, or while the video tooling is missing; the table says which, and so should your summary.
 - Read the day's post Draft: its beats set the video's length and the time of every line of text.
   The edit runs exactly to the last beat's end.
 
@@ -35,8 +35,8 @@ The edit record's format is in the task definition, and the launcher's checks de
   If the Draft's post is not approved, shorten the Draft's beats to what the footage holds, keeping the hook beat, and keep the length inside the Format's; otherwise write no edit record and say what is too short.
 - A speed other than 1 is for a shot the table says may run at another speed, such as a timelapse.
   Choose the speed that fits the whole recording into the beats: the source range's length divided by the time it must play for.
-- Keep a screen recording whole in the frame: leave `fit` at its default, so its edges are never cropped away.
-  Use `"fit": "cover"` for camera footage only when the table shows it was filmed wider than 9:16.
+- How a recording fits the 9:16 frame is not yours to choose: the launcher shows every one whole, scaled down with black beside it, so a screen recording never loses an edge and camera footage filmed wider than 9:16 is never cropped.
+- Sound is not yours to choose either: a stretch at the speed it was recorded at keeps its sound, and one at another speed is silent.
 
 ## Pair legs
 
@@ -46,6 +46,7 @@ The edit record's format is in the task definition, and the launcher's checks de
 - When it says after its opening, the kit marks the pair as a re-cut.
   Each leg opens on its own take, the one whose name ends in the leg's letter, such as `d06-s1a` for leg A and `d06-s1b` for leg B.
   Use a lettered take only under the opening beats: everything after them comes from files with no leg letter, which both legs can use.
+  When the table lists the pair's first shot as founder on camera, the Founder says the Hook in it: under the opening beats, that shot comes only from the leg's own take, and a leg whose own take is not in the footage place is not ready.
   Every segment after the opening is the other leg's, unchanged and in the same order.
 - When the other leg's video is already in an open or approved post, never change that leg's edit record to make the two match: change the newer leg.
 

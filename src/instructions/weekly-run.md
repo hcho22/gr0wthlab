@@ -202,16 +202,18 @@ Write it as the file `day-NN.json` (such as `day-01.json`) in the edits folder t
 - `in` and `out` are seconds into the source file, inside its measured length; a segment plays for `out` minus `in` seconds.
 - The segments together run exactly as long as the day's post Draft: its last beat's end time, which must also be a length the Format gives.
   The launcher draws each beat's on-screen text, and its spoken line as a caption, over the video for the beat's time; an edit record holds no text.
-- A shot the brief marks as never cut is one segment, or neighbouring segments that run on from each other in the same file with no gap; no other shot plays between its segments.
+- A shot the brief marks as never cut is one segment, or neighbouring segments that run on from each other in the same file with no gap and at the same speed; no other shot plays between its segments.
 - Every shot the brief lists for the day appears at least once.
   If a shot has no file, there is no video: write no edit record and say so.
 - A segment may add `"speed"`, a number other than 1, only for a shot the brief says may run at another speed, such as a timelapse; it then plays for `out` minus `in`, divided by the speed.
-- A segment may add `"fit": "cover"` to fill the 9:16 frame by cropping the source's edges; the default, `"contain"`, shows the whole source with bars beside it, and never loses a part of a screen recording.
-- A segment may add `"mute": true` to drop its source's sound.
+- A segment holds no other key: how a source fits the frame and whether it has sound are the launcher's rules, never yours to choose.
+  Every source is shown whole in the 9:16 frame, scaled down with black beside it and never cropped.
+  A segment at the speed it was recorded at keeps its source's sound, and a segment at another speed is silent.
 - The legs of an A/B pair share their footage.
   When the brief says a day uses the same source ranges as its other leg from the first frame to the last, copy that leg's segments unchanged.
   When it says after its opening, the kit marks the pair as a re-cut: only the segments under the hook beat, and under any later beat that shows one of the pair's Hooks, may differ; every later segment is that leg's, unchanged and in the same order.
   Outside those opening beats, use only files with no leg letter in their name, since both legs must be able to use them.
+  When the brief lists the pair's first shot as founder on camera, the Hook is said there: under those opening beats, show that shot only from the leg's own take, the file with the leg's letter after the shot's name, and at least once.
 
 ## Rules
 

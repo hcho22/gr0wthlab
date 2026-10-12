@@ -20,19 +20,19 @@ SCREEN = video.Facts(14.0, 886, 1920, 60.0, "h264", "yuv420p", False)
 CAMERA = video.Facts(8.0, 1080, 1920, 30.0, "h264", "yuv420p", True)
 FINISHED = video.Facts(10.0, 1080, 1920, 30.0, "h264", "yuv420p", False)
 TOOLS = video.Tooling(Path("/opt/tools/ffmpeg"), Path("/opt/tools/ffprobe"), "ffmpeg version 7.1.1", converts_hdr=True)
-# Every filter a render may use: each only trims, retimes, resizes, joins, or draws text; anullsrc is silence.
-ALLOWED = set(video.FILTERS + video.SOUND_FILTERS + video.HDR_FILTERS) | {"null"}
+# Every filter a render may use, named here and not read from the renderer: each only trims, retimes, resizes, pads,
+# joins, converts colour or sound format, or draws text, and anullsrc, the one that makes something, makes silence.
+PICTURE = {"setpts", "fps", "trim", "scale", "pad", "setsar", "format", "concat", "subtitles", "null"}
+SOUND = {"aresample", "aformat", "apad", "atrim", "asetpts", "anullsrc"}
+TO_SDR = {"zscale", "tonemap"}
+ALLOWED = PICTURE | SOUND | TO_SDR
 
 
 def filters(graph):
-    """The name of every filter in a filter graph."""
-    names = set()
-    for chain in graph.split(";"):
-        for step in re.sub(r"\[[^\]]*\]", "", chain).split(","):
-            name = step.split("=", 1)[0].strip()
-            if re.fullmatch(r"[a-z]+", name):
-                names.add(name)
-    return names
+    """The name of every filter in a filter graph: what each step of each chain starts with, once its labels are
+    taken off."""
+    steps = [step for chain in graph.split(";") for step in re.sub(r"\[[^\]]*\]", "", chain).split(",")]
+    return {step.split("=", 1)[0].strip() for step in steps}
 
 
 class CanvasTest(unittest.TestCase):
@@ -129,8 +129,8 @@ class VerifyTest(unittest.TestCase):
 
 
 class ComposeTest(unittest.TestCase):
-    def cut(self, name, start, end, facts=SCREEN, speed=1.0, fit="contain", mute=False):
-        return video.Cut(Path("/footage/window-1") / name, start, end, speed, fit, mute, facts)
+    def cut(self, name, start, end, facts=SCREEN, speed=1.0):
+        return video.Cut(Path("/footage/window-1") / name, start, end, speed, facts)
 
     def test_text_is_drawn_inside_the_safe_zone_white_on_a_black_outline(self):
         text = video.subtitles(
@@ -164,19 +164,34 @@ class ComposeTest(unittest.TestCase):
     def test_the_filter_graph_only_trims_retimes_resizes_joins_and_draws_text(self):
         cuts = [
             self.cut("a.mov", 1, 4, CAMERA),
-            self.cut("b.mov", 2, 13, fit="cover"),
+            self.cut("b.mov", 2, 13),
             self.cut("c.mov", 0, 300, replace(CAMERA, duration=330.0, transfer="arib-std-b67"), speed=20.0),
         ]
-        graph, sound = video.graph(CANVAS, cuts, True)
-        self.assertTrue(sound)
-        self.assertLessEqual(filters(graph), ALLOWED, filters(graph) - ALLOWED)
+        for text in (True, False):
+            graph, sound = video.graph(CANVAS, cuts, text)
+            self.assertTrue(sound)
+            self.assertEqual(filters(graph) - ALLOWED, set())
+        graph, _ = video.graph(CANVAS, cuts, True)
+        self.assertEqual(filters(graph), ALLOWED - {"null"})
+        made_up = "[0:v:0]testsrc2=size=1080x1920,geq=random(1)[v0];[v0]null[vout]"
+        self.assertEqual(filters(made_up) - ALLOWED, {"testsrc2", "geq"})
         self.assertIn("[0:v:0]setpts=(PTS-STARTPTS)/1.000000,fps=30,trim=duration=3.000000", graph)
-        self.assertIn("scale=1080:1920:force_original_aspect_ratio=decrease:force_divisible_by=2", graph)
-        self.assertIn("pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black", graph)
-        self.assertIn("scale=1080:1920:force_original_aspect_ratio=increase:flags=lanczos,crop=1080:1920", graph)
         self.assertIn(f"[2:v:0]{video.TO_SDR},setpts=(PTS-STARTPTS)/20.000000,fps=30,trim=duration=15.000000", graph)
         self.assertIn("concat=n=3:v=1:a=1[vc][ac]", graph)
         self.assertTrue(graph.endswith("[vc]subtitles=overlay.ass:fontsdir=fonts[vout]"))
+
+    def test_every_cut_is_fitted_whole_into_the_frame_and_never_cropped(self):
+        wide = replace(CAMERA, width=1920, height=1080)
+        cuts = [self.cut("a.mov", 1, 4, CAMERA), self.cut("b.mov", 2, 13), self.cut("c.mov", 0, 4, wide)]
+        graph, _ = video.graph(CANVAS, cuts, False)
+        fit = (
+            "scale=1080:1920:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos,"
+            "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p"
+        )
+        self.assertEqual(graph.count(fit), 3)
+        self.assertEqual((graph.count("scale="), graph.count("pad=")), (3, 3))
+        self.assertNotIn("crop", graph)
+        self.assertNotIn("increase", graph)
 
     def test_the_only_thing_made_from_nothing_is_silence_for_a_cut_with_no_sound(self):
         spoken, shown, sped = (
@@ -197,10 +212,15 @@ class ComposeTest(unittest.TestCase):
         self.assertFalse(sound)
         self.assertNotIn("anullsrc", silent)
         self.assertIn("concat=n=1:v=1:a=0[vc]", silent)
-        muted, sound = video.graph(CANVAS, [replace(spoken, mute=True)], False)
+        # Sound is decided by rule: a cut that plays at another speed never carries its recording's sound.
+        self.assertEqual((spoken.sound, shown.sound, sped.sound), (True, False, False))
+        lapse, sound = video.graph(CANVAS, [sped], False)
         self.assertFalse(sound)
-        command = video.command(TOOLS, CANVAS, [shown], False, Path("/out.mp4"))
-        self.assertNotIn("aac", command)
+        self.assertEqual(filters(lapse) & SOUND, set())
+        for cuts in ([shown], [sped]):
+            command = video.command(TOOLS, CANVAS, cuts, False, Path("/out.mp4"))
+            self.assertNotIn("aac", command)
+            self.assertNotIn("[ac]", command)
 
 
 class ToolingTest(unittest.TestCase):
@@ -255,7 +275,7 @@ class ToolingTest(unittest.TestCase):
         tooling = video.find(self.env, self.canvas)
         clip = fakes.fake_clip(self.root / "footage" / "window-1" / "d01-s1.mov", 14.0)
         before = fakes.tree_digest(self.root / "footage")
-        cut = video.Cut(clip, 2.0, 12.0, 1.0, "contain", False, video.probe(tooling, clip, self.env))
+        cut = video.Cut(clip, 2.0, 12.0, 1.0, video.probe(tooling, clip, self.env))
         out = self.root / "ledger" / "assets" / "window-1" / "day-01.mp4"
         video.render(tooling, self.canvas, [cut], [video.Overlay(0, 3, "Open it.")], out, self.env)
         made = json.loads(out.read_text())
@@ -263,18 +283,25 @@ class ToolingTest(unittest.TestCase):
         self.assertIn("Dialogue: 0,0:00:00.00,0:00:03.00,Text,,0,0,0,,Open it.", made["text"])
         self.assertEqual(video.verify(video.probe(tooling, out, self.env), self.canvas, 10.0), [])
         self.assertEqual(sorted(path.name for path in out.parent.iterdir()), ["day-01.mp4"])
+        # A render that fails part way leaves the half-written file it was making nowhere, and what stood stands.
         (self.root / "tools" / "ffmpeg.json").write_text(json.dumps({"fail": "Conversion failed!"}))
+        log = self.root / "tools" / "partial.log"
         failed = out.with_name("day-02.mp4")
-        with self.assertRaisesRegex(video.VideoError, r"ffmpeg did not finish the render \(Conversion failed!\)"):
-            video.render(tooling, self.canvas, [cut], [], failed, self.env)
-        self.assertEqual(sorted(path.name for path in out.parent.iterdir()), ["day-01.mp4"])
+        for target in (failed, out):
+            with self.assertRaisesRegex(video.VideoError, r"ffmpeg did not finish the render \(Conversion failed!\)"):
+                video.render(tooling, self.canvas, [cut], [], target, self.env)
+            self.assertEqual(sorted(path.name for path in out.parent.iterdir()), ["day-01.mp4"])
+        written = log.read_text().splitlines()
+        self.assertEqual([Path(line).parent for line in written], [out.parent, out.parent])
+        self.assertNotIn(str(out), written)
+        self.assertEqual(json.loads(out.read_text()), made)
         self.assertEqual(fakes.tree_digest(self.root / "footage"), before)
 
     def test_hdr_footage_is_not_rendered_by_tooling_that_cannot_convert_it(self):
         (self.root / "tools" / "ffmpeg.json").write_text(json.dumps({"lacks": ["tonemap"]}))
         tooling = video.find(self.env, self.canvas)
         clip = fakes.fake_clip(self.root / "footage" / "d02-s1.mov", 8.0, 1080, 1920, 30, transfer="arib-std-b67")
-        cut = video.Cut(clip, 0.0, 3.0, 1.0, "contain", False, video.probe(tooling, clip, self.env))
+        cut = video.Cut(clip, 0.0, 3.0, 1.0, video.probe(tooling, clip, self.env))
         with self.assertRaisesRegex(video.VideoError, "lacks the zscale and tonemap filters that convert HDR footage"):
             video.render(tooling, self.canvas, [cut], [], self.root / "out.mp4", self.env)
         self.assertFalse((self.root / "out.mp4").exists())
@@ -308,7 +335,7 @@ class RealToolingTest(unittest.TestCase):
 
     def cut(self, path, start, end, **more):
         facts = video.probe(TOOLING, path, self.env)
-        return video.Cut(path, start, end, more.get("speed", 1.0), more.get("fit", "contain"), False, facts)
+        return video.Cut(path, start, end, more.get("speed", 1.0), facts)
 
     def test_footage_is_measured(self):
         screen = video.probe(TOOLING, self.screen, self.env)
@@ -337,7 +364,7 @@ class RealToolingTest(unittest.TestCase):
 
     def test_cuts_of_any_shape_with_and_without_sound_join_into_one_asset(self):
         out = self.root / "assets" / "joined.mp4"
-        cuts = [self.cut(self.camera, 0.5, 2.5, fit="cover"), self.cut(self.screen, 0.0, 6.0, speed=2.0)]
+        cuts = [self.cut(self.camera, 0.5, 2.5), self.cut(self.screen, 0.0, 6.0, speed=2.0)]
         video.render(TOOLING, REAL_CANVAS, cuts, [video.Overlay(0, 2, "A spoken line.", caption=True)], out, self.env)
         facts = video.probe(TOOLING, out, self.env)
         self.assertEqual(video.verify(facts, REAL_CANVAS, 5.0), [])
@@ -360,7 +387,7 @@ class RealToolingTest(unittest.TestCase):
             self.assertTrue(source.hdr)
             self.assertIn("HDR", source.describe())
             out = self.root / "assets" / "from-hdr.mp4"
-            cut = video.Cut(clip, 0.0, 2.0, 1.0, "contain", False, source)
+            cut = video.Cut(clip, 0.0, 2.0, 1.0, source)
             video.render(TOOLING, REAL_CANVAS, [cut], [video.Overlay(0, 2, "Stand-in test footage.")], out, self.env)
             facts = video.probe(TOOLING, out, self.env)
             self.assertFalse(facts.hdr)

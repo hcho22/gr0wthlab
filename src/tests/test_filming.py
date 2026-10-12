@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import unittest
 from datetime import date, timedelta
+from pathlib import Path
 from unittest import mock
 
 from gr0wthlab import boundary, cli, cycle, exchange, filming, footage, shots, video
@@ -143,8 +144,9 @@ class FilmingPlanTest(FilmingRunCase):
         )
         self.assertIn(
             " Each leg opens on its own Hook, so record the opening once for each: name the takes `d02-s1a` for day 2"
-            " and `d02-s1b` for day 9. Everything after the opening is shared by both legs: record it once, in a take"
-            " named without a leg letter, such as `d02-s1.mov`.",
+            " and `d02-s1b` for day 9. The Founder is on camera in it, so a leg has no video until its own take is"
+            " there. Everything after the opening is shared by both legs: record it once, in a take named without a"
+            " leg letter, such as `d02-s1.mov`.",
             text,
         )
         self.assertIn('- d04, day 4 (P04): Format in `angles.md` line 11. Day 4 opens on "Airplane mode on.', text)
@@ -154,6 +156,12 @@ class FilmingPlanTest(FilmingRunCase):
         self.assertIn("Not planned: day 14, since the calendar decides its Angle later", text)
         self.assertIn(f"- What holds for every screen recording: `{CALENDAR}` line 28", text)
         self.assertIn("Every asset is finished at 1080x1920 (9:16), so film upright.", text)
+        self.assertIn("A recording of another shape is shown whole, with black beside it, and never cropped.\n", text)
+        self.assertIn(
+            "- Sound is not chosen in the edit: a cut that plays at the speed it was recorded at keeps its recording's"
+            " sound, and a cut that plays at another speed, such as a timelapse, is silent.\n",
+            text,
+        )
         # Nothing but the kit text a shot list uses: no pain, signal, or kill criterion is copied.
         for strategy in ("Pain 1", "Watched-full rate", "Bottom quartile", "holds viewers"):
             self.assertNotIn(strategy, text)
@@ -490,22 +498,49 @@ class FootagePlaceTest(FilmingRunCase):
             self.clip(name)
         known = {"d01-s1", "d02-s1", "d02-s2", "d04-s1"}
         found = footage.read(self.footage, 1, known, tooling, self.env)
-        self.assertEqual(filming.lacking(found, jobs["d01"].shots, "A", False), ([], [], ["d01-s1"]))
-        self.assertEqual(filming.lacking(found, jobs["d01"].shots, "B", False), (["d01-s1"], [], []))
+        self.assertEqual(filming.lacking(found, jobs["d01"].shots, "A", False), ([], [], ["d01-s1"], []))
+        self.assertEqual(filming.lacking(found, jobs["d01"].shots, "B", False), (["d01-s1"], [], [], []))
         # In a re-cut pair the first shot of several can be the leg's own opening take; every other shot is shared.
-        self.assertEqual(filming.lacking(found, jobs["d02"].shots, "A", True), ([], [], ["d02-s2"]))
-        self.assertEqual(filming.lacking(found, jobs["d02"].shots[:1], "A", True), ([], [], ["d02-s1"]))
-        self.assertEqual(filming.lacking(found, jobs["d04"].shots, None, False), ([], [], []))
+        self.assertEqual(filming.lacking(found, jobs["d02"].shots, "A", True), ([], [], ["d02-s2"], []))
+        self.assertEqual(filming.lacking(found, jobs["d02"].shots[:1], "A", True), ([], [], ["d02-s1"], []))
+        self.assertEqual(filming.lacking(found, jobs["d04"].shots, None, False), ([], [], [], []))
         self.clip("d02-s2.mov")
         self.clip("d01-s1-take-2.mov")
         found = footage.read(self.footage, 1, known, tooling, self.env)
-        self.assertEqual(filming.lacking(found, jobs["d01"].shots, "A", False), ([], [], []))
-        self.assertEqual(filming.lacking(found, jobs["d02"].shots, "A", True), ([], [], []))
+        self.assertEqual(filming.lacking(found, jobs["d01"].shots, "A", False), ([], [], [], []))
+        self.assertEqual(filming.lacking(found, jobs["d02"].shots, "A", True), ([], [], [], []))
         # A shared take that is there and could not be measured is unmeasured footage, never a file still to film.
         (self.footage / "window-1" / "d02-s1.mov").write_text("half of a file still being copied")
         found = footage.read(self.footage, 1, known, tooling, self.env)
-        self.assertEqual(filming.lacking(found, jobs["d02"].shots[:1], "A", True), ([], ["d02-s1"], []))
-        self.assertEqual(filming.lacking(found, jobs["d02"].shots[:1], "B", True), ([], ["d02-s1"], []))
+        self.assertEqual(filming.lacking(found, jobs["d02"].shots[:1], "A", True), ([], ["d02-s1"], [], []))
+        self.assertEqual(filming.lacking(found, jobs["d02"].shots[:1], "B", True), ([], ["d02-s1"], [], []))
+
+    def test_a_re_cut_leg_needs_its_own_opening_take_only_where_the_founder_is_on_camera_in_it(self):
+        tooling = video.find(self.env)
+        parsed, roles = fakes.filming_kit(self.root / "kit")
+        jobs = {job.key: job for job in shots.requirements(parsed, roles["calendar"]).jobs}
+        self.assertEqual([shot.kind for shot in jobs["d02"].shots], ["founder on camera", "screen recording"])
+        self.assertEqual([shot.kind for shot in jobs["d01"].shots], ["screen recording"])
+        for name in ("d01-s1.mov", "d02-s1.mov", "d02-s2.mov"):
+            self.clip(name)
+        known = {"d01-s1", "d02-s1", "d02-s2"}
+        found = footage.read(self.footage, 1, known, tooling, self.env)
+        # Each leg's Hook is said in the first shot, so each leg needs its own take of it, whatever follows.
+        for leg in ("A", "B"):
+            self.assertEqual(filming.lacking(found, jobs["d02"].shots, leg, True), ([], [], [], ["d02-s1"]))
+            self.assertEqual(filming.lacking(found, jobs["d02"].shots[:1], leg, True), ([], [], [], ["d02-s1"]))
+            # A pair that is not re-cut, and one that opens on a screen recording, need the shared take alone.
+            self.assertEqual(filming.lacking(found, jobs["d02"].shots, leg, False), ([], [], [], []))
+            self.assertEqual(filming.lacking(found, jobs["d01"].shots, leg, True), ([], [], [], []))
+        self.clip("d02-s1a.mov")
+        found = footage.read(self.footage, 1, known, tooling, self.env)
+        self.assertEqual(filming.lacking(found, jobs["d02"].shots, "A", True), ([], [], [], []))
+        self.assertEqual(filming.lacking(found, jobs["d02"].shots, "B", True), ([], [], [], ["d02-s1"]))
+        # A leg's own take that is there and could not be measured is unmeasured footage, never a take still to film.
+        (self.footage / "window-1" / "d02-s1b.mov").write_text("half of a file still being copied")
+        found = footage.read(self.footage, 1, known, tooling, self.env)
+        self.assertEqual(filming.lacking(found, jobs["d02"].shots, "B", True), ([], ["d02-s1"], [], []))
+        self.assertEqual(filming.lacking(found, jobs["d02"].shots, "A", True), ([], [], [], []))
 
     def test_a_window_folder_that_is_a_link_or_missing_is_never_read_through(self):
         tooling = video.find(self.env)
@@ -543,9 +578,12 @@ class EditRunTest(FilmingRunCase):
         )
 
     def test_footage_of_an_approved_shot_becomes_a_finished_asset_in_the_day_s_post(self):
-        before_any = self.day_1
-        queue = before_any()
+        self.approved_plan()
+        self.clip("d01-s1.mov")
         before = fakes.tree_digest(self.footage)
+        queue = self.run_ok(
+            {fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): fakes.edit_record(1, DAY_1)}
+        )
         post = next(entry for entry in queue["open"] if entry["kind"] == "post")
         self.assertEqual((post["day"], post["id"]), (1, "20261011-post-w1-day-01"))
         self.assertRegex(post["asset"], r"^assets/window-1/day-01-[0-9a-f]{12}\.mp4$")
@@ -597,17 +635,14 @@ class EditRunTest(FilmingRunCase):
         self.assertEqual((record["asset"], record["sha256"], record["day"]), (post["asset"], post["asset_sha256"], 1))
         self.assertEqual(
             record["edit"]["record"]["segments"],
-            [
-                {
-                    "shot": "d01-s1",
-                    "source": "window-1/d01-s1.mov",
-                    "in": 2.0,
-                    "out": 12.0,
-                    "speed": 1.0,
-                    "fit": "contain",
-                    "mute": False,
-                }
-            ],
+            [{"shot": "d01-s1", "source": "window-1/d01-s1.mov", "in": 2.0, "out": 12.0, "speed": 1.0}],
+        )
+        self.assertEqual(
+            {key: record["cuts"][0][key] for key in ("shot", "source", "in", "out", "speed")},
+            record["edit"]["record"]["segments"][0],
+        )
+        self.assertEqual(
+            sorted(record["cuts"][0]), ["bytes", "facts", "in", "out", "sha256", "shot", "source", "speed"]
         )
         self.assertEqual(record["cuts"][0]["sha256"], before["window-1/d01-s1.mov"][0])
         self.assertEqual(
@@ -1022,7 +1057,11 @@ class EditRunTest(FilmingRunCase):
         self.assertIn(f"**Video file**: none yet ({failure}).", self.item(post))
         self.assertIn(f"- Day 1's video was not cut: {failure}.", self.notice())
         self.assertIn("- The run finished.", self.report())
-        self.assertEqual(list((self.ledger() / "assets" / "window-1").iterdir()), [])
+        # The half-written file the failed render left is gone with it.
+        folder = self.ledger() / "assets" / "window-1"
+        left = [Path(line) for line in (self.tools / "partial.log").read_text().splitlines()]
+        self.assertEqual([path.parent for path in left], [folder])
+        self.assertEqual(list(folder.iterdir()), [])
 
     def test_an_asset_whose_record_cannot_be_written_holds_the_day_and_blocks_nothing(self):
         self.approved_plan()
@@ -1149,7 +1188,6 @@ class EditRunTest(FilmingRunCase):
         told = [entry for entry in queue["open"] if entry["published_by_run"] == queue["updated_by_run"]]
         self.assertEqual(told, [])
         self.assertIn(f"| 1 | d01-s1 | not cut | {settled} |", self.report())
-        self.assertNotIn("has no video", self.report())
 
     def test_check_edits_gives_the_agent_the_launcher_s_verdict_without_opening_the_footage(self):
         self.approved_plan(days=(1, 2, 8, 9))
@@ -1257,7 +1295,13 @@ class EditRunTest(FilmingRunCase):
         with mock.patch.object(cli, "REPO_ROOT", self.repo), mock.patch.object(cli, "LEDGER_DIR", self.repo / "ledger"):
             self.assertEqual(cli.rebuild_asset(post["asset_record"], self.env, self.home, out), 1)
             self.assertIn("`window-1/d01-s1.mov` is no longer the footage this asset was cut from", out.getvalue())
+            out = io.StringIO()
             self.assertEqual(cli.rebuild_asset("../config/run.json", self.env, self.home, out), 1)
+            self.assertEqual(
+                out.getvalue(),
+                f"`../config/run.json` cannot be rebuilt: refusing to touch {self.repo}/config/run.json: it is outside"
+                f" {self.repo}/ledger\n",
+            )
 
 
 class RecutRunTest(FilmingRunCase):
@@ -1300,6 +1344,87 @@ class RecutRunTest(FilmingRunCase):
         self.assertIn(f"| not ready: {why} |", self.brief().split("## Filming")[1].split("| 9 |")[1].split("\n")[0])
         self.assertIn(f"- Day 9 has no video: {why}, and nothing is substituted.", self.notice())
         self.assertFalse((self.ledger() / "assets").exists())
+
+    def test_a_re_cut_leg_whose_hook_is_said_on_camera_has_no_video_until_its_own_opening_take_is_there(self):
+        self.one_shot_pair()
+        self.clip("d02-s1.mov", 20.0, 1080, 1920, 30, sound=True)
+
+        def why(leg):
+            take = f"d02-s1{leg.lower()}"
+            return (
+                f"shot d02-s1 has no opening take of leg {leg}'s own (the Founder is on camera in it and each leg opens"
+                f" on its own Hook, so it needs a file named `{take}`, such as `{take}.mov`)"
+            )
+
+        # Only the take both legs share is there: neither leg is ready, though an edit record names every shot.
+        whole = fakes.edit_record(2, ("d02-s1", "d02-s1.mov", 0, 20))
+        queue = self.run_ok({fakes.draft_path(2): fakes.filming_draft(2), fakes.edit_path(2): whole})
+        self.assertFalse((self.ledger() / "assets").exists())
+        brief = self.brief().split("## Filming")[1]
+        self.assertIn(
+            f"| `window-1/d02-s1.mov` for d02-s1: 20.00s, 1080x1920, 30 fps, with sound | not ready: {why('A')} |",
+            brief,
+        )
+        self.assertIn("- No day is ready for an edit record this run.", brief)
+        self.assertIn(f"| 2 | d02-s1 | not cut | {why('A')} |", self.report())
+        self.assertIn(f"- Day 2 has no video: {why('A')}, and nothing is substituted.", self.notice())
+        post = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.assertNotIn("asset", post)
+        self.assertIn(f"**Video file**: none yet ({why('A')}).", self.item(post))
+        code, text = self.check_edits(queue["updated_by_run"])
+        self.assertEqual(code, 1, text)
+        self.assertIn(f"PROBLEM day 2: drafts/edits/window-1/day-02.json will not be cut this run: {why('A')}", text)
+        # With leg A's own take there the day is ready, and a record that opens on the shared take is refused.
+        self.clip("d02-s1a.mov", 6.0, 1080, 1920, 30, sound=True)
+        queue = self.run_ok()
+        self.assertRegex(self.brief().split("## Filming")[1], r"\| 2 \|[^\n]*\| ready \|")
+        self.assertEqual([entry for entry in queue["open"] if entry["kind"] == "post"], [])
+        self.assertFalse((self.ledger() / "assets" / "window-1").exists())
+        self.assertIn(
+            "pair-legs: the Founder is on camera in shot d02-s1, where each leg of AB-3 opens on its own Hook, so"
+            " under its opening leg A shows that shot only from its own take, a file named `d02-s1a`; this edit shows"
+            " `window-1/d02-s1.mov` there",
+            self.report(),
+        )
+        # The later leg is not ready either, with leg A's take and the shared one there: its own is still to film.
+        fakes.set_window(self.repo, fakes.window_from(date(2026, 10, 4)))
+        self.run_ok()
+        self.assertIn(
+            f"| not ready: {why('B')} |", self.brief().split("## Filming")[1].split("| 9 |")[1].split("\n")[0]
+        )
+        self.assertIn(f"| 9 | d02-s1 | no edit record | {why('B')} |", self.report())
+        self.assertIn(f"- Day 9 has no video: {why('B')}, and nothing is substituted.", self.notice())
+        self.assertFalse((self.ledger() / "assets" / "window-1").exists())
+
+    def test_a_re_cut_pair_that_opens_on_a_screen_recording_is_cut_from_the_take_both_legs_share(self):
+        calendar = self.mandu / CALENDAR
+        text = calendar.read_text(encoding="utf-8")
+        plain = "Day 1's asset again, with only its hook swapped"
+        self.assertIn(plain, text)
+        calendar.write_text(text.replace(plain, "Day 1's asset again, with a re-cut start"), encoding="utf-8")
+        self.approved_plan()
+        plan = self.item(self.entries("filming-plan")[0])
+        self.assertIn("- d01, days 1 and 8 (P01, AB-1, opening re-cut): Format in `angles.md` line 8.", plan)
+        self.assertNotIn("The Founder is on camera in it", plan)
+        self.clip("d01-s1.mov")
+        queue = self.run_ok(
+            {fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): fakes.edit_record(1, DAY_1)}
+        )
+        brief = self.brief().split("## Filming")[1]
+        self.assertIn("10s; the same source ranges as day 8 after its opening", brief)
+        self.assertRegex(brief, r"\| 1 \|[^\n]*\| ready \|")
+        first = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.assertIn("asset", first)
+        fakes.set_window(self.repo, fakes.window_from(date(2026, 10, 4)))
+        queue = self.run_ok(
+            {fakes.draft_path(8): fakes.filming_draft(8), fakes.edit_path(8): fakes.edit_record(8, DAY_1)}
+        )
+        self.assertRegex(self.brief().split("## Filming")[1], r"\| 8 \|[^\n]*\| ready \|")
+        second = next(entry for entry in queue["open"] if entry.get("day") == 8)
+        self.assertIn("the same source ranges as day 1's leg after the re-cut opening", self.item(second))
+        ours, theirs = self.asset(first), self.asset(second)
+        self.assertEqual(theirs["inputs"], [str(self.footage / "window-1" / "d01-s1.mov")])
+        self.assertEqual((ours["inputs"], ours["seeks"]), (theirs["inputs"], theirs["seeks"]))
 
     def test_a_re_cut_pair_with_its_shared_take_is_cut_and_a_lettered_take_stays_in_the_opening(self):
         self.one_shot_pair()

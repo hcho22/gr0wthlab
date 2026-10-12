@@ -5,9 +5,10 @@ footage into one 9:16 asset with on-screen text and captions drawn over it (rend
 measurement (verify). Rendering is deterministic: the same footage, cuts, text, and tooling give the same file.
 
 There is no generative step. Every input of a render is a footage file the caller resolved inside the footage place,
-and the filter graph only trims, retimes, scales, pads or crops, joins, and draws text; the one thing it makes from
-nothing is silence, for a cut whose source has no sound. Every output goes to the path the caller gives, never beside
-an input. Tooling that is missing, or lacks what a render needs, is a finding the run reports, never an error.
+and the filter graph only trims, retimes, scales, pads, joins, and draws text; the one thing it makes from nothing is
+silence, for a cut that carries no sound. Every cut is fitted into the frame the one way that never crops: scaled
+down whole, with black beside it. Every output goes to the path the caller gives, never beside an input. Tooling that
+is missing, or lacks what a render needs, is a finding the run reports, never an error.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ FFPROBE_ENV = "GR0WTHLAB_FFPROBE_BIN"
 # Where Homebrew installs them; launchd's PATH names neither.
 SEARCH = ("/opt/homebrew/bin", "/usr/local/bin")
 SYSTEM_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
-FILTERS = ("scale", "pad", "crop", "fps", "trim", "setpts", "setsar", "format", "concat", "subtitles")
+FILTERS = ("scale", "pad", "fps", "trim", "setpts", "setsar", "format", "concat", "subtitles")
 SOUND_FILTERS = ("aresample", "aformat", "apad", "atrim", "asetpts", "anullsrc")
 HDR_FILTERS = ("zscale", "tonemap")
 ENCODERS = ("libx264", "aac")
@@ -42,9 +43,6 @@ TO_SDR = (
     "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,"
     "zscale=t=bt709:m=bt709:r=tv,format=yuv420p"
 )
-CONTAIN = "contain"
-COVER = "cover"
-FITS = (CONTAIN, COVER)
 PROBE_TIMEOUT = 60
 RENDER_TIMEOUT = 1800
 # How far a measured length may sit from the length asked for: under two frames of a 30 fps asset.
@@ -167,8 +165,6 @@ class Cut:
     start: float
     end: float
     speed: float
-    fit: str
-    mute: bool
     facts: Facts
 
     @property
@@ -178,7 +174,7 @@ class Cut:
     @property
     def sound(self) -> bool:
         """A cut carries its source's sound only at the speed it was recorded at."""
-        return self.facts.sound and not self.mute and self.speed == 1
+        return self.facts.sound and self.speed == 1
 
 
 @dataclass(frozen=True)
@@ -430,15 +426,11 @@ def graph(canvas: Canvas, cuts: Sequence[Cut], text: bool) -> tuple[str, bool]:
             f"fps={canvas.fps}",
             f"trim=duration={cut.length:.6f}",
             "setpts=PTS-STARTPTS",
+            f"scale={size}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos",
+            f"pad={size}:(ow-iw)/2:(oh-ih)/2:color=black",
+            "setsar=1",
+            "format=yuv420p",
         ]
-        if cut.fit == COVER:
-            steps += [f"scale={size}:force_original_aspect_ratio=increase:flags=lanczos", f"crop={size}"]
-        else:
-            steps += [
-                f"scale={size}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos",
-                f"pad={size}:(ow-iw)/2:(oh-ih)/2:color=black",
-            ]
-        steps += ["setsar=1", "format=yuv420p"]
         chains.append(f"[{index}:v:0]{','.join(steps)}[v{index}]")
         joined += f"[v{index}]"
         if sound:

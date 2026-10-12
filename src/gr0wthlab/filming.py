@@ -450,15 +450,7 @@ class Filming:
                 )
         overlays = edits.overlays(draft)
         cuts = [
-            video.Cut(
-                self.inventory.path(clip),
-                segment.start,
-                segment.end,
-                segment.speed,
-                segment.fit,
-                segment.mute,
-                clip.facts,
-            )
+            video.Cut(self.inventory.path(clip), segment.start, segment.end, segment.speed, clip.facts)
             for segment, clip in zip(edit.segments, clips)
         ]
         made = {
@@ -707,13 +699,16 @@ def plan_item(filming: Filming, previous: Mapping[str, object] | None = None) ->
     if canvas is not None:
         body.append(
             f"- Every asset is finished at {canvas.shape}, so film upright. Text is drawn {canvas.top} pixels from"
-            f" the top and {canvas.bottom} from the bottom, so keep what matters between them."
+            f" the top and {canvas.bottom} from the bottom, so keep what matters between them. A recording of"
+            " another shape is shown whole, with black beside it, and never cropped."
         )
     body += [
         f"- Drop each file in the footage place's `window-{window}/` folder, named for its shot, such as"
         " `d01-s1.mov`, or `d01-s1-take-2.mov` for another take; `docs/operations.md` has the rest.",
         "- On-screen text and captions are never filmed: the edit draws them from each day's post Draft, whose"
         " Video table is that day's script.",
+        "- Sound is not chosen in the edit: a cut that plays at the speed it was recorded at keeps its recording's"
+        " sound, and a cut that plays at another speed, such as a timelapse, is silent.",
         "- Nothing is generated or substituted: a shot with no file has no video.",
     ]
     for sitting in groups:
@@ -747,9 +742,12 @@ def plan_item(filming: Filming, previous: Mapping[str, object] | None = None) ->
             line += f' Day {hook.day} opens on "{hook.text}" (`{names[hook.source]}` line {hook.line}).'
         if job.recut and len(job.hooks) > 1:
             first = job.shots[0].id
-            takes = " and ".join(f"`{first}{hook.leg.lower()}` for day {hook.day}" for hook in job.hooks if hook.leg)
+            legs = [hook for hook in job.hooks if hook.leg]
+            takes = " and ".join(f"`{edits.own_take(first, hook.leg)}` for day {hook.day}" for hook in legs)
+            line += f" Each leg opens on its own Hook, so record the opening once for each: name the takes {takes}."
+            if any(edits.own_opening(job.shots, hook.leg, job.recut) for hook in legs):
+                line += " The Founder is on camera in it, so a leg has no video until its own take is there."
             line += (
-                f" Each leg opens on its own Hook, so record the opening once for each: name the takes {takes}."
                 " Everything after the opening is shared by both legs: record it once, in a take named without a"
                 f" leg letter, such as `{first}.mov`."
             )
@@ -871,21 +869,26 @@ def gate(filming: Filming, job: shots.Job) -> str:
 
 def lacking(
     inventory: footage.Inventory, wanted: Sequence[shots.Shot], leg: str | None, recut: bool
-) -> tuple[list[str], list[str], list[str]]:
+) -> tuple[list[str], list[str], list[str], list[str]]:
     """The shots of a day no edit can be cut from yet: those with no footage, those whose only footage could not be
-    measured, and, for a pair leg, those with no take both legs can use. The legs of a pair share their footage, so
-    a take named for one leg is only that leg's opening in a re-cut pair: the first shot of several can do with one,
-    and every other shot needs a take named without a leg letter."""
-    missing, unread, unshared = [], [], []
+    measured, for a pair leg those with no take both legs can use, and the opening shot of a leg that must open on a
+    take of its own and has none. The legs of a pair share their footage, so a take named for one leg is only that
+    leg's opening in a re-cut pair: the first shot of several can do with one, and every other shot needs a take
+    named without a leg letter. Where the Founder is on camera in that first shot, each leg needs its own take of it
+    too, since its Hook is said there."""
+    missing, unread, unshared, unopened = [], [], [], []
+    own = edits.own_opening(wanted, leg, recut)
     for index, shot in enumerate(wanted):
         usable = inventory.for_shot(shot.id, leg)
+        unmeasured = inventory.for_shot(shot.id, leg, measured=False)
         opening = recut and index == 0 and len(wanted) > 1
         if not usable:
-            (unread if inventory.for_shot(shot.id, leg, measured=False) else missing).append(shot.id)
+            (unread if unmeasured else missing).append(shot.id)
         elif leg and not opening and all(clip.leg for clip in usable):
-            waiting = [clip for clip in inventory.for_shot(shot.id, leg, measured=False) if not clip.leg]
-            (unread if waiting else unshared).append(shot.id)
-    return missing, unread, unshared
+            (unread if any(not clip.leg for clip in unmeasured) else unshared).append(shot.id)
+        elif shot == own and not any(clip.leg for clip in usable):
+            (unread if any(clip.leg for clip in unmeasured) else unopened).append(shot.id)
+    return missing, unread, unshared, unopened
 
 
 def no_shared_take(names: Sequence[str], recut: bool) -> str:
@@ -895,6 +898,15 @@ def no_shared_take(names: Sequence[str], recut: bool) -> str:
     return (
         f"{shot_names(names)} {'has' if one else 'have'} no take both legs can use (the legs share {where}, so"
         f" {'it needs' if one else 'each needs'} a file named without a leg letter, such as `{names[0]}.mov`)"
+    )
+
+
+def no_own_take(shot: str, leg: str) -> str:
+    """Why a re-cut leg has no video while its opening shot, with the Founder on camera, has no take of the leg's."""
+    take = edits.own_take(shot, leg)
+    return (
+        f"shot {shot} has no opening take of leg {leg}'s own (the Founder is on camera in it and each leg opens on"
+        f" its own Hook, so it needs a file named `{take}`, such as `{take}.mov`)"
     )
 
 
@@ -911,12 +923,14 @@ def readiness(filming: Filming, job: shots.Job, leg: str | None) -> str:
         return f"the video tooling cannot be used ({filming.tooling.problem})"
     if filming.canvas is None:
         return filming.problem or "config/platforms.json holds no canvas"
-    missing, unread, unshared = lacking(inventory, job.shots, leg, job.recut)
+    missing, unread, unshared, unopened = lacking(inventory, job.shots, leg, job.recut)
     reasons = [f"no footage yet for {shot_names(missing)}"] if missing else []
     if unread:
         reasons.append(f"the footage of {shot_names(unread)} could not be measured")
     if unshared:
         reasons.append(no_shared_take(unshared, job.recut))
+    if unopened:
+        reasons.append(no_own_take(unopened[0], leg))
     return "; ".join(reasons)
 
 
@@ -1149,15 +1163,18 @@ def notice_section(filming: Filming | None, day_text: str) -> tuple[int, str, st
     for number, day in sorted(filming.days.items()):
         spec = day.spec
         job = filming.requirements.job_for(number)
-        missing, unread, unshared = lacking(inventory, spec.shots, spec.leg, spec.recut)
+        missing, unread, unshared, unopened = lacking(inventory, spec.shots, spec.leg, spec.recut)
         approved = job is not None and not gate(filming, job)
         owed = begun and approved and not filming.due.get(number)
-        if owed and (missing or unread or unshared) and number not in [asset.day for asset in blocked]:
+        lacks = missing or unread or unshared or unopened
+        if owed and lacks and number not in [asset.day for asset in blocked]:
             reasons = [f"{shot_names(missing)} {'has' if len(missing) == 1 else 'have'} no footage"] if missing else []
             if unread:
                 reasons.append(f"the footage of {shot_names(unread)} could not be measured")
             if unshared:
                 reasons.append(no_shared_take(unshared, spec.recut))
+            if unopened:
+                reasons.append(no_own_take(unopened[0], spec.leg))
             lines.append(f"- Day {number} has no video: {' and '.join(reasons)}, and nothing is substituted.")
     for clip in inventory.unmatched():
         lines.append(f"- `{clip.name}` in the footage place is footage of no shot: {clip.problem}.")
@@ -1295,7 +1312,7 @@ def rebuild(store: Store, relative: str, where: Path | None, env: Mapping[str, s
             if footage.fingerprint(source)[0] != cut["sha256"]:
                 raise ValueError(f"`{cut['source']}` is no longer the footage this asset was cut from")
             facts = video.Facts.from_json(cut["facts"])
-            cuts.append(video.Cut(source, cut["in"], cut["out"], cut["speed"], cut["fit"], cut["mute"], facts))
+            cuts.append(video.Cut(source, cut["in"], cut["out"], cut["speed"], facts))
     except (ConfigError, UnsafeFile, OSError, KeyError, TypeError, ValueError) as error:
         return False, [f"`{relative}` cannot be rebuilt: {getattr(error, 'strerror', None) or error}"]
     tooling = video.find(env, canvas)
