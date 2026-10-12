@@ -47,7 +47,7 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
    If `origin/main` moved meanwhile, it replays the records commit on top and retries once; a commit that cannot be pushed stays local and goes with the next run, and the run log says why the replay failed.
 
 The schedule, the agent's time limit, the production clone's path, and the records step are in [`config/run.json`](../config/run.json).
-Launcher logs, Codex's event stream, and each run's record go to `~/Library/Logs/gr0wthlab/`.
+Launcher logs, Codex's event stream, Codex's own log with its record of each tool call, and each run's record go to `~/Library/Logs/gr0wthlab/`.
 
 ## Set up the production clone (once, after merge)
 
@@ -173,6 +173,22 @@ A change to `src/bin/gr0wthlab` or the launcher's package, `config/guardrails/ru
 ```sh
 cd ~/gr0wthlab && src/bin/gr0wthlab preflight && src/bin/gr0wthlab boundary-check
 ```
+
+The boundary check passes only when the runtime's own records show all of this, never the agent's report:
+
+- Each of the nine forbidden targets was attempted and refused once per tool, each on its own: Codex's record of the run holds a patch that names that target's sentinel alone, refused as outside the permission profile, and the kernel's log holds a refused shell write to that target's sentinel by its full path.
+- Nothing changed outside the writable areas, in this clone, Mandu, or any Product checkout.
+- The kernel refused the connection to each of the check's two local listeners, and neither received one.
+- Both permitted files landed in every area.
+
+The launcher writes every step for the agent: one patch per target, and one script, placed in `workspace/instructions/` for the length of the run, that holds every shell step.
+The agent is only the instrument, so a step it skipped or sent wrongly is handed to it again, in at most three probe runs per check; the output then shows `NOT YET PROVEN` for the earlier run, what it asks again for, and one closing line with the verdict.
+Anything that says something about the runtime fails the check at once, with no further run: a sentinel that landed, a connection that got through, a change outside the areas, a run that did not exit cleanly, or a record of Codex's that is not whole.
+A `FAILED` check names the target and what the record shows for it, for example `no patch named its sentinel`; read that before running the check again, since a failure after three probe runs is not the agent's slip.
+
+Each probe run leaves, in `~/Library/Logs/gr0wthlab/`, the instruction it handed over (`<run id>.probe.md`), its script (`<run id>.probe.sh`), Codex's log (`<run id>.stderr.log`), and the verdict with its evidence (`<run id>.boundary-check.json`).
+Every run, weekly or check, starts Codex with `RUST_LOG=error,codex_otel.log_only=info`, so its log keeps a record of each tool call with its arguments and output, and the Codex account's email address on each record; the logs stay on the Mac.
+A Codex upgrade can change that record's format, which fails the check with `Codex's log holds no tool call`; fix the reading of it in `src/gr0wthlab/codex.py` through a reviewed change, never by loosening the check.
 
 To repeat the check on the scheduled path, generate a one-off LaunchAgent a few minutes ahead, then remove it once it has run:
 

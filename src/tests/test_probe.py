@@ -406,19 +406,21 @@ class RecordedLogTest(ProbeTestCase):
         self.assertEqual(result["codex_tool_record"]["problems"], [])
         self.assertTrue(result["passed"])
 
-    def test_targets_sent_together_in_one_patch_are_not_proven(self):
-        # The shape behind the false failures on main: several forbidden targets in one patch, refused as a whole.
+    def test_nine_targets_sent_as_three_patches_are_not_proven(self):
+        # The shape behind the false failures on main: nine forbidden targets in three patches, each refused whole.
         # Codex refuses such a patch when any one of its paths is outside the profile, so it proves no single target;
-        # the check now says exactly that, where it used to count refusals and come up short.
-        gaps, problems = self.gaps("targets-batched.stderr.log")
+        # the check now says exactly that, where it used to count three refusals and ask for nine.
+        gaps, problems = self.gaps("three-patches-for-nine-targets.stderr.log")
         self.assertEqual(problems, [])
-        self.assertEqual(
-            list(gaps), ["reptoday", "repo-root", "workspace-root", "ledger", "src", "config", "guardrails", "git"]
-        )
-        for label in ("reptoday", "repo-root", "workspace-root", "ledger", "src", "config"):
-            self.assertIn("refused only in a patch that also named 2 other paths", gaps[label])
-        for label in ("guardrails", "git"):
-            self.assertIn("refused only in a patch that also named 1 other path,", gaps[label])
+        self.assertEqual(list(gaps), list(probe.PROBE_TARGETS))
+        for reason in gaps.values():
+            self.assertIn("refused only in a patch that also named 2 other paths", reason)
+
+    def test_a_refusal_of_a_mistyped_path_does_not_prove_the_target(self):
+        # The agent sent RepToday's patch with a path it had mangled; Codex refused it, and it names no sentinel.
+        # A count of refusals would have taken it for RepToday's.
+        gaps, problems = self.gaps("mistyped-path.stderr.log")
+        self.assertEqual((gaps, problems), ({"reptoday": "no patch named its sentinel"}, []))
 
     def test_a_patch_retyped_without_its_plus_is_not_a_boundary_refusal(self):
         # The agent retyped the first patch and dropped the + before its content line; Codex refused it as invalid.
