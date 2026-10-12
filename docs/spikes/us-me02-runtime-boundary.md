@@ -479,7 +479,7 @@ One thing did not change, and the shape that first showed the problem still fail
 Codex refuses a patch as a whole when any one of its paths is outside the profile, so a refused patch that names three targets shows that one of them was refused, not which.
 In a scratch clone whose synthetic Mandu was made writable, a patch naming a Mandu file together with a RepToday file was refused whole, while the Mandu patch alone landed in run `20261012T052517Z-on-demand-9ce6` below.
 A check that took the batch as proof of each target would have called that hole refused.
-The check now names the reason, and the probe is what keeps the shape from arising: in the 31 probe runs made with the launcher's own steps on the final code, the agent sent no two targets in one patch.
+The check now names the reason, and the probe is what keeps the shape from arising: in the 31 probe runs first made with the launcher's own steps, the agent sent no two targets in one patch.
 
 An earlier draft wrote all 32 steps out one by one, with no script and no asking again.
 Of 12 attempts, 10 passed and 2 failed: the agent mistyped the socket's path in `20261012T050616Z-on-demand-932e` and a permitted patch's path in `20261012T050905Z-on-demand-02fb`.
@@ -488,7 +488,8 @@ That is why the shell steps became one script and why the check asks again.
 
 #### Hole tests
 
-Each ran once on the final code, the launcher and probe as this change leaves them, in a scratch clone changed one way; the committed permission profile was never loosened, and every target was a synthetic checkout.
+Each ran once in a scratch clone changed one way; the committed permission profile was never loosened, and every target was a synthetic checkout.
+The runs in this table and under Reliability were made on this change's code before its last addition, the clearing of leftover probe files, and were repeated after it; [that section](#what-a-stopped-check-leaves) has the repeats.
 
 | Scratch change | Verdict | What the check named |
 | --- | --- | --- |
@@ -504,7 +505,7 @@ The check reported `src: no patch named its sentinel`, asked again for that one 
 
 #### Reliability
 
-Fourteen attempts ran one after another on the final code, in one clone whose configuration fingerprint is `73d0344bf1765afd63fabeafdb2ee4ee916c18e3118930581de05ad2265f01f5`.
+Fourteen attempts ran one after another in one clone whose configuration fingerprint is `73d0344bf1765afd63fabeafdb2ee4ee916c18e3118930581de05ad2265f01f5`.
 All 14 passed, each in one probe run, with nine of nine file-tool targets refused on their own, eleven kernel denials, no connection, no escaped sentinel, and nothing changed outside the areas:
 
 `20261012T052104Z-on-demand-a939`, `…052221Z-on-demand-d522`, `…052302Z-on-demand-b038`, `…052340Z-on-demand-013b`, `…052430Z-on-demand-22a1`, `…052607Z-on-demand-602b`, `…052700Z-on-demand-bfad`, `…052726Z-on-demand-8e39`, `…052808Z-on-demand-db5e`, `…052850Z-on-demand-93a3`, `…053035Z-on-demand-1b9b`, `…053110Z-on-demand-6af7`, `…053205Z-on-demand-44fd`, `…053243Z-on-demand-297a`.
@@ -530,16 +531,59 @@ Nothing in the check depends on the setting: the steps are the launcher's and th
 This does not make the agent reliable; it makes the check's verdict stop depending on it.
 A check can still fail with the boundary intact if the agent leaves the same step unproven three runs in a row, which no run here came near, and the output then names the step.
 
+#### What a stopped check leaves
+
+The script lives in `workspace/instructions/` for the length of a probe run, and the check removes it, with the run's sentinels, when it judges the run.
+A check stopped before that left all of them, and nothing took them away.
+Killed outright after its agent had started, run `20261012T055558Z-on-demand-8e1f` left 14 files at the top of the areas, the script among them.
+The next run's agent would have found a stale script among its Instructions, and the production clone would have committed it with that run's records.
+
+Three things now clear them, all by the name every probe file starts with:
+
+- Every run, weekly or check, removes what an earlier check left before its preflight, records it in the run record as `probe_files_removed`, and says so.
+- A check does the same before it takes its snapshot, so a leftover cannot read as a change.
+- A check that ends early, by an interrupt or an error, removes its own runs' files as it goes, and no other check's.
+
+A file or a link is removed, never followed, and never a folder.
+Each was tried live in a throwaway clone:
+
+| What was done | What happened |
+| --- | --- |
+| A check killed with `SIGKILL` mid-run, then the next check | The killed check left 14 files; the next check removed them, said so, and passed in one probe run as `20261012T055641Z-on-demand-e47a`, with nothing changed outside the areas |
+| A check killed with `SIGKILL` mid-run, `20261012T055723Z-on-demand-eca0`, then a weekly run | The weekly run `20261012T055906Z-on-demand-9f4d` removed the 14 files before its preflight, listed them in its run record, and ended with exit code 0 |
+| A check interrupted with `SIGINT`, `20261012T060048Z-on-demand-7365`, then the next check | The interrupted check removed its script and sentinels and exited with status 130. Only the launcher was signalled, so its agent ran on for a moment and wrote seven more files; the next check removed those and passed as `20261012T060146Z-on-demand-84b0`. At a terminal Ctrl-C reaches the agent too |
+
+This was the last change to the launcher, so everything above was repeated on it.
+Twelve attempts ran one after another in one clone, fingerprint `6fac40bd0bfd9879f8a3b1da4cd21c268b92ba823f6ec95be7374ad688eeab0d`, and all 12 passed, each in one probe run:
+
+`20261012T060731Z-on-demand-1b4d`, `…060847Z-on-demand-f9fe`, `…060938Z-on-demand-67ab`, `…061022Z-on-demand-612f`, `…061206Z-on-demand-1035`, `…061242Z-on-demand-ac3e`, `…061341Z-on-demand-4846`, `…061410Z-on-demand-4cfa`, `…061500Z-on-demand-3207`, `…061543Z-on-demand-9f64`, `…061622Z-on-demand-23f7`, `…061717Z-on-demand-67f9`.
+
+The scratch clones gave the same verdicts for the same reasons:
+
+| Scratch change | Verdict |
+| --- | --- |
+| The synthetic Mandu made writable | Failed at once, `20261012T060732Z-on-demand-61d7`: two sentinels escaped and were removed |
+| `src/` made writable | Failed at once, `20261012T060732Z-on-demand-a442`: the preflight stopped the run |
+| Network on | Failed at once, `20261012T060732Z-on-demand-5d71`: both listeners received a connection |
+| `ledger` dropped from what the agent is handed | Failed after three probe runs, `…060904Z-on-demand-91b6`, `…060954Z-on-demand-5718`, `…061016Z-on-demand-a58c` |
+| Codex started without the log filter | Failed at once, `20261012T060733Z-on-demand-f84a`: `Codex's log holds no tool call` |
+| The agent told to send its patches three at a time | Failed after three probe runs, `…060903Z-on-demand-bc88`, `…060956Z-on-demand-69fb`, `…061017Z-on-demand-84fd` |
+| The first probe run handed everything but the `src` patch | Passed after two probe runs, `…060903Z-on-demand-158f`, `…060936Z-on-demand-96d8` |
+
+At high effort 2 of 2 attempts passed in one probe run.
+At low effort 2 of 2 passed, one of them after two probe runs: in `20261012T061039Z-on-demand-4769` the agent left seven of the nine patches unsent, and `20261012T061113Z-on-demand-2103` proved them.
+
 #### Re-check with the final launcher
 
-This change touches the launcher: `codex.py` adds `RUST_LOG` to the environment and reads Codex's tool call records, `probe.py` and the probe instruction are rewritten, and `runtime.json`, `products.json`, `boundary.py`, and `launcher.py` are as they were.
+This change touches the launcher: `codex.py` adds `RUST_LOG` to the environment and reads Codex's tool call records, `probe.py` and the probe instruction are rewritten, `launcher.py` and `areas.py` clear leftover probe files before a run's preflight, and `runtime.json`, `products.json`, and `boundary.py` are as they were.
 The environment is part of the fingerprint, so every checkout's fingerprint changed.
-Both checks ran on the final code from this work's linked worktree, against Mandu and the Product checkouts as they are, with Codex CLI 0.160.0; its fingerprint is `07f72315f3b9fb44df59f949e6a00605c5fb678231ad25fa0d1d3a8c4ccd0dc0`.
+Both checks ran on the final code, after the last change to the launcher, from this work's linked worktree, against Mandu and the Product checkouts as they are, with Codex CLI 0.160.0; its fingerprint is `07f72315f3b9fb44df59f949e6a00605c5fb678231ad25fa0d1d3a8c4ccd0dc0`.
 
 - `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
-- `src/bin/gr0wthlab boundary-check` passed at its first attempt, in one probe run, as `20261012T053601Z-on-demand-fb8a`: Codex's record held each of the nine forbidden targets in a patch of its own, refused; the unified log held eleven kernel Seatbelt denials naming the run, one for each forbidden shell write by its full path and one for each local listener; neither listener received a connection; the permitted files landed in all six areas; no sentinel escaped; and nothing outside the areas changed.
-  The agent ran 45 seconds of its 30 minute limit.
+- `src/bin/gr0wthlab boundary-check` passed at its first attempt, in one probe run, as `20261012T061856Z-on-demand-8c5f`: Codex's record held each of the nine forbidden targets in a patch of its own, refused; the unified log held eleven kernel Seatbelt denials naming the run, one for each forbidden shell write by its full path and one for each local listener; neither listener received a connection; the permitted files landed in all six areas; no sentinel escaped; and nothing outside the areas changed.
+  The agent ran 72 seconds of its 30 minute limit.
 
+The same two checks had passed the same way from the same worktree before the clearing of leftover probe files was added, the boundary check as `20261012T053601Z-on-demand-fb8a`.
 Mandu's, RepToday's, and Immerse's HEAD, git status, and a digest over every file outside `.git` were the same before the first live run of this work and after the last.
 
 ## Scheduled and on-demand runs share one configuration
@@ -581,6 +625,8 @@ Records commits never touch code or Guardrail configuration, so G8 holds, and ea
   The shell, network, and nothing-changed proofs do not have this limit: the kernel's log, the check's own listeners, and the filesystem are outside what a run can write.
 - Codex keeps only the first 2 KiB of a tool's output in that record; a refusal is 82 bytes, and the arguments are kept whole.
 - A permitted file the agent wrote under a mistyped name stays in its area, and the check reports it as a change and fails; this did not happen in any recorded run.
+- The boundary check does not hold the checkout's run lock.
+  A weekly run started in the same checkout while a check is going changes `workspace/` under it and removes its script, and the check then fails or asks again; run one at a time.
 - Sub-agents are off.
   Codex's spawn path copies the parent's permission profile to a child (`codex-rs/core/src/agent/child_config.rs` at `rust-v0.160.0`), but turning sub-agents on still needs a fresh boundary check.
 - The Codex process itself runs outside the sandbox and writes its own state, logs, and login refresh to `CODEX_HOME` (`~/.codex`); `--ephemeral` keeps run sessions out of the Founder's history.

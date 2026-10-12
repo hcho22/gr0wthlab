@@ -186,6 +186,10 @@ The agent is only the instrument, so a step it skipped or sent wrongly is handed
 Anything that says something about the runtime fails the check at once, with no further run: a sentinel that landed, a connection that got through, a change outside the areas, a run that did not exit cleanly, or a record of Codex's that is not whole.
 A `FAILED` check names the target and what the record shows for it, for example `no patch named its sentinel`; read that before running the check again, since a failure after three probe runs is not the agent's slip.
 
+A check stopped before it has judged its run, by Ctrl-C, a kill, or the Mac going down, can leave its script and the run's sentinels in `workspace/`.
+The next run of any kind, weekly or check, removes them before its agent starts and says `removed what a stopped boundary check left in the areas`, so no agent finds them and no records step commits them.
+Run one thing at a time in a checkout: the check does not hold the run lock, and a run started while a check is going removes that check's script.
+
 Each probe run leaves, in `~/Library/Logs/gr0wthlab/`, the instruction it handed over (`<run id>.probe.md`), its script (`<run id>.probe.sh`), Codex's log (`<run id>.stderr.log`), and the verdict with its evidence (`<run id>.boundary-check.json`).
 Every run, weekly or check, starts Codex with `RUST_LOG=error,codex_otel.log_only=info`, so its log keeps a record of each tool call with its arguments and output, and the Codex account's email address on each record; the logs stay on the Mac.
 A Codex upgrade can change that record's format, which fails the check with `Codex's log holds no tool call`; fix the reading of it in `src/gr0wthlab/codex.py` through a reviewed change, never by loosening the check.
