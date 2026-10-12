@@ -665,8 +665,10 @@ def settle_day(
     is the one it was queued from and the day's edit record is in place. When only its slot changed and its edit
     record is still the one the video was cut from, the post that replaces it shows the same video, carried over
     from its own record, as long as the finished file is still the file that record names; otherwise the open post
-    stands as it is, and a new slot reaches it once the video is cut again. A day whose edit record is gone has no
-    video to offer, so the brief and check-edits tell the agent to leave such a day's record as it is."""
+    stands as it is, and a new slot reaches it once the video is cut again. Wherever the open post stands with a video
+    that was not cut again, the day's row says where that video's finished file stands when it is not intact, by the
+    one check the filming workflow keeps. A day whose edit record is gone has no video to offer, so the brief and
+    check-edits tell the agent to leave such a day's record as it is."""
     number = day_plan.day.day
     approved = day_plan.approved
     asset = None
@@ -702,8 +704,9 @@ def settle_day(
         if carried is None:
             result.status, result.item = KEPT, str(posted["id"])
             result.detail = f"its video was not cut again ({asset.detail})"
-            if moved and same_record:
-                result.detail += ", and its finished file is gone or is no longer the file its record names"
+            file = video.file(number, store)
+            if file is not None and not file.intact:
+                result.detail += f", and {file.told(' of the video it names')}"
             result.detail += "; the open item stands"
             if moved:
                 result.detail += ", and its new slot reaches it once the video is cut again"

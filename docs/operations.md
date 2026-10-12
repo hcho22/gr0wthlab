@@ -54,8 +54,9 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
    For a Draft that passes, it checks the day's edit record in `workspace/drafts/edits/`, if the agent wrote one, against the shot list and the footage, renders it with `ffmpeg` into `ledger/assets/` with the Draft's text drawn over it, and measures the result; the day's post then shows the finished video.
    An edit record that fails a check renders nothing and blocks the day's post, naming the rule; missing video tooling is reported as a skipped edit, never as a failed run; every check is kept in `ledger/evidence/filming/`.
    A cut that fails for a reason outside the edit record (a tooling error, footage that changed while the run worked, a record that could not be written) holds the video as missing tooling does: nothing is blocked, an open post stands, and the run's notice names the failure.
-   Where the day's post shows a video when the run ends, the notice and the run report say that the video could not be cut again and that the post keeps the video it shows; they say a day has no video only when its post shows none.
-   The brief and `check-edits` tell the agent the same beforehand: the edit record of a day whose open post shows a video stays as it is while the video cannot be cut again, and is never reported as a problem to fix.
+   Where the day's post names a video when the run ends, the notice and the run report say that the video could not be cut again; they say a day has no video only when its post names none.
+   They say that the post keeps the video it shows only when the finished file is on disk and is the file the video's record and the post's queue entry name, which the launcher checks by fingerprint every time before it says so ("Video tooling and finished videos" below has what it says otherwise).
+   The brief and `check-edits` tell the agent the same beforehand: the edit record of a day whose open post names a video stays as it is while the video cannot be cut again, and is never reported as a problem to fix.
    Before it queues any post, it compares the two videos each A/B pair's posts are about to show, reading each from its own record in `ledger/evidence/filming/assets/`, which knows every footage file by its fingerprint and not by its name: when they show different footage outside their openings, nothing the run changed for the pair is offered, the posts that stood stay, and the run report and the notice name the pair.
    A day whose copy the Founder approved before its video existed gets its video only while its Draft is still that copy; otherwise no video is cut and the notice says so.
    It files each reviewed proposal in `src/proposals/` once, and never again whatever the Founder decides: the brand lint's word lists, and, in a run with outreach messages to offer, the loss-framing and sponsorship-ask lists.
@@ -154,7 +155,7 @@ Until `first_sitting` is set, every run prepares calendar days 1 to 7 as the fir
 Once it is set, each run prepares the calendar days from the next day through the end of the week after the coming sitting (on the sitting's own day, exactly that week), skipping any day already approved, and each post's slot is its date at `slot`.
 A changed slot reaches an open post at the next run, which replaces the post with one that carries it.
 A post that shows a video keeps it through that change even when the video cannot be cut again in that run, for example while its footage is away or `ffmpeg` is missing: the post that replaces it shows the same finished file, as long as its Draft and its edit record are the ones it was made from and the file is still the one its record names.
-Otherwise the open post stands as it is, the run report says so, and the slot reaches it once the video is cut again.
+Otherwise the open post stands as it is, the run report says so, with where the finished file stands when that is the reason, and the slot reaches it once the video is cut again.
 
 ## Set the footage place
 
@@ -224,7 +225,16 @@ Its record, `ledger/evidence/filming/assets/window-<n>-day-<nn>-<recipe>.json`, 
 
 The command renders the video again beside where its record says it was, measures it, and puts it in place only if it came out byte for byte the file its record names.
 Anything else, such as a render by other tooling, which can encode the same frames differently, is reported and discarded, and whatever is at that path stays as it was.
+When it puts nothing in place, its last line says what stands at that path now: the file its record names, a file that is no longer that one, nothing, or a file that could not be read.
 A video no open or approved post names can simply be deleted.
+
+A finished file is the only copy of its video, since it never enters git, so every run checks the file of each video an open or approved post names: it must be on disk, and its fingerprint must be the SHA-256 the video's record and the post's queue entry hold.
+The launcher says a post shows or keeps a video only when that check passes.
+When the file is gone, or is no longer the file its record names, the run report and a notice name the post and the file and say exactly that, nothing is substituted, and whatever is at that path is left as it is.
+An open post's video is then cut again by the rules that cut any video, once its footage and the video tooling are there and its day is due; until then every run's notice says so again, and the open post stands as it is, still naming the file.
+An approved post is never cut again, so its notice gives the `rebuild-asset` command that makes the file again from the footage.
+A file that cannot be read is not a file that is gone: the report and the notice give the reason the read failed, nothing is said of whether the post keeps its video, no post changes, and the report marks the filming output incomplete.
+The same holds when the video's own record under `ledger/evidence/filming/assets/` cannot be read or does not name the file the post names.
 
 ## Mark the Waitlist live
 
