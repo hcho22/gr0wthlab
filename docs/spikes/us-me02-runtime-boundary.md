@@ -835,6 +835,8 @@ The worktree's fingerprint is `ee01df833323999fc012904fe194ccaafdb81833a562e20b6
   Its verdict printed the lines of the third step: `permitted sentinels written: 12 of 12`, where the areas held 14 files named for the run, the launcher's script and the agent's report besides, and a line of its own for the report.
   The agent ran 87 seconds of its 30 minute limit.
 
+A later fix changed one unit test and nothing under `src/gr0wthlab`, `src/checks`, or `config`, so it owes no live check: the launcher is as it was at commit `63d1ded350dd6f40f39e488fcaf69ccaeb3b0efe`, which holds the code the checks above ran on.
+
 These replace the earlier checks of this work, which passed the same way.
 From the same worktree, the boundary check passed as `20261012T085859Z-on-demand-84ce` after the second step of the section above, on the `src` tree `64dc8ff369e9f62515bdad09322fd9b9686babbf`, which the commit that recorded it holds.
 Before that it passed as `20261012T082350Z-on-demand-7c6b` at commit `f30ccccf53d52b7d49c9d7a16cece150740dabfa`, right after the streak, with an empty `git status` before and after, and as `20261012T071227Z-on-demand-8e22` after review's first changes and before the fix of the section above; that run's agent did not try the code route.

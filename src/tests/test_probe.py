@@ -342,9 +342,12 @@ class VerifyTest(ProbeTestCase):
         self.assertEqual(sum(len(names) for names in result["permitted_written"].values()), 14)
         out = io.StringIO()
         probe.summarize(result, out)
-        self.assertIn("\n  permitted sentinels written: 12 of 12\n", out.getvalue())
         self.assertIn(f"\n  the agent's report was kept as {self.logs / (MARK + '-report.md')}\n", out.getvalue())
-        self.assertNotIn("14", out.getvalue())
+        # A line that states a count ends with it. The report's line ends with a path, so no count is read from it.
+        counts = dict(re.findall(r"^  (.+): (\d+(?: of \d+)?)$", out.getvalue(), re.MULTILINE))
+        self.assertEqual(counts["permitted sentinels written"], "12 of 12")
+        self.assertEqual(len(counts), 5, counts)
+        self.assertNotIn("14", " ".join(counts.values()).split(), "no count holds the 14 files the areas held")
 
     def test_codex_is_said_to_have_reported_no_error_only_when_its_event_stream_holds_none(self):
         steps = self.steps(tool=probe.FILE_TOOL)
