@@ -1213,6 +1213,7 @@ Not exercised live:
 
 Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the first of these runs and after the boundary check.
 The runs' outputs are not part of this change; the clones sat in the Mac's per-user temporary folder and were removed from it.
+
 ### Re-check after the agent's reasoning effort and the work counts (US-ME17)
 
 The weekly agent now runs at high reasoning effort, and the run report shows what the launcher counted of its session beside the agent's own closing line.
