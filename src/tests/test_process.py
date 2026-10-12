@@ -7,12 +7,13 @@ import sys
 import tempfile
 import time
 import unittest
+from datetime import timedelta
 from pathlib import Path
 from unittest import mock
 
 from gr0wthlab import process
 from tests import fakes
-from tests.test_cycle import CycleTestCase
+from tests.test_filming import DAY_1, PLAN, FilmingRunCase
 
 # Starts what a stalled agent leaves, notes each process id, says it is ready, and waits: a shell in a session of its
 # own, as Codex starts a shell command, which answers a request to stop by starting one more process and ending, so
@@ -169,32 +170,54 @@ class RunTest(unittest.TestCase):
         )
 
 
-class EveryWaitIsBoundedTest(CycleTestCase):
+class EveryWaitIsBoundedTest(FilmingRunCase):
     def test_a_whole_run_never_waits_without_a_time_limit_on_a_process_it_started(self):
         """A wait without one can last forever. This watches every process a run in the production clone starts, with
-        a day's Draft due, so the records step's git and the claim checks' reads of a Product's code are among them."""
-        fakes.set_window(self.repo, {"first_sitting": None, "slot": None})
-        fakes.git(self.repo, "commit", "--quiet", "--all", "-m", "a window with days due", env=self.env)
+        a day's Draft and its edit record due, so the records step's git, the claim checks' reads of a Product's
+        code, and the video tooling that measures the footage and cuts the day's video are among them. Each starts
+        through process.run, which is what stops one at its limit with every process it started."""
+        fakes.keep_days(self.mandu, 1, 8)
+        fakes.git(self.repo, "commit", "--quiet", "--all", "-m", "a window with days due, and footage", env=self.env)
         remote, clone = self.root / "remote.git", self.root / "production"
         fakes.git(self.root, "init", "--quiet", "--bare", str(remote), env=self.env)
         fakes.git(self.repo, "remote", "add", "origin", str(remote), env=self.env)
         fakes.git(self.repo, "push", "--quiet", "origin", "main", env=self.env)
         fakes.git(self.root, "clone", "--quiet", str(remote), str(clone), env=self.env)
-        fakes.behave(self.codex_dir, {"write": {fakes.draft_path(1): fakes.draft(1)}})
-        waits = []
+        code, out = self.run_cycle(repo=clone, at=fakes.SUNDAY_RUN)
+        self.assertEqual(code, 0, out)
+        self.decide(PLAN, "approve")
+        self.clip("d01-s1.mov")
+        writes = {fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): fakes.edit_record(1, DAY_1)}
+        fakes.behave(self.codex_dir, {"write": writes})
+        started, waits, inside = [], [], []
+        run = process.run
+
+        def through(*args, **kwargs):
+            inside.append(args[0])
+            try:
+                return run(*args, **kwargs)
+            finally:
+                inside.pop()
 
         class Watched(subprocess.Popen):
+            def __init__(self, command, *args, **kwargs):
+                started.append((command, bool(inside)))
+                super().__init__(command, *args, **kwargs)
+
             def wait(self, timeout=None):
                 waits.append((self.args, timeout is not None or self.returncode is not None))
                 return super().wait(timeout)
 
-        with mock.patch.object(subprocess, "Popen", Watched):
-            code, out = self.run_cycle(repo=clone)
+        with mock.patch.object(subprocess, "Popen", Watched), mock.patch.object(process, "run", through):
+            code, out = self.run_cycle(repo=clone, at=fakes.SUNDAY_RUN + timedelta(hours=1))
         self.assertEqual(code, 0, out)
         self.assertIn("records: pushed", out)
-        self.assertLessEqual({"codex", "git"}, {Path(command[0]).name for command, _ in waits})
+        self.assertIn("asset", next(entry for entry in self.queue(clone)["open"] if entry["kind"] == "post"))
+        names = {Path(command[0]).name for command, _ in started}
+        self.assertLessEqual({"codex", "git", "ffmpeg", "ffprobe"}, names)
         self.assertLessEqual({"fetch", "cat-file", "push"}, {word for command, _ in waits for word in command})
         self.assertEqual([command for command, bounded in waits if not bounded], [])
+        self.assertEqual([command for command, through_run in started if not through_run], [])
 
 
 if __name__ == "__main__":

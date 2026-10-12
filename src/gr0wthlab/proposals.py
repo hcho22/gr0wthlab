@@ -112,4 +112,4 @@ def describe(filing: Filing, ledger: Ledger) -> str:
         "superseded": f"replaced by `{entry.get('superseded_by')}`",
     }.get(status, status)
     when = "filed this run" if filing.status == FILED else "filed earlier, never re-asked"
-    return f"`{filing.source}` is `{entry['id']}`, {when}: {where}."
+    return f"`{filing.source}` is `{entry['id']}`, {when}: {where.rstrip('.')}."

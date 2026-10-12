@@ -12,7 +12,7 @@ from datetime import date
 from pathlib import Path
 from unittest import mock
 
-from gr0wthlab import boundary, cli, exchange, settings
+from gr0wthlab import boundary, cli, evidence, exchange, settings
 from gr0wthlab.areas import Areas, Store, UnsafeFile, read_plain
 from gr0wthlab.boundary import ConfigError
 from tests import fakes
@@ -304,6 +304,31 @@ class CheckIncomingTest(unittest.TestCase):
             rejected_again = fakes.proposal(extra="supersedes: 20261011-queued\n", title="supersede a decided one")
             (incoming / "supersede.md").write_text(rejected_again, encoding="utf-8")
             (incoming / f"{'long-' * 13}name.md").write_text(fakes.proposal(title="a long name"), encoding="utf-8")
+            quote = evidence.Quote(
+                "d-0123456789ab",
+                "RepToday",
+                "https://www.reddit.com/r/fitness30plus/comments/abc123/an_example/",
+                "2026-10-11",
+                "Three words here.",
+                "A thread.",
+                "lost-the-routine",
+                "strong",
+                "venting",
+                True,
+                "reddit:fitness30plus",
+                "post",
+                "",
+                "0" * 64,
+                True,
+                "an-earlier-run",
+            )
+            evidence.keep(Store(Path(os.path.realpath(directory)) / "ledger"), quote)
+            for name, cited in (("sourced.md", quote.id), ("unsourced.md", "d-000000000000")):
+                angle = fakes.proposal(title=f"give P03 a second Hook ({name})", new_angle="yes").replace(
+                    "- Cleared and reserved:",
+                    f"- Sourced pain: `{evidence.file_of(cited)}`\n- Cleared and reserved:",
+                )
+                (incoming / name).write_text(angle, encoding="utf-8")
             out = io.StringIO()
             with (
                 mock.patch.object(cli, "INCOMING", incoming),
@@ -319,7 +344,9 @@ class CheckIncomingTest(unittest.TestCase):
         self.assertIn("PROBLEM twin.md\n  - asks the same as good.md, which is also in incoming/", text)
         self.assertIn("PROBLEM supersede.md\n  - supersedes 20261011-queued, which is not an open item", text)
         self.assertIn(f"PROBLEM {'long-' * 13}name.md\n  - name it <slug>.md directly in incoming/", text)
-        self.assertIn("6 items checked, 5 with problems", text)
+        self.assertIn("OK sourced.md", text)
+        self.assertIn("PROBLEM unsourced.md\n  - it declares new_angle: yes, and a proposal that adds or changes", text)
+        self.assertIn("8 items checked, 6 with problems", text)
 
 
 if __name__ == "__main__":

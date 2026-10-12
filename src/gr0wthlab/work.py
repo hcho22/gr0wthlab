@@ -273,10 +273,12 @@ def claim_line(claims: Claims | None) -> str:
 
 
 def proposal_line(proposals: Proposals | None) -> str:
-    """The proposals count: this session's own, and beside it any an earlier run left that this run queued."""
+    """The proposals count: this session's own, and beside it any an earlier run left that this run queued. It is
+    of the package-change proposals in review-queue/incoming/ and says so: an Angle or a Hook the session proposes from
+    Listening goes through review-queue/angles/ and is accounted for under Listening in the report."""
     if proposals is None:
-        return "Proposals this session wrote: not counted; the launcher problems say why"
-    line = f"Proposals this session wrote: {proposals.written} queued"
+        return "Proposals this session wrote to incoming/: not counted; the launcher problems say why"
+    line = f"Proposals this session wrote to incoming/: {proposals.written} queued"
     if proposals.left:
         were = "was" if proposals.left == 1 else "were"
         line += f"; {proposals.left} more queued in this run {were} left by an earlier run"
@@ -315,5 +317,5 @@ def summary(work: Work) -> str:
     if work.proposals is None:
         parts.append("proposals not counted")
     else:
-        parts.append(f"{plural(work.proposals.written, 'proposal')} this session wrote queued")
+        parts.append(f"{plural(work.proposals.written, 'proposal')} this session wrote to incoming/ queued")
     return ", ".join(parts)

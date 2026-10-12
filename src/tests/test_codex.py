@@ -230,5 +230,42 @@ class PreflightTest(CodexTestCase):
         self.assertEqual(codex.codex_version(self.codex_bin, self.environment), "codex-cli 1.2.3")
 
 
+class NetworkProbeTest(unittest.TestCase):
+    TARGETS = ["www.reddit.com:443", "itunes.apple.com:443", "forum.example.com:443"]
+
+    def test_the_probe_s_output_is_read_target_by_target(self):
+        output = "UNREACHABLE www.reddit.com:443 101\nREACHED itunes.apple.com:443 102\nnoise\nUNREACHABLE x 1 2\n"
+        result = codex.evaluate_network(output, self.TARGETS)
+        self.assertEqual(result.unreachable, (("www.reddit.com:443", 101),))
+        self.assertEqual(result.reached, ("itunes.apple.com:443",))
+        self.assertEqual(result.failures, ("forum.example.com:443 was not probed",))
+        self.assertFalse(result.ok)
+        self.assertEqual(result.as_json()["unreachable"], ["www.reddit.com:443"])
+
+    def test_only_a_probe_that_tried_every_target_and_reached_none_passes(self):
+        output = "".join(f"UNREACHABLE {target} {pid}\n" for pid, target in enumerate(self.TARGETS, 200))
+        self.assertTrue(codex.evaluate_network(output, self.TARGETS).ok)
+        self.assertFalse(codex.evaluate_network("", self.TARGETS).ok)
+        self.assertTrue(codex.evaluate_network("", []).ok)
+
+    def test_the_probe_tries_each_target_once_sending_nothing_and_names_the_process_that_tried(self):
+        targets = ["open.example:443", "closed.example:8443"]
+        with tempfile.TemporaryDirectory() as folder:
+            # Stands in for nc: records how it was called and by which process, and opens only open.example.
+            tool = Path(folder) / "nc"
+            tool.write_text('#!/bin/sh\necho "$$ $*" >> "$0.calls"\n[ "$6" = open.example ]\n', encoding="utf-8")
+            tool.chmod(tool.stat().st_mode | stat.S_IXUSR)
+            with mock.patch.object(codex, "NETCAT", str(tool)):
+                result = codex.run_network_probe({}, None, tool, dict(os.environ), targets, sandboxed=False)
+            calls = [line.split() for line in Path(f"{tool}.calls").read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(result.reached, ("open.example:443",))
+        self.assertEqual(result.failures, ())
+        zero_io = ["-z", "-G", "3", "-w", "3"]
+        self.assertEqual(
+            [call[1:] for call in calls], [zero_io + ["open.example", "443"], zero_io + ["closed.example", "8443"]]
+        )
+        self.assertEqual(result.unreachable, (("closed.example:8443", int(calls[1][0])),))
+
+
 if __name__ == "__main__":
     unittest.main()

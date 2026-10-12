@@ -85,6 +85,7 @@ With network on, the file grants would not be the whole boundary: in review, `co
 Any local service that accepted a request from a run would act for it outside the sandbox, so the write boundary would rest on every such service refusing.
 With network off, the kernel refuses those connections (`deny(1) network-outbound`), and the boundary check tests it.
 A later story that needs network, such as Listening, YouTube read access, or scheduler drafts, must enable it only through Codex's `network_proxy` domain allow-list for its specific hosts, keep local sockets and localhost unreachable, and re-run the boundary check.
+Listening did not need it: the launcher fetches for the agent, outside the sandbox (see the re-check after Listening and outreach below).
 
 ## Refused-write evidence
 
@@ -401,6 +402,817 @@ Nothing in the process table ties such a process to the agent, so the stop does 
 This is not particular to a timed-out run: in `20261011T183552Z-on-demand-5ac3` the agent started `/bin/sleep 621` the same way and the run ended with exit code 0 after 17 seconds; the launcher stopped nothing, and the process was still running 15 seconds later.
 A plain background job (`nohup sleep 617 >/dev/null 2>&1 &`, run `20261011T181728Z-on-demand-a19e`) left nothing: no reading of the process table during or after that run showed it.
 
+### Re-check after Listening and outreach (US-ME13, US-ME14)
+
+Listening and outreach are the runtime's first use of the network and its first untrusted input, so this change touches the boundary itself.
+The tighter of the two designs held: the sandboxed agent never needed the network, so it still has none, and Codex's `network_proxy` is not used.
+`runtime.json` is unchanged, the launcher still passes `permissions.gr0wthlab.network.enabled=false`, and the permission profile, the Codex flags, and the environment are as they were.
+
+What is new sits outside the sandbox.
+The launcher itself now reads a fixed list of sources (`config/sources.json`) before the agent starts, through one client (`src/gr0wthlab/fetch.py`) whose rules are `config/guardrails/fetch.json` and its own code: a credential-free GET over HTTPS on port 443 to a listed host and to no other, each host's `robots.txt` read first and binding, a bounded number of spaced requests, and a redirect followed only to a listed host.
+It writes what it read into one snapshot in `ledger/`, which the agent can read and never write, and every request it was asked to make, sent or not, into the run's request log.
+`src/tests/test_fetch.py` holds the contract by behavior: what the client puts on the wire is one GET with no body, cookie, or credential, and a path a `robots.txt` disallows is never requested.
+No unit test can open a connection beyond the machine, since `src/tests/__init__.py` refuses one at the socket, so the whole runs under test show that nothing but this client reaches for the network.
+`config/products.json` gained one package source and the package files Listening and outreach read.
+
+Two proofs were added to what every run and the boundary check already did.
+Every run's preflight now also tries each listed host from inside the sandbox, with no model, and stops the run before the agent starts if one is reachable.
+The boundary check proves the network from both sides: a control outside the sandbox shows the probe can open a connection to the check's own listener, the same probe inside the sandbox must reach neither that listener nor any listed host, a kernel Seatbelt denial must name each of those attempts by its process, and the launcher's client must send nothing but a GET to listed hosts and refuse an address outside the list before anything is sent.
+
+Both checks were run on 2026-10-11 with Codex CLI 0.160.0, from a linked worktree on the code as committed, whose configuration fingerprint is `f92a4c4aa4b29adbef9c716c4582e96810cdd2b4ea574a7ee1fd73ef51dc0747`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached none of the three listed hosts (`www.reddit.com`, `itunes.apple.com`, `www.youtube.com`) from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261011T170146Z-on-demand-8ae0`: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox all four targets were refused, and the kernel named each attempt, the listener's as `network-outbound remote:*:<port>` and each host's as `network-outbound /private/var/run/mDNSResponder`, since the sandbox refuses even the name lookup; the launcher's client sent three requests, each a GET for a listed host's `robots.txt`, and refused `https://example.com/` unsent.
+
+The same check passed on the first feature commit as run `20261011T164442Z-on-demand-24ff`.
+One attempt before it does not count: run `20261011T164318Z-on-demand-bc98`, from a throwaway clone under `/private/tmp`, passed the network proof the same way but failed, correctly, on the patch rejections (three of nine), because the agent shortened that clone's very long path in several of its file-tool attempts.
+
+The stories' Validation Tests were then run live through the launcher on demand, against Mandu and RepToday (`main` at `de0355d`) as they are, with a throwaway exchange folder standing in for Mandu's.
+
+| Run | What it showed |
+| --- | --- |
+| `20261011T164542Z-on-demand-3900` | The weekly run as configured: three requests left the Mac, each a GET for a listed host's `robots.txt`, and all 21 source requests (the three subreddits' threads and rules, reviews of the 12 competitors the research cites a store page for, and the three creators' feeds) were refused unsent, since each host's `robots.txt` disallows the path. Every source was reported as failed with that reason, one notice named them, Listening and the outreach Drafts were marked incomplete, and the agent recorded nothing from memory. Two creator messages were queued, each saying "No hook found" and why; the personal-network ask and the third creator message were blocked, on a front matter value and on a code citation. |
+| `20261011T165257Z-on-demand-9bb9` | A proposed Angle with no source, placed in `workspace/review-queue/angles/`, with a throwaway task definition that only runs `check-work`: the launcher discarded it with a note in the run report, set it aside, and queued nothing from it. |
+| `20261011T165333Z-on-demand-9de5` | Simulated records: both creator messages approved, one recorded as sent with no reply, one as sent and answered, and two proposals rejected with reasons. One follow-up was queued, for the creator who had not replied; none was offered for the one who replied or the one never written to. Both reasons were coded, one execution and one strategy, and kept beside the Founder's words. |
+| `20261011T165657Z-on-demand-9a05` | The personal-network ask was queued with the Source link `reptoday.app/network`, the line to forward, and the warning not to send before the Waitlist is live, and the third creator message was queued. Follow-up Drafts placed for the creator who replied and the one not yet approved were not offered. The strategy reason was answered by a package-change proposal citing its decision record, and `workspace/instructions/` was as it had been. |
+
+Across the four runs twelve requests left the Mac, all of them a GET for `robots.txt` on a listed host, 84 source requests were refused unsent, and no request carried a body, so nothing was posted anywhere.
+Mandu's and RepToday's HEAD, refs, git status, index, and every file digest were the same after the last check as before the first run.
+The two simulated send dates are earlier than the day their items were queued, which only a simulation can be.
+The three weekly runs cost between $0.018 and $0.033 each at API prices, and the check-only run $0.003.
+
+What these runs could not show is a real thread or review being read: no named source can be read under its host's `robots.txt` today, so no real quote was recorded, no reply Draft was offered, and no fetched text ever reached the model.
+The Evidence validator, the reply checks, and the handling of instructions planted in a fetched post are therefore shown only by the unit tests and the example sets, on synthetic fixtures (`src/tests/test_evidence.py`, `src/tests/test_work_cycle.py`, `src/examples/listening/`).
+How the named sources may be read is the Founder's decision, and nothing here reads a disallowed path.
+
+### Re-check after the review of Listening and outreach
+
+The review of that change removed parts of it and tightened others, so both checks were run again on the launcher as it now is.
+What changed that touches the boundary:
+
+- A message to a creator no longer rests on anything read over the network, so the creators' feeds and their host are gone: `config/guardrails/fetch.json` lists two hosts, `www.reddit.com` and `itunes.apple.com`.
+- The snapshot of what a run fetched is working data in `ledger/working/`, which git ignores: the agent reads it while the run is in progress, the launcher removes it when the run ends, and the records step never saves it.
+  Only a quote the agent recorded and the launcher validated is kept, with its link, the date read, and a hash of the document it came from.
+- The client fails a read, and never the run, on a redirect or an address it cannot parse or put on the wire, and reads a `robots.txt` that starts with a byte order mark as it reads any other.
+- The network probe's script takes its tool as its first argument, so a unit test can run the script itself against a stand-in.
+- `runtime.json`, the permission profile, the Codex flags, and the environment are unchanged, and the sandboxed agent still has no network.
+
+The `robots.txt` gate is as it was: the Founder decided on 2026-10-11 that each host's `robots.txt` stays binding for now, while the owners' terms are read first-hand.
+
+Both checks were run on 2026-10-11 with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261011T180322Z-on-demand-f6f3`: Codex logged ten patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox all three targets, the listener and the two hosts, were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+
+The weekly runs in the table above were not repeated in this round.
+They describe the launcher as it was before the review, with three hosts, the creators' feeds, and the "No hook found" line, none of which a run has now.
+
+### Re-check after the second review round
+
+A second review round changed the launcher again, outside the boundary itself, so both checks were repeated on the launcher as it now is.
+
+- A quote record the launcher refuses is removed and copied nowhere; its file name and the reasons are all that is kept, and no reason repeats the record's text.
+- Every package-change proposal declares `new_angle`, on the item the Founder reads: one that declares it adds or changes an Angle or Hook is queued only when its Evidence names, exactly, the record of a Listening quote the ledger holds, and one that declares it does not is queued whatever files it touches.
+- `runtime.json`, `fetch.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Both checks were run on 2026-10-11 with Codex CLI 0.160.0, from a linked worktree holding the round's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed as run `20261011T183426Z-on-demand-6701`: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+
+### Re-check after the third review round
+
+A third review round removed one check from the launcher, so both checks were repeated on the launcher as it now is.
+
+- The launcher no longer reads a package-change proposal's ask to second-guess its declaration.
+  A proposal that declares it adds or changes an Angle or Hook is still queued only when its Evidence names, exactly, the record of a Listening quote the ledger holds; one that declares it does not is queued whatever it touches or says.
+  The declaration is on the item the Founder reads, and the Founder is the check on a wrong one.
+- `runtime.json`, `fetch.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Both checks were run on the evening of 2026-10-11, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the round's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T043052Z-on-demand-2306`, whose identifier carries the time in UTC: Codex logged ten patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+
+### Re-check after the wording fixes
+
+The launcher changed twice more after the third round's check, both times in what it writes and never in what it may do, so both checks were repeated on the launcher as it now is.
+
+- Four of the launcher's own lines were reworded: the brief's count of threads and reviews to read, a creator message item's disclosure line, the run report's count of listed hosts tried from inside the sandbox, and the run report's detail for a subreddit's rules page.
+- A creator message item says its sponsorship check was made only when it was.
+  When Mandu's `brand-rules.json` holds no `sponsorship_asks` list, or no brand rules were read at all, the item says that no phrase check ran and that the judgment is the Founder's.
+- `runtime.json`, `fetch.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Both checks were run on the evening of 2026-10-11, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the second of those changes before it was committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T055650Z-on-demand-0aed`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+
+Mandu's, RepToday's, and Immerse's HEAD, refs, git status, index, and every file digest were the same after the boundary check as before the preflight.
+
+### Re-check after the rebase onto the agent time limit
+
+The agent time limit (US-ME17) reached `main` while this work was in review, and this work was then put on top of it.
+The launcher now holds both pieces of work: every process it waits for starts through `process.py` with a time limit, and Listening, outreach, and rejection-reason coding run inside that cycle.
+Each had been checked only without the other, the time limit in its own section above and this work in the five sections before this one, so both checks were repeated on the launcher as it now is.
+
+- `runtime.json` is as it is on `main`, and `fetch.json` still lists the two hosts, `www.reddit.com` and `itunes.apple.com`.
+- The configuration fingerprint is the one this worktree had before the rebase, so the Codex command, environment, and version are as they were.
+
+Both checks were run on the evening of 2026-10-11, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree on the rebased code as committed, with nothing uncommitted, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, `ledger/` among them, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T064925Z-on-demand-5972`, whose identifier carries the time in UTC: Codex logged ten patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  The probe's agent ran 34.5 seconds of its 30 minute limit, all of them with the Mac awake.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the boundary check as before the preflight.
+
+### Re-check after the review of the rebased launcher
+
+A review of the rebased launcher changed it in five places, one of them on the network path, so both checks were repeated on the launcher as it now is.
+
+- The launcher's network read has a deadline for the whole exchange as well as a timeout for each wait: `config/guardrails/fetch.json` gained `read_deadline_seconds`, 60, beside `timeout_seconds`, 20, and once the deadline has passed `fetch.send` shuts the connection's socket, so a host that answers a byte at a time ends as a source not read.
+  Its hosts are still the two, `www.reddit.com` and `itunes.apple.com`, and a request is still one credential-free GET.
+- The launcher copies nothing it sets aside from Listening or from rejection-reason coding into the ledger: a discarded Angle or Hook proposal and a set-aside rejection code are removed, like a refused quote record, and leave a file name and the launcher's reasons.
+- The reply check also reads `/r/name` and `/u/name` as the mentions Reddit links, the `Rejection reasons coded` output is incomplete while a listed reason has no accepted code, and two counts are worded to agree with their number.
+- `runtime.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 664 tests in 329 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run shortly after midnight on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T073054Z-on-demand-6bdb`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, the permitted files landed in all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client, through the read that now carries the deadline, sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 36.1 seconds of its 30 minute limit.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, and every file digest were the same after the boundary check as before the unit suite.
+
+### Re-check after the second review of the rebased launcher
+
+A second review of the rebased launcher changed one line of launcher code and the documents around the retention rule, so both checks were repeated on the launcher as it now is.
+
+- A decision record that cannot be read for its rejection reason is reported once: at the take-in `cycle.py` adds only the problems the run does not already list, so the run report's launcher problems and the notice's count hold one unreadable record once.
+- The copy the launcher makes of a file it sets aside from `workspace/review-queue/incoming/` is as it was, and the documents now say so.
+  `AGENTS.md`, `ledger/README.md`, and `docs/operations.md` list, as known gaps not yet decided by the Founder, the places where text the agent wrote, which can repeat a source's words, is committed today, and name the three things that leave a file name and the launcher's reasons only.
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 665 tests in 307 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run at about one in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T080716Z-on-demand-51bd`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 59.3 seconds of its 30 minute limit.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the boundary check as before the unit suite.
+
+### Re-check after the fix to the Instructions guard
+
+A third review of the rebased launcher changed the guard that puts `workspace/instructions/` back after every run, in `src/gr0wthlab/learning.py`, so both checks were repeated on the launcher as it now is.
+
+- A file is put back when the run left a folder where the file was: the guard clears the folders the run emptied after it removes what the run added and before it writes anything back.
+- An entry that could not be read before the run, which the run report names as not guarded, is left exactly as it is, and is no longer removed as added during the run.
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 667 tests in 323 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run at about half past one in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T083020Z-on-demand-3839`, whose identifier carries the time in UTC: Codex logged ten patch rejections where nine are needed, the unified log held eleven kernel Seatbelt denials naming the run, with one for each forbidden shell target, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 61.5 seconds of its 30 minute limit.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the boundary check as before the unit suite.
+
+### Re-check after outreach records that cannot be read
+
+A fourth review of the rebased launcher changed three launcher modules, one of them on the network path, so both checks were repeated on the launcher as it now is.
+
+- An open follow-up is withdrawn only on what a record that was read says (`outreach.py`, `cycle.py`).
+  When Mandu's `outreach/` folder cannot be read, or the record of a creator's first message is missing after a follow-up was queued from it, cannot be read, or is not valid, that follow-up is neither offered nor withdrawn, the run report names Mandu's outreach records as failed and the Outreach output as incomplete with the reason, and the notice a failed source gets is queued.
+- The pause the launcher's client keeps between its own requests to one host is always kept and is no longer compared to `max_wait_seconds` (`fetch.py`): only a wait the host asked for, a Crawl-delay in its `robots.txt` or a Retry-After, is compared to it, and a longer one still ends that host's reads with that reason.
+  `config/guardrails/fetch.json` is unchanged: its hosts are still the two, and a request is still one credential-free GET.
+- Code that was computed and read nowhere is removed from `outreach.py`, and three documents now say that the request log also holds the `robots.txt` rule lines of the group that applied to each host.
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 672 tests in 312 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run shortly after two in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T090814Z-on-demand-bf60`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, with one for each forbidden shell target, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client, through the wait that now keeps its own pause, sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 34.6 seconds of its 30 minute limit, and no attempt was refused by the model provider.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the boundary check as before the unit suite.
+
+### Re-check after messages whose sources cannot be read
+
+A fifth review of the rebased launcher changed how a message Draft is taken in, in `src/gr0wthlab/messages.py`, so both checks were repeated on the launcher as it now is.
+
+- An open message item is never withdrawn because a source its Draft is checked against cannot be read.
+  When the Angle bank, the checklist, or the brand rules cannot be used, or the Product's code cannot be read for a Draft that lists claims, an open ask, creator message, follow-up, or reply stands, not checked again, as an open post already did.
+  A Draft that fails a check the launcher could make is still blocked and its open item withdrawn, and with no open item a source that cannot be read still blocks the Draft.
+- The Outreach Drafts and Listening Evidence outputs name such a source and read incomplete (`outreach.py`, `listening.py`).
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 675 tests in 319 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run at about half past two in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T092806Z-on-demand-3f19`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, with one for each forbidden shell target, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 33.0 seconds of its 30 minute limit, and no attempt was refused by the model provider.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the boundary check as before the unit suite.
+
+### Re-check after a reply whose quote record cannot be read
+
+A sixth review of the rebased launcher changed how a message Draft's check names a source it could not read, so both checks were repeated on the launcher as it now is.
+
+- Each block that rests on a source that could not be read says so where the check raises it (`messages.py`, with the mark kept on the verdict in `drafts.py`): the Angle bank, the checklist, the brand rules, the Product's code, git's read of one file a claim names when it times out or cannot start (`codebase.py`), and the kept quote record a reply answers (`listening.py`, `evidence.py`).
+  An open message or reply whose verdict holds such a block stands, not checked again, and the list that was kept beside those blocks is gone.
+- A claim that names a file that is not there, and a reply whose quote record is absent altogether, still block the Draft and withdraw an open item.
+  What post Drafts and Beta Cohort recruiting Drafts do is as it was.
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the full unit suite passed under `/usr/bin/python3`, 680 tests in 332 seconds, run once, and ruff 0.15.20 found nothing to fix or reformat.
+
+Both checks were run at about ten to three in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the review's changes before they were committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` was run twice, and both attempts are recorded here.
+  The first, run `20261012T095231Z-on-demand-7f37`, failed on one line only: Codex logged four patch rejections where nine are needed.
+  The run's `stderr.log` holds four refused patches, while the probe agent's own report lists all nine forbidden file-tool targets as refused: that fits nine targets sent in four patches, each refused whole, though the log does not name the targets of a patch.
+  Everything else in that run held: twelve kernel Seatbelt denials naming the run, with one for each forbidden shell target, no connection to either listener, 13 permitted files across all six areas, no sentinel escaped, nothing changed outside the areas, and the same network proof as below.
+  It was not a refusal by the model provider: the agent ran 64.2 seconds and made its tool calls.
+  The second, run `20261012T095404Z-on-demand-5e15`, passed: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, with one for each forbidden shell target, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 59.7 seconds of its 30 minute limit.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, refs, git status, stash, index, and every file digest were the same after the second boundary check as before the unit suite.
+
+### Re-check after the read deadline that reaches a slow body
+
+The third live test round found that the read deadline cut slow headers and never a slow body, and the fix changed the launcher's network read, so both checks were repeated on the launcher as it now is.
+
+- `fetch.send` keeps the socket itself once the request is sent, and shuts that socket once the deadline has passed.
+  Until this fix it looked the socket up on the connection, and `http.client` lets go of it there as soon as it has read the headers of an answer that carries `Connection: close`, as both listed hosts answered a request for their `robots.txt` in that round.
+  So what the re-check after the review of the rebased launcher says of a host that answers a byte at a time held for its headers only.
+- Seen live with the committed limits, through a local stand-in for `www.reddit.com` over TLS: a feed whose 948-byte body came four bytes a second held one run for 340.8 seconds before the fix.
+  After it the stand-in saw the client leave at 60.8 seconds, the run report listed the source as failed with `no complete answer within 60 s`, and the run read its other sources and ended after 74.5 seconds.
+  Called directly with a 5 second deadline, `fetch.send` ended a slow body, slow headers, and a host that never answers after 5.0 to 5.2 seconds each, where the slow body after `Connection: close` was still being read at 20 seconds before the fix.
+- The unit test of the deadline drives the real `http.client` against a listener on the machine, once with slow headers and once with a slow body after headers that close the connection; the second fails on the launcher as it was.
+- `runtime.json`, `fetch.json`, `products.json`, the permission profile, the Codex flags, and the environment are unchanged.
+
+Before the live checks, the client's unit tests, `tests.test_fetch`, passed under `/usr/bin/python3`, 35 tests.
+The full unit suite and ruff were not run in this round, a test phase held to targeted checks; CI runs both on the pull request.
+
+Both checks were run at about ten to four in the morning on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from a linked worktree holding the fix before it was committed, whose configuration fingerprint is still `0b84a2352053837064846b512138a8296cbe20425cfd911b06c2a0fc55177af8`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T104805Z-on-demand-56a4`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, with one for each forbidden shell target, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and the repository, Mandu, RepToday, and Immerse matched their snapshots from before the run.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused, and the kernel named each attempt by its process; the launcher's client, through the read that now keeps its socket, sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused `https://example.com/` unsent.
+  No path a `robots.txt` disallows was requested, in the checks or in any test: the unit tests reach no host at all.
+  The probe's agent ran 42.0 seconds of its 30 minute limit, and no attempt was refused by the model provider.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and every file digest were the same after the boundary check as before the preflight.
+
+### Re-check after filming (US-ME09)
+
+Filming added three launcher steps, all outside the sandbox.
+Before the agent starts, the launcher files the filming plan from the kit and lists the footage place, read-only, measuring each file with `ffprobe`.
+Once the agent has finished, it renders each edit record that passes its checks with `ffmpeg` into `ledger/assets/`, which git ignores: each render is written beside its place, measured there, and moved into place only if it measures as the canvas asks.
+`config/products.json` gained RepToday's footage place, unset, and `config/platforms.json` the shape a finished video is rendered at.
+The agent's start is unchanged: `codex.py`, `boundary.py`, `launcher.py`, the probe, and `runtime.json` are as they were, and `image_generation` stays among the disabled features.
+The footage place is never one of the locations the sandbox reads, and the launcher refuses to start if it overlaps the repository or any of those locations.
+Inside the sandbox, the new `check-edits` reads `config/products.json` and `runtime.json`, to find the areas as `check-drafts` does, the record the launcher wrote for the run in `ledger/run-reports/`, the launcher's own record of each video a standing post shows, in `ledger/evidence/filming/assets/`, by which the pair check judges that video, and the agent's own files in `workspace/`: each due day's edit record and post Draft.
+It never opens the footage place.
+
+The review of this work then changed the launcher and its configuration again.
+A render that fails for a reason outside its edit record (a tool error, footage that changed while the run worked, a record that could not be written) now holds the day's video instead of blocking the day, and an open post stands.
+Every render, the run's own and `rebuild-asset`'s, goes through one step that leaves what is in place as it was unless the new file verifies, and `rebuild-asset` puts a file in place only when it is byte for byte the one its record names.
+The footage place is refused when it overlaps any location the sandbox reads, where before only the repository counted.
+A day whose copy was approved gets its video only while its Draft is still that copy, a post rejected with its video is not asked again without one, footage that could not be measured is named as such, a shot that may not be cut can no longer be split around another shot, and a day approved with its video is shown to the agent as settled.
+`config/products.json` lost the block that restated the PRD's day numbers, and the run report the line that compared the kit with them.
+In the run report's Filming table, a day that has an edit record and no video now gets the reason its post got: no Draft, a Draft that could not be read, an open post kept without being checked again, or Drafts that were not taken in at all.
+The legs of a pair now need takes both can use: the filming plan says that everything after a re-cut opening is filmed once, in a take named without a leg letter, a day is not ready while a shot the legs share has only takes named for one leg, with the notice naming that shot, and an edit record may use a leg's own take only in its opening.
+The calendar's rule for every screen recording is recognised by fewer of its words and stated in the launcher's own.
+A job's fingerprint now holds only what must be filmed: where a shot's facts were read, the launcher's words for that, and why a day is left out are no part of it, so a line added above the calendar's checklist no longer voids an approved plan.
+A shared take that is in the footage place and could not be measured is reported as footage that could not be measured, not as a take still to film.
+The shot-list tests and both example sets, the filming one and the post-Draft one it is laid over, were compared with the real kit: no line and no table cell of four words or more in them now equals one of the kit's, except what the parsers read as format, which is the table header rows, the section headings, and the labels of the pair legs.
+Shorter runs of words are still shared with the kit in the synthetic text inherited from the post-Draft example set and its tests, such as parts of its Hooks, signals, and checklist lines, which this work did not rewrite.
+An edit record's segment is now a shot, a source, an in, an out, and an optional speed: the `fit` and `mute` keys are gone from the record (`edits.py`), the cut and the renderer (`video.py`), and the run's cut and `rebuild-asset` (`cut` and `rebuild` in `filming.py`).
+Every source is fitted into the frame the one way that never crops, scaled down whole with black beside it, and sound follows one rule, which the filming plan now states: a cut at the speed it was recorded at keeps its source's sound, and a cut at another speed is silent.
+In a re-cut pair whose first shot has the Founder on camera, a leg is not ready until its own lettered opening take is in the footage place, the notice and the run report name that take, and an edit record must show that shot under its opening only from the leg's own take; a re-cut pair that opens on a screen recording is as it was.
+The task definition (`src/instructions/weekly-run.md`) and the agent's guidance (`workspace/instructions/filming.md`) changed with both.
+A leg of such a pair is now told which lettered take of its own it lacks as soon as the footage place holds any take of its first shot, whether or not a take both legs can use is there; before, with only the other leg's take there, it was told that the shot had no footage (`lacking` in `filming.py`).
+The filming plan's first line, the task definition's sentence on when a day is ready, and the guidance's line on what a later leg films no longer say that a later leg films nothing, since the later leg of such a pair records its own opening take.
+A pair leg whose post is made again from the edit record its video was already cut from, for example after the posting slot moves, its Draft is written again, or the canvas changes, no longer says that its other leg has no video to compare with, and a leg says that only when its other leg has none.
+The review's last change restated everything the launcher did to keep a pair's two videos alike as one rule: when a run ends, the two posts of a pair never both show a video unless the two videos show the same source ranges outside each one's opening.
+It is checked once per pair, after every Draft is checked, every edit record checked on its own, and every video cut, and before any post is queued (`take` in `posts.py`, `pair_check` in `filming.py`), on the video the run is about to leave in each leg's post: the one cut in this run when the post is about to show it, otherwise the one the post already shows.
+Each video is judged by its own record in the ledger, which holds every cut with the fingerprint of the file it was made from and now also where its opening is; no edit record and no Draft in the other leg's place is read for it.
+When the two differ, nothing the run changed for the pair is offered and what stood before stays: no post of either leg is queued, replaced, or withdrawn for it, the video that was cut stays in `ledger/assets/`, named by no post, and the run report and the notice name the pair, the two videos, and the source ranges each shows.
+A leg's checks, in its post and in the run's Evidence, say that it shows the same source ranges as its other leg only when the two videos were compared in that run and matched, and a video's own record holds the checks of that video alone.
+A leg cut alone is offered when its video matches the one its other leg's post shows, and `check-edits` tells the agent beforehand, of the videos a run that ended now would leave, which leg would not be offered.
+This replaces what the earlier rounds of the review had built to the same end, all of it now removed: the comparison of a leg's edit record with the files in its other leg's place, the rule that legs cut anew in one run are offered together or not at all, the reading of a re-cut pair's opening from the other leg's Draft, and the field of a post's queue entry that recorded which edit record its video was compared with.
+An edit record that follows the format is now identified by the SHA-256 of its content, so the same cut saved again in other bytes is the same record (`parse` in `edits.py`).
+The pair check then came to know footage by the file it is, never by the file's name: for each cut it reads the fingerprint the video's record holds of the file the cut was made from, with the range and the speed (`footage`, `outside`, and `unlike` in `edits.py`), and `check-edits` reads the same from the run's inventory (`shows` and `preview` in `filming.py`).
+To that check the same file under another name is the same footage, and another recording put in its place under the same name is not: a leg cut from it is not offered beside a video cut from the first, and the notice names the file as no longer the one the other video was cut from.
+The post item that is queued is now the one that was checked: the pair check adds its line to a video's checks after the day's item was first checked, so the item is checked again as it is queued, and one that no longer follows the item format blocks the day and withdraws an open post, as any such item does (`queue_day` in `posts.py`).
+The task definition and the agent's guidance changed with these.
+Both checks were therefore made again on the code as it stands after those changes, on 2026-10-12, Mac local time, with Codex CLI 0.160.0, from the linked worktree this change was reviewed in, whose configuration fingerprint is `845d76771dd7fd1feb0383a8687c811de45bfaecddb5d63effba2234dcbda8d4`; the run identifier carries the UTC date.
+The fingerprint is computed from the command, its environment, and the Codex version, so it follows the worktree's location.
+The checks ran on that worktree's files before the commit that records them here was made, so that commit is later than the run, and their logs went to a folder in the Mac's temporary directory, named with `GR0WTHLAB_LOG_DIR`, not to the default log folder.
+After them, and after the proof below, that commit gained this record and nothing else.
+A later commit reworded one passage of `docs/operations.md`, on what renaming a footage file means for a rebuild and for an edit record that names it, and noted it here; it changed no launcher code, configuration, task definition, guidance, or test, so neither check was made again for it.
+A further commit, of documentation alone, corrected two sentences and noted them here: this section's list of what `check-edits` reads, which had left out the videos' own records in `ledger/evidence/filming/assets/`, and the line of `ledger/README.md` on what such a record is for, which had left out the pair check; it too changed no launcher code, configuration, task definition, guidance, or test, so neither check was made again for it.
+
+This work's 19 commits were then replayed onto `main` at commit `92d8bbe`, which had gained Beta Cohort recruiting (US-ME15) and the agent time limit (US-ME17) since the commit the work started from, `9f53d1c`.
+The replayed work ended at commit `c901933`, and every commit identifier this section gives for an earlier check or proof names a commit of the work before the replay, which the replayed history does not hold.
+`main` had taken version 4 of the Mandu exchange for the Beta Cohort's records, so what this work adds to the exchange became version 5 at that point, in `exchange.py`, in `docs/mandu-exchange.md`, and in the PRD's note on this story; it is version 6 since the merge with `main` that the next section records.
+The replay left the files that plan, check, and cut video byte for byte as they were (`shots.py`, `edits.py`, `video.py`, `filming.py`, `posts.py`, `config/platforms.json`, and `workspace/instructions/filming.md`), and the agent's start is `main`'s, which this work does not change.
+The run around them is now `main`'s with this work's changes on it (`cycle.py`, `cli.py`, `exchange.py`, `queue.py`, `report.py`, and the task definition among them), and on that code the unit suite passed, 674 tests under `/usr/bin/python3` with none skipped, as did ruff.
+US-ME09's Validation Test was not run again on the replayed code at that point; it has been since, as the proof below records.
+The replayed launcher was one that neither `main`'s checks nor the ones above had run on, so both checks were made once more, on 2026-10-12, Mac local time, with Codex CLI 0.160.0, from the same linked worktree and with the same configuration fingerprint, on the files of commit `c901933`, whose `src/gr0wthlab` tree is `eb8f6ccf9ad911a8e6762b0f2ea753a6073a63a3` and whose `config` tree is `a5bc89f2bb229780d70246a4e86bbed4bf5007e8`.
+One file differed from that commit when they ran, a test: in `src/tests/test_exchange.py`, a post that names its video now states the exchange version of the launcher, where it stated 4.
+The commit that recorded those checks held that change and its record, and nothing else; the boundary check then passed as run `20261012T104608Z-on-demand-d0df`.
+
+The review of the replayed code then changed the launcher once more.
+`video.py` now starts ffmpeg and ffprobe only through `process.py`, by one helper over `process.run` (`run` in `video.py`), so a tool that passes its time limit is stopped with every process it started, as every other process the launcher waits for is; the limits themselves are as they were, 60 seconds for a measurement or a listing and 30 minutes for a render.
+A post that shows a video keeps it when its slot changes in a run that cannot cut the video again: the post that replaces it shows the same finished file, carried over from the video's own record (`carry` in `filming.py`, `settle_day` in `posts.py`), as long as its Draft and its edit record are the ones it was made from and the file is still the one its record names, and it is compared with its other leg's video as any post about to change is.
+Otherwise the open post stands as it is, the run report says so, and the slot reaches it once the video is cut again.
+`check-drafts` and `check-edits` now report a day whose post the Founder rejected with its video for as long as its Draft and its edit record are the ones that post was made from, and `check-edits` a day whose approved copy is no longer the Draft in place; the record of a run's filming standing holds each due day's approved and rejected posts for that.
+A filming plan filed while none is open now replaces the latest plan the Founder decided, and says what changed since that one, not since a plan withdrawn before it was decided (`file_plan` in `filming.py`).
+The task definition and `docs/operations.md` changed with these.
+On that code the unit suite passed, 678 tests under `/usr/bin/python3` with none skipped, as did ruff.
+Both checks were therefore made again, on 2026-10-12, Mac local time, with Codex CLI 0.160.0, from the same linked worktree and with the same configuration fingerprint, on that worktree's files before the commit that records them here was made.
+After them, and after the proof below, that commit, `dada2c8`, gained their record and nothing else; the boundary check then passed as run `20261012T112705Z-on-demand-a243`.
+
+The review then changed what the notice and the run report say of one case, and nothing else in the launcher.
+A day whose post shows a video when the run ends, whether its open post was kept or its video was carried into the post that replaced it, is no longer said to have no video: the notice says that its video could not be cut again, why, and that its post keeps the video it shows, and the report's Filming table says the same of that day (`settle`, `notice_section`, and `report_lines` in `filming.py`).
+A day whose post shows none is still said to have no video.
+Which posts are kept, carried, or replaced, the slot rule, and the pair rule are as commit `dada2c8` left them, and `docs/operations.md` says what the notice now says.
+On that code the unit suite passed, 679 tests under `/usr/bin/python3` with none skipped, as did ruff.
+Both checks were therefore made once more, on 2026-10-12, Mac local time, with Codex CLI 0.160.0, from the same linked worktree and with the same configuration fingerprint, on that worktree's files before the commit that records them here was made.
+After them that commit, `5119068`, gained their record and nothing else; the boundary check then passed as run `20261012T120136Z-on-demand-522d`.
+
+The review then swept every surface that speaks of a day whose post shows a video, against one rule: such a day keeps that video and its edit record as they are whenever the video cannot be cut again in a run, and nothing the agent is shown may tell it to change, remove, or rewrite that record.
+The surfaces checked were the agent's, which are `check-edits`, `check-drafts`, the brief's Post Drafts and Filming lines for the day, the task definition, and the filming guidance in `workspace/instructions/filming.md`, and the launcher's, which are the run report, the notice, and the post item.
+Each was checked for a day the Founder approved with its video, a day whose open post shows a video that can be cut, and a day whose open post shows a video that cannot be cut again, with its slot changed, with its footage away, and with the video tooling missing.
+Four surfaces broke the rule, all of them the agent's, and were changed.
+`check-edits` reported the edit record of such a day as a problem whenever it could not be cut; it now reports it as kept, which is not counted as a problem, with the reason and the words to leave it as it is (`check_edits` in `cli.py`, `waits` in `filming.py`).
+The brief's Filming table said only that such a day was not ready, under a sentence asking for an edit record for no other day; it now says that the day's post keeps the video it shows while its Draft stays as it is, and to leave its edit record as it is (`brief_lines` in `filming.py`).
+The task definition and the filming guidance told the agent to remove an edit record its footage cannot satisfy; both now except the record of a day whose post keeps its video.
+The other surfaces held: `check-drafts` and the brief's Post Drafts lines say nothing of an edit record, an approved day is shown as settled with its record left as it is in the brief and in `check-edits`, and the run report, the notice, and the post item say what the launcher does, as the two changes before this one left them.
+What the launcher keeps, carries, replaces, or withdraws did not change: a post still keeps its video only while its day's edit record is in place, which the docstring of `settle_day` now says.
+On that code the unit suite passed, 679 tests under `/usr/bin/python3` with none skipped, as did ruff.
+Both checks were therefore made once more, on 2026-10-12, Mac local time, with Codex CLI 0.160.0, from the same linked worktree and with the same configuration fingerprint, on that worktree's files before the commit that records them here was made.
+After them, and after the proof below, that commit gained this record and nothing else.
+A later commit, of documentation alone, made two lines say what that code does and noted them here: the line of `AGENTS.md` on what `src/tests/test_process.py` fails on, and the line of `ledger/README.md` on what the record `check-edits` reads holds; it changed no launcher code, configuration, task definition, guidance, or test, so neither check was made again for it.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
+- `src/bin/gr0wthlab boundary-check` passed on its first attempt, as run `20261012T123026Z-on-demand-9e73`, and was not run again: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, nine of file writes, with none of the nine forbidden shell targets left without one, and two of outbound connections, neither local listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed, in the repository, Mandu, RepToday, or Immerse.
+  It replaces run `20261012T120136Z-on-demand-522d`, the last of the earlier runs listed below.
+
+These replace the earlier checks of this work, all of which passed the same way.
+Both checks ran before the review, with configuration fingerprint `bd4cdef99b6a61d6296ce8c3e0405d6b0863f3078ddb02e2ea8bd04c6eb97865`, the boundary check as `20261011T164834Z-on-demand-a319`.
+During the review the boundary check passed sixteen more times before the one above, all but the last five on 2026-10-11, Mac local time: five with configuration fingerprint `493a65d5fda12b63024414d111f8dad1e0473a1770b6dc69eda172bea2a47ba3`, then eleven with the fingerprint above.
+It ran as `20261011T180126Z-on-demand-9644` before the change that made the filming plan and the notice word one day, one line, and several skipped edits correctly.
+It ran as `20261011T181348Z-on-demand-8bea` on the code of commit `58aac95`, before the change to the reason the Filming table gives a day whose open post was kept without being checked again (`settle` in `filming.py`).
+It ran as `20261011T183230Z-on-demand-6a0a` on the code of commit `9cd3c75`, before the changes to what the legs of a pair need of their takes and to how the screen-recording rule is recognised and worded.
+It ran as `20261011T190110Z-on-demand-7913` on the code of commit `8d7f888`, before the changes to what a job's fingerprint holds (`shots.py`) and to how a shared take that could not be measured is reported (`lacking` in `filming.py`).
+It ran as `20261011T192503Z-on-demand-9870` on the code of commit `8b680d3`, before the removal of `fit` and `mute` and the own opening take of a re-cut leg whose Hook is said on camera.
+It ran as `20261012T012337Z-on-demand-e6c3`, on its first attempt and with the fingerprint above, on the code of commit `b13bbb7`, before the change to how such a leg's own opening take is reported when no take both legs can use is there (`lacking` in `filming.py`), with the plan's first line and the words of the task definition and guidance that go with it.
+It ran as `20261012T034026Z-on-demand-1ce3`, on its first attempt and with the fingerprint above, on the code of commit `4c69fb8`, before the change to what a pair leg's checks say of its other leg when the two are not compared (`reference` and `examine` in `filming.py`).
+It ran as `20261012T040417Z-on-demand-9a78`, on its first attempt and with the fingerprint above, on the code of commit `67efd3a`, before the change by which the legs of a pair that one run cuts anew are offered together or not at all, and no leg counts as compared without being compared (`take` in `posts.py`, and `finish` and `reference` in `filming.py`).
+It ran as `20261012T044910Z-on-demand-28f2`, on its first attempt and with the fingerprint above, on the code of commit `d391a0b`, before the change to which Draft and which record a leg is compared with, and to what the queue records of the comparison (`reference` and `draft_of` in `filming.py`).
+It ran as `20261012T052825Z-on-demand-457d`, on its first attempt and with the fingerprint above, on the code of commit `007e61f`, before the change by which an untouched leg recorded as paired read the other leg's opening only from the Draft that leg's standing post was queued from (`reference` and `draft_of` in `filming.py`).
+It ran as `20261012T055700Z-on-demand-f091`, on its first attempt and with the fingerprint above, on the code of commit `1b30fe2`, before the change that made the one rule of a pair's videos, checked once per pair on the videos' own records (`pair_check` in `filming.py`, `take` in `posts.py`), and identified an edit record by its content (`parse` in `edits.py`).
+That change removed `reference` and `draft_of`, which the lines above name, from `filming.py`.
+It ran as `20261012T074030Z-on-demand-f028`, on its first attempt and with the fingerprint above, on the code of commit `c12b52d`, before the review's last change: footage known by its fingerprint in the pair check (`footage`, `outside`, and `unlike` in `edits.py`), and the post item checked as it is queued (`queue_day` in `posts.py`).
+It ran as `20261012T083653Z-on-demand-a36f`, on its first attempt and with the fingerprint above, on the code this work had before the replay onto `main`, the review's last change included.
+It ran as `20261012T104608Z-on-demand-d0df`, on its first attempt and with the fingerprint above, on the replayed code of commit `c901933`, before the change that had the video tooling started through `process.py`, the video a post keeps through a slot change, what `check-drafts` and `check-edits` say of a rejected video and of an approved copy, and which plan a new filming plan replaces.
+It ran as `20261012T112705Z-on-demand-a243`, on its first attempt and with the fingerprint above, on the code of commit `dada2c8`, before the change to what the notice and the run report say of a day whose post keeps a video that could not be cut again.
+It ran as `20261012T120136Z-on-demand-522d`, on its first attempt and with the fingerprint above, on the code of commit `5119068`, before the review's last change: what `check-edits`, the brief, the task definition, and the filming guidance tell the agent of a day whose post keeps its video.
+
+US-ME09's Validation Test was last run live through the launcher on demand the same day, network off, with ffmpeg 7.1.1, on the code as it ships, the final task definition included: commit `5119068` with the changes of the commit that adds this record.
+It was repeated because those changes touch the task definition and the guidance the agent works from.
+It ran from a throwaway checkout in the Mac's temporary folder whose tracked files, this note apart, were file for file that worktree's; its configuration fingerprint, `e75f58b19b0293f73a449dab581c2aad898806b953c56c3d1995043c98ea5e51`, differs because its locations do.
+Its inputs were throwaway ones made the same way as for the proofs described below: the same stand-in clip in a footage place set with `GR0WTHLAB_FOOTAGE_DIR`, the synthetic kit cut down to days 1 and 8, the synthetic Product checkout, a simulated approval of the filming plan, and, from the third run on, `window.first_sitting` set to `2026-10-11` in an uncommitted `config/run.json`.
+
+| Run | What it showed |
+| --- | --- |
+| `20261012T123428Z-on-demand-0361` | The filming plan arrived as one item, `20261012-filming-plan-w1`, of the `filming-plan` kind; day 1 was not ready, since the plan was not approved; the agent wrote day 1's Draft, which passed and was queued as copy alone, `20261012-post-w1-day-01`; no edit record was written |
+| `20261012T123543Z-on-demand-9d30` | With the plan approved, the agent wrote day 1's edit record, one unbroken range from 2 to 12 seconds; the launcher rendered `assets/window-1/day-01-791d5f47aca2.mp4` and replaced the day's post with `20261012-post-w1-day-01-2`, whose checks say day 8 has no video to compare with yet |
+| `20261012T123635Z-on-demand-67a8` | The agent wrote day 8's Draft from day 1's, with code cited for its one claim, and day 8's edit record with the same source range; the Draft passed, the launcher rendered `assets/window-1/day-08-f6fab9623441.mp4`, compared it with the video day 1's post shows, each read from its own record, and queued day 8's post, `20261012-post-w1-day-08`, with it, its checks saying the same source ranges as day 1's leg from the first frame to the last |
+
+All three runs used the real task definition, each once.
+One thing in the proof was done by hand, and nothing else: the simulated approval of the plan.
+Every line of every Draft, and both edit records, are the agent's own, unedited.
+Both assets are byte for byte the files of the proof before this one, under the same names.
+Both measure 1080x1920 with square pixels, 9:16, H.264, 30 frames a second, 300 frames, 10.00 seconds, with no sound stream, and follow the shot list: one unbroken range of `d01-s1`, which may not be cut, at the speed it was recorded.
+They differ only in the Hook drawn over the first 3 seconds: frame for frame, a structural similarity of 0.975 during the hook beat and 0.998 after it.
+`rebuild-asset` rendered day 1's asset again from its record and the footage twice, once with the asset in place and once after it was deleted; each time the render was byte for byte the file the record names and took its place.
+After the last run of the proof and the rebuilds, every file in the footage place had the SHA-256, size, modification time, and mode it had before the first, and the folder listed the same.
+Each run cost about a cent at API prices.
+
+One more run was then made in the same checkout, to see what the agent does with the edit record of a day whose post keeps its video; it is no part of the proof.
+By hand, the stand-in clip was moved out of the footage place, and nothing else: run `20261012T123752Z-on-demand-345b` used the real task definition.
+The brief's Filming table said of day 8 that it was not ready, having no footage for shot `d01-s1`, that its post keeps the video it shows while its Draft stays as it is, and to leave its edit record as it is.
+The agent wrote no edit record and left day 8's Draft and edit record byte for byte as they were, and its summary says that `check-edits` reported the record as kept.
+The launcher kept day 8's post with its video, and the run report's Filming table says the video was not cut and that the post keeps the video it shows.
+
+Before that, the Validation Test had been run live through the launcher on demand the same day, network off, with ffmpeg 7.1.1, on the replayed code: commit `dada2c8`, as its files stood before it was made.
+That proof ran from a throwaway checkout in the Mac's temporary folder whose tracked files, this note apart, were file for file that worktree's, the task definition and guidance included; its configuration fingerprint, `8c04e89bfb199c957833a9920b705350d97a0e0f573d6734f426d5112e4cf4c4`, differs because its locations do.
+Its inputs were throwaway ones made the same way as for the proof described next: the same stand-in clip in a footage place set with `GR0WTHLAB_FOOTAGE_DIR`, the synthetic kit cut down to days 1 and 8, the synthetic Product checkout, a simulated approval of the filming plan, and, for the last run, `window.first_sitting` set to `2026-10-11` in an uncommitted `config/run.json`.
+
+| Run | What it showed |
+| --- | --- |
+| `20261012T112825Z-on-demand-252d` | The filming plan arrived as one item, `20261012-filming-plan-w1`, of the `filming-plan` kind; day 1 was not ready, since the plan was not approved; the agent wrote day 1's Draft, which passed and was queued as copy alone, `20261012-post-w1-day-01`; no edit record was written |
+| `20261012T112949Z-on-demand-fb32` | With the plan approved, the agent wrote day 1's edit record, one unbroken range from 2 to 12 seconds; the launcher rendered `assets/window-1/day-01-791d5f47aca2.mp4` and replaced the day's post with `20261012-post-w1-day-01-2`, whose checks say day 8 has no video to compare with yet |
+| `20261012T113119Z-on-demand-ad0d` | The agent wrote day 8's Draft from day 1's, with code cited for its one claim, and day 8's edit record with the same source range; the Draft passed, the launcher rendered `assets/window-1/day-08-f6fab9623441.mp4`, compared it with the video day 1's post shows, each read from its own record, and queued day 8's post, `20261012-post-w1-day-08`, with it, its checks saying the same source ranges as day 1's leg from the first frame to the last; the item states exchange version 5 |
+
+All three runs used the real task definition, each once.
+One thing in the proof was done by hand, and nothing else: the simulated approval of the plan.
+Every line of every Draft, and both edit records, are the agent's own, unedited.
+Both assets are byte for byte the files of the proof on commit `c12b52d`, under the same names; the proof after that one, the last before the replay, gave other files, since its Drafts drew one more line of text.
+Both measure 1080x1920 with square pixels, 9:16, H.264, 30 frames a second, 300 frames, 10.00 seconds, with no sound stream, and follow the shot list: one unbroken range of `d01-s1`, which may not be cut, at the speed it was recorded.
+They differ only in the Hook drawn over the first 3 seconds: frame for frame, a structural similarity of 0.975 during the hook beat and 0.998 after it.
+`rebuild-asset` rendered day 1's asset again from its record and the footage twice, once with the asset in place and once after it was deleted; each time the render was byte for byte the file the record names and took its place.
+After the last run of the proof and the rebuilds, every file in the footage place had the SHA-256, size, modification time, and mode it had before the first, and the folder listed the same.
+Each run cost about a cent at API prices.
+
+One more run was then made in the same checkout, to see a slot set while a video cannot be cut again; it is no part of the proof.
+By hand, `window.slot` was set to `19:00` in the uncommitted `config/run.json` and the stand-in clip was moved out of the footage place, and run `20261012T113243Z-on-demand-9317` used a throwaway task definition that only re-runs the checks, so the agent changed no file.
+Day 8's post was replaced by `20261012-post-w1-day-08-2`, which states the slot `2026-10-19T19:00-07:00` and shows the same file with the same SHA-256, its checks again saying the same source ranges as day 1's leg; the run report's Filming table says the video was not cut, since shot `d01-s1` had no footage, and its row for the post says it carries the video the replaced post showed, which was not cut again in that run.
+
+Before the replay, the Validation Test had last been run live through the launcher on demand the same day, network off, with ffmpeg 7.1.1, on the code this work then had: commit `c12b52d` with the changes of the commit that recorded run `20261012T083653Z-on-demand-a36f`.
+It was repeated there because those changes touch how the two videos of a pair are compared and which rendering of a post item is checked (`unlike` in `edits.py`, `queue_day` in `posts.py`); nothing of the renderer changed.
+Its two assets are not the files of the proofs before it: this time the agent's Drafts drew a line of on-screen text over the second beat, `Not released yet.`, where the Drafts of those proofs drew none, so the text drawn over the footage, and with it each file's name and bytes, differ.
+It ran from a throwaway checkout in the Mac's temporary folder whose tracked files, this note apart, were file for file that worktree's, the task definition and guidance included; its configuration fingerprint, `8f74f9a00cd170f6f6435decc1c628beff537fa4bfcf749bc8317099c0b9af58`, differs because its locations do.
+The runs below used throwaway inputs, each made for the proof from what this repository holds; none was the Founder's or a Product's package.
+
+- The footage place was a temporary folder outside every checkout, set with `GR0WTHLAB_FOOTAGE_DIR`, holding one stand-in clip, `window-1/d01-s1.mov`, made with the tests' own `make_test_clip`: 14 seconds of ffmpeg's `testsrc2` test pattern at 886x1920 and 60 frames a second, with its running clock and a dark band across every frame, so a cut would show.
+- The package was the filming example set's synthetic kit (`src/examples/filming/`, laid over the post-Draft example set's), its calendar cut down to days 1 and 8, and the Product's code was the post-Draft example set's synthetic checkout.
+- The Founder's approval of the filming plan was one decision record in a throwaway exchange folder, marked as simulated.
+- The last run had `window.first_sitting` set to `2026-10-11` in an uncommitted `config/run.json`: the runs were made on Monday 2026-10-12, Mac local time, which is then day 1 of the window, so that run prepared the week after the coming sitting, calendar days 8 to 14, and the days from the next day up to that week, of which the cut-down calendar holds day 8 alone.
+
+| Run | What it showed |
+| --- | --- |
+| `20261012T083821Z-on-demand-e31a` | The filming plan arrived as one item, `20261012-filming-plan-w1`, of the `filming-plan` kind; day 1 was not ready, since the plan was not approved; the agent wrote day 1's Draft, which passed and was queued as copy alone, `20261012-post-w1-day-01`; no edit record was written |
+| `20261012T084031Z-on-demand-0025` | With the plan approved, the agent wrote day 1's edit record, one unbroken range from 2 to 12 seconds; the launcher rendered `assets/window-1/day-01-33e1806e37a7.mp4` and replaced the day's post with `20261012-post-w1-day-01-2`, whose checks say day 8 has no video to compare with yet; the video's own record holds its three checks, an empty opening, since the pair is not a re-cut, and its one cut with the fingerprint of the stand-in clip |
+| `20261012T084136Z-on-demand-ace6` | The agent wrote day 8's Draft from day 1's, with code cited for its one claim, and day 8's edit record with the same source range; the Draft passed, the launcher rendered `assets/window-1/day-08-6ede1f48dbac.mp4`, compared it with the video day 1's post shows, each read from its own record, which name the same fingerprint for `window-1/d01-s1.mov`, and queued day 8's post, `20261012-post-w1-day-08`, with it, its checks saying the same source ranges as day 1's leg from the first frame to the last |
+
+All three runs used the real task definition, each once.
+One thing in the proof was done by hand, and nothing else: the simulated approval of the plan.
+Every line of every Draft, and both edit records, are the agent's own, unedited; as in the proof before this one, the agent cited code for day 8's Hook claim.
+The first run also queued a notice that the agent had not finished its package review, since several files of the synthetic package hold only their own path as text; that is the fixture, and no part of filming.
+Both assets measure 1080x1920 with square pixels, 9:16, H.264, 30 frames a second, 300 frames, 10.00 seconds, with no sound stream, since the stand-in clip has no sound.
+Both follow the shot list: one unbroken range of `d01-s1`, which may not be cut, at the speed it was recorded.
+They differ only in the Hook drawn over the first 3 seconds: frame for frame, the two files have a structural similarity of 0.975 during the hook beat and 0.998 after it, where the only difference left is how each file was compressed.
+`rebuild-asset` rendered day 1's asset again from its record and the footage twice, once with the asset in place and once after it was deleted; each time the render was byte for byte the file the record names and took its place.
+After the last run of the proof and the rebuilds, every file in the footage place had the SHA-256, size, modification time, and mode it had before the first, and the folder listed the same.
+Each run cost about a cent at API prices, between $0.007 and $0.012.
+The proof's pair is a plain pair, so neither video has an opening; the launcher's unit tests cover the re-cut pair.
+
+Three more runs were then made in the same checkout, to see a footage file replaced and renamed; they are no part of the proof.
+For each, the footage place was changed by hand, and the run used a throwaway task definition that only re-runs the checks, so the agent changed no file.
+For run `20261012T084351Z-on-demand-42bb`, a second stand-in clip of the same test pattern, 15 seconds long, was put in place of the first under its name.
+Day 8's edit record was rendered from it as `assets/window-1/day-08-99e7d5936f0f.mp4`, which came out byte for byte the video day 8's post already showed, since the pattern's first seconds are the same picture in both clips: the post was kept as unchanged and the run reported nothing, while `check-edits`, which renders nothing, told the agent that the file was no longer the one day 1's video was cut from.
+For run `20261012T084507Z-on-demand-44f1`, the first clip, with its first second trimmed off and exported again, was put there under the same name.
+Day 8's edit record was rendered as `assets/window-1/day-08-3b5786980eb6.mp4`, another video, and it was not offered: both posts stood as they were, and the run report, in day 8's rows and in its line for pair AB-1, and the notice said that both videos show `window-1/d01-s1.mov` from 2 to 12 seconds and that the file is no longer the one day 1's video was cut from, as `check-edits` had.
+For run `20261012T084605Z-on-demand-b22f`, the first clip was put back under another name, `window-1/d01-s1-take-2.mov`, and day 8's edit record was changed by hand to name it.
+The render, `assets/window-1/day-08-58b8e0674a3e.mp4`, was byte for byte the video day 8's post showed, the post was kept, the run reported nothing, and `check-edits` passed day 8.
+
+The proof had been run a little earlier on the code of commit `c12b52d`, in runs `20261012T074212Z-on-demand-1ae4`, `20261012T074351Z-on-demand-ca36`, and `20261012T074459Z-on-demand-5f82`, each once on the real task definition, with the simulated approval the one thing done by hand.
+It produced `assets/window-1/day-01-791d5f47aca2.mp4` and `assets/window-1/day-08-f6fab9623441.mp4`, byte for byte the two files of the proofs before it under new names, since a file's name carries a digest of what its record holds of the render, which from that commit on includes where the video's opening is.
+One more run there, `20261012T074643Z-on-demand-c0e7`, under the throwaway task definition and with day 8's edit record changed by hand to the range from 3 to 13 seconds, showed a pair whose videos differ: that record was rendered as `assets/window-1/day-08-eb9e1a51aea3.mp4` and not offered, both posts stood, and the run report, the notice, and `check-edits` named the pair and both source ranges.
+
+Before that, the proof had been run on the code of commit `1b30fe2`, in runs `20261012T055751Z-on-demand-8689`, `20261012T055922Z-on-demand-602c`, `20261012T060032Z-on-demand-3a15`, and `20261012T060239Z-on-demand-779d`, with two things done by hand: the simulated approval, and one claim line removed from day 8's Draft before the last run, which used the throwaway task definition.
+It produced the same two files under the names every proof from commit `b13bbb7` on had given them, `assets/window-1/day-01-c540efedba66.mp4` and `assets/window-1/day-08-149772ce5c23.mp4`.
+
+Before that again, it had been run the same way on the code of commit `007e61f`, in runs `20261012T052915Z-on-demand-1c64`, `20261012T053025Z-on-demand-b952`, `20261012T053223Z-on-demand-98a4`, and `20261012T053356Z-on-demand-3a8b`, with the same two things done by hand; it produced the same two files.
+
+Earlier still, it had been run on the code of commit `d391a0b`, but for one sentence of the task definition and one of the guidance that were reworded after it, in runs `20261012T045112Z-on-demand-1b22`, `20261012T045425Z-on-demand-41d6`, `20261012T045556Z-on-demand-3f35`, `20261012T045825Z-on-demand-6201`, and `20261012T050037Z-on-demand-2cfc`.
+There too the agent listed day 8's Hook as a claim with no code, in two runs, and day 8 was cut only after that claim was removed by hand under the throwaway task definition; it produced the same two files.
+
+Before that, the proof had been run on the code of commit `b13bbb7`, in runs `20261012T012437Z-on-demand-7605`, `20261012T012639Z-on-demand-3b41`, and `20261012T012757Z-on-demand-8ee3`, each once, with every Draft and edit record the agent's own, unedited.
+It produced the same two files, and `rebuild-asset` and the footage place gave the same results.
+Between that commit and the final code the review changed how a leg's own opening take is reported, the first line of the filming plan, what a pair leg's checks say of its other leg, the order of checking, cutting, and queueing, how the two videos of a pair are compared and what footage is known by in that comparison, what a finished video's record holds, what an edit record is identified by, and which rendering of a post item is checked, with the sentences of the task definition and guidance that go with them; nothing of the renderer changed.
+
+An earlier proof ran on the code of commit `58aac95`, in runs `20261011T181507Z-on-demand-38d3`, `20261011T181559Z-on-demand-fd6a`, and `20261011T181701Z-on-demand-e247`, from a throwaway checkout whose launcher, configuration, and task definition were file for file that commit's.
+It produced `assets/window-1/day-01-a225d209b598.mp4` and `assets/window-1/day-08-572967c80330.mp4`, which measured as the two above do, with the same structural similarity before and after the hook beat, and `rebuild-asset` and the footage place gave the same results.
+It no longer stands for the code that ships, since the review changed all of this between that commit and the final code:
+
+- The launcher outside the render path: the Filming table's reason for a day whose open post was kept unchecked (`settle` in `filming.py`), what the legs of a pair need of their takes (the plan's wording, a day's readiness and the reason it gives, and the checks of an edit record, the own opening take among them), how the screen-recording rule is recognised and worded, what a job's fingerprint holds, how a shared take that could not be measured is reported, what a pair leg's checks say of its other leg, how the two videos of a pair are compared, now once per pair on the videos' own records before any post is queued, with each footage file known by its fingerprint, what a finished video's record holds, what an edit record is identified by, which rendering of a post item is checked, and the order in which Drafts are checked, videos cut, and posts queued.
+- The render path and the edit record's format: `fit` and `mute` removed from `edits.py`, `video.py`, and `cut` and `rebuild` in `filming.py`, so every source is fitted the one way and sound follows the one rule.
+- The task definition and the agent's guidance: `src/instructions/weekly-run.md` and `workspace/instructions/filming.md` changed in commit `8d7f888` (a take named for one leg is used only under that leg's opening, and only takes with no leg letter outside it) again in commit `b13bbb7` (no `fit` or `mute`, the sound rule, the same speed for the neighbouring segments of a shot that may not be cut, and the own opening take), once more in commit `4c69fb8` (when a day is ready, and what a later leg films), then in commit `d391a0b` (legs with a new edit record in one run are offered together or not at all), in commit `007e61f` (which Draft a re-cut pair's opening is read from), in commit `1b30fe2` (an untouched leg is judged only by the Draft and edit record its other leg's post was queued from), in commit `c12b52d`, which replaced the last three of these with the one rule of a pair's videos, judged on the videos themselves, and last with the final change (a footage file is known by its content, not by its name).
+- The synthetic kit, which at that commit still had a few lines equal to lines of the real kit; the review has since replaced them.
+
+That proof had itself been run once before, minutes earlier, on the code as it stood before the wording change named above, in runs `20261011T180326Z-on-demand-8b92`, `20261011T180440Z-on-demand-10a9`, `20261011T180609Z-on-demand-867a`, and `20261011T180751Z-on-demand-75eb`.
+It produced the same two files as the proof on `58aac95`, with the same names and SHA-256.
+In it the agent listed day 8's Hook as a claim with no code, so the claim check blocked that Draft, as it should, and run `867a` cut no video for day 8, its report saying a video is cut only from a Draft that passes; day 8 was cut in run `75eb` only after that claim line was removed by hand, under a throwaway task definition that only re-runs the checks.
+None of these runs exercised a render that fails, a day held because its Draft is no longer the approved copy, a day settled by an approved video, a day whose open post was kept without being checked again, a pair filmed only as takes named for one leg, a re-cut leg whose Hook is said on camera, a cut at another speed, both legs of a pair cut in one run, a leg whose other leg's Draft does not pass, or a re-cut pair, and a pair whose two videos differ, a footage file replaced, one renamed, a slot set while a video could not be cut again, and an edit record left in place while its footage was away were seen live only in the extra runs named above; the launcher's unit tests cover each with fake tooling, and the renderer's part of them with the real ffmpeg where it is installed.
+
+The Validation Test was first run live on the first commit of this work, `47b42a1`, before the review, network off, with the same ffmpeg, against a reconciled copy of `projects/RepToday/` as described above, so against the real kit's shape.
+Its footage was a stand-in clip of the same pattern, which also carried the words "TEST INPUT, stand-in sample footage, not a real recording", in a temporary folder outside every checkout; the plan's approval was simulated in the same way, and its last run had `window.first_sitting` set to `2026-10-04` in the same way.
+
+| Run | What it showed |
+| --- | --- |
+| `20261011T162946Z-on-demand-412a` | The filming plan arrived as one item, `20261011-filming-plan-w1`, of the `filming-plan` kind: 9 assets in 2 sittings for days 1 to 13, device screen recordings and on camera, with day 14 left out because the calendar decides its Angle later; that run's report also said the kit films the Founder on camera on days 2, 4, 6, and 12 and reuses footage on days 8, 9, 10, and 13, as the PRD names them, a line the review has since removed with the registry block it read; no edit record was written, since the plan was not approved |
+| `20261011T163326Z-on-demand-e095` | With the plan approved, the brief listed the stand-in clip with its measured facts and marked day 1 ready; the agent wrote day 1's edit record, one unbroken range from 2 to 12 seconds, and said the start point was a first guess the Founder must check; nothing was cut, since day 1's Draft was blocked by its own claim check |
+| `20261011T163558Z-on-demand-b6db` | Day 1's asset was rendered, `assets/window-1/day-01-9c397efe26f7.mp4`, and the day's post was queued with it, the item naming the file, its SHA-256, the source range, and the checks it passed |
+| `20261011T163627Z-on-demand-f344` | On the real task definition, the agent wrote day 8's Draft from day 1's, changing only the Hook's lines, and day 8's edit record with the same source range; the launcher compared the two records, rendered `assets/window-1/day-08-a513ae2aa863.mp4`, and queued day 8's post with it |
+
+Its two assets measured as the ones above do, and differed only in the Hook: a structural similarity of 0.956 during the hook beat and 0.999 after it.
+`rebuild-asset`, which then rendered straight over the asset, gave day 1's file again byte for byte, and the footage place was as it had been before the first run.
+Mandu's, the RepToday checkout's, and the Immerse checkout's HEAD, refs, git status, index, and every file digest were the same after that day's boundary check as before the first run.
+Each of those runs cost between $0.003 and $0.034 at API prices.
+Two things in them were not the agent's.
+In its first two runs the agent listed day 1's Hook claim with no code, so the claim check blocked the Draft, as it should, and no video was cut; for the proof, the claim's citation was then written by hand (`ReadyViewModel.swift` lines 4 to 9 at `de0355d`), which `check-drafts` verified.
+Run `b6db` used a throwaway task definition that only re-runs the checks, so the agent could not rewrite that Draft; the edit record it rendered was the one the agent wrote in run `e095`.
+
+### Re-check after the merge of filming with Listening and outreach
+
+Filming (US-ME09) was merged with `main` at commit `28eff81`, which had gained Listening, outreach message Drafts, and rejection-reason coding (US-ME13, US-ME14) after `92d8bbe`, the commit filming was last brought up to.
+It is one merge commit on filming's branch, whose parents are `c2011d3` and `28eff81`, and the launcher it leaves is one that neither side's checks above had run on, so both checks were made again.
+
+- Both workflows are whole in the merged launcher.
+  The files that plan, check, and cut video are byte for byte as at `c2011d3`: `shots.py`, `edits.py`, `video.py`, `filming.py`, `footage.py`, `posts.py`, `config/platforms.json`, and `workspace/instructions/filming.md`.
+  The agent's start, the network client, and the Listening, outreach, and rejection-code modules are byte for byte `main`'s: `codex.py`, `boundary.py`, `launcher.py`, `probe.py`, `process.py`, `fetch.py`, `sources.py`, `listening.py`, `outreach.py`, `messages.py`, `learning.py`, `evidence.py`, `runtime.json`, `fetch.json`, and `config/sources.json`.
+- The files that hold both sides are `cycle.py`, `cli.py`, `report.py`, `queue.py`, `exchange.py`, `config/products.json`, `config/run.json`, and the task definition.
+  Before the agent starts, a run plans the post Drafts, then files the filming plan and lists the footage place, then plans the Beta Cohort's batch, then reads the network sources and plans Listening and outreach; after the agent, it takes in the posts with their videos, then the recruiting Drafts, then the quotes, messages, and rejection codes.
+  The task definition has one list of steps: filming stays step 6 and recruiting step 7, Listening, outreach, and the rejection codes are steps 8 to 10, and the checks and the summary are steps 11 and 12.
+- `main` had taken version 5 of the Mandu exchange for the outreach records and a proposal's `new_angle`, so what filming adds to the exchange is version 6, in `exchange.py`, in `docs/mandu-exchange.md`, and in the PRD's note on the story; Mandu's side must read version 6 before the Founder can approve a filming plan.
+  One test of `main`'s changed with it: a package-change proposal reads without `new_angle` at the versions before 5 and needs it at version 5 and at every later one, where the test had read every version before the latest without it.
+- `runtime.json`, `fetch.json`, the permission profile, the Codex flags, and the environment are unchanged, and the footage place is still not set.
+
+On the merged files the full unit suite passed under `/usr/bin/python3`, 844 tests with none skipped, as did ruff.
+US-ME09's Validation Test, the day 1 and day 8 proof, was not run again on the merged code.
+
+Both checks were run on the morning of 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from filming's own worktree on the merged files before the merge commit that records them here was made, with configuration fingerprint `bd4cdef99b6a61d6296ce8c3e0405d6b0863f3078ddb02e2ea8bd04c6eb97865`; their logs went to a folder in the Mac's temporary directory, named with `GR0WTHLAB_LOG_DIR`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T142328Z-on-demand-9978`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, with none of the forbidden shell targets left without one, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and nothing outside the areas changed.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused an address on a host that is not listed, unsent.
+
+Mandu's, RepToday's, and Immerse's HEAD, git status, index, refs, and every file digest were the same after the boundary check as before the preflight.
+
+### Re-check after the review of the merged launcher
+
+The review of the merged launcher changed three things in it, so both checks were made again.
+
+- A rejected filming plan's reason is counted as filming's own: `workflow_of` in `learning.py` names the `filming-plan` kind `filming`, where it had fallen through to `review-queue` in the brief, the learning ledger, and the run report's Learning lines.
+- The `Filming plan and edits` output is incomplete, with the agent's gap, when the agent was stopped at its time limit or ended with an error and left a day that was ready for an edit record without one (`gaps` and `tally` in `filming.py`, which `cycle.py` and `report.py` now give that gap).
+  The filming line of the run state carries the gap, and a timed-out run's notice lists the output among those it left incomplete.
+  A ready day that an agent which finished left without an edit record is still named in the Filming table, and is not a gap on its own.
+- An edit record is a record that does not follow the format when a time or a speed in it is a number too large to read, written as a whole number or with an exponent, or is any other value that is not a finite number, and when the record is nested too deep to read (`number` and `parse` in `edits.py`).
+  Its day is blocked with that reason and the run goes on, where the run, `check-edits`, and `check-drafts` had each ended in an error on the whole number and on the nesting.
+- `codex.py`, `boundary.py`, `launcher.py`, the probe, `runtime.json`, `fetch.json`, and `config/products.json` are unchanged, and the footage place is still not set.
+
+On these files the full unit suite passed under `/usr/bin/python3`, 847 tests with none skipped, as did ruff.
+US-ME09's Validation Test, the day 1 and day 8 proof, was not run again: none of the three changes touches how an edit record that follows the format is checked or cut.
+
+Both checks were run on the morning of 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from the linked worktree this review ran in, on its files before the commit that records them here was made, with `src/` at tree `7a93b4e0c67623b73555bf1946e186b37d7faea2` and `config/` at tree `a96e4fa6a9f0cbb125b643f5a1268702d53022cb`, the tree `config/` has at the merge commit.
+Their configuration fingerprint was `266f97299bb17078f62c285564a6b01d6603a275ad872e66de15296839ef2dcc`, not the one above, since the fingerprint covers the sandbox policy and that policy names the worktree's own path.
+Their logs went to a folder in the Mac's temporary directory, named with `GR0WTHLAB_LOG_DIR`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T150505Z-on-demand-3531`: Codex logged eleven patch rejections, where nine are needed, the unified log held twelve kernel Seatbelt denials naming the run, nine of file writes and three of outbound connections, with none of the forbidden shell targets left without one, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and nothing outside the areas changed.
+  Its network proof: the control reached the listener once; inside the sandbox the listener and the two hosts were refused; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused an address on a host that is not listed, unsent.
+  It replaces run `20261012T142328Z-on-demand-9978` above, which passed on the launcher as the merge left it.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, index, refs, and every file digest were the same after the boundary check as before the preflight.
+
+### Re-check after the owed-run check (US-ME17)
+
+This section was written on this work's own branch on the evening of 2026-10-11, the Mac's local date, before that branch held Listening, outreach, or filming, whose sections above reached `main` first.
+Every check and run in it was made on the launcher without them; the section after it records the launcher that holds all of them.
+
+Nothing holds the Mac awake for a run, as the Founder decided on 2026-10-11, so each week's run now happens when the Mac is awake ([operations](../operations.md#a-run-happens-when-the-mac-is-awake)).
+A start of the weekly schedule is first a check of the launcher's own records (`src/gr0wthlab/attempts.py`, `ledger/run-reports/attempts/`): it begins a run only while the week's run is still owed and the Mac is fully awake, and the weekly LaunchAgent makes that start every two minutes that the Mac is running as well as at the weekly time.
+A review of this work then changed two things in the launcher, called the review changes below.
+An attempt that did not complete counts as cut short by sleep when the Mac slept anywhere from its start to its agent's end, not only while the agent ran.
+A one-off scheduled start (`--once`) always runs, as it did before this work, and is never an attempt.
+How Codex is started is unchanged: at one checkout path, `show-config` gives the fingerprint `fdba77d0574276b59d79784db9bbd6d4b5952f686beb2ec4f7d159b1c35983c7` both at `92d8bbe`, before this work, and with it.
+The review changes touch nothing the fingerprint covers: `codex.py`, `boundary.py`, `launcher.py`, `config/guardrails/runtime.json`, and `config/products.json` are as they were before them.
+`config/run.json` changed after them, and after the checks below, only in the wording of the explanation beside the agent's time limit, which now says a run of the weekly schedule where it said a scheduled run.
+The launcher does not use that explanation and the fingerprint does not cover it, so the checks below still stand.
+The launcher starts one new process, `/usr/bin/pmset -g systemstate`, once in each start of the weekly schedule that finds a run owed; it reads the Mac's power state, goes through `process.py` with a time limit like every other process, and changes nothing.
+Nothing in the launcher, its configuration, the task definition, or a rendered LaunchAgent holds the Mac awake, wakes it, or schedules a wake; `src/tests/test_attempts.py` watches every process a whole scheduled run starts and every key of a rendered LaunchAgent.
+
+Both checks were made on the final launcher on 2026-10-11, Mac local time, after the review changes, with Codex CLI 0.160.0, from the worktree those changes were made in, against Mandu and the Product checkouts as they are; there the fingerprint is `e11fc43aa715a00cb94d589c1c382351edd2e8412cff705c82eb2da7b6ab8df0`, and the run identifier carries the UTC date.
+No change to the launcher came after them.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
+- `src/bin/gr0wthlab boundary-check` passed at its first attempt, as run `20261012T064034Z-on-demand-4042`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+  The probe's agent ran 73 seconds of its 30 minute limit, all of them with the Mac awake.
+
+These replace two earlier pairs of checks made the same day on this work.
+The first pair came before a correction to the wording of a comment in `schedule.py`: the preflight passed the same way, and the boundary check passed at its first attempt as `20261012T054221Z-on-demand-8ed4`, with ten patch rejections where the check needs nine, eleven kernel denials, no connection, no escaped sentinel, and nothing changed outside the areas.
+The second pair came after that correction and before the review changes, from the worktree this work was first made in, where the fingerprint is `004a906cd66214d6e0e3223f50e7627e01cb5bfe4eaa64c37de4b1c637eee705`: the preflight passed the same way, and the boundary check passed at its first attempt as `20261012T055304Z-on-demand-feb1`, with nine patch rejections, eleven kernel denials, no connection, no escaped sentinel, and nothing changed outside the areas; its agent ran 50 seconds.
+No attempt at the boundary check failed.
+
+What happened before this work was established on the Founder's Mac the same day, not assumed.
+
+- The Mac sleeps after one minute idle (`pmset -g`: `sleep 1`), and while asleep it wakes by itself, with `powernap` on.
+  `pmset -g log` shows 74 dark wakes on 2026-10-10 and 2026-10-11, 45 seconds long at the median and 83 minutes at the longest; between the idle sleep at 12:22 and the next full wake at 17:44 on 2026-10-11 there were 23, each 45 to 153 seconds long.
+- launchd starts jobs in dark wakes, and an interval counts the time the Mac is running, dark wakes included.
+  The unified log shows an hourly interval job of another vendor (`com.google.GoogleUpdater.wake`, `StartInterval` 3600) ending at 23:41:33 on 2026-10-10, next at 06:35:47 inside the dark wake of 06:32:21 to 06:36:23, then hourly while the Mac was in use, then at 14:23:40 inside the dark wake of 14:23:00 to 14:23:45.
+  Each gap adds up to about an hour of running time once the dark wakes between are counted, so an interval that fell due during sleep is not started at once at the next wake.
+- For a calendar start the Mac slept through, `launchd.plist(5)` on macOS 26.6.2 says launchd starts the job the next time the computer wakes, once however many times it was missed.
+  This was not observed: the log held no calendar job's start inside a sleep.
+  Taken with the line above, such a start comes in a dark wake, within minutes to an hour of the weekly time and with nobody at the Mac.
+- A scheduled run the Mac sleeps through, on `main` at `92d8bbe`, in a throwaway production clone with a stand-in agent that never exits and a wall clock stepped forward 16 hours three seconds into the agent: run `20261011T230000Z-scheduled-623e` ended with exit code 6, its report said it timed out and that the Mac was asleep for about 16 hours, a notice was queued, `next_run` named the following Sunday, and nothing in `ledger/` said whether the week's run had completed.
+  Nothing followed, and each of two further scheduled starts ran a whole run again, since a scheduled start always did.
+
+The same clone, agent, and clock on this work as it stood before the review changes, through `src/bin/gr0wthlab` itself, started by a script that replaces only the names the launcher reads its clocks through, and the answer to whether the Mac is fully awake where a dark wake is meant.
+Each row is one requirement of this work, and every run named is a whole run with its report.
+
+| Requirement | Expected | Observed | Result |
+| --- | --- | --- | --- |
+| A start the Mac slept through runs once the Mac is fully awake and says how late | A start in a dark wake begins nothing; the first start with the Mac fully awake runs, and its report gives the due time, the start, and the lateness | Starts at Sunday 16:08 in a dark wake ended with exit code 0 and wrote nothing; the start at Sunday 19:40, run `20261012T024000Z-scheduled-c90f`, reported `Started late: due Sunday 2026-10-11 16:00, started Sunday 2026-10-11 19:40, 3 h 40 min after its time` | pass |
+| A run the Mac slept past its limit is timed out with the sleep named and does not count | Exit code 6, the report says timed out, how long the Mac slept, and that a fresh run follows; no notice; `next_run` stays at the due time | Run `…-c90f`, asleep 16 hours from three seconds into the agent: all of that, with the record `cut-short-by-sleep` | pass |
+| A fresh run follows by itself and completes, and says what happened | The next start with the Mac fully awake runs a whole run as attempt 2, and later starts begin nothing | A start at Monday 07:10 in a dark wake began nothing; the start at Monday 08:02, run `20261012T150200Z-scheduled-5516`, completed and reported `16 h 2 min after its time. This is attempt 2 of at most 3: the attempt started Sunday 2026-10-11 19:40 was cut short by the Mac's sleep`; the start at 08:04 began nothing and, at a terminal, said the run had completed | pass |
+| A run that timed out with the Mac awake earns no fresh run | Its report and notice say no run starts by itself; later starts begin nothing | Run `20261011T230000Z-scheduled-81b6`, with the limit lowered to 4 seconds for the lab: both, and starts two minutes and sixteen hours later began nothing | pass |
+| The attempt limit ends the fresh runs with a notice | After the last attempt a notice says so, and no start begins a run until the next weekly time | With the limit lowered to 2 for the lab, runs `20261018T230000Z-scheduled-e753` and `20261019T030100Z-scheduled-1063` were both cut short; the second queued `Notice: the Mac's sleep cut short every attempt at the run due 2026-10-18`, and the next start began nothing | pass |
+| Two starts at once leave one run | One run and one report | Two scheduled starts at the same moment on the Mac's real clock, with its real answer about its power state: `20261012T055504Z-scheduled-789c` ran, the other was refused with exit code 5 and is named in that run's report, and a third start afterwards began nothing | pass |
+| A fresh run queues nothing already queued or decided | The never-ask-twice and carry-over rules hold across attempts | Unit tests only: `AcrossAttemptsTest` runs a cut-short attempt that queues a proposal and a post, has the Founder approve one and leave the other at a sitting, and runs the fresh attempt with the agent writing both again | pass, not run live |
+| A run on demand is unchanged | It always runs, asks nothing about the Mac's power state, and reads as before | Runs `20261012T150500Z-on-demand-5583` and `20261019T151000Z-on-demand-54f2`, each after the week's scheduled run had ended without completing, ran and completed | pass |
+| Nothing holds the Mac awake | No key of a rendered LaunchAgent does, no process a scheduled run starts does, and the one question the launcher asks about the Mac's power only reads it | `NothingHoldsTheMacAwakeTest` parses each rendered LaunchAgent and watches every process a whole scheduled run starts, and `FullyAwakeTest` holds the question to `pmset -g systemstate`; `pmset -g assertions`, read while a scheduled run was in progress, listed no assertion held by the run's processes, only those of other processes on the Mac | pass |
+
+A scheduled start that begins nothing took 0.2 seconds and printed nothing.
+Every run in the table was made on this work before the review changes; the second table below repeats, on the final launcher, the rows those changes touch.
+The LaunchAgent and the run with the real agent below were made earlier still, before edits to the wording of one notice in `report.py`, the explanation beside the schedule in `config/run.json`, and a comment in `schedule.py`.
+
+The scheduled path was exercised with a temporary LaunchAgent under its own label, `gr0wthlab.fm-run-when-awake-test`, rendered by `src/bin/gr0wthlab launch-agent --label …` in a throwaway production clone with the stand-in agent, its weekly time set four minutes ahead and its interval to one minute for the lab.
+launchd accepted the calendar time and the interval together (`run interval = 60 seconds`) and started the job eight times in eight minutes, each with exit code 0.
+The first start, a minute after loading, began the run owed from the week before and said how late it was (`20261012T052632Z-scheduled-65f2`); the next two began nothing and printed nothing; the start at the weekly time ran on time (`20261012T052903Z-scheduled-0730`).
+That run's record was then rewritten by hand to read as cut short by sleep, and the next interval start ran attempt 2 by itself (`20261012T053006Z-scheduled-2593`); the three after it began nothing.
+The LaunchAgent was removed with `launchctl bootout` and by deleting its plist: `launchctl print` no longer finds it, and no `gr0wthlab` entry remains in `~/Library/LaunchAgents` or `launchctl list`.
+The real weekly schedule was not installed.
+
+One whole run with the real agent went through the scheduled path in a throwaway production clone inside the worktree, against Mandu and the Product checkouts as they are: run `20261012T052606Z-scheduled-18ba` passed the check with the Mac's own answer that it was fully awake, its agent ran 2 minutes 31 seconds and ended with exit code 0, the run cost about $0.03, its records were pushed to the clone's own throwaway remote, its record reads `completed`, and a second scheduled start began nothing.
+
+After the review changes, the scenarios they touch were run on the final launcher.
+Each ran in a throwaway production clone of the worktree with a throwaway remote of its own, a synthetic Mandu and Product checkout, and the stand-in agent, through `src/bin/gr0wthlab` itself, started by a script that replaces only the names the launcher reads its clocks through, and the answer to whether the Mac is fully awake where a dark wake is meant.
+In these runs the Mac falls asleep when the wall clock steps forward, by 3 hours unless a row says otherwise, while the launcher waits on one named process; awake time stays the Mac's own.
+The week's run is the one due Sunday 2026-10-11 16:00, and every run named is a whole run with its report.
+
+| Requirement | Expected | Observed | Result |
+| --- | --- | --- | --- |
+| Sleep in the pre-run fetch cuts the start short | The start is refused, its record reads cut short by sleep, and a fresh run follows by itself and names it | Start at 16:01, asleep in `git fetch`: the fetch was stopped at its 120 second limit, the start ended with exit code 4 and no report, and the record reads attempt 1, `cut-short-by-sleep`, `asleep_seconds` 10800. A start at 19:03 in a dark wake began nothing. The start at 19:05, run `20261012T020500Z-scheduled-8128`, completed and reported `This is attempt 2 of at most 3: the attempt started Sunday 2026-10-11 16:01 was cut short by the Mac's sleep`; the start at 19:07 began nothing | pass |
+| Sleep while git is asked for the checkout's boundary cuts the attempt short | The same for an attempt already claimed | Asleep in `git rev-parse --git-dir`: exit code 2, no report, and the claimed attempt `20261011T230100Z-scheduled-8c24` reads `cut-short-by-sleep`; run `20261012T020500Z-scheduled-bcce` followed as attempt 2 and completed | pass |
+| Sleep in Codex's version probe cuts the run short | The run reaches its report, which says that the agent did not start, for how long the Mac slept outside the agent's time, and that a fresh run follows; no notice; `next_run` stays at the due time | Run `20261011T230100Z-scheduled-dc53`, exit code 2: all of that, with `The Mac was asleep for about 3 h 0 min 0 s of this run outside the agent's time`, and the record `cut-short-by-sleep`. A start at 19:03 in a dark wake began nothing; run `20261012T020500Z-scheduled-880f` followed as attempt 2, completed, and moved `next_run` to the next Sunday | pass |
+| Sleep in the boundary preflight cuts the run short | The same | Run `20261011T230100Z-scheduled-5f44`, exit code 3: the same lines and record; run `20261012T020500Z-scheduled-7057` followed as attempt 2 and completed | pass |
+| Sleep while the agent runs reads as it did | Timed out, the sleep named as the agent's, no notice, and a fresh run follows | Run `20261011T230100Z-scheduled-edcb`, asleep from three seconds into an agent that never exits: exit code 6, `The Mac was asleep for about 3 h 0 min 0 s while the agent ran`, no line about sleep outside the agent's time, no notice, and `next_run` at the due time; run `20261012T020500Z-scheduled-a35a` followed as attempt 2 | pass |
+| Sleep before a restart on new code counts in the attempt | The start carries its clock reading across the restart | New reviewed code on the remote, the Mac asleep 90 seconds in the fetch, which finished within its limit, then a real `execve` onto the new code and an agent that exits with code 1, the Mac awake: run `20261012T063900Z-scheduled-96cf` reported `The Mac was asleep for about 1 min 30 s of this run outside the agent's time` and that a fresh run follows, and its record reads `cut-short-by-sleep`, `asleep_seconds` 90; run `20261012T063900Z-scheduled-6cba` followed as attempt 2. This pair ran at the Mac's own time of day, since the restarted launcher reads the real clock | pass |
+| A start refused with the Mac awake earns no fresh run | Its record reads refused, and later starts begin nothing | An unreviewed change in the clone: exit code 4, and the record reads attempt 1, `refused-to-start`, with no `asleep_seconds`; starts two minutes and sixteen hours later began nothing | pass |
+| A run that timed out with the Mac awake earns no fresh run | Its report and notice say no run starts by itself; later starts begin nothing | Run `20261011T230100Z-scheduled-3a45`, with the limit lowered to 4 seconds for the lab: both, and the record reads `timed-out`; starts two minutes and sixteen hours later began nothing | pass |
+| A one-off start runs in a dark wake | It runs whatever the Mac answers, each time it is started | A one-off run due Tuesday 2026-10-13 09:05, started at 09:06 with the answer that the Mac is in a dark wake: run `20261013T160600Z-scheduled-6794` completed, reported `Scheduled for Tuesday 2026-10-13 09:05; started on time`, and is noted as `one-off` in the record of the week's run, with no record of its own. Started again at 12:00, run `20261013T190000Z-scheduled-d831` ran and said it started 2 h 55 min late | pass |
+| A completed one-off run leaves the weekly start with nothing owed | The weekly start begins nothing | The weekly start at 09:10, between those two runs, began nothing | pass |
+| A one-off run cut short by sleep reports as before and claims no attempt | Timed out with the sleep named, its notice queued with the pointer to the agent's limit, `next_run` the weekly time, no word of a fresh run, and no attempt | Run `20261013T160600Z-scheduled-71fa`, asleep from three seconds into an agent that never exits: exit code 6, all of that, noted as `one-off`, `cut-short-by-sleep`, with no attempt number. A weekly start at 12:10 in a dark wake began nothing; the one at 12:12, run `20261013T191200Z-scheduled-7a25`, ran as attempt 1 and named no earlier attempt | pass |
+
+A start that began nothing printed nothing and ended with exit code 0.
+No LaunchAgent was loaded for these runs.
+The whole unit suite, 565 tests, and `ruff` passed on the same code.
+
+Not exercised live:
+
+- A real sleep.
+  The Mac was held awake throughout, so no run was frozen by sleep: every cut-short run above came from a stepped wall clock, as in the time-limit tests.
+- What Codex does when the Mac sleeps in the middle of a model call and wakes within the limit.
+  The launcher counts such a run as cut short only if the agent then fails to finish.
+- launchd starting a calendar job the Mac slept through, as above.
+- What the Mac answers about its power state in a dark wake.
+  Fully awake, it lists the capability `Graphics`, and the root power domain's `System Capabilities` reads 15.
+  In `pmset -g log` every full wake of those two days is marked `[CDNVA]` and every dark wake `[CDNPB]` or `[CDNP]`, without the V; the launcher takes `Graphics` to be that V, which was not read in a dark wake.
+  A passive sampler ran beside this work and saw no dark wake, since the Mac did not sleep.
+  If the answer in a dark wake were not as expected, starts would begin in dark wakes, attempts would be cut short there, and the notice at the limit would say so.
+- A fresh run with the real agent after a cut-short attempt.
+- A LaunchAgent on the final launcher.
+  The temporary one above ran before the review changes, and none was loaded after them, so launchd starting a one-off job, in a dark wake or at its time, was not observed.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the first of these runs and after the last.
+The same held before the first run made after the review changes and after the last.
+The runs' outputs were removed from the worktree afterwards and are not part of this change; the clones of the later runs sat in the Mac's per-user temporary folder and were removed from it.
+
+### Re-check after the merge of the owed-run check with Listening, outreach, and filming
+
+The owed-run check (US-ME17) was merged with `main` at commit `48b9c2d`, which had gained Listening, outreach message Drafts, and rejection-reason coding (US-ME13, US-ME14) and then filming (US-ME09) after `92d8bbe`, the commit this work was made on.
+It is one merge commit on this work's branch, `a9fd244`, whose parents are `64b2487` and `48b9c2d`, and the launcher it leaves is one that neither side's checks above had run on, so both checks were made again.
+
+- Both sides are whole in the merged launcher.
+  The files only this work touches are byte for byte as at `64b2487`: `attempts.py`, `schedule.py`, `settings.py`, and `src/tests/test_attempts.py`.
+  Every file this work does not touch is byte for byte `main`'s, among them `codex.py`, `boundary.py`, `launcher.py`, `probe.py`, `process.py`, `fetch.py`, `runtime.json`, `fetch.json`, `config/products.json`, `config/sources.json`, and the task definition.
+- The files that hold both sides are `cycle.py`, `report.py`, `cli.py`, `config/run.json`, the tests' fixtures and `test_cycle.py`, and the documents.
+  A start of the weekly schedule is first the owed-run check, before the run lock and before anything is read from the network, so a start that begins nothing still fetches nothing and writes nothing.
+  A run that does begin reads its network sources as on `main`, and what it fetched is discarded when it ends, whether it finished, was refused, or stopped on an error; a weekly start that was refused or stopped is noted in the week's record after that.
+  The Mac's sleep is counted from the run's start to its agent's end, so sleep during the launcher's own network reads counts as sleep anywhere else in the attempt does.
+- The Mandu exchange is `main`'s version 6.
+  This work adds no field to it, and its sentences on `next_run` stand beside `main`'s on the queue's order and on a post's finished video.
+- `runtime.json`, `fetch.json`, the permission profile, the Codex flags, and the environment are as on `main`; this work never changed them.
+
+On the merged files the full unit suite passed under `/usr/bin/python3`, 897 tests, as did ruff.
+
+The scenarios at the heart of this work were run again on the merged launcher, as in the tables above: a throwaway production clone of the merge commit with a throwaway remote of its own, a synthetic Mandu and Product checkout, no network source listed, the stand-in agent, and a clock stepped forward to stand for the Mac's sleep.
+A start of the weekly schedule in a dark wake began nothing and left `ledger/` as it was.
+Run `20261012T024000Z-scheduled-e8d8`, which the Mac slept through for 16 hours from six seconds in, ended with exit code 6, said it timed out and for how long the Mac slept, queued no notice, left `next_run` at the time the run was due in a queue of exchange version 6, and is noted `cut-short-by-sleep`.
+A start in a dark wake then began nothing, run `20261012T150200Z-scheduled-5d90` followed as attempt 2 and completed, and the start after it began nothing.
+In a second clone a one-off run started in a dark wake ran (`20261013T160600Z-scheduled-0a60`) and is noted `one-off`, the weekly start after it began nothing, and a run on demand ran (`20261013T161200Z-on-demand-1723`).
+Each clone was left with a clean git status and no fetched working data.
+The other rows of the tables above, sleep before the agent starts, the attempt limit, a timeout with the Mac awake, a refused start, and two starts at once, were not run again live on the merged launcher; their unit tests pass on it.
+No LaunchAgent was loaded.
+
+Both checks were run on the morning of 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from this work's worktree on the merge commit as committed, with nothing uncommitted, where the configuration fingerprint is `004a906cd66214d6e0e3223f50e7627e01cb5bfe4eaa64c37de4b1c637eee705`, as it was in that worktree before the merge.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T172512Z-on-demand-06b5`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and nothing outside the areas changed.
+  Its network proof: the control reached the listener; inside the sandbox the listener and the two hosts were refused; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused an address on a host that is not listed, unsent.
+  The probe's agent ran 38 seconds of its 30 minute limit, all of them with the Mac awake.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same after the boundary check as before it.
+The runs' outputs are not part of this change; the clones sat in the Mac's temporary folder.
+
+### Re-check after the review of the merged owed-run check
+
+A review of the merged launcher changed two things in it on 2026-10-12, the Mac's local date.
+
+- An attempt of the weekly schedule now completes only when its agent ends without an error and, besides, either the Mac stayed awake for the whole attempt or the agent's summary confirms its review.
+  One whose agent ends with exit code 0 after the Mac slept, its review unconfirmed, is cut short by sleep, and a fresh run follows by itself.
+  Before, it counted as the week's run, its report said `The run finished`, and no run followed that week.
+  So the launcher no longer does what the re-check after the owed-run check above says in its list of what was not exercised live: that a run the Mac slept in the middle of counts as cut short only if the agent then fails to finish.
+- While a fresh run is to follow by itself, the notice of a cut-short attempt leaves out the work its agent did not reach: a due day with no post Draft, a recruiting Draft that was not written, and an outreach message with no Draft.
+  Before, such an attempt queued a notice of each of them, which stayed open after the fresh run had done the work.
+
+[Operations](../operations.md#a-run-happens-when-the-mac-is-awake) has both rules.
+The change is in `attempts.py`, `report.py`, and the notice text of `posts.py`, `beta.py`, and `outreach.py`.
+It touches nothing the configuration fingerprint covers and nothing under `config/`: `codex.py`, `boundary.py`, `launcher.py`, `probe.py`, `process.py`, `fetch.py`, `cycle.py`, `runtime.json`, `fetch.json`, `config/products.json`, `config/run.json`, and the task definition are as at `8f6545c`.
+It starts no new process, and nothing in it holds the Mac awake, wakes it, or schedules a wake.
+But for the two reproductions, the launcher of every run and check below is the worktree as it stood with the change in it, not yet committed: its `src` tree is `116894e72099b89c02ba0fa59bb836d507f69816`, and its `config` tree is that of `8f6545c`, `c20626748a2cae17822f8a98f74172646c71c087`.
+
+Both findings were first reproduced on the launcher as committed at `8f6545c`, and the scenarios the change touches were then run on the changed launcher.
+Each ran in a throwaway production clone with a throwaway remote of its own, a synthetic Mandu and Product checkout, no network source listed, and the stand-in agent, so no run in the table used a model.
+Each start went through the launcher's own `main`, as `src/bin/gr0wthlab` calls it, started by a script that replaces only the clocks the launcher reads and, where a dark wake is meant, the answer to whether the Mac is fully awake.
+The Mac falls asleep when the wall clock steps forward while the launcher waits on the agent; awake time stays the Mac's own.
+The week's run is the one due Sunday 2026-10-11 16:00, each attempt 1 started at 16:01, and every run named is a whole run with its report.
+
+| Requirement | Expected | Observed | Result |
+| --- | --- | --- | --- |
+| Before the change: exit code 0 after a sleep, the review unconfirmed, counts as the week's run | The finding, on the launcher as committed | Run `20261011T230100Z-scheduled-7624` at `8f6545c`, the agent ending with exit code 0 and no `Review: complete` line, the Mac asleep 10 minutes while it ran: the record reads `completed`, the report says `The run finished`, a notice says the review was not confirmed finished, and the starts at 16:15 and 16:17 began nothing | reproduced |
+| Before the change: a first batch the Mac slept through leaves a notice of seven missing Drafts | The finding, on the launcher as committed | Run `20261011T230100Z-scheduled-f4c8` at `8f6545c`, with the first sitting set to 2026-10-11 so that days 1 to 7 are due: it queued `Notice: the run timed out on 2026-10-11 and had 7 other problems`. The fresh run `20261012T020500Z-scheduled-73cb` queued the seven posts, and that notice, with its seven `has no Draft` lines, was still open | reproduced |
+| Exit code 0 after a sleep with the review unconfirmed is cut short, and a fresh run follows | The report says that the agent ended without an error, that the Mac slept, and that a fresh run follows, where it said the run finished; no notice; `next_run` stays at the due time; the next start with the Mac fully awake is attempt 2 | Run `20261011T230100Z-scheduled-76e2`, exit code 0, the Mac asleep 10 minutes while the agent ran: all of that, with the record `cut-short-by-sleep`, `asleep_seconds` 600. A start at 16:13 in a dark wake began nothing. Run `20261011T231500Z-scheduled-0c5a` followed as attempt 2, named the attempt started at 16:01, completed, and moved `next_run` to the next Sunday; the start at 16:17 began nothing | pass |
+| Exit code 0 after a sleep with the review confirmed completes | It is the week's run, and nothing follows | Run `20261011T230100Z-scheduled-0476`, the Mac asleep 10 minutes while the agent ran: `The run finished`, the sleep named, the record `completed` with `asleep_seconds` 600, no notice, and the next start began nothing | pass |
+| Exit code 0 with the Mac awake and the review unconfirmed completes, with the notice it had | As before the change | Run `20261011T230100Z-scheduled-ef44`: `The run finished`, the record `completed`, `Notice: the package review was not confirmed finished on 2026-10-11` with its text as before, and the next start began nothing | pass |
+| The last attempt, exit code 0 after a sleep and unconfirmed, reads as any exhausted attempt | No further attempt, and the notice at the limit | With the limit lowered to 2 for the lab: run `20261011T230100Z-scheduled-e9e9` was slept through, and run `20261012T030100Z-scheduled-8ba7`, attempt 2, ended with exit code 0 after 10 minutes of sleep. Its report says it was attempt 2 of at most 2 and that no further attempt starts by itself, it queued `Notice: the Mac's sleep cut short every attempt at the run due 2026-10-11`, `next_run` moved to the next Sunday, and the starts at Sunday 20:14 and Monday 12:14 began nothing | pass |
+| A first batch the Mac slept through queues no notice | The attempt's report lists the seven days; no notice; the fresh run queues the seven posts, and the queue holds no notice about missing Drafts | The first sitting set to 2026-10-11, and the synthetic kit's one blocking checklist line checked off. Run `20261011T230100Z-scheduled-4f6a`, asleep 3 hours from 3 seconds into an agent that writes nothing and never exits: exit code 6, seven `no Draft` rows in its report, no notice, and `next_run` at the due time. Run `20261012T020500Z-scheduled-03b3` followed as attempt 2 and queued the posts of days 1 to 7; the queue held no notice | pass |
+| A cut-short attempt with a failed source names the source and not the Drafts | One notice, with the timeout, the fresh run that follows, and the source | The same week with one package file missing from the synthetic Mandu: run `20261011T230100Z-scheduled-ca64` queued `Notice: the run timed out on 2026-10-11 and had 1 other problem`, which names the missing file and says a fresh run follows, with no `has no Draft` line; its report lists all seven days | pass |
+| The last attempt's notice lists everything | The notice at the limit names each day with no Draft | The same week with the limit lowered to 1 for the lab: run `20261011T230100Z-scheduled-1fd8` queued `Notice: the Mac's sleep cut short every attempt at the run due 2026-10-11`, with a `has no Draft` line for each of days 1 to 7 | pass |
+| Outreach messages the Mac slept through queue no notice | No notice, and the fresh run queues them | The personal-network ask and three first messages due: run `20261011T230100Z-scheduled-c18c` reported four messages with no Draft and queued no notice. Run `20261012T020500Z-scheduled-eb58` followed as attempt 2 and queued the four messages; the queue held no notice | pass |
+| Recruiting Drafts the Mac slept through queue no notice | No notice, and the fresh run queues them | A Beta Build record and a Waitlist view in place: run `20261011T230100Z-scheduled-bc0e` reported the invitation and the Waitlist ask with no Draft and queued no notice. Run `20261012T020500Z-scheduled-3f2d` followed as attempt 2 and queued both; the queue held no notice | pass |
+| A ready filming day the Mac slept through queues no notice | No notice, and the fresh run cuts the day's video | RepToday filming, the plan approved, and day 1's footage in place, a real video file the Mac's ffmpeg made from its own test pattern: run `20261011T230100Z-scheduled-6983` reported day 1 as ready for an edit record with none, and with no Draft, and queued no notice. Run `20261012T020500Z-scheduled-c3f8` followed as attempt 2 and queued day 1's post with a 10 second video the real ffmpeg rendered. The run on demand that filed the plan the day before, `20261010T230000Z-on-demand-7c6d`, had queued its own notice of day 1's missing Draft, as any run does, and it stayed open, since no run closes an earlier run's notice | pass |
+
+Each production clone was left with a clean git status, its records pushed to its own remote, and no fetched working data.
+A start that began nothing printed nothing and ended with exit code 0.
+No LaunchAgent was loaded, and the real weekly schedule was not installed.
+
+On the changed files the full unit suite passed under `/usr/bin/python3`, 910 tests, as did ruff.
+
+Both checks were made on the morning of 2026-10-12, the Mac's local date, after the last change to the launcher, with Codex CLI 0.160.0, from the worktree the change was made in, against Mandu and the Product checkouts as they are, where the configuration fingerprint is `f7b33364b911fc93d13b41ad5543ac591a43f38853405d0c382c0238e5f8503a`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T181556Z-on-demand-c70c`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, no local connection got through, 13 permitted files landed across all six areas, no sentinel escaped, and nothing outside the areas changed.
+  Its network proof: the control reached the listener; inside the sandbox three targets were refused and none was reached; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused an address on a host that is not listed.
+  The probe's agent ran 32 seconds of its 30 minute limit, all of them with the Mac awake.
+
+Not exercised live:
+
+- A real sleep.
+  The Mac was held awake throughout, so every cut-short run above came from a stepped wall clock.
+- The real agent frozen by sleep in the middle of a model call.
+  The stand-in agent's exit code 0 with a summary that does not confirm its review stands for what such an agent leaves; whether the real agent ends that way was not observed on this launcher.
+- A fresh run with the real agent after a cut-short attempt.
+- launchd, a LaunchAgent, and the Mac's answer about its power state in a dark wake, as the re-check after the owed-run check above lists them.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the first of these runs and after the boundary check.
+The runs' outputs are not part of this change; the clones sat in the Mac's per-user temporary folder and were removed from it.
 ### Re-check after the agent's reasoning effort and the work counts (US-ME17)
 
 The weekly agent now runs at high reasoning effort, and the run report shows what the launcher counted of its session beside the agent's own closing line.
@@ -568,7 +1380,7 @@ Each scheduled run's fingerprint matches the on-demand runs of the same configur
 ## Where the production run executes
 
 The production run executes from a dedicated, ordinary clone at `~/gr0wthlab` on `main`, outside firstmate's `projects/` clone and its worktrees.
-The weekly LaunchAgent is `gr0wthlab.weekly-run`, generated by `src/bin/gr0wthlab launch-agent`, which defaults to the Sunday 16:00 schedule in [`config/run.json`](../../config/run.json) (US-ME17).
+The weekly LaunchAgent is `gr0wthlab.weekly-run`, generated by `src/bin/gr0wthlab launch-agent`, which defaults to the Sunday 16:00 schedule in [`config/run.json`](../../config/run.json) and starts the launcher every two minutes as well, each start a check of whether the week's run is still owed (US-ME17).
 Setting up the clone and the schedule, and removing them: [operations](../operations.md).
 
 Merged code reaches the clone only from `origin`.
@@ -593,6 +1405,7 @@ Records commits never touch code or Guardrail configuration, so G8 holds, and ea
   Codex's spawn path copies the parent's permission profile to a child (`codex-rs/core/src/agent/child_config.rs` at `rust-v0.160.0`), but turning sub-agents on still needs a fresh boundary check.
 - The Codex process itself runs outside the sandbox and writes its own state, logs, and login refresh to `CODEX_HOME` (`~/.codex`); `--ephemeral` keeps run sessions out of the Founder's history.
 - A Codex upgrade can change profile semantics; the per-run preflight fails closed, and the boundary check should be re-run after every upgrade.
+- The launcher's own network reads run outside the sandbox, as the launcher's other reads of Mandu and the Waitlist view do, so nothing in the sandbox bounds them: `fetch.py`, its contract tests, and the reviewed host list are the boundary, and the request log is the record.
 - A separate macOS user with no credentials would be a stronger boundary than unreadable credential files; nothing in v1 needs it.
 - Inside an area, the sandbox refuses a hard link to a file the run cannot read but allows a symbolic link to one.
   The launcher reads and commits files from `workspace/` outside the sandbox, so it never follows a link there: it opens agent-written files without following links, refuses any file with more than one link, and never commits a link.
@@ -603,11 +1416,11 @@ Records commits never touch code or Guardrail configuration, so G8 holds, and ea
 ## Repeat the check
 
 The live check needs the Founder's Mac, the Codex login, and the real checkouts, so CI cannot run it; CI runs the launcher's and configuration's unit tests instead.
-Re-run it after any change to the launcher, `config/guardrails/runtime.json`, or `config/products.json`, and after every Codex upgrade:
+Re-run it after any change to the launcher, `config/guardrails/runtime.json`, `config/guardrails/fetch.json`, or `config/products.json`, and after every Codex upgrade:
 
 ```sh
 src/bin/gr0wthlab show-config      # the resolved command, environment, policy, and fingerprint
-src/bin/gr0wthlab preflight        # the per-run sandbox proof, with no model
+src/bin/gr0wthlab preflight        # the per-run sandbox proof of writes and network, with no model
 src/bin/gr0wthlab boundary-check   # the US-ME02 validation test, on demand
 ```
 

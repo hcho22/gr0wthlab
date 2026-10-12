@@ -18,7 +18,7 @@ HOOK_RULES = {
     "no_all_caps_words_in_hook": True,
     "all_caps_allowlist": ["100"],
     "required_sections": ["Hook"],
-    "required_disclosure": "Screen images simulated.",
+    "required_disclosure": "Screens shown are mock-ups.",
     "pain_source_url_must_start_with": "https://",
     "notes": ["n"],
 }
@@ -76,6 +76,7 @@ class BrandRulesTest(unittest.TestCase):
                 "invented proof",
                 "fake scarcity",
                 "allowed phrases",
+                "loss framing",
             ],
         )
         self.assertEqual(full_rules().pending(), [])

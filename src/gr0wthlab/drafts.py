@@ -264,6 +264,7 @@ class Verdict:
     claims: list[ClaimResult] = field(default_factory=list)
     hook: FrozenHook | None = None
     angle: Angle | None = None
+    unread: list[str] = field(default_factory=list)  # each source a block rests on that could not be read
 
     @property
     def passed(self) -> bool:
@@ -273,8 +274,12 @@ class Verdict:
         for finding in findings:
             (self.blocks if finding.blocks else self.warnings).append(finding)
 
-    def block(self, rule: str, detail: str, where: str = "") -> None:
+    def block(self, rule: str, detail: str, where: str = "", unread: str = "") -> None:
+        """Add a block. unread names the source it rests on when that could not be read, so the block says nothing
+        of the Draft itself."""
         self.blocks.append(Finding(rule, where, detail))
+        if unread and unread not in self.unread:
+            self.unread.append(unread)
 
 
 @dataclass
