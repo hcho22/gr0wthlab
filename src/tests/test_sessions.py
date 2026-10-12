@@ -385,6 +385,35 @@ class OrderTest(SessionsCase):
         for key in listed:
             self.assertEqual(self.run_record(key)["work"]["package_files_listed"], len(listed[key]))
 
+    def test_a_brief_names_only_the_failed_sources_its_own_workflow_s_output_needs(self):
+        # One package file that only the package review reads, and one the post Drafts and outreach need as well.
+        (self.mandu / "projects/RepToday/gtm/05-social-pmf/read-the-results.md").unlink()
+        (self.mandu / "projects/RepToday/gtm/02-brand/brand-guidelines.md").unlink()
+        self.behave()
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        self.assertEqual(fakes.sessions_started(self.codex_dir), ["package-review", "post-drafts", "outreach"])
+        failed = {
+            key: self.brief(session=key).split("## Failed sources\n", 1)[1].split("\n## ")[0]
+            for key in ("package-review", "post-drafts", "outreach")
+        }
+        for key, told in failed.items():
+            with self.subTest(session=key):
+                self.assertIn("brand-guidelines.md`: missing.", told)
+                self.assertEqual("read-the-results.md`: missing." in told, key == "package-review")
+                self.assertIn("A failed source blocks only the work that needs it", told)
+                self.assertEqual("Review every other package file as usual" in told, key == "package-review")
+        # The report still lists every source with its result, whichever session needed it.
+        self.assertIn("- Sources: 2 failed (", self.report())
+
+    def test_a_session_whose_work_needs_no_failed_source_is_told_of_none(self):
+        (self.mandu / "projects/RepToday/gtm/05-social-pmf/read-the-results.md").unlink()
+        self.behave()
+        self.assertEqual(self.run_cycle()[0], 0)
+        told = self.brief(session="outreach").split("## Failed sources\n", 1)[1].split("\n## ")[0]
+        self.assertEqual(told.strip(), "None that this session's work needs.")
+        self.assertEqual(self.outputs()["Outreach Drafts"][0], "complete")
+
     def test_a_later_session_sees_what_an_earlier_one_left_and_nothing_is_taken_in_until_the_last_has_ended(self):
         self.behave()
         launch, seen = cycle.launcher.run, {}

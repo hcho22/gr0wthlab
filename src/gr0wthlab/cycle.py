@@ -1638,6 +1638,7 @@ class Cycle:
         state = RunState(run_id, trigger, started, str(sessions.FOLDER), sync=sync)
         state.problems += list(sync.get("repaired", []))
         state.late_after = timedelta(minutes=config.late_after_minutes)
+        state.titles = {key: str(output.get("title", key)) for key, output in config.outputs.items()}
         if trigger == "scheduled":
             state.due = report.due_time(started, config.weekly, once)
             if once is None:

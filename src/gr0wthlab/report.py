@@ -94,6 +94,7 @@ class RunState:
     set_aside: list = field(default_factory=list)  # queue.SetAside
     queue_after: list[Mapping[str, object]] = field(default_factory=list)
     sessions: list[Session] = field(default_factory=list)  # one for each workflow, in the order a run starts them
+    titles: Mapping[str, str] = field(default_factory=dict)  # each output of config/run.json: its title in the report
     run_limit: float = 0.0  # the bound on all of this run's sessions together, in seconds
     claims: work.Claims | None = None  # the Draft claims in the Drafts any session of this run wrote or changed
     proposals: work.Proposals | None = None  # the proposals queued from incoming/: the run's sessions', and the rest
@@ -540,6 +541,15 @@ def brief_files(state: RunState, session: Session) -> list[package.FileResult]:
     ]
 
 
+def failed_for(state: RunState, session: Session) -> list[SourceLine]:
+    """The failed sources one session's brief names: the ones its workflow's output needs, so a session is told of
+    nothing that blocks another workflow's work alone. A source the launcher alone reads is never named."""
+    title = state.titles.get(session.workflow.output, session.workflow.output)
+    return [
+        line for line in state.failed_sources() if title in line.needed_by and line.name not in beta.LAUNCHER_SOURCES
+    ]
+
+
 def session_rows(state: RunState, current: Session) -> list[list[str]]:
     """The sessions this run starts, as a brief tells them: this one, and each other with whether it comes before
     or after. A workflow with nothing due is not named: a brief holds its own session's work and no word of work
@@ -570,13 +580,19 @@ def render_brief(
     in incoming/ now, each file with its ask or why it has none, and drafts is each ready filming day with where its
     post Draft stands."""
     key = session.key
+    whole = session.workflow.files == sessions.ALL
     lines = [
         f"# Brief for run {state.run_id}: the {session.title} session",
         "",
         "The launcher wrote this just before you started.",
         "Every Go-To-Market Package file is in the Mandu checkout, at the absolute path listed below;",
         "a Product's own repository holds its code, never its package.",
-        "In the items you write, cite a package file by its path inside the Mandu checkout, as in the Changes list.",
+    ]
+    if session.workflow.writes_items:
+        lines.append(
+            "In the items you write, cite a package file by its path inside the Mandu checkout, as in the Changes list."
+        )
+    lines += [
         "The Mandu checkout and every read-only location in the header are readable, even inside a folder the",
         "sandbox otherwise denies, such as /private/tmp.",
         "",
@@ -596,7 +612,7 @@ def render_brief(
     rows = []
     mandu = Path(state.mandu)
     listed = {file.path for file in files}
-    if session.workflow.files == sessions.ALL:
+    if whole:
         for result in state.snapshot:
             if result.reason:
                 rows.append([f"`{mandu / result.source.path}`", f"failed: {result.reason}"])
@@ -604,30 +620,33 @@ def render_brief(
     else:
         rows = [[f"`{mandu / file.path}`", f"{file.status}: {file_line(file)}"] for file in files]
     if rows:
-        if session.workflow.files != sessions.ALL:
+        if not whole:
             lines += [
                 "The package files this session's work needs; read each one, and any other your work turns on.",
                 "",
             ]
         lines += table(["File", "This run"], rows)
+        lines += ["", "## Changes since the previous snapshot", ""]
+        lines += package_changes(state, None if whole else listed)
     else:
         lines.append("This session's own section below holds what it works from; it lists no package file to read.")
-    lines += ["", "## Changes since the previous snapshot", ""]
-    lines += package_changes(state, None if session.workflow.files == sessions.ALL else listed)
     lines += ["", "## Failed sources", ""]
-    failed = [line for line in state.failed_sources() if line.name not in beta.LAUNCHER_SOURCES]
+    failed = failed_for(state, session)
     if failed:
-        lines += [
-            "A failed source blocks only the work that needs it: never guess what it says, and do everything else.",
-            "Review every other package file as usual; only contradictions that involve a failed file go unchecked.",
-            "",
-        ]
+        lines.append(
+            "A failed source blocks only the work that needs it: never guess what it says, and do everything else."
+        )
+        if whole:
+            lines.append(
+                "Review every other package file as usual; only contradictions that involve a failed file go unchecked."
+            )
+        lines.append("")
         lines += [
             f"- {line.name}: {line.detail} Incomplete without it: {', '.join(line.needed_by) or 'nothing else'}."
             for line in failed
         ]
     else:
-        lines.append("None.")
+        lines.append("None that this session's work needs." if state.failed_sources() else "None.")
     lines += ["", "## Founder decisions taken in this run", ""]
     lines += decision_lines(state, taken_only=True) or ["None."]
     if session.workflow.writes_items:
