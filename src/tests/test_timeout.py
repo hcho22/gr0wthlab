@@ -18,6 +18,7 @@ from gr0wthlab.report import RunState
 from tests import fakes
 from tests.test_beta_cycle import BetaCycleTestCase
 from tests.test_cycle import CycleTestCase
+from tests.test_filming import FilmingRunCase
 
 # Long enough for the fake agent to start and write what a test gives it to write, short enough for the suite.
 LIMIT = 3
@@ -194,7 +195,7 @@ class TimedOutRunTest(TimeLimitTestCase):
         self.assertNotIn("$0", text)
         gap = f"the agent was stopped at its {LIMIT} s time limit"
         self.assertIn(f"| Package review (contradictions) | incomplete | {gap} |", text)
-        self.assertIn("- package-review: checked=14 acted=0 note=14 files, 0 changed, 0 failed; 0 proposals", text)
+        self.assertIn("- package-review: checked=16 acted=0 note=16 files, 0 changed, 0 failed; 0 proposals", text)
         self.assertIn(f"0 proposals queued; incomplete: {gap}\n", text)
         # No calendar day is due in this window, so the post Drafts needed nothing from the agent this run.
         self.assertIn("| Post Drafts | complete |", text)
@@ -311,6 +312,51 @@ class TimedOutRecruitingTest(BetaCycleTestCase, TimeLimitTestCase):
         self.assertEqual(incomplete_for(text, gap), ["Package review (contradictions)", "Beta Cohort recruiting"])
         self.assertIn("Incomplete this run: Package review (contradictions), Beta Cohort recruiting.", notice)
         self.assertIn("- The Waitlist ask has no Draft, so it was not offered this run.", notice)
+
+
+class TimedOutFilmingTest(FilmingRunCase, TimeLimitTestCase):
+    def test_a_timed_out_run_with_a_day_ready_for_an_edit_record_marks_filming_incomplete_and_its_notice_names_it(self):
+        self.approved_plan()
+        self.clip("d01-s1.mov")
+        fakes.behave(self.codex_dir, {"write": {fakes.draft_path(1): fakes.filming_draft(1)}, "hang": True})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=self.runs))
+        self.assertEqual(code, cycle.EXIT_STOPPED, out)
+        self.assertTrue(fakes.all_gone(fakes.agent_pids(self.codex_dir)))
+
+        # The Draft the agent had written is queued with no video; the edit record it never reached is missing.
+        text = self.report()
+        gap = f"the agent was stopped at its {LIMIT} s time limit"
+        self.assertIn("| 1 | d01-s1 | no edit record | it is ready for an edit record and has none |", text)
+        self.assertIn(f"| Filming plan and edits | incomplete | {gap} |", text)
+        self.assertRegex(text, rf"\n- filming: checked=2 acted=0 note=plan approved as [^\n]*; incomplete: {gap}\n")
+        outputs = ["Package review (contradictions)", "Post Drafts", "Filming plan and edits"]
+        self.assertEqual(incomplete_for(text, gap), outputs)
+        self.assertIn(f"Incomplete this run: {', '.join(outputs)}. The next run does this work again", self.notice())
+
+
+class TimedOutRejectionCodingTest(TimeLimitTestCase):
+    def test_a_timed_out_run_with_a_reason_to_code_marks_the_coding_incomplete_and_its_notice_names_it(self):
+        fakes.behave(self.codex_dir, {"write": {WHOLE_ITEM: fakes.PROPOSAL}})
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        rejected = "20261011-name-status-stale"
+        self.decide(rejected, "reject", reason="Too long to read in a minute.")
+        fakes.behave(self.codex_dir, {"hang": True})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(code, cycle.EXIT_STOPPED, out)
+        self.assertTrue(fakes.all_gone(fakes.agent_pids(self.codex_dir)))
+
+        text = self.report()
+        gap = f"the agent was stopped at its {LIMIT} s time limit"
+        self.assertIn(f'- `{rejected}` (package-review): "Too long to read in a minute."', self.brief())
+        self.assertIn(f"| Rejection reasons coded | incomplete | no accepted code for `{rejected}`; {gap} |", text)
+        self.assertIn(
+            f"- learning: checked=0 acted=0 note=1 rejection reason, 0 of 1 coded; incomplete: no accepted code for"
+            f" `{rejected}`; {gap}\n",
+            text,
+        )
+        self.assertEqual(incomplete_for(text, gap), ["Package review (contradictions)", "Rejection reasons coded"])
+        self.assertIn("Incomplete this run: Package review (contradictions), Rejection reasons coded.", self.notice())
 
 
 class TimedOutProductionRunTest(TimeLimitTestCase):

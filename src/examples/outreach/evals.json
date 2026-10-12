@@ -1,0 +1,289 @@
+{
+  "adapted_from": "the evals.json shape of github.com/coreyhaines31/marketingskills skills/*/evals/evals.json at commit 1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff (MIT; see THIRD_PARTY_NOTICES.md)",
+  "skill_name": "outreach",
+  "description": "The outreach workflow's example set (US-ME14, F5), in the marketingskills evals.json shape. A deterministic assertion is checked by the unit tests (src/tests/test_example_sets.py) against the synthetic kit, whose channel plan names three synthetic creators; a judged assertion waits for US-ME16. An example's first file is its candidate Draft; a second file is the Founder's record of what was sent and answered, as Mandu would hold it, with the day the run happens.",
+  "kit": "../post-drafts/files/mandu",
+  "code": "../post-drafts/files/code",
+  "assertion_kinds": {
+    "deterministic": "check is one of: offered; blocked_by (rule: a finding's rule, or the start of one); not_offered (reason: part of the reason); carries_source_link",
+    "judged": "text is a statement a reviewer, or a model at US-ME16, judges true or false of the agent's Draft"
+  },
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Draft the personal-network ask from the brief.",
+      "expected_output": "An identity-framed ask that carries the personal-network Source link exactly as the Waitlist Dispatch request defines it, and closes on a line a friend can forward; the launcher offers it.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "offered"
+        },
+        {
+          "kind": "deterministic",
+          "check": "carries_source_link"
+        },
+        {
+          "kind": "judged",
+          "text": "The ask is framed around who the reader is, never around what they lose by not acting."
+        },
+        {
+          "kind": "judged",
+          "text": "It reads as one person writing to people they know, with no pressure to act."
+        },
+        {
+          "kind": "judged",
+          "text": "The ask closes on one line a friend could forward by itself: it says what the Product is and who it is for, and carries the Source link."
+        },
+        {
+          "kind": "judged",
+          "text": "The message is short enough to read in one look: well under 150 words."
+        }
+      ],
+      "files": [
+        "files/drafts/network-ask.md"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Draft the ask; the candidate below adds a loss-framed line.",
+      "expected_output": "The launcher blocks the Draft, naming the loss-framing rule from the brand rules in Mandu.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "blocked_by",
+          "rule": "loss_framing"
+        },
+        {
+          "kind": "judged",
+          "text": "A good ask says who the Product is for and leaves it there."
+        }
+      ],
+      "files": [
+        "files/drafts/network-ask-loss-framed.md"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Draft the ask; the candidate below points at a link nobody defined.",
+      "expected_output": "The launcher blocks the Draft: the only link is the personal-network Source link, never an invented one.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "blocked_by",
+          "rule": "source-link"
+        }
+      ],
+      "files": [
+        "files/drafts/network-ask-invented-link.md"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Draft the ask; the candidate below carries no link.",
+      "expected_output": "The launcher blocks the Draft: a sign-up could not be counted under its Source.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "blocked_by",
+          "rule": "source-link"
+        }
+      ],
+      "files": [
+        "files/drafts/network-ask-no-link.md"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Draft the message to Slow Strength.",
+      "expected_output": "An ask-free message offering early access, which asks for nothing in return; the launcher offers it.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "offered"
+        },
+        {
+          "kind": "judged",
+          "text": "The message offers one thing, asks for nothing, and never mentions money, a post, or a mention."
+        },
+        {
+          "kind": "judged",
+          "text": "The message is short enough to read in one look: well under 150 words."
+        },
+        {
+          "kind": "judged",
+          "text": "The message does not write as if the Founder had seen work of the creator's that the plan does not describe."
+        }
+      ],
+      "files": [
+        "files/drafts/creator.md"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Draft the message; the candidate below asks to sponsor a video.",
+      "expected_output": "The launcher blocks the Draft, naming the sponsorship rule from the brand rules in Mandu.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "blocked_by",
+          "rule": "sponsorship_asks"
+        },
+        {
+          "kind": "judged",
+          "text": "A good message offers early access, a conversation, or story material, and nothing paid."
+        }
+      ],
+      "files": [
+        "files/drafts/creator-sponsorship.md"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Draft the message; the candidate below offers something outside the three the plan allows.",
+      "expected_output": "The launcher blocks the Draft: the offer is early access, a founder conversation, or story material.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "blocked_by",
+          "rule": "ask-free"
+        }
+      ],
+      "files": [
+        "files/drafts/creator-offer.md"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Draft the message; the candidate below ends on a question.",
+      "expected_output": "The launcher blocks the Draft on the brand rule that no copy asks a question.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "blocked_by",
+          "rule": "hook_must_not_be_question"
+        }
+      ],
+      "files": [
+        "files/drafts/creator-question.md"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Draft the message; the candidate below gives an email address.",
+      "expected_output": "The launcher blocks the Draft: no Draft ever holds an email address; the Founder fills in recipients.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "blocked_by",
+          "rule": "email-address"
+        }
+      ],
+      "files": [
+        "files/drafts/creator-address.md"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Slow Strength has not replied, and the waiting period the Founder approved has passed (the second file is the Founder's record). Draft the one follow-up.",
+      "expected_output": "The launcher offers the single follow-up, which says there will be no further contact.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "offered"
+        },
+        {
+          "kind": "judged",
+          "text": "The follow-up is shorter than the first message and says plainly that it is the last."
+        }
+      ],
+      "files": [
+        "files/drafts/follow-up.md",
+        "files/records/non-reply.json"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Slow Strength replied (the second file). The candidate below is a follow-up all the same.",
+      "expected_output": "No follow-up is offered: a follow-up goes only to a non-reply.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "not_offered",
+          "reason": "a follow-up goes only to a non-reply"
+        },
+        {
+          "kind": "judged",
+          "text": "A good run writes no follow-up for a creator who replied."
+        }
+      ],
+      "files": [
+        "files/drafts/follow-up.md",
+        "files/records/replied.json"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "The one follow-up to Slow Strength was already approved (the second file). The candidate below is a second one.",
+      "expected_output": "No second follow-up is ever offered: after one, there is no further contact.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "not_offered",
+          "reason": "not asked again"
+        }
+      ],
+      "files": [
+        "files/drafts/follow-up.md",
+        "files/records/followed-up.json"
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "The first message went out three days ago (the second file). The candidate below is a follow-up already.",
+      "expected_output": "No follow-up is offered before the waiting period the Founder approved has passed.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "not_offered",
+          "reason": "waiting until 2026-10-19"
+        }
+      ],
+      "files": [
+        "files/drafts/follow-up.md",
+        "files/records/waiting.json"
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "The Founder set a waiting period of 30 days when sending (the second file). The candidate below is a follow-up after 13.",
+      "expected_output": "No follow-up is offered: the waiting period is the one the Founder approved, not the default.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "not_offered",
+          "reason": "waiting until 2026-11-11"
+        }
+      ],
+      "files": [
+        "files/drafts/follow-up.md",
+        "files/records/longer-wait.json"
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "The first message is approved but not recorded as sent (the second file). The candidate below is a follow-up.",
+      "expected_output": "No follow-up is offered: nothing shows the first message was sent.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "not_offered",
+          "reason": "is not recorded as sent in Mandu yet"
+        }
+      ],
+      "files": [
+        "files/drafts/follow-up.md",
+        "files/records/never-sent.json"
+      ]
+    }
+  ]
+}

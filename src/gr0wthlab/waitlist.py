@@ -27,11 +27,10 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from . import exchange
-from .package import FAILED, READ
+from .package import FAILED, READ, SKIPPED
 from .settings import UNKNOWN, Waitlist
 
 SOURCE_NAME = "Waitlist anonymous view"
-SKIPPED = "skipped"  # as report.SKIPPED
 REFUSED = "refused"
 VIEW_FORMAT = 1
 EVIDENCE_FORMAT = 1

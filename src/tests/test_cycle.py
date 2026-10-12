@@ -50,6 +50,7 @@ class CycleTestCase(unittest.TestCase):
         asked = mock.patch.object(attempts, "fully_awake", return_value=True)
         self.awake = asked.start()
         self.addCleanup(asked.stop)
+        self.web = fakes.Web()  # the web a run reads; no test opens the real one
 
     def tearDown(self):
         for root, dirs, files in os.walk(self.tmp.name):
@@ -63,7 +64,8 @@ class CycleTestCase(unittest.TestCase):
         if at is not None:
             self.clock.set(at)
         out = io.StringIO()
-        runner = cycle.Cycle(repo or self.repo, self.env, self.home, out, self.clock, clocks)
+        reader = lambda policy: fakes.client(self.web, policy)  # noqa: E731
+        runner = cycle.Cycle(repo or self.repo, self.env, self.home, out, self.clock, reader, clocks)
         kwargs = {"execve": execve} if execve else {}
         code = runner.run(None, trigger, once, ["run"], **kwargs)
         return code, out.getvalue()
@@ -121,7 +123,7 @@ class FirstRunTest(CycleTestCase):
         self.assertEqual(len(snapshots), 1)
         snapshot = json.loads(snapshots[0].read_text(encoding="utf-8"))
         files = snapshot["products"]["RepToday"]["files"]
-        self.assertEqual(len(files), 14)
+        self.assertEqual(len(files), 16)
         self.assertTrue(all(len(entry["sha256"]) == 64 and entry["read_at"] for entry in files))
         self.assertNotIn("projects/RepToday", json.dumps([entry.get("text") for entry in files]))
 
@@ -137,10 +139,13 @@ class FirstRunTest(CycleTestCase):
 
         report = self.report()
         self.assertIn(
-            "## Summary\n\n- checked=15 acted=1 note=package-review 14 files, 0 changed, 0 failed; 1 proposal queued\n",
+            "## Summary\n\n- checked=17 acted=1 note=package-review 16 files, 0 changed, 0 failed; 1 proposal queued\n",
             report,
         )
-        self.assertIn("- listening: checked=0 acted=0 note=not built until US-ME13", report)
+        self.assertIn("- listening: checked=0 acted=0 note=0 of 0 sources read, 0 documents;", report)
+        self.assertIn("## Listening\n\nNo Listening source is configured, so nothing was read.", report)
+        self.assertIn("| Listening Evidence | complete |", report)
+        self.assertEqual(self.web.requests, [], "a run with no source configured asks the network for nothing")
         for workflow in ("review-queue", "listening", "outreach"):
             self.assertTrue((ledger / f"run-reports/state/{workflow}.json").is_file(), workflow)
         self.assertIn("On demand, started", report)
@@ -155,7 +160,7 @@ class FirstRunTest(CycleTestCase):
 
     def test_a_quiet_run_still_says_what_it_checked(self):
         self.run_cycle()
-        self.assertIn("- checked=14 acted=0 note=nothing new needed action\n", self.report())
+        self.assertIn("- checked=16 acted=0 note=nothing new needed action\n", self.report())
 
     def test_an_invalid_run_state_is_set_aside_rebuilt_and_reported(self):
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
@@ -201,26 +206,31 @@ class DecisionRoundTripTest(CycleTestCase):
         "notice": ("example-notice", ""),
     }
 
-    def test_one_item_of_each_kind_the_agent_files_and_a_post_two_approved_one_rejected_two_undecided(self):
-        """A message is queued only from a recruiting Draft, so its round trip is in test_beta_cycle."""
+    def test_one_item_of_each_kind_two_approved_two_rejected_two_undecided(self):
         writes = {
             f"review-queue/incoming/{slug}.md": fakes.proposal(kind, extra, title=slug)
             for kind, (slug, extra) in self.KINDS.items()
         }
         writes[fakes.draft_path(1)] = fakes.draft(1)  # a post is queued only from its Draft
+        creator = fakes.KIT_CREATORS[0]
+        writes[fakes.message_path("creator", creator[0])] = fakes.message("creator", creator[0], fakes.CREATOR_BODY)
+        fakes.set_run(self.repo, "outreach", {"creators": fakes.creators([creator])})  # and so is a message
         fakes.set_window(self.repo, fakes.window_from(fakes.SUNDAY_RUN.date()))
         fakes.keep_days(self.mandu, 1)
         fakes.behave(self.codex_dir, {"write": writes})
         self.assertEqual(self.run_cycle()[0], 0)
         first = self.queue()
+        # Every kind but the filming plan, which only the launcher files, and only when a Product films
+        # (test_filming).
         self.assertEqual(
-            [entry["kind"] for entry in first["open"]], [kind for kind in exchange.KINDS if kind != "message"]
+            [entry["kind"] for entry in first["open"]], [kind for kind in exchange.KINDS if kind != "filming-plan"]
         )
         ids = {entry["kind"]: entry["id"] for entry in first["open"]}
         self.assertEqual(ids["post"], "20261011-post-w1-day-01")
 
         self.decide(ids["post"], "approve", note="Good hook.")
         self.decide(ids["notice"], "approve")
+        self.decide(ids["message"], "reject", reason="Too salesy for my network.")
         self.decide(ids["package-change-proposal"], "reject", reason="Wait for counsel.")
         day = self.sit()
         fakes.set_window(self.repo, fakes.QUIET_WINDOW)
@@ -235,19 +245,17 @@ class DecisionRoundTripTest(CycleTestCase):
         )
         closed = {entry["id"]: entry["status"] for entry in second["closed"]}
         self.assertEqual(closed[ids["post"]], "approved")
-        self.assertEqual(closed[ids["package-change-proposal"]], "rejected")
+        self.assertEqual(closed[ids["message"]], "rejected")
         evidence = self.ledger() / "evidence/decisions"
-        rejected = json.loads((evidence / f"{ids['package-change-proposal']}.json").read_text(encoding="utf-8"))
-        self.assertEqual((rejected["decision"], rejected["reason"]), ("reject", "Wait for counsel."))
-        self.assertEqual(rejected["item_file"], f"review-queue/items/{ids['package-change-proposal']}.md")
-        self.assertEqual(
-            rejected["source"]["path"], str(self.exchange / f"decisions/{ids['package-change-proposal']}.json")
-        )
+        rejected = json.loads((evidence / f"{ids['message']}.json").read_text(encoding="utf-8"))
+        self.assertEqual((rejected["decision"], rejected["reason"]), ("reject", "Too salesy for my network."))
+        self.assertEqual(rejected["item_file"], f"review-queue/items/{ids['message']}.md")
+        self.assertEqual(rejected["source"]["path"], str(self.exchange / f"decisions/{ids['message']}.json"))
         approved = json.loads((evidence / f"{ids['post']}.json").read_text(encoding="utf-8"))
         self.assertEqual(approved["note"], "Good hook.")
         self.assertTrue((self.ledger() / "evidence/sittings/2026-10-11.json").is_file())
         report = self.report()
-        self.assertIn("| Mandu decisions | changed | 3 records, 3 new since the previous run |", report)
+        self.assertIn("| Mandu decisions | changed | 4 records, 4 new since the previous run |", report)
         self.assertIn("Reason: Wait for counsel.", report)
         self.assertIn(f"Sitting {day}: 41 minutes.", report)
         self.assertIn(f"carried over from the sitting on {day}", report)
@@ -258,6 +266,7 @@ class DecisionRoundTripTest(CycleTestCase):
             {
                 ids["post"]: "approved",
                 ids["notice"]: "approved",
+                ids["message"]: "rejected",
                 ids["package-change-proposal"]: "rejected",
             },
         )
@@ -265,7 +274,7 @@ class DecisionRoundTripTest(CycleTestCase):
             {key: value["carried_over_from"] for key, value in recorded["carried"].items()},
             {ids["dispatch-request"]: day, ids["weekly-read-decision"]: day},
         )
-        self.assertIn("review-queue 3 decisions taken in", report)
+        self.assertIn("review-queue 4 decisions taken in", report)
 
         rejected_again = {"review-queue/incoming/again.md": fakes.proposal(title="name-status-stale")}
         fakes.behave(self.codex_dir, {"write": rejected_again})
@@ -275,7 +284,7 @@ class DecisionRoundTripTest(CycleTestCase):
         notice = (self.ledger() / third["open"][2]["file"]).read_text(encoding="utf-8")
         self.assertIn(f"asks the same as {ids['package-change-proposal']}, which is rejected", notice)
         self.assertIn(f"carried over from the sitting on {day}", self.report())
-        self.assertIn("3 records, 0 new since the previous run", self.report())
+        self.assertIn("4 records, 0 new since the previous run", self.report())
         self.assertIn("rejected: Approve package change: name-status-stale. Reason: Wait for counsel.", self.brief())
 
     def test_a_decision_on_an_item_superseded_before_it_was_taken_in_is_kept(self):
@@ -717,7 +726,8 @@ class FailuresTest(CycleTestCase):
         for entry in ("workspace/drafts/sub", "workspace/instructions/README.md", "workspace/review-queue/incoming"):
             self.assertIn(f"- `{entry}` {restored}", problems)
         self.assertEqual((self.workspace() / "drafts/sub/draft.md").read_text(encoding="utf-8"), "a draft\n")
-        self.assertEqual((self.workspace() / "instructions/README.md").read_text(encoding="utf-8"), "edited\n")
+        self.assertEqual((self.workspace() / "instructions/README.md").read_text(encoding="utf-8"), "# instructions\n")
+        self.assertIn("- `instructions/README.md` was changed during the run and put back as it was;", problems)
         queue = self.queue()
         self.assertEqual([entry["kind"] for entry in queue["open"]], ["package-change-proposal", "notice"])
         notice = (self.ledger() / queue["open"][1]["file"]).read_text(encoding="utf-8")
@@ -765,7 +775,7 @@ class FailuresTest(CycleTestCase):
                 report = self.report()
                 self.assertIn(f"| Package review (contradictions) | incomplete | {gap} |", report)
                 self.assertIn(
-                    " acted=1 note=package-review 14 files, 0 changed, 0 failed; 0 proposals queued;"
+                    " acted=1 note=package-review 16 files, 0 changed, 0 failed; 0 proposals queued;"
                     f" incomplete: {gap}; review-queue 0 decisions taken in, 1 other item queued,",
                     report.partition("\n- ")[2].partition("\n")[0],
                 )
@@ -783,7 +793,7 @@ class FailuresTest(CycleTestCase):
         self.assertEqual(code, 0, out)
         report = self.report()
         self.assertIn("| Package review (contradictions) | complete | the agent finished its review |", report)
-        self.assertIn("- checked=14 acted=0 note=nothing new needed action\n", report)
+        self.assertIn("- checked=16 acted=0 note=nothing new needed action\n", report)
         self.assertEqual(self.queue()["open"], [])
 
     def test_a_late_scheduled_run_says_so(self):

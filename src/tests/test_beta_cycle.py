@@ -476,14 +476,14 @@ class WeekByWeekTest(BetaCycleTestCase):
         report = self.report()
         self.assertIn(f"| Beta invitation | kept | `{first['id']}`; its Draft is unchanged and passes |", report)
         self.assertIn(
-            "- Set aside, not queued: `beta-invite.md`: a message is queued only from its Draft in"
+            "- Set aside, not queued: `beta-invite.md`: a message is queued only from its Draft in drafts/messages/ or"
             " drafts/beta-recruiting/, after the launcher's checks; never write one here",
             report,
         )
         for name, item in (("invite-off.md", first), ("ask-off.md", ask)):
             self.assertIn(
                 f"- Set aside, not queued: `{name}`: supersedes {item['id']}, a message the launcher queued from its"
-                " Draft; only a change to that Draft in drafts/beta-recruiting/ replaces it",
+                " Draft; only a change to that Draft in drafts/messages/ or drafts/beta-recruiting/ replaces it",
                 report,
             )
         self.assertIn(

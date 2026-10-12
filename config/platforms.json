@@ -2,6 +2,22 @@
   "adapted_from": "skills/social/references/platform-limits.md of github.com/coreyhaines31/marketingskills at commit 1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff (MIT License, Copyright (c) 2025 Corey Haines; see THIRD_PARTY_NOTICES.md)",
   "description": "Platform facts the post-Draft lint checks deterministically (US-ME08): each test platform's Draft fields, their character limits, and its hashtag limits. These are facts about the platforms, not marketing strategy, which stays in Mandu. The launcher reads this file and the agent cannot write it (G8). A platform the kit's platform assignment names must appear here, or every Draft is blocked until it does.",
   "fields_note": "Each platform's fields are the ### sections its ## section in a post Draft holds. body is the caption whose first line is the Hook and whose text both platforms share; title must be the Hook; hashtags lists the post's #tags, which count against the body's character limit. max_chars blocks a Draft over it; visible_chars only warns, since text past it is still posted.",
+  "video": {
+    "adapted_from": "skills/ad-creative/references/short-form-video-specs.md of the same library at the same commit (the canvas, the cross-platform safe zone, and the caption style), and the beat-sheet shape of skills/video/references/edit-anatomy.md",
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "safe_zone": {"top": 220, "bottom": 500, "left": 180, "right": 180},
+    "text": {
+      "font_file": "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+      "font_name": "Arial",
+      "size": 64,
+      "caption_size": 52,
+      "outline": 6,
+      "max_chars": 160
+    },
+    "facts": "A finished asset is 1080x1920 (9:16) at 30 frames a second, H.264, as both test platforms take it, with AAC sound when any of its cuts carries sound and no sound stream when none does. A source of another shape is scaled down whole, with black beside it, and never cropped. Each platform's own buttons and caption cover the frame's edges, so text is drawn only inside the safe zone: 220 pixels clear at the top, 500 at the bottom, and 180 at each side. On-screen text and captions are white with a black outline and no box, shown whole for a beat's time with no animation, in a font that ships with macOS."
+  },
   "platforms": {
     "TikTok": {
       "fields": {

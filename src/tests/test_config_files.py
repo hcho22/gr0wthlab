@@ -49,7 +49,7 @@ class RunConfigTest(unittest.TestCase):
         outputs = set(self.config["outputs"])
         reptoday = next(p for p in self.registry["products"] if p["name"] == "RepToday")
         sources = reptoday["go_to_market_package"]["sources"]
-        self.assertEqual(len(sources), 13)
+        self.assertEqual(len(sources), 14)
         for source in sources + self.config["sources_not_connected"]:
             self.assertLessEqual(set(source["needed_by"]), outputs, source)
 
@@ -83,6 +83,29 @@ class RunConfigTest(unittest.TestCase):
         self.assertEqual(exchange["access"], "read-only")
         self.assertEqual(exchange["env"], "GR0WTHLAB_EXCHANGE_DIR")
         self.assertTrue((REPO / exchange["spec"]).is_file())
+
+    def test_filming_is_built_and_its_footage_place_waits_for_the_founder(self):
+        from gr0wthlab import video
+
+        self.assertEqual(
+            self.config["outputs"]["filming-plan"],
+            {"title": "Filming plan and edits", "story": "US-ME09", "built": True},
+        )
+        reptoday = next(p for p in self.registry["products"] if p["name"] == "RepToday")
+        footage = reptoday["filming"]["footage"]
+        self.assertEqual((footage["local_path"], footage["access"]), (None, "read-only"))
+        self.assertRegex(footage["env"], r"^GR0WTHLAB_[A-Z]+_DIR$")
+        self.assertNotIn("filming", next(p for p in self.registry["products"] if p["name"] == "Immerse"))
+        # The plan reads the calendar, the Angle bank, and the pairs: each is a snapshotted source that feeds it.
+        feeding = {
+            Path(source["path"]).name
+            for source in reptoday["go_to_market_package"]["sources"]
+            if "filming-plan" in source["needed_by"]
+        }
+        self.assertEqual(feeding, {"cadence-14-day.md", "angles.md", "ab-pairs.md"})
+        canvas = video.load_canvas(load("config/platforms.json"))
+        self.assertEqual((canvas.width, canvas.height, canvas.fps), (1080, 1920, 30))
+        self.assertEqual(canvas.ratio.numerator * 16, canvas.ratio.denominator * 9)
 
     def test_the_weekly_task_definition_is_reviewed_code(self):
         self.assertTrue(self.config["instruction"].startswith("src/instructions/"))
@@ -120,6 +143,10 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(
             self.config["codex"]["session_flags"], ["--ignore-user-config", "--ignore-rules", "--ephemeral"]
         )
+
+    def test_image_generation_stays_disabled_so_no_run_can_generate_a_frame(self):
+        self.assertIn("image_generation", self.config["codex"]["disabled_features"])
+        self.assertIs(self.config["network"], False)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,15 @@
+{
+  "edit": 1,
+  "product": "RepToday",
+  "window": 1,
+  "day": 7,
+  "segments": [
+    {
+      "shot": "d07-s1",
+      "source": "window-1/d07-s1.mov",
+      "in": 5.0,
+      "out": 325.0,
+      "speed": 20
+    }
+  ]
+}
