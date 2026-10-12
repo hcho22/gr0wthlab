@@ -193,6 +193,7 @@ class Asset:
     cuts: list[dict[str, object]] = field(default_factory=list)
     checks: list[str] = field(default_factory=list)
     parsed: edits.Edit | None = None
+    pair: str | None = None  # the SHA-256 of the other leg's edit record this day's was compared with
 
     @property
     def finished(self) -> bool:
@@ -213,6 +214,7 @@ class Asset:
             "asset_record": self.record,
             "edit": self.edit,
             "edit_sha256": self.edit_sha256,
+            "pair_edit_sha256": self.pair,
         }
 
     def lines(self) -> list[str]:
@@ -260,7 +262,19 @@ class Asset:
             "asset_record": self.record,
             "reused": self.reused,
             "checks": self.checks,
+            "pair_edit_sha256": self.pair,
         }
+
+
+@dataclass
+class Comparison:
+    """What an A/B leg's edit is compared with, or why it is not compared."""
+
+    edit: edits.Edit | None = None  # the other leg's edit record to compare with now
+    draft: posts.PostDraft | None = None  # that leg's Draft, which tells the opening of a re-cut pair
+    problem: str = ""  # why the leg cannot be compared and may not go uncompared, which blocks it
+    alone: str = ""  # what its checks say of its other leg when it is not compared in this run
+    pair: str | None = None  # the other leg's edit record its video is recorded as compared with, uncompared now
 
 
 @dataclass
@@ -289,6 +303,7 @@ class Filming:
     results: dict[int, Asset] = field(default_factory=dict)
     record: str | None = None
     env: Mapping[str, str] = field(default_factory=dict)  # what the video tooling runs with
+    passed: Mapping[int, posts.PostDraft] | None = None  # the Drafts that passed this run's checks, once made
 
     def edit_path(self, number: int) -> Path:
         return self.edits / f"day-{number:02d}.json"
@@ -343,15 +358,16 @@ class Filming:
         if all(segment.speed == 1 for segment in edit.segments):
             asset.checks.append("every cut plays at the speed it was recorded at")
         if not asset.blocks:
-            reference, reference_draft, problem, alone = self.reference(day.spec, edit, areas)
-            if problem:
-                asset.blocks.append(Finding("pair-legs", "", problem))
-            elif reference is not None:
-                asset.blocks += edits.check_pair(edit, draft, reference, reference_draft, day.spec)
+            found = self.reference(day.spec, edit, areas)
+            asset.pair = found.edit.sha256 if found.edit is not None else found.pair
+            if found.problem:
+                asset.blocks.append(Finding("pair-legs", "", found.problem))
+            elif found.edit is not None:
+                asset.blocks += edits.check_pair(edit, draft, found.edit, found.draft, day.spec)
                 where = "after the re-cut opening" if day.spec.recut else "from the first frame to the last"
-                asset.checks.append(f"the same source ranges as day {reference.day}'s leg {where}")
-            elif alone:
-                asset.checks.append(alone)
+                asset.checks.append(f"the same source ranges as day {found.edit.day}'s leg {where}")
+            elif found.alone:
+                asset.checks.append(found.alone)
         if not asset.blocks:
             asset.status = READY
         return asset
@@ -365,68 +381,78 @@ class Filming:
         edit, _ = read_edit(areas, self.edit_path(number))
         return edit is not None and edit.sha256 != (self.posted.get(number) or {}).get("edit_sha256")
 
-    def reference(
-        self, spec: edits.DaySpec, edit: edits.Edit, areas: Areas
-    ) -> tuple[edits.Edit | None, posts.PostDraft | None, str, str]:
-        """The edit an A/B leg must match outside its opening, with that leg's Draft; why the leg cannot be compared
-        when it cannot, which blocks it; and, when it is checked alone, what its checks say of its other leg. The
-        same rules as the post-Draft check of the two legs' copy.
+    def draft_of(self, number: int, posted: Mapping[str, object], areas: Areas) -> posts.PostDraft | None:
+        """The Draft a leg's video stands on when the run ends: the one that passed this run's checks, else the one
+        its standing post was queued from when that is still the Draft in place. None when the Draft in place is
+        neither, so a Draft no video stands on never tells a pair's opening. check-edits runs before any Draft is
+        checked, so there a Draft that can be read stands in for one that passed."""
+        if self.passed is not None and number in self.passed:
+            return self.passed[number]
+        draft, _ = posts.read_draft(areas, self.draft_path(number))
+        if draft is None or draft.problems:
+            return None
+        return draft if self.passed is None or draft.sha256 == posted.get("draft_sha256") else None
 
-        A leg is compared with the edit record its other leg's standing video was cut from whenever that record is
-        still in place, whether or not its own video was already cut from its own record: no leg counts as compared
-        without being compared. When this run cuts the other leg anew, the two new records are compared with each
-        other instead, once, as the later day's check; a leg whose own video already stands is then the reference
-        and is not checked against a record no video was cut from.
-        """
+    def reference(self, spec: edits.DaySpec, edit: edits.Edit, areas: Areas) -> Comparison:
+        """What an A/B leg's edit must match outside its opening, or why it is not compared; the same rules as the
+        post-Draft check of the two legs' copy.
+
+        A leg is compared with the edit record its other leg's standing video was cut from, and, in a re-cut pair,
+        with the opening the Draft that video stands on gives, whether or not its own video was already cut from its
+        own record. When this run cuts the other leg anew, the two new records are compared with each other
+        instead, once, as the later day's check; a leg whose own video already stands is then the reference and is
+        not checked against a record no video was cut from.
+
+        A leg that cannot be compared now goes uncompared only when its own video stands and the queue records the
+        two standing videos as the pair that was compared; any other leg is blocked, and nothing ever says a
+        comparison was made that was not."""
         other = spec.other
         if other is None:
-            return None, None, "", ""
-        posted = self.posted.get(other) or {}
+            return Comparison()
+        mine, posted = self.posted.get(spec.day) or {}, self.posted.get(other) or {}
         current, _ = read_edit(areas, self.edit_path(other))
-        shown = (self.posted.get(spec.day) or {}).get("edit_sha256") == edit.sha256
-        if self.anew(other, areas):
-            if shown or other > spec.day:
-                return (
-                    None,
-                    None,
-                    "",
-                    f"day {other}'s leg has a new edit record, which is compared with this one before any video is"
-                    " cut from it",
+        shown = mine.get("edit_sha256") == edit.sha256
+        standing = posted.get("edit_sha256")
+        known = standing if shown and paired(mine, posted) else None
+        replaced = f"day {other}'s edit record is no longer the one the video of `{posted.get('id')}` was cut from"
+
+        def apart(why: str) -> Comparison:
+            if known:
+                return Comparison(
+                    alone=f"it was not compared with day {other}'s leg again, since {why}: its video and the video"
+                    f" of `{posted['id']}` are recorded as the pair that was compared",
+                    pair=known,
                 )
-        elif not posted.get("edit_sha256"):
-            return None, None, "", f"day {other}, its pair's other leg, has no video to compare with yet"
-        elif current is None or current.sha256 != posted["edit_sha256"]:
             if shown:
-                return (
-                    None,
-                    None,
-                    "",
-                    f"the edit record day {other}'s video was cut from is no longer in place, so the two videos"
-                    " were not compared again",
+                return Comparison(
+                    problem=f"{why}, and nothing records that this leg's video and the video of `{posted['id']}` were"
+                    " compared with each other, so the pair is not compared"
                 )
-            return (
-                None,
-                None,
-                f"day {other}'s edit record is no longer the one the video of `{posted['id']}` was cut from, so this"
-                " leg cannot be compared with it",
-                "",
-            )
+            return Comparison(problem=f"{why}, so this leg cannot be compared with it")
+
+        if self.anew(other, areas):
+            if shown and standing and not known:
+                return apart(replaced)
+            if shown or other > spec.day:
+                return Comparison(
+                    alone=f"day {other}'s leg has a new edit record, which is compared with this one before any video"
+                    " is cut from it",
+                    pair=known,
+                )
+        elif not standing:
+            return Comparison(alone=f"day {other}, its pair's other leg, has no video to compare with yet")
+        elif current is None or current.sha256 != standing:
+            return apart(replaced)
         if current.problems:
-            return (
-                None,
-                None,
-                f"day {other}'s edit record does not follow the format, so this leg cannot be compared",
-                "",
+            return Comparison(
+                problem=f"day {other}'s edit record does not follow the format, so this leg cannot be compared"
             )
-        draft, _ = posts.read_draft(areas, self.draft_path(other))
-        if draft is None or draft.problems:
-            return (
-                None,
-                None,
-                f"day {other}'s post Draft could not be read, so the opening it re-cuts cannot be told",
-                "",
-            )
-        return current, draft, "", ""
+        if not spec.recut:
+            return Comparison(current)
+        draft = self.draft_of(other, posted, areas)
+        if draft is None:
+            return apart(f"day {other}'s post Draft, as it is now, is not one a video of that leg stands on")
+        return Comparison(current, draft)
 
     def finish(self, drafts: Mapping[int, posts.PostDraft], areas: Areas, store: Store, now: datetime) -> None:
         """Turn the edit record of each day whose Draft passed into a finished asset when it passes every check:
@@ -438,6 +464,7 @@ class Filming:
         The legs of a pair that this run cuts anew are offered together or not at all, so that two posts never
         show videos that were not compared with each other: a leg is not cut once its other leg cannot be, and the
         video already cut for a leg whose other leg then fails is not kept."""
+        self.passed = drafts
         for number in sorted(drafts):
             self.results[number] = self.examine(number, areas, drafts[number])
         pairs = {}
@@ -643,6 +670,15 @@ def from_record(data: object) -> Filming:
         )
     except (AttributeError, KeyError, TypeError, ValueError) as error:
         raise RecordError(f"it does not hold a run's filming standing ({type(error).__name__}: {error})") from error
+
+
+def paired(mine: Mapping[str, object], theirs: Mapping[str, object]) -> bool:
+    """Whether two legs' standing posts show the pair of videos that was compared: one of them records that its
+    video's edit record was compared with the one the other's video was cut from."""
+    return any(
+        bool(other.get("edit_sha256")) and leg.get("pair_edit_sha256") == other["edit_sha256"]
+        for leg, other in ((mine, theirs), (theirs, mine))
+    )
 
 
 def together(other: int) -> str:

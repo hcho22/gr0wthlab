@@ -739,6 +739,8 @@ class EditRunTest(FilmingRunCase):
         self.assertNotEqual(day_1["asset_sha256"], day_8["asset_sha256"])
         self.assertIn("the same source ranges as day 1's leg from the first frame to the last", self.item(day_8))
         self.assertEqual(fakes.tree_digest(self.footage), before)
+        # The queue records with each video which edit record of the other leg it was compared with.
+        self.assertEqual((day_1["pair_edit_sha256"], day_8["pair_edit_sha256"]), (None, day_1["edit_sha256"]))
         # The slot moves, so day 8's post is replaced by one that shows the same video. No leg counts as compared
         # without being compared: it is checked against day 1's video again, and the item says so.
         fakes.set_window(self.repo, {"slot": "20:00"})
@@ -842,6 +844,126 @@ class EditRunTest(FilmingRunCase):
     @staticmethod
     def both(edit):
         return {fakes.edit_path(1): fakes.edit_record(1, edit), fakes.edit_path(4): fakes.edit_record(4, edit)}
+
+    def one_week_recut_pair(self):
+        """A kit that posts both legs of the re-cut pair AB-3 in one week, days 2 and 5, with its plan approved and
+        its footage there, and one run that cuts both; returns the two open posts, day 2's and day 5's."""
+        calendar = self.mandu / CALENDAR
+        rows = calendar.read_text(encoding="utf-8").splitlines()
+        leg_b = next(row for row in rows if row.startswith("| 9 |")).replace("| 9 |", "| 5 |", 1)
+        moved = "\n".join(leg_b if row.startswith("| 5 |") else row for row in rows)
+        calendar.write_text(moved + "\n", encoding="utf-8")
+        self.approved_plan(days=(2, 5))
+        for name, seconds in (("d02-s1a-take-1.mov", 6.0), ("d02-s1b-take-1.mov", 6.0), ("d02-s1-closing.mov", 15.0)):
+            self.clip(name, seconds, 1080, 1920, 30, sound=True)
+        self.clip("d02-s2.mov", 16.0)
+        tail = (("d02-s2", "d02-s2.mov", 2, 13), ("d02-s1", "d02-s1-closing.mov", 5, 11))
+        queue = self.run_ok(
+            {
+                fakes.draft_path(2): fakes.filming_draft(2),
+                fakes.draft_path(5): fakes.filming_draft(9).replace("day: 9", "day: 5"),
+                fakes.edit_path(2): fakes.edit_record(2, ("d02-s1", "d02-s1a-take-1.mov", 1, 4), *tail),
+                fakes.edit_path(5): fakes.edit_record(5, ("d02-s1", "d02-s1b-take-1.mov", 0.5, 3.5), *tail),
+            }
+        )
+        first, second = (next(entry for entry in queue["open"] if entry.get("day") == day) for day in (2, 5))
+        self.assertIn("the same source ranges as day 2's leg after the re-cut opening", self.item(second))
+        self.assertEqual((first["pair_edit_sha256"], second["pair_edit_sha256"]), (None, first["edit_sha256"]))
+        return first, second
+
+    def posts_open(self):
+        return {entry["day"]: entry for entry in self.queue()["open"] if entry["kind"] == "post"}
+
+    def checks_of(self, day):
+        """What the latest run's filming Evidence says it checked of a day's video."""
+        run = self.queue()["updated_by_run"]
+        filmed = json.loads((self.ledger() / f"evidence/filming/{run}.json").read_text(encoding="utf-8"))
+        return next(entry for entry in filmed["days"] if entry["day"] == day)["checks"]
+
+    def test_a_broken_draft_of_one_leg_does_not_withdraw_the_other_leg_of_a_plain_pair(self):
+        drafts = self.one_week_pair()
+        queue = self.run_ok(dict(drafts, **self.both(DAY_1)))
+        first, second = (next(entry for entry in queue["open"] if entry.get("day") == day) for day in (1, 4))
+        # The agent breaks day 1's Draft and touches nothing else. A plain pair has no opening to read from a
+        # Draft, so day 4 is compared with day 1's video as ever, and its open post stands with the same video.
+        self.run_ok({fakes.draft_path(1): "not a Draft\n"})
+        standing = self.posts_open()
+        self.assertEqual({day: entry["id"] for day, entry in standing.items()}, {4: second["id"]})
+        self.assertEqual(standing[4]["asset_sha256"], second["asset_sha256"])
+        self.assertEqual(
+            self.checks_of(4)[-1], "the same source ranges as day 1's leg from the first frame to the last"
+        )
+        report = self.report()
+        self.assertIn("| 1 | P01 / AB-1 leg A | blocked |", report)
+        self.assertIn(
+            f"| 4 | P01 / AB-1 leg B | kept | `{second['id']}`; its Draft is unchanged and passes, and so is its"
+            " video |",
+            report,
+        )
+        notice = self.notice()
+        self.assertIn(f"- The open post `{first['id']}` for day 1 is withdrawn", notice)
+        self.assertNotIn(second["id"], notice)
+        self.assertNotIn("Day 4", notice)
+
+    def kept_beside(self, draft):
+        """Both legs of the re-cut pair stand with compared videos; the agent then leaves day 2 the given Draft and
+        touches nothing else. Day 2 is blocked for it, and day 5, untouched, keeps its open post and its video: the
+        opening is never read from a Draft no video stands on, and the queue records the pair as compared."""
+        first, second = self.one_week_recut_pair()
+        self.run_ok({fakes.draft_path(2): draft})
+        standing = self.posts_open()
+        self.assertEqual({day: entry["id"] for day, entry in standing.items()}, {5: second["id"]})
+        self.assertEqual(standing[5]["asset_sha256"], second["asset_sha256"])
+        self.assertEqual(
+            self.checks_of(5)[-1],
+            "it was not compared with day 2's leg again, since day 2's post Draft, as it is now, is not one a video"
+            f" of that leg stands on: its video and the video of `{first['id']}` are recorded as the pair that was"
+            " compared",
+        )
+        report = self.report()
+        self.assertIn("| 2 | P02 / AB-3 leg A | blocked |", report)
+        self.assertIn(
+            f"| 5 | P02 / AB-3 leg B | kept | `{second['id']}`; its Draft is unchanged and passes, and so is its"
+            " video |",
+            report,
+        )
+        notice = self.notice()
+        self.assertIn(f"- The open post `{first['id']}` for day 2 is withdrawn", notice)
+        self.assertNotIn(second["id"], notice)
+        self.assertNotIn("Day 5", notice)
+
+    def test_a_changed_draft_of_one_re_cut_leg_that_does_not_pass_does_not_withdraw_the_other_leg(self):
+        longer = fakes.filming_draft(2).replace("### Beat 1 (hook): 0-3s", "### Beat 1 (hook): 0-4s")
+        longer = longer.replace("### Beat 2: 3-14s", "### Beat 2: 4-14s")
+        self.assertEqual(longer.count("0-4s") + longer.count("4-14s"), 2)
+        self.kept_beside(longer)
+
+    def test_an_unreadable_draft_of_one_re_cut_leg_does_not_withdraw_the_other_leg(self):
+        self.kept_beside("not a Draft\n")
+
+    def test_a_leg_whose_pair_is_not_recorded_as_compared_and_cannot_be_compared_is_named_as_not_compared(self):
+        first, second = self.one_week_recut_pair()
+        # A queue as an earlier launcher could leave it: nothing records what either video was compared with.
+        path = self.ledger() / "review-queue" / "queue.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        next(entry for entry in data["open"] if entry["id"] == second["id"])["pair_edit_sha256"] = None
+        path.write_text(json.dumps(data), encoding="utf-8")
+        # Day 2's Draft cannot be read, so its opening cannot be told and the two videos cannot be compared now.
+        self.run_ok({fakes.draft_path(2): "not a Draft\n"})
+        self.assertEqual(self.posts_open(), {})
+        named = (
+            "pair-legs: day 2's post Draft, as it is now, is not one a video of that leg stands on, and nothing"
+            f" records that this leg's video and the video of `{first['id']}` were compared with each other, so the"
+            " pair is not compared"
+        )
+        report, notice = self.report(), self.notice()
+        self.assertIn("| 5 | P02 / AB-3 leg B | blocked |", report)
+        self.assertIn(f"- {named}", report)
+        self.assertIn(f"- Day 5 (`drafts/posts/window-1/day-05.md`): {named}", notice)
+        self.assertIn(f"- The open post `{second['id']}` for day 5 is withdrawn", notice)
+        for text in (report, notice):
+            self.assertNotIn("the pair that was compared", text)
+            self.assertNotIn("the same source ranges as day 2's leg", text)
 
     def test_the_earlier_leg_of_a_pair_cut_in_one_run_is_checked_alone_and_says_the_later_leg_is_compared_with_it(
         self,
