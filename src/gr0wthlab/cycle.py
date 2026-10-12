@@ -758,7 +758,7 @@ class Cycle:
             return []
         left = clear_probe_files(boundary)
         if left:
-            self.say(f"pre-run: removed what a stopped boundary check left in the areas: {', '.join(left)}")
+            self.say(f"pre-run: removed boundary probe files left in the areas: {', '.join(left)}")
         return left
 
     def leave_note(self, run_id: str, line: str) -> None:

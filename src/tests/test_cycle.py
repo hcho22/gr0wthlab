@@ -1118,9 +1118,9 @@ class ProductionCloneTest(CycleTestCase):
         fakes.behave(self.codex_dir, {"write": {"drafts/day-3.md": "a Draft\n"}})
         code, out = self.run_cycle(repo=self.clone)
         self.assertEqual(code, 0, out)
-        self.assertIn(f"pre-run: removed what a stopped boundary check left in the areas: {names}\n", out)
-        self.assertLess(out.index("pre-run: removed what"), out.index("pre-run: current"))
-        self.assertEqual(out.count("removed what"), 1, "nothing was left for the run's own clearing")
+        self.assertIn(f"pre-run: removed boundary probe files left in the areas: {names}\n", out)
+        self.assertLess(out.index("pre-run: removed boundary probe files"), out.index("pre-run: current"))
+        self.assertEqual(out.count("removed boundary probe files"), 1, "nothing was left for the run's own clearing")
         self.assertEqual([path for path in left if path.exists()], [])
         self.assertIn("records: pushed: pushed 1 records commit", out)
         changed = fakes.git(self.remote, "diff", "--name-only", "HEAD~1", "HEAD", env=self.env).split()
@@ -1128,7 +1128,7 @@ class ProductionCloneTest(CycleTestCase):
         self.assertEqual(list(self.committed_probe_files()), [])
         quoted = ", ".join(f"`{path.relative_to(self.clone)}`" for path in left)
         self.assertIn(
-            "## Agent\n\n- Removed what a stopped boundary check left in the areas, before the agent started: "
+            "## Agent\n\n- Removed boundary probe files left in the areas, before the agent started: "
             f"{quoted}\n- Boundary preflight: passed",
             self.report(self.clone),
         )
@@ -1142,14 +1142,14 @@ class ProductionCloneTest(CycleTestCase):
         calls = []
         code, out = self.run_cycle(repo=self.clone, execve=lambda *args: calls.append(args))
         self.assertEqual(len(calls), 1, out)
-        self.assertIn(f"pre-run: removed what a stopped boundary check left in the areas: {names}\n", out)
+        self.assertIn(f"pre-run: removed boundary probe files left in the areas: {names}\n", out)
         self.assertEqual([path for path in left if path.exists()], [])
         self.env[cycle.PRE_RUN_ENV] = calls[0][2][cycle.PRE_RUN_ENV]
         code, out = self.run_cycle(repo=self.clone)
         self.assertEqual(code, 0, out)
-        self.assertNotIn("removed what", out)
+        self.assertNotIn("removed boundary probe files", out)
         self.assertIn(
-            "- Removed what a stopped boundary check left in the areas, before the agent started: `workspace/drafts/",
+            "- Removed boundary probe files left in the areas, before the agent started: `workspace/drafts/",
             self.report(self.clone),
         )
         self.assertEqual(list(self.committed_probe_files()), [])
@@ -1164,12 +1164,12 @@ class ProductionCloneTest(CycleTestCase):
         code, out = self.run_cycle(repo=self.clone)
         self.assertEqual(code, 0, out)
         self.assertNotIn("pre-run:", out)
-        self.assertIn(f"gr0wthlab: removed what a stopped boundary check left in the areas: {names}\n", out)
-        self.assertLess(out.index("removed what"), out.index("preflight refused"))
+        self.assertIn(f"gr0wthlab: removed boundary probe files left in the areas: {names}\n", out)
+        self.assertLess(out.index("removed boundary probe files"), out.index("preflight refused"))
         self.assertIn("records: pushed", out)
         self.assertEqual(list(self.committed_probe_files()), [])
         self.assertIn(
-            "- Removed what a stopped boundary check left in the areas, before the agent started: `workspace/drafts/",
+            "- Removed boundary probe files left in the areas, before the agent started: `workspace/drafts/",
             self.report(self.clone),
         )
 

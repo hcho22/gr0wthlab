@@ -574,7 +574,7 @@ def render_report(state: RunState) -> str:
     removed = probe_files_removed(state)
     if removed:
         lines.append(
-            "- Removed what a stopped boundary check left in the areas, before the agent started: "
+            "- Removed boundary probe files left in the areas, before the agent started: "
             + ", ".join(f"`{path}`" for path in removed)
         )
     preflight = state.agent.get("preflight") or {}

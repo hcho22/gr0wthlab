@@ -20,12 +20,11 @@ A step the agent skipped or sent mangled says nothing about the runtime, so the 
 still have no record again, PROBE_RUNS times at most, and fails if one is still unproven. Anything that does say
 something about the runtime ends the check as failed at once: a sentinel that landed, a connection that got through,
 a change outside the areas, a run that did not exit cleanly, or a record of Codex's that is not whole.
-One unclean exit is no verdict on the runtime: a run whose agent was started and ended before its first tool call,
-leaving nothing at all, as when the model cannot be reached. It tested nothing, so it is asked again like an unproven
-step, and a check whose every run ended that way ends as not tested, which is neither a pass nor a failure of the
-boundary.
+One unclean exit is set apart: a run whose agent was started, that made no tool call and left nothing at all, tested
+nothing. If it ended by itself it is asked again like an unproven step; if the launcher stopped it at the agent's
+time limit the check ends there. A check in which no run made a tool call ends as not tested, which is not a pass.
 How many refusals a run logged in all never decides anything, and the agent's own report is kept as evidence and
-never read for the verdict.
+never read for the verdict. Every line the check prints states what a record shows and names no cause beyond it.
 """
 
 from __future__ import annotations
@@ -414,14 +413,14 @@ def file_tool_gaps(calls: Sequence[codex.ToolResult], steps: Sequence[Step]) -> 
 def tool_record(log_dir: Path, run_id: str, clean_exit: bool) -> tuple[list[codex.ToolResult], list[str]]:
     """The tool calls Codex recorded for a run, and why that record cannot be taken as whole, if it cannot.
 
-    A run that exited cleanly did its work through tool calls, so a log that holds none was not kept with them. A run
-    that did not exit cleanly may have ended before its first, which is no fault of the record's.
+    A run that exited cleanly did its work through tool calls, so a log that holds none is not the whole record. A run
+    that did not exit cleanly may have ended before its first.
     """
     stderr = log_dir / f"{run_id}.stderr.log"
     log = stderr.read_text(encoding="utf-8", errors="replace") if stderr.is_file() else ""
     calls, problems = codex.tool_results(log)
     if not calls and clean_exit:
-        problems = [f"Codex's log holds no tool call; it records them when started with RUST_LOG={codex.LOG_FILTER}"]
+        problems = ["Codex's log holds no tool call"]
     return calls, problems
 
 
@@ -447,7 +446,8 @@ def verify(
     empty otherwise. result["passed"] says every needed step has its record and nothing else is wrong, so the check is
     complete. result["not_tested"] says the run was never an attempt: its agent was started, it did not exit cleanly,
     Codex recorded no tool call, and the check could see that it left nothing, no file, no connection, no kernel
-    denial, and no change inside or outside the areas. Such a run never passes and is asked again.
+    denial, and no change inside or outside the areas. Such a run never passes, and is asked again unless the launcher
+    stopped it at the agent's time limit, result["timed_out"], which no run is ever asked again after.
     """
     record_path = log_dir / f"{run_id}.json"
     record = json.loads(record_path.read_text(encoding="utf-8")) if record_path.is_file() else {}
@@ -519,6 +519,7 @@ def verify(
         "fingerprint": record.get("fingerprint"),
         "trigger": record.get("trigger"),
         "run_exit_code": exit_code,
+        "timed_out": bool(record.get("timed_out")),
         "agent_started": bool(record.get("agent_started")),
         "codex_last_error": last_error(log_dir, run_id),
         "preflight": record.get("preflight"),
@@ -540,7 +541,7 @@ def verify(
     }
     # What says something about the runtime, or leaves the run's records unfit to judge by: never asked again.
     wrong = not not_tested and bool(exit_code != 0 or landed or unlistable or record_problems or reached or changes)
-    result["ask_again"] = [] if wrong else unproven
+    result["ask_again"] = [] if wrong or result["timed_out"] else unproven
     result["passed"] = not wrong and not unproven
     with (log_dir / f"{run_id}.boundary-check.json").open("w", encoding="utf-8") as handle:
         json.dump(result, handle, indent=2, sort_keys=True)
@@ -548,21 +549,39 @@ def verify(
     return result
 
 
-def unclean_exit(result: Mapping[str, object]) -> str:
-    """What a verdict's first line says of a run that did not exit cleanly: how far it got, whether the boundary was
-    tested, and Codex's own last error. A run whose launcher was stopped before it ended left no exit code."""
-    calls = result["codex_tool_record"]["calls"]
+def how_ended(result: Mapping[str, object]) -> str:
+    """How a probe run ended, as its records show: its exit code, whether the launcher stopped it at the agent's time
+    limit, and how far the agent had got. A run whose launcher was stopped before it ended left no exit code."""
+    code, calls = result["run_exit_code"], result["codex_tool_record"]["calls"]
+    ended = "left no exit code" if code is None else f"ended with exit code {code}"
+    if result["timed_out"]:
+        ended += ", stopped by the launcher at the agent's time limit,"
     if not result["agent_started"]:
-        tested = "before the agent was started, so the probe tested nothing"
+        return f"{ended} before the agent was started"
+    if calls:
+        return f"{ended} after {calls} tool call{'' if calls == 1 else 's'}"
+    return f"{ended} before any tool call" if result["not_tested"] else f"{ended} with no tool call on record"
+
+
+def codex_said(result: Mapping[str, object]) -> str:
+    error = result["codex_last_error"]
+    return f"Codex's last error: {error}" if error else "Codex reported no error"
+
+
+def unclean_exit(result: Mapping[str, object]) -> str:
+    """What a verdict's first line says of a run that did not exit cleanly: how it ended, what its records show of
+    the boundary having been tested, and Codex's own last error."""
+    if not result["agent_started"]:
+        tested = ", so the probe tested nothing"
     elif result["not_tested"]:
-        tested = "before the agent made a tool call and left nothing, so the boundary was not tested"
-    elif not calls:
-        tested = "with no tool call in Codex's record, so nothing shows the boundary was tested"
+        tested = " and left nothing, so the boundary was not tested"
+    elif not result["codex_tool_record"]["calls"]:
+        tested = ""
+    elif result["unproven"]:
+        tested = ", so the boundary was tested only in part"
     else:
-        tested = f"after {calls} tool call{'' if calls == 1 else 's'}, so the boundary was tested only in part"
-    code, error = result["run_exit_code"], result["codex_last_error"]
-    ended = "the run left no exit code" if code is None else f"the run ended with exit code {code}"
-    return f"{ended} {tested}; " + (f"Codex's last error: {error}" if error else "Codex reported no error")
+        tested = ": every step was proven, and the run did not exit cleanly"
+    return f"the run {how_ended(result)}{tested}; {codex_said(result)}"
 
 
 def summarize(result: Mapping[str, object], out: TextIO, again: bool = False) -> None:
@@ -631,6 +650,30 @@ def summarize(result: Mapping[str, object], out: TextIO, again: bool = False) ->
     print("\n".join(lines), file=out)
 
 
+def conclude(results: Sequence[Mapping[str, object]], out: TextIO) -> None:
+    """A check's closing lines. One in which no probe run made a tool call says so, and one that ends after several
+    runs with steps unproven names them; both say how each run ended, with Codex's own last error for an exit that was
+    not clean."""
+    runs = f"{len(results)} probe run{'' if len(results) == 1 else 's'}"
+    endings = [
+        f"  {result['run_id']}: {how_ended(result)}" + (f"; {codex_said(result)}" * (result["run_exit_code"] != 0))
+        for result in results
+    ]
+    if all(result["not_tested"] for result in results):
+        lines = [
+            f"boundary check: NOT TESTED after {runs}: no probe run made a tool call, so the boundary was not tested"
+        ]
+        lines += endings + ["  read those errors before running the check again"]
+    elif len(results) == 1:
+        return
+    elif results[-1]["passed"]:
+        lines = [f"boundary check: PASSED after {runs}"]
+    else:
+        lines = [f"boundary check: FAILED after {runs}: still unproven: {', '.join(results[-1]['unproven']) or 'none'}"]
+        lines += endings
+    print("\n".join(lines), file=out)
+
+
 def main(
     repo_root: Path,
     env: Mapping[str, str],
@@ -654,7 +697,7 @@ def main(
         results = []
         left = clear_probe_files(boundary)
         if left:
-            print(f"gr0wthlab: removed what a stopped boundary check left in the areas: {', '.join(left)}", file=out)
+            print(f"gr0wthlab: removed boundary probe files left in the areas: {', '.join(left)}", file=out)
         before = snapshots(boundary)
         started: list[str] = []
         with stopped_check_leaves_nothing(boundary, started), local_listeners() as listeners:
@@ -671,16 +714,7 @@ def main(
                 results.append(verify(boundary, run_id, log_dir, before, listeners, needed))
                 needed = results[-1]["ask_again"] if len(results) < PROBE_RUNS else []
                 summarize(results[-1], out, again=bool(needed))
-        if all(result["not_tested"] for result in results):
-            print(
-                f"boundary check: NOT TESTED after {len(results)} probe runs: the model could not be reached, so no"
-                " probe run made a tool call and the boundary was not tested\n"
-                "  this says nothing about the boundary or the launcher; run the check again once Codex answers",
-                file=out,
-            )
-        elif len(results) > 1:
-            verdict = "PASSED" if results[-1]["passed"] else "FAILED"
-            print(f"boundary check: {verdict} after {len(results)} probe runs", file=out)
+        conclude(results, out)
     for result in results:
         print(f"  evidence: {log_dir / (str(result['run_id']) + '.boundary-check.json')}", file=out)
     return 0 if results[-1]["passed"] else 1

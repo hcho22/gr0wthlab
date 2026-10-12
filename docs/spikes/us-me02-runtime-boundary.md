@@ -470,11 +470,11 @@ The launcher now starts every run that way, weekly runs too, so the configuratio
 
 Asking again.
 The agent is the instrument that exercises the runtime, and an instrument slips: even with every step written out, it mistyped a path in 2 of the 12 attempts of an earlier draft of this fix.
-A step the agent skipped or sent wrongly says nothing about the runtime, so the check hands the agent the steps that still have no record again, in at most three probe runs, and fails if one is still unproven.
+A step that has no record after a run proves nothing either way, so the check hands the steps that still have no record over again, in at most three probe runs, and fails if one is still unproven.
 What a run must prove is the check's own list of steps, not whatever the run was handed.
 Anything that does say something about the runtime fails the check at once, with no further run: a sentinel that landed, a connection that got through, a change outside the areas, a run that did not exit cleanly, or a record of Codex's that is not whole.
 Asking again cannot hide a hole, because a hole shows as one of those, and none of them is ever asked about twice.
-One unclean exit was later set apart from the rest, a run that ended before its agent's first tool call and left nothing; [the section on it](#a-run-that-never-reached-the-model) says why that cannot hide a hole either.
+One unclean exit was later set apart from the rest, a run that ended before its agent's first tool call and left nothing; [the section on it](#a-run-that-made-no-tool-call) says why that cannot hide a hole either.
 
 One thing did not change, and the shape that first showed the problem still fails: nine targets sent as three patches prove no target.
 Codex refuses a patch as a whole when any one of its paths is outside the profile, so a refused patch that names three targets shows that one of them was refused, not which.
@@ -627,7 +627,7 @@ The check now reads a patch as Codex does, line by line, each trimmed first.
 It was shown live in a scratch clone whose probe paired Mandu's patch with RepToday's, and the evidence area's permitted patch with `src`'s, the second file of each pair named on a line indented by one space, run `20261012T065310Z-on-demand-e3a5`.
 Codex refused both patches whole, and the permitted evidence file did not land, so Codex 0.160.0 does read an indented line as naming a file.
 The check reported `mandu`, `reptoday`, and `src` each as `refused only in a patch that also named 1 other path`, and failed.
-That run's Codex log is now a fixture of the unit tests.
+A later run of the same scratch probe, `20261012T084444Z-on-demand-9319`, gave the same two refusals and the same verdict, and its Codex log is the fixture the unit tests read.
 No recorded run of the committed probe sent such a patch.
 
 Because the probe's wording changed, the streak was made again on the final code: 12 attempts one after another in one clone, fingerprint `cae5f107346663bbcf82d5e27f87a9883232a50e9d698fba9f52b86b81860760`.
@@ -683,37 +683,37 @@ Nine attempts passed, each in one probe run, and three failed:
 | 11 | `…072732Z-on-demand-10dd` | Passed | Not tried; the report says not attempted |
 | 12 | `…072838Z-on-demand-9990` | Passed | Not tried; the report says not attempted |
 
-In each of the three failures Codex gave up before the agent made a tool call, with `exceeded retry limit, last status: 429 Too Many Requests` in the run's `.events.jsonl`: the model's provider was refusing the account's requests.
+In each of the three failures the run ended before the agent made a tool call, and Codex's last error in the run's `.events.jsonl` was `exceeded retry limit, last status: 429 Too Many Requests`.
 The launcher's run ended with exit code 1, and the check failed at once, as it does for any run that did not exit cleanly.
 No sentinel escaped, no listener received a connection, and nothing outside the areas changed.
 Two of the four scratch clones lost their second probe run the same way in the same seconds: `ledger` dropped, `…072214Z-on-demand-a8c8` then `…072258Z-on-demand-bd6e`, and the `src` patch held back, `…072214Z-on-demand-c59f` then `…072300Z-on-demand-36c9`, each failed after two probe runs.
 The other two gave their verdicts once more: Mandu made writable failed at once as `20261012T072213Z-on-demand-250c`, and three patches at a time failed after three probe runs, `…072214Z-on-demand-ddf2`, `…072250Z-on-demand-734a`, `…072335Z-on-demand-9539`.
-The nine attempts that reached the model passed like the 12 before them.
+The nine attempts whose agents made tool calls passed like the 12 before them.
 
 No run was made after that streak: review's instruction was to stop at a streak that is not clean and report it, not to run until one is.
 The two edits were taken back, so the code this change holds is, file for file, the code the first streak, the scratch clones beside it, the production clone, and the re-check below ran on.
-What the second streak showed about the check was a limit, not a hole: a run that could not reach the model failed the check at once and was never asked again, and the verdict then said `Codex's log holds no tool call`, which was true and was not the cause.
-The cause was only in the line above the verdict, `finished with exit code 1`, and in the run's `.events.jsonl`.
-[The next section](#a-run-that-never-reached-the-model) changes that.
+What the second streak showed about the check was a limit, not a hole: a run that ended before any tool call failed the check at once and was never asked again, and the verdict said `Codex's log holds no tool call` and nothing of how the run had ended.
+That was only in the line above the verdict, `finished with exit code 1`, and in the run's `.events.jsonl`.
+[The next section](#a-run-that-made-no-tool-call) changes that.
 
-#### A run that never reached the model
+#### A run that made no tool call
 
-The runs of this section were made from 00:57 to 01:25 on 2026-10-12, Mac local time.
-The second streak above left a defect in view: the check still failed with nothing wrong, and in a way that read as the launcher's fault.
-A probe run that the model's provider refuses ends in about two seconds with exit code 1, before the agent has made a tool call.
-The check took that exit for a verdict on the runtime and failed at once.
-Its verdict listed nine targets with `no patch named its sentinel`, every shell target, every permitted write as missing, and a hint about Codex's log filter, and it never said that the run had not exited cleanly.
-It was reproduced on the code as it stood before this fix, in a scratch clone whose `runtime.json` named a model the account cannot use, run `20261012T075729Z-on-demand-d7b3`: Codex answered with a `400` error, the run ended with exit code 1 after no tool call, and the verdict was that same block.
+The runs of this section were made from 00:57 to 02:00 on 2026-10-12, Mac local time.
+The second streak above left a defect in view: a probe run that ended before any tool call failed the check at once, with a verdict that said nothing of how the run had ended.
+In the recorded runs such a run ended in about two seconds with exit code 1.
+The check took that exit for a verdict on the runtime.
+Its verdict listed nine targets with `no patch named its sentinel`, every shell target, every permitted write as missing, and a sentence about Codex's log filter, and it never said that the run had not exited cleanly.
+It was reproduced on the code as it stood before this fix, in a scratch clone whose `runtime.json` named a model the account cannot use, run `20261012T075729Z-on-demand-d7b3`: Codex's last error was a `400`, the run ended with exit code 1 after no tool call, and the verdict was that same block.
 
-What changed is all in how `probe.py` judges a run and words its verdict:
+The fix came in two steps, both in how `probe.py` judges a run and words its verdict.
+The first is commit `f30cccc`, which the streak below ran on:
 
-- A run that did not exit cleanly says so in the first line of its verdict: its exit code, how far it got (before the agent was started, before its first tool call, or after how many), whether the boundary was tested, and Codex's own last error, read from the run's `.events.jsonl`.
-- A run that also made no tool call attempted no target, so its verdict has no line for any target and no hint about the log filter.
-  The hint is kept for the one case it fits, a run that exited cleanly with no tool call on record.
+- A run that did not exit cleanly says so in the first line of its verdict: its exit code, how far it got (before the agent was started, before any tool call, or after how many), and Codex's own last error, read from the run's `.events.jsonl`.
+- A run that also made no tool call attempted no target, so its verdict has no line for any target.
 - A run whose agent was started, that did not exit cleanly, made no tool call, and left nothing at all was never an attempt.
   Nothing means every trace the check can see: no sentinel anywhere, no file in the areas but the launcher's own script, no kernel denial naming the run, no connection at either listener, and no change inside or outside the areas against the snapshot.
   Its verdict is `NOT TESTED`, and the check hands the same steps over again, within the same three probe runs.
-- A check whose every probe run ended that way ends `NOT TESTED after 3 probe runs`, saying that the model could not be reached and that this says nothing about the boundary or the launcher.
+- A check whose every probe run ended that way ends `NOT TESTED`.
   It is not a pass: the command exits with a failing status.
 - Every other unclean exit fails the check at once and is never asked again, as before: one after any tool call, one that left anything, and one whose agent the launcher never started, which is a failed preflight or a configuration it refused.
 
@@ -721,17 +721,14 @@ Asking such a run again cannot hide a hole.
 A write or a connection that got through is a trace, so that run is an attempt and fails at once, and a run that left none proved nothing either way and can never pass.
 `--verify` judges a run without the snapshot and the listeners, so it cannot show that a run left nothing; it calls such a run failed, with the same first line.
 
-The new verdicts were shown live on the fixed code, before it was committed, in scratch clones each changed one way:
+That step was shown live before it was committed, in scratch clones each changed one way; the lines quoted are as the check then printed them:
 
 | Scratch change | Verdict |
 | --- | --- |
 | A model the account cannot use | `NOT TESTED` three times, `20261012T080314Z-on-demand-b13c`, `…080319Z-on-demand-985a`, `…080324Z-on-demand-4920`, each with Codex's `400` error and no line for any target; the check ended `NOT TESTED after 3 probe runs` with a failing status, 16 seconds in all |
 | `src/` made writable | Failed at once, `20261012T080330Z-on-demand-b183`: `the run ended with exit code 3 before the agent was started`, under the launcher's own line naming the file its preflight wrote in `src/` |
-| Codex started without the log filter | Failed at once, `20261012T080341Z-on-demand-90f4`, as before: the run exited cleanly, so the verdict is `Codex's log holds no tool call` with the hint, though 11 kernel denials were there |
-| The agent's time limit set to 25 seconds | The first probe run met a real refusal, `20261012T080414Z-on-demand-e3a8`: `NOT TESTED`, with `429 Too Many Requests`, and it was asked again; the second, `…080417Z-on-demand-2719`, was stopped at the limit after 10 tool calls: `FAILED: the run ended with exit code 6 after 10 tool calls, so the boundary was tested only in part`, with its unproven targets listed, and there was no third run |
-
-Codex's log and event stream from one refused run of the second streak above, `20261012T072302Z-on-demand-8f37`, are now a fixture of the unit tests.
-The tests cover a refused run followed by a clean one, which passes; three refused runs, which end not tested; refused runs after a run that had proved all but one step, which fail with those steps still proven; an unclean exit after a tool call, which fails at once; a failed preflight; and an unclean run with no tool call that left files, a kernel denial, or a sentinel, each of which fails at once.
+| Codex started without the log filter | Failed at once, `20261012T080341Z-on-demand-90f4`, as before: the run exited cleanly and `Codex's log holds no tool call`, though 11 kernel denials were there |
+| The agent's time limit set to 25 seconds | The first probe run, `20261012T080414Z-on-demand-e3a8`, ended before any tool call with `429 Too Many Requests` as Codex's last error: `NOT TESTED`, and it was asked again; the second, `…080417Z-on-demand-2719`, was stopped at the limit after 10 tool calls: `FAILED: the run ended with exit code 6 after 10 tool calls, so the boundary was tested only in part`, with its unproven targets listed, and there was no third run |
 
 The streak for this fix ran on the commit that holds it, `f30ccccf53d52b7d49c9d7a16cece150740dabfa`, whose tree is `2f0f0ec4437613718ceff950fd8c81a6a30e0744`.
 Nothing was committed and no file was changed between that commit and the streak; the record of the streak, here, and of the re-check below came after both, and this note is the only file they touch.
@@ -757,25 +754,62 @@ All 12 passed, each in one probe run:
 
 No probe run was asked again, no attempt ended not tested, and none failed, so the streak stopped at 12 attempts, short of the 20 it was allowed.
 In every attempt nine of nine file-tool targets were refused on their own, eleven kernel denials named the run, neither listener received a connection, no sentinel escaped, and nothing changed outside the areas.
-The provider refused none of these runs, so the streak itself never met the new verdict; the scratch clone above with the 25 second limit did, on a real `429`.
+No run of the streak ended before a tool call, so the streak itself never met the new verdict; the scratch clone above with the 25 second limit did, in the run whose last error from Codex was a `429`.
+
+The second step came after that streak, and is everything that changed in the launcher's code since `f30cccc`.
+Review held every line the check prints, and every sentence here and in [operations](../operations.md#after-a-change-to-the-launcher-or-configuration) about its output, to one rule: a line states what a record shows, names no cause the records do not show, and neither clears nor blames the launcher, the configuration, the model, or the agent.
+The first step's wording broke that rule, and this is exactly what changed:
+
+- The closing line of a check in which no probe run made a tool call had said that the model could not be reached, that this said nothing about the boundary or the launcher, and that the check should be run again once Codex answered.
+  No record shows any of the three, and the scratch clone above with the unusable model is a case where each is false, since there the configuration named the model and no later run could differ.
+  The closing lines now say that no probe run made a tool call and that the boundary was not tested, give each run's exit code and Codex's own last error, or that Codex reported none, and tell the reader to read those errors before running the check again.
+- A run the launcher stopped at the agent's time limit is never asked again, whether or not it had made a tool call.
+  Under the first step one stopped before its first tool call was asked again, so a check could take three time limits; now the check ends there, and the verdict says that the launcher stopped the agent at its time limit and how far it had got.
+  A run that ended by itself before any tool call and left nothing is still asked again.
+- A check that ends after more than one probe run with steps unproven had closed with `FAILED after 3 probe runs` and no more.
+  Its closing lines now name the steps still unproven and say how each probe run ended: its exit code, how many tool calls it had made, and Codex's last error for an exit that was not clean.
+- A run that ended uncleanly after a tool call was said to have tested the boundary only in part, also when every step had its record.
+  That line is now printed only when a step is unproven; otherwise the verdict says that every step was proven and that the run did not exit cleanly.
+- A run with no tool call on record that did leave something was said to show nothing of the boundary having been tested, though what it left is listed under that line; the line now says only that no tool call is on record.
+- `Codex's log holds no tool call` had gone on to say when Codex records tool calls, which pointed at the log filter though the run's own record holds the filter it was started with; the line now ends there.
+- The line a run prints when it removes probe files it finds in the areas had called them what a stopped boundary check left; it now reads `removed boundary probe files left in the areas`, here, in a weekly run, and in the run report, since the files' names are all the record shows.
+
+What passes did not change.
+The same records are required for a pass and are read the same way, every case's exit status is as it was, and the only run whose asking again changed is the one stopped at the time limit before any tool call, which is no longer asked again.
+So the streak on `f30cccc` stands as the evidence for what passes, and no other streak was run.
+
+The second step was shown live in scratch clones again:
+
+| Scratch change | What the check printed |
+| --- | --- |
+| A model the account cannot use | `NOT TESTED` three times, `20261012T084959Z-on-demand-a628`, `…085004Z-on-demand-c8d1`, `…085010Z-on-demand-6eb6`, then `NOT TESTED after 3 probe runs: no probe run made a tool call, so the boundary was not tested`, one line for each run with `ended with exit code 1 before any tool call` and Codex's `400` error, and `read those errors before running the check again`; failing status |
+| The agent's time limit set to 3 seconds | One run, `20261012T085017Z-on-demand-710e`: `NOT TESTED: the run ended with exit code 6, stopped by the launcher at the agent's time limit, before any tool call and left nothing, so the boundary was not tested; Codex reported no error`, not asked again, then `NOT TESTED after 1 probe run`; failing status |
+| The agent's time limit set to 25 seconds | One run, `20261012T085118Z-on-demand-8e70`: `FAILED: the run ended with exit code 6, stopped by the launcher at the agent's time limit, after 4 tool calls, so the boundary was tested only in part; Codex reported no error`, with its unproven targets listed |
+| `src/` made writable | Failed at once, `20261012T085015Z-on-demand-e6f3`, with the same lines as before |
+| Codex started without the log filter | Failed at once, `20261012T085030Z-on-demand-f02d`: `Codex's record of the run's tool calls: Codex's log holds no tool call`, with 14 files in the areas and 11 kernel denials listed beside it |
+
+Codex's log and event stream from two runs that ended before any tool call are fixtures of the unit tests: `20261012T072302Z-on-demand-8f37` of the second streak above, whose last error was the `429`, and `20261012T080314Z-on-demand-b13c` of the first scratch table, whose last error was the `400`.
+The tests cover such a run followed by a clean one, which passes; three such runs with the `400`, which end not tested with each run's error in the closing lines; an agent stopped at its time limit before its first tool call, which is not asked again, and one stopped after a tool call; one step left out of the first run and then two runs with no tool call, which close with that step and how each run ended; every step proven and then an unclean exit; an unclean exit after a tool call with steps unproven; a failed preflight; and an unclean run with no tool call that left files, a kernel denial, or a sentinel, each of which fails at once.
+The fixture for the indented patch line was rebuilt in this step, since the report in the first run's log held em dashes: the scratch probe was run again as it was, the first of those runs, `20261012T084312Z-on-demand-59ff`, held them too, and the second, `20261012T084444Z-on-demand-9319`, held none.
 
 #### Re-check with the final launcher
 
-This change touches the launcher: `codex.py` adds `RUST_LOG` to the environment and reads Codex's tool call records, `probe.py` and the probe instruction are rewritten, `launcher.py` and `areas.py` clear leftover probe files before a run's preflight, `cycle.py` clears them before the production clone's pre-run records step, `report.py` names them in the run report, `probe.py` calls a run that never reached the model not tested and reads Codex's last error through `codex.py`, and `runtime.json`, `products.json`, and `boundary.py` are as they were.
+This change touches the launcher: `codex.py` adds `RUST_LOG` to the environment and reads Codex's tool call records, `probe.py` and the probe instruction are rewritten, `launcher.py` and `areas.py` clear leftover probe files before a run's preflight, `cycle.py` clears them before the production clone's pre-run records step, `report.py` names them in the run report, `probe.py` calls a run that made no tool call and left nothing not tested and reads Codex's last error through `codex.py`, and `runtime.json`, `products.json`, and `boundary.py` are as they were.
 The environment is part of the fingerprint, so every checkout's fingerprint changed.
-Both checks ran on the final code at 01:23 on 2026-10-12, Mac local time, with Codex CLI 0.160.0, right after the streak above.
-They ran from the linked worktree the review was made in, checked out at the streak's commit, `f30ccccf53d52b7d49c9d7a16cece150740dabfa`, with an empty `git status` before and after, against Mandu and the Product checkouts as they are.
-Its fingerprint is `ee01df833323999fc012904fe194ccaafdb81833a562e20b646e63a6cda73c7f`, as it was before the last fix, which changes neither the command nor the environment.
+Both checks ran on the final code at 01:58 on 2026-10-12, Mac local time, with Codex CLI 0.160.0, after the second step of the section above and the full unit suite on it.
+They ran from the linked worktree the review was made in, against Mandu and the Product checkouts as they are, with that step's changes not yet committed and the worktree's `git status` the same before and after.
+The code they ran on has the `src` tree `64dc8ff369e9f62515bdad09322fd9b9686babbf` and the `config` tree `18080e871557bdf598782a9b1cce2623ecd18faf`, which `git rev-parse <commit>:src` and `<commit>:config` give for the commit that adds this record; nothing but this note changed after the checks.
+The worktree's fingerprint is `ee01df833323999fc012904fe194ccaafdb81833a562e20b646e63a6cda73c7f`, as it has been since review's first changes, none of which since then changed the command or the environment.
 
 - `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
-- `src/bin/gr0wthlab boundary-check` passed at its first attempt, in one probe run, as `20261012T082350Z-on-demand-7c6b`: Codex's record held each of the nine forbidden targets in a patch of its own, refused; the unified log held eleven kernel Seatbelt denials naming the run, one for each forbidden shell write by its full path and one for each local listener; neither listener received a connection; the permitted files landed in all six areas; no sentinel escaped; and nothing outside the areas changed.
-  The agent ran 41 seconds of its 30 minute limit.
+- `src/bin/gr0wthlab boundary-check` passed at its first attempt, in one probe run, as `20261012T085859Z-on-demand-84ce`: Codex's record held each of the nine forbidden targets in a patch of its own, refused; the unified log held eleven kernel Seatbelt denials naming the run, one for each forbidden shell write by its full path and one for each local listener; neither listener received a connection; the permitted files landed in all six areas; no sentinel escaped; and nothing outside the areas changed.
+  The agent ran 35 seconds of its 30 minute limit.
 
 These replace the earlier checks of this work, which passed the same way.
-From the same worktree, the boundary check passed as `20261012T071227Z-on-demand-8e22` after review's first changes and before the fix of the section above; its agent did not try the code route.
+From the same worktree, the boundary check passed as `20261012T082350Z-on-demand-7c6b` at commit `f30ccccf53d52b7d49c9d7a16cece150740dabfa`, right after the streak, with an empty `git status` before and after, and as `20261012T071227Z-on-demand-8e22` after review's first changes and before the fix of the section above; that run's agent did not try the code route.
 From this work's own linked worktree, fingerprint `07f72315f3b9fb44df59f949e6a00605c5fb678231ad25fa0d1d3a8c4ccd0dc0`, it passed as `20261012T061856Z-on-demand-8c5f` after the clearing of leftover probe files was added, and as `20261012T053601Z-on-demand-fb8a` before it.
 Mandu's, RepToday's, and Immerse's HEAD, git status, and a digest over every file outside `.git` were the same before the first live run of this work and after the last.
-The same held, with each checkout's branch and stash as well, from before the first of review's live runs to after the last, and again from before the first run of the last fix to after this re-check.
+The same held, with each checkout's branch and stash as well, from before the first of review's live runs to after the last, again across the runs of the first step of the fix above, and again from before the first run of its second step to after this re-check.
 
 ## Scheduled and on-demand runs share one configuration
 
@@ -816,8 +850,8 @@ Records commits never touch code or Guardrail configuration, so G8 holds, and ea
   The shell, network, and nothing-changed proofs do not have this limit: the kernel's log, the check's own listeners, and the filesystem are outside what a run can write.
 - Codex keeps only the first 2 KiB of a tool's output in that record; a refusal is 82 bytes, and the arguments are kept whole.
 - A permitted file the agent wrote under a mistyped name stays in its area, and the check reports it as a change and fails; this did not happen in any recorded run.
-- A probe run that cannot reach the model, as when the Codex account is rate limited, proves nothing, and a check whose three probe runs all end that way ends `NOT TESTED`, with a failing status.
-  That is no verdict on the boundary, and the only remedy is to run the check again once Codex answers; the check does not wait between its probe runs, and a refusal takes about two seconds, so three in a row can pass in ten.
+- A check in which no probe run makes a tool call proves nothing and ends `NOT TESTED`, with a failing status.
+  The check does not wait between its probe runs, and in the recorded runs one that ended before any tool call took about two seconds, so three in a row can pass in about ten.
 - The boundary check does not hold the checkout's run lock.
   A weekly run started in the same checkout while a check is going changes `workspace/` under it and removes its script, and the check then fails or asks again; run one at a time.
 - Sub-agents are off.

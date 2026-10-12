@@ -182,25 +182,33 @@ The boundary check passes only when the runtime's own records show all of this, 
 - Both permitted files landed in every area.
 
 The launcher writes every step for the agent: one patch per target, and one script, placed in `workspace/instructions/` for the length of the run, that holds every shell step.
-The agent is only the instrument, so a step it skipped or sent wrongly is handed to it again, in at most three probe runs per check; the output then shows `NOT YET PROVEN` for the earlier run, what it asks again for, and one closing line with the verdict.
-Anything that says something about the runtime fails the check at once, with no further run: a sentinel that landed, a connection that got through, a change outside the areas, a run that did not exit cleanly, with the one exception below, or a record of Codex's that is not whole.
-A `FAILED` check names the target and what the record shows for it, for example `no patch named its sentinel`; read that before running the check again, since a failure after three probe runs is not the agent's slip.
-A probe run that did not exit cleanly says so in the first line of its verdict, with its exit code, Codex's own last error, and whether the boundary was tested.
-One such run is no verdict at all: a run whose agent was started and that ended before the agent's first tool call, leaving nothing, as when the model cannot be reached because the Codex account is rate limited.
-Its verdict is `NOT TESTED`, with Codex's error, for example `429 Too Many Requests`, and no line for any target; the check hands the same steps over again, within the same three probe runs.
-A check whose every probe run ended that way ends `NOT TESTED after 3 probe runs`: the boundary was not tested because the model could not be reached.
-That is neither a boundary failure nor a fault in the launcher, and it is not a pass either, so the command still exits with a failing status; run the check again once Codex answers.
-A run that ended uncleanly after a tool call, or that left anything behind, was an attempt: it fails the check at once, and its first line says how far it got.
+Every line the check prints states what a record shows, and names no cause beyond it.
+A step that has no record after a probe run is handed over again, in at most three probe runs per check; the output then shows `NOT YET PROVEN` for the earlier run and what it asks again for.
+These end the check as failed at once, with no further run: a sentinel that landed, a connection that got through, a change outside the areas, a run that did not exit cleanly, with the one exception below, or a record of Codex's that is not whole.
+A `FAILED` run names each target and what the record shows for it, for example `no patch named its sentinel`.
+A check that ends after more than one probe run with steps unproven closes with those steps and with how each probe run ended: its exit code, how many tool calls it had made, and Codex's own last error for an exit that was not clean.
+Read how each run ended before running the check again.
+
+A probe run that did not exit cleanly says so in the first line of its verdict: its exit code, whether the launcher stopped it at the agent's time limit, how far the agent had got, and Codex's own last error, or that Codex reported none.
+One such run is asked again: a run whose agent was started and that ended by itself before any tool call, leaving nothing behind.
+Its verdict is `NOT TESTED`, with no line for any target, and the check hands the same steps over again, within the same three probe runs.
+A run the launcher stopped at the agent's time limit is never asked again, whether or not it had made a tool call: the check ends there.
+A check in which no probe run made a tool call ends `NOT TESTED`: its closing lines say so, give each run's exit code and Codex's last error, and say that the boundary was not tested.
+That is not a pass, so the command exits with a failing status; read those errors before running the check again.
+A run that ended uncleanly after a tool call, or that left anything behind, fails the check at once.
+Its first line says after how many tool calls it ended, and either that the boundary was tested only in part or, when every step has its record, that every step was proven and the run did not exit cleanly.
 
 A check stopped before it has judged its run, by Ctrl-C, a kill, or the Mac going down, can leave its script and the run's sentinels in `workspace/`.
-The next run of any kind, weekly or check, removes them and says `removed what a stopped boundary check left in the areas`.
+The next run of any kind, weekly or check, removes every file at the top of an area whose name starts with `gr0wthlab-boundary-probe-`, and says `removed boundary probe files left in the areas` with their paths.
 A weekly run in this clone does it before its pre-run sync commits `workspace/`, and every run does it before its agent starts, so no agent finds them and no records step commits them.
 A weekly run's report names what was removed in its Agent section.
 Run one thing at a time in a checkout: the check does not hold the run lock, and a run started while a check is going removes that check's script.
 
 Each probe run leaves, in `~/Library/Logs/gr0wthlab/`, the instruction it handed over (`<run id>.probe.md`), its script (`<run id>.probe.sh`), Codex's log (`<run id>.stderr.log`), and the verdict with its evidence (`<run id>.boundary-check.json`).
 Every run, weekly or check, starts Codex with `RUST_LOG=error,codex_otel.log_only=info`, so its log keeps a record of each tool call with its arguments and output, and the Codex account's email address on each record; the logs stay on the Mac.
-A Codex upgrade can change that record's format, which fails the check with `Codex's log holds no tool call`; fix the reading of it in `src/gr0wthlab/codex.py` through a reviewed change, never by loosening the check.
+A run that exited cleanly and whose log holds no such record fails the check with `Codex's log holds no tool call`.
+Two records are worth reading then, both in `<run id>.json`: `environment.RUST_LOG`, and `codex_version`, since the reading of the log in `src/gr0wthlab/codex.py` was written against Codex CLI 0.160.0.
+Change that reading only through a reviewed change, never by loosening the check.
 
 To repeat the check on the scheduled path, generate a one-off LaunchAgent a few minutes ahead, then remove it once it has run:
 

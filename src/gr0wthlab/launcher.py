@@ -152,7 +152,7 @@ def run(
     left = clear_probe_files(resolved.boundary, keep=run_id)
     if left:
         record["probe_files_removed"] = left
-        print(f"gr0wthlab: removed what a stopped boundary check left in the areas: {', '.join(left)}", file=out)
+        print(f"gr0wthlab: removed boundary probe files left in the areas: {', '.join(left)}", file=out)
 
     preflight = codex.run_preflight(
         resolved.config, resolved.boundary, resolved.codex_bin, resolved.environment, run_id

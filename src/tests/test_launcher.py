@@ -123,10 +123,8 @@ class LeftoverTest(unittest.TestCase):
         )
         self.assertEqual((record["exit_code"], record["agent_started"]), (0, True))
         self.assertEqual(record["probe_files_removed"], [str(stale.relative_to(self.repo))])
-        self.assertIn(
-            f"removed what a stopped boundary check left in the areas: {stale.relative_to(self.repo)}", out.getvalue()
-        )
-        self.assertLess(out.getvalue().index("removed what"), out.getvalue().index("preflight refused"))
+        self.assertIn(f"removed boundary probe files left in the areas: {stale.relative_to(self.repo)}", out.getvalue())
+        self.assertLess(out.getvalue().index("removed boundary probe files"), out.getvalue().index("preflight refused"))
         self.assertFalse(stale.exists())
         self.assertTrue(mine.is_file(), "the run in progress keeps its own files")
 
@@ -137,7 +135,7 @@ class LeftoverTest(unittest.TestCase):
         record = launcher.run(self.repo, task, "on-demand", self.env, self.home, out, None, facts, time_limit=60)
         self.assertEqual(record["exit_code"], 0)
         self.assertNotIn("probe_files_removed", record)
-        self.assertNotIn("removed what", out.getvalue())
+        self.assertNotIn("removed boundary probe files", out.getvalue())
 
 
 class CliTest(unittest.TestCase):

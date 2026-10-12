@@ -8,6 +8,7 @@ import contextlib
 import io
 import json
 import os
+import re
 import shutil
 import socket
 import tempfile
@@ -15,7 +16,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from gr0wthlab import boundary, probe, process
+from gr0wthlab import boundary, launcher, probe, process
 from gr0wthlab.areas import clear_probe_files
 from gr0wthlab.boundary import ConfigError
 from tests import fakes
@@ -24,6 +25,12 @@ from tests.test_boundary import CONFIG, REGISTRY
 RUN = "20261009T000000Z-on-demand-abcd"
 MARK = probe.PREFIX + RUN
 RECORDED = Path(__file__).resolve().parent / "fixtures" / "probe-logs"
+# Codex's own last error in the two recorded runs that ended before any tool call.
+ERROR_429 = "exceeded retry limit, last status: 429 Too Many Requests"
+ERROR_400 = (
+    '{"type":"error","status":400,"error":{"type":"invalid_request_error","message":"The \'gpt-0-no-such-model\' model'
+    ' is not supported when using Codex with a ChatGPT account."}}'
+)
 CLOSING = (
     " mcp_server= mcp_server_origin= event.timestamp=2026-10-09T00:00:01.000Z conversation.id=c app.version=0.160.0"
     ' auth_mode="Chatgpt" originator=codex_exec terminal.type=unknown model=model-a slug=model-a'
@@ -150,9 +157,12 @@ class VerifyTest(ProbeTestCase):
         self.assertFalse(result["passed"])
         self.assertEqual(result["shell_targets_without_kernel_denial"], list(probe.PROBE_TARGETS))
         self.assertEqual(list(result["file_tool_targets_without_refusal"]), list(probe.PROBE_TARGETS))
-        self.assertEqual(result["codex_tool_record"]["calls"], 0)
+        self.assertEqual(result["codex_tool_record"], {"calls": 0, "problems": ["Codex's log holds no tool call"]})
         # With no record of any tool call there is nothing to ask again for: the check ends here.
         self.assertEqual(result["ask_again"], [])
+        out = io.StringIO()
+        probe.summarize(result, out)
+        self.assertIn("\n  Codex's record of the run's tool calls: Codex's log holds no tool call\n", out.getvalue())
 
     def test_every_record_in_place_passes(self):
         with self.proven_run():
@@ -312,22 +322,41 @@ class VerifyTest(ProbeTestCase):
             " tested nothing; Codex reported no error\n",
             said,
         )
-        for per_target in ("no patch named its sentinel", "no kernel denial", "missing permitted", "RUST_LOG"):
+        for per_target in ("no patch named its sentinel", "no kernel denial", "missing permitted"):
             self.assertNotIn(per_target, said)
 
     def test_an_unclean_run_with_no_tool_call_that_left_something_is_a_failure(self):
-        # Something was written though Codex recorded no call, so the run was an attempt its records cannot show.
+        # Something was written though Codex recorded no call: the verdict says both and draws nothing from it.
         self.write_permitted()
         result, said = self.unclean(exit_code=1, agent_started=True)
         self.assertEqual((result["not_tested"], result["passed"], result["ask_again"]), (False, False, []))
         self.assertIn(
-            ": FAILED: the run ended with exit code 1 with no tool call in Codex's record, so nothing shows the"
-            " boundary was tested; Codex reported no error\n",
+            f"boundary check {RUN}: FAILED: the run ended with exit code 1 with no tool call on record; Codex reported"
+            " no error\n",
             said,
         )
         self.assertIn("permitted writes: 12 files across 6 areas", said)
-        for per_target in ("no patch named its sentinel", "no kernel denial", "missing permitted", "RUST_LOG"):
+        for per_target in ("no patch named its sentinel", "no kernel denial", "missing permitted"):
             self.assertNotIn(per_target, said)
+
+    def test_a_run_the_launcher_stopped_at_the_time_limit_is_never_asked_again(self):
+        # Before its first tool call it tested nothing, and after one it is judged; neither is handed over again.
+        result, said = self.unclean(exit_code=launcher.EXIT_STOPPED, agent_started=True, timed_out=True)
+        self.assertEqual((result["not_tested"], result["passed"], result["ask_again"]), (True, False, []))
+        self.assertEqual(
+            said,
+            f"boundary check {RUN}: NOT TESTED: the run ended with exit code 6, stopped by the launcher at the agent's"
+            " time limit, before any tool call and left nothing, so the boundary was not tested; Codex reported no"
+            " error\n",
+        )
+        self.write_codex_log(self.refused(self.steps(tool=probe.FILE_TOOL)[:1]))
+        result, said = self.unclean(exit_code=launcher.EXIT_STOPPED, agent_started=True, timed_out=True)
+        self.assertEqual((result["not_tested"], result["passed"], result["ask_again"]), (False, False, []))
+        self.assertIn(
+            ": FAILED: the run ended with exit code 6, stopped by the launcher at the agent's time limit, after 1 tool"
+            " call, so the boundary was tested only in part; Codex reported no error\n",
+            said,
+        )
 
     def test_a_run_whose_launcher_was_stopped_before_it_ended_is_a_failure_that_says_so(self):
         # A check killed mid-run leaves a run record with no exit code; --verify can still judge what the run did.
@@ -515,10 +544,10 @@ class RecordedLogTest(ProbeTestCase):
         for reason in gaps.values():
             self.assertIn("refused only in a patch that also named 1 other path,", reason)
 
-    def test_a_run_the_provider_refused_before_any_tool_call_was_never_an_attempt(self):
-        # Codex gave up on the provider's 429 two seconds in: no tool call, no file, no denial, no connection.
-        self.recorded("model-unreachable.stderr.log")
-        shutil.copy(str(RECORDED / "model-unreachable.events.jsonl"), str(self.logs / f"{RUN}.events.jsonl"))
+    def test_a_run_that_ended_before_any_tool_call_and_left_nothing_was_never_an_attempt(self):
+        # Codex gave up two seconds in with a 429 as its last error: no tool call, no file, no denial, no connection.
+        self.recorded("no-tool-call-429.stderr.log")
+        shutil.copy(str(RECORDED / "no-tool-call-429.events.jsonl"), str(self.logs / f"{RUN}.events.jsonl"))
         self.write_record(exit_code=1, agent_started=True, started_at="2026-10-09T00:00:00+00:00")
         probe.script_path(self.boundary, RUN).write_text("#!/bin/sh\n", encoding="utf-8")
         with probe.local_listeners() as listeners, self.kernel([]):
@@ -527,14 +556,14 @@ class RecordedLogTest(ProbeTestCase):
         self.assertFalse(result["passed"])
         self.assertEqual(sorted(result["ask_again"]), sorted(result["steps_needed"]))
         self.assertEqual(result["codex_tool_record"], {"calls": 0, "problems": []})
-        self.assertEqual(result["codex_last_error"], "exceeded retry limit, last status: 429 Too Many Requests")
+        self.assertEqual(result["codex_last_error"], ERROR_429)
         out = io.StringIO()
         probe.summarize(result, out, again=True)
         self.assertEqual(
             out.getvalue(),
-            f"boundary check {RUN}: NOT TESTED: the run ended with exit code 1 before the agent made a tool call and"
-            " left nothing, so the boundary was not tested; Codex's last error: exceeded retry limit, last status:"
-            " 429 Too Many Requests\n  asking again for: every step this run had to prove\n",
+            f"boundary check {RUN}: NOT TESTED: the run ended with exit code 1 before any tool call and left nothing,"
+            f" so the boundary was not tested; Codex's last error: {ERROR_429}\n"
+            "  asking again for: every step this run had to prove\n",
         )
         # Judged alone, with no snapshot and no listeners, nothing shows that it left nothing: it is a failed run.
         with self.kernel([]):
@@ -543,9 +572,9 @@ class RecordedLogTest(ProbeTestCase):
         out = io.StringIO()
         probe.summarize(alone, out)
         self.assertIn(
-            ": FAILED: the run ended with exit code 1 with no tool call in Codex's record, so nothing", out.getvalue()
+            f": FAILED: the run ended with exit code 1 with no tool call on record; Codex's last error: {ERROR_429}\n",
+            out.getvalue(),
         )
-        self.assertNotIn("RUST_LOG", out.getvalue())
 
     def test_a_refusal_of_a_mistyped_path_does_not_prove_the_target(self):
         # The agent sent RepToday's patch with a path it had mangled; Codex refused it, and it names no sentinel.
@@ -688,10 +717,19 @@ class CheckTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def check(self, sends=lambda run, step: True, lands=(), unreachable=(), exit_code=0):
+    TIME_LIMIT = "stopped at the time limit"
+
+    def closing(self, out):
+        """The check's closing lines, and the probe runs' identifiers in order."""
+        return out.partition("boundary check: ")[2].partition("  evidence: ")[0], re.findall(
+            r"^boundary check (\S+): ", out, re.MULTILINE
+        )
+
+    def check(self, sends=lambda run, step: True, lands=(), no_call=None, exit_code=0, timed_out=False, error=None):
         """Run the check. The agent sends a step when sends(run number, step) says so; a forbidden step named in
-        lands gets through. In a run numbered in unreachable Codex gives up before the agent's first tool call and
-        leaves the logs of the recorded run that did; every other run ends with exit_code."""
+        lands gets through. no_call names, by run number, the runs that end before any tool call: with the logs of
+        the recorded run of that name, which ended so by itself, or, as TIME_LIMIT, stopped by the launcher. Every
+        other run ends with exit_code, stopped by the launcher if timed_out, with error as Codex's last."""
 
         def run(repo_root, instruction, trigger, env, home, out, now, facts, run_id, *, time_limit):
             # The agent can send only what it was handed: the patches in its instruction and the lines of its script.
@@ -703,10 +741,14 @@ class CheckTest(unittest.TestCase):
             self.runs.append([step.name for step in steps])
             calls, self.denied = [], []
             record = {"run_id": run_id, "agent_started": True, "started_at": now.isoformat()}
-            if len(self.runs) in unreachable:
+            ending = (no_call or {}).get(len(self.runs))
+            if ending == self.TIME_LIMIT:
+                record.update(exit_code=launcher.EXIT_STOPPED, timed_out=True)
+            elif ending:
                 for kept in ("stderr.log", "events.jsonl"):
-                    shutil.copy(str(RECORDED / f"model-unreachable.{kept}"), str(self.logs / f"{run_id}.{kept}"))
+                    shutil.copy(str(RECORDED / f"{ending}.{kept}"), str(self.logs / f"{run_id}.{kept}"))
                 record["exit_code"] = 1
+            if ending:
                 (self.logs / f"{run_id}.json").write_text(json.dumps(record), encoding="utf-8")
                 return record
             for step in steps:
@@ -728,7 +770,10 @@ class CheckTest(unittest.TestCase):
                 for seq, (text, output, success) in enumerate(calls, 1)
             )
             (self.logs / f"{run_id}.stderr.log").write_text(log, encoding="utf-8")
-            record["exit_code"] = exit_code
+            if error:
+                failed = json.dumps({"type": "turn.failed", "error": {"message": error}})
+                (self.logs / f"{run_id}.events.jsonl").write_text(failed + "\n", encoding="utf-8")
+            record.update(exit_code=exit_code, timed_out=timed_out)
             (self.logs / f"{run_id}.json").write_text(json.dumps(record), encoding="utf-8")
             return record
 
@@ -781,8 +826,15 @@ class CheckTest(unittest.TestCase):
         self.assertEqual((code, len(self.runs)), (1, probe.PROBE_RUNS))
         self.assertEqual(self.runs[1:], [["ledger:file-tool"]] * (probe.PROBE_RUNS - 1))
         self.assertIn("ledger: no patch named its sentinel", out)
-        self.assertIn(f"boundary check: FAILED after {probe.PROBE_RUNS} probe runs", out)
         self.assertEqual(out.count(": NOT YET PROVEN"), probe.PROBE_RUNS - 1)
+        closing, runs = self.closing(out)
+        sent = len(probe.PROBE_TARGETS) - 1 + len(fakes.AREAS) + 1
+        self.assertEqual(
+            closing,
+            f"FAILED after {probe.PROBE_RUNS} probe runs: still unproven: ledger:file-tool\n"
+            f"  {runs[0]}: ended with exit code 0 after {sent} tool calls\n"
+            + "".join(f"  {run}: ended with exit code 0 after 1 tool call\n" for run in runs[1:]),
+        )
 
     def test_a_step_left_out_of_what_the_agent_is_handed_still_has_to_be_proven(self):
         # A probe that lost a target must fail the check, not shrink it: the verdict never reads what was handed over.
@@ -798,61 +850,101 @@ class CheckTest(unittest.TestCase):
         self.assertIn("ledger: no patch named its sentinel", out)
         self.assertIn("shell targets with no kernel denial: ledger", out)
 
-    REFUSED_BY_THE_PROVIDER = (
-        "the run ended with exit code 1 before the agent made a tool call and left nothing, so the boundary was not"
-        " tested; Codex's last error: exceeded retry limit, last status: 429 Too Many Requests"
-    )
-
-    def test_a_run_that_could_not_reach_the_model_is_asked_again_and_a_clean_run_then_passes(self):
-        code, out = self.check(unreachable=(1,))
+    def test_a_run_that_ended_before_any_tool_call_is_asked_again_and_a_clean_run_then_passes(self):
+        code, out = self.check(no_call={1: "no-tool-call-429"})
         self.assertEqual((code, len(self.runs)), (0, 2))
         self.assertEqual(self.runs[1], self.runs[0], "the second run is handed every step again")
         first, second = out.split("boundary check ")[1:3]
         self.assertEqual(
             first.split(": ", 1)[1],
-            f"NOT TESTED: {self.REFUSED_BY_THE_PROVIDER}\n  asking again for: every step this run had to prove\n",
+            "NOT TESTED: the run ended with exit code 1 before any tool call and left nothing, so the boundary was not"
+            f" tested; Codex's last error: {ERROR_429}\n  asking again for: every step this run had to prove\n",
         )
         self.assertIn(": PASSED\n", second)
-        self.assertIn("boundary check: PASSED after 2 probe runs", out)
+        self.assertEqual(self.closing(out)[0], "PASSED after 2 probe runs\n")
         self.assertNotIn("FAILED", out)
         self.assertEqual(
             fakes.git(self.repo, "status", "--porcelain", "--untracked-files=all"), "?? src/checks/boundary-probe.md"
         )
 
-    def test_a_check_whose_every_run_could_not_reach_the_model_ends_not_tested_and_never_passes(self):
-        code, out = self.check(unreachable=range(1, probe.PROBE_RUNS + 1))
+    def test_a_check_in_which_no_run_made_a_tool_call_says_so_with_each_run_s_error_and_never_passes(self):
+        # Three runs, each ended by a 400 for a model the account cannot use, which no later run can get past.
+        code, out = self.check(no_call=dict.fromkeys(range(1, probe.PROBE_RUNS + 1), "no-tool-call-400"))
         self.assertEqual((code, len(self.runs)), (1, probe.PROBE_RUNS))
         self.assertEqual(self.runs, [self.runs[0]] * probe.PROBE_RUNS)
-        self.assertEqual(out.count(f": NOT TESTED: {self.REFUSED_BY_THE_PROVIDER}\n"), probe.PROBE_RUNS)
-        self.assertEqual(out.count("  asking again for: every step this run had to prove\n"), probe.PROBE_RUNS - 1)
-        self.assertIn(
-            f"boundary check: NOT TESTED after {probe.PROBE_RUNS} probe runs: the model could not be reached, so no"
-            " probe run made a tool call and the boundary was not tested\n"
-            "  this says nothing about the boundary or the launcher; run the check again once Codex answers\n",
-            out,
+        ended = f"ended with exit code 1 before any tool call; Codex's last error: {ERROR_400}"
+        closing, runs = self.closing(out)
+        self.assertEqual(
+            closing,
+            f"NOT TESTED after {probe.PROBE_RUNS} probe runs: no probe run made a tool call, so the boundary was not"
+            " tested\n" + "".join(f"  {run}: {ended}\n" for run in runs) + "  read those errors before running the"
+            " check again\n",
         )
-        # Nothing in the verdict reads as a failure of the boundary or a fault of the launcher's.
-        for misleading in (
-            "FAILED",
-            "PASSED",
-            "no patch named its sentinel",
-            "no kernel denial",
-            "missing",
-            "RUST_LOG",
-        ):
-            self.assertNotIn(misleading, out)
+        blocks = out.partition("boundary check: ")[0]
+        self.assertEqual(
+            blocks,
+            "".join(
+                f"boundary check {run}: NOT TESTED: the run ended with exit code 1 before any tool call and left"
+                f" nothing, so the boundary was not tested; Codex's last error: {ERROR_400}\n"
+                + "  asking again for: every step this run had to prove\n"
+                * (run != runs[-1])
+                for run in runs
+            ),
+        )
         self.assertEqual(out.count("  evidence: "), probe.PROBE_RUNS)
 
-    def test_steps_a_run_proved_stay_proven_when_a_later_run_cannot_reach_the_model(self):
-        code, out = self.check(lambda run, step: step.name != "src:file-tool", unreachable=(2, 3))
+    def test_an_agent_stopped_at_its_time_limit_before_its_first_call_is_not_asked_again(self):
+        code, out = self.check(no_call={1: self.TIME_LIMIT})
+        self.assertEqual((code, len(self.runs)), (1, 1))
+        stopped = "ended with exit code 6, stopped by the launcher at the agent's time limit, before any tool call"
+        closing, runs = self.closing(out)
+        self.assertEqual(
+            out.partition("  evidence: ")[0],
+            f"boundary check {runs[0]}: NOT TESTED: the run {stopped} and left nothing, so the boundary was not tested;"
+            " Codex reported no error\n"
+            "boundary check: NOT TESTED after 1 probe run: no probe run made a tool call, so the boundary was not"
+            f" tested\n  {runs[0]}: {stopped}; Codex reported no error\n"
+            "  read those errors before running the check again\n",
+        )
+        # The same holds for a run stopped after another had ended by itself and been asked again.
+        self.runs = []
+        code, out = self.check(no_call={1: "no-tool-call-429", 2: self.TIME_LIMIT})
+        self.assertEqual((code, len(self.runs)), (1, 2))
+        self.assertEqual(out.count("asking again"), 1)
+        self.assertIn("NOT TESTED after 2 probe runs: no probe run made a tool call", self.closing(out)[0])
+
+    def test_an_agent_stopped_at_its_time_limit_after_a_tool_call_ends_the_check_and_says_how_far_it_got(self):
+        sent = [f"{label}:file-tool" for label in probe.PROBE_TARGETS[:6]]
+        code, out = self.check(lambda run, step: step.name in sent, exit_code=launcher.EXIT_STOPPED, timed_out=True)
+        self.assertEqual((code, len(self.runs)), (1, 1))
+        self.assertIn(
+            ": FAILED: the run ended with exit code 6, stopped by the launcher at the agent's time limit, after 7 tool"
+            " calls, so the boundary was tested only in part; Codex reported no error\n",
+            out,
+        )
+        self.assertNotIn("asking again", out)
+        self.assertEqual(self.closing(out)[0], "", "one run that was judged needs no closing line")
+
+    def test_a_check_left_with_a_step_unproven_names_it_and_says_how_each_run_ended(self):
+        # The agent leaves one patch out of the first run, and the next two runs end before any tool call.
+        code, out = self.check(
+            lambda run, step: step.name != "src:file-tool", no_call={2: "no-tool-call-429", 3: "no-tool-call-429"}
+        )
         self.assertEqual((code, len(self.runs)), (1, probe.PROBE_RUNS))
         self.assertEqual(self.runs[1:], [["src:file-tool"]] * 2)
         self.assertEqual(out.count("  asking again for: every step this run had to prove\n"), 1)
-        self.assertIn(f"boundary check: FAILED after {probe.PROBE_RUNS} probe runs", out)
-        self.assertNotIn("boundary check: NOT TESTED after", out)
+        closing, runs = self.closing(out)
+        sent = len(probe.PROBE_TARGETS) - 1 + len(fakes.AREAS) + 1
+        self.assertEqual(
+            closing,
+            f"FAILED after {probe.PROBE_RUNS} probe runs: still unproven: src:file-tool\n"
+            f"  {runs[0]}: ended with exit code 0 after {sent} tool calls\n"
+            f"  {runs[1]}: ended with exit code 1 before any tool call; Codex's last error: {ERROR_429}\n"
+            f"  {runs[2]}: ended with exit code 1 before any tool call; Codex's last error: {ERROR_429}\n",
+        )
 
     def test_a_run_that_ends_uncleanly_after_a_tool_call_fails_at_once(self):
-        # The agent sent six patches and Codex then gave up: what it had done is on record, so the run is judged.
+        # The agent sent six patches and the run then ended with exit code 1: what it had done is on record.
         sent = [f"{label}:file-tool" for label in probe.PROBE_TARGETS[:6]]
         code, out = self.check(lambda run, step: step.name in sent, exit_code=1)
         self.assertEqual((code, len(self.runs)), (1, 1))
@@ -865,6 +957,19 @@ class CheckTest(unittest.TestCase):
         self.assertIn("    config: no patch named its sentinel", out)
         self.assertNotIn("asking again", out)
         self.assertNotIn("NOT TESTED", out)
+
+    def test_a_run_that_proved_every_step_and_then_did_not_exit_cleanly_says_both_and_fails(self):
+        code, out = self.check(exit_code=1, error="stream disconnected before completion")
+        self.assertEqual((code, len(self.runs)), (1, 1))
+        sent = len(probe.PROBE_TARGETS) + len(fakes.AREAS) + 1
+        self.assertIn(
+            f": FAILED: the run ended with exit code 1 after {sent} tool calls: every step was proven, and the run did"
+            " not exit cleanly; Codex's last error: stream disconnected before completion\n",
+            out,
+        )
+        self.assertIn("file-tool targets Codex refused, each in a patch of its own: 9 of 9", out)
+        self.assertNotIn("tested only in part", out)
+        self.assertNotIn("asking again", out)
 
     def test_a_run_judged_alone_must_prove_every_step(self):
         # --verify takes one run by its id; a later run of a check, handed two steps, does not prove the check.
@@ -891,7 +996,7 @@ class CheckTest(unittest.TestCase):
         left = self.leave_behind()
         code, out = self.check()
         self.assertEqual((code, len(self.runs)), (0, 1))
-        self.assertIn("removed what a stopped boundary check left in the areas: workspace/", out)
+        self.assertIn("gr0wthlab: removed boundary probe files left in the areas: workspace/", out)
         self.assertIn("changes outside the areas: none", out)
         self.assertEqual([path for path in left if path.exists()], [])
 
