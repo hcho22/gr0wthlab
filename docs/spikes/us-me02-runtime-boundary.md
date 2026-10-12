@@ -34,7 +34,7 @@ The PRD's "Codex automation" is therefore `codex exec` started by a LaunchAgent,
 
 | File | Role |
 | --- | --- |
-| [`config/guardrails/runtime.json`](../../config/guardrails/runtime.json) | The runtime, the six writable areas, read grants, network (off), model, and the Codex features turned off |
+| [`config/guardrails/runtime.json`](../../config/guardrails/runtime.json) | The runtime, the six writable areas, read grants, network (off), the model and its reasoning effort, and the Codex features turned off |
 | [`config/products.json`](../../config/products.json) | The read-only Mandu and Product checkouts, which become read grants |
 | [`src/bin/gr0wthlab`](../../src/bin/gr0wthlab) | The launcher; the LaunchAgent and on-demand runs both call `src/bin/gr0wthlab run`, whose task definition is a file under `src/instructions/` |
 | [`src/checks/boundary-probe.md`](../../src/checks/boundary-probe.md) | The throwaway instruction the validation test runs, kept in `src/` so the agent cannot edit its own test |
@@ -43,7 +43,7 @@ The launcher fails closed.
 It refuses to start if `runtime.json` names anything other than the six areas under `workspace/` or turns network on, if a registry location overlaps the repository, or if Codex is missing.
 For each run it starts `codex exec` with:
 
-- `--cd <repository>/workspace`, `--ignore-user-config`, `--ignore-rules`, `--ephemeral`, `--json`, and the model from `runtime.json` (`gpt-6-luna`).
+- `--cd <repository>/workspace`, `--ignore-user-config`, `--ignore-rules`, `--ephemeral`, `--json`, and the model from `runtime.json` (`gpt-6-luna`) with its reasoning effort (`-c model_reasoning_effort="high"`, since 2026-10-11).
 - `-c default_permissions="gr0wthlab"`, the profile below, built by `filesystem_policy` in [`src/gr0wthlab/boundary.py`](../../src/gr0wthlab/boundary.py), and `-c permissions.gr0wthlab.network.enabled=false`.
 - `--disable` for `apps`, `plugins`, `remote_plugin`, `hooks`, the browser and computer-use features, `skill_mcp_dependency_install`, `tool_suggest`, `image_generation`, `memories`, and `shell_snapshot`.
   Each of these either acts outside the local sandbox (ChatGPT connectors, MCP servers, hooks, browser or desktop control) or makes the run depend on the Founder's shell setup.
@@ -1213,6 +1213,295 @@ Not exercised live:
 
 Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the first of these runs and after the boundary check.
 The runs' outputs are not part of this change; the clones sat in the Mac's per-user temporary folder and were removed from it.
+
+### Re-check after the agent's reasoning effort and the work counts (US-ME17)
+
+The weekly agent now runs at high reasoning effort, and the run report shows what the launcher counted of its session beside the agent's own closing line.
+How Codex is started changed in one place: `codex exec` takes `-c model_reasoning_effort="high"` after `--model`, from `codex.reasoning_effort` in `runtime.json`, which the launcher refuses to load with any value but `low`, `medium`, `high`, `xhigh`, or `max`.
+The preflight's `codex sandbox` command is unchanged, since it runs no model, and the permission profile, the environment, and every other flag are as they were; the configuration fingerprint changes with the command.
+Everything else is launcher code that runs outside the sandbox (`work.py`, with `cycle.py`, `report.py`, `settings.py`, and one counter in `drafts.py`).
+Once the agent has ended it reads Codex's event stream in the launcher's log folder, the post Drafts in `workspace/drafts/posts/` as the Draft check already reads them, the package files in Mandu the snapshot already reads, and the Review Queue.
+Before the agent starts it reads the post Drafts due once, the same way, and the files in `workspace/review-queue/incoming/`, as the take-in reads them, so that it can tell afterwards which of them this session wrote or changed; a file it cannot read then is a launcher problem, the Draft claims and the proposals are not counted, and the run starts as it would have.
+It writes nothing in `workspace/`, Mandu, or a Product checkout; the counts go into the run report in `ledger/` and the run's log record.
+
+Both checks were made on the final launcher on 2026-10-12, Mac local time, with Codex CLI 0.160.0, from the linked worktree the review was made in, against Mandu and the Product checkouts as they are.
+They came after the one change made to the launcher's package once review had ended, which changed no statement: the description at the head of `cycle.py` now lists the count among a run's steps and the read of `incoming/` among what the launcher does in `workspace/`.
+The configuration fingerprint there is `791a5a98da39278e8541c16fdd49eb0748a2fd4005fb2aa965cb712b97459f83`, as it was when review ended, and no change to the launcher or its configuration came after them.
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the two checks and after them.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T082632Z-on-demand-5d3a`: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners and a second for the Mandu target, which the probe's agent tried twice, neither listener received a connection, the permitted files, 13 of them, landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+  The probe's agent ran 83 seconds at high effort, all of them with the Mac awake.
+
+Both had also passed four times before, on the launcher as it then was, each time with the boundary check at its first and only attempt.
+Before review, from the worktree the change was made in, it passed as run `20261012T055318Z-on-demand-8727`, whose agent ran 37 seconds.
+After review's first and second rounds, with the same fingerprint as above, it passed as runs `20261012T062443Z-on-demand-6c97` and `20261012T070050Z-on-demand-e49a`, whose agents ran 58 seconds each.
+On the launcher as review left it, before the description in `cycle.py` changed, it passed under that fingerprint as run `20261012T074058Z-on-demand-ab41`, with eleven kernel denials; its agent ran 53 seconds.
+
+Three facts about Codex that the change rests on were measured on 2026-10-11 with the real agent, started with the launcher's own Codex command from a throwaway clone.
+
+| Question | What was run | What it showed |
+| --- | --- | --- |
+| How much of one command's output is the model shown | One command printing 4,000 numbered lines, 180,000 characters | Lines 1 to 445 and 3,557 to 4,000, which is the first 20,000 and the last 20,000 characters, under the note `Warning: truncated output (original token count: 45003)` and with `…35003 tokens truncated…` between them: 10,000 tokens at 4 characters each, the model catalog's truncation policy for `gpt-6-luna`. Codex's event stream holds all 180,000 characters either way |
+| Does the run's cost cover the tokens high effort adds | A question answered with one number and no command, at high and at low effort | At high, 251 output tokens of which 243 were reasoning tokens; at low, 6 and 0. Reasoning tokens are counted within the output tokens the cost prices, so the cost line needed no new term and reads as it did |
+| What Codex does with an unknown effort | The same question with `model_reasoning_effort="hgih"` | Codex started the session and the model's service refused the request (`Invalid value: 'hgih'. Supported values are: 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', and 'max'`), so Codex ended with exit code 1. A run would have done everything that comes before the agent first, which is why the launcher refuses the value when the configuration loads |
+
+The weekly run was then run live through the launcher, on demand, network off, thirteen times, each in a fresh throwaway clone with an empty `ledger/`, so each is a first week: a package review and the first batch's seven post Drafts, with no Beta Build record in Mandu.
+Each read Mandu (`3f836c1` with its uncommitted changes) and RepToday (`main` at `de0355d`) at the registry's own locations, and the package snapshot held the same 24 files with the same fingerprints in all thirteen.
+Every run ended with exit code 0, no launcher problem, and no item set aside.
+Mandu's and RepToday's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the first run, after the last, and after the boundary check.
+The thirteen runs cost $1.05 at API prices.
+Their reports also showed counts that review then removed (commands run and what they did, file edits, post Drafts written, claims whose quoted code the launcher found, items queued and set aside, and reasoning tokens in the cost line), so the tables below keep only the counts the report still shows, beside the agent's own word and the cost.
+Review also made the count of package files read stricter for a file with no line of 24 characters or more; none of the 24 package files is one, so the figures below stand.
+It then made the Draft claims and the proposals count the session's own, leaving out a Draft or a proposal an earlier run left; each of the thirteen was a first run in a fresh clone, where every Draft and every proposal is the session's own, so those figures stand too.
+
+The anchor: three runs on `main` as it was before this change (`92d8bbe`), at Codex's default medium effort, all three at once.
+That launcher counted nothing, so these rows were counted afterwards with the same code over each run's event stream, Drafts, and Review Queue.
+
+| Run | Agent's own word | Agent time | Package files read | Claims naming code | Proposals queued | Cost |
+| --- | --- | --- | --- | --- | --- | --- |
+| `20261012T043659Z-on-demand-ce36` | incomplete | 59 s | 6 of 24 | 0 of 8 | 0 | $0.012 |
+| `20261012T043700Z-on-demand-1b4a` | incomplete | 2 min 38 s | 11 of 24 | 0 of 8 | 1 | $0.028 |
+| `20261012T043700Z-on-demand-47a5` | incomplete | 1 min 22 s | 24 of 24 | 4 of 9 | 1 | $0.019 |
+
+The first five runs at high effort, all at once, on this change's first commit (`526f560`).
+
+| Run | Agent's own word | Agent time | Package files read | Claims naming code | Proposals queued | Cost |
+| --- | --- | --- | --- | --- | --- | --- |
+| `20261012T045858Z-on-demand-88fe` | complete | 6 min 37 s | 24 of 24 | 8 of 9 | 13 | $0.098 |
+| `20261012T045859Z-on-demand-b8f7` | complete | 11 min 3 s | 17 of 24 | 9 of 10 | 5 | $0.070 |
+| `20261012T045858Z-on-demand-b8f0` | complete | 4 min 43 s | 24 of 24 | 8 of 8 | 6 | $0.056 |
+| `20261012T045858Z-on-demand-577f` | complete, in backticks | 18 min 42 s | 11 of 24 | 7 of 11 | 9 | $0.115 |
+| `20261012T045858Z-on-demand-ad1f` | complete | 16 min 19 s | 24 of 24 | 10 of 12 | 4 | $0.105 |
+
+Five more runs at high effort, on `2d12b12`: the first alone, with no other session of this change beside it, and the other four at once.
+
+| Run | Agent's own word | Agent time | Package files read | Claims naming code | Proposals queued | Cost |
+| --- | --- | --- | --- | --- | --- | --- |
+| `20261012T052303Z-on-demand-af54` | complete | 7 min 8 s | 20 of 24 | 11 of 13 | 8 | $0.078 |
+| `20261012T053022Z-on-demand-1619` | complete | 9 min 44 s | 21 of 24 | 6 of 8 | 7 | $0.135 |
+| `20261012T053022Z-on-demand-575a` | complete | 15 min 35 s | 23 of 24 | 6 of 8 | 7 | $0.096 |
+| `20261012T053022Z-on-demand-74ea` | complete | 13 min 49 s | 23 of 24 | 7 of 9 | 2 | $0.081 |
+| `20261012T053023Z-on-demand-c65c` | complete | 10 min 30 s | 24 of 24 | 6 of 9 | 5 | $0.158 |
+
+One more run was made after review's first round, which cut the report to these counts: on demand, in a fresh throwaway clone with an empty `ledger/`, so again a first week, against the same Mandu and RepToday.
+Run `20261012T062330Z-on-demand-a2d7` ended with exit code 0, no launcher problem, and no item set aside, at $0.062: it read 10 of the 24 package files, 7 of its 7 Draft claims named code, and 3 of its proposals were queued, in 10 min 31 s of agent time, and it said `Review: complete`.
+This session read fewer package files than any of the ten before it and still said the review was complete: it printed whole package folders in single commands, one returning 314,707 characters, and Codex cut each to its first and last 20,000.
+The launcher as it was before review counts the same 10 of 24 over this run's event stream.
+
+The report's shape, and the first evidence of a second week, come from a two-run sequence on the launcher as review's second round left it: a first run in a fresh throwaway clone with an empty `ledger/`, and then a second run in the same clone, both on demand, against the same Mandu and RepToday at the registry's own locations.
+Both ended with exit code 0, no launcher problem, and no item set aside, at $0.10 and $0.079.
+That round's boundary check, run `e49a`, ran its probe during the first run's first and second minutes.
+
+The first run, `20261012T070026Z-on-demand-000d`.
+Its summary held these two lines, the second reading as the cost line reads on `main`:
+
+```text
+- The agent's work, as the launcher counted it: 24 of 24 package files read, 6 of 9 Draft claims with a code location in the 7 of 7 due Drafts this session wrote or changed, 6 proposals queued, in 8 min 32 s of agent time. The agent's own word: "Review: complete".
+- Approximate cost: about $0.10 at API prices, for 5,851,107 input tokens (5,593,088 cached) and 45,352 output tokens.
+```
+
+Its `Agent's work` section, whole:
+
+```text
+## Agent's work
+
+Counted by the launcher from Codex's record of the session, the Draft files the run left, and the Review Queue. None of these comes from what the agent says of itself, and none changes what is queued, blocked, or marked incomplete:
+
+- Agent time: 8 min 32 s of its 30 min limit, with `gpt-6-luna` at `high` reasoning effort.
+- Package files read: 24 of the 24 the brief listed, counting a file as read when at least half of its lines came back in output the model was shown.
+- Draft claims in the 7 of 7 due Drafts this session wrote or changed: 9 listed, 6 name a code location and 3 name none.
+- Proposals queued: 6 package-change proposals the agent wrote.
+
+The agent's own word, which the launcher does not check:
+
+- "Review: complete"
+```
+
+The second run, `20261012T070906Z-on-demand-fe4b`, started seven seconds after the first ended, with the first run's seven Drafts, all blocked, in `workspace/` and its items open in the Review Queue.
+Its summary line and its count lines:
+
+```text
+- The agent's work, as the launcher counted it: 24 of 24 package files read, 7 of 10 Draft claims with a code location in the 7 of 7 due Drafts this session wrote or changed, 2 proposals queued, in 6 min 25 s of agent time. The agent's own word: "Review: complete".
+
+- Agent time: 6 min 25 s of its 30 min limit, with `gpt-6-luna` at `high` reasoning effort.
+- Package files read: 24 of the 24 the brief listed, counting a file as read when at least half of its lines came back in output the model was shown.
+- Draft claims in the 7 of 7 due Drafts this session wrote or changed: 10 listed, 7 name a code location and 3 name none.
+- Proposals queued: 2 package-change proposals the agent wrote.
+```
+
+Each run's log record held the same counts under `work`, six keys and no others.
+Review's third round then made the proposals count the session's own as well, and that is the one line of these reports that reads differently today: `Proposals this session wrote: 6 queued.` and `2 queued.` in place of the last count line of each, and `6 proposals this session wrote queued` and `2 proposals this session wrote queued` in the summary lines.
+The figures are the same, since nothing stood in `incoming/` before either session; a run that queues proposals an earlier run left there, as after a run that could not read the Review Queue, is shown by the unit tests only.
+The second session wrote all seven Drafts again, each of which the first run's Draft check had blocked, and the launcher's post-Draft Evidence for the two runs holds a different fingerprint for every one of the seven days, which agrees with the count.
+So the sequence shows the count on a second run, and it does not show a session that leaves the Drafts alone: the line for that, "this session wrote or changed none of the 7 Drafts due, so it has no Draft claims to count", and the count of a single changed Draft are shown by the unit tests only.
+The second run also listed `Mandu decisions` as a failed source, as the launcher on `main` does once items are open: Mandu's exchange folder does not exist yet, so its report marked `Founder decisions taken in` and `Review Queue` incomplete.
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the sequence and after it and that round's boundary check, as they were around run `a2d7`.
+None of these three runs is in the figures below, which are of the thirteen.
+
+What the sample shows:
+
+- The early stop is on `main` at medium effort: all three anchor runs ended `Review: incomplete`, 4 of 25 Draft claims named code, and the three queued 0, 1, and 1 proposals.
+- At high effort all ten runs ended with the words `Review: complete`, 78 of 97 claims named code, and each run queued 2 to 13 proposals.
+  In run `577f` the agent wrapped that closing line in backticks, which the launcher does not take as confirmation, so that one report marked the review not confirmed.
+- The counts tell apart what the closing line does not.
+  Run `577f` said the review was complete after reading 11 of the 24 package files: it printed them in three loops whose output was cut each time.
+  Run `b8f7` read 17 of 24 and said the same, and anchor run `47a5` read all 24 and said it had not finished.
+- High effort cost $0.056 to $0.158 a run, $0.099 on average, about five times the anchors' $0.020, and took 4 min 43 s to 18 min 42 s of agent time, 7 min 8 s in the run made alone.
+  The earlier investigation had measured about $0.08 and 4.5 to 15 minutes.
+
+What it does not show:
+
+- A rate.
+  Three runs and ten, on one day, against one state of the package, say that the two settings differ and not by how much.
+- A quiet Mac.
+  Nine of the ten runs at high effort shared the Mac with three or four sessions of their own batch, and other gr0wthlab work was running sessions throughout, so the times are upper readings; the one run made alone is a single reading.
+- More than one second run.
+  The sequence above is a single reading, made minutes after its first run with nothing decided in between.
+- A week with Founder decisions to take in, a Beta Cohort section, or the workflows still to be built, each of which gives the session more or different work, and more time against the 30 minute limit.
+- That the review found every contradiction.
+  A keyword search of the queued proposals, not checked by hand, finds proposals on all four of the stale facts the earlier investigation had verified in 4 of the 10 runs at high effort, on at least two of them in all 10, and on at most one in each anchor run; that investigation had found all four in each of its five runs.
+- A Draft passing.
+  Every Draft in every run was blocked, since the package's open trademark line blocks every post today.
+- That a file read is a file understood.
+  The count says a file's text was shown to the model, which is a floor on attention and no more.
+- The scheduled path, which starts Codex with the same command.
+
+One thing seen in passing and left alone: inside the sandbox `/usr/bin/python3` prints the `xcrun` shim's cache warnings before a check command's own output, and run `577f` spent several commands trying to silence them.
+
+### Re-check after the merge of the reasoning effort and work counts with Listening, outreach, filming, and the owed-run check
+
+The reasoning effort and the work counts (US-ME17) were merged with `main` at commit `0f90801`, which had gained Listening, outreach message Drafts, and rejection-reason coding (US-ME13, US-ME14), then filming (US-ME09), then the owed-run check (US-ME17) after `92d8bbe`, the commit this work was made on.
+It is one merge commit on this work's branch, `f0047c4`, whose parents are `056d257` and `0f90801`, and the launcher it leaves is one that neither side's checks above had run on, so both checks were made again.
+
+- Both sides are whole in the merged launcher.
+  Every file this work does not touch is byte for byte `main`'s, among them `attempts.py`, `fetch.py`, `listening.py`, `outreach.py`, `learning.py`, `filming.py`, `process.py`, `probe.py`, `queue.py`, `fetch.json`, `config/products.json`, `config/sources.json`, and the task definition.
+  `runtime.json` and `boundary.py` are as this work left them: `main` never changed either after `92d8bbe`, so the only difference from `main` is the reasoning effort and the check that refuses an unknown one.
+- How Codex is started is `main`'s command with this work's one flag, `-c model_reasoning_effort="high"` after `--model`.
+  The preflight still runs no model and still proves from inside the sandbox that neither listed host can be reached.
+- The files that hold both sides are `cycle.py`, `report.py`, `settings.py`, `config/run.json`, the tests' fixtures, and the documents.
+  Before the agent starts, a run does everything `main` does first: it reads the network sources, plans Listening and outreach, and notes the agent's Instructions as they stood.
+  Only then does it take this work's one reading of the Drafts due and of `incoming/`, so nothing the launcher does before the agent can pass for the session's work.
+  After the agent it makes every take-in of `main`'s, the items in `incoming/`, the posts, the recruiting Drafts, the Listening and outreach work, and the codes, and then the count.
+- `main` reads the agent's closing line itself: a weekly attempt the Mac slept during is the week's run only when the agent ended without an error and its summary ends with `Review: complete`, and a run that a fresh one follows leaves the work its agent did not reach out of its notice.
+  This work never changes that line or what the launcher reads from it.
+  It quotes the line in the report beside the counts and rewords the detail of the package review's row, so the owed-run check decides exactly as on `main`; the one test of `main`'s that named the row's old detail now names the new one.
+  The counts themselves add nothing to a notice and gate nothing, so they do not change which attempt counts.
+  A count that cannot be made is another matter: it is a launcher problem, and a notice lists it like any other.
+  It adds a line to the run's notice, queues a notice on a run that would have had none, and does so on a cut-short attempt that a fresh run follows as well, since such an attempt queues no notice only when how its agent ended is all the notice would say.
+- The counting starts no process: it reads Codex's event stream, the Drafts, `incoming/`, and the package files, so `main`'s rule that every launcher process starts through `process.py` is untouched.
+  A reading it cannot take is a launcher problem and no count; it withdraws nothing and blocks nothing.
+- One count is named more narrowly than before the merge.
+  With Listening on `main`, a session proposes an Angle or a Hook through `workspace/review-queue/angles/`, and the launcher queues it as a package-change proposal from there.
+  The proposals count is of `workspace/review-queue/incoming/` alone, so its line now reads `Proposals this session wrote to incoming/`, and the summary line the same, where the reports quoted above read `Proposals this session wrote`.
+  What a session proposes from Listening is accounted for in the report's Listening section and is not in the count.
+- The note on the agent's time limit in `config/run.json` holds this work's measured basis at high effort and `main`'s account of what follows a run cut at the limit.
+  The ten runs behind that basis carried the package review and the post Drafts only: they were made before Listening, outreach, and filming joined the session.
+  One run at high effort that carries them was timed on the merged launcher afterwards, as recorded [below](#the-weekly-run-timed-on-the-merged-launcher).
+
+On the merged files the full unit suite passed under `/usr/bin/python3`, 943 tests, as did ruff.
+Two faults of the merge were in tests alone and were corrected there: the tests' Mandu now lists 16 package files where it listed 14, and the attempt test named the review row's old detail.
+
+Both checks were run on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from this work's worktree on the merge commit as committed, with nothing uncommitted, where the configuration fingerprint is `f42c847b1ab5238b69c95abeecdd8721c18cdb61aac286c78c07b0f7532080bf`, as it was in that worktree before the merge.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T194651Z-on-demand-aa5c`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and nothing outside the areas changed.
+  Its network proof: the control reached the listener; inside the sandbox the listener and the two hosts were refused; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused an address on a host that is not listed, unsent.
+  The probe's agent ran 47 seconds of its 30 minute limit at high effort, all of them with the Mac awake.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same after the boundary check as before it.
+
+The weekly run itself, with the real agent, was not run on the merged launcher for these two checks; it was run afterwards, once, as the next section records.
+
+### The weekly run timed on the merged launcher
+
+Review of the merge asked whether the agent's 30 minute limit still holds for the session the merge makes, since every run behind the limit's basis was made before Listening, outreach, and filming joined it.
+So one whole weekly run was made with the real agent at high effort on the merged launcher, on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0.
+It was made once.
+
+It ran in a throwaway production clone of this branch at `06eee70`, with a throwaway remote of its own, a synthetic Mandu and Product checkout, the Mac's real clocks and its own answer about its power state, the real ffmpeg, and the launcher's own client on the real network.
+The clone's configuration was the committed one but for the window, whose first sitting was set to Sunday 2026-10-18 with a 19:00 slot, so that days 1 to 7 fell due.
+The synthetic Mandu held the package files of the post-Draft, Beta Cohort, and filming example sets, 18 files in the snapshot, with the synthetic kit's one blocking checklist line checked off and the three creators of `config/run.json` named in its channel plan.
+
+The week was set up first, with no model:
+
+- An earlier run in the same clone filed the filming plan and the Waitlist Dispatch request and queued no notice.
+  It had the stand-in agent, a clock set to Saturday 2026-10-10 16:00, and outreach and the source list turned off, so it prepared no message and sent nothing onto the network.
+- The plan was then approved by a simulated decision record, and a file for every shot of days 1 to 7 was put in the footage place: ten real video files, 1.0 GB in all, which the Mac's ffmpeg made from its own test pattern.
+- A Beta Build record with recruiting open was put in the exchange folder, and a Waitlist view generated an hour earlier where the launcher reads it.
+- One commit on the throwaway remote put the outreach settings and the source list back as committed.
+
+The timed run was one start of the weekly schedule, `src/bin/gr0wthlab run --trigger scheduled`, on Monday 2026-10-12 at 13:04 local time, as run `20261012T200426Z-scheduled-3205`.
+Its own pre-run sync fast-forwarded the clone to that commit, and its report says it started 21 h 4 min late; it was attempt 1 at the run due Sunday 2026-10-11 16:00.
+
+What its brief gave the one session to do:
+
+| Work | Due in this run |
+| --- | --- |
+| Package review | 18 package files, none changed since the earlier run |
+| Post Drafts | Days 1 to 7, each with its slot |
+| Edit records | Days 1 to 7, all seven marked ready, from the 10 footage files |
+| Beta Cohort recruiting | The invitation and the Waitlist ask |
+| Outreach | The personal-network ask and a first message to each of the three creators; no follow-up was due |
+| Listening | Nothing: no thread or review could be read |
+| Founder decisions | One taken in, the plan's approval; no rejection to code |
+
+Listening read whatever its sources allowed, which was nothing.
+The launcher sent one request, a GET for `www.reddit.com`'s `robots.txt`, which disallows every address for automated readers, so the six subreddit sources were never asked for and the report lists them as failed.
+The synthetic research cites no App Store page, so no review feed was asked for and `itunes.apple.com` was not contacted.
+The brief therefore told the agent to write no quote record, no proposed Angle or Hook, and no reply Draft.
+
+How it ended: the agent ended by itself, with exit code 0, after 4 min 35 s of its 30 minute limit, which is 275 seconds, 15 percent of the limit, and its summary ends with `Review: complete`.
+The run ended with exit code 0 after 295 seconds in all and no launcher problem, its attempt is recorded as `completed`, and the Mac was awake throughout.
+Its summary lines on the agent's work and the cost, and its count lines:
+
+```text
+- The agent's work, as the launcher counted it: 18 of 18 package files read, 5 of 7 Draft claims with a code location in the 7 of 7 due Drafts this session wrote or changed, 1 proposal this session wrote to incoming/ queued, in 4 min 35 s of agent time. The agent's own word: "Review: complete".
+- Approximate cost: about $0.038 at API prices, for 1,721,822 input tokens (1,623,808 cached) and 24,457 output tokens.
+
+- Agent time: 4 min 35 s of its 30 min limit, with `gpt-6-luna` at `high` reasoning effort.
+- Package files read: 18 of the 18 the brief listed, counting a file as read when at least half of its lines came back in output the model was shown.
+- Draft claims in the 7 of 7 due Drafts this session wrote or changed: 7 listed, 5 name a code location and 2 name none.
+- Proposals this session wrote to incoming/: 1 queued.
+```
+
+The same run in the columns of the tables in the section above:
+
+| Run | Agent's own word | Agent time | Package files read | Claims naming code | Proposals queued | Cost |
+| --- | --- | --- | --- | --- | --- | --- |
+| `20261012T200426Z-scheduled-3205` | complete | 4 min 35 s | 18 of 18 | 5 of 7 | 1 | $0.038 |
+
+What the launcher made of the session's files:
+
+- The session wrote a post Draft and an edit record for each of the seven days.
+  The posts of days 1 to 5 were queued, each with a finished video the real ffmpeg rendered in this run.
+  Days 6 and 7 were blocked, each because no code supports its one claim, and no video was cut for them, since a video is cut only from a Draft that passes.
+- The invitation, with its batch of 8 entries, and the Waitlist ask were queued.
+- The personal-network ask and the three creator messages were queued.
+- The one proposal was queued, and nothing was set aside.
+- One notice was queued, of 8 problems: the six sources that could not be read and the two blocked Drafts.
+
+The clone was left with a clean git status, its records pushed to its own remote, and no fetched working data.
+
+What this one run shows, and what it does not:
+
+- With post Drafts, edit records, recruiting Drafts, and outreach messages all due in one session beside the review, the agent's time was 275 seconds, under the 283 seconds of the shortest of the ten runs above.
+- It is not a reading of the real package.
+  The synthetic package is 18 short files, 11,179 characters in all, five of them a single line, where one command of run `a2d7` above printed 314,707 characters of the real one.
+  So the ten runs remain the measure of the review and the post Drafts on the real package, 283 to 1,122 seconds, and this run is the measure of the work those ten did not carry: seven edit records, two recruiting Drafts, and four outreach messages.
+  All of that, with a small review and seven Drafts, took 275 seconds.
+  Added whole to the longest of the ten, that gives 1,397 seconds, which is a sum over two different sessions and not a measurement.
+- It is a single reading, on one day.
+- It does not show Listening with anything to read.
+  Quote records, proposed Angles and Hooks, and reply Drafts were not due, and that is the part of the session the listed hosts' `robots.txt` leaves out today.
+- It does not show a rejection to code, a follow-up message, or the window's second week with the second legs of its A/B pairs.
+
+The limit stays at 1800 seconds.
+Nothing in the launcher changed for this run or after it.
+The change made with it is to documents and to the wording of the note on the limit in `config/run.json`, which the configuration fingerprint does not cover, so the two checks above stand and neither was made again.
+With that change in place the full unit suite passed under `/usr/bin/python3`, 943 tests, as did ruff.
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the clone was built as after the run.
+The clone, its remote, the synthetic checkouts, and the footage sat in the Mac's per-user temporary folder and were removed from it.
 
 ## Scheduled and on-demand runs share one configuration
 

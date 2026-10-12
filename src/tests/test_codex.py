@@ -18,6 +18,7 @@ CODEX_CONFIG = dict(
     codex={
         "permission_profile": "gr0wthlab",
         "model": "model-a",
+        "reasoning_effort": "high",
         "approval_policy": "never",
         "sub_agents": False,
         "session_flags": ["--ignore-user-config", "--ignore-rules", "--ephemeral"],
@@ -95,6 +96,9 @@ class CommandTest(CodexTestCase):
         for flag in ("--ignore-user-config", "--ignore-rules", "--ephemeral", "--json"):
             self.assertIn(flag, command)
         self.assertEqual(command[command.index("--model") + 1], "model-a")
+        self.assertIn(
+            'model_reasoning_effort="high"', [command[i + 1] for i, part in enumerate(command) if part == "-c"]
+        )
         for widening in (
             "--sandbox",
             "-s",
@@ -106,14 +110,30 @@ class CommandTest(CodexTestCase):
         ):
             self.assertNotIn(widening, command)
 
+    def test_the_agent_runs_at_the_configured_reasoning_effort_and_the_preflight_takes_none(self):
+        for effort in boundary.REASONING_EFFORTS:
+            config = dict(CODEX_CONFIG, codex=dict(CODEX_CONFIG["codex"], reasoning_effort=effort))
+            command = codex.build_exec_command(config, self.boundary, self.codex_bin, Path("/logs/run.md"))
+            overrides = [command[i + 1] for i, part in enumerate(command) if part == "-c"]
+            with self.subTest(effort=effort):
+                self.assertEqual(
+                    [o for o in overrides if o.startswith("model_reasoning_effort")],
+                    [f'model_reasoning_effort="{effort}"'],
+                )
+                self.assertLess(command.index(f'model_reasoning_effort="{effort}"'), command.index("-"))
+        self.assertNotIn("model_reasoning_effort", " ".join(codex.config_overrides(CODEX_CONFIG, self.boundary)))
+
     def test_fingerprint_ignores_the_run_output_path_only(self):
         env = {"HOME": "/h"}
         other_config = dict(CODEX_CONFIG, codex=dict(CODEX_CONFIG["codex"], model="model-b"))
+        other_effort = dict(CODEX_CONFIG, codex=dict(CODEX_CONFIG["codex"], reasoning_effort="medium"))
         first = codex.build_exec_command(CODEX_CONFIG, self.boundary, self.codex_bin, Path("/l/a.md"))
         second = codex.build_exec_command(CODEX_CONFIG, self.boundary, self.codex_bin, Path("/l/b.md"))
         other_model = codex.build_exec_command(other_config, self.boundary, self.codex_bin, Path("/l/a.md"))
+        medium = codex.build_exec_command(other_effort, self.boundary, self.codex_bin, Path("/l/a.md"))
         self.assertEqual(codex.fingerprint(first, env, "v1"), codex.fingerprint(second, env, "v1"))
         self.assertNotEqual(codex.fingerprint(first, env, "v1"), codex.fingerprint(other_model, env, "v1"))
+        self.assertNotEqual(codex.fingerprint(first, env, "v1"), codex.fingerprint(medium, env, "v1"))
         self.assertNotEqual(codex.fingerprint(first, env, "v1"), codex.fingerprint(first, {"HOME": "/x"}, "v1"))
         self.assertNotEqual(codex.fingerprint(first, env, "v1"), codex.fingerprint(first, env, "v2"))
 

@@ -40,7 +40,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    A source that is disallowed, refused, or failing is reported with its reason, queued in a notice, and marks its workflow incomplete; the run goes on.
    The first time it reads a subreddit's rules, it queues one notice that quotes and links them; no reply Draft for that subreddit is offered until the Founder acknowledges it, and the Founder's answer stands whatever the rules say later.
    It reads the Founder's outreach records from Mandu's exchange folder and works out which messages may be offered: the personal-network ask, one message for each creator in `config/run.json` that the channel plan names, and one follow-up only for a creator who was written to, has not replied, and whose waiting period has passed.
-   It writes the agent's brief and runs the agent in the sandbox with the task definition `src/instructions/weekly-run.md`.
+   It writes the agent's brief and runs the agent in the sandbox with the task definition `src/instructions/weekly-run.md`, at the reasoning effort [`config/guardrails/runtime.json`](../config/guardrails/runtime.json) sets, which is high.
    The agent has no network, and every run proves it before the agent starts: the preflight tries each listed host from inside the sandbox and stops the run if one is reachable.
    The agent writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records, and never write there.
    The agent has a time limit; one still running at it is stopped, and the run goes on without it ([When a run times out](#when-a-run-times-out)).
@@ -51,6 +51,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    One that declares it does is set aside, with what to add, unless its Evidence names the record of a Listening quote the launcher already keeps; one that declares it does not is queued whatever it touches or says.
    The launcher never checks a declaration against a proposal's wording: the Founder is the check on a wrong declaration, at the sitting.
    The package review counts as complete only when the agent's summary ends with the line `Review: complete`; otherwise the run report marks it incomplete and the notice says so.
+   That line is the agent's own word, so the run report also shows what the launcher itself counted of the session ([Reading the agent's work](#reading-the-agents-work)).
    It checks each post Draft the agent wrote in `workspace/drafts/posts/` and queues a post only for one that passes; a blocked Draft is named in the run report and the notice with every failing rule or checklist line, and every check is kept in `ledger/evidence/post-drafts/`.
    For a Draft that passes, it checks the day's edit record in `workspace/drafts/edits/`, if the agent wrote one, against the shot list and the footage, renders it with `ffmpeg` into `ledger/assets/` with the Draft's text drawn over it, and measures the result; the day's post then shows the finished video.
    An edit record that fails a check renders nothing and blocks the day's post, naming the rule; missing video tooling is reported as a skipped edit, never as a failed run; every check is kept in `ledger/evidence/filming/`.
@@ -341,13 +342,84 @@ A run that cannot finish, for example because a file it must write cannot be wri
 A run whose agent was stopped at its time limit also ends with exit code 6, after it has written its own report, which says it timed out.
 Each checkout keeps its run lock (`ledger/run.lock`, never committed) and these notes for its next report (`ledger/notes/`) in its own `ledger/`, so a run in a firstmate worktree never blocks or hides a production run.
 
+## Reading the agent's work
+
+A run is one agent session, and it ends when the agent writes its final message.
+The launcher checks everything the agent wrote, but whether the agent did all its work is something only the agent says, in the `Review:` line that ends its summary.
+That line has read `Review: complete` after sessions that did the least, so no run should be judged by it alone.
+
+Each run report therefore has an `Agent's work` section, and a line in its summary, that set two things side by side and name each for what it is:
+
+- What the launcher counted, from Codex's record of the session, the Draft files the run left, and the Review Queue.
+  None of it comes from what the agent says of itself.
+- The agent's own word: its closing `Review:` line, quoted.
+
+The counts:
+
+- `Agent time`, against the limit, with the model and reasoning effort the agent ran at.
+- `Package files read`: how many of the package files the brief listed came back to the model.
+  Codex shows the model at most about 40,000 characters of one command's output, the first and last halves of that, and cuts the middle.
+  A session that prints every package file in one command is shown the first and last few, so naming a file in a command is not reading it.
+  The launcher counts a file as read when at least half of its lines of 24 characters or more are in the part of some command's output the model was shown; the figure is `work_counts` in [`config/run.json`](../config/run.json), a fact about Codex that needs measuring again after a Codex upgrade or a change of model.
+  A file with no line that long is counted only when a command that names its path was shown its whole text, since short lines such as a lone brace are in any output.
+  The count is a floor: a file read some other way, such as by a pattern that does not name it, is not counted.
+- `Draft claims`: how many claims the post Drafts this session wrote or changed list, how many of them name a code location, and how many name none.
+  The post Drafts stay in `workspace/` from run to run, and the agent is told to leave an open day's Draft alone when nothing in it needs changing, so a Draft on disk is often an earlier run's work.
+  The launcher therefore takes the fingerprint of each due day's Draft before the agent starts, and counts a Draft as this session's only when it is new or its fingerprint differs once the agent has ended.
+  The line says how many of the Drafts due those are, and a session that wrote or changed none has no Draft claims to count.
+  A claim item that does not follow the format names no code location, so the two figures add up to the claims listed.
+- `Proposals this session wrote to incoming/`: how many package-change proposals this session wrote or changed in `workspace/review-queue/incoming/` that the launcher queued.
+  An Angle or a Hook the session proposes from Listening goes through `workspace/review-queue/angles/` instead: it is accounted for in the report's Listening section and is not in this count.
+  A run queues everything standing in `incoming/`, and a run that could not read the Review Queue, or was stopped before it took its items in, leaves its session's items there for the next run.
+  The launcher tells those apart as it does the Drafts, by each file's fingerprint before the agent starts and once it has ended, and the line names them beside the session's own: `0 queued; 5 more queued in this run were left by an earlier run`.
+
+The launcher takes one reading of the Drafts due and of `incoming/` before the agent starts, and one once it has ended.
+When either cannot be taken, for example in a folder left closed, neither the Draft claims nor the proposals are counted and the launcher problems say why; the run starts and goes on as it would have.
+
+The counts inform the Founder and gate nothing: nothing is queued, blocked, or marked incomplete because of one, and every check of an item or a Draft is what it was.
+The launcher still reads the agent's closing line itself in two places, and the counts change neither: the package review's row is complete only on the line `Review: complete`, and a weekly attempt the Mac slept during is the week's run only when the agent ended without an error and its summary ends with that line ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
+A count that cannot be made is listed as a launcher problem, and the run goes on without it; that holds for the one reading the launcher makes for a count before the agent starts as well.
+The run's notice lists that problem like any other launcher problem, so a run that would have queued no notice queues one for it.
+The run's log record in `~/Library/Logs/gr0wthlab/` holds the same counts under `work`, with the name of every package file not read.
+
+What the counts looked like when they were introduced, on 2026-10-11, against Mandu and RepToday as they were.
+Each run was on demand in a fresh clone, so each was a first week: a package review and the first batch's seven post Drafts.
+
+| Reasoning effort | Runs | Ended with the words `Review: complete` | Package files read, of 24 | Draft claims naming code | Proposals queued | Agent time | Cost a run |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| medium, Codex's default, on `main` before the change | 3 | 0 | 6, 11, and 24 | 4 of 25 | 0 to 1 | 59 s to 2 min 38 s | $0.012 to $0.028 |
+| high | 10 | 10 | 11 to 24, all 24 in four runs | 78 of 97 | 2 to 13 | 4 min 43 s to 18 min 42 s | $0.056 to $0.158 |
+
+Read a report against these counts.
+A run that says `Review: complete` after little agent time, few package files read, or with most claims naming no code did less than the runs at high effort did, whatever its closing line says.
+High effort does not make every session thorough: two of the ten read 11 and 17 of the 24 files and still said the review was complete.
+One more run, made after the table's ten, read 10 of the 24 in 10 min 31 s and said the same.
+A first run and then a second run in one clone each read all 24, and the second session wrote all seven Drafts again, so its Draft claims line counted all seven.
+[The US-ME02 spike note](spikes/us-me02-runtime-boundary.md#re-check-after-the-agents-reasoning-effort-and-the-work-counts-us-me17) lists every run and says what the sample does not show.
+
+Every run above was made before Listening, outreach, and filming joined the session.
+One run was timed on 2026-10-12 on the launcher that has them, once: a start of the weekly schedule at high effort in a throwaway production clone, against a synthetic package of 18 short files and not the real one.
+
+| What was due | How the run ended | Agent time | Package files read | Draft claims naming code | Proposals queued | Cost |
+| --- | --- | --- | --- | --- | --- | --- |
+| The package review; post Drafts for days 1 to 7; an edit record for each of those days, with footage in place; the Beta Cohort invitation and the Waitlist ask; the personal-network ask and a first message to each of three creators. Listening had nothing to read | The agent ended by itself with exit code 0 and the words `Review: complete`; the run ended with exit code 0 and no launcher problem, on a Mac that stayed awake | 4 min 35 s of the 30 minute limit | 18 of 18 | 5 of 7, in the 7 of 7 Drafts due | 1 | $0.038 |
+
+The launcher queued five posts with their finished video, the invitation and the Waitlist ask, and the four messages, and blocked two post Drafts whose one claim no code supports.
+Listening read nothing because `www.reddit.com`'s `robots.txt` disallows every listed address and the synthetic research cites no App Store page, so the session had no quote, proposed Angle or Hook, or reply to write.
+It is one reading, on a package far smaller than the real one: it shows that the added work takes minutes, and not how long a session on the real package takes with that work in it.
+[The spike note](spikes/us-me02-runtime-boundary.md#the-weekly-run-timed-on-the-merged-launcher) has the set-up and what the run does not show.
+
 ## When a run times out
 
 Every run ends with its report, so the agent has a time limit: `agent.time_limit_seconds` in [`config/run.json`](../config/run.json), 1800 seconds (30 minutes) today.
 The limit counts wall-clock time from the moment the agent starts, the Mac's sleep included.
 Nothing keeps the Mac awake for a run, and a sleeping Mac runs nothing, so the stop of an agent the Mac slept past its limit starts within about a second of the Mac waking, a dark wake included, not at the time of day the limit fell.
 Awake time is counted as well, and the agent is stopped at whichever count reaches the limit first, so a wall clock set back cannot extend a run; one set forward can end a run early.
-The 46 weekly runs recorded with the real agent took 18 to 218 seconds, so a healthy run on a Mac that stays awake ends long before the limit and is never touched by it.
+At high reasoning effort the agent took 283 to 1,122 seconds, median 646, in the ten runs measured on 2026-10-11, each a package review and one batch of post Drafts, most with four or five sessions running at once on the Mac.
+A healthy run on a Mac that stays awake therefore ends inside the limit, the longest measured at 62 percent of it; at Codex's default medium effort the 46 runs recorded before took 18 to 218 seconds.
+Those ten runs were made before Listening, outreach, and filming joined the session.
+One run at high effort that carries them was timed on 2026-10-12, with post Drafts, edit records, recruiting Drafts, and outreach messages all due beside the review: its agent took 275 seconds, 15 percent of the limit, and ended by itself ([Reading the agent's work](#reading-the-agents-work)).
+That run read a synthetic package far smaller than the real one and had no Listening document to read, and it is a single reading, so watch the report's `Agent time` line in the first weekly runs on the real package.
 An agent still running at the limit, for example because its model stream stalled, is stopped with every process the Mac's process table shows it started, which is its descendants and every process in a session one of them leads: each is asked to stop, and any still running after 10 seconds of awake time is forced.
 The launcher then reads the process table again to confirm that none of them is left, and finishes the run as it finishes any run.
 The stop does not find a process the agent detached earlier in the run: one in a session of its own whose parent has already ended, as a shell command that has finished can leave.

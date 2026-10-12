@@ -11,14 +11,15 @@ and outreach from the Founder's records; brief the agent and run it inside the s
 workspace/review-queue/incoming/ that pass the format, a post for each Draft it wrote that passes every check, with
 the video cut from its edit record when it has one (posts.take), the recruiting Drafts that pass theirs (beta.take),
 the quotes, proposals, and messages that pass theirs (listening.take, outreach.take), the code it proposed for each
-rejection reason (learning.take), and the reviewed proposals that need filing; write the Review Queue and the run
-report; commit and push workspace/ and ledger/. Every step but the agent is deterministic code outside the sandbox.
-The launcher's records live in ledger/, which the agent can read and never write, so nothing it does can change them;
-in workspace/ the launcher only restores its owner's access to entries the agent left without it, reads the Drafts and
-the edit records, removes a recruiting Draft that holds what looks like an email address, reads and removes the items,
-quote records, proposals, and codes it takes in, and puts the agent's Instructions back as they were. One run at a
-time per checkout holds the run lock in its ledger/ from the sync to the saved records; a run started meanwhile
-refuses to start, and the next report says so.
+rejection reason (learning.take), and the reviewed proposals that need filing; count what the agent's session did, for
+the report to show beside the agent's own word (work.py); write the Review Queue and the run report; commit and push
+workspace/ and ledger/. Every step but the agent is deterministic code outside the sandbox. The launcher's records
+live in ledger/, which the agent can read and never write, so nothing it does can change them; in workspace/ the
+launcher only restores its owner's access to entries the agent left without it, reads the Drafts and the edit records,
+reads the items in incoming/ before the agent starts and once it has ended, removes a recruiting Draft that holds what
+looks like an email address, reads and removes the items, quote records, proposals, and codes it takes in, and puts
+the agent's Instructions back as they were. One run at a time per checkout holds the run lock in its ledger/ from the
+sync to the saved records; a run started meanwhile refuses to start, and the next report says so.
 
 A weekly scheduled start comes first as a check (attempts.py): it begins a run only while the launcher's records show
 the week's run is still owed and the Mac is fully awake, and every run notes there how it ended, so a weekly run the
@@ -40,7 +41,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import TextIO
+from typing import TextIO, TypeVar
 
 from . import (
     attempts,
@@ -65,6 +66,7 @@ from . import (
     settings,
     sources,
     waitlist,
+    work,
 )
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, read_plain
@@ -92,6 +94,12 @@ INTAKE = (
     ("drafts", listening.REPLIES_IN),
     ("drafts", outreach.FOLDER),
 )
+# The package review's row when it is complete: complete by the agent's closing line alone, so the row says whose word
+# that is and where the launcher's own counts are.
+REVIEW_SAID_COMPLETE = "the agent said it finished its review; the launcher's counts are under Agent's work"
+# The two counts made from what stands in workspace/ before the agent starts and once it has ended.
+WRITTEN = "the Draft claims and the proposals"
+T = TypeVar("T")
 
 
 def entry_point(repo_root: Path) -> Path:
@@ -621,7 +629,7 @@ class Cycle:
             skipped["filming-plan"] = "no active Product films"
         own = {
             "package-snapshot": ([], f"`{state.snapshot_file}`"),
-            "package-review": ([review_gap] if review_gap else [], "the agent finished its review"),
+            "package-review": ([review_gap] if review_gap else [], REVIEW_SAID_COMPLETE),
             "decisions": ([] if ledger_ok else ["the ledger could not be read; no decision was matched"], decisions),
             "review-queue": (
                 [] if ledger_ok else ["the ledger could not be read; the queue was left as it was"],
@@ -1150,6 +1158,42 @@ class Cycle:
             state.problems.append(f"`{filing.source}` could not be filed: {filing.detail}")
         state.outreach_filing = proposals.describe(filing, ledger)
 
+    def counted(self, state: RunState, what: str, count: Callable[[], T]) -> T | None:
+        """Make one count of the agent's session, for the run report to show beside the agent's own word. The counts
+        gate nothing, so a count that cannot be made is a launcher problem and the run goes on without it."""
+        try:
+            return count()
+        except (OSError, ConfigError) as error:
+            state.problems.append(f"{what} could not be counted ({error})")
+            return None
+
+    def count_work(
+        self, state: RunState, config: settings.Settings, log_dir: Path, written: work.Written | None, taken_in: bool
+    ) -> None:
+        """Count what the agent's session did, once it has ended and its items are taken in. written is what this
+        session wrote or changed of the Drafts due and the proposals in incoming/, so that nothing an earlier run left
+        is counted as its work; without it neither the Draft claims nor the proposals are counted. taken_in says
+        whether the launcher took in what stood in incoming/."""
+        mandu = Path(state.mandu)
+        files = {
+            file.path: mandu / file.path
+            for result in state.snapshot
+            for file in result.files
+            if file.status != package.FAILED
+        }
+        claims = proposals = None
+        if written is not None:
+            set_aside = {item.name for item in state.set_aside}
+            queued = [name for name in written.proposals if taken_in and name not in set_aside]
+            claims, proposals = written.claims, work.count_proposals(written.proposals, queued)
+        state.work = self.counted(
+            state,
+            "the agent's work",
+            lambda: work.measure(
+                log_dir / f"{state.run_id}.events.jsonl", config.shown_output_chars, files, claims, proposals
+            ),
+        )
+
     def leave_note(self, run_id: str, line: str) -> None:
         """A one-line note in ledger/notes/, which the next run's report shows."""
         self.store.write_text(self.store.path(NOTES_DIR, f"{run_id}.txt"), line + "\n")
@@ -1411,6 +1455,7 @@ class Cycle:
         )
         state.guidance = learning.remember(areas)
         state.problems += state.guidance.problems
+        before = self.counted(state, WRITTEN, lambda: work.standing(state.posts, areas, products))
         brief = self.store.path(RUN_REPORTS, f"{run_id}.brief.md")
         self.store.write_text(
             brief, report.render_brief(state, canonical(self.repo_root), areas.workspace, self.store.root)
@@ -1447,6 +1492,11 @@ class Cycle:
         state.problems += records.restore_access(canonical(self.repo_root))
 
         now = self.now()
+        written = None
+        if before is not None and state.agent.get("agent_started"):
+            written = self.counted(
+                state, WRITTEN, lambda: work.written(before, work.standing(state.posts, areas, products))
+            )
         published: list[str] = []
         if ledger_ok:
             kept = evidence.records(self.store)
@@ -1459,6 +1509,8 @@ class Cycle:
         elif state.posts is not None:
             state.posts_problem = "not taken in: the Review Queue could not be read"
         self.take_work(state, areas, ledger, ledger_ok, products, run_id, now, seen)
+        if state.agent.get("agent_started"):
+            self.count_work(state, config, log_dir, written, ledger_ok)
         report_path = self.store.path(RUN_REPORTS, f"{run_id}.md")
         state.problems += areas.problems
         areas.problems.clear()
@@ -1553,6 +1605,7 @@ class Cycle:
             ending=state.ending,
             usage=state.usage,
             cost_usd=state.cost,
+            work=state.work.as_json() if state.work else None,
             queued=state.published,
             problems=state.problems,
             set_aside=[item.name for item in state.set_aside],

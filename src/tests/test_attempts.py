@@ -181,7 +181,7 @@ class SleptThroughTest(OwedRunTestCase):
         )
         self.assertNotIn("asleep or off", fresh)
         self.assertNotIn("starts by itself", fresh)
-        self.assertIn("| Package review (contradictions) | complete | the agent finished its review |", fresh)
+        self.assertIn(f"| Package review (contradictions) | complete | {cycle.REVIEW_SAID_COMPLETE} |", fresh)
         self.assertEqual(self.queue()["open"], [])
         self.assertEqual(datetime.fromisoformat(self.queue()["next_run"]), (DUE + timedelta(days=7)).astimezone())
         self.assertEqual(self.endings(), [("scheduled", attempts.SLEPT), ("scheduled", attempts.COMPLETED)])

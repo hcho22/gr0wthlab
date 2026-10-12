@@ -93,11 +93,14 @@ def child_environment(home: Path, codex_bin: Path, temp_dir: str) -> dict[str, s
 
 
 def build_exec_command(config: Mapping, boundary: Boundary, codex_bin: Path, last_message: Path) -> list[str]:
-    """codex exec reading its prompt from stdin; the run's only writable paths are the areas."""
+    """codex exec reading its prompt from stdin; the run's only writable paths are the areas. The model and its
+    reasoning effort are the agent's alone: the preflight runs no model, so it does not take them."""
+    codex = config["codex"]
     return (
         [str(codex_bin), "exec", "--cd", str(boundary.working_directory)]
-        + list(config["codex"]["session_flags"])
-        + ["--model", config["codex"]["model"], "--json", "--output-last-message", str(last_message)]
+        + list(codex["session_flags"])
+        + ["--model", codex["model"], "-c", f"model_reasoning_effort={toml_string(codex['reasoning_effort'])}"]
+        + ["--json", "--output-last-message", str(last_message)]
         + config_overrides(config, boundary)
         + ["-"]
     )

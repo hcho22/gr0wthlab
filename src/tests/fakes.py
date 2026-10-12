@@ -6,6 +6,7 @@ import dataclasses
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import stat
@@ -209,6 +210,59 @@ def install_codex(directory: Path) -> Path:
 
 def behave(directory: Path, behavior: dict) -> None:
     (directory / "behavior.json").write_text(json.dumps(behavior), encoding="utf-8")
+
+
+# Codex's event stream, as `codex exec --json` writes it: one line for each step that ran to its end.
+
+
+def command_event(command: str, output: str = "", exit_code: int = 0) -> str:
+    """One finished shell command, with all of its output, as the stream holds it whatever the model was shown."""
+    item = {
+        "id": "item_1",
+        "type": "command_execution",
+        "command": f"/bin/zsh -lc {shlex.quote(command)}",
+        "aggregated_output": output,
+        "exit_code": exit_code,
+        "status": "completed",
+    }
+    return json.dumps({"type": "item.completed", "item": item})
+
+
+def read_event(*paths: Path) -> str:
+    """The agent reading files whole, one after another, in one command."""
+    output = "".join(path.read_text(encoding="utf-8") for path in paths)
+    return command_event("cat " + " ".join(str(path) for path in paths), output)
+
+
+def edit_event(*paths: str) -> str:
+    """One finished file edit; the stream names the files and never holds their text."""
+    item = {
+        "id": "item_2",
+        "type": "file_change",
+        "changes": [{"path": path, "kind": "add"} for path in paths],
+        "status": "completed",
+    }
+    return json.dumps({"type": "item.completed", "item": item})
+
+
+def write_events(path: Path, *lines: str) -> Path:
+    """A session's event stream on disk, opened and closed as Codex opens and closes one."""
+    stream = [json.dumps({"type": "thread.started", "thread_id": "t"}), json.dumps({"type": "turn.started"}), *lines]
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(stream) + "\n", encoding="utf-8")
+    return path
+
+
+def package_files(mandu: Path) -> list[Path]:
+    """Every package file a run's brief lists for the throwaway Mandu, in the registry's order."""
+    registry = json.loads((REPO / "config" / "products.json").read_text(encoding="utf-8"))
+    found = []
+    for product in registry["products"]:
+        for source in (product.get("go_to_market_package") or {}).get("sources", []):
+            target = mandu / source["path"]
+            prefix = source.get("files_starting_with", "")
+            found += sorted(target.glob(f"{prefix}*")) if source["path"].endswith("/") else [target]
+    return [path for path in found if path.is_file()]
 
 
 def agent_pids(directory: Path) -> list[int]:
