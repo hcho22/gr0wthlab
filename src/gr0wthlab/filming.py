@@ -343,57 +343,80 @@ class Filming:
         if all(segment.speed == 1 for segment in edit.segments):
             asset.checks.append("every cut plays at the speed it was recorded at")
         if not asset.blocks:
-            reference, reference_draft, problem = self.reference(day.spec, edit, areas)
+            reference, reference_draft, problem, alone = self.reference(day.spec, edit, areas)
             if problem:
                 asset.blocks.append(Finding("pair-legs", "", problem))
             elif reference is not None:
                 asset.blocks += edits.check_pair(edit, draft, reference, reference_draft, day.spec)
                 where = "after the re-cut opening" if day.spec.recut else "from the first frame to the last"
                 asset.checks.append(f"the same source ranges as day {reference.day}'s leg {where}")
-            elif day.spec.other is not None:
-                asset.checks.append(f"day {day.spec.other}, its pair's other leg, has no video to compare with yet")
+            elif alone:
+                asset.checks.append(alone)
         if not asset.blocks:
             asset.status = READY
         return asset
 
     def reference(
         self, spec: edits.DaySpec, edit: edits.Edit, areas: Areas
-    ) -> tuple[edits.Edit | None, posts.PostDraft | None, str]:
-        """The edit an A/B leg must match outside its opening, with that leg's Draft, and why the leg cannot be
-        compared when it cannot; the same rules as the post-Draft check of the two legs' copy.
+    ) -> tuple[edits.Edit | None, posts.PostDraft | None, str, str]:
+        """The edit an A/B leg must match outside its opening, with that leg's Draft; why the leg cannot be compared
+        when it cannot, which blocks it; and, when it is checked alone, what its checks say of its other leg. The
+        same rules as the post-Draft check of the two legs' copy.
 
         A leg whose own post already shows the video cut from this very record is not checked again, so it stays
-        the reference for the newer leg. When this run cuts both legs anew, the earlier day is checked alone and the
-        later day against it.
+        the reference for the newer leg: the comparison made when the later of the two videos was cut stands. When
+        this run cuts both legs anew, the earlier day is checked alone and the later day against it. An edit record
+        of the other leg that no video was cut from yet is always compared before one is.
         """
         other = spec.other
+        if other is None:
+            return None, None, "", ""
         mine = self.posted.get(spec.day) or {}
-        if other is None or mine.get("edit_sha256") == edit.sha256:
-            return None, None, ""
         posted = self.posted.get(other) or {}
         current, _ = read_edit(areas, self.edit_path(other))
-        anew = other in self.due and not self.due[other]
-        if anew and current is not None and current.sha256 != posted.get("edit_sha256"):
-            chosen = current if other < spec.day else None
+        renewed = current is not None and current.sha256 != posted.get("edit_sha256")
+        none_yet = f"day {other}, its pair's other leg, has no video to compare with yet"
+        later = (
+            f"day {other}'s leg has a new edit record, which is compared with this one before any video is cut from it"
+        )
+        if mine.get("edit_sha256") == edit.sha256:
+            if not posted.get("edit_sha256"):
+                return None, None, "", none_yet
+            stands = (
+                f"its edit record is the one the video of `{mine['id']}` was cut from, and the comparison with day"
+                f" {other}'s leg made when the later of the two videos was cut still stands, so it was not compared"
+                " again"
+            )
+            return None, None, "", later if renewed else stands
+        if renewed and other in self.due and not self.due[other]:
+            if other > spec.day:
+                return None, None, "", later
         elif not posted.get("edit_sha256"):
-            chosen = None
-        elif current is None or current.sha256 != posted["edit_sha256"]:
+            return None, None, "", none_yet
+        elif current is None or renewed:
             return (
                 None,
                 None,
                 f"day {other}'s edit record is no longer the one the video of `{posted['id']}` was cut from, so this"
                 " leg cannot be compared with it",
+                "",
             )
-        else:
-            chosen = current
-        if chosen is None:
-            return None, None, ""
-        if chosen.problems:
-            return None, None, f"day {other}'s edit record does not follow the format, so this leg cannot be compared"
+        if current.problems:
+            return (
+                None,
+                None,
+                f"day {other}'s edit record does not follow the format, so this leg cannot be compared",
+                "",
+            )
         draft, _ = posts.read_draft(areas, self.draft_path(other))
         if draft is None or draft.problems:
-            return None, None, f"day {other}'s post Draft could not be read, so the opening it re-cuts cannot be told"
-        return chosen, draft, ""
+            return (
+                None,
+                None,
+                f"day {other}'s post Draft could not be read, so the opening it re-cuts cannot be told",
+                "",
+            )
+        return current, draft, "", ""
 
     def finish(self, number: int, draft: posts.PostDraft, areas: Areas, store: Store, now: datetime) -> Asset:
         """Turn a day's edit record into a finished asset when it passes every check: render it with the Draft's
