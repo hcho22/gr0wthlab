@@ -2,18 +2,30 @@
 
 Order: bring the production clone up to origin's main; snapshot the Go-To-Market Package; take in the Founder's
 decisions from Mandu; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests
-that need filing; plan the post Drafts from the 14-day kit (posts.prepare); read the Founder's Beta Build record
-and, only once it exists, plan the Beta Cohort's next invitation batch (beta.prepare); brief the agent and run it
-inside the sandbox (launcher.run); queue the items it wrote to workspace/review-queue/incoming/ that pass the format,
-a post for each Draft it wrote that passes every check (posts.take), the recruiting Drafts that pass theirs
-(beta.take), and the reviewed brand-rules proposal when it needs filing; write the Review Queue and the run report;
-commit and push workspace/ and ledger/. Every step but the agent is deterministic code outside the sandbox. The
-launcher's records live in ledger/, which the agent can read and never write, so nothing it does can change them; in
-workspace/ the launcher only restores its owner's access to entries the agent left without it, removes what a stopped
-boundary check left at the top of the areas, before the first records step can commit it, reads the post and
-recruiting Drafts, removes a recruiting Draft that holds what looks like an email address, and reads and removes the
-incoming items it takes in. One run at a time per checkout holds the run lock in its ledger/ from the sync to the
-saved records; a run started meanwhile refuses to start, and the next report says so.
+that need filing; plan the post Drafts from the 14-day kit (posts.prepare); file the filming plan and list and measure
+the footage place (filming.prepare); read the Founder's Beta Build record and, only once it exists, plan the Beta
+Cohort's next invitation batch (beta.prepare); read the fixed list of network sources into one snapshot (fetch.Client,
+the launcher's only way onto the network), which is working data removed when the run ends, and plan Listening from it
+and outreach from the Founder's records; brief the agent and run it inside the sandbox, which has no network
+(launcher.run); put back any change the run made to its own Instructions; queue the items it wrote to
+workspace/review-queue/incoming/ that pass the format, a post for each Draft it wrote that passes every check, with
+the video cut from its edit record when it has one (posts.take), the recruiting Drafts that pass theirs (beta.take),
+the quotes, proposals, and messages that pass theirs (listening.take, outreach.take), the code it proposed for each
+rejection reason (learning.take), and the reviewed proposals that need filing; count what the agent's session did, for
+the report to show beside the agent's own word (work.py); write the Review Queue and the run report; commit and push
+workspace/ and ledger/. Every step but the agent is deterministic code outside the sandbox. The launcher's records
+live in ledger/, which the agent can read and never write, so nothing it does can change them; in workspace/ the
+launcher only restores its owner's access to entries the agent left without it, removes what a stopped boundary
+check left at the top of the areas, before the first records step can commit it, reads the Drafts and the edit records,
+reads the items in incoming/ before the agent starts and once it has ended, removes a recruiting Draft that holds what
+looks like an email address, reads and removes the items, quote records, proposals, and codes it takes in, and puts
+the agent's Instructions back as they were. One run at a time per checkout holds the run lock in its ledger/ from the
+sync to the saved records; a run started meanwhile refuses to start, and the next report says so.
+
+A weekly scheduled start comes first as a check (attempts.py): it begins a run only while the launcher's records show
+the week's run is still owed and the Mac is fully awake, and every run notes there how it ended, so a weekly run the
+Mac's sleep cut short, wherever in it the sleep fell, is followed by a fresh one and no other run is. A one-off
+scheduled start (--once) always runs, as a run on demand does.
 """
 
 from __future__ import annotations
@@ -22,19 +34,30 @@ import fcntl
 import hashlib
 import json
 import os
+import shlex
+import shutil
 import stat
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import TextIO
+from typing import TextIO, TypeVar
 
 from . import (
+    attempts,
     beta,
     dispatch,
+    evidence,
     exchange,
+    fetch,
+    filming,
+    footage,
     launcher,
+    learning,
+    listening,
+    messages,
+    outreach,
     package,
     posts,
     process,
@@ -42,7 +65,9 @@ from . import (
     records,
     report,
     settings,
+    sources,
     waitlist,
+    work,
 )
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, clear_probe_files, read_plain
@@ -60,6 +85,22 @@ RUN_REPORTS = "run-reports"
 SNAPSHOTS = "package-snapshots"
 SUMMARY_LIMIT = 4000
 WAITLIST_NEEDS = ("waitlist-counts", "weekly-read", "beta-recruiting")
+WORKING = "working"
+# The folders, each inside one of the agent's areas, that the launcher takes the agent's work in from.
+INTAKE = (
+    ("evidence", listening.QUOTES_IN),
+    ("evidence", learning.CODES_IN),
+    ("review_queue", listening.ANGLES_IN),
+    ("drafts", messages.DRAFTS),
+    ("drafts", listening.REPLIES_IN),
+    ("drafts", outreach.FOLDER),
+)
+# The package review's row when it is complete: complete by the agent's closing line alone, so the row says whose word
+# that is and where the launcher's own counts are.
+REVIEW_SAID_COMPLETE = "the agent said it finished its review; the launcher's counts are under Agent's work"
+# The two counts made from what stands in workspace/ before the agent starts and once it has ended.
+WRITTEN = "the Draft claims and the proposals"
+T = TypeVar("T")
 
 
 def entry_point(repo_root: Path) -> Path:
@@ -143,21 +184,41 @@ class Cycle:
         home: Path,
         out: TextIO,
         clock: Callable[[], datetime],
+        client: Callable[[fetch.Policy], fetch.Client] | None = None,
+        clocks: process.Clock = process.CLOCK,
     ):
         self.repo_root = repo_root
         self.env = env
         self.home = home
         self.out = out
         self.clock = clock
+        self.client = client or fetch.Client  # the real network, through fetch.send, unless a test gives another
+        self.clocks = clocks
         self.store = Store(canonical(repo_root) / LEDGER)
         self.started: datetime | None = None
         self.run_id: str | None = None
+        self.due: datetime | None = None  # when a weekly start's run was due, once its settings could be read
+        self.unsure = False  # the Mac did not say whether it was fully awake when a weekly start asked
+        self.noted = False  # how this run ended is in the record of the run due at its time
+        self.since: Callable[[], tuple[float, float]] | None = None  # the clocks' reading from this start's beginning
+        self.before = (0.0, 0.0)  # what this start had taken when it restarted on new code, as taken() gives it
 
     def say(self, message: str) -> None:
         print(f"gr0wthlab: {message}", file=self.out)
 
     def now(self) -> datetime:
         return self.clock()
+
+    def taken(self) -> tuple[float, float]:
+        """The seconds since this start began, then those of them the Mac was awake, a restart on new code included,
+        on the clocks every time limit is measured on."""
+        seconds, awake = self.since()
+        return self.before[0] + seconds, self.before[1] + awake
+
+    def asleep(self) -> float:
+        """About how many seconds the Mac has been asleep since this start began, by the measure and the tolerance of
+        the agent's own time; 0 when it stayed awake."""
+        return report.asleep_for(*self.taken())
 
     def snapshot(self, state: RunState, config: settings.Settings, boundary: Boundary, registry) -> None:
         mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
@@ -415,6 +476,10 @@ class Cycle:
         outcome = state.post_outcome
         drafting = set(outcome.published if outcome else ()) | ({state.filed} if state.filed else set())
         drafting |= set(state.beta_outcome.published if state.beta_outcome else ())
+        if state.filming is not None and state.filming.standing.acted:
+            drafting.add(state.filming.standing.item)
+        drafting |= set(state.work_published)  # counted by Listening and outreach, each under its own workflow
+        agent_gap = state.agent_gap()
         proposals = sum(
             1 for entry in queued if entry["kind"] == "package-change-proposal" and entry["id"] not in drafting
         )
@@ -456,9 +521,11 @@ class Cycle:
                 or ("no reviewed Dispatch request" if ledger_ok else "none filed: the Review Queue could not be read"),
             ),
             self.post_tally(state),
+            self.filming_tally(state),
             self.beta_tally(state),
-            run_state.Tally("listening", 0, 0, "not built until US-ME13"),
-            run_state.Tally("outreach", 0, 0, "not built until US-ME14"),
+            listening.tally(state.listening, state.listening_result, state.listening_problem, agent_gap),
+            outreach.tally(state.outreach, state.outreach_result, state.outreach_problem, agent_gap),
+            learning.tally(state.learning, state.learning_problem, agent_gap),
         ]
 
     def waitlist_tally(self, state: RunState, breach: str | None) -> run_state.Tally:
@@ -493,6 +560,11 @@ class Cycle:
             acted += 1
             note += "; the brand-rules proposal filed"
         return run_state.Tally("post-drafts", checked, acted, note, "; ".join(gaps))
+
+    def filming_tally(self, state: RunState) -> run_state.Tally:
+        if state.filming is None and state.filming_problem:
+            return run_state.Tally("filming", 0, 0, state.filming_problem, state.filming_problem)
+        return filming.tally(state.filming, state.agent_gap())
 
     def beta_tally(self, state: RunState) -> run_state.Tally:
         """What Beta Cohort recruiting checked and acted on: the sign-ups that asked for an invitation, and each item
@@ -554,9 +626,11 @@ class Cycle:
             skipped[beta.WORKFLOW] = (
                 "the Founder has recorded no approved Beta Build in Mandu" if state.beta else "no Product recruits one"
             )
+        if state.filming is None and not state.filming_problem:
+            skipped["filming-plan"] = "no active Product films"
         own = {
             "package-snapshot": ([], f"`{state.snapshot_file}`"),
-            "package-review": ([review_gap] if review_gap else [], "the agent finished its review"),
+            "package-review": ([review_gap] if review_gap else [], REVIEW_SAID_COMPLETE),
             "decisions": ([] if ledger_ok else ["the ledger could not be read; no decision was matched"], decisions),
             "review-queue": (
                 [] if ledger_ok else ["the ledger could not be read; the queue was left as it was"],
@@ -570,6 +644,22 @@ class Cycle:
             ),
             "post-drafts": (self.post_gaps(state), self.post_tally(state).note),
             beta.WORKFLOW: (self.beta_gaps(state), self.beta_tally(state).note),
+            "filming-plan": (
+                filming.gaps(state.filming, agent_gap) if state.filming is not None else [state.filming_problem],
+                self.filming_tally(state).note,
+            ),
+            "listening": (
+                listening.gaps(state.listening, state.listening_result, state.listening_problem, agent_gap),
+                listening.tally(state.listening, state.listening_result, state.listening_problem, agent_gap).note,
+            ),
+            "outreach-drafts": (
+                outreach.gaps(state.outreach, state.outreach_result, state.outreach_problem, agent_gap),
+                outreach.tally(state.outreach, state.outreach_result, state.outreach_problem, agent_gap).note,
+            ),
+            "rejection-codes": (
+                learning.gaps(state.learning, state.learning_problem, agent_gap),
+                learning.tally(state.learning, state.learning_problem, agent_gap).note,
+            ),
         }
         rows, agent_incomplete = [], []
         for key, output in config.outputs.items():
@@ -613,6 +703,58 @@ class Cycle:
             detail = f"`{code.branch}` at `{code.short}`, read at that commit for claim checks"
             state.sources.append(SourceLine(f"{code.name} repository", package.READ, detail, needs))
 
+    def prepare_filming(
+        self,
+        state: RunState,
+        config: settings.Settings,
+        where: filming.Place | None,
+        areas: Areas,
+        ledger: Ledger,
+        ledger_ok: bool,
+        products: Sequence[str],
+        seen: dict[str, str],
+    ) -> None:
+        """The run's filming standing, fixed before the agent starts: the filming plan filed or found, and the
+        footage place listed and measured, with the video tooling and the footage place as two of the run's
+        sources. Tooling that is missing is a skipped source, so its edits are skipped, never a failed run."""
+        if where is None:
+            return
+        if state.posts is None:
+            state.filming_problem = "not planned: the post Drafts, whose calendar the plan reads, were not prepared"
+            return
+        if not ledger_ok:
+            state.filming_problem = "not planned: the Review Queue could not be read"
+            return
+        try:
+            found = filming.prepare(
+                canonical(self.repo_root),
+                state.posts,
+                where,
+                ledger,
+                self.store,
+                areas,
+                products,
+                seen,
+                self.env,
+                state.run_id,
+                self.now(),
+            )
+            self.store.write_json(self.store.path(RUN_REPORTS, filming.record_file(state.run_id)), found.as_record())
+        except (ConfigError, OSError) as error:
+            state.filming_problem = f"not planned: {error}"
+            state.problems.append(f"the filming plan could not be prepared ({error})")
+            return
+        state.filming = found
+        if found.standing.acted:
+            state.published.append(str(found.standing.item))
+        needs = output_titles(config, ("filming-plan",))
+        tooling = found.tooling
+        detail = tooling.describe() if tooling.ok else f"{tooling.problem}; every edit is skipped until it can be used"
+        state.sources.append(SourceLine("Video tooling", package.READ if tooling.ok else SKIPPED, detail, needs))
+        inventory = found.inventory
+        status = {footage.READ: package.READ, footage.FAILED: package.FAILED}.get(inventory.status, SKIPPED)
+        state.sources.append(SourceLine("Footage place", status, inventory.detail, needs))
+
     def take_posts(
         self,
         state: RunState,
@@ -626,12 +768,20 @@ class Cycle:
         """Queue each Draft that passes, record every check, and file the brand-rules proposal unless it ever was."""
         if state.posts is not None:
             try:
-                state.post_outcome = posts.take(state.posts, areas, self.store, ledger, run_id, now, products)
+                state.post_outcome = posts.take(
+                    state.posts, areas, self.store, ledger, run_id, now, products, state.filming
+                )
                 state.published += state.post_outcome.published
                 posts.record(state.posts, state.post_outcome, self.store, run_id, now)
             except (OSError, ConfigError) as error:
                 state.posts_problem = f"not taken in: {error}"
                 state.problems.append(f"the post Drafts could not be taken in ({error})")
+        if state.filming is not None:
+            state.filming.settle(state.post_outcome)
+            try:
+                filming.record(state.filming, self.store, run_id, now)
+            except (OSError, ConfigError) as error:
+                state.problems.append(f"the run's filming record could not be written ({error})")
         rules = state.posts.context.rules if state.posts else None
         try:
             filing = proposals.file_once(
@@ -761,6 +911,303 @@ class Cycle:
             self.say(f"pre-run: removed boundary probe files left in the areas: {', '.join(left)}")
         return left
 
+    def research_apps(
+        self, state: RunState, config: sources.Config, mandu: Path
+    ) -> tuple[list[sources.App], list[str], str]:
+        """The App Store apps whose reviews this run reads: the competitors the research in Mandu names, as the
+        post-Draft checks already read them, each by the store page its own section cites; the names with none; and
+        why the research could not be used, if it could not."""
+        if config.app_store is None:
+            return [], [], ""
+        plan = state.posts
+        if plan is None or "competitors" in plan.context.kit.problems:
+            why = plan.context.kit.problems["competitors"] if plan else state.posts_problem or "no kit was read"
+            return [], [], f"the competitors could not be read from the research ({why}), so no review was read"
+        competitors = plan.context.kit.competitors
+        folder = mandu / plan.context.paths["competitors"]
+        texts = {}
+        for name in sorted({competitor.source for competitor in competitors}):
+            try:
+                texts[name] = (folder / name).read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                continue
+        apps, missing = sources.research_apps(competitors, texts, config.app_store.country)
+        return apps, missing, ""
+
+    def read_sources(
+        self,
+        state: RunState,
+        config: settings.Settings,
+        policy: fetch.Policy,
+        source_config: sources.Config,
+        mandu: Path,
+        seen: run_state.ListeningState,
+    ) -> tuple[sources.Snapshot, list[tuple[str, str]], str]:
+        """Read the fixed list of network sources, outside the sandbox, into this run's snapshot, and keep the
+        request log; every source's result goes into the run report, read or not."""
+        self.discard_working()
+        now = self.now()
+        apps, missing, research_problem = self.research_apps(state, source_config, mandu)
+        limit = source_config.app_store.max_apps if source_config.app_store else 0
+        skipped = [(f"App Store reviews: {name}", "the research cites no App Store page for it") for name in missing]
+        skipped += [
+            (f"App Store reviews: {app.name}", f"over this run's limit of {limit} apps") for app in apps[limit:]
+        ]
+        client = self.client(policy)
+        snapshot = listening.read_sources(client, source_config, apps, seen, state.run_id, now)
+        needs = output_titles(config, ("listening",))
+        for reading in snapshot.readings:
+            state.sources.append(SourceLine(reading.source.name, reading.status, reading.detail, needs))
+        state.sources += [SourceLine(name, SKIPPED, why) for name, why in skipped]
+        if research_problem:
+            detail = f"{research_problem[0].upper()}{research_problem[1:]}."
+            state.sources.append(SourceLine("App Store reviews", package.FAILED, detail, needs))
+        if snapshot.readings:
+            path = self.store.path(WORKING, f"{state.run_id}.sources.json")
+            self.store.write_json(path, snapshot.as_json())
+            state.snapshot_sources = self.store.relative(path)
+            log = self.store.path(RUN_REPORTS, f"{state.run_id}.requests.json")
+            self.store.write_json(log, dict(client.summary(), run=state.run_id))
+            state.requests_file = self.store.relative(log)
+        return snapshot, skipped, research_problem
+
+    def discard_working(self) -> None:
+        """Remove what a run fetched over the network: working data for that run alone, which is gone when the run
+        ends and which no later run reads."""
+        shutil.rmtree(str(self.store.path(WORKING)), ignore_errors=True)
+
+    def prepare_work(
+        self,
+        state: RunState,
+        config: settings.Settings,
+        registry: Mapping,
+        boundary: Boundary,
+        areas: Areas,
+        ledger: Ledger | None,
+        states: run_state.States,
+        folder: Path,
+        network: tuple[fetch.Policy, sources.Config, outreach.Settings],
+    ) -> None:
+        """Before the agent: read the network sources, plan Listening from them and outreach from the Founder's
+        records in Mandu, and record both plans for the agent's own check. Each step fails on its own; with no
+        ledger, as when the Review Queue could not be read, nothing is filed or matched."""
+        policy, source_config, outreach_settings = network
+        mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
+        today = self.now().astimezone().date()
+        try:
+            snapshot, skipped, research_problem = self.read_sources(
+                state, config, policy, source_config, mandu, states.listening
+            )
+            fit = listening.package_role(registry)
+            fit_readable = fit is not None and any(
+                file.path == fit[1] and file.status != package.FAILED
+                for result in state.snapshot
+                for file in result.files
+            )
+            limits, _ = messages.run_limits(canonical(self.repo_root), registry, config.waitlist_live(today))
+            state.listening = listening.prepare(
+                registry,
+                source_config,
+                snapshot,
+                state.snapshot_sources,
+                self.store,
+                ledger,
+                fit_readable,
+                limits,
+                state.run_id,
+                self.now(),
+            )
+            if state.listening is not None:
+                state.listening.skipped, state.listening.research_problem = skipped, research_problem
+                state.problems += state.listening.problems.values()
+                state.published += state.listening.filed
+                state.work_published += state.listening.filed
+        except (OSError, ConfigError, sources.SourceError) as error:
+            state.listening_problem = f"not prepared: {error}"
+            state.problems.append(f"Listening could not be prepared ({error})")
+        try:
+            records, counted = outreach.Records(), ""
+            if ledger is not None and package.file_type(folder / "outreach") == stat.S_IFDIR:
+                found, problems, failure = read_records(folder / "outreach")
+                parsed, more = parse_records(found, exchange.parse_outreach)
+                bad = {Path(record.name).name: "; ".join(record.problems) for record in problems + more}
+                records = outreach.Records(tuple(record for record, _, _ in parsed), bad, failure or "")
+                counted = report.plural(len(found), "record") + (f", {len(bad)} could not be used" if bad else "")
+            try:
+                if ledger is not None:
+                    state.outreach, states.outreach = outreach.prepare(
+                        canonical(self.repo_root),
+                        outreach_settings,
+                        registry,
+                        mandu,
+                        ledger,
+                        records,
+                        states.outreach,
+                        areas,
+                        self.now(),
+                        state.run_id,
+                        config.waitlist_live(today),
+                    )
+                else:
+                    state.outreach_problem = "not prepared: the Review Queue could not be read"
+            finally:
+                unread = state.outreach.unread if state.outreach is not None else []
+                needs = output_titles(config, ("outreach-drafts",))
+                if records.failure:
+                    detail = f"`{folder / 'outreach'}` could not be read: {records.failure}."
+                    line = SourceLine("Mandu outreach records", package.FAILED, detail, needs)
+                elif unread:
+                    detail = "; ".join(f"{who}: {why}" for who, why in unread) + "."
+                    line = SourceLine("Mandu outreach records", package.FAILED, detail, needs)
+                elif counted:
+                    line = SourceLine("Mandu outreach records", package.READ, counted, needs)
+                else:
+                    line = SourceLine("Mandu outreach records", SKIPPED, "no message has been recorded as sent yet")
+                state.sources.append(line)
+        except (OSError, ConfigError, run_state.StateError) as error:
+            state.outreach_problem = f"not prepared: {error}"
+            state.problems.append(f"the outreach messages could not be prepared ({error})")
+        try:
+            if ledger is not None:
+                state.reasons, problems = learning.reasons(self.store, ledger)
+                learning.answered(
+                    self.store, ledger, [str(p["name"]) for p in registry.get("products", [])], state.reasons
+                )
+                state.problems += problems
+            record = {
+                "run": state.run_id,
+                "listening": listening.plan_record(state.listening) if state.listening else None,
+                "outreach": outreach.plan_record(state.outreach, areas) if state.outreach else None,
+            }
+            self.store.write_json(self.store.path(RUN_REPORTS, f"{state.run_id}.work-plan.json"), record)
+        except (OSError, ConfigError) as error:
+            state.problems.append(f"the plan for the agent's own check could not be written ({error})")
+        overrides = (
+            " ".join(f"{name}={shlex.quote(path)}" for name, path in state.posts.locations) if state.posts else ""
+        )
+        entry = canonical(self.repo_root) / "src/bin/gr0wthlab"
+        state.check_work = f"{overrides} /usr/bin/python3 {entry} check-work --run {state.run_id}".strip()
+        for area, parts in INTAKE:
+            for depth in range(1, len(parts) + 1):
+                areas.ensure_folder(areas.path(area, *parts[:depth]))
+
+    def take_work(
+        self,
+        state: RunState,
+        areas: Areas,
+        ledger: Ledger,
+        ledger_ok: bool,
+        products: Sequence[str],
+        run_id: str,
+        now: datetime,
+        seen: dict[str, str],
+    ) -> None:
+        """After the agent: put back any change to its Instructions, then take in its Listening work, its outreach
+        Drafts, and the codes it proposed for rejection reasons, each on its own."""
+        if state.guidance is not None:
+            state.put_back = learning.put_back(state.guidance, areas)
+            state.problems += [f"{line}; no run may change its own Instructions yet" for line in state.put_back]
+        if not ledger_ok:
+            unread = "not taken in: the Review Queue could not be read"
+            state.listening_problem = state.listening_problem or unread
+            state.outreach_problem = state.outreach_problem or unread
+            state.learning_problem = "the rejection reasons were not read: the Review Queue could not be read"
+            return
+        context = state.posts.context if state.posts else None
+        if state.listening is not None:
+            try:
+                state.listening_result = listening.take(
+                    state.listening, context, areas, self.store, ledger, run_id, now, products, seen
+                )
+                state.published += state.listening_result.published
+                state.work_published += state.listening_result.published
+            except (OSError, ConfigError) as error:
+                state.listening_problem = f"not taken in: {error}"
+                state.problems.append(f"the Listening work could not be taken in ({error})")
+        plan = state.outreach
+        if plan is not None and not plan.problem:
+            try:
+                if context is None:
+                    state.outreach_problem = "not taken in: the kit could not be read, so no message could be checked"
+                else:
+                    state.outreach_result = outreach.take(
+                        plan, context, areas, self.store, ledger, run_id, now, products
+                    )
+                    state.published += state.outreach_result.published
+                    state.work_published += state.outreach_result.published
+            except (OSError, ConfigError) as error:
+                state.outreach_problem = f"not taken in: {error}"
+                state.problems.append(f"the outreach Drafts could not be taken in ({error})")
+        if plan is not None and plan.slots:
+            self.file_outreach_lists(state, context, ledger, products, run_id, now, seen)
+        try:
+            state.learning = learning.take(areas, self.store, ledger, products, run_id, now)
+            state.problems += [problem for problem in state.learning.problems if problem not in state.problems]
+        except (OSError, ConfigError, ValueError) as error:
+            state.learning_problem = f"the rejection reasons could not be coded ({error})"
+            state.problems.append(state.learning_problem)
+
+    def file_outreach_lists(self, state: RunState, context, ledger: Ledger, products, run_id, now, seen) -> None:
+        """File the loss-framing and sponsorship lists proposal unless it ever was, or Mandu's file holds them."""
+        rules = context.rules if context else None
+        try:
+            filing = proposals.file_once(
+                canonical(self.repo_root),
+                outreach.RULES_PROPOSAL,
+                rules.data if rules else None,
+                self.store,
+                ledger,
+                products,
+                run_id,
+                now,
+                seen,
+            )
+        except (OSError, ConfigError) as error:
+            state.problems.append(f"`{outreach.RULES_PROPOSAL}` could not be filed ({error})")
+            return
+        if filing.status == proposals.FILED:
+            state.published.append(filing.item)
+            state.work_published.append(filing.item)
+        elif filing.status == proposals.UNUSABLE:
+            state.problems.append(f"`{filing.source}` could not be filed: {filing.detail}")
+        state.outreach_filing = proposals.describe(filing, ledger)
+
+    def counted(self, state: RunState, what: str, count: Callable[[], T]) -> T | None:
+        """Make one count of the agent's session, for the run report to show beside the agent's own word. The counts
+        gate nothing, so a count that cannot be made is a launcher problem and the run goes on without it."""
+        try:
+            return count()
+        except (OSError, ConfigError) as error:
+            state.problems.append(f"{what} could not be counted ({error})")
+            return None
+
+    def count_work(
+        self, state: RunState, config: settings.Settings, log_dir: Path, written: work.Written | None, taken_in: bool
+    ) -> None:
+        """Count what the agent's session did, once it has ended and its items are taken in. written is what this
+        session wrote or changed of the Drafts due and the proposals in incoming/, so that nothing an earlier run left
+        is counted as its work; without it neither the Draft claims nor the proposals are counted. taken_in says
+        whether the launcher took in what stood in incoming/."""
+        mandu = Path(state.mandu)
+        files = {
+            file.path: mandu / file.path
+            for result in state.snapshot
+            for file in result.files
+            if file.status != package.FAILED
+        }
+        claims = proposals = None
+        if written is not None:
+            set_aside = {item.name for item in state.set_aside}
+            queued = [name for name in written.proposals if taken_in and name not in set_aside]
+            claims, proposals = written.claims, work.count_proposals(written.proposals, queued)
+        state.work = self.counted(
+            state,
+            "the agent's work",
+            lambda: work.measure(
+                log_dir / f"{state.run_id}.events.jsonl", config.shown_output_chars, files, claims, proposals
+            ),
+        )
+
     def leave_note(self, run_id: str, line: str) -> None:
         """A one-line note in ledger/notes/, which the next run's report shows."""
         self.store.write_text(self.store.path(NOTES_DIR, f"{run_id}.txt"), line + "\n")
@@ -786,6 +1233,78 @@ class Cycle:
             return None
         return handle
 
+    def owed(self) -> int | None:
+        """A weekly scheduled start is first a check of the launcher's own records: None while the week's run is still
+        owed and the Mac is fully awake, and otherwise the exit status of a start that begins nothing. The check takes
+        no lock and writes nothing, so the LaunchAgent can make it every few minutes, and it prints its reason only at
+        a terminal, so a LaunchAgent's log does not grow by a line each time."""
+        try:
+            config = settings.load(self.repo_root, self.env, self.home)
+        except ConfigError as error:
+            self.say(f"refusing to start: {error}")
+            return launcher.EXIT_CONFIG
+        self.due = report.due_time(self.now(), config.weekly)
+        record = attempts.load(self.store, self.due)
+        why = attempts.waiting(record, config.attempts_per_week)
+        if not why:
+            awake = attempts.fully_awake()
+            self.unsure = awake is None
+            why = "" if awake or self.unsure else "the Mac is not fully awake, and a run starts only while it is"
+        if why and self.out.isatty():
+            self.say(f"nothing to start: {why}")
+        return 0 if why else None
+
+    def claim(self, state: RunState, config: settings.Settings) -> attempts.Attempt | None:
+        """Under the run lock, note this weekly scheduled attempt in the record of the run due at its time before
+        anything else is done, so that an attempt that never ends still counts; None when the record shows that no run
+        is owed after all, as when another start completed it meanwhile."""
+        record = attempts.load_to_write(self.store, state.due)
+        why = attempts.waiting(record, config.attempts_per_week)
+        if why:
+            self.say(f"nothing to start: {why}")
+            return None
+        if record.problem:
+            state.problems.append(
+                f"the record of the attempts at the run due {report.moment(state.due)} could not be used"
+                f" ({record.problem}); it was set aside and started again, so this run may repeat one already made"
+            )
+        if self.unsure:
+            state.problems.append(
+                "the Mac did not say whether it was fully awake, so this run started without knowing; a run started"
+                " in a dark wake is likely to be cut short by sleep"
+            )
+        self.due = state.due
+        return attempts.claim(self.store, record, config.attempts_per_week, state.started)
+
+    def note_ending(self, state: RunState, config: settings.Settings) -> None:
+        """Note how this run ended in the record of the run due at its time, which the next weekly start reads to
+        tell whether a run is still owed. A run on demand or a one-off scheduled run is noted at the weekly time
+        before it started and is never an attempt, so one that completed counts as that week's run."""
+        if state.attempt:
+            due, kind = state.due, attempts.SCHEDULED
+        else:
+            due = report.due_time(state.started, config.weekly)
+            kind = attempts.ONE_OFF if state.trigger == attempts.SCHEDULED else attempts.ON_DEMAND
+        attempts.finish(self.store, due, kind, state.started, state.run_id, state.ending, self.now(), state.slept)
+        self.noted = True
+        follows = report.what_follows(state)
+        if follows:
+            self.say(follows)
+
+    def note_no_report(self, trigger: str, ending: str) -> None:
+        """Note the ending of a weekly scheduled start that never reached its report, refused or stopped by an error.
+        One the Mac slept during was cut short by sleep, as a run that reached its report would be; any other does not
+        earn another attempt, so the owed-run check does not start it again every few minutes."""
+        if trigger != attempts.SCHEDULED or self.due is None or self.noted:
+            return
+        try:
+            started = self.started or self.now()
+            asleep = self.asleep()
+            ending = attempts.SLEPT if asleep else ending
+            attempts.finish(self.store, self.due, trigger, started, self.run_id, ending, self.now(), asleep)
+        except (OSError, ConfigError) as error:
+            self.say(f"how this start ended could not be noted ({error})")
+
     def run(
         self,
         instruction: Path | None,
@@ -794,12 +1313,19 @@ class Cycle:
         argv: Sequence[str],
         execve: Callable[[str, list[str], Mapping[str, str]], None] = os.execve,
     ) -> int:
+        self.since = self.clocks.start()
+        if trigger == attempts.SCHEDULED and once is None and not self.env.get(PRE_RUN_ENV):
+            code = self.owed()
+            if code is not None:
+                return code
         lock = self.lock(trigger)
         if lock is None:
             return EXIT_BUSY
         with lock:
             try:
-                return self.locked_run(instruction, trigger, once, argv, execve)
+                for name, line in attempts.left_without_ending(self.store):
+                    self.leave_note(name, line)
+                code = self.locked_run(instruction, trigger, once, argv, execve)
             except (OSError, ConfigError) as error:
                 started = self.started or self.now()
                 run_id = self.run_id or launcher.new_run_id(trigger, started)
@@ -809,7 +1335,13 @@ class Cycle:
                 )
                 self.leave_note(run_id, line)
                 self.say(f"the run stopped: {error}; the next run's report will say so")
+                self.note_no_report(trigger, attempts.STOPPED)
                 return EXIT_STOPPED
+            finally:
+                self.discard_working()
+            if code:
+                self.note_no_report(trigger, attempts.REFUSED)
+            return code
 
     def locked_run(
         self,
@@ -822,6 +1354,8 @@ class Cycle:
         pre = json.loads(self.env[PRE_RUN_ENV]) if self.env.get(PRE_RUN_ENV) else None
         started = datetime.fromisoformat(pre["started_at"]) if pre else self.now()
         self.started, self.run_id = started, None
+        if pre:
+            self.before = tuple(pre.get("taken", self.before))
         try:
             config = settings.load(self.repo_root, self.env, self.home)
             task = config.instruction if instruction is None else settings.instruction_path(self.repo_root, instruction)
@@ -857,7 +1391,7 @@ class Cycle:
             if result.code_changed:
                 # Run the reviewed code just fetched, not the code already loaded in this process.
                 entry = str(entry_point(self.repo_root))
-                carried = json.dumps({"started_at": started.isoformat(), "sync": sync})
+                carried = json.dumps({"started_at": started.isoformat(), "sync": sync, "taken": self.taken()})
                 for stream in (self.out, sys.stdout, sys.stderr):
                     stream.flush()  # execve discards anything still buffered
                 execve(entry, [entry, *argv], dict(self.env, **{PRE_RUN_ENV: carried}))
@@ -869,6 +1403,10 @@ class Cycle:
         state.late_after = timedelta(minutes=config.late_after_minutes)
         if trigger == "scheduled":
             state.due = report.due_time(started, config.weekly, once)
+            if once is None:
+                state.attempt = self.claim(state, config)
+                if state.attempt is None:
+                    return 0
         state.code = head(self.repo_root)
         try:
             _, boundary = load_boundary(self.repo_root, self.env, self.home)
@@ -876,6 +1414,9 @@ class Cycle:
             folder = settings.exchange_dir(registry, boundary, self.env, self.home)
             rules = settings.waitlist(registry, boundary, self.env, self.home)
             beta_rules = beta.rules(registry, config)
+            footage_place = filming.place(registry, boundary, self.env, self.home)
+            policy = fetch.load_policy(canonical(self.repo_root))
+            network = (policy, sources.load(canonical(self.repo_root), policy), outreach.settings(config.data))
         except ConfigError as error:
             self.say(f"refusing to start: {error}")
             return launcher.EXIT_CONFIG
@@ -911,6 +1452,8 @@ class Cycle:
         self.read_waitlist(state, config, rules)
         if ledger_ok:
             self.file_dispatches(state, ledger, products, seen)
+        self.prepare_posts(state, config, registry, boundary, ledger)
+        self.prepare_filming(state, config, footage_place, areas, ledger, ledger_ok, products, seen)
         state.queue_before = ledger.ordered()
         state.replaced = {str(entry["id"]): ledger.decided_replaced(entry) for entry in state.queue_before}
         state.closed_proposals = [
@@ -918,11 +1461,21 @@ class Cycle:
             for entry in ledger.entries.values()
             if entry["kind"] == "package-change-proposal" and entry["status"] != OPEN
         ]
-        self.prepare_posts(state, config, registry, boundary, ledger)
         self.prepare_beta(
             state, config, beta_rules, folder, registry, boundary, ledger, ledger_ok, areas, states.beta_recruiting
         )
         areas.ensure_folder(areas.path("review_queue", INCOMING))
+        self.prepare_work(
+            state, config, registry, boundary, areas, ledger if ledger_ok else None, states, folder, network
+        )
+        # A stopped boundary check's script sits among the agent's Instructions, so every run removes what such a check
+        # left before it remembers them: the guard would put back after the agent whatever it had remembered.
+        state.probe_files_removed = clear_probe_files(boundary)
+        if state.probe_files_removed:
+            self.say(f"removed boundary probe files left in the areas: {', '.join(state.probe_files_removed)}")
+        state.guidance = learning.remember(areas)
+        state.problems += state.guidance.problems
+        before = self.counted(state, WRITTEN, lambda: work.standing(state.posts, areas, products))
         brief = self.store.path(RUN_REPORTS, f"{run_id}.brief.md")
         self.store.write_text(
             brief, report.render_brief(state, canonical(self.repo_root), areas.workspace, self.store.root)
@@ -943,6 +1496,7 @@ class Cycle:
             )
         except OSError as error:
             state.agent = {"exit_code": launcher.EXIT_CONFIG, "agent_started": False, "error": str(error)}
+        state.slept = self.asleep()
         log_dir = launcher.default_log_dir(self.env, self.home)
         last_message = log_dir / f"{run_id}.last-message.md"
         if last_message.is_file():
@@ -958,9 +1512,15 @@ class Cycle:
         state.problems += records.restore_access(canonical(self.repo_root))
 
         now = self.now()
+        written = None
+        if before is not None and state.agent.get("agent_started"):
+            written = self.counted(
+                state, WRITTEN, lambda: work.written(before, work.standing(state.posts, areas, products))
+            )
         published: list[str] = []
         if ledger_ok:
-            published, state.set_aside = ledger.take_incoming(areas, self.store, products, run_id, now, seen)
+            kept = evidence.records(self.store)
+            published, state.set_aside = ledger.take_incoming(areas, self.store, products, run_id, now, seen, kept)
             state.published += published
         incoming = len(published) + len(state.set_aside)
         if ledger_ok:
@@ -968,6 +1528,9 @@ class Cycle:
             self.take_beta(state, areas, ledger, products, run_id, now)
         elif state.posts is not None:
             state.posts_problem = "not taken in: the Review Queue could not be read"
+        self.take_work(state, areas, ledger, ledger_ok, products, run_id, now, seen)
+        if state.agent.get("agent_started"):
+            self.count_work(state, config, log_dir, written, ledger_ok)
         report_path = self.store.path(RUN_REPORTS, f"{run_id}.md")
         state.problems += areas.problems
         areas.problems.clear()
@@ -997,12 +1560,16 @@ class Cycle:
         if ledger_ok and state.post_outcome is not None and state.post_outcome.withdrawn:
             posts.withdraw(ledger, state.post_outcome, state.notice, run_id, now)
         if ledger_ok:
+            taken_back = list(state.listening_result.replies if state.listening_result else ())
+            taken_back += list(state.outreach_result.outcomes if state.outreach_result else ())
+            messages.withdraw(ledger, taken_back, state.notice, run_id, now)
             self.settle_beta(state, ledger, states, run_id, now)
         state.queue_after = ledger.ordered()
         self.outputs(state, config, ledger_ok)
         if ledger_ok:
             ledger.mark_carried_over(sittings)
-            next_run = report.next_due(now, config.weekly)
+            # While a fresh run is to follow by itself, the next weekly run is the one already due.
+            next_run = state.due.astimezone() if state.again else report.next_due(now, config.weekly)
             try:
                 self.store.write_json(
                     ledger_path, ledger.as_json(run_id, now, self.store.relative(report_path), next_run)
@@ -1028,6 +1595,7 @@ class Cycle:
                 path.unlink()
             self.say(f"run report: {report_path}")
 
+        self.note_ending(state, config)
         saved = None
         if production and config.records.save_after_run:
             result = records.save(
@@ -1054,8 +1622,10 @@ class Cycle:
             records=saved,
             report=str(report_path),
             late=state.late,
+            ending=state.ending,
             usage=state.usage,
             cost_usd=state.cost,
+            work=state.work.as_json() if state.work else None,
             queued=state.published,
             problems=state.problems,
             set_aside=[item.name for item in state.set_aside],

@@ -1,0 +1,14 @@
+{
+  "edit": 1,
+  "product": "RepToday",
+  "window": 1,
+  "day": 1,
+  "segments": [
+    {
+      "shot": "d01-s1",
+      "source": "/Users/founder/Movies/holiday.mov",
+      "in": 2.0,
+      "out": 12.0
+    }
+  ]
+}

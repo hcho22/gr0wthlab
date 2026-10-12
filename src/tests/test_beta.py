@@ -49,7 +49,7 @@ class RecordsTest(unittest.TestCase):
         self.assertEqual((record.approved_on, record.recruiting, record.build), ("2026-10-09", "open", "1.0 (42)"))
         for change, problem in (
             ({"exchange": 3}, "exchange must be 4 or later"),
-            ({"exchange": 5}, "newer than gr0wthlab can read"),
+            ({"exchange": exchange.EXCHANGE_VERSION + 1}, "newer than gr0wthlab can read"),
             ({"product": "Immerse"}, "product must equal the file name"),
             ({"approved_on": "soon"}, "approved_on must be the YYYY-MM-DD date"),
             ({"approved_on": "2026-10-12"}, "approved_on is after the day the record was made"),

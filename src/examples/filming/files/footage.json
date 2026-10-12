@@ -1,0 +1,120 @@
+{
+  "description": "Synthetic stand-in for the launcher's inventory of a footage place: the name, shot, leg, and measured facts of footage that was never filmed. No media file is in this repository; the tooling tests make matching test clips with ffmpeg's own test pattern when it is installed.",
+  "folder": "window-1",
+  "clips": [
+    {
+      "name": "window-1/d01-s1.mov",
+      "bytes": 15738027,
+      "sha256": "3ec11d89e1d598e99a279797d2280529014d7687d90bf8153e056b00ccdb5327",
+      "shot": "d01-s1",
+      "leg": null,
+      "facts": {
+        "duration": 14.0,
+        "width": 886,
+        "height": 1920,
+        "fps": 60.0,
+        "codec": "h264",
+        "pix_fmt": "yuv420p",
+        "sound": false,
+        "transfer": "",
+        "square_pixels": true
+      },
+      "problem": ""
+    },
+    {
+      "name": "window-1/d02-s1a-take-1.mov",
+      "bytes": 4200000,
+      "sha256": "1d2a2eec5658fe0def761dcb550d6772b203513b0cb47082711a3f4d018a7a88",
+      "shot": "d02-s1",
+      "leg": "A",
+      "facts": {
+        "duration": 6.0,
+        "width": 1080,
+        "height": 1920,
+        "fps": 30.0,
+        "codec": "h264",
+        "pix_fmt": "yuv420p",
+        "sound": true,
+        "transfer": "",
+        "square_pixels": true
+      },
+      "problem": ""
+    },
+    {
+      "name": "window-1/d02-s1b-take-1.mov",
+      "bytes": 4100000,
+      "sha256": "1bf98cdc4ae30906230c0ee82f26d1678e948082335ba8b53ac52bd6e87e73bd",
+      "shot": "d02-s1",
+      "leg": "B",
+      "facts": {
+        "duration": 6.0,
+        "width": 1080,
+        "height": 1920,
+        "fps": 30.0,
+        "codec": "h264",
+        "pix_fmt": "yuv420p",
+        "sound": true,
+        "transfer": "",
+        "square_pixels": true
+      },
+      "problem": ""
+    },
+    {
+      "name": "window-1/d02-s1-closing.mov",
+      "bytes": 9800000,
+      "sha256": "374c998cb0f60c512ede865a1537520da2555587cabc8f7535fdeaaa1b653c07",
+      "shot": "d02-s1",
+      "leg": null,
+      "facts": {
+        "duration": 15.0,
+        "width": 1080,
+        "height": 1920,
+        "fps": 30.0,
+        "codec": "h264",
+        "pix_fmt": "yuv420p",
+        "sound": true,
+        "transfer": "",
+        "square_pixels": true
+      },
+      "problem": ""
+    },
+    {
+      "name": "window-1/d02-s2.mov",
+      "bytes": 17900000,
+      "sha256": "8cd105bb153d08076190167b9592392c381723a2564a97c203e4438150b04efd",
+      "shot": "d02-s2",
+      "leg": null,
+      "facts": {
+        "duration": 16.0,
+        "width": 886,
+        "height": 1920,
+        "fps": 60.0,
+        "codec": "h264",
+        "pix_fmt": "yuv420p",
+        "sound": false,
+        "transfer": "",
+        "square_pixels": true
+      },
+      "problem": ""
+    },
+    {
+      "name": "window-1/d07-s1.mov",
+      "bytes": 210000000,
+      "sha256": "97c9fca5d0bfe928bb1a741f563f3e8bf2b193e8e98882eb2c53f67f7055b599",
+      "shot": "d07-s1",
+      "leg": null,
+      "facts": {
+        "duration": 330.0,
+        "width": 1080,
+        "height": 1920,
+        "fps": 30.0,
+        "codec": "h264",
+        "pix_fmt": "yuv420p",
+        "sound": true,
+        "transfer": "",
+        "square_pixels": true
+      },
+      "problem": ""
+    }
+  ]
+}

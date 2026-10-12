@@ -196,7 +196,8 @@ class TakeTest(TakeTestCase):
         )
         self.assertIn(
             "- The kit's checklist for every asset (`projects/RepToday/gtm/05-social-pmf/cadence-14-day.md`), each"
-            " line yours to judge on this post:\n  Line 26: Founder is on camera for every first-person line.\n",
+            " line yours to judge on this post:\n  Line 26: The founder is in frame for every line said in the first"
+            " person.\n",
             text,
         )
 

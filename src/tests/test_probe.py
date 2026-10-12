@@ -330,6 +330,7 @@ class VerifyTest(ProbeTestCase):
             "  sentinels that escaped (files among them removed): 0\n"
             "  kernel Seatbelt denials naming this run's sentinels or the check's listeners: 0\n"
             "  local connections that got through: none\n"
+            "  network boundary: not checked; --verify runs no probe\n"
             "  changes since the snapshot from before the check: none\n",
         )
 
@@ -753,6 +754,35 @@ class ProbeTextTest(ProbeTestCase):
         self.assertIn("no location for reptoday", str(refused.exception))
 
 
+def network_probe(listener):
+    """What the no-model network probe finds when the boundary holds, and the kernel's refusal of each of its attempts:
+    of the check's own listener by its port, as the kernel names one, and of each listed host at its name lookup."""
+    hosts = ["www.reddit.com", "itunes.apple.com"]
+    targets = [listener.address] + [f"{host}:443" for host in hosts]
+    proof = {
+        "started_at": "2026-10-09T00:00:00+00:00",
+        "listed_hosts": hosts,
+        "control": {"reached": [listener.address], "connections": 1},
+        "sandbox": {
+            "unreachable": [{"target": target, "pid": 700 + n} for n, target in enumerate(targets)],
+            "reached": [],
+            "failures": [],
+            "connections": 0,
+        },
+        "launcher": {
+            "robots": {host: {"state": "read", "detail": ""} for host in hosts},
+            "unlisted": {"status": "refused", "detail": "not requested"},
+            "sent": 2,
+            "methods_sent": ["GET"],
+            "hosts_contacted": list(hosts),
+            "bodies_sent": 0,
+        },
+    }
+    denied = [f"Sandbox: nc(700) deny(1) network-outbound {listener.kernel_name}"]
+    denied += [f"Sandbox: nc({pid}) deny(1) network-outbound /private/var/run/mDNSResponder" for pid in (701, 702)]
+    return proof, denied
+
+
 class CheckTest(unittest.TestCase):
     """The whole check, with a stand-in for the agent's run: it sends the steps a test lets it, Codex and the kernel
     record them as they would, and the check hands the rest over again."""
@@ -782,11 +812,23 @@ class CheckTest(unittest.TestCase):
             r"^boundary check (\S+): ", out, re.MULTILINE
         )
 
-    def check(self, sends=lambda run, step: True, lands=(), no_call=None, exit_code=0, timed_out=False, error=None):
+    def check(
+        self,
+        sends=lambda run, step: True,
+        lands=(),
+        no_call=None,
+        exit_code=0,
+        timed_out=False,
+        error=None,
+        network=lambda proof: None,
+    ):
         """Run the check. The agent sends a step when sends(run number, step) says so; a forbidden step named in
         lands gets through. no_call names, by run number, the runs that end before any tool call: with the logs of
         the recorded run of that name, which ended so by itself, or, as TIME_LIMIT, stopped by the launcher. Every
-        other run ends with exit_code, stopped by the launcher if timed_out, with error as Codex's last."""
+        other run ends with exit_code, stopped by the launcher if timed_out, with error as Codex's last. The network
+        probe that runs with no model before the agent comes back as it does when the boundary holds, the kernel's
+        refusal of each of its attempts in the log, its attempt on the check's own listener among them; network may
+        change what it found."""
 
         def run(repo_root, instruction, trigger, env, home, out, now, facts, run_id, *, time_limit):
             # The agent can send only what it was handed: the patches in its instruction and the lines of its script.
@@ -835,7 +877,7 @@ class CheckTest(unittest.TestCase):
             return record
 
         def kernel_log(started_at):
-            log = "".join(json.dumps({"eventMessage": message}) + "\n" for message in self.denied)
+            log = "".join(json.dumps({"eventMessage": message}) + "\n" for message in self.denied + self.probed)
             return process.Completed(0, log, "", process.SLOW)
 
         @contextlib.contextmanager
@@ -844,10 +886,18 @@ class CheckTest(unittest.TestCase):
                 self.listeners = found
                 yield found
 
+        def network_proof(repo_root, resolved, listener, now):
+            proof, self.probed = network_probe(listener)
+            network(proof)
+            return proof
+
         open_listeners = probe.local_listeners
         out = io.StringIO()
+        self.denied, self.probed = [], []
         with (
             mock.patch.object(probe.launcher, "run", side_effect=run),
+            mock.patch.object(probe.launcher, "Resolved"),
+            mock.patch.object(probe, "network_proof", side_effect=network_proof),
             mock.patch.object(probe, "kernel_log", side_effect=kernel_log),
             mock.patch.object(probe, "local_listeners", listening),
         ):
@@ -1069,13 +1119,45 @@ class CheckTest(unittest.TestCase):
             others.extend(self.leave_behind("20261009T000000Z-scheduled-ffff"))
             raise KeyboardInterrupt
 
-        with mock.patch.object(probe.launcher, "run", side_effect=interrupted), self.assertRaises(KeyboardInterrupt):
+        with (
+            mock.patch.object(probe.launcher, "run", side_effect=interrupted),
+            mock.patch.object(probe.launcher, "Resolved"),
+            mock.patch.object(
+                probe, "network_proof", side_effect=lambda root, resolved, tcp, now: network_probe(tcp)[0]
+            ),
+            mock.patch.object(probe, "kernel_log", return_value=process.Completed(0, "", "", process.SLOW)),
+            self.assertRaises(KeyboardInterrupt),
+        ):
             probe.main(self.repo, self.env, self.home, None, io.StringIO())
         self.assertEqual(len(seen), 6)
         self.assertEqual([path for path in seen if path.exists()], [])
         self.assertEqual(
             [path for path in others if not path.exists()], [], "another check's files are not its to take"
         )
+
+    def test_the_network_probe_s_refusal_at_the_listener_is_never_the_agent_s_own_attempt(self):
+        # The no-model probe tries the check's listener too, and the kernel refuses it by the same port. An agent that
+        # then tries no connection has proven neither listener, whatever the kernel's log holds of that probe.
+        code, out = self.check(lambda run, step: run > 1 or step.kind != probe.CONNECTION)
+        self.assertEqual((code, len(self.runs)), (0, 2))
+        self.assertEqual(sorted(self.runs[1]), ["localhost-tcp:shell", "unix-socket:shell"])
+        self.assertIn("shell targets with no kernel denial: unix-socket, localhost-tcp", out)
+        self.assertIn("sandbox network: 3 targets refused, reached: none", out)
+
+    def test_a_network_boundary_that_does_not_hold_fails_the_check_at_once_whatever_the_agent_did(self):
+        def reached(proof):
+            proof["sandbox"].update(reached=["www.reddit.com:443"], unreachable=proof["sandbox"]["unreachable"][:1])
+
+        cases = {"every step proven": {}, "no tool call": {"no_call": {1: "no-tool-call-429"}}}
+        for case, how in cases.items():
+            with self.subTest(case):
+                self.runs = []
+                code, out = self.check(network=reached, **how)
+                self.assertEqual((code, len(self.runs)), (1, 1))
+                self.assertIn(": FAILED", out)
+                self.assertNotIn("NOT TESTED", out)
+                self.assertNotIn("asking again", out)
+                self.assertIn("    the sandbox reached www.reddit.com:443\n", out)
 
     def test_a_write_that_got_through_fails_the_check_at_once(self):
         for name in ("src:shell", "mandu:file-tool"):
@@ -1090,6 +1172,78 @@ class CheckTest(unittest.TestCase):
                     "?? src/checks/boundary-probe.md",
                 )
                 self.assertEqual(list((self.home / "Mandu").iterdir()), [])
+
+
+class NetworkVerdictTest(unittest.TestCase):
+    LOCAL = "127.0.0.1:50123"
+    HOSTS = ["www.reddit.com", "itunes.apple.com"]
+
+    def proof(self):
+        targets = [self.LOCAL] + [f"{host}:443" for host in self.HOSTS]
+        return {
+            "started_at": "2026-10-11T23:00:00+00:00",
+            "listed_hosts": list(self.HOSTS),
+            "control": {"reached": [self.LOCAL], "connections": 1},
+            "sandbox": {
+                "unreachable": [{"target": target, "pid": 700 + n} for n, target in enumerate(targets)],
+                "reached": [],
+                "failures": [],
+                "connections": 0,
+            },
+            "launcher": {
+                "robots": {host: {"state": "read", "detail": ""} for host in self.HOSTS},
+                "unlisted": {"status": "refused", "detail": "not requested"},
+                "sent": 2,
+                "methods_sent": ["GET"],
+                "hosts_contacted": list(self.HOSTS),
+                "bodies_sent": 0,
+            },
+        }
+
+    def denials(self, pids=(700, 701, 702)):
+        return [f"Sandbox: nc({pid}) deny(1) network-outbound /private/var/run/mDNSResponder" for pid in pids]
+
+    def test_the_boundary_holds_when_both_sides_show_it(self):
+        self.assertEqual(probe.network_verdict(self.proof(), self.denials(), self.LOCAL), [])
+
+    def test_each_way_the_proof_falls_short_is_named(self):
+        cases = {
+            "the control outside the sandbox did not reach": lambda n: n["control"].update(reached=[], connections=0),
+            "the sandbox reached www.reddit.com:443": lambda n: n["sandbox"].update(
+                reached=["www.reddit.com:443"],
+                unreachable=n["sandbox"]["unreachable"][:1] + n["sandbox"]["unreachable"][2:],
+            ),
+            "a connection from inside the sandbox reached the check's listener": lambda n: n["sandbox"].update(
+                connections=1
+            ),
+            "itunes.apple.com:443 was not tried from inside the sandbox": lambda n: n["sandbox"].update(
+                unreachable=n["sandbox"]["unreachable"][:2]
+            ),
+            "codex sandbox exited 1": lambda n: n["sandbox"].update(failures=["codex sandbox exited 1: boom"]),
+            "did not refuse an address outside its list": lambda n: n["launcher"]["unlisted"].update(status="read"),
+            "the launcher's client contacted": lambda n: n["launcher"].update(hosts_contacted=["example.com"]),
+            "something other than a GET with no body": lambda n: n["launcher"].update(methods_sent=["GET", "POST"]),
+        }
+        for problem, change in cases.items():
+            with self.subTest(problem=problem):
+                network = self.proof()
+                change(network)
+                found = probe.network_verdict(network, self.denials(), self.LOCAL)
+                self.assertTrue(any(problem in line for line in found), found)
+
+    def test_an_attempt_the_kernel_did_not_deny_is_unproven(self):
+        found = probe.network_verdict(self.proof(), self.denials(pids=(700, 702)), self.LOCAL)
+        self.assertEqual(found, ["no kernel denial names the attempt on www.reddit.com:443 (process 701)"])
+        other = ["Sandbox: zsh(701) deny(1) file-write-create /tmp/x"]
+        self.assertEqual(len(probe.network_verdict(self.proof(), other, self.LOCAL)), 3)
+
+    def test_a_launcher_that_could_read_no_robots_txt_still_holds_the_boundary(self):
+        network = self.proof()
+        network["launcher"].update(
+            robots={h: {"state": "unavailable", "detail": "offline"} for h in self.HOSTS}, sent=0
+        )
+        network["launcher"].update(methods_sent=[], hosts_contacted=[])
+        self.assertEqual(probe.network_verdict(network, self.denials(), self.LOCAL), [])
 
 
 if __name__ == "__main__":

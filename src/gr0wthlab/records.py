@@ -27,6 +27,8 @@ LOCAL_TIMEOUT = 60
 # Files that would change how git treats the records themselves are never committed.
 GIT_CONTROL_FILES = (".gitattributes", ".gitignore", ".gitmodules")
 DOCUMENTATION = "README.md"
+# Finished video lives outside git: .gitignore leaves this folder out, and nothing in it is ever committed.
+ASSETS = f"{LEDGER}/assets/"
 PLAIN_MODES = ("100644", "100755")
 
 # Pre-run outcomes.
@@ -273,6 +275,8 @@ def unsafe(repo: Path, mode: str, path: str, max_bytes: int) -> str | None:
     """Why a staged record path may not be committed, or None."""
     if Path(path).name in GIT_CONTROL_FILES:
         return "a git control file"
+    if path.startswith(ASSETS):
+        return "a finished asset, which never enters git"
     if Path(path).name == DOCUMENTATION:
         return "documentation, which only a reviewed pull request changes; put back"
     if mode == "000000":

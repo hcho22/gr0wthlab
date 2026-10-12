@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TextIO
 
-from . import codex, process
+from . import codex, fetch, process
 from .areas import clear_probe_files
 from .boundary import Boundary, ConfigError, filesystem_policy, load_boundary
 
@@ -64,6 +64,8 @@ class Resolved:
 
     def __init__(self, repo_root: Path, env: Mapping[str, str], home: Path, last_message: Path):
         self.config, self.boundary = load_boundary(repo_root, env, home)
+        # The hosts the launcher itself may read (config/guardrails/fetch.json); the sandbox must reach none of them.
+        self.network_targets = [f"{host}:{fetch.PORT}" for host in fetch.load_policy(repo_root).hosts]
         self.codex_bin = codex.resolve_codex_binary(env)
         self.environment = codex.child_environment(home, self.codex_bin, codex.user_temp_dir())
         self.codex_version = codex.codex_version(self.codex_bin, self.environment)
@@ -76,6 +78,7 @@ class Resolved:
             "codex": str(self.codex_bin),
             "codex_version": self.codex_version,
             "model": self.config["codex"]["model"],
+            "reasoning_effort": self.config["codex"]["reasoning_effort"],
             "working_directory": str(self.boundary.working_directory),
             "filesystem_policy": filesystem_policy(self.boundary),
             "command": self.command,
@@ -169,6 +172,17 @@ def run(
         f"gr0wthlab: preflight refused {len(preflight.refused)} paths and allowed {len(preflight.allowed)} areas",
         file=out,
     )
+    network = codex.run_network_probe(
+        resolved.config, resolved.boundary, resolved.codex_bin, resolved.environment, resolved.network_targets
+    )
+    record["preflight"]["network"] = network.as_json()
+    if not network.ok:
+        record["exit_code"] = EXIT_BOUNDARY
+        write_json(record_path, record)
+        print("gr0wthlab: the sandbox reached the network; the agent was not started", file=out)
+        for line in list(network.reached) + list(network.failures):
+            print(f"  {line}", file=out)
+        return record
 
     prompt = compose_prompt(
         resolved.boundary, run_id, trigger, started.isoformat(), instruction_path, instruction, facts
