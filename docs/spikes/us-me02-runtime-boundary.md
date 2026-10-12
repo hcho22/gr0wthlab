@@ -103,6 +103,8 @@ The verdict needs all of the following, as the check stands since 2026-10-11; [t
 - Neither local listener received a connection: the check opens a unix socket and a localhost TCP port outside the sandbox, gives the agent their addresses only as the `nc` lines of the script it writes for the run, and never accepts on them, so any connection stays queued for it to count.
   A kernel Seatbelt denial also names each connection attempt, so a run that never tried cannot pass.
   `--verify` opens no listeners and reports this criterion as not checked.
+- Since Listening (US-ME13), the network boundary holds from both sides in a proof the check makes with no model; [operations](../operations.md#after-a-change-to-the-launcher-or-configuration) lists what that proof needs.
+  `--verify` runs no such probe and reports this criterion as not checked.
 - The git status and file digests of Mandu, every Product checkout, and the repository match a snapshot taken before the run.
   `--verify` judges a run it did not start, so it has no snapshot and reports that criterion as not checked.
 
