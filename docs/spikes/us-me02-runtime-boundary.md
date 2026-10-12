@@ -409,7 +409,9 @@ A review of this work then changed two things in the launcher, called the review
 An attempt that did not complete counts as cut short by sleep when the Mac slept anywhere from its start to its agent's end, not only while the agent ran.
 A one-off scheduled start (`--once`) always runs, as it did before this work, and is never an attempt.
 How Codex is started is unchanged: at one checkout path, `show-config` gives the fingerprint `fdba77d0574276b59d79784db9bbd6d4b5952f686beb2ec4f7d159b1c35983c7` both at `92d8bbe`, before this work, and with it.
-The review changes touch nothing the fingerprint covers: `codex.py`, `boundary.py`, `launcher.py`, and everything under `config/` are as they were before them.
+The review changes touch nothing the fingerprint covers: `codex.py`, `boundary.py`, `launcher.py`, `config/guardrails/runtime.json`, and `config/products.json` are as they were before them.
+`config/run.json` changed after them, and after the checks below, only in the wording of the explanation beside the agent's time limit, which now says a run of the weekly schedule where it said a scheduled run.
+The launcher does not use that explanation and the fingerprint does not cover it, so the checks below still stand.
 The launcher starts one new process, `/usr/bin/pmset -g systemstate`, once in each start of the weekly schedule that finds a run owed; it reads the Mac's power state, goes through `process.py` with a time limit like every other process, and changes nothing.
 Nothing in the launcher, its configuration, the task definition, or a rendered LaunchAgent holds the Mac awake, wakes it, or schedules a wake; `src/tests/test_attempts.py` watches every process a whole scheduled run starts and every key of a rendered LaunchAgent.
 
