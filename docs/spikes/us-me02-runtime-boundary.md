@@ -34,7 +34,7 @@ The PRD's "Codex automation" is therefore `codex exec` started by a LaunchAgent,
 
 | File | Role |
 | --- | --- |
-| [`config/guardrails/runtime.json`](../../config/guardrails/runtime.json) | The runtime, the six writable areas, read grants, network (off), model, and the Codex features turned off |
+| [`config/guardrails/runtime.json`](../../config/guardrails/runtime.json) | The runtime, the six writable areas, read grants, network (off), the model and its reasoning effort, and the Codex features turned off |
 | [`config/products.json`](../../config/products.json) | The read-only Mandu and Product checkouts, which become read grants |
 | [`src/bin/gr0wthlab`](../../src/bin/gr0wthlab) | The launcher; the LaunchAgent and on-demand runs both call `src/bin/gr0wthlab run`, whose task definition is a file under `src/instructions/` |
 | [`src/checks/boundary-probe.md`](../../src/checks/boundary-probe.md) | The throwaway instruction the validation test runs, kept in `src/` so the agent cannot edit its own test |
