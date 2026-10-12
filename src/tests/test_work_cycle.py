@@ -1143,6 +1143,41 @@ class CheckWorkTest(WorkCycleTestCase):
         self.assertIn("1 quote kept, 1 refused; 1 Angle or Hook proposal queued, 1 discarded;", report)
         self.assertIn("| your personal network | ask | queued | `20261011-message-network-ask` |", report)
 
+    def test_each_session_checks_its_own_part_alone_as_its_brief_tells_it_to(self):
+        # A reason to code, so the run has a Rejection reasons session after Listening's and outreach's.
+        self.agent({"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL})
+        self.go()
+        self.decide("20261011-name-status-stale", "reject", reason="Too long to read in a minute.")
+        writes = quote_file(read_on="2026-10-18")
+        writes[fakes.message_path("network-ask")] = fakes.message("network-ask", "network", fakes.NETWORK_BODY)
+        self.agent(writes)
+        checks = {session: (code, text) for session, code, text in self.go_with_checks(weeks=1, part=True)}
+        self.assertEqual(list(checks), ["package-review", "listening", "outreach", "learning"])
+        # Listening's session runs before outreach's and the Rejection reasons': what they have not written yet is no
+        # problem of its, so its own check passes on its own work.
+        code, text = checks["listening"]
+        self.assertEqual(code, 0, text)
+        self.assertIn(f"OK quote {POST}: its words stand in the text fetched from", text)
+        self.assertNotIn("NO DRAFT", text)
+        self.assertNotIn("code 20261011-name-status-stale", text)
+        self.assertTrue(text.rstrip().endswith("1 checked, 0 with problems"), text[-60:])
+        code, text = checks["outreach"]
+        self.assertIn("OK your personal network, ask", text)
+        self.assertIn("NO DRAFT Slow Strength, first message", text)
+        self.assertNotIn("quote", text)
+        self.assertNotIn("code 20261011-name-status-stale", text)
+        code, text = checks["learning"]
+        self.assertEqual(code, 1, text)
+        self.assertEqual(
+            text,
+            "PROBLEM code 20261011-name-status-stale: its rejection reason has no code yet\n1 checked, 1 with"
+            " problems\n",
+        )
+        # Each of the three is given that command in its own brief, and no other session is.
+        for key in ("listening", "outreach", "learning"):
+            self.assertIn(f"check-work --run {self.run_record()['run_id']} --part {key}`", self.brief(session=key))
+        self.assertNotIn("check-work", self.brief(session="package-review"))
+
     def test_it_reads_the_decisions_this_run_took_in_and_the_reasons_still_to_code(self):
         self.agent({"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL})
         self.go()
