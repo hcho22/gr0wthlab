@@ -225,6 +225,7 @@ class SnapshotTest(unittest.TestCase):
             ],
         )
         self.assertEqual(snapshot.readings[0].detail, "1 document, 0 not read by an earlier run")
+        self.assertEqual(snapshot.readings[1].detail, "1 document", "a rules page is read again at every run")
         self.assertIn("HTTP 404", snapshot.readings[2].detail)
         self.assertIn("not a rule list", snapshot.readings[3].detail)
         self.assertEqual(snapshot.read_on, "2026-10-11")

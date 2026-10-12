@@ -419,7 +419,8 @@ def intro_lines(draft: MessageDraft, target: Target, context: Context, limits: L
             " recorded, and the waiting period you approved has passed. After it there is no further contact."
         )
     lines.append(
-        f"If {target.label} ever posts about {product}, early access is a material connection they must disclose."
+        f"If {target.label} ever posts about {product} after receiving early access, that is a material connection"
+        " they must disclose."
     )
     return lines
 

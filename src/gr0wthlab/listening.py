@@ -675,8 +675,9 @@ def brief_lines(plan: Plan | None, workspace: Path, ledger_root: Path, mandu: Pa
         if plan.fit_readable
         else f"The Fit definition `{plan.fit_path}` could not be read this run, so score every fit as unclear."
     )
+    what = "thread or review" if len(heard) == 1 else "threads and reviews"
     lines += [
-        f"- {plural(len(heard), 'thread or review')} to read, {fresh} not read by an earlier run.",
+        f"- {len(heard)} {what} to read, {fresh} not read by an earlier run.",
         f"- {fit}",
         f"- Record a quote as `{workspace / 'evidence' / QUOTES_IN[0]}/<document id>.md`, one record for each"
         f" document at most, with `read_on: {plan.snapshot.read_on}`; the launcher keeps a record only if its quote"

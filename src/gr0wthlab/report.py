@@ -525,10 +525,10 @@ def render_report(state: RunState) -> str:
         )
         network = preflight.get("network")
         if network:
-            reached = ", ".join(network.get("reached", [])) or "none"
+            reached = network.get("reached", [])
             lines.append(
-                f"- Sandbox network: {len(network.get('unreachable', []))} listed hosts tried from inside the sandbox,"
-                f" reached: {reached}."
+                f"- Sandbox network: {len(network.get('unreachable', [])) + len(reached)} listed hosts tried from"
+                f" inside the sandbox, reached: {', '.join(reached) or 'none'}."
             )
     if state.agent.get("fingerprint"):
         lines.append(f"- Configuration fingerprint: `{state.agent['fingerprint']}`")

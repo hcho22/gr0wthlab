@@ -495,8 +495,9 @@ def read(client: fetch.Client, source: Source, config: Config, seen: Callable[[s
             continue
         kept.append(Document(**dict(document.__dict__, new=not seen(document.thread or document.link))))
     kept = kept[: config.max_documents]
-    fresh = sum(1 for document in kept if document.new)
-    detail = f"{len(kept)} document{'' if len(kept) == 1 else 's'}, {fresh} not read by an earlier run"
+    detail = f"{len(kept)} document{'' if len(kept) == 1 else 's'}"
+    if source.kind != RULES:  # a rules page is read again at every run, and no run state is kept for it
+        detail += f", {sum(1 for document in kept if document.new)} not read by an earlier run"
     return Reading(source, READ, detail, result.at, hashlib.sha256(result.body).hexdigest(), kept)
 
 

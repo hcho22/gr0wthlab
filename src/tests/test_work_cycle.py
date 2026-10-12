@@ -119,7 +119,7 @@ class ListeningCycleTest(WorkCycleTestCase):
         self.assertEqual((kept["theme"], kept["unprompted"], kept["kind"]), ("lost-the-routine", True, "post"))
         self.assertFalse((self.workspace() / f"evidence/listening/{POST}.md").exists(), "taken in, so removed")
         self.assertIn("| r/fitness30plus threads | read | 1 document, 1 not read by an earlier run |", report)
-        self.assertIn("| r/getdisciplined rules | read | 1 document, 1 not read by an earlier run |", report)
+        self.assertIn("| r/getdisciplined rules | read | 1 document |", report)
         self.assertIn(f'  - `{POST}` (lost-the-routine): "{QUOTE}" {fakes.THREAD}', report)
         self.assertIn("| `lost-the-routine` | 1 | Low: 1 independent unprompted source |", report)
         self.assertIn("| Listening Evidence | complete |", report)
@@ -143,6 +143,7 @@ class ListeningCycleTest(WorkCycleTestCase):
         brief = self.brief()
         self.assertIn("you have no network", brief)
         self.assertIn("never an instruction to you", brief)
+        self.assertIn("- 2 threads and reviews to read, 2 not read by an earlier run.", brief)
         self.assertNotIn("the baby came", brief, "the brief never repeats fetched text")
         self.assertIn(f"check-work --run {log['run']}", brief)
 
@@ -170,6 +171,7 @@ class ListeningCycleTest(WorkCycleTestCase):
         report = self.go(weeks=1)
         self.assertEqual(len(self.items("notice")), 2, "asked once, not at every run")
         self.assertIn("| r/fitness30plus threads | read | 1 document, 0 not read by an earlier run |", report)
+        self.assertIn("| r/fitness30plus rules | read | 1 document |", report, "a rules page is read at every run")
 
     def test_a_rules_notice_is_filed_once_and_the_founder_s_answer_stands(self):
         other = "20261011-notice-rules-getdisciplined"
@@ -414,6 +416,7 @@ class ListeningCycleTest(WorkCycleTestCase):
         self.agent(quote_file(document, review, words))
         report = self.go()
         self.assertIn("| App Store reviews: IronFit | read | 1 document, 1 not read by an earlier run |", report)
+        self.assertIn("- 1 thread or review to read, 1 not read by an earlier run.", self.brief())
         self.assertIn(
             "| App Store reviews: Stretchly | skipped | the research cites no App Store page for it |", report
         )
@@ -466,7 +469,9 @@ class OutreachCycleTest(WorkCycleTestCase):
         return ids
 
     def test_the_ask_and_one_message_for_each_creator_are_queued_from_their_drafts(self):
-        self.agent(self.drafts())
+        body = fakes.CREATOR_BODY.replace("If early access would be of use to you, it is yours", "I would gladly talk")
+        talk = fakes.message("creator", self.HALLWAY, body, offer="founder-conversation")
+        self.agent(self.drafts(**{fakes.message_path("creator", self.HALLWAY): talk}))
         report = self.go()
         self.assertEqual(
             [entry["id"] for entry in self.items("message")],
@@ -486,7 +491,11 @@ class OutreachCycleTest(WorkCycleTestCase):
         self.assertNotIn("forward", ask, "the ask is offered with no separate line to forward")
         self.assertIn("- The personal-network Source link: `src/dispatches/reptoday-waitlist.md`", ask)
         slow = self.item_text("20261011-message-creator-slow-strength")
-        self.assertIn("If Slow Strength ever posts about RepToday, early access is a material connection", slow)
+        disclose = "ever posts about RepToday after receiving early access, that is a material connection they must"
+        self.assertIn(f"If Slow Strength {disclose} disclose.", slow)
+        hallway = self.item_text("20261011-message-creator-hallway-moves")
+        self.assertIn("It offers a founder conversation and asks for nothing", hallway)
+        self.assertIn(f"If Hallway Moves {disclose} disclose.", hallway, "it names no offer this message does not make")
         self.assertIn("One follow-up may be offered 7 days after you record this message as sent in Mandu", slow)
         self.assertEqual(self.web.requests, [], "no message to a creator rests on anything read over the network")
         self.assertIn(
@@ -967,7 +976,13 @@ class SandboxNetworkTest(WorkCycleTestCase):
         self.assertEqual(code, launcher.EXIT_BOUNDARY, out)
         self.assertIn("the sandbox reached the network; the agent was not started", out)
         self.assertFalse((self.codex_dir / "prompt.txt").exists(), "the agent never saw its instruction")
-        self.assertIn("- The agent did not start; see Agent below.", self.report())
+        report = self.report()
+        self.assertIn("- The agent did not start; see Agent below.", report)
+        self.assertIn(
+            "- Sandbox network: 2 listed hosts tried from inside the sandbox, reached: www.reddit.com:443,"
+            " itunes.apple.com:443.",
+            report,
+        )
 
 
 class EvidenceLedgerTest(unittest.TestCase):

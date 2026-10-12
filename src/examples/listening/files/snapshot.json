@@ -28,7 +28,7 @@
       "url": "https://www.reddit.com/r/fitness30plus/about/rules.json",
       "page": "https://www.reddit.com/r/fitness30plus/about/rules",
       "status": "read",
-      "detail": "1 document, 1 not read by an earlier run",
+      "detail": "1 document",
       "fetched_at": "2026-10-11T23:00:00+00:00",
       "sha256": "c936ed697124635a094efb917c9f6893b24f9f9fed42c50939834de0eaaa80bb",
       "documents": 1
@@ -56,7 +56,7 @@
       "url": "https://www.reddit.com/r/getdisciplined/about/rules.json",
       "page": "https://www.reddit.com/r/getdisciplined/about/rules",
       "status": "read",
-      "detail": "1 document, 1 not read by an earlier run",
+      "detail": "1 document",
       "fetched_at": "2026-10-11T23:00:00+00:00",
       "sha256": "c936ed697124635a094efb917c9f6893b24f9f9fed42c50939834de0eaaa80bb",
       "documents": 1
