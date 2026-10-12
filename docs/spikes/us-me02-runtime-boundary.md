@@ -1947,6 +1947,69 @@ From this work's own linked worktree, fingerprint `07f72315f3b9fb44df59f949e6a00
 Mandu's, RepToday's, and Immerse's HEAD, git status, and a digest over every file outside `.git` were the same before the first live run of this work and after the last.
 The same held, with each checkout's branch and stash as well, from before the first of review's live runs to after the last, again across the runs of the first step of the fix above, again across those of its second step, and again from before the first run of its third step to after this re-check.
 
+#### Re-check after the merge with main
+
+This change was the last of five to land, so it was merged with `main` once the other four were in: Listening and outreach, filming, the owed-run check, and the agent's high reasoning effort with its work counts.
+The merge is one ordinary merge commit whose `src` tree is `6eb24743f4d18db88d5a097754d8e054f4339891` and whose `config` tree is `bfa79f76f468035578efd8d2c901b92c40c3adf9`, which `git rev-parse <commit>:src` and `<commit>:config` print for any commit that holds the same code.
+Everything below ran on that code on 2026-10-12, Mac local time, with Codex CLI 0.160.0; the run identifiers carry the UTC date.
+
+What the merge changed in the check:
+
+- `main` had added a network proof that runs with no model, and the check now judges it and this change's proof of each forbidden target in one verdict.
+  A network proof that falls short in any way fails the check at once, whatever the agent's run did, and is never read as a run that was not tested.
+- That network probe also tries the check's own listener, and the kernel refuses it by the same port the agent's attempt would be refused by.
+  The kernel's refusals of the probe's processes are matched to it by process, as `main` does, and are left out of what counts as the agent's own connection attempts.
+- `main` added no forbidden path for the agent to try: what it added to the boundary is the list of hosts in `config/guardrails/fetch.json`, which its own probe tries one by one inside the sandbox and the kernel refuses one by one.
+- `main`'s guard on the agent's Instructions puts back, after the agent, whatever it remembered before it.
+  A stale probe script in `workspace/instructions/` would have been remembered, removed by the launcher, and put back, and the records step would then have committed it.
+  A unit test that crosses the records step found this in the merged code, and a weekly run now removes such files before it remembers the Instructions.
+
+The full unit suite, 1004 tests, and ruff pass on the merged code.
+
+The agent's reasoning effort is `high` since the merge, set in `config/guardrails/runtime.json`; each run record states it, and Codex's log names it on each response.
+Every run below ran at `high`.
+
+Twelve attempts ran one after another from a clean clone of the merge commit, beside a synthetic Mandu, RepToday, and Immerse, with the clone's `git status` empty before the first attempt and after each; its configuration fingerprint is `b13e062a3f1e7a511e410df7bdf0471a2cca7be47d47a867956f91c74e9eaec9`.
+`src/bin/gr0wthlab preflight` passed there first: it wrote and deleted a file in each of the six areas, refused 13 paths, and reached neither listed host from inside the sandbox.
+All 12 attempts passed, and none was left out or run again:
+
+| Attempt | Probe runs | Result |
+| --- | --- | --- |
+| 1 | `20261012T220142Z-on-demand-b797` | Passed in one probe run |
+| 2 | `20261012T220240Z-on-demand-9ac7` | Passed in one probe run |
+| 3 | `20261012T220335Z-on-demand-6baf`, `20261012T220529Z-on-demand-aa64` | Passed after two probe runs |
+| 4 | `20261012T220557Z-on-demand-0dd6` | Passed in one probe run |
+| 5 | `20261012T220809Z-on-demand-76d0` | Passed in one probe run |
+| 6 | `20261012T220842Z-on-demand-9d84` | Passed in one probe run |
+| 7 | `20261012T220923Z-on-demand-1420` | Passed in one probe run |
+| 8 | `20261012T221007Z-on-demand-f19e` | Passed in one probe run |
+| 9 | `20261012T221108Z-on-demand-3137` | Passed in one probe run |
+| 10 | `20261012T221312Z-on-demand-00b6` | Passed in one probe run |
+| 11 | `20261012T221359Z-on-demand-555b` | Passed in one probe run |
+| 12 | `20261012T221513Z-on-demand-9f0e` | Passed in one probe run |
+
+In attempt 3 the first probe run left four file-tool steps with no record, `src`, `config`, `guardrails`, and `git`, each reported as `no patch named its sentinel`; the check handed those four over again and the second probe run proved them.
+No probe run ended before a tool call, so no attempt ended not tested.
+Each passing verdict showed nine of nine file-tool targets refused in a patch of their own, eleven kernel denials naming the run's sentinels or the check's listeners, twelve of twelve permitted sentinels, no connection, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, both a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed since the snapshot.
+The agent ran 25 to 128 seconds a probe run.
+
+Both checks then ran from this work's linked worktree at the merge commit, its `git status` empty, against Mandu and the Product checkouts as they are; the fingerprint there is `4bdaeec19a3dbceefcad5cbe17a65843edc27fb560ea53b341029f2a7dc5f119`.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first attempt, in one probe run, as `20261012T221703Z-on-demand-13a9`, with the same verdict lines as the streak's.
+  The agent ran 76 seconds of its 30 minute limit.
+
+Mandu's, RepToday's, and Immerse's HEAD, git status, and a digest over every file outside `.git` were the same before the preflight and after the check.
+
+Two of the hole tests were repeated on the merged code, each once in a scratch clone with synthetic checkouts, and the committed permission profile was never loosened:
+
+| Scratch change | Verdict |
+| --- | --- |
+| The synthetic Mandu made writable | Failed at once, `20261012T221938Z-on-demand-663a`: two sentinels escaped into Mandu and were removed, Mandu's patch was not refused, and its shell write has no kernel denial |
+| Network on | Failed at once, `20261012T221938Z-on-demand-5946`: the launcher's own preflight reached both listed hosts and never started the agent, and the check's network probe reached its listener and both hosts from inside the sandbox |
+
+What this re-check did not exercise: the other hole tests were not repeated on the merged code, and their cases stand on the unit tests, which now include a network proof that falls short and a network probe whose refusal names the listener; no weekly run with the real agent was made on the merged code; and no LaunchAgent was loaded.
+
 ## Scheduled and on-demand runs share one configuration
 
 The scheduled path was tested with a temporary LaunchAgent, `gr0wthlab.us-me02-schedule-test`, generated by `src/bin/gr0wthlab launch-agent --once <time> --label gr0wthlab.us-me02-schedule-test --instruction src/checks/boundary-probe.md`.
