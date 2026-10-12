@@ -1503,6 +1503,143 @@ With that change in place the full unit suite passed under `/usr/bin/python3`, 9
 Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the clone was built as after the run.
 The clone, its remote, the synthetic checkouts, and the footage sat in the Mac's per-user temporary folder and were removed from it.
 
+## One session per workflow (US-ME17)
+
+The weekly run was one agent session that did every workflow's work, and each workflow added to it made that session longer for every other.
+The Founder approved running one sandboxed session per workflow on 2026-10-11.
+This section is the design, written before the change was built.
+
+### The sessions, and their order
+
+A run starts at most one session for each of seven workflows, in this order:
+
+| Order | Session | What it writes | Why it comes here |
+| --- | --- | --- | --- |
+| 1 | Package review | Package-change proposals in `workspace/review-queue/incoming/` | Every later session can read what it proposed before resting anything on the package |
+| 2 | Post Drafts | The due days' Drafts in `workspace/drafts/posts/` | After the review, whose proposals name the package text a claim should not rest on |
+| 3 | Filming | Edit records in `workspace/drafts/edits/` | After the post Drafts: an edit record runs exactly as long as its day's Draft, and a video is cut only from a Draft that passes |
+| 4 | Beta Cohort recruiting | The recruiting Drafts in `workspace/drafts/beta-recruiting/` | It needs nothing an earlier session writes |
+| 5 | Listening | Quote records, proposed Angles and Hooks, and reply Drafts | A reply is drafted only for a quote the same session recorded, so the three stay together, as their take-in already has them |
+| 6 | Outreach | The personal-network ask, the creator messages, and the one follow-up | It needs nothing an earlier session writes |
+| 7 | Rejection reasons | A code for each reason, and the proposal a strategy reason needs | Last, so its proposals can take account of every proposal the run already holds |
+
+The order is fixed in launcher code, not in configuration: it follows from what each session needs, and a test holds it.
+Sessions never run at once.
+One checkout has one run lock and one `workspace/`, and two agents writing there together would make every count of one session's work a guess.
+
+Which sessions a run starts is decided once, before the first one, from what the launcher read by then.
+A workflow with nothing due starts no session, and the run report says so with the reason.
+
+| Session | It has work due when |
+| --- | --- |
+| Package review | The snapshot read at least one package file |
+| Post Drafts | The plan lists a calendar day the Founder has not approved |
+| Filming | The filming table marks a day ready for an edit record |
+| Beta Cohort recruiting | The Founder's gate is recorded and the plan asks for a Draft |
+| Listening | The snapshot holds a thread or a review to read |
+| Outreach | The plan holds a message that is due |
+| Rejection reasons | A rejection reason has no code yet, or a strategy reason has no proposal yet |
+
+### What each session sees
+
+Each session is a fresh `codex exec` process started by the launcher through `process.py`, with the same command but for the path of its own closing message.
+So every session runs under the same committed permission profile, with the network off and with `--ephemeral`, and the configuration fingerprint is the same for every session of a run.
+The boundary preflight and the sandbox's network proof run before each session, not once per run: no agent starts on a boundary that was last proved before another agent ran.
+Nothing is carried from one session to the next but the files in `workspace/`, which every session can read and write as before, and the launcher's records in `ledger/`, which none can write.
+
+A session is told only its own workflow's work:
+
+- Its task definition is the common part every session shares, then its workflow's own part.
+  Both are reviewed files under `src/instructions/weekly-run/`, and the launcher puts them together, so a rule that binds every session is written once.
+  A test reads every session's composed definition and fails when one lacks the common rules.
+- Its brief is written just before it starts and holds the run's common facts, then its workflow's section alone.
+  The package files it lists are the ones the Product registry says that workflow's output needs (`needed_by` in `config/products.json`); the package review's brief lists them all.
+- Its brief also names what earlier sessions of the same run left in `workspace/review-queue/incoming/`, which the launcher has not taken in yet, so a later session neither repeats a proposal nor rests a claim on text an earlier one found stale.
+  The Filming session's brief says which ready days have a post Draft in place.
+
+### The launcher takes every session's work in once, when the last has ended
+
+The alternative was to take each session's work in before the next one starts.
+It was rejected because it changes the take-in rules:
+
+- A post is queued together with its video, and the two videos of an A/B pair are compared once, when every day is settled and before any post is queued.
+  Taking the post Drafts in before the Filming session had written its edit records would queue each post without its video and then replace it in the same run.
+- The Review Queue is written once, when the run ends, and Mandu reads it only then.
+  Nothing a run queues is withdrawn again in the same run today, and that stays so.
+- A package-change proposal is refused when it asks the same as one already open, decided, or also in `incoming/`; one pass over everything in `incoming/` keeps that rule as it is.
+
+So the take-in is the code it was, run once, in the order it had: the items in `incoming/`, the posts with their videos, the recruiting Drafts, the Listening work, the outreach Drafts, and the codes.
+A session reads an earlier session's work as files in `workspace/`, never as queued items.
+What the Instructions guard does is unchanged as well: the launcher notes `workspace/instructions/` before the first session and puts back any change once the last has ended.
+
+What this costs: a later session can change or remove a file an earlier one wrote before the launcher has read it, as one long session could change its own earlier work.
+The sandbox gives every session the same six areas, and narrowing that per workflow is left for later.
+The counts make it visible: each session's Draft claims and proposals are counted from one reading of the Drafts due and of `incoming/` before that session starts and one once it has ended.
+
+### One workflow's trouble stays its own
+
+A session can fall short in four ways: it does not start (the preflight failed, or Codex could not be started), it is stopped at its time limit, it ends with an error, or the model's provider refuses it.
+The last is an error exit too; the launcher reads Codex's last reported error from the session's event stream and quotes it, so a `429` reads as a refusal and not as a failure of the agent's work.
+In each case the launcher goes on with the next session, takes in whatever the session had written by the rules above, and marks only that workflow's outputs incomplete, with the real reason.
+The run's one notice names each session that fell short.
+Every run still ends with its report.
+
+Where a later session could not do its work because an earlier one fell short, its own section of the report shows the work not done, as it does today: a ready day with no edit record, for example.
+Its output is not marked incomplete for the other session's trouble.
+
+The package review stays the one output the agent's own word decides: its row is complete only when the Package review session's summary ends with the closing line.
+Every other output is judged by what the launcher itself can check, as before.
+
+### The closing line
+
+Every session ends its summary with one line, `Session: complete` or `Session: incomplete: <what, and why>`.
+It replaces the single session's `Review:` line, which named one workflow's work.
+The line is the agent's own word, and the report quotes each session's beside what the launcher counted of that session.
+
+### Time limits
+
+Each session has its own limit, and the limit applies to that session alone: `agent.time_limit_seconds` in `config/run.json`, or the value `agent.session_time_limit_seconds` gives its workflow.
+A session still running at its limit is stopped as the single agent was, with every process the process table shows it started, and the run goes on.
+
+A run also has one bound on all its sessions together, `agent.run_time_limit_seconds`.
+Without it the longest a run can take would grow by one session limit with every workflow added, and a provider outage that stalls every session would hold the report back for seven limits.
+A session starts only while the run has time left, and gets its own limit or what is left of the run's, whichever is less; a session the bound leaves no time for is not started, and its workflow is marked incomplete for that reason.
+The time counted is each session's own, as its limit counts it, the Mac's sleep included.
+
+The numbers are set from the measurement below, not from this design.
+
+### A run happens when the Mac is awake, across several sessions
+
+Nothing here holds the Mac awake, wakes it, or schedules a wake, and the owed-run check is unchanged.
+
+- The week's run completed when every session the run had work for started and ended without an error and, where the Mac slept at any time from the run's start to its last session's end, every one of them also confirmed its work with the closing line `Session: complete`.
+  A workflow with nothing due is no part of that.
+- The attempts rule therefore reads every session's closing line, not one.
+  Sleep can freeze whichever session is running, and a frozen session can end without an error and with its work unfinished, so no single session's word can speak for the run.
+- A run that did not complete and that the Mac slept during, in any session or between two, was cut short by sleep and earns another attempt, within `schedule.attempts_per_week`.
+  As before, the sleep counts wherever it fell and however the run then ended.
+- A run that did not complete with the Mac awake throughout earns none and waits for the Founder.
+  Its recorded ending is that of the first session that fell short: never started, timed out, or stopped early.
+- A fresh run is a fresh, whole run: it starts every session that has work due again, the ones that finished in the cut-short attempt included.
+  Resuming at the first unfinished session was considered and left out.
+  It would need a record of which sessions an attempt finished, and a rule for when that record is stale, since a decision or a package change between two attempts changes what a finished session would have written.
+  Repeating a finished session costs the Founder nothing new: the cut-short attempt has already taken in what that session wrote, the fresh session's brief lists it as open, and a Draft already in place is rewritten only for a reason.
+  It costs API time and money, at most one run's worth for each attempt, which `attempts_per_week` already bounds.
+- A run on demand and a one-off scheduled run always run, as before, and are never attempts.
+
+### What the report shows
+
+For every workflow the report says whether its session ran, and why not when it did not.
+For every session that ran it gives how the session ended, its agent time against its limit, its approximate cost, the agent's closing line quoted as the agent's word, and the launcher's counts of that session alone: package files read of the ones its brief listed, the Draft claims in the Drafts it wrote or changed, and the proposals it wrote to `incoming/` that were queued.
+Then it gives the run's totals: sessions run, agent time against the run's bound, and cost.
+
+### What is unchanged
+
+The permission profile, the six writable areas, what the sandbox reads, and the network being off.
+Every check of an item, a Draft, an edit record, a quote, a message, and a code.
+How Founder records are read.
+The Mandu exchange, version 6.
+
 ## Scheduled and on-demand runs share one configuration
 
 The scheduled path was tested with a temporary LaunchAgent, `gr0wthlab.us-me02-schedule-test`, generated by `src/bin/gr0wthlab launch-agent --once <time> --label gr0wthlab.us-me02-schedule-test --instruction src/checks/boundary-probe.md`.
