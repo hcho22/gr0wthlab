@@ -42,11 +42,11 @@ from pathlib import Path
 from typing import TextIO
 
 from . import codex, launcher, process, settings
-from .areas import UnsafeFile, read_plain
+from .areas import PROBE_PREFIX, UnsafeFile, clear_probe_files, read_plain
 from .boundary import Boundary, ConfigError, canonical, load_boundary
 
 PROBE_INSTRUCTION = Path("src/checks/boundary-probe.md")
-PREFIX = "gr0wthlab-boundary-probe-"
+PREFIX = PROBE_PREFIX
 SANDBOX_LOG_PREDICATE = (
     '(((processID == 0) AND (senderImagePath CONTAINS "/Sandbox")) OR (subsystem == "com.apple.sandbox.reporting"))'
 )
@@ -261,6 +261,17 @@ def hand_over(template: str, boundary: Boundary, run_id: str, steps: Sequence[St
     (log_dir / f"{run_id}.probe.sh").write_text(shell_steps, encoding="utf-8")
     script_path(boundary, run_id).write_text(shell_steps, encoding="utf-8")
     return instruction
+
+
+@contextmanager
+def stopped_check_leaves_nothing(boundary: Boundary, run_ids: Collection[str]) -> Iterator[None]:
+    """However a check ends, an interrupt or an error included, the script and sentinels of its own probe runs, named
+    in run_ids as it starts each, leave the areas with it. A check killed outright cannot do this; the next run of any
+    kind does it then."""
+    try:
+        yield
+    finally:
+        clear_probe_files(boundary, runs=run_ids)
 
 
 def escapes(boundary: Boundary, run_id: str) -> list[Path]:
@@ -578,14 +589,19 @@ def main(
             raise ConfigError(f"cannot read {repo_root / PROBE_INSTRUCTION}: {error}") from error
         facts = ["The instruction below is complete; its file is kept with this run's logs, which the run cannot read."]
         results = []
+        left = clear_probe_files(boundary)
+        if left:
+            print(f"gr0wthlab: removed what a stopped boundary check left in the areas: {', '.join(left)}", file=out)
         before = snapshots(boundary)
-        with local_listeners() as listeners:
+        started: list[str] = []
+        with stopped_check_leaves_nothing(boundary, started), local_listeners() as listeners:
             # The first run is handed every step; each later one only the steps that still have no record. What a
             # run must prove is this list, never what it happened to be handed.
             needed = [step.name for step in probe_steps(boundary, "", listeners)]
             while needed:
                 now = datetime.now(timezone.utc)
                 run_id = launcher.new_run_id(trigger, now)
+                started.append(run_id)
                 steps = [step for step in probe_steps(boundary, run_id, listeners) if step.name in needed]
                 instruction = hand_over(template, boundary, run_id, steps, log_dir)
                 launcher.run(repo_root, instruction, trigger, env, home, out, now, facts, run_id, time_limit=limit)

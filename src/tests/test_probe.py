@@ -15,6 +15,7 @@ from pathlib import Path
 from unittest import mock
 
 from gr0wthlab import boundary, probe, process
+from gr0wthlab.areas import clear_probe_files
 from gr0wthlab.boundary import ConfigError
 from tests import fakes
 from tests.test_boundary import CONFIG, REGISTRY
@@ -444,6 +445,38 @@ class RecordedLogTest(ProbeTestCase):
         self.assertIn("Codex's log holds no tool call", problems[0])
 
 
+class LeftoverTest(ProbeTestCase):
+    """Files a boundary check left in the areas are cleared by name, whichever run they came from."""
+
+    def test_only_probe_files_at_the_top_of_an_area_are_removed_and_the_run_in_progress_keeps_its_own(self):
+        areas = dict(self.boundary.areas)
+        old = "20261001T000000Z-on-demand-0001"
+        stale = [probe.script_path(self.boundary, old), probe.report_path(self.boundary, old)]
+        stale.append(areas["drafts"] / f"{probe.PREFIX}{old}-permitted-shell.txt")
+        mine = probe.script_path(self.boundary, RUN)
+        kept = [mine, areas["instructions"] / "package-review.md", areas["drafts"] / "posts" / f"{probe.PREFIX}x.md"]
+        kept[2].parent.mkdir()
+        folder = areas["evidence"] / f"{probe.PREFIX}{old}-folder"
+        folder.mkdir()
+        for path in stale + kept:
+            path.write_text("text\n", encoding="utf-8")
+        outside = self.repo / "src" / "kept.txt"
+        outside.write_text("kept\n", encoding="utf-8")
+        link = areas["evidence"] / f"{probe.PREFIX}{old}-link.txt"
+        link.symlink_to(outside)
+        removed = clear_probe_files(self.boundary, keep=RUN)
+        self.assertEqual(sorted(removed), sorted(str(path.relative_to(self.repo)) for path in stale + [link]))
+        self.assertEqual([path for path in stale + [link] if os.path.lexists(str(path))], [])
+        self.assertEqual([path for path in kept + [folder, outside] if not path.exists()], [])
+        self.assertEqual(outside.read_text(encoding="utf-8"), "kept\n", "a link is removed, never followed")
+        # A check that is ending takes only its own runs' files, and leaves another's alone.
+        other = probe.script_path(self.boundary, old)
+        other.write_text("text\n", encoding="utf-8")
+        self.assertEqual(clear_probe_files(self.boundary, runs=[RUN]), [str(mine.relative_to(self.repo))])
+        self.assertEqual(clear_probe_files(self.boundary, runs=[]), [])
+        self.assertEqual(clear_probe_files(self.boundary), [str(other.relative_to(self.repo))])
+
+
 class ProbeTextTest(ProbeTestCase):
     """What the launcher hands the agent: every step in full, one patch per target and one script for the shell."""
 
@@ -638,6 +671,43 @@ class CheckTest(unittest.TestCase):
         self.assertFalse(alone["passed"])
         self.assertEqual(len(alone["steps_needed"]), 2 * len(probe.PROBE_TARGETS) + 2 * len(fakes.AREAS))
         self.assertEqual(len(alone["file_tool_targets_without_refusal"]), len(probe.PROBE_TARGETS) - 1)
+
+    def leave_behind(self, run_id="20261001T000000Z-on-demand-0001"):
+        """What a check stopped mid-run leaves in the areas: its script and the sentinels the agent had written."""
+        _, resolved = boundary.load_boundary(self.repo, self.env, self.home)
+        left = [probe.script_path(resolved, run_id), probe.report_path(resolved, run_id)]
+        left += [step.path for step in probe.probe_steps(resolved, run_id) if step.kind == probe.PERMITTED][:3]
+        for path in left:
+            path.write_text("left behind\n", encoding="utf-8")
+        return left
+
+    def test_what_a_stopped_check_left_is_removed_before_the_next_check_looks(self):
+        left = self.leave_behind()
+        code, out = self.check()
+        self.assertEqual((code, len(self.runs)), (0, 1))
+        self.assertIn("removed what a stopped boundary check left in the areas: workspace/", out)
+        self.assertIn("changes outside the areas: none", out)
+        self.assertEqual([path for path in left if path.exists()], [])
+
+    def test_a_check_interrupted_mid_run_takes_its_script_and_sentinels_with_it(self):
+        _, resolved = boundary.load_boundary(self.repo, self.env, self.home)
+        seen = []
+        others = []
+
+        def interrupted(repo_root, instruction, trigger, env, home, out, now, facts, run_id, *, time_limit):
+            seen.append(probe.script_path(resolved, run_id))
+            self.assertTrue(seen[0].is_file())
+            seen.extend(self.leave_behind(run_id))
+            others.extend(self.leave_behind("20261009T000000Z-scheduled-ffff"))
+            raise KeyboardInterrupt
+
+        with mock.patch.object(probe.launcher, "run", side_effect=interrupted), self.assertRaises(KeyboardInterrupt):
+            probe.main(self.repo, self.env, self.home, None, io.StringIO())
+        self.assertEqual(len(seen), 6)
+        self.assertEqual([path for path in seen if path.exists()], [])
+        self.assertEqual(
+            [path for path in others if not path.exists()], [], "another check's files are not its to take"
+        )
 
     def test_a_write_that_got_through_fails_the_check_at_once(self):
         for name in ("src:shell", "mandu:file-tool"):
