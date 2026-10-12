@@ -11,13 +11,17 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-from gr0wthlab import cycle, report, work
+from gr0wthlab import cycle, drafts, report, work
 from gr0wthlab.report import RunState
 from tests import fakes
 from tests.test_cycle import CycleTestCase
 
 SHOWN = 40000
 FILES_RULE = "counting a file as read when at least half of its lines came back in output the model was shown"
+NONE_WRITTEN = (
+    "Draft claims: this session wrote or changed none of the 7 Drafts due, so it has no Draft claims to count"
+)
+ALL_WRITTEN = "Draft claims in the 7 of 7 due Drafts this session wrote or changed"
 
 
 def page(name: str, lines: int = 60) -> str:
@@ -163,20 +167,21 @@ class CountLinesTest(unittest.TestCase):
         return state
 
     def test_every_count_says_what_it_counts(self):
-        counted = work.Work(
-            files_listed=24, files_not_read=("gtm/a.md", "gtm/b.md"), claims=10, claims_cited=8, proposals=4
-        )
+        claims = work.Claims(due=7, written=3, listed=8, cited=7)
+        counted = work.Work(files_listed=24, files_not_read=("gtm/a.md", "gtm/b.md"), claims=claims, proposals=4)
         self.assertEqual(
             work.count_lines(counted),
             [
                 f"Package files read: 22 of the 24 the brief listed, {FILES_RULE}. Not read: `gtm/a.md`, `gtm/b.md`.",
-                "Draft claims: 10 listed; 8 name a code location and 2 name none.",
+                "Draft claims in the 3 of 7 due Drafts this session wrote or changed: 8 listed, 7 name a code location"
+                " and 1 names none.",
                 "Proposals queued: 4 package-change proposals the agent wrote.",
             ],
         )
         self.assertEqual(
             work.summary(counted),
-            "22 of 24 package files read, 8 of 10 Draft claims with a code location, 4 proposals queued",
+            "22 of 24 package files read, 7 of 8 Draft claims with a code location in the 3 of 7 due Drafts this"
+            " session wrote or changed, 4 proposals queued",
         )
         self.assertEqual(
             counted.as_json(),
@@ -184,10 +189,63 @@ class CountLinesTest(unittest.TestCase):
                 "package_files_listed": 24,
                 "package_files_read": 22,
                 "package_files_not_read": ["gtm/a.md", "gtm/b.md"],
-                "claims_with_code_location": 8,
-                "claims_without_code_location": 2,
+                "claims_with_code_location": 7,
+                "claims_without_code_location": 1,
                 "proposals_queued": 4,
             },
+        )
+
+    def test_the_draft_claims_line_says_which_drafts_it_is_of_or_why_there_is_no_count(self):
+        lines = {
+            work.Claims(due=1, written=1, listed=1, cited=1): (
+                "Draft claims in the 1 of 1 due Draft this session wrote or changed: 1 listed, 1 names a code location"
+                " and 0 name none.",
+                "1 of 1 Draft claim with a code location in the 1 of 1 due Draft this session wrote or changed, ",
+            ),
+            work.Claims(due=7): (
+                "Draft claims: this session wrote or changed none of the 7 Drafts due, so it has no Draft claims to"
+                " count.",
+                "none of the 7 Drafts due written or changed, ",
+            ),
+            work.Claims(): ("Draft claims: none to count; no post Draft was due.", ""),
+            None: ("Draft claims: not counted; the launcher problems say why.", "Draft claims not counted, "),
+        }
+        for claims, (line, summary) in lines.items():
+            with self.subTest(claims=claims):
+                counted = work.Work(claims=claims)
+                self.assertEqual(work.count_lines(counted)[1], line)
+                self.assertEqual(work.summary(counted), f"{summary}0 proposals queued")
+        uncounted = work.Work(claims=None).as_json()
+        self.assertEqual(
+            (uncounted["claims_with_code_location"], uncounted["claims_without_code_location"]), (None,) * 2
+        )
+
+    def test_a_draft_an_earlier_run_left_is_not_this_session_s(self):
+        earlier = {day: drafts.parse(fakes.draft(day), fakes.draft_path(day)) for day in (1, 2, 3)}
+        changed = drafts.parse(fakes.draft(2, caption="The score dipped and kept its history."), fakes.draft_path(2))
+        new = drafts.parse(fakes.draft(4), fakes.draft_path(4))
+        before = {**earlier, 4: None, 5: None}
+        after = {1: earlier[1], 2: changed, 3: None, 4: new, 5: None}
+        self.assertEqual(work.count_claims(before, after), work.Claims(due=5, written=2, listed=2, cited=2))
+        self.assertEqual(work.count_claims(before, before), work.Claims(due=5))
+        self.assertEqual(work.count_claims({}, {}), work.Claims())
+
+    def test_a_claim_item_the_launcher_cannot_read_names_no_code_location(self):
+        # After the clean Draft's one claim: an item with no Shows line, one with no Code line, and one naming none.
+        text = fakes.draft(3) + (
+            "- Claim: The streak never resets.\n  Code: `Engine/ConsistencyScore.swift:6-7`\n"
+            "- Claim: A rest day counts.\n  Shows: `restDays`\n"
+            "- Claim: It reminds you at night.\n  Code: none\n  Shows: none\n"
+        )
+        draft = drafts.parse(text, fakes.draft_path(3))
+        self.assertEqual((len(draft.claims), draft.unread_claims), (2, 2))
+        claims = work.count_claims({3: None}, {3: draft})
+        self.assertEqual(claims, work.Claims(due=1, written=1, listed=4, cited=1))
+        self.assertEqual(claims.cited + claims.uncited, claims.listed)
+        self.assertEqual(
+            work.count_lines(work.Work(claims=claims))[1],
+            "Draft claims in the 1 of 1 due Draft this session wrote or changed: 4 listed, 1 names a code location and"
+            " 3 name none.",
         )
 
     def test_many_unread_files_are_counted_and_not_named(self):
@@ -195,13 +253,13 @@ class CountLinesTest(unittest.TestCase):
         lines = work.count_lines(work.Work(files_listed=24, files_not_read=unread))
         self.assertEqual(lines[0], f"Package files read: 17 of the 24 the brief listed, {FILES_RULE}.")
 
-    def test_a_run_with_no_stream_or_no_claim_says_so(self):
-        counted = work.Work(files_listed=24)
+    def test_a_run_with_no_stream_says_so(self):
+        counted = work.Work(files_listed=24, claims=work.Claims())
         self.assertEqual(
             work.count_lines(counted),
             [
                 "Package files read: not counted; the agent left no record of a session to count from.",
-                "Draft claims: none listed.",
+                "Draft claims: none to count; no post Draft was due.",
                 "Proposals queued: 0 package-change proposals the agent wrote.",
             ],
         )
@@ -210,7 +268,7 @@ class CountLinesTest(unittest.TestCase):
         self.assertEqual(work.summary(counted), "0 proposals queued")
 
     def test_the_report_names_the_launcher_s_counts_and_the_agent_s_word_apart(self):
-        counted = work.Work(files_listed=24, files_not_read=("a",) * 18, proposals=1)
+        counted = work.Work(files_listed=24, files_not_read=("a",) * 18, claims=work.Claims(due=7), proposals=1)
         text = report.render_report(self.state(counted))
         section = text.split("## Agent's work\n", 1)[1].split("\n## Agent\n", 1)[0]
         launcher, agent = section.split("The agent's own word, which the launcher does not check:")
@@ -221,15 +279,16 @@ class CountLinesTest(unittest.TestCase):
             [
                 "- Agent time: 8 min 21 s of its 30 min limit, with `gpt-6-luna` at `high` reasoning effort.",
                 f"- Package files read: 6 of the 24 the brief listed, {FILES_RULE}.",
-                "- Draft claims: none listed.",
+                f"- {NONE_WRITTEN}.",
                 "- Proposals queued: 1 package-change proposal the agent wrote.",
             ],
         )
         self.assertNotIn("Review:", launcher)
         self.assertEqual(agent.strip(), '- "Review: complete"')
         self.assertIn(
-            "- The agent's work, as the launcher counted it: 6 of 24 package files read, 1 proposal queued, in 8 min"
-            ' 21 s of agent time. The agent\'s own word: "Review: complete".',
+            "- The agent's work, as the launcher counted it: 6 of 24 package files read, none of the 7 Drafts due"
+            " written or changed, 1 proposal queued, in 8 min 21 s of agent time. The agent's own word: \"Review:"
+            ' complete".',
             text.split("## Sources")[0],
         )
 
@@ -270,7 +329,8 @@ class RunCountsTest(CycleTestCase):
         self.drafts = [str(self.workspace() / fakes.draft_path(day)) for day in range(1, 8)]
 
     def record(self) -> dict:
-        return json.loads(next(self.logs.glob("*-on-demand-*.json")).read_text(encoding="utf-8"))["work"]
+        """The latest run's counts in its log record."""
+        return json.loads(sorted(self.logs.glob("*-on-demand-*.json"))[-1].read_text(encoding="utf-8"))["work"]
 
     def counts(self) -> list[str]:
         """The launcher's counts in the run report's Agent's work section, one to a line."""
@@ -309,7 +369,7 @@ class RunCountsTest(CycleTestCase):
             counts,
             [
                 f"- Package files read: 14 of the 14 the brief listed, {FILES_RULE}.",
-                "- Draft claims: 7 listed; 7 name a code location and 0 name none.",
+                f"- {ALL_WRITTEN}: 7 listed, 7 name a code location and 0 name none.",
                 "- Proposals queued: 1 package-change proposal the agent wrote.",
             ],
         )
@@ -336,14 +396,16 @@ class RunCountsTest(CycleTestCase):
         self.assertEqual((counted["claims_with_code_location"], counted["claims_without_code_location"]), (0, 0))
         text = self.report()
         self.assertIn(
-            "- The agent's work, as the launcher counted it: 2 of 14 package files read, 1 proposal queued, in ", text
+            "- The agent's work, as the launcher counted it: 2 of 14 package files read, none of the 7 Drafts due"
+            " written or changed, 1 proposal queued, in ",
+            text,
         )
         self.assertIn('The agent\'s own word: "Review: complete".', text)
         self.assertEqual(
             self.counts()[1:],
             [
                 f"- Package files read: 2 of the 14 the brief listed, {FILES_RULE}.",
-                "- Draft claims: none listed.",
+                f"- {NONE_WRITTEN}.",
                 "- Proposals queued: 1 package-change proposal the agent wrote.",
             ],
         )
@@ -360,8 +422,11 @@ class RunCountsTest(CycleTestCase):
         self.assertEqual(code, 0, out)
         counted = self.record()
         self.assertEqual((counted["claims_with_code_location"], counted["claims_without_code_location"]), (0, 7))
-        self.assertIn("- Draft claims: 7 listed; 0 name a code location and 7 name none.", self.counts())
-        self.assertIn("0 of 7 Draft claims with a code location", self.report().split("## Sources")[0])
+        self.assertIn(f"- {ALL_WRITTEN}: 7 listed, 0 name a code location and 7 name none.", self.counts())
+        self.assertIn(
+            "0 of 7 Draft claims with a code location in the 7 of 7 due Drafts this session wrote or changed",
+            self.report().split("## Sources")[0],
+        )
         # The Draft check blocks them as it did before the counts existed, each naming its claim.
         self.assertIn("| Post Drafts | complete | 7 days: 7 blocked |", self.report())
         self.assertEqual(self.report().count("claim-unsupported:"), 7)
@@ -378,17 +443,68 @@ class RunCountsTest(CycleTestCase):
         self.assertEqual(self.record()["package_files_read"], 3)
         self.assertIn("The agent's own word: none; the agent left no summary.", self.report())
 
-    @unittest.skipIf(os.geteuid() == 0, "root can search any folder")
-    def test_a_draft_folder_closed_before_the_agent_starts_does_not_stop_the_run(self):
-        # No count reads workspace/ before the agent starts: a folder left closed is restored once the agent has
-        # ended, as it was before the counts existed, and the run reports.
-        folder = (self.workspace() / fakes.draft_path(1)).parent
-        folder.mkdir(parents=True)
-        folder.chmod(0)
+    def test_a_second_run_that_writes_nothing_has_no_draft_claims_to_count(self):
+        writes = {fakes.draft_path(day): fakes.draft(day) for day in range(1, 8)}
+        fakes.behave(self.codex_dir, {"write": writes})
+        self.assertEqual(self.run_cycle()[0], 0)
+        self.assertIn(f"- {ALL_WRITTEN}: 7 listed, 7 name a code location and 0 name none.", self.counts())
+        # The second session opens three files, writes nothing, and says it finished.
+        fakes.behave(self.codex_dir, {"events": [fakes.read_event(path) for path in self.package[:3]]})
         code, out = self.run_cycle()
         self.assertEqual(code, 0, out)
-        self.assertIn("was left without its owner's read and write access, so the launcher restored it", self.report())
-        self.assertEqual(self.record()["proposals_queued"], 0)
+        counted = self.record()
+        self.assertEqual((counted["claims_with_code_location"], counted["claims_without_code_location"]), (0, 0))
+        self.assertIn(f"- {NONE_WRITTEN}.", self.counts())
+        text = self.report()
+        self.assertIn(
+            "- The agent's work, as the launcher counted it: 3 of 14 package files read, none of the 7 Drafts due"
+            " written or changed, 0 proposals queued, in ",
+            text,
+        )
+        self.assertIn('The agent\'s own word: "Review: complete".', text)
+        self.assertNotIn("Draft claims with a code location", text)
+
+    def test_a_second_run_that_changes_one_draft_counts_that_one_only(self):
+        writes = {fakes.draft_path(day): fakes.draft(day) for day in range(1, 8)}
+        fakes.behave(self.codex_dir, {"write": writes})
+        self.assertEqual(self.run_cycle()[0], 0)
+        changed = uncited(fakes.draft(3, caption="The score dipped after a skipped day and kept its history."))
+        fakes.behave(self.codex_dir, {"write": {fakes.draft_path(3): changed}})
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        counted = self.record()
+        self.assertEqual((counted["claims_with_code_location"], counted["claims_without_code_location"]), (0, 1))
+        self.assertIn(
+            "- Draft claims in the 1 of 7 due Drafts this session wrote or changed: 1 listed, 0 name a code location"
+            " and 1 names none.",
+            self.counts(),
+        )
+
+    @unittest.skipIf(os.geteuid() == 0, "root can search any folder")
+    def test_a_draft_folder_closed_before_the_agent_starts_leaves_the_claims_uncounted_and_the_run_going(self):
+        # An earlier run's Draft sits in a folder the launcher cannot search before the agent starts. Nothing says
+        # whether this session wrote it, so its claims are not counted, and the run goes on as it would have: the
+        # agent runs, the folder is restored once it has ended, and the Draft there is checked.
+        earlier = self.workspace() / fakes.draft_path(1)
+        earlier.parent.mkdir(parents=True)
+        earlier.write_text(fakes.draft(1), encoding="utf-8")
+        earlier.parent.chmod(0)
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        self.assertIn("- Draft claims: not counted; the launcher problems say why.", self.counts())
+        text = self.report()
+        problems = text.partition("\n## Launcher problems\n")[2]
+        self.assertRegex(
+            problems, r"- the Draft claims could not be counted \(\[Errno 13\] Permission denied: '[^']*day-01\.md'\)"
+        )
+        self.assertIn("was left without its owner's read and write access, so the launcher restored it", problems)
+        self.assertIn("Draft claims not counted, 1 proposal queued", text.split("## Sources")[0])
+        counted = self.record()
+        self.assertEqual((counted["claims_with_code_location"], counted["claims_without_code_location"]), (None,) * 2)
+        self.assertEqual((counted["package_files_listed"], counted["proposals_queued"]), (14, 1))
+        self.assertIn("20261011-name-status-stale", [entry["id"] for entry in self.queue()["open"]])
+        self.assertEqual(earlier.read_text(encoding="utf-8"), fakes.draft(1))
 
     def test_a_count_that_cannot_be_made_is_a_launcher_problem_and_the_run_goes_on(self):
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})

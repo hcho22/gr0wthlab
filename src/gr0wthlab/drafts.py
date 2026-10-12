@@ -74,6 +74,7 @@ class PostDraft:
     platforms: dict[str, dict[str, str]] = field(default_factory=dict)
     claims: list[Claim] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
+    unread_claims: int = 0  # claim items that do not follow the format, so they are in no check
 
     def number(self, key: str) -> int | None:
         value = self.fields.get(key, "")
@@ -231,6 +232,7 @@ def parse_claims(draft: PostDraft, lines: Sequence[str]) -> None:
             draft.problems.append(
                 f"each claim is - Claim:, then Code: `path:line`, then Shows: `code`; got {item[0]!r}"
             )
+            draft.unread_claims += 1
             continue
         location, excerpt = values["Code"].strip("`"), values["Shows"]
         if excerpt.startswith("`") and excerpt.endswith("`") and len(excerpt) > 1:

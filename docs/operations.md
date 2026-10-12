@@ -139,11 +139,16 @@ The counts:
   The launcher counts a file as read when at least half of its lines of 24 characters or more are in the part of some command's output the model was shown; the figure is `work_counts` in [`config/run.json`](../config/run.json), a fact about Codex that needs measuring again after a Codex upgrade or a change of model.
   A file with no line that long is counted only when a command that names its path was shown its whole text, since short lines such as a lone brace are in any output.
   The count is a floor: a file read some other way, such as by a pattern that does not name it, is not counted.
-- `Draft claims`: how many claims the post Drafts for the days due list, how many of them name a code location, and how many name none.
+- `Draft claims`: how many claims the post Drafts this session wrote or changed list, how many of them name a code location, and how many name none.
+  The post Drafts stay in `workspace/` from run to run, and the agent is told to leave an open day's Draft alone when nothing in it needs changing, so a Draft on disk is often an earlier run's work.
+  The launcher therefore takes the fingerprint of each due day's Draft before the agent starts, and counts a Draft as this session's only when it is new or its fingerprint differs once the agent has ended.
+  The line says how many of the Drafts due those are, and a session that wrote or changed none has no Draft claims to count.
+  A claim item that does not follow the format names no code location, so the two figures add up to the claims listed.
+  When a Draft due cannot be read before the agent starts or once it has ended, for example in a folder left closed, the Draft claims are not counted and the launcher problems say why; the run starts and goes on as it would have.
 - `Proposals queued`: how many package-change proposals the agent wrote that the launcher queued.
 
 The counts inform the Founder and gate nothing: nothing is queued, blocked, or marked incomplete because of one, and every check of an item or a Draft is what it was.
-A count that cannot be made is listed as a launcher problem, and the run goes on without it.
+A count that cannot be made is listed as a launcher problem, and the run goes on without it; that holds for the one reading the launcher makes for a count before the agent starts as well.
 The run's log record in `~/Library/Logs/gr0wthlab/` holds the same counts under `work`, with the name of every package file not read.
 
 What the counts looked like when they were introduced, on 2026-10-11, against Mandu and RepToday as they were.
@@ -157,7 +162,8 @@ Each run was on demand in a fresh clone, so each was a first week: a package rev
 Read a report against these counts.
 A run that says `Review: complete` after little agent time, few package files read, or with most claims naming no code did less than the runs at high effort did, whatever its closing line says.
 High effort does not make every session thorough: two of the ten read 11 and 17 of the 24 files and still said the review was complete.
-One more run, made on the final code after the table's ten, read 10 of the 24 in 10 min 31 s and said the same.
+One more run, made after the table's ten, read 10 of the 24 in 10 min 31 s and said the same.
+A first run and then a second run in one clone each read all 24, and the second session wrote all seven Drafts again, so its Draft claims line counted all seven.
 [The US-ME02 spike note](spikes/us-me02-runtime-boundary.md#re-check-after-the-agents-reasoning-effort-and-the-work-counts-us-me17) lists every run and says what the sample does not show.
 
 ## When a run times out

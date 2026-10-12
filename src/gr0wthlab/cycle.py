@@ -27,7 +27,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import TextIO
+from typing import TextIO, TypeVar
 
 from . import (
     beta,
@@ -47,6 +47,7 @@ from . import (
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
+from .drafts import PostDraft
 from .queue import INCOMING, OPEN, QUEUE_FILE, REVIEW_QUEUE, SET_ASIDE, SUPERSEDED, Ledger, QueueError
 from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLine, Unusable
 
@@ -63,6 +64,7 @@ WAITLIST_NEEDS = ("waitlist-counts", "weekly-read", "beta-recruiting")
 # The package review's row when it is complete: complete by the agent's closing line alone, so the row says whose word
 # that is and where the launcher's own counts are.
 REVIEW_SAID_COMPLETE = "the agent said it finished its review; the launcher's counts are under Agent's work"
+T = TypeVar("T")
 
 
 def entry_point(repo_root: Path) -> Path:
@@ -751,11 +753,27 @@ class Cycle:
         except (OSError, ConfigError) as error:
             state.problems.append(f"the Beta Cohort recruiting Evidence could not be written ({error})")
 
+    def counted(self, state: RunState, what: str, count: Callable[[], T]) -> T | None:
+        """Make one count of the agent's session, for the run report to show beside the agent's own word. The counts
+        gate nothing, so a count that cannot be made is a launcher problem and the run goes on without it."""
+        try:
+            return count()
+        except (OSError, ConfigError) as error:
+            state.problems.append(f"{what} could not be counted ({error})")
+            return None
+
     def count_work(
-        self, state: RunState, config: settings.Settings, log_dir: Path, areas: Areas, proposals: int
+        self,
+        state: RunState,
+        config: settings.Settings,
+        log_dir: Path,
+        areas: Areas,
+        drafts_before: Mapping[int, PostDraft | None] | None,
+        proposals: int,
     ) -> None:
-        """Count what the agent's session did, for the run report to show beside the agent's own word. The counts gate
-        nothing, so a count that cannot be made is a launcher problem and the run goes on without it."""
+        """Count what the agent's session did, once it has ended and its items are taken in. drafts_before is each due
+        day's Draft as it stood before the agent started, so that only the claims of the Drafts this session wrote or
+        changed are counted; without it the Draft claims are not counted."""
         mandu = Path(state.mandu)
         files = {
             file.path: mandu / file.path
@@ -763,17 +781,18 @@ class Cycle:
             for file in result.files
             if file.status != package.FAILED
         }
-        try:
-            state.work = work.measure(
-                log_dir / f"{state.run_id}.events.jsonl",
-                config.shown_output_chars,
-                files,
-                state.posts,
-                areas,
-                proposals,
+        claims = None
+        if drafts_before is not None:
+            claims = self.counted(
+                state, "the Draft claims", lambda: work.count_claims(drafts_before, work.due_drafts(state.posts, areas))
             )
-        except (OSError, ConfigError) as error:
-            state.problems.append(f"the agent's work could not be counted ({error})")
+        state.work = self.counted(
+            state,
+            "the agent's work",
+            lambda: work.measure(
+                log_dir / f"{state.run_id}.events.jsonl", config.shown_output_chars, files, claims, proposals
+            ),
+        )
 
     def leave_note(self, run_id: str, line: str) -> None:
         """A one-line note in ledger/notes/, which the next run's report shows."""
@@ -936,6 +955,7 @@ class Cycle:
             state, config, beta_rules, folder, registry, boundary, ledger, ledger_ok, areas, states.beta_recruiting
         )
         areas.ensure_folder(areas.path("review_queue", INCOMING))
+        drafts_before = self.counted(state, "the Draft claims", lambda: work.due_drafts(state.posts, areas))
         brief = self.store.path(RUN_REPORTS, f"{run_id}.brief.md")
         self.store.write_text(
             brief, report.render_brief(state, canonical(self.repo_root), areas.workspace, self.store.root)
@@ -985,7 +1005,7 @@ class Cycle:
             proposals = sum(
                 1 for identifier in published if ledger.entries[identifier]["kind"] == "package-change-proposal"
             )
-            self.count_work(state, config, log_dir, areas, proposals)
+            self.count_work(state, config, log_dir, areas, drafts_before, proposals)
         report_path = self.store.path(RUN_REPORTS, f"{run_id}.md")
         state.problems += areas.problems
         areas.problems.clear()
