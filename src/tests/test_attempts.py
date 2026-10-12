@@ -14,12 +14,27 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
-from gr0wthlab import attempts, cli, cycle, exchange, process, report, schedule, settings
+from gr0wthlab import (
+    attempts,
+    beta,
+    cli,
+    cycle,
+    exchange,
+    messages,
+    outreach,
+    posts,
+    process,
+    report,
+    schedule,
+    settings,
+)
 from gr0wthlab.areas import Store
 from gr0wthlab.boundary import ConfigError
 from gr0wthlab.report import RunState
 from tests import fakes
+from tests.test_beta_cycle import BetaCycleTestCase
 from tests.test_cycle import CycleTestCase
+from tests.test_filming import FilmingRunCase
 
 # When the run of the week is due, as config/run.json sets it: Sunday 16:00 on the Mac's wall clock.
 DUE = datetime(2026, 10, 11, 16, 0)
@@ -29,6 +44,12 @@ ITEM = "review-queue/incoming/name-status-stale.md"
 ASLEEP = 3 * 3600
 # A one-off scheduled run's time, on the Tuesday after the run of the week fell due.
 ONCE = "2026-10-13T09:05"
+# What the stand-in agent does when it ends without an error and without the line that confirms its review.
+UNCONFIRMED = {"summary": "Read the first half of the package.\n"}
+FOLLOWS = (
+    "The Mac's sleep cut this run short, so it does not count as the run due Sunday 2026-10-11 16:00: a fresh, whole"
+    " run starts by itself once the Mac is awake, and nothing is needed from you."
+)
 
 
 def at(**after) -> datetime:
@@ -186,6 +207,76 @@ class SleptThroughTest(OwedRunTestCase):
         self.assertIn("started on time at Sunday 2026-10-11 16:12. This is attempt 2 of at most 3:", self.report())
         self.assertEqual(self.endings()[-1], ("scheduled", attempts.COMPLETED))
 
+    def test_an_agent_that_ends_unconfirmed_and_without_an_error_after_the_mac_slept_was_cut_short_by_sleep_too(self):
+        """What an agent can leave that the Mac's sleep froze in the middle of its work and a later wake let end."""
+        self.exchange.mkdir()
+        fakes.behave(self.codex_dir, UNCONFIRMED)
+        with self.mac.asleep_in("exec", 600):
+            code, out = self.scheduled(minutes=1)
+        self.assertEqual(code, 0, out)
+        text = self.report()
+        self.assertNotIn("The run finished.", text)
+        self.assertIn(
+            "- The agent ended without an error, but the Mac slept during the run and the agent did not confirm that"
+            " it finished every pass, so its work this run may be incomplete.\n"
+            "- The Mac was asleep for about 10 min 0 s while the agent ran, which counts toward the agent's time"
+            f" limit.\n- {FOLLOWS}\n",
+            text,
+        )
+        self.assertIn(f"gr0wthlab: {FOLLOWS}\n", out)
+        self.assertEqual(self.queue()["open"], [])
+        self.assertNotIn("Problems this run are listed in the notice", text)
+        self.assertEqual(datetime.fromisoformat(self.queue()["next_run"]), DUE.astimezone())
+        [attempt] = self.record()["runs"]
+        self.assertEqual((attempt["attempt"], attempt["ending"], attempt["asleep_seconds"]), (1, attempts.SLEPT, 600))
+
+        fakes.behave(self.codex_dir, {})
+        code, out = self.scheduled(minutes=12)
+        self.assertEqual(code, 0, out)
+        self.assertIn(
+            "started on time at Sunday 2026-10-11 16:12. This is attempt 2 of at most 3: the attempt started Sunday"
+            " 2026-10-11 16:01 was cut short by the Mac's sleep.\n- The run finished.\n",
+            self.report(),
+        )
+        self.assertEqual(self.endings(), [("scheduled", attempts.SLEPT), ("scheduled", attempts.COMPLETED)])
+        self.assertEqual(self.queue()["open"], [])
+        self.assertEqual(datetime.fromisoformat(self.queue()["next_run"]), (DUE + timedelta(days=7)).astimezone())
+        self.assertEqual(self.scheduled(minutes=14), (0, ""))
+        self.assertEqual(len(self.reports()), 2)
+
+    def test_an_agent_that_confirms_its_review_after_the_mac_slept_completed_the_week_s_run(self):
+        with self.mac.asleep_in("exec", 600):
+            code, out = self.scheduled(minutes=1)
+        self.assertEqual(code, 0, out)
+        text = self.report()
+        self.assertIn("- The run finished.\n- The Mac was asleep for about 10 min 0 s while the agent ran", text)
+        self.assertNotIn("cut this run short", text + out)
+        self.assertEqual(self.endings(), [("scheduled", attempts.COMPLETED)])
+        self.assertEqual(self.queue()["open"], [])
+        self.assertEqual(datetime.fromisoformat(self.queue()["next_run"]), (DUE + timedelta(days=7)).astimezone())
+        self.assertEqual(self.scheduled(minutes=12), (0, ""))
+        self.assertEqual(len(self.reports()), 1)
+
+    def test_an_agent_that_ends_unconfirmed_with_the_mac_awake_completed_the_run_and_its_notice_is_as_before(self):
+        fakes.behave(self.codex_dir, UNCONFIRMED)
+        code, out = self.scheduled(minutes=1)
+        self.assertEqual(code, 0, out)
+        text = self.report()
+        self.assertIn("- The run finished.\n", text)
+        self.assertNotIn("asleep", text)
+        self.assertNotIn("starts by itself", text + out)
+        self.assertIn("| Package review (contradictions) | incomplete | the agent did not confirm that it", text)
+        self.assertEqual(self.endings(), [("scheduled", attempts.COMPLETED)])
+        self.assertEqual(
+            [entry["ask"] for entry in self.notices()],
+            ["Notice: the package review was not confirmed finished on 2026-10-11"],
+        )
+        told = self.notice().split("## Notice\n\n")[1].split("\n\n")[0]
+        self.assertTrue(told.endswith("in the Review Queue yet; the next run reviews it again."), told)
+        self.assertEqual(datetime.fromisoformat(self.queue()["next_run"]), (DUE + timedelta(days=7)).astimezone())
+        self.assertEqual(self.scheduled(minutes=5), (0, ""))
+        self.assertEqual(len(self.reports()), 1)
+
     def test_a_cut_short_run_with_another_problem_still_queues_its_notice_and_says_a_fresh_run_follows(self):
         self.behavior = {"write": {"review-queue/incoming/broken.md": "not an item\n"}}
         code, out = self.slept_through(minutes=1)
@@ -320,10 +411,7 @@ class SleepAnywhereTest(OwedRunTestCase):
     """An attempt that did not complete was cut short by the Mac's sleep wherever in it the Mac slept, before its agent
     started as much as while the agent ran; one the Mac stayed awake through still waits for the Founder."""
 
-    FOLLOWS = (
-        "- The Mac's sleep cut this run short, so it does not count as the run due Sunday 2026-10-11 16:00: a fresh,"
-        " whole run starts by itself once the Mac is awake, and nothing is needed from you.\n"
-    )
+    FOLLOWS = f"- {FOLLOWS}\n"
 
     def fresh_run_follows(self, repo=None):
         """The next start with the Mac fully awake is a whole run that names the attempt before it, and the last."""
@@ -405,6 +493,13 @@ class SleepAnywhereTest(OwedRunTestCase):
 
 
 class AttemptLimitTest(OwedRunTestCase):
+    # What the second of two attempts says when the Mac's sleep cut it short as well.
+    LAST = (
+        "The Mac's sleep cut this run short, and it was attempt 2 of at most 2 at the run due Sunday 2026-10-11"
+        " 16:00, so no further attempt starts by itself: start a run on demand while the Mac stays awake"
+        " (`src/bin/gr0wthlab run`). The limit is `schedule.attempts_per_week` in `config/run.json`."
+    )
+
     def test_the_limit_ends_the_fresh_runs_with_a_notice(self):
         fakes.set_run(self.repo, "schedule", {"attempts_per_week": 2})
         code, out = self.slept_through(minutes=1)
@@ -413,11 +508,7 @@ class AttemptLimitTest(OwedRunTestCase):
 
         code, out = self.slept_through(hours=4)
         self.assertEqual(code, cycle.EXIT_STOPPED, out)
-        last = (
-            "The Mac's sleep cut this run short, and it was attempt 2 of at most 2 at the run due Sunday 2026-10-11"
-            " 16:00, so no further attempt starts by itself: start a run on demand while the Mac stays awake"
-            " (`src/bin/gr0wthlab run`). The limit is `schedule.attempts_per_week` in `config/run.json`."
-        )
+        last = self.LAST
         text = self.report()
         self.assertIn("4 h 0 min after its time. This is attempt 2 of at most 2: the attempt started Sunday", text)
         self.assertIn(f"- {last}\n", text)
@@ -439,6 +530,33 @@ class AttemptLimitTest(OwedRunTestCase):
         code, out = self.scheduled(days=7, minutes=1)
         self.assertEqual(code, 0, out)
         self.assertIn("- Scheduled for Sunday 2026-10-18 16:00; started on time", self.report())
+
+    def test_a_last_attempt_that_ends_unconfirmed_after_the_mac_slept_reads_as_any_exhausted_attempt(self):
+        fakes.set_run(self.repo, "schedule", {"attempts_per_week": 2})
+        self.assertEqual(self.slept_through(minutes=1)[0], cycle.EXIT_STOPPED)
+        fakes.behave(self.codex_dir, UNCONFIRMED)
+        with self.mac.asleep_in("exec", 600):
+            code, out = self.scheduled(hours=4)
+        self.assertEqual(code, 0, out)
+        text = self.report()
+        self.assertNotIn("The run finished.", text)
+        self.assertIn("4 h 0 min after its time. This is attempt 2 of at most 2: the attempt started Sunday", text)
+        self.assertIn(f"- {self.LAST}\n", text)
+        self.assertIn(f"gr0wthlab: {self.LAST}\n", out)
+        [queued] = self.notices()
+        self.assertEqual(queued["ask"], "Notice: the Mac's sleep cut short every attempt at the run due 2026-10-11")
+        notice = self.notice()
+        self.assertIn(f"in the Review Queue yet; the next run reviews it again. {self.LAST}\n", notice)
+        self.assertEqual(exchange.check_item(notice, ["RepToday", "Immerse"], published=True).problems, [])
+        self.assertIn(f"- Problems this run are listed in the notice `{queued['id']}`.", text)
+        self.assertEqual(datetime.fromisoformat(self.queue()["next_run"]), (DUE + timedelta(days=7)).astimezone())
+        self.assertEqual(self.endings(), [("scheduled", attempts.SLEPT)] * 2)
+
+        fakes.behave(self.codex_dir, {})
+        for hours in (8, 16, 40):
+            self.assertEqual(self.scheduled(hours=hours), (0, ""))
+        self.assertEqual(len(self.reports()), 2)
+        self.assertEqual(self.notices(), [queued])
 
     def test_three_attempts_name_both_earlier_ones(self):
         for hours in (0, 4):
@@ -557,6 +675,161 @@ class AcrossAttemptsTest(OwedRunTestCase):
         kinds = sorted(entry["kind"] for entry in self.queue()["open"])
         self.assertEqual(kinds, ["notice", "package-change-proposal", "post"])
         self.assertIn("| Post Drafts | complete |", self.report())
+
+
+class UnreachedWorkTest(OwedRunTestCase):
+    """While a fresh run follows by itself, a cut-short attempt's notice leaves out the work its agent did not reach,
+    which that run does again and reports on itself; everything else is told as in any run."""
+
+    def setUp(self):
+        super().setUp()
+        self.exchange.mkdir()
+
+    def first_batch(self):
+        """The week of the window's first sitting, when days 1 to 7 are due, with the kit's one blocking checklist
+        line checked off so that every day's Draft can pass; returns the seven Drafts as the agent writes them."""
+        fakes.set_window(self.repo, fakes.window_from(DUE.date()))
+        checklist = self.mandu / "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md"
+        lines = checklist.read_text(encoding="utf-8")
+        self.assertIn("- [ ] **Device benchmark", lines)
+        checklist.write_text(lines.replace("- [ ] **Device benchmark", "- [x] **Device benchmark"), encoding="utf-8")
+        return {fakes.draft_path(day): fakes.draft(day) for day in range(1, 8)}
+
+    def fresh_run(self, writes):
+        """The fresh run that follows by itself, in which the agent writes what the cut-short attempt's did not."""
+        self.behavior = {"write": writes}
+        fakes.behave(self.codex_dir, self.behavior)
+        code, out = self.scheduled(hours=3, minutes=5)
+        self.assertEqual(code, 0, out)
+        self.assertIn("This is attempt 2 of at most 3:", self.report())
+        self.assertEqual(self.endings(), [("scheduled", attempts.SLEPT), ("scheduled", attempts.COMPLETED)])
+
+    def test_a_first_batch_the_mac_slept_through_queues_no_notice_and_the_fresh_run_queues_its_seven_posts(self):
+        drafts = self.first_batch()
+        code, out = self.slept_through(minutes=1)
+        self.assertEqual(code, cycle.EXIT_STOPPED, out)
+        cut_short = self.report()
+        self.assertIn("- Post Drafts: 7 no Draft.\n", cut_short)
+        self.assertIn("| Post Drafts | incomplete | no Draft for day 1, 2, 3, 4, 5, 6, 7; the agent was", cut_short)
+        self.assertIn(f"- {FOLLOWS}\n", cut_short)
+        self.assertNotIn("Problems this run are listed in the notice", cut_short)
+        self.assertEqual(self.queue()["open"], [])
+
+        self.fresh_run(drafts)
+        queue = self.queue()
+        self.assertEqual([entry["kind"] for entry in queue["open"]], ["post"] * 7)
+        self.assertEqual(sorted(entry["day"] for entry in queue["open"]), list(range(1, 8)))
+        self.assertIn("| Post Drafts | complete | 7 days: 7 queued |", self.report())
+
+    def test_a_cut_short_attempt_with_a_failed_source_queues_a_notice_that_names_the_source_and_not_the_drafts(self):
+        self.first_batch()
+        (self.mandu / "projects/RepToday/gtm/05-social-pmf/read-the-results.md").unlink()
+        code, out = self.slept_through(minutes=1)
+        self.assertEqual(code, cycle.EXIT_STOPPED, out)
+        [queued] = self.notices()
+        self.assertEqual(queued["ask"], "Notice: the run timed out on 2026-10-11 and had 1 other problem")
+        notice = self.notice()
+        self.assertIn("read-the-results.md`: missing. Incomplete: ", notice)
+        self.assertIn(f"Post Drafts. {FOLLOWS}\n", notice)
+        self.assertNotIn("has no Draft", notice)
+        self.assertNotIn("not offered", notice)
+        self.assertEqual(exchange.check_item(notice, ["RepToday", "Immerse"], published=True).problems, [])
+        # The attempt's own report still lists every day.
+        self.assertIn("- Post Drafts: 7 no Draft.\n", self.report())
+        self.assertIn("| 7 | P07 | no Draft |", self.report())
+
+    def test_the_last_attempt_s_notice_lists_every_draft_its_agent_did_not_reach(self):
+        self.first_batch()
+        fakes.set_run(self.repo, "schedule", {"attempts_per_week": 1})
+        code, out = self.slept_through(minutes=1)
+        self.assertEqual(code, cycle.EXIT_STOPPED, out)
+        [queued] = self.notices()
+        self.assertEqual(queued["ask"], "Notice: the Mac's sleep cut short every attempt at the run due 2026-10-11")
+        notice = self.notice()
+        for day in range(1, 8):
+            self.assertIn(f"- Day {day} has no Draft, so it has no post this run.\n", notice)
+        self.assertIn("it was attempt 1 of at most 1 at the run due Sunday 2026-10-11 16:00, so no further", notice)
+
+    def test_outreach_messages_the_mac_slept_through_queue_no_notice_and_the_fresh_run_queues_them(self):
+        fakes.add_dispatches(self.repo, self.env)
+        fakes.set_run(self.repo, "outreach", {"network_ask_source": "network", "creators": fakes.creators()})
+        code, out = self.slept_through(minutes=1)
+        self.assertEqual(code, cycle.EXIT_STOPPED, out)
+        cut_short = self.report()
+        self.assertIn("| Slow Strength | first message | no Draft |", cut_short)
+        self.assertIn("| Outreach Drafts | incomplete | no Draft for ", cut_short)
+        self.assertEqual(self.notices(), [])
+
+        writes = {fakes.message_path("network-ask"): fakes.message("network-ask", "network", fakes.NETWORK_BODY)}
+        for key, _ in fakes.KIT_CREATORS:
+            writes[fakes.message_path("creator", key)] = fakes.message("creator", key, fakes.CREATOR_BODY)
+        self.fresh_run(writes)
+        queue = self.queue()
+        self.assertEqual(
+            sorted(entry["id"] for entry in queue["open"] if entry["kind"] == "message"),
+            [
+                "20261011-message-creator-desk-reset",
+                "20261011-message-creator-hallway-moves",
+                "20261011-message-creator-slow-strength",
+                "20261011-message-network-ask",
+            ],
+        )
+        self.assertEqual(self.notices(), [])
+
+
+class UnreachedRecruitingTest(BetaCycleTestCase, OwedRunTestCase):
+    def test_recruiting_drafts_the_mac_slept_through_queue_no_notice_and_the_fresh_run_queues_them(self):
+        fakes.write_view(self.view, fakes.waitlist_view((at() - timedelta(hours=1)).isoformat()))
+        self.approve_build()
+        code, out = self.slept_through(minutes=1)
+        self.assertEqual(code, cycle.EXIT_STOPPED, out)
+        cut_short = self.report()
+        self.assertIn("| Beta invitation | no Draft |", cut_short)
+        self.assertIn("| Waitlist ask | no Draft |", cut_short)
+        self.assertIn(f"- {FOLLOWS}\n", cut_short)
+        self.assertEqual(self.queue()["open"], [])
+
+        self.behavior = {
+            "write": {fakes.INVITATION: fakes.beta_draft(), fakes.WAITLIST_ASK: fakes.beta_draft("waitlist-ask-clean")}
+        }
+        fakes.behave(self.codex_dir, self.behavior)
+        code, out = self.scheduled(hours=3, minutes=5)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.endings(), [("scheduled", attempts.SLEPT), ("scheduled", attempts.COMPLETED)])
+        self.assertEqual(sorted(entry["beta"] for entry in self.messages()), ["beta-invitation", "waitlist-ask"])
+        self.assertEqual(self.notices(), [])
+
+
+class UnreachedFilmingTest(FilmingRunCase, OwedRunTestCase):
+    def test_a_ready_filming_day_the_mac_slept_through_queues_no_notice_and_the_fresh_run_cuts_its_video(self):
+        # The week before: a run files the filming plan, the Founder approves it, and the footage of day 1 arrives.
+        fakes.keep_days(self.mandu, 1, 8)
+        code, out = self.run_cycle(at=at(days=-1))
+        self.assertEqual(code, 0, out)
+        [plan] = [entry["id"] for entry in self.queue()["open"] if entry["kind"] == "filming-plan"]
+        self.decide(plan, "approve")
+        self.clip("d01-s1.mov")
+        before = self.notices()
+
+        code, out = self.slept_through(minutes=1)
+        self.assertEqual(code, cycle.EXIT_STOPPED, out)
+        cut_short = self.report()
+        self.assertIn("| 1 | d01-s1 | no edit record | it is ready for an edit record and has none |", cut_short)
+        self.assertIn("- Post Drafts: 1 no Draft.\n", cut_short)
+        self.assertIn(f"- {FOLLOWS}\n", cut_short)
+        self.assertEqual(self.notices(), before)
+
+        cut = ("d01-s1", "d01-s1.mov", 2, 12)
+        self.behavior = {
+            "write": {fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): fakes.edit_record(1, cut)}
+        }
+        fakes.behave(self.codex_dir, self.behavior)
+        code, out = self.scheduled(hours=3, minutes=5)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.endings(), [("scheduled", attempts.SLEPT), ("scheduled", attempts.COMPLETED)])
+        [post] = [entry for entry in self.queue()["open"] if entry["kind"] == "post"]
+        self.assertEqual((post["day"], bool(post.get("asset"))), (1, True))
+        self.assertEqual(self.notices(), before)
 
 
 class OnDemandTest(OwedRunTestCase):
@@ -909,10 +1182,14 @@ class RecordTest(unittest.TestCase):
         self.assertEqual(attempts.left_without_ending(self.store), [])
         self.assertEqual(attempts.load(self.store, earlier).runs[0]["ending"], attempts.COMPLETED)
 
-    def test_how_a_run_ended_follows_from_its_agent_and_whether_the_mac_slept(self):
+    def test_how_a_run_ended_follows_from_its_agent_whether_the_mac_slept_and_whether_it_confirmed_its_review(self):
+        done = {"agent_started": True, "exit_code": 0}
+        self.assertEqual(attempts.ending(done, 0.0, confirmed=False), attempts.COMPLETED)
+        self.assertEqual(attempts.ending(done, 600.0, confirmed=False), attempts.SLEPT)
+        self.assertEqual(attempts.ending(done, 600.0, confirmed=True), attempts.COMPLETED)
         for agent, asleep, ending in (
-            ({"agent_started": True, "exit_code": 0}, 0.0, attempts.COMPLETED),
-            ({"agent_started": True, "exit_code": 0}, 600.0, attempts.COMPLETED),
+            (done, 0.0, attempts.COMPLETED),
+            (done, 600.0, attempts.COMPLETED),
             ({"agent_started": True, "exit_code": 6, "timed_out": True}, 10800.0, attempts.SLEPT),
             ({"agent_started": True, "exit_code": 6, "timed_out": True}, 0.0, attempts.TIMED_OUT),
             ({"agent_started": True, "exit_code": 1}, 600.0, attempts.SLEPT),
@@ -924,6 +1201,8 @@ class RecordTest(unittest.TestCase):
         ):
             with self.subTest(agent=agent, asleep=asleep):
                 self.assertEqual(attempts.ending(agent, asleep), ending)
+                if agent is not done:
+                    self.assertEqual(attempts.ending(agent, asleep, confirmed=False), ending)
         self.assertEqual(set(attempts.SAID), {value for name, value in vars(attempts).items() if name in ENDINGS})
 
 
@@ -979,6 +1258,127 @@ class ReportTest(unittest.TestCase):
         title, body, _, _ = report.problems_notice(with_more, "run-reports/R.md")
         self.assertEqual(title, "Notice: the run timed out on 2026-10-11 and had 1 other problem")
         self.assertIn("a fresh, whole run starts by itself once the Mac is awake", body)
+
+    def unconfirmed(self, **kwargs):
+        """A run whose agent ended without an error and without confirming its review, ten minutes of its eleven
+        with the Mac asleep."""
+        state = self.state(slept=600.0, agent_seconds=660.0, agent_awake_seconds=60.0, **kwargs)
+        state.review = "Read the first half of the package."
+        return state
+
+    def test_an_agent_that_ends_unconfirmed_after_the_mac_slept_did_not_complete_a_scheduled_attempt(self):
+        state = self.unconfirmed()
+        self.assertEqual((state.ending, state.again), (attempts.SLEPT, True))
+        text = report.render_report(state)
+        self.assertNotIn("The run finished.", text)
+        self.assertIn(
+            "- The agent ended without an error, but the Mac slept during the run and the agent did not confirm that"
+            " it finished every pass, so its work this run may be incomplete.\n"
+            "- The Mac was asleep for about 10 min 0 s while the agent ran, which counts toward the agent's time"
+            f" limit.\n- {FOLLOWS}\n",
+            text,
+        )
+        self.assertIsNone(report.problems_notice(state, "run-reports/R.md"))
+        with_more = self.unconfirmed()
+        with_more.problems.append("a file could not be read")
+        title, body, _, _ = report.problems_notice(with_more, "run-reports/R.md")
+        self.assertEqual(title, "Notice: the run on 2026-10-11 had 2 problems")
+        self.assertIn(f"in the Review Queue yet; the next run reviews it again. {FOLLOWS}\n", body)
+
+        unfinished = self.unconfirmed()
+        unfinished.review = "Review: incomplete: the brand files were not reached."
+        self.assertEqual((unfinished.ending, unfinished.again), (attempts.SLEPT, True))
+        self.assertIn(
+            "the Mac slept during the run and the agent did not finish its review: the brand files were not reached,"
+            " so its work this run may be incomplete.\n",
+            report.render_report(unfinished),
+        )
+        self.assertIsNone(report.problems_notice(unfinished, "run-reports/R.md"))
+
+        last = self.unconfirmed(number=3, earlier=(at(minutes=1), at(hours=4)))
+        self.assertEqual((last.ending, last.again), (attempts.SLEPT, False))
+        self.assertNotIn("The run finished.", report.render_report(last))
+        title, body, _, _ = report.problems_notice(last, "run-reports/R.md")
+        self.assertEqual(title, "Notice: the Mac's sleep cut short every attempt at the run due 2026-10-11")
+        self.assertIn(
+            "the next run reviews it again. The Mac's sleep cut this run short, and it was attempt 3 of at most 3 at"
+            " the run due Sunday 2026-10-11 16:00, so no further attempt starts by itself: start a run on demand",
+            body,
+        )
+
+    def test_an_agent_that_ends_without_an_error_completed_when_it_confirmed_or_the_mac_stayed_awake(self):
+        confirmed = self.state(slept=600.0, agent_seconds=660.0, agent_awake_seconds=60.0)
+        self.assertEqual((confirmed.ending, confirmed.again), (attempts.COMPLETED, False))
+        self.assertEqual(report.what_follows(confirmed), "")
+        self.assertIn("- The run finished.\n- The Mac was asleep for about 10 min", report.render_report(confirmed))
+        self.assertIsNone(report.problems_notice(confirmed, "run-reports/R.md"))
+
+        awake = self.state()
+        awake.review = "Read the first half of the package."
+        self.assertEqual((awake.ending, awake.again, report.what_follows(awake)), (attempts.COMPLETED, False, ""))
+        self.assertIn("- The run finished.\n", report.render_report(awake))
+        title, body, _, _ = report.problems_notice(awake, "run-reports/R.md")
+        self.assertEqual(title, "Notice: the package review was not confirmed finished on 2026-10-11")
+        self.assertTrue(body.split("\n\n")[0].endswith("the next run reviews it again."), body)
+
+        # A run on demand and a one-off scheduled run are never asked: each reads and notifies as before.
+        for trigger in ("on-demand", "scheduled"):
+            other = self.unconfirmed()
+            other.trigger, other.attempt = trigger, None
+            self.assertEqual((other.ending, other.again, report.what_follows(other)), (attempts.COMPLETED, False, ""))
+            self.assertIn("- The run finished.\n", report.render_report(other))
+            title, body, _, _ = report.problems_notice(other, "run-reports/R.md")
+            self.assertEqual(title, "Notice: the package review was not confirmed finished on 2026-10-11")
+            self.assertTrue(body.split("\n\n")[0].endswith("the next run reviews it again."), body)
+
+    def unreached(self, state):
+        """A run whose agent wrote none of what it was asked for: seven post Drafts, the recruiting invitation, and
+        the first message to a creator."""
+        state.post_outcome = posts.Outcome([posts.DayResult(day, posts.MISSING) for day in range(1, 8)])
+        state.beta_outcome = beta.Outcome([beta.DraftResult(beta.INVITATION, beta.MISSING)])
+        state.outreach = outreach.Plan("RepToday", "R", "channel-plan.md", messages.Limits(), Path("drafts"))
+        creator = messages.Target(messages.CREATOR, *fakes.KIT_CREATORS[0])
+        state.outreach_result = outreach.Result([messages.Outcome(creator, messages.MISSING)])
+        return state
+
+    def test_a_cut_short_attempt_s_notice_leaves_out_what_its_agent_did_not_reach_while_a_fresh_run_follows(self):
+        missing = (
+            "- Day 7 has no Draft, so it has no post this run.",
+            "- The Beta invitation has no Draft, so it was not offered this run.",
+            "- Slow Strength, first message: no Draft was written, so nothing is offered.",
+        )
+        self.assertIsNone(report.problems_notice(self.unreached(self.slept()), "run-reports/R.md"))
+        self.assertIsNone(report.problems_notice(self.unreached(self.unconfirmed()), "run-reports/R.md"))
+
+        with_more = self.unreached(self.slept())
+        with_more.problems.append("a file could not be read")
+        with_more.post_outcome.results[0] = posts.DayResult(1, posts.BLOCKED, "its Draft could not be read")
+        with_more.beta_outcome.results[0].withdrawn = "20261004-message-beta-invitation-1"
+        title, body, _, _ = report.problems_notice(with_more, "run-reports/R.md")
+        self.assertEqual(title, "Notice: the run timed out on 2026-10-11 and had 3 other problems")
+        self.assertIn("- Day 1: its Draft could not be read\n", body)
+        self.assertIn("- The open `20261004-message-beta-invitation-1` is withdrawn, since it no longer stands.", body)
+        self.assertIn("- a file could not be read", body)
+        self.assertIn("a fresh, whole run starts by itself once the Mac is awake", body)
+        for line in missing:
+            self.assertNotIn(line, body)
+        self.assertNotIn("has no Draft", body)
+
+        # Once no fresh run follows, and in a run that is no attempt, the notice lists everything, as before.
+        last = self.unreached(self.slept(number=3, earlier=(at(minutes=1), at(hours=4))))
+        on_demand = self.unreached(self.slept())
+        on_demand.trigger, on_demand.attempt, on_demand.due = "on-demand", None, None
+        awake = self.unreached(self.state(exit_code=6, timed_out=True))
+        for state, title in (
+            (last, "Notice: the Mac's sleep cut short every attempt at the run due 2026-10-11"),
+            (on_demand, "Notice: the run timed out on 2026-10-11 and had 9 other problems"),
+            (awake, "Notice: the run timed out on 2026-10-11 and had 9 other problems"),
+        ):
+            with self.subTest(title=title, trigger=state.trigger):
+                told, body, _, _ = report.problems_notice(state, "run-reports/R.md")
+                self.assertEqual(told, title)
+                for line in missing:
+                    self.assertIn(line, body)
 
     def test_sleep_outside_the_agent_s_time_cuts_a_scheduled_run_short_and_the_report_says_for_how_long(self):
         before = self.state(exit_code=3, agent_started=False, slept=600.0)

@@ -1234,12 +1234,14 @@ def report_lines(plan: Plan | None, outcome: Outcome | None, filing: str, proble
     return lines
 
 
-def notice_section(outcome: Outcome | None, day_text: str) -> tuple[int, str, str] | None:
-    """The blocked Drafts, any day with no Draft, and any post withdrawn, for the run's notice; None if nothing."""
+def notice_section(outcome: Outcome | None, day_text: str, again: bool = False) -> tuple[int, str, str] | None:
+    """The blocked Drafts, any day with no Draft, and any post withdrawn, for the run's notice; None if nothing.
+    again says a fresh, whole run follows this one by itself, which writes the Draft of a day that has none or
+    reports on it itself, so such a day is left out."""
     if outcome is None:
         return None
     blocked = outcome.blocked
-    missing = [result for result in outcome.results if result.status == MISSING]
+    missing = [] if again else [result for result in outcome.results if result.status == MISSING]
     if not blocked and not missing:
         return None
     lines = []

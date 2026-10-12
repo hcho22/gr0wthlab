@@ -174,21 +174,33 @@ What a week looks like:
 - The Mac is asleep or off at 16:00: the run starts within about two minutes of the Mac next being fully awake, and its report says when it was due and when it started.
   A start more than `schedule.late_after_minutes` minutes after its time, 15 today, reads as started late, with how long after its time that was.
 - The Mac goes to sleep in the middle of a run: the run is frozen while the Mac sleeps and goes on whenever the Mac is running, a dark wake included.
-  If it finishes that way, it is the week's run.
+  If it finishes that way, its agent ending without an error and confirming its review, it is the week's run.
   If it does not, whatever ended it and wherever in the run the Mac slept, the run does not count as the week's run: its report, where it has one, says that the Mac's sleep cut it short and for about how long the Mac slept, and a fresh, whole run starts by itself once the Mac is fully awake.
   The fresh run's report says when the run was due, when it started, which attempt it is, and when each attempt before it started.
 
 A fresh run is a whole run under the same rules as any other: it queues nothing an earlier attempt already queued, asks again nothing the Founder decided, and keeps what was carried over.
 An attempt that a fresh run is to follow queues no notice for being cut short, since nothing is needed from the Founder.
+Its notice also leaves out every part that only restates work its agent did not reach: a due day with no post Draft, a recruiting Draft that was not written, and an outreach message, first or follow-up, with no Draft.
+The fresh run, being a whole run, does that work again and reports on it itself.
+A ready filming day with no edit record has no line of its own in any run's notice; the run report names it.
+If nothing else is left, no notice is queued, as in a week with no such work due.
+Everything else queues the notice as in any run: a failed source, an item or Draft the agent left half written, a Draft that was blocked, an open item the attempt withdrew, a launcher problem.
+That notice also says that the attempt was cut short and that a fresh run follows.
+The attempt's run report lists everything, as any run's does.
+No run closes or withdraws an earlier run's notice.
 While a fresh run is owed, `next_run` in the Review Queue stays at the time the week's run was due, so Mandu says at a sitting that the week's run has not finished.
 After the last attempt a week's run may take, a notice asks the Founder to start a run on demand while the Mac stays awake, and no further run starts by itself until the next weekly time.
+That notice leaves nothing out: it lists the work the agent did not reach as any run's notice does.
 
 Which endings earn another attempt:
 
-- An attempt that completed is the week's run, whether or not the Mac slept during it, and nothing follows it.
+- An attempt completed when its agent ended without an error and, besides, either the Mac stayed awake for the whole attempt or the agent's summary confirmed its review, ending with the line `Review: complete`.
+  It is the week's run, and nothing follows it.
+  With the Mac awake throughout, an agent that ended without an error completed the attempt whether or not it confirmed its review; a review it did not confirm queues its notice as in any run.
 - An attempt that did not complete and during which the Mac slept was cut short by sleep, and earns another.
   The sleep counts wherever it fell: during the pre-run fetch in the production clone, while the launcher asked git for the checkout's boundary, during Codex's version probe or the boundary preflight, or while the agent ran.
-  It counts however the attempt then ended: refused before it started, stopped by an error, with its agent never started, stopped at its time limit, or ended with an error.
+  It counts however the attempt then ended: refused before it started, stopped by an error, with its agent never started, stopped at its time limit, ended with an error, or ended without an error and without confirming its review.
+  The last is what an agent can leave that the Mac's sleep froze in the middle of its work: its report says that the agent ended without an error, that the Mac slept during the run, and that the review was not confirmed, where it would otherwise say that the run finished.
   Such an attempt does not block the week.
   A fresh, whole run follows by itself, within `schedule.attempts_per_week`, and that run's report names it as it names any earlier attempt.
 - An attempt that did not complete with the Mac awake throughout earns none and waits for the Founder.
@@ -349,7 +361,7 @@ What the Founder sees after a timed-out run:
 - Each output that needed the agent, such as the package review and the post Drafts of a run with a day due, is marked incomplete with the reason; what the launcher does alone is complete as usual.
 - Whatever the agent had written is checked as always: an item or Draft that passes every check is queued, and one cut off mid-way fails its checks and is set aside or blocked, named in the report.
 - One notice in the Review Queue leads with the timeout and lists what it left incomplete; a second timed-out run the same day adds no second notice while the first is open.
-  A run of the weekly schedule that the Mac's sleep cut short queues no notice for the timeout alone while a fresh run is to follow.
+  A run of the weekly schedule that the Mac's sleep cut short queues no notice for the timeout alone while a fresh run is to follow, and its notice then leaves out the work its agent did not reach ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
 - The cost line says the cost is not available, or gives the part Codex had reported before the stop as a floor; it never says zero.
 - The run saves its records and releases the run lock, so the next run starts as usual and does the unfinished work again; the run itself ends with exit code 6.
 

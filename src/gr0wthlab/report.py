@@ -174,8 +174,9 @@ class RunState:
 
     @property
     def ending(self) -> str:
-        """How the run ended, as the record of the run due at its time keeps it."""
-        return attempts.ending(self.agent, self.slept)
+        """How the run ended, as the record of the run due at its time keeps it. Only a weekly scheduled attempt is
+        asked whether its agent confirmed its review."""
+        return attempts.ending(self.agent, self.slept, self.attempt is None or self.review == REVIEW_COMPLETE)
 
     @property
     def again(self) -> bool:
@@ -592,8 +593,13 @@ def summary_lines(state: RunState) -> list[str]:
     agent = state.agent.get("exit_code")
     lines = [f"- {run_tally(state.tallies).line()}", f"- {start_line(state)}"]
     lines += [f"- {line}" for line in state.notes]
-    if agent == 0:
+    if agent == 0 and state.ending == attempts.COMPLETED:
         lines.append("- The run finished.")
+    elif agent == 0:
+        lines.append(
+            f"- The agent ended without an error, but the Mac slept during the run and {state.review_gap()}, so its"
+            " work this run may be incomplete."
+        )
     elif state.timed_out:
         lines.append(
             f"- The run timed out: the agent was still running at its {state.time_limit} time limit, so the launcher"
@@ -741,7 +747,8 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     A notice about one kind of problem says what it is in its title; a notice about several counts every problem.
     A run that timed out says so first, in its title and its text, whatever else went wrong.
     A weekly scheduled run that the Mac's sleep cut short queues no notice for that alone while a fresh run follows
-    by itself; once the run due then has no attempt left, the notice says so in its title.
+    by itself, and its notice then leaves out the work its agent did not reach, which that run does again and reports
+    on itself; once the run due then has no attempt left, the notice lists everything and says so in its title.
     """
     day = wall_clock(state.started).strftime("%Y-%m-%d")
     sections: list[tuple[int, str, str]] = []  # how many problems, the title, the text
@@ -780,18 +787,18 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 + "\n".join(bullet(f"`{record.name}`: {'; '.join(record.problems)}") for record in others),
             )
         )
-    blocked = posts.notice_section(state.post_outcome, day)
+    blocked = posts.notice_section(state.post_outcome, day, state.again)
     if blocked:
         sections.append(blocked)
     unfilmed = filming.notice_section(state.filming, day)
     if unfilmed:
         sections.append(unfilmed)
-    recruiting = beta.notice_section(state.beta_outcome, day)
+    recruiting = beta.notice_section(state.beta_outcome, day, state.again)
     if recruiting:
         sections.append(recruiting)
     for section in (
         listening.notice_section(state.listening, state.listening_result, day),
-        outreach.notice_section(state.outreach, state.outreach_result, day),
+        outreach.notice_section(state.outreach, state.outreach_result, day, state.again),
         learning.notice_section(state.learning, day),
     ):
         if section:
@@ -849,7 +856,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 "The Marketing Engineer did not finish reviewing the Go-To-Market Package"
                 + (f" ({why})" if why else "")
                 + ", so a contradiction it did not reach is not in the Review Queue yet; the next run reviews it"
-                " again.",
+                f" again.{follows}",
             )
         )
     elif state.review_gap():
@@ -859,7 +866,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 f"the package review was not confirmed finished on {day}",
                 "The Marketing Engineer did not confirm that it finished every pass of its review of the Go-To-Market"
                 " Package, so a contradiction it did not reach may not be in the Review Queue yet; the next run reviews"
-                " it again.",
+                f" it again.{follows}",
             )
         )
     if state.problems:

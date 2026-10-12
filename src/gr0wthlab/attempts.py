@@ -7,8 +7,9 @@ the record of every run made since that time fell due: each scheduled attempt, n
 run on demand or one-off scheduled run, noted as it ends. A run starts only while that record shows the run still
 owed: none has completed, every scheduled attempt so far was cut short by the Mac's sleep, and fewer attempts were made
 than config/run.json allows. Only sleep earns another attempt, wherever in the attempt it fell: an attempt that did not
-complete with the Mac awake throughout, or that left no ending, waits for the Founder. A one-off scheduled run
-(--once) is no part of this: it always runs, as a run on demand does, and is never an attempt.
+complete with the Mac awake throughout, or that left no ending, waits for the Founder. An attempt the Mac slept during
+completed only if its agent ended without an error and confirmed its review. A one-off scheduled run (--once) is no
+part of this: it always runs, as a run on demand does, and is never an attempt.
 
 A sleeping Mac wakes by itself every few minutes, for about a minute with its display off, to do its own housekeeping
 (a dark wake), and launchd starts jobs then as at any other time. A run takes longer than a dark wake lasts, so one
@@ -222,12 +223,14 @@ def left_without_ending(store: Store) -> list[tuple[str, str]]:
     return lines
 
 
-def ending(agent: Mapping[str, object], asleep: float) -> str:
+def ending(agent: Mapping[str, object], asleep: float, confirmed: bool = True) -> str:
     """How a run that reached its report ended, from the launcher's record of its agent and the seconds the Mac slept
     from the run's start to its agent's end. A run whose agent did not finish counts as cut short by sleep whenever
     the Mac slept in that time, wherever the sleep fell: whether the agent then never started, was stopped at its
-    limit, or ended with an error."""
-    if agent.get("exit_code") == 0:
+    limit, or ended with an error. confirmed is False only for a scheduled attempt whose agent's summary did not
+    confirm its review: an agent that sleep froze in the middle of its work can end without an error and with the
+    work unfinished, so such an attempt completed only if the Mac stayed awake, and was cut short by sleep otherwise."""
+    if agent.get("exit_code") == 0 and (confirmed or not asleep):
         return COMPLETED
     if asleep:
         return SLEPT
