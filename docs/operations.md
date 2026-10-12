@@ -133,17 +133,17 @@ Each run report therefore has an `Agent's work` section, and a line in its summa
 The counts:
 
 - `Agent time`, against the limit, with the model and reasoning effort the agent ran at.
-- `Commands run`: the shell commands that ran to their end; how many read the Product's code, how many ran one of the launcher's checks (`check-incoming`, `check-drafts`, `check-beta-drafts`), and how many returned more output than Codex shows the model.
 - `Package files read`: how many of the package files the brief listed came back to the model.
   Codex shows the model at most about 40,000 characters of one command's output, the first and last halves of that, and cuts the middle.
   A session that prints every package file in one command is shown the first and last few, so naming a file in a command is not reading it.
-  The launcher counts a file as read when at least half of its lines are in the part of some command's output the model was shown; the figure is `work_counts` in [`config/run.json`](../config/run.json), a fact about Codex that needs measuring again after a Codex upgrade or a change of model.
-- `File edits`: the edits the agent made with its file-editing tool.
-- `Post Drafts`: how many of the days due have a Draft, and how many of those this run wrote or changed.
-- `Draft claims`: how many claims the Drafts list, how many name a code location, for how many of those the launcher found the quoted code at that location, and how many name none.
-- `Review Queue items the agent wrote`: how many were queued, how many of those are package-change proposals, and how many were set aside.
+  The launcher counts a file as read when at least half of its lines of 24 characters or more are in the part of some command's output the model was shown; the figure is `work_counts` in [`config/run.json`](../config/run.json), a fact about Codex that needs measuring again after a Codex upgrade or a change of model.
+  A file with no line that long is counted only when a command that names its path was shown its whole text, since short lines such as a lone brace are in any output.
+  The count is a floor: a file read some other way, such as by a pattern that does not name it, is not counted.
+- `Draft claims`: how many claims the post Drafts for the days due list, how many of them name a code location, and how many name none.
+- `Proposals queued`: how many package-change proposals the agent wrote that the launcher queued.
 
 The counts inform the Founder and gate nothing: nothing is queued, blocked, or marked incomplete because of one, and every check of an item or a Draft is what it was.
+A count that cannot be made is listed as a launcher problem, and the run goes on without it.
 The run's log record in `~/Library/Logs/gr0wthlab/` holds the same counts under `work`, with the name of every package file not read.
 
 What the counts looked like when they were introduced, on 2026-10-11, against Mandu and RepToday as they were.
@@ -155,8 +155,9 @@ Each run was on demand in a fresh clone, so each was a first week: a package rev
 | high | 10 | 10 | 11 to 24, all 24 in four runs | 78 of 97 | 2 to 13 | 4 min 43 s to 18 min 42 s | $0.056 to $0.158 |
 
 Read a report against these counts.
-A run that says `Review: complete` after few commands, few package files read, or with most claims naming no code did less than the runs at high effort did, whatever its closing line says.
+A run that says `Review: complete` after little agent time, few package files read, or with most claims naming no code did less than the runs at high effort did, whatever its closing line says.
 High effort does not make every session thorough: two of the ten read 11 and 17 of the 24 files and still said the review was complete.
+One more run, made on the final code after the table's ten, read 10 of the 24 in 10 min 31 s and said the same.
 [The US-ME02 spike note](spikes/us-me02-runtime-boundary.md#re-check-after-the-agents-reasoning-effort-and-the-work-counts-us-me17) lists every run and says what the sample does not show.
 
 ## When a run times out

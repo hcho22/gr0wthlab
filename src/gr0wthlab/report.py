@@ -23,14 +23,7 @@ NOT_BUILT = "not built yet"
 # The line the agent's summary ends with: its own account of whether it finished every pass of its review.
 REVIEW_COMPLETE = "Review: complete"
 REVIEW_INCOMPLETE = "Review: incomplete"
-# Codex counts reasoning tokens within output tokens, so the cost, which prices every output token, covers them.
-USAGE_FIELDS = (
-    "input_tokens",
-    "cached_input_tokens",
-    "cache_write_input_tokens",
-    "output_tokens",
-    "reasoning_output_tokens",
-)
+USAGE_FIELDS = ("input_tokens", "cached_input_tokens", "cache_write_input_tokens", "output_tokens")
 NOTICE_BODY_LIMIT = exchange.MAX_ITEM_CHARS // 2
 # Fewer seconds than this between the agent's wall-clock time and its awake time are the two clocks' own difference,
 # not the Mac asleep.
@@ -273,11 +266,10 @@ def cost_line(state: RunState) -> str:
             return "Approximate cost: not available; the agent was stopped before it reported any token counts."
         return "Approximate cost: unknown; the agent reported no token counts."
     usage = state.usage
-    reasoning = usage.get("reasoning_output_tokens", 0)
     tokens = (
         f"{usage['input_tokens']:,} input tokens ({usage['cached_input_tokens']:,} cached) "
         f"and {usage['output_tokens']:,} output tokens"
-    ) + (f" ({reasoning:,} of them reasoning)" if reasoning else "")
+    )
     amount = f"{state.cost:.2f}" if state.cost >= 0.1 else f"{state.cost:.3f}"
     if state.timed_out:
         return (

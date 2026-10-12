@@ -752,13 +752,7 @@ class Cycle:
             state.problems.append(f"the Beta Cohort recruiting Evidence could not be written ({error})")
 
     def count_work(
-        self,
-        state: RunState,
-        config: settings.Settings,
-        log_dir: Path,
-        areas: Areas,
-        drafts_before: Mapping[int, str | None],
-        kinds: Sequence[str],
+        self, state: RunState, config: settings.Settings, log_dir: Path, areas: Areas, proposals: int
     ) -> None:
         """Count what the agent's session did, for the run report to show beside the agent's own word. The counts gate
         nothing, so a count that cannot be made is a launcher problem and the run goes on without it."""
@@ -775,10 +769,8 @@ class Cycle:
                 config.shown_output_chars,
                 files,
                 state.posts,
-                drafts_before,
                 areas,
-                kinds,
-                len(state.set_aside),
+                proposals,
             )
         except (OSError, ConfigError) as error:
             state.problems.append(f"the agent's work could not be counted ({error})")
@@ -944,7 +936,6 @@ class Cycle:
             state, config, beta_rules, folder, registry, boundary, ledger, ledger_ok, areas, states.beta_recruiting
         )
         areas.ensure_folder(areas.path("review_queue", INCOMING))
-        drafts_before = work.draft_marks(state.posts, areas)
         brief = self.store.path(RUN_REPORTS, f"{run_id}.brief.md")
         self.store.write_text(
             brief, report.render_brief(state, canonical(self.repo_root), areas.workspace, self.store.root)
@@ -991,8 +982,10 @@ class Cycle:
         elif state.posts is not None:
             state.posts_problem = "not taken in: the Review Queue could not be read"
         if state.agent.get("agent_started"):
-            kinds = [str(ledger.entries[identifier]["kind"]) for identifier in published]
-            self.count_work(state, config, log_dir, areas, drafts_before, kinds)
+            proposals = sum(
+                1 for identifier in published if ledger.entries[identifier]["kind"] == "package-change-proposal"
+            )
+            self.count_work(state, config, log_dir, areas, proposals)
         report_path = self.store.path(RUN_REPORTS, f"{run_id}.md")
         state.problems += areas.problems
         areas.problems.clear()

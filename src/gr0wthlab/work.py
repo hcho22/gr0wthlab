@@ -9,7 +9,6 @@ counts inform the Founder: nothing is queued, blocked, or marked incomplete beca
 from __future__ import annotations
 
 import json
-import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,25 +17,18 @@ from . import posts
 from .areas import Areas
 from .drafts import none
 
-# A line shorter than this is too common to show that one file's text came back, unless the file holds no longer one.
+# A line shorter than this is too common to show that one file's text came back.
 TELLING_LINE = 24
-# One of the launcher's own checks, as a command names it: the entry point, then the check. The agent often quotes the
-# entry point's path, and Codex records the command inside a quoted shell argument, so quotes may follow the path.
-CHECK = re.compile(r"""gr0wthlab['"]*\s+check-(?:incoming|drafts|beta-drafts)\b""")
 # The report names the package files that were not read only when they are this few; the run's log record names all.
 NAMED_AT_MOST = 6
 
 
 @dataclass(frozen=True)
-class Session:
-    """One agent session, from Codex's event stream: the shell commands and file edits that ran to their end."""
+class Command:
+    """One shell command that ran to its end, from Codex's event stream."""
 
-    commands: int = 0
-    cut: int = 0  # commands that returned more output than Codex shows the model
-    code_reads: int = 0  # commands that named the Product's code checkout
-    checks: int = 0  # commands that ran one of the launcher's own checks
-    edits: int = 0
-    shown: str = ""  # every command's output as Codex shows it to the model, one after another
+    text: str
+    shown: str  # its output as Codex shows it to the model
 
 
 def shown_part(output: str, limit: int) -> str:
@@ -48,46 +40,35 @@ def shown_part(output: str, limit: int) -> str:
     return f"{output[:half]}\n{output[len(output) - half :]}"
 
 
-def read_session(events: Path, shown_chars: int, code_checkout: Path | None = None) -> Session | None:
-    """The session Codex recorded in its event stream, or None when the agent left no stream to count from. A line that
-    is not an event, as a stream cut off mid-line ends with, is passed over."""
+def read_session(events: Path, shown_chars: int) -> list[Command] | None:
+    """The shell commands Codex recorded in its event stream, or None when the agent left no stream to count from. A
+    line that is not an event, as a stream cut off mid-line ends with, is passed over."""
     try:
         lines = events.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError:
         return None
-    commands = cut = code_reads = checks = edits = 0
-    shown = []
+    commands = []
     for line in lines:
         try:
             event = json.loads(line)
         except ValueError:
             continue
         item = event.get("item") if isinstance(event, dict) and event.get("type") == "item.completed" else None
-        if not isinstance(item, dict):
+        if not isinstance(item, dict) or item.get("type") != "command_execution":
             continue
-        if item.get("type") == "file_change":
-            edits += 1
-        if item.get("type") != "command_execution":
-            continue
-        command, output = str(item.get("command") or ""), str(item.get("aggregated_output") or "")
-        commands += 1
-        cut += len(output) > shown_chars
-        code_reads += code_checkout is not None and str(code_checkout) in command
-        checks += CHECK.search(command) is not None
-        shown.append(shown_part(output, shown_chars))
-    return Session(commands, cut, code_reads, checks, edits, "\n".join(shown))
+        output = str(item.get("aggregated_output") or "")
+        commands.append(Command(str(item.get("command") or ""), shown_part(output, shown_chars)))
+    return commands
 
 
 def telling_lines(text: str) -> set[str]:
-    """The distinct lines that show a file's text came back: its longer lines, or every line when it has none."""
-    lines = {line.strip() for line in text.splitlines()} - {""}
-    return {line for line in lines if len(line) >= TELLING_LINE} or lines
+    """The distinct lines long enough to show that a file's text came back."""
+    return {line.strip() for line in text.splitlines() if len(line.strip()) >= TELLING_LINE}
 
 
-def came_back(text: str, shown: str) -> bool:
+def came_back(lines: set[str], shown: str) -> bool:
     """Whether at least half of a file's telling lines are in the output the model was shown, in any command and in
     any order, each whole: a search that returned a few of its lines does not count as reading it."""
-    lines = telling_lines(text)
     needed = (len(lines) + 1) // 2
     found = 0
     for seen, line in enumerate(lines, start=1):
@@ -99,134 +80,80 @@ def came_back(text: str, shown: str) -> bool:
     return False
 
 
-def files_read(session: Session, files: Mapping[str, Path]) -> tuple[int, list[str]]:
+def shown_whole(name: str, text: str, session: Sequence[Command]) -> bool:
+    """Whether a command that names a file was shown its whole text. A file with no telling line is read only so: its
+    short lines are in any output, and show nothing wherever else they came back."""
+    return any(name in command.text and text in command.shown for command in session)
+
+
+def files_read(session: Sequence[Command], files: Mapping[str, Path]) -> tuple[int, list[str]]:
     """How many of the package files the brief listed can be compared, and which of them did not come back in the
-    output the model was shown. A file the launcher cannot read now, or one with no text, is left out of both."""
+    output the model was shown. files gives each by its path in Mandu, which a command that names it holds. A file the
+    launcher cannot read now, or one with no text, is left out of both."""
+    shown = "\n".join(command.shown for command in session)
     compared, missing = 0, []
     for name, path in files.items():
         try:
-            text = path.read_text(encoding="utf-8", errors="replace")
+            text = path.read_text(encoding="utf-8", errors="replace").strip()
         except OSError:
             continue
-        if not telling_lines(text):
+        if not text:
             continue
         compared += 1
-        if not came_back(text, session.shown):
+        lines = telling_lines(text)
+        if not (came_back(lines, shown) if lines else shown_whole(name, text, session)):
             missing.append(name)
     return compared, missing
 
 
-def due_days(plan: posts.Plan) -> list[int]:
-    """The calendar days the brief asks a Draft for: every day it lists that the Founder has not approved."""
-    return [day_plan.day.day for day_plan in plan.days if not day_plan.approved]
-
-
-def draft_marks(plan: posts.Plan | None, areas: Areas) -> dict[int, str | None]:
-    """Each due day's Draft as it stands on disk, by its fingerprint, or None where there is none that can be read;
-    taken before the agent starts and again after it, the difference is what this run wrote."""
-    if plan is None:
-        return {}
-    marks = {}
-    for number in due_days(plan):
-        draft, _ = posts.read_draft(areas, plan.draft_path(number))
-        marks[number] = draft.sha256 if draft is not None else None
-    return marks
-
-
 @dataclass(frozen=True)
 class Work:
-    """One run's counts. session is None when the agent left no event stream, and then nothing is said of it."""
+    """One run's counts. files_not_read is None when the agent left no event stream, and then nothing is said of the
+    package files."""
 
-    session: Session | None = None
     files_listed: int = 0
-    files_not_read: tuple[str, ...] = ()
-    days_due: int = 0
-    drafts_present: int = 0
-    drafts_written: int = 0
+    files_not_read: tuple[str, ...] | None = None
     claims: int = 0
     claims_cited: int = 0  # claims that name a code location
-    claims_found: int = 0  # of those, the ones whose quoted code the launcher found at that location
-    queued: int = 0  # items the agent wrote that the launcher queued
-    proposals: int = 0  # of those, package-change proposals
-    set_aside: int = 0
-    shown_chars: int = 0
+    proposals: int = 0  # package-change proposals the agent wrote that the launcher queued
 
     @property
-    def files_read(self) -> int:
-        return self.files_listed - len(self.files_not_read)
+    def files_read(self) -> int | None:
+        return None if self.files_not_read is None else self.files_listed - len(self.files_not_read)
 
     @property
     def claims_uncited(self) -> int:
         return self.claims - self.claims_cited
 
     def as_json(self) -> dict[str, object]:
-        session = self.session
         return {
-            "commands": session.commands if session else None,
-            "commands_output_cut": session.cut if session else None,
-            "commands_reading_product_code": session.code_reads if session else None,
-            "commands_running_checks": session.checks if session else None,
-            "file_edits": session.edits if session else None,
             "package_files_listed": self.files_listed,
-            "package_files_read": self.files_read if session else None,
-            "package_files_not_read": list(self.files_not_read) if session else None,
-            "draft_days_due": self.days_due,
-            "drafts_present": self.drafts_present,
-            "drafts_written": self.drafts_written,
-            "claims": self.claims,
+            "package_files_read": self.files_read,
+            "package_files_not_read": None if self.files_not_read is None else list(self.files_not_read),
             "claims_with_code_location": self.claims_cited,
             "claims_without_code_location": self.claims_uncited,
-            "claims_found_at_location": self.claims_found,
-            "items_queued": self.queued,
             "proposals_queued": self.proposals,
-            "items_set_aside": self.set_aside,
         }
 
 
 def measure(
-    events: Path,
-    shown_chars: int,
-    files: Mapping[str, Path],
-    plan: posts.Plan | None,
-    before: Mapping[int, str | None],
-    areas: Areas,
-    kinds: Sequence[str],
-    set_aside: int,
+    events: Path, shown_chars: int, files: Mapping[str, Path], plan: posts.Plan | None, areas: Areas, proposals: int
 ) -> Work:
     """Count one run's work once the agent has ended and its items are taken in. files are the package files the brief
-    listed, by the name the report gives each; before is draft_marks as it was before the agent started; kinds are the
-    kinds of the items the agent wrote that the launcher queued."""
-    checkout = plan.code.checkout if plan is not None else None
-    session = read_session(events, shown_chars, checkout)
-    listed, missing = files_read(session, files) if session else (len(files), [])
-    present = written = claims = cited = found = 0
-    days = due_days(plan) if plan is not None else []
-    for number in days:
-        draft, _ = posts.read_draft(areas, plan.draft_path(number))
-        if draft is None:
+    listed, by their paths in Mandu; the claims are those of the post Drafts for the days the brief asks a Draft for,
+    every day it lists that the Founder has not approved; proposals is how many package-change proposals the agent
+    wrote that the launcher queued."""
+    session = read_session(events, shown_chars)
+    listed, missing = files_read(session, files) if session is not None else (len(files), None)
+    claims = cited = 0
+    for day_plan in plan.days if plan is not None else []:
+        if day_plan.approved:
             continue
-        present += 1
-        written += draft.sha256 != before.get(number)
-        for claim in draft.claims:
+        draft, _ = posts.read_draft(areas, plan.draft_path(day_plan.day.day))
+        for claim in draft.claims if draft is not None else []:
             claims += 1
-            if not none(claim.location):
-                cited += 1
-                found += plan.code.verify(claim.location, claim.excerpt) is None
-    return Work(
-        session,
-        listed,
-        tuple(missing),
-        len(days),
-        present,
-        written,
-        claims,
-        cited,
-        found,
-        len(kinds),
-        sum(1 for kind in kinds if kind == "package-change-proposal"),
-        set_aside,
-        shown_chars,
-    )
+            cited += not none(claim.location)
+    return Work(listed, None if missing is None else tuple(missing), claims, cited, proposals)
 
 
 def plural(count: int, noun: str) -> str:
@@ -235,53 +162,31 @@ def plural(count: int, noun: str) -> str:
 
 def count_lines(work: Work) -> list[str]:
     """The launcher's counts, one to a line, each saying what it counts."""
-    session = work.session
-    if session is None:
-        lines = ["Commands run: none recorded; the agent left no record of a session to count from."]
+    if work.files_not_read is None:
+        files = "Package files read: not counted; the agent left no record of a session to count from"
     else:
-        commands = f"Commands run: {session.commands}"
-        if session.commands:
-            commands += (
-                f"; {session.code_reads} of them read the Product's code, {session.checks} ran one of the launcher's"
-                f" checks, and {session.cut} returned more than the {work.shown_chars:,} characters Codex shows the"
-                " model of one command's output, so the middle of that output was cut"
-            )
         files = (
             f"Package files read: {work.files_read} of the {work.files_listed} the brief listed, counting a file as"
             " read when at least half of its lines came back in output the model was shown"
         )
         if 0 < len(work.files_not_read) <= NAMED_AT_MOST:
             files += f". Not read: {', '.join(f'`{name}`' for name in work.files_not_read)}"
-        lines = [f"{commands}.", f"{files}.", f"File edits: {session.edits}."]
-    if work.days_due:
-        lines.append(
-            f"Post Drafts: {work.drafts_present} of the {plural(work.days_due, 'day')} due have a Draft;"
-            f" {work.drafts_written} written or changed this run."
+    if work.claims:
+        claims = (
+            f"Draft claims: {work.claims} listed; {work.claims_cited} name a code location and {work.claims_uncited}"
+            " name none"
         )
     else:
-        lines.append("Post Drafts: no calendar day was due.")
-    if work.claims:
-        lines.append(
-            f"Draft claims: {work.claims} listed; {work.claims_cited} name a code location, where the launcher found"
-            f" the quoted code for {work.claims_found}; {work.claims_uncited} name none."
-        )
-    elif work.drafts_present:
-        lines.append("Draft claims: none listed.")
-    lines.append(
-        f"Review Queue items the agent wrote: {work.queued} queued, {plural(work.proposals, 'package-change proposal')}"
-        f" among them; {work.set_aside} set aside."
-    )
-    return lines
+        claims = "Draft claims: none listed"
+    proposals = f"Proposals queued: {plural(work.proposals, 'package-change proposal')} the agent wrote"
+    return [f"{files}.", f"{claims}.", f"{proposals}."]
 
 
 def summary(work: Work) -> str:
     """The counts in one sentence, for the top of the run report."""
     parts = []
-    if work.session is not None:
-        parts.append(plural(work.session.commands, "command"))
+    if work.files_not_read is not None:
         parts.append(f"{work.files_read} of {plural(work.files_listed, 'package file')} read")
-    if work.days_due:
-        parts.append(f"{work.drafts_written} of {plural(work.days_due, 'due Draft')} written")
     if work.claims:
         parts.append(f"{work.claims_cited} of {plural(work.claims, 'Draft claim')} with a code location")
     parts.append(f"{plural(work.proposals, 'proposal')} queued")

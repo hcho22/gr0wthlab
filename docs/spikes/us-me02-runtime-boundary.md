@@ -408,21 +408,22 @@ How Codex is started changed in one place: `codex exec` takes `-c model_reasonin
 The preflight's `codex sandbox` command is unchanged, since it runs no model, and the permission profile, the environment, and every other flag are as they were; the configuration fingerprint changes with the command.
 Everything else is launcher code that runs outside the sandbox after the agent has ended (`work.py`, with `cycle.py`, `report.py`, and `settings.py`): it reads Codex's event stream in the launcher's log folder, the post Drafts in `workspace/drafts/posts/` as the Draft check already reads them, the package files in Mandu the snapshot already reads, and the Review Queue.
 It writes nothing in `workspace/`, Mandu, or a Product checkout; the counts go into the run report in `ledger/` and the run's log record.
-The task definition lost one clause, which had told the agent to write a recruiting Draft "even when ... your package review is unfinished".
 
-Both checks were made on the final launcher on 2026-10-11, Mac local time, with Codex CLI 0.160.0, from the linked worktree this change was made in, against Mandu and the Product checkouts as they are; the run identifier carries the UTC date.
-The configuration fingerprint there is `f42c847b1ab5238b69c95abeecdd8721c18cdb61aac286c78c07b0f7532080bf`, and no change to the launcher or its configuration came after them.
+Both checks were made on the final launcher, as review left it, on 2026-10-11, Mac local time, with Codex CLI 0.160.0, from the linked worktree the review was made in, against Mandu and the Product checkouts as they are; the run identifier carries the UTC date.
+The configuration fingerprint there is `791a5a98da39278e8541c16fdd49eb0748a2fd4005fb2aa965cb712b97459f83`, and no change to the launcher or its configuration came after them.
 
 - `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
-- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T055318Z-on-demand-8727`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
-  The probe's agent ran 37 seconds at high effort, all of them with the Mac awake.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T062443Z-on-demand-6c97`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files, 13 of them, landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+  The probe's agent ran 58 seconds at high effort, all of them with the Mac awake.
+
+Both had also passed before review, on the launcher as it then was, from the worktree the change was made in: the boundary check at its first and only attempt as run `20261012T055318Z-on-demand-8727`, whose agent ran 37 seconds.
 
 Three facts about Codex that the change rests on were measured the same day with the real agent, started with the launcher's own Codex command from a throwaway clone.
 
 | Question | What was run | What it showed |
 | --- | --- | --- |
 | How much of one command's output is the model shown | One command printing 4,000 numbered lines, 180,000 characters | Lines 1 to 445 and 3,557 to 4,000, which is the first 20,000 and the last 20,000 characters, under the note `Warning: truncated output (original token count: 45003)` and with `…35003 tokens truncated…` between them: 10,000 tokens at 4 characters each, the model catalog's truncation policy for `gpt-6-luna`. Codex's event stream holds all 180,000 characters either way |
-| Does the run's cost cover the tokens high effort adds | A question answered with one number and no command, at high and at low effort | At high, 251 output tokens of which 243 were reasoning tokens; at low, 6 and 0. Reasoning tokens are counted within the output tokens the cost prices, so the cost line needed no new term; it now also says how many of the output tokens were reasoning |
+| Does the run's cost cover the tokens high effort adds | A question answered with one number and no command, at high and at low effort | At high, 251 output tokens of which 243 were reasoning tokens; at low, 6 and 0. Reasoning tokens are counted within the output tokens the cost prices, so the cost line needed no new term and reads as it did |
 | What Codex does with an unknown effort | The same question with `model_reasoning_effort="hgih"` | Codex started the session and the model's service refused the request (`Invalid value: 'hgih'. Supported values are: 'none', 'minimal', 'low', 'medium', 'high', 'xhigh', and 'max'`), so Codex ended with exit code 1. A run would have done everything that comes before the agent first, which is why the launcher refuses the value when the configuration loads |
 
 The weekly run was then run live through the launcher, on demand, network off, thirteen times, each in a fresh throwaway clone with an empty `ledger/`, so each is a first week: a package review and the first batch's seven post Drafts, with no Beta Build record in Mandu.
@@ -430,50 +431,80 @@ Each read Mandu (`3f836c1` with its uncommitted changes) and RepToday (`main` at
 Every run ended with exit code 0, no launcher problem, and no item set aside.
 Mandu's and RepToday's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the first run, after the last, and after the boundary check.
 The thirteen runs cost $1.05 at API prices.
+Their reports also showed counts that review then removed (commands run and what they did, file edits, post Drafts written, claims whose quoted code the launcher found, items queued and set aside, and reasoning tokens in the cost line), so the tables below keep only the counts the report still shows, beside the agent's own word and the cost.
+Review also made the count of package files read stricter for a file with no line of 24 characters or more; none of the 24 package files is one, so the figures below stand.
 
 The anchor: three runs on `main` as it was before this change (`92d8bbe`), at Codex's default medium effort, all three at once.
 That launcher counted nothing, so these rows were counted afterwards with the same code over each run's event stream, Drafts, and Review Queue.
 
-| Run | Agent's own word | Agent time | Commands (output cut) | Package files read | Drafts written of days due | Claims naming code (quote found there) | Proposals queued | Cost | Output tokens (reasoning) |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `20261012T043659Z-on-demand-ce36` | incomplete | 59 s | 8 (3) | 6 of 24 | 7 of 7 | 0 of 8 (0) | 0 | $0.012 | 5,258 (532) |
-| `20261012T043700Z-on-demand-1b4a` | incomplete | 2 min 38 s | 14 (4) | 11 of 24 | 7 of 7 | 0 of 8 (0) | 1 | $0.028 | 13,789 (2,141) |
-| `20261012T043700Z-on-demand-47a5` | incomplete | 1 min 22 s | 49 (4) | 24 of 24 | 7 of 7 | 4 of 9 (2) | 1 | $0.019 | 7,567 (729) |
+| Run | Agent's own word | Agent time | Package files read | Claims naming code | Proposals queued | Cost |
+| --- | --- | --- | --- | --- | --- | --- |
+| `20261012T043659Z-on-demand-ce36` | incomplete | 59 s | 6 of 24 | 0 of 8 | 0 | $0.012 |
+| `20261012T043700Z-on-demand-1b4a` | incomplete | 2 min 38 s | 11 of 24 | 0 of 8 | 1 | $0.028 |
+| `20261012T043700Z-on-demand-47a5` | incomplete | 1 min 22 s | 24 of 24 | 4 of 9 | 1 | $0.019 |
 
 The first five runs at high effort, all at once, on this change's first commit (`526f560`).
-Its count of commands that ran one of the launcher's checks missed a command whose entry-point path the agent had quoted, so two of these reports say 0 where the final code counts 8 and 11; every other count is the same under the final code.
 
-| Run | Agent's own word | Agent time | Commands (output cut) | Package files read | Drafts written of days due | Claims naming code (quote found there) | Proposals queued | Cost | Output tokens (reasoning) |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `20261012T045858Z-on-demand-88fe` | complete | 6 min 37 s | 120 (4) | 24 of 24 | 7 of 7 | 8 of 9 (8) | 13 | $0.098 | 41,129 (22,362) |
-| `20261012T045859Z-on-demand-b8f7` | complete | 11 min 3 s | 31 (7) | 17 of 24 | 7 of 7 | 9 of 10 (9) | 5 | $0.070 | 30,825 (13,225) |
-| `20261012T045858Z-on-demand-b8f0` | complete | 4 min 43 s | 86 (4) | 24 of 24 | 7 of 7 | 8 of 8 (8) | 6 | $0.056 | 25,401 (9,448) |
-| `20261012T045858Z-on-demand-577f` | complete, in backticks | 18 min 42 s | 42 (6) | 11 of 24 | 7 of 7 | 7 of 11 (7) | 9 | $0.115 | 56,033 (30,734) |
-| `20261012T045858Z-on-demand-ad1f` | complete | 16 min 19 s | 122 (8) | 24 of 24 | 7 of 7 | 10 of 12 (10) | 4 | $0.105 | 47,256 (24,041) |
+| Run | Agent's own word | Agent time | Package files read | Claims naming code | Proposals queued | Cost |
+| --- | --- | --- | --- | --- | --- | --- |
+| `20261012T045858Z-on-demand-88fe` | complete | 6 min 37 s | 24 of 24 | 8 of 9 | 13 | $0.098 |
+| `20261012T045859Z-on-demand-b8f7` | complete | 11 min 3 s | 17 of 24 | 9 of 10 | 5 | $0.070 |
+| `20261012T045858Z-on-demand-b8f0` | complete | 4 min 43 s | 24 of 24 | 8 of 8 | 6 | $0.056 |
+| `20261012T045858Z-on-demand-577f` | complete, in backticks | 18 min 42 s | 11 of 24 | 7 of 11 | 9 | $0.115 |
+| `20261012T045858Z-on-demand-ad1f` | complete | 16 min 19 s | 24 of 24 | 10 of 12 | 4 | $0.105 |
 
-The five runs on the final code (`2d12b12`): the first alone, with no other session of this change beside it, and the other four at once.
-The launcher's code changed after them only in how one sentence of the report words a closing line it does not accept, and in one comment; its configuration changed only in its notes.
+Five more runs at high effort, on `2d12b12`: the first alone, with no other session of this change beside it, and the other four at once.
 
-| Run | Agent's own word | Agent time | Commands (output cut) | Package files read | Drafts written of days due | Claims naming code (quote found there) | Proposals queued | Cost | Output tokens (reasoning) |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `20261012T052303Z-on-demand-af54` | complete | 7 min 8 s | 79 (9) | 20 of 24 | 7 of 7 | 11 of 13 (11) | 8 | $0.078 | 46,514 (25,079) |
-| `20261012T053022Z-on-demand-1619` | complete | 9 min 44 s | 79 (9) | 21 of 24 | 7 of 7 | 6 of 8 (6) | 7 | $0.135 | 51,142 (25,105) |
-| `20261012T053022Z-on-demand-575a` | complete | 15 min 35 s | 102 (4) | 23 of 24 | 7 of 7 | 6 of 8 (6) | 7 | $0.096 | 42,572 (20,618) |
-| `20261012T053022Z-on-demand-74ea` | complete | 13 min 49 s | 100 (8) | 23 of 24 | 7 of 7 | 7 of 9 (7) | 2 | $0.081 | 38,258 (18,720) |
-| `20261012T053023Z-on-demand-c65c` | complete | 10 min 30 s | 102 (5) | 24 of 24 | 7 of 7 | 6 of 9 (6) | 5 | $0.158 | 55,437 (31,554) |
+| Run | Agent's own word | Agent time | Package files read | Claims naming code | Proposals queued | Cost |
+| --- | --- | --- | --- | --- | --- | --- |
+| `20261012T052303Z-on-demand-af54` | complete | 7 min 8 s | 20 of 24 | 11 of 13 | 8 | $0.078 |
+| `20261012T053022Z-on-demand-1619` | complete | 9 min 44 s | 21 of 24 | 6 of 8 | 7 | $0.135 |
+| `20261012T053022Z-on-demand-575a` | complete | 15 min 35 s | 23 of 24 | 6 of 8 | 7 | $0.096 |
+| `20261012T053022Z-on-demand-74ea` | complete | 13 min 49 s | 23 of 24 | 7 of 9 | 2 | $0.081 |
+| `20261012T053023Z-on-demand-c65c` | complete | 10 min 30 s | 24 of 24 | 6 of 9 | 5 | $0.158 |
+
+The report's final shape, from one more run made after review on the launcher as review left it: on demand, in a fresh throwaway clone with an empty `ledger/`, so again a first week, against the same Mandu and RepToday.
+Run `20261012T062330Z-on-demand-a2d7` ended with exit code 0, no launcher problem, and no item set aside; the boundary check above ran its probe during the run's second and third minutes.
+Its summary held these two lines, the second reading as the cost line reads on `main`:
+
+```text
+- The agent's work, as the launcher counted it: 10 of 24 package files read, 7 of 7 Draft claims with a code location, 3 proposals queued, in 10 min 31 s of agent time. The agent's own word: "Review: complete".
+- Approximate cost: about $0.062 at API prices, for 3,007,581 input tokens (2,816,000 cached) and 30,133 output tokens.
+```
+
+Its `Agent's work` section, whole:
+
+```text
+## Agent's work
+
+Counted by the launcher from Codex's record of the session, the Draft files the run left, and the Review Queue. None of these comes from what the agent says of itself, and none changes what is queued, blocked, or marked incomplete:
+
+- Agent time: 10 min 31 s of its 30 min limit, with `gpt-6-luna` at `high` reasoning effort.
+- Package files read: 10 of the 24 the brief listed, counting a file as read when at least half of its lines came back in output the model was shown.
+- Draft claims: 7 listed; 7 name a code location and 0 name none.
+- Proposals queued: 3 package-change proposals the agent wrote.
+
+The agent's own word, which the launcher does not check:
+
+- "Review: complete"
+```
+
+The run's log record held the same counts under `work`, six keys and no others, with the names of the 14 package files not read.
+This session read fewer package files than any of the ten before it and still said the review was complete: it printed whole package folders in single commands, one returning 314,707 characters, and Codex cut each to its first and last 20,000.
+The launcher as it was before review counts the same 10 of 24 over this run's event stream.
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before this run and after it and the boundary check.
+This run is not in the figures below, which are of the thirteen.
 
 What the sample shows:
 
 - The early stop is on `main` at medium effort: all three anchor runs ended `Review: incomplete`, 4 of 25 Draft claims named code, and the three queued 0, 1, and 1 proposals.
-- At high effort all ten runs ended with the words `Review: complete`, 78 of 97 claims named code, the launcher found the quoted code at all 78 locations, and each run queued 2 to 13 proposals.
+- At high effort all ten runs ended with the words `Review: complete`, 78 of 97 claims named code, and each run queued 2 to 13 proposals.
   In run `577f` the agent wrapped that closing line in backticks, which the launcher does not take as confirmation, so that one report marked the review not confirmed.
 - The counts tell apart what the closing line does not.
   Run `577f` said the review was complete after reading 11 of the 24 package files: it printed them in three loops whose output was cut each time.
   Run `b8f7` read 17 of 24 and said the same, and anchor run `47a5` read all 24 and said it had not finished.
-- All seven Drafts were written in every run at either setting, so Drafts written did not separate the two settings here; claims naming code did.
 - High effort cost $0.056 to $0.158 a run, $0.099 on average, about five times the anchors' $0.020, and took 4 min 43 s to 18 min 42 s of agent time, 7 min 8 s in the run made alone.
   The earlier investigation had measured about $0.08 and 4.5 to 15 minutes.
-- The cost line now shows the reasoning tokens, 9,448 to 31,554 a run at high effort against 532 to 2,141 at medium.
 
 What it does not show:
 
