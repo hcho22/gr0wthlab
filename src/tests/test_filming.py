@@ -5,6 +5,7 @@ import collections
 import io
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -1550,10 +1551,12 @@ class EditRunTest(FilmingRunCase):
     def test_an_edit_record_with_a_number_too_large_or_nested_too_deep_blocks_its_day_and_the_run_goes_on(self):
         self.approved_plan()
         self.clip("d01-s1.mov")
-        deep = fakes.edit_record(1, DAY_1).replace('"RepToday"', "[" * 100000 + "]" * 100000)
+        deep = fakes.edit_record(1, DAY_1).replace('"day": 1', '"day": ' + "[" * 100000 + "]" * 100000)
         for edit, problem in (
             (fakes.edit_record(1, ("d01-s1", "d01-s1.mov", 2, 10**400)), "segment 1: in, out, and speed are numbers"),
-            (deep, "it is nested too deep to read"),
+            # How deep a record is read is the interpreter's limit. A parser that refuses this one leaves only its
+            # depth to name; on an interpreter whose parser reads this deep, the nesting sits where the day is held.
+            (deep, "(it is nested too deep to read|day must be a whole number from 1)"),
         ):
             with self.subTest(problem=problem):
                 queue = self.run_ok({fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): edit})
@@ -1561,11 +1564,11 @@ class EditRunTest(FilmingRunCase):
                 self.assertFalse((self.ledger() / "assets").exists())
                 report = self.report()
                 self.assertIn("- The run finished.", report)
-                self.assertIn("| 1 | d01-s1 | blocked | edit-format: " + problem, report)
-                self.assertIn(f"edit-format: {problem}", self.notice())
+                self.assertRegex(report, re.escape("| 1 | d01-s1 | blocked | edit-format: ") + problem)
+                self.assertRegex(self.notice(), f"edit-format: {problem}")
                 code, text = self.check_edits(queue["updated_by_run"])
                 self.assertEqual(code, 1, text)
-                self.assertIn(f"  - edit-format: {problem}", text)
+                self.assertRegex(text, f"  - edit-format: {problem}")
                 # check-drafts reads the same record for its digest, and still gives the Draft its own verdict.
                 code, text = self.check_drafts(queue["updated_by_run"])
                 self.assertEqual(code, 0, text)

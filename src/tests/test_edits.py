@@ -91,7 +91,6 @@ class ParseTest(unittest.TestCase):
 
     def test_what_does_not_follow_the_format_is_named(self):
         whole = fakes.edit_record(1, ("d01-s1", "d01-s1.mov", 2, 12))
-        deep = "[" * 100000 + "]" * 100000
         for text, problem in (
             ("not json", "it is not JSON"),
             ('{"edit": 1}', "it holds exactly the keys edit, product, window, day, segments"),
@@ -106,12 +105,19 @@ class ParseTest(unittest.TestCase):
             (whole.replace('"out": 12', f'"out": 12, "speed": {10**400}'), "segment 1: in, out, and speed are numbers"),
             (whole.replace('"out": 12', '"out": 1e999'), "segment 1: in, out, and speed are numbers"),
             (whole.replace('"in": 2', '"in": NaN'), "segment 1: in, out, and speed are numbers"),
-            (deep, "it is nested too deep to read"),
-            (whole.replace('"RepToday"', deep), "it is nested too deep to read"),
         ):
             with self.subTest(text=text[:200], problem=problem):
                 self.assertNotEqual(text, whole)
                 self.assertTrue(any(problem in found for found in edits.parse(text, "x.json").problems))
+        # How deep a record is read is the interpreter's limit. A parser that refuses this one leaves only its depth to
+        # name; on an interpreter whose parser reads this deep, the nesting sits where the format holds something else.
+        deep = "[" * 100000 + "]" * 100000
+        for text, read in (
+            (deep, "it holds exactly the keys edit, product, window, day, segments"),
+            (whole.replace('"day": 1', f'"day": {deep}'), "day must be a whole number from 1"),
+        ):
+            with self.subTest(text=text[:200]):
+                self.assertIn(edits.parse(text, "x.json").problems, (["it is nested too deep to read"], [read]))
 
     def test_an_edit_has_a_bounded_number_of_segments(self):
         many = [("d01-s1", "d01-s1.mov", 0, 1)] * (edits.MAX_SEGMENTS + 1)
