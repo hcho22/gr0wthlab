@@ -98,10 +98,12 @@ The request log also holds the `robots.txt` rule lines of the group that applied
 Nothing else the agent writes is checked against what was fetched, so text of its own that repeats a source's words is committed today in each of these places.
 They are known gaps, not yet decided by the Founder:
 
-- A file the launcher sets aside from `workspace/review-queue/incoming/` is copied whole to `ledger/review-queue/set-aside/<run id>/`: a package-change proposal that declares `new_angle: yes` and names no kept quote, a file that fails the item format, and a post or a message written there.
+- A file the launcher sets aside from `workspace/review-queue/incoming/` is copied whole to `ledger/review-queue/set-aside/<run id>/`: a package-change proposal that declares `new_angle: yes` and names no kept quote, a file that fails the item format, and a post, a message, or a filming plan written there.
 - A Draft the agent wrote, a reply that failed its checks included, stays in `workspace/` and is committed as written until it passes or is rewritten, as is any other file the agent leaves in `workspace/` that the launcher neither takes in nor puts back.
 - The reasons in a run report or a notice can repeat pieces of a file's text: a front matter line, up to 80 characters of an Evidence line, the headings found.
   The reasons a Draft's checks give, kept with the Evidence of those checks, can quote the Draft.
+  The reasons an edit record's checks give can quote its `shot` and `source` values whole.
+  They are kept in the run's filming Evidence (`ledger/evidence/filming/<run id>.json`), in the day's post verdict in the post Drafts Evidence (`ledger/evidence/post-drafts/<run id>.json`), and in the run report and notice.
 - The run report quotes the agent's own summary, up to 4,000 characters.
 - What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, and the line that says why a rejection code fits.
 

@@ -32,6 +32,7 @@ gr0wthlab is the Marketing Engineer's repository; [`README.md`](README.md) gives
   A file set aside from `incoming/` is copied whole to `ledger/review-queue/set-aside/<run id>/`.
   A Draft stays in `workspace/` and is committed as written until it passes or is rewritten, as is any other file the agent leaves in `workspace/` that the launcher neither takes in nor puts back.
   The reasons in a run report or a notice can repeat pieces of a file's text (a front matter line, up to 80 characters of an Evidence line, the headings found), and the reasons a Draft's checks give can quote the Draft.
+  The reasons an edit record's checks give can quote its `shot` and `source` values whole.
   The run report quotes the agent's own summary, up to 4,000 characters.
   What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, and the line that says why a rejection code fits.
   Three things are removed and leave their file name and the launcher's reasons only: a refused quote record, a discarded `angles/` proposal, and a set-aside rejection code.

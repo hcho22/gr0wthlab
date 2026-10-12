@@ -14,7 +14,13 @@
       "shot": "d02-s1",
       "source": "window-1/d02-s1-closing.mov",
       "in": 0.0,
-      "out": 17.0
+      "out": 15.0
+    },
+    {
+      "shot": "d02-s1",
+      "source": "window-1/d02-s1-closing.mov",
+      "in": 0.0,
+      "out": 2.0
     }
   ]
 }

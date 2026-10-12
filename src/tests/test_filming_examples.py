@@ -134,7 +134,10 @@ class FilmingExampleSetTest(unittest.TestCase):
             differ = self.legs_differ(example) if len(example["files"]) > 2 else ""
             return found == [] and not differ, lines + [differ]
         if check == "blocked_by":
-            return any(finding.rule == assertion["rule"] for finding in found), lines
+            # An example claims every rule its record is blocked by, so no case trips a rule it is not about.
+            named = {other["rule"] for other in example["assertions"] if other.get("check") == "blocked_by"}
+            rules = {finding.rule for finding in found}
+            return assertion["rule"] in rules and rules <= named, lines
         raise AssertionError(f"unknown check {check}")
 
     def plan_holds(self, assertion):

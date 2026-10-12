@@ -6,7 +6,7 @@
   "base_kit": "../post-drafts/files/mandu",
   "footage": "files/footage.json",
   "assertion_kinds": {
-    "deterministic": "check is one of: plan_is_one_item; plan_films, plan_reuses, plan_on_camera, plan_unplanned (days); plan_sittings (count); plan_quotes_formats; edit_passes (with another leg's files: the two videos also show the same footage outside each one's opening); blocked_by (rule: a finding's rule); legs_not_offered (says: words of how the two legs' videos differ); asset_blocked (says: words of the finding); asset_kept; renders and legs_differ_only_in_the_opening (needs: video tooling)",
+    "deterministic": "check is one of: plan_is_one_item; plan_films, plan_reuses, plan_on_camera, plan_unplanned (days); plan_sittings (count); plan_quotes_formats; edit_passes (with another leg's files: the two videos also show the same footage outside each one's opening); blocked_by (rule: a finding's rule; an example names every rule its record is blocked by); legs_not_offered (says: words of how the two legs' videos differ); asset_blocked (says: words of the finding); asset_kept; renders and legs_differ_only_in_the_opening (needs: video tooling)",
     "judged": "text is a statement a reviewer, or a model at US-ME16, judges true or false of the agent's edit record and summary"
   },
   "evals": [
@@ -372,6 +372,11 @@
           "kind": "deterministic",
           "check": "blocked_by",
           "rule": "shot-list"
+        },
+        {
+          "kind": "deterministic",
+          "check": "blocked_by",
+          "rule": "pair-legs"
         }
       ],
       "files": [
