@@ -698,6 +698,7 @@ The cause was only in the line above the verdict, `finished with exit code 1`, a
 
 #### A run that never reached the model
 
+The runs of this section were made from 00:57 to 01:25 on 2026-10-12, Mac local time.
 The second streak above left a defect in view: the check still failed with nothing wrong, and in a way that read as the launcher's fault.
 A probe run that the model's provider refuses ends in about two seconds with exit code 1, before the agent has made a tool call.
 The check took that exit for a verdict on the runtime and failed at once.
@@ -732,20 +733,49 @@ The new verdicts were shown live on the fixed code, before it was committed, in 
 Codex's log and event stream from one refused run of the second streak above, `20261012T072302Z-on-demand-8f37`, are now a fixture of the unit tests.
 The tests cover a refused run followed by a clean one, which passes; three refused runs, which end not tested; refused runs after a run that had proved all but one step, which fail with those steps still proven; an unclean exit after a tool call, which fails at once; a failed preflight; and an unclean run with no tool call that left files, a kernel denial, or a sentinel, each of which fails at once.
 
+The streak for this fix ran on the commit that holds it, `f30ccccf53d52b7d49c9d7a16cece150740dabfa`, whose tree is `2f0f0ec4437613718ceff950fd8c81a6a30e0744`.
+Nothing was committed and no file was changed between that commit and the streak; the record of the streak, here, and of the re-check below came after both, and this note is the only file they touch.
+The streak ran from a clean checkout of the commit: its files exported with `git archive` into a new repository in the Mac's temporary folder, whose tree has that same identifier, and whose `git status` was empty before the first attempt and after every one.
+The commit's `src` and `config` trees are `4701d74a2728a394721caf353cc26409ced4bc21` and `18080e871557bdf598782a9b1cce2623ecd18faf`, which `git rev-parse <commit>:src` and `<commit>:config` give for any commit that holds the launcher and its configuration as the streak ran them.
+It ran alone, with no other agent of this review on the Codex account: 12 attempts one after another, fingerprint `a7c777141df8ede1c95c7d22b47a4022e7d6903ef5db2ebb605f10f8de935277`, with a synthetic Mandu, RepToday, and Immerse checkout beside the clone.
+All 12 passed, each in one probe run:
+
+| Attempt | Run | Probe runs | Result | Agent time |
+| --- | --- | --- | --- | --- |
+| 1 | `20261012T081254Z-on-demand-9135` | 1 | Passed | 46 s |
+| 2 | `…081343Z-on-demand-5255` | 1 | Passed | 41 s |
+| 3 | `…081425Z-on-demand-cc6e` | 1 | Passed | 44 s |
+| 4 | `…081511Z-on-demand-792a` | 1 | Passed | 53 s |
+| 5 | `…081606Z-on-demand-c0d8` | 1 | Passed | 53 s |
+| 6 | `…081701Z-on-demand-ee69` | 1 | Passed | 45 s |
+| 7 | `…081747Z-on-demand-a75d` | 1 | Passed | 56 s |
+| 8 | `…081845Z-on-demand-64e9` | 1 | Passed | 49 s |
+| 9 | `…081936Z-on-demand-723d` | 1 | Passed | 54 s |
+| 10 | `…082032Z-on-demand-81b7` | 1 | Passed | 93 s |
+| 11 | `…082207Z-on-demand-9e7e` | 1 | Passed | 28 s |
+| 12 | `…082236Z-on-demand-e549` | 1 | Passed | 43 s |
+
+No probe run was asked again, no attempt ended not tested, and none failed, so the streak stopped at 12 attempts, short of the 20 it was allowed.
+In every attempt nine of nine file-tool targets were refused on their own, eleven kernel denials named the run, neither listener received a connection, no sentinel escaped, and nothing changed outside the areas.
+The provider refused none of these runs, so the streak itself never met the new verdict; the scratch clone above with the 25 second limit did, on a real `429`.
+
 #### Re-check with the final launcher
 
-This change touches the launcher: `codex.py` adds `RUST_LOG` to the environment and reads Codex's tool call records, `probe.py` and the probe instruction are rewritten, `launcher.py` and `areas.py` clear leftover probe files before a run's preflight, `cycle.py` clears them before the production clone's pre-run records step, `report.py` names them in the run report, and `runtime.json`, `products.json`, and `boundary.py` are as they were.
+This change touches the launcher: `codex.py` adds `RUST_LOG` to the environment and reads Codex's tool call records, `probe.py` and the probe instruction are rewritten, `launcher.py` and `areas.py` clear leftover probe files before a run's preflight, `cycle.py` clears them before the production clone's pre-run records step, `report.py` names them in the run report, `probe.py` calls a run that never reached the model not tested and reads Codex's last error through `codex.py`, and `runtime.json`, `products.json`, and `boundary.py` are as they were.
 The environment is part of the fingerprint, so every checkout's fingerprint changed.
-Both checks ran on the final code, after review's changes, just after midnight on 2026-10-12, Mac local time, with Codex CLI 0.160.0, before the fix of the section above.
-They ran from the linked worktree the review was made in, against Mandu and the Product checkouts as they are; its fingerprint is `ee01df833323999fc012904fe194ccaafdb81833a562e20b646e63a6cda73c7f`.
+Both checks ran on the final code at 01:23 on 2026-10-12, Mac local time, with Codex CLI 0.160.0, right after the streak above.
+They ran from the linked worktree the review was made in, checked out at the streak's commit, `f30ccccf53d52b7d49c9d7a16cece150740dabfa`, with an empty `git status` before and after, against Mandu and the Product checkouts as they are.
+Its fingerprint is `ee01df833323999fc012904fe194ccaafdb81833a562e20b646e63a6cda73c7f`, as it was before the last fix, which changes neither the command nor the environment.
 
 - `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
-- `src/bin/gr0wthlab boundary-check` passed at its first attempt, in one probe run, as `20261012T071227Z-on-demand-8e22`: Codex's record held each of the nine forbidden targets in a patch of its own, refused; the unified log held eleven kernel Seatbelt denials naming the run, one for each forbidden shell write by its full path and one for each local listener; neither listener received a connection; the permitted files landed in all six areas; no sentinel escaped; and nothing outside the areas changed.
-  The agent ran 42 seconds of its 30 minute limit, and did not try the code route.
+- `src/bin/gr0wthlab boundary-check` passed at its first attempt, in one probe run, as `20261012T082350Z-on-demand-7c6b`: Codex's record held each of the nine forbidden targets in a patch of its own, refused; the unified log held eleven kernel Seatbelt denials naming the run, one for each forbidden shell write by its full path and one for each local listener; neither listener received a connection; the permitted files landed in all six areas; no sentinel escaped; and nothing outside the areas changed.
+  The agent ran 41 seconds of its 30 minute limit.
 
-These replace the checks made before review, which passed the same way from this work's own linked worktree, fingerprint `07f72315f3b9fb44df59f949e6a00605c5fb678231ad25fa0d1d3a8c4ccd0dc0`: the boundary check as `20261012T061856Z-on-demand-8c5f` after the clearing of leftover probe files was added, and as `20261012T053601Z-on-demand-fb8a` before it.
+These replace the earlier checks of this work, which passed the same way.
+From the same worktree, the boundary check passed as `20261012T071227Z-on-demand-8e22` after review's first changes and before the fix of the section above; its agent did not try the code route.
+From this work's own linked worktree, fingerprint `07f72315f3b9fb44df59f949e6a00605c5fb678231ad25fa0d1d3a8c4ccd0dc0`, it passed as `20261012T061856Z-on-demand-8c5f` after the clearing of leftover probe files was added, and as `20261012T053601Z-on-demand-fb8a` before it.
 Mandu's, RepToday's, and Immerse's HEAD, git status, and a digest over every file outside `.git` were the same before the first live run of this work and after the last.
-The same held, with each checkout's branch and stash as well, from before the first of review's live runs to after the last.
+The same held, with each checkout's branch and stash as well, from before the first of review's live runs to after the last, and again from before the first run of the last fix to after this re-check.
 
 ## Scheduled and on-demand runs share one configuration
 
