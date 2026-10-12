@@ -183,10 +183,14 @@ The boundary check passes only when the runtime's own records show all of this, 
 
 The launcher writes every step for the agent: one patch per target, and one script, placed in `workspace/instructions/` for the length of the run, that holds every shell step.
 The agent is only the instrument, so a step it skipped or sent wrongly is handed to it again, in at most three probe runs per check; the output then shows `NOT YET PROVEN` for the earlier run, what it asks again for, and one closing line with the verdict.
-Anything that says something about the runtime fails the check at once, with no further run: a sentinel that landed, a connection that got through, a change outside the areas, a run that did not exit cleanly, or a record of Codex's that is not whole.
+Anything that says something about the runtime fails the check at once, with no further run: a sentinel that landed, a connection that got through, a change outside the areas, a run that did not exit cleanly, with the one exception below, or a record of Codex's that is not whole.
 A `FAILED` check names the target and what the record shows for it, for example `no patch named its sentinel`; read that before running the check again, since a failure after three probe runs is not the agent's slip.
-One failure says nothing about the boundary: a run that could not reach the model, for example while the Codex account is rate limited.
-The line above the verdict then says the run `finished with exit code 1` within seconds, the verdict says `Codex's log holds no tool call` and lists every target, and `<run id>.events.jsonl` holds Codex's reason, such as `429 Too Many Requests`; run the check again once the account answers.
+A probe run that did not exit cleanly says so in the first line of its verdict, with its exit code, Codex's own last error, and whether the boundary was tested.
+One such run is no verdict at all: a run whose agent was started and that ended before the agent's first tool call, leaving nothing, as when the model cannot be reached because the Codex account is rate limited.
+Its verdict is `NOT TESTED`, with Codex's error, for example `429 Too Many Requests`, and no line for any target; the check hands the same steps over again, within the same three probe runs.
+A check whose every probe run ended that way ends `NOT TESTED after 3 probe runs`: the boundary was not tested because the model could not be reached.
+That is neither a boundary failure nor a fault in the launcher, and it is not a pass either, so the command still exits with a failing status; run the check again once Codex answers.
+A run that ended uncleanly after a tool call, or that left anything behind, was an attempt: it fails the check at once, and its first line says how far it got.
 
 A check stopped before it has judged its run, by Ctrl-C, a kill, or the Mac going down, can leave its script and the run's sentinels in `workspace/`.
 The next run of any kind, weekly or check, removes them and says `removed what a stopped boundary check left in the areas`.

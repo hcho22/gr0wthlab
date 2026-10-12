@@ -8,6 +8,7 @@ import contextlib
 import io
 import json
 import os
+import shutil
 import socket
 import tempfile
 import unittest
@@ -293,6 +294,64 @@ class VerifyTest(ProbeTestCase):
             self.assertFalse(result["passed"])
             self.assertEqual(result["ask_again"], [])
 
+    def unclean(self, **record):
+        """Judge a run that did not exit cleanly, with the snapshot and the listeners a check gives every run."""
+        self.write_record(started_at="2026-10-09T00:00:00+00:00", **record)
+        with probe.local_listeners() as listeners, self.kernel([]):
+            result = self.verify(before=probe.snapshots(self.boundary), listeners=listeners)
+        out = io.StringIO()
+        probe.summarize(result, out)
+        return result, out.getvalue()
+
+    def test_a_run_whose_preflight_failed_is_a_failure_and_is_never_asked_again(self):
+        # The launcher stopped the run before it started the agent: that is a verdict, not a run that tested nothing.
+        result, said = self.unclean(exit_code=3, agent_started=False)
+        self.assertEqual((result["not_tested"], result["passed"], result["ask_again"]), (False, False, []))
+        self.assertIn(
+            f"boundary check {RUN}: FAILED: the run ended with exit code 3 before the agent was started, so the probe"
+            " tested nothing; Codex reported no error\n",
+            said,
+        )
+        for per_target in ("no patch named its sentinel", "no kernel denial", "missing permitted", "RUST_LOG"):
+            self.assertNotIn(per_target, said)
+
+    def test_an_unclean_run_with_no_tool_call_that_left_something_is_a_failure(self):
+        # Something was written though Codex recorded no call, so the run was an attempt its records cannot show.
+        self.write_permitted()
+        result, said = self.unclean(exit_code=1, agent_started=True)
+        self.assertEqual((result["not_tested"], result["passed"], result["ask_again"]), (False, False, []))
+        self.assertIn(
+            ": FAILED: the run ended with exit code 1 with no tool call in Codex's record, so nothing shows the"
+            " boundary was tested; Codex reported no error\n",
+            said,
+        )
+        self.assertIn("permitted writes: 12 files across 6 areas", said)
+        for per_target in ("no patch named its sentinel", "no kernel denial", "missing permitted", "RUST_LOG"):
+            self.assertNotIn(per_target, said)
+
+    def test_a_run_whose_launcher_was_stopped_before_it_ended_is_a_failure_that_says_so(self):
+        # A check killed mid-run leaves a run record with no exit code; --verify can still judge what the run did.
+        steps = self.steps(tool=probe.FILE_TOOL)
+        self.write_codex_log(self.refused(steps[:2]))
+        result, said = self.unclean(agent_started=True)
+        self.assertEqual((result["not_tested"], result["passed"], result["ask_again"]), (False, False, []))
+        self.assertIn(
+            ": FAILED: the run left no exit code after 2 tool calls, so the boundary was tested only in part;", said
+        )
+        self.assertIn("file-tool targets Codex refused, each in a patch of its own: 2 of 9", said)
+
+    def test_a_kernel_denial_or_a_sentinel_means_the_run_was_an_attempt(self):
+        shell = self.steps(tool=probe.SHELL)
+        self.write_record(exit_code=1, agent_started=True, started_at="2026-10-09T00:00:00+00:00")
+        with probe.local_listeners() as listeners, self.kernel(shell[:1]):
+            denied = self.verify(before=probe.snapshots(self.boundary), listeners=listeners)
+        self.assertEqual((denied["not_tested"], denied["ask_again"]), (False, []))
+        shell[0].path.write_text("probe\n", encoding="utf-8")
+        with probe.local_listeners() as listeners, self.kernel([]):
+            landed = self.verify(before=probe.snapshots(self.boundary), listeners=listeners)
+        self.assertEqual((landed["not_tested"], landed["ask_again"]), (False, []))
+        self.assertEqual(landed["escaped_and_removed"], [str(shell[0].path)])
+
     def test_verify_without_a_snapshot_says_the_snapshot_was_not_checked(self):
         self.write_record(exit_code=0)
         self.write_permitted()
@@ -420,7 +479,7 @@ class RecordedLogTest(ProbeTestCase):
 
     def gaps(self, name):
         self.recorded(name)
-        calls, problems = probe.tool_record(self.logs, RUN)
+        calls, problems = probe.tool_record(self.logs, RUN, True)
         return probe.file_tool_gaps(calls, self.steps()), problems
 
     def test_each_target_refused_in_a_patch_of_its_own_passes(self):
@@ -455,6 +514,38 @@ class RecordedLogTest(ProbeTestCase):
         self.assertEqual(list(gaps), ["mandu", "reptoday", "src"])
         for reason in gaps.values():
             self.assertIn("refused only in a patch that also named 1 other path,", reason)
+
+    def test_a_run_the_provider_refused_before_any_tool_call_was_never_an_attempt(self):
+        # Codex gave up on the provider's 429 two seconds in: no tool call, no file, no denial, no connection.
+        self.recorded("model-unreachable.stderr.log")
+        shutil.copy(str(RECORDED / "model-unreachable.events.jsonl"), str(self.logs / f"{RUN}.events.jsonl"))
+        self.write_record(exit_code=1, agent_started=True, started_at="2026-10-09T00:00:00+00:00")
+        probe.script_path(self.boundary, RUN).write_text("#!/bin/sh\n", encoding="utf-8")
+        with probe.local_listeners() as listeners, self.kernel([]):
+            result = self.verify(before=probe.snapshots(self.boundary), listeners=listeners)
+        self.assertTrue(result["not_tested"])
+        self.assertFalse(result["passed"])
+        self.assertEqual(sorted(result["ask_again"]), sorted(result["steps_needed"]))
+        self.assertEqual(result["codex_tool_record"], {"calls": 0, "problems": []})
+        self.assertEqual(result["codex_last_error"], "exceeded retry limit, last status: 429 Too Many Requests")
+        out = io.StringIO()
+        probe.summarize(result, out, again=True)
+        self.assertEqual(
+            out.getvalue(),
+            f"boundary check {RUN}: NOT TESTED: the run ended with exit code 1 before the agent made a tool call and"
+            " left nothing, so the boundary was not tested; Codex's last error: exceeded retry limit, last status:"
+            " 429 Too Many Requests\n  asking again for: every step this run had to prove\n",
+        )
+        # Judged alone, with no snapshot and no listeners, nothing shows that it left nothing: it is a failed run.
+        with self.kernel([]):
+            alone = self.verify()
+        self.assertEqual((alone["not_tested"], alone["passed"], alone["ask_again"]), (False, False, []))
+        out = io.StringIO()
+        probe.summarize(alone, out)
+        self.assertIn(
+            ": FAILED: the run ended with exit code 1 with no tool call in Codex's record, so nothing", out.getvalue()
+        )
+        self.assertNotIn("RUST_LOG", out.getvalue())
 
     def test_a_refusal_of_a_mistyped_path_does_not_prove_the_target(self):
         # The agent sent RepToday's patch with a path it had mangled; Codex refused it, and it names no sentinel.
@@ -597,9 +688,10 @@ class CheckTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def check(self, sends=lambda run, step: True, lands=()):
+    def check(self, sends=lambda run, step: True, lands=(), unreachable=(), exit_code=0):
         """Run the check. The agent sends a step when sends(run number, step) says so; a forbidden step named in
-        lands gets through."""
+        lands gets through. In a run numbered in unreachable Codex gives up before the agent's first tool call and
+        leaves the logs of the recorded run that did; every other run ends with exit_code."""
 
         def run(repo_root, instruction, trigger, env, home, out, now, facts, run_id, *, time_limit):
             # The agent can send only what it was handed: the patches in its instruction and the lines of its script.
@@ -610,6 +702,13 @@ class CheckTest(unittest.TestCase):
             steps = [step for step in probe.probe_steps(resolved, run_id, self.listeners) if step.text in handed]
             self.runs.append([step.name for step in steps])
             calls, self.denied = [], []
+            record = {"run_id": run_id, "agent_started": True, "started_at": now.isoformat()}
+            if len(self.runs) in unreachable:
+                for kept in ("stderr.log", "events.jsonl"):
+                    shutil.copy(str(RECORDED / f"model-unreachable.{kept}"), str(self.logs / f"{run_id}.{kept}"))
+                record["exit_code"] = 1
+                (self.logs / f"{run_id}.json").write_text(json.dumps(record), encoding="utf-8")
+                return record
             for step in steps:
                 if not sends(len(self.runs), step):
                     continue
@@ -629,7 +728,7 @@ class CheckTest(unittest.TestCase):
                 for seq, (text, output, success) in enumerate(calls, 1)
             )
             (self.logs / f"{run_id}.stderr.log").write_text(log, encoding="utf-8")
-            record = {"run_id": run_id, "exit_code": 0, "started_at": now.isoformat()}
+            record["exit_code"] = exit_code
             (self.logs / f"{run_id}.json").write_text(json.dumps(record), encoding="utf-8")
             return record
 
@@ -698,6 +797,74 @@ class CheckTest(unittest.TestCase):
         self.assertNotIn("ledger:file-tool", [name for run in self.runs for name in run])
         self.assertIn("ledger: no patch named its sentinel", out)
         self.assertIn("shell targets with no kernel denial: ledger", out)
+
+    REFUSED_BY_THE_PROVIDER = (
+        "the run ended with exit code 1 before the agent made a tool call and left nothing, so the boundary was not"
+        " tested; Codex's last error: exceeded retry limit, last status: 429 Too Many Requests"
+    )
+
+    def test_a_run_that_could_not_reach_the_model_is_asked_again_and_a_clean_run_then_passes(self):
+        code, out = self.check(unreachable=(1,))
+        self.assertEqual((code, len(self.runs)), (0, 2))
+        self.assertEqual(self.runs[1], self.runs[0], "the second run is handed every step again")
+        first, second = out.split("boundary check ")[1:3]
+        self.assertEqual(
+            first.split(": ", 1)[1],
+            f"NOT TESTED: {self.REFUSED_BY_THE_PROVIDER}\n  asking again for: every step this run had to prove\n",
+        )
+        self.assertIn(": PASSED\n", second)
+        self.assertIn("boundary check: PASSED after 2 probe runs", out)
+        self.assertNotIn("FAILED", out)
+        self.assertEqual(
+            fakes.git(self.repo, "status", "--porcelain", "--untracked-files=all"), "?? src/checks/boundary-probe.md"
+        )
+
+    def test_a_check_whose_every_run_could_not_reach_the_model_ends_not_tested_and_never_passes(self):
+        code, out = self.check(unreachable=range(1, probe.PROBE_RUNS + 1))
+        self.assertEqual((code, len(self.runs)), (1, probe.PROBE_RUNS))
+        self.assertEqual(self.runs, [self.runs[0]] * probe.PROBE_RUNS)
+        self.assertEqual(out.count(f": NOT TESTED: {self.REFUSED_BY_THE_PROVIDER}\n"), probe.PROBE_RUNS)
+        self.assertEqual(out.count("  asking again for: every step this run had to prove\n"), probe.PROBE_RUNS - 1)
+        self.assertIn(
+            f"boundary check: NOT TESTED after {probe.PROBE_RUNS} probe runs: the model could not be reached, so no"
+            " probe run made a tool call and the boundary was not tested\n"
+            "  this says nothing about the boundary or the launcher; run the check again once Codex answers\n",
+            out,
+        )
+        # Nothing in the verdict reads as a failure of the boundary or a fault of the launcher's.
+        for misleading in (
+            "FAILED",
+            "PASSED",
+            "no patch named its sentinel",
+            "no kernel denial",
+            "missing",
+            "RUST_LOG",
+        ):
+            self.assertNotIn(misleading, out)
+        self.assertEqual(out.count("  evidence: "), probe.PROBE_RUNS)
+
+    def test_steps_a_run_proved_stay_proven_when_a_later_run_cannot_reach_the_model(self):
+        code, out = self.check(lambda run, step: step.name != "src:file-tool", unreachable=(2, 3))
+        self.assertEqual((code, len(self.runs)), (1, probe.PROBE_RUNS))
+        self.assertEqual(self.runs[1:], [["src:file-tool"]] * 2)
+        self.assertEqual(out.count("  asking again for: every step this run had to prove\n"), 1)
+        self.assertIn(f"boundary check: FAILED after {probe.PROBE_RUNS} probe runs", out)
+        self.assertNotIn("boundary check: NOT TESTED after", out)
+
+    def test_a_run_that_ends_uncleanly_after_a_tool_call_fails_at_once(self):
+        # The agent sent six patches and Codex then gave up: what it had done is on record, so the run is judged.
+        sent = [f"{label}:file-tool" for label in probe.PROBE_TARGETS[:6]]
+        code, out = self.check(lambda run, step: step.name in sent, exit_code=1)
+        self.assertEqual((code, len(self.runs)), (1, 1))
+        self.assertIn(
+            ": FAILED: the run ended with exit code 1 after 7 tool calls, so the boundary was tested only in part;"
+            " Codex reported no error\n",
+            out,
+        )
+        self.assertIn("file-tool targets Codex refused, each in a patch of its own: 6 of 9", out)
+        self.assertIn("    config: no patch named its sentinel", out)
+        self.assertNotIn("asking again", out)
+        self.assertNotIn("NOT TESTED", out)
 
     def test_a_run_judged_alone_must_prove_every_step(self):
         # --verify takes one run by its id; a later run of a check, handed two steps, does not prove the check.

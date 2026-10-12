@@ -93,6 +93,27 @@ def tool_results(log: str) -> tuple[list[ToolResult], list[str]]:
     return results, problems
 
 
+def last_error(events: str) -> str | None:
+    """The last error Codex reported in its event stream, the --json output a run keeps as events.jsonl, on one line;
+    None if it reported none."""
+    found = None
+    for line in events.splitlines():
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        kind = event.get("type") if isinstance(event, dict) else None
+        if kind == "error":
+            message = event.get("message")
+        elif kind == "turn.failed" and isinstance(event.get("error"), dict):
+            message = event["error"].get("message")
+        else:
+            continue
+        if isinstance(message, str) and message.strip():
+            found = " ".join(message.split())[:300]
+    return found
+
+
 def toml_string(value: str) -> str:
     # A JSON string is a valid TOML basic string for every character json.dumps emits.
     return json.dumps(value)

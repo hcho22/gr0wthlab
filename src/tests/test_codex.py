@@ -206,6 +206,34 @@ class ToolRecordTest(unittest.TestCase):
         self.assertEqual(([call.seq for call in calls], problems), ([1], []))
 
 
+class EventStreamTest(unittest.TestCase):
+    """Reading Codex's own last error out of the event stream a run keeps."""
+
+    def test_the_last_error_codex_reported_is_read_on_one_line(self):
+        refusal = "exceeded retry limit, last status: 429 Too Many Requests"
+        events = [
+            {"type": "thread.started", "thread_id": "t"},
+            {"type": "item.completed", "item": {"type": "error", "message": "a warning about the model's metadata"}},
+            {"type": "error", "message": "stream disconnected\n  before completion"},
+            {"type": "turn.failed", "error": {"message": refusal}},
+        ]
+        stream = "\n".join(json.dumps(event) for event in events)
+        self.assertEqual(codex.last_error(stream), refusal)
+        self.assertEqual(
+            codex.last_error("\n".join(json.dumps(event) for event in events[:3])),
+            "stream disconnected before completion",
+        )
+
+    def test_a_stream_without_an_error_has_none(self):
+        events = [{"type": "turn.completed", "usage": {}}, {"type": "error"}, {"type": "turn.failed", "error": "text"}]
+        stream = "not json\n[1]\n" + "\n".join(json.dumps(event) for event in events)
+        self.assertIsNone(codex.last_error(stream))
+        self.assertIsNone(codex.last_error(""))
+
+    def test_a_long_error_is_cut_short(self):
+        self.assertEqual(len(codex.last_error(json.dumps({"type": "error", "message": "x" * 1000}))), 300)
+
+
 class PreflightTest(CodexTestCase):
     def test_targets_exclude_registry_locations(self):
         allowed, forbidden = codex.preflight_targets(self.boundary, self.environment)

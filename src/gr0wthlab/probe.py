@@ -20,6 +20,10 @@ A step the agent skipped or sent mangled says nothing about the runtime, so the 
 still have no record again, PROBE_RUNS times at most, and fails if one is still unproven. Anything that does say
 something about the runtime ends the check as failed at once: a sentinel that landed, a connection that got through,
 a change outside the areas, a run that did not exit cleanly, or a record of Codex's that is not whole.
+One unclean exit is no verdict on the runtime: a run whose agent was started and ended before its first tool call,
+leaving nothing at all, as when the model cannot be reached. It tested nothing, so it is asked again like an unproven
+step, and a check whose every run ended that way ends as not tested, which is neither a pass nor a failure of the
+boundary.
 How many refusals a run logged in all never decides anything, and the agent's own report is kept as evidence and
 never read for the verdict.
 """
@@ -407,14 +411,24 @@ def file_tool_gaps(calls: Sequence[codex.ToolResult], steps: Sequence[Step]) -> 
     return gaps
 
 
-def tool_record(log_dir: Path, run_id: str) -> tuple[list[codex.ToolResult], list[str]]:
-    """The tool calls Codex recorded for a run, and why that record cannot be taken as whole, if it cannot."""
+def tool_record(log_dir: Path, run_id: str, clean_exit: bool) -> tuple[list[codex.ToolResult], list[str]]:
+    """The tool calls Codex recorded for a run, and why that record cannot be taken as whole, if it cannot.
+
+    A run that exited cleanly did its work through tool calls, so a log that holds none was not kept with them. A run
+    that did not exit cleanly may have ended before its first, which is no fault of the record's.
+    """
     stderr = log_dir / f"{run_id}.stderr.log"
     log = stderr.read_text(encoding="utf-8", errors="replace") if stderr.is_file() else ""
     calls, problems = codex.tool_results(log)
-    if not calls:
+    if not calls and clean_exit:
         problems = [f"Codex's log holds no tool call; it records them when started with RUST_LOG={codex.LOG_FILTER}"]
     return calls, problems
+
+
+def last_error(log_dir: Path, run_id: str) -> str | None:
+    """Codex's own last error in a run's event stream, or None if it reported none."""
+    events = log_dir / f"{run_id}.events.jsonl"
+    return codex.last_error(events.read_text(encoding="utf-8", errors="replace")) if events.is_file() else None
 
 
 def verify(
@@ -431,10 +445,13 @@ def verify(
     what a run judged alone must prove. result["unproven"] names those this run leaves without a record;
     result["ask_again"] is the same steps when nothing else is wrong, which another probe run may be handed, and
     empty otherwise. result["passed"] says every needed step has its record and nothing else is wrong, so the check is
-    complete.
+    complete. result["not_tested"] says the run was never an attempt: its agent was started, it did not exit cleanly,
+    Codex recorded no tool call, and the check could see that it left nothing, no file, no connection, no kernel
+    denial, and no change inside or outside the areas. Such a run never passes and is asked again.
     """
     record_path = log_dir / f"{run_id}.json"
     record = json.loads(record_path.read_text(encoding="utf-8")) if record_path.is_file() else {}
+    exit_code = record.get("exit_code")
     steps = [step for step in probe_steps(boundary, run_id, listeners or ()) if needed is None or step.name in needed]
 
     landed = escapes(boundary, run_id)
@@ -461,7 +478,7 @@ def verify(
 
     log = kernel_log(record["started_at"]) if record.get("started_at") else None
     denials = sandbox_denials(run_id, log.stdout, listeners or ()) if log else []
-    calls, record_problems = tool_record(log_dir, run_id)
+    calls, record_problems = tool_record(log_dir, run_id, exit_code == 0)
     gaps = file_tool_gaps(calls, [step for step in steps if step.kind == FORBIDDEN])
     undenied = [
         step.label
@@ -483,11 +500,27 @@ def verify(
             for listener in listeners
         }
     unproven = [f"{label}:{FILE_TOOL}" for label in gaps] + [f"{label}:{SHELL}" for label in undenied] + missing
+    reached = any(entry["connections"] for entry in (listened or {}).values())
+    changes = changed(before, snapshots(boundary)) if before is not None else None
+    left_nothing = (
+        not landed
+        and not unlistable
+        and written <= {script_path(boundary, run_id)}
+        and log is not None
+        and not log.timed_out
+        and not denials
+        and listened is not None
+        and not reached
+        and changes == {}
+    )
+    not_tested = bool(record.get("agent_started")) and exit_code != 0 and not calls and left_nothing
     result: dict[str, object] = {
         "run_id": run_id,
         "fingerprint": record.get("fingerprint"),
         "trigger": record.get("trigger"),
-        "run_exit_code": record.get("exit_code"),
+        "run_exit_code": exit_code,
+        "agent_started": bool(record.get("agent_started")),
+        "codex_last_error": last_error(log_dir, run_id),
         "preflight": record.get("preflight"),
         "steps_needed": [step.name for step in steps],
         "escaped_and_removed": [str(path) for path in landed],
@@ -501,18 +534,12 @@ def verify(
         "kernel_log_cut_short": bool(log and log.timed_out),
         "shell_targets_without_kernel_denial": undenied,
         "local_listeners": listened,
-        "changed_outside_areas": changed(before, snapshots(boundary)) if before is not None else None,
+        "changed_outside_areas": changes,
         "unproven": unproven,
+        "not_tested": not_tested,
     }
     # What says something about the runtime, or leaves the run's records unfit to judge by: never asked again.
-    wrong = bool(
-        record.get("exit_code") != 0
-        or landed
-        or unlistable
-        or record_problems
-        or any(entry["connections"] for entry in (listened or {}).values())
-        or result["changed_outside_areas"]
-    )
+    wrong = not not_tested and bool(exit_code != 0 or landed or unlistable or record_problems or reached or changes)
     result["ask_again"] = [] if wrong else unproven
     result["passed"] = not wrong and not unproven
     with (log_dir / f"{run_id}.boundary-check.json").open("w", encoding="utf-8") as handle:
@@ -521,28 +548,61 @@ def verify(
     return result
 
 
+def unclean_exit(result: Mapping[str, object]) -> str:
+    """What a verdict's first line says of a run that did not exit cleanly: how far it got, whether the boundary was
+    tested, and Codex's own last error. A run whose launcher was stopped before it ended left no exit code."""
+    calls = result["codex_tool_record"]["calls"]
+    if not result["agent_started"]:
+        tested = "before the agent was started, so the probe tested nothing"
+    elif result["not_tested"]:
+        tested = "before the agent made a tool call and left nothing, so the boundary was not tested"
+    elif not calls:
+        tested = "with no tool call in Codex's record, so nothing shows the boundary was tested"
+    else:
+        tested = f"after {calls} tool call{'' if calls == 1 else 's'}, so the boundary was tested only in part"
+    code, error = result["run_exit_code"], result["codex_last_error"]
+    ended = "the run left no exit code" if code is None else f"the run ended with exit code {code}"
+    return f"{ended} {tested}; " + (f"Codex's last error: {error}" if error else "Codex reported no error")
+
+
 def summarize(result: Mapping[str, object], out: TextIO, again: bool = False) -> None:
-    """One probe run's verdict; again says the check goes on to hand the agent the unproven steps once more."""
-    verdict = "PASSED" if result["passed"] else "NOT YET PROVEN" if again else "FAILED"
+    """One probe run's verdict; again says the check goes on to hand the agent the unproven steps once more.
+
+    A run that did not exit cleanly says so in its first line. One that also made no tool call attempted no target, so
+    it gets no line for any, and one that was never an attempt gets no line but that first.
+    """
+    if result["passed"]:
+        verdict = "PASSED"
+    elif result["not_tested"]:
+        verdict = "NOT TESTED"
+    else:
+        verdict = "NOT YET PROVEN" if again else "FAILED"
     escaped = result["escaped_and_removed"]
     written = result["permitted_written"]
     needed = result["steps_needed"]
+    unclean = result["run_exit_code"] != 0
+    attempted = not unclean or bool(result["codex_tool_record"]["calls"])
+    first = f"boundary check {result['run_id']}: {verdict}" + (f": {unclean_exit(result)}" if unclean else "")
+    if result["not_tested"]:
+        print("\n".join([first] + ["  asking again for: every step this run had to prove"] * again), file=out)
+        return
     lines = [
-        f"boundary check {result['run_id']}: {verdict}",
+        first,
         f"  steps this run had to prove: {len(needed)}",
         f"  sentinels that escaped (removed): {len(escaped)}",
         *(f"    {path}" for path in escaped),
         f"  permitted writes: {sum(len(files) for files in written.values())} files across {len(written)} areas",
     ]
-    if result["permitted_missing"]:
+    if attempted and result["permitted_missing"]:
         lines.append(f"  missing permitted writes: {', '.join(result['permitted_missing'])}")
     if result["unlistable_areas"]:
         unlistable = ", ".join(f"{key} ({reason})" for key, reason in result["unlistable_areas"].items())
         lines.append(f"  areas that could not be listed: {unlistable}")
-    gaps = result["file_tool_targets_without_refusal"]
-    asked = len([name for name in needed if name in {f"{target}:{FILE_TOOL}" for target in PROBE_TARGETS}])
-    lines.append(f"  file-tool targets Codex refused, each in a patch of its own: {asked - len(gaps)} of {asked}")
-    lines += [f"    {label}: {reason}" for label, reason in gaps.items()]
+    if attempted:
+        gaps = result["file_tool_targets_without_refusal"]
+        asked = len([name for name in needed if name in {f"{target}:{FILE_TOOL}" for target in PROBE_TARGETS}])
+        lines.append(f"  file-tool targets Codex refused, each in a patch of its own: {asked - len(gaps)} of {asked}")
+        lines += [f"    {label}: {reason}" for label, reason in gaps.items()]
     lines += [
         f"  Codex's record of the run's tool calls: {problem}" for problem in result["codex_tool_record"]["problems"]
     ]
@@ -553,7 +613,7 @@ def summarize(result: Mapping[str, object], out: TextIO, again: bool = False) ->
             " denials were not read"
         )
     unproven = result["shell_targets_without_kernel_denial"]
-    if unproven:
+    if attempted and unproven:
         lines.append(f"  shell targets with no kernel denial: {', '.join(unproven)}")
     listened = result["local_listeners"]
     if listened is None:
@@ -611,7 +671,14 @@ def main(
                 results.append(verify(boundary, run_id, log_dir, before, listeners, needed))
                 needed = results[-1]["ask_again"] if len(results) < PROBE_RUNS else []
                 summarize(results[-1], out, again=bool(needed))
-        if len(results) > 1:
+        if all(result["not_tested"] for result in results):
+            print(
+                f"boundary check: NOT TESTED after {len(results)} probe runs: the model could not be reached, so no"
+                " probe run made a tool call and the boundary was not tested\n"
+                "  this says nothing about the boundary or the launcher; run the check again once Codex answers",
+                file=out,
+            )
+        elif len(results) > 1:
             verdict = "PASSED" if results[-1]["passed"] else "FAILED"
             print(f"boundary check: {verdict} after {len(results)} probe runs", file=out)
     for result in results:
