@@ -42,6 +42,7 @@ from . import (
     report,
     settings,
     waitlist,
+    work,
 )
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, read_plain
@@ -59,6 +60,9 @@ RUN_REPORTS = "run-reports"
 SNAPSHOTS = "package-snapshots"
 SUMMARY_LIMIT = 4000
 WAITLIST_NEEDS = ("waitlist-counts", "weekly-read", "beta-recruiting")
+# The package review's row when it is complete: complete by the agent's closing line alone, so the row says whose word
+# that is and where the launcher's own counts are.
+REVIEW_SAID_COMPLETE = "the agent said it finished its review; the launcher's counts are under Agent's work"
 
 
 def entry_point(repo_root: Path) -> Path:
@@ -555,7 +559,7 @@ class Cycle:
             )
         own = {
             "package-snapshot": ([], f"`{state.snapshot_file}`"),
-            "package-review": ([review_gap] if review_gap else [], "the agent finished its review"),
+            "package-review": ([review_gap] if review_gap else [], REVIEW_SAID_COMPLETE),
             "decisions": ([] if ledger_ok else ["the ledger could not be read; no decision was matched"], decisions),
             "review-queue": (
                 [] if ledger_ok else ["the ledger could not be read; the queue was left as it was"],
@@ -747,6 +751,38 @@ class Cycle:
         except (OSError, ConfigError) as error:
             state.problems.append(f"the Beta Cohort recruiting Evidence could not be written ({error})")
 
+    def count_work(
+        self,
+        state: RunState,
+        config: settings.Settings,
+        log_dir: Path,
+        areas: Areas,
+        drafts_before: Mapping[int, str | None],
+        kinds: Sequence[str],
+    ) -> None:
+        """Count what the agent's session did, for the run report to show beside the agent's own word. The counts gate
+        nothing, so a count that cannot be made is a launcher problem and the run goes on without it."""
+        mandu = Path(state.mandu)
+        files = {
+            file.path: mandu / file.path
+            for result in state.snapshot
+            for file in result.files
+            if file.status != package.FAILED
+        }
+        try:
+            state.work = work.measure(
+                log_dir / f"{state.run_id}.events.jsonl",
+                config.shown_output_chars,
+                files,
+                state.posts,
+                drafts_before,
+                areas,
+                kinds,
+                len(state.set_aside),
+            )
+        except (OSError, ConfigError) as error:
+            state.problems.append(f"the agent's work could not be counted ({error})")
+
     def leave_note(self, run_id: str, line: str) -> None:
         """A one-line note in ledger/notes/, which the next run's report shows."""
         self.store.write_text(self.store.path(NOTES_DIR, f"{run_id}.txt"), line + "\n")
@@ -908,6 +944,7 @@ class Cycle:
             state, config, beta_rules, folder, registry, boundary, ledger, ledger_ok, areas, states.beta_recruiting
         )
         areas.ensure_folder(areas.path("review_queue", INCOMING))
+        drafts_before = work.draft_marks(state.posts, areas)
         brief = self.store.path(RUN_REPORTS, f"{run_id}.brief.md")
         self.store.write_text(
             brief, report.render_brief(state, canonical(self.repo_root), areas.workspace, self.store.root)
@@ -953,6 +990,9 @@ class Cycle:
             self.take_beta(state, areas, ledger, products, run_id, now)
         elif state.posts is not None:
             state.posts_problem = "not taken in: the Review Queue could not be read"
+        if state.agent.get("agent_started"):
+            kinds = [str(ledger.entries[identifier]["kind"]) for identifier in published]
+            self.count_work(state, config, log_dir, areas, drafts_before, kinds)
         report_path = self.store.path(RUN_REPORTS, f"{run_id}.md")
         state.problems += areas.problems
         areas.problems.clear()
@@ -1041,6 +1081,7 @@ class Cycle:
             late=state.late,
             usage=state.usage,
             cost_usd=state.cost,
+            work=state.work.as_json() if state.work else None,
             queued=state.published,
             problems=state.problems,
             set_aside=[item.name for item in state.set_aside],

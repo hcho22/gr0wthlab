@@ -88,6 +88,14 @@ class RunConfigTest(unittest.TestCase):
         self.assertTrue(self.config["instruction"].startswith("src/instructions/"))
         self.assertTrue((REPO / self.config["instruction"]).is_file())
 
+    def test_no_step_of_the_task_definition_gives_leave_to_drop_the_review(self):
+        text = (REPO / self.config["instruction"]).read_text(encoding="utf-8")
+        [recruiting] = [line for line in text.splitlines() if "A recruiting Draft is one short message" in line]
+        self.assertIn("write each one the table lists", recruiting)
+        self.assertNotIn("review", recruiting.lower())
+        self.assertNotIn("unfinished", text.lower())
+        self.assertIn("the review is finished when every pass is", text)
+
 
 class RuntimeConfigTest(unittest.TestCase):
     def setUp(self):
@@ -111,6 +119,10 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(policy["/private/var/tmp"], "deny")
         self.assertEqual(policy[str(resolved.repo_root)], "read")
         self.assertEqual(policy[str(HOME / "Mandu")], "read")
+
+    def test_the_agent_runs_at_high_reasoning_effort_and_the_file_says_why(self):
+        self.assertEqual(boundary.load_runtime_config(REPO)["codex"]["reasoning_effort"], "high")
+        self.assertGreater(len(self.config["codex"]["reasoning_effort_why"]), 200)
 
     def test_features_that_act_outside_the_sandbox_are_disabled(self):
         disabled = set(self.config["codex"]["disabled_features"])

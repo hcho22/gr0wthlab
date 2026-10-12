@@ -31,10 +31,20 @@ class RunSettingsTest(unittest.TestCase):
         self.assertEqual((config.records.remote, config.records.branch), ("origin", "main"))
         self.assertTrue(config.records.sync_before_run and config.records.save_after_run)
         self.assertEqual(set(config.prices), {"input", "cached_input", "cache_write_input", "output"})
+        self.assertEqual(config.shown_output_chars, 40000)
         override = settings.load(REPO, {"GR0WTHLAB_PRODUCTION_CLONE": "/srv/clone"}, HOME)
         self.assertEqual(override.records.production_clone, Path("/srv/clone"))
         with self.assertRaises(ConfigError):
             settings.load(REPO, {"GR0WTHLAB_PRODUCTION_CLONE": "relative"}, HOME)
+
+    def test_how_much_output_codex_shows_is_a_whole_number_set_in_reviewed_configuration(self):
+        self.assertEqual(settings.load_shown_output({"shown_output_characters": 40000}), 40000)
+        for bad in (None, {}, [40000], {"shown_output_characters": None}):
+            with self.subTest(work_counts=bad), self.assertRaises(ConfigError):
+                settings.load_shown_output(bad)
+        for value in (0, 1, -40000, 40000.0, "40000", True):
+            with self.subTest(shown=value), self.assertRaisesRegex(ConfigError, "work_counts.shown_output_characters"):
+                settings.load_shown_output({"shown_output_characters": value})
 
     def test_day_1_follows_the_window_s_first_sitting_which_only_the_founder_sets(self):
         unset = settings.load(REPO, {}, HOME).window

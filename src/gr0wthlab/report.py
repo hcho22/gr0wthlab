@@ -1,7 +1,8 @@
 """What a run tells the agent before it starts (the brief) and the Founder after it ends (the run report).
 
 Both are rendered from the launcher's own state, never from anything the agent wrote, except the agent's closing
-summary, which the report quotes as the agent's account.
+summary, which the report quotes as the agent's account. The report sets that account's `Review:` line beside what the
+launcher counted of the session's work (work.py), and says which is which.
 """
 
 from __future__ import annotations
@@ -12,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import beta, exchange, package, posts, process, schedule, waitlist
+from . import beta, exchange, package, posts, process, schedule, waitlist, work
 from .state import Tally, run_tally
 
 SKIPPED = "skipped"
@@ -22,11 +23,20 @@ NOT_BUILT = "not built yet"
 # The line the agent's summary ends with: its own account of whether it finished every pass of its review.
 REVIEW_COMPLETE = "Review: complete"
 REVIEW_INCOMPLETE = "Review: incomplete"
-USAGE_FIELDS = ("input_tokens", "cached_input_tokens", "cache_write_input_tokens", "output_tokens")
+# Codex counts reasoning tokens within output tokens, so the cost, which prices every output token, covers them.
+USAGE_FIELDS = (
+    "input_tokens",
+    "cached_input_tokens",
+    "cache_write_input_tokens",
+    "output_tokens",
+    "reasoning_output_tokens",
+)
 NOTICE_BODY_LIMIT = exchange.MAX_ITEM_CHARS // 2
 # Fewer seconds than this between the agent's wall-clock time and its awake time are the two clocks' own difference,
 # not the Mac asleep.
 ASLEEP_AT_LEAST = 5
+# How much of the agent's closing line the report quotes as its word.
+REVIEW_WORD_LIMIT = 300
 
 
 @dataclass
@@ -101,6 +111,7 @@ class RunState:
     beta: beta.Plan | None = None  # Beta Cohort recruiting: the gate, and once it is recorded, the run's plan
     beta_outcome: beta.Outcome | None = None
     beta_problem: str = ""  # why recruiting was not prepared or not taken in, when it was not
+    work: work.Work | None = None  # what the launcher counted of the agent's session, once the agent has ended
 
     @property
     def lateness(self) -> timedelta | None:
@@ -227,7 +238,8 @@ def token_usage(events: Path) -> dict[str, int] | None:
 
 
 def cost(usage: Mapping[str, int], prices: Mapping[str, float]) -> float:
-    """Approximate US dollars at API prices; cached and cache-write tokens are counted within input tokens."""
+    """Approximate US dollars at API prices; cached and cache-write tokens are counted within input tokens, and
+    reasoning tokens within output tokens."""
     cached = usage.get("cached_input_tokens", 0)
     written = usage.get("cache_write_input_tokens", 0)
     fresh = max(usage.get("input_tokens", 0) - cached - written, 0)
@@ -261,10 +273,11 @@ def cost_line(state: RunState) -> str:
             return "Approximate cost: not available; the agent was stopped before it reported any token counts."
         return "Approximate cost: unknown; the agent reported no token counts."
     usage = state.usage
+    reasoning = usage.get("reasoning_output_tokens", 0)
     tokens = (
         f"{usage['input_tokens']:,} input tokens ({usage['cached_input_tokens']:,} cached) "
         f"and {usage['output_tokens']:,} output tokens"
-    )
+    ) + (f" ({reasoning:,} of them reasoning)" if reasoning else "")
     amount = f"{state.cost:.2f}" if state.cost >= 0.1 else f"{state.cost:.3f}"
     if state.timed_out:
         return (
@@ -476,6 +489,58 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
     return "\n".join(lines)
 
 
+def review_word(state: RunState) -> str:
+    """The agent's own closing line, quoted as its word, or that it left none."""
+    if not state.agent_summary.strip():
+        return "none; the agent left no summary"
+    line = " ".join(state.review.split())
+    shown = line if len(line) <= REVIEW_WORD_LIMIT else line[:REVIEW_WORD_LIMIT].rstrip() + "..."
+    if state.review == REVIEW_COMPLETE or state.review.startswith(REVIEW_INCOMPLETE):
+        return f'"{shown}"'
+    return f'its summary ends with neither `{REVIEW_COMPLETE}` nor `{REVIEW_INCOMPLETE}`, but with "{shown}"'
+
+
+def agent_setting(state: RunState) -> str:
+    """The model and reasoning effort the agent ran with, as the run record keeps them."""
+    model, effort = state.agent.get("model"), state.agent.get("reasoning_effort")
+    return f"`{model}` at `{effort}` reasoning effort" if model and effort else ""
+
+
+def work_summary(state: RunState) -> str:
+    """One line for the top of the report: the launcher's counts, then the agent's word, each named for what it is."""
+    if state.work is None:
+        return ""
+    seconds = state.agent.get("agent_seconds")
+    took = f", in {span_text(float(seconds))} of agent time" if seconds is not None else ""
+    return (
+        f"The agent's work, as the launcher counted it: {work.summary(state.work)}{took}. The agent's own word:"
+        f" {review_word(state)}."
+    )
+
+
+def work_lines(state: RunState) -> list[str]:
+    """The run report's account of the agent's work: the launcher's counts first, then the agent's own word, each
+    named for what it is."""
+    if state.work is None:
+        return ["The launcher counted nothing: the agent did not start, or its work could not be counted."]
+    lines = [
+        "Counted by the launcher from Codex's record of the session, the Draft files the run left, and the Review"
+        " Queue. None of these comes from what the agent says of itself, and none changes what is queued, blocked, or"
+        " marked incomplete:",
+        "",
+    ]
+    seconds = state.agent.get("agent_seconds")
+    if seconds is not None:
+        setting = agent_setting(state)
+        lines.append(
+            f"- Agent time: {span_text(float(seconds))} of its {state.time_limit} limit"
+            + (f", with {setting}." if setting else ".")
+        )
+    lines += [f"- {line}" for line in work.count_lines(state.work)]
+    lines += ["", "The agent's own word, which the launcher does not check:", "", f"- {review_word(state)}"]
+    return lines
+
+
 def summary_lines(state: RunState) -> list[str]:
     failed = state.failed_sources()
     open_items = state.queue_after
@@ -527,6 +592,9 @@ def summary_lines(state: RunState) -> list[str]:
         lines.append(f"- {recruiting}")
     if state.notice:
         lines.append(f"- Problems this run are listed in the notice `{state.notice}`.")
+    counted = work_summary(state)
+    if counted:
+        lines.append(f"- {counted}")
     lines.append(f"- {cost_line(state)}")
     return [line for line in lines if line]
 
@@ -562,6 +630,7 @@ def render_report(state: RunState) -> str:
         lines += ["", "The run state disagreed with the Review Queue, which wins; the state was repaired:", ""]
         lines += [f"- {note}" for note in state.state_notes]
     lines += ["", "## Outputs", ""] + table(["Output", "Status", "Detail"], state.outputs)
+    lines += ["", "## Agent's work", ""] + work_lines(state)
     lines += ["", "## Agent", ""]
     preflight = state.agent.get("preflight") or {}
     if preflight:

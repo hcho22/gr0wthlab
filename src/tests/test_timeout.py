@@ -160,7 +160,7 @@ class EntryPointTest(TimeLimitTestCase):
         self.assertIn("- The run finished.", clean)
         self.assertNotIn("- The run timed out", clean)
         self.assertNotIn("- Timed out:", clean)
-        self.assertIn("| Package review (contradictions) | complete | the agent finished its review |", clean)
+        self.assertIn(f"| Package review (contradictions) | complete | {cycle.REVIEW_SAID_COMPLETE} |", clean)
         self.assertRegex(clean, rf"\n- Agent time: \d+ s; time limit {LIMIT} s\.\n")
         self.assertEqual(sorted(entry.get("day", 0) for entry in self.queue()["open"]), [0, 0, 1, 2])
         self.assertEqual(self.notices(), [queued["notice"]])

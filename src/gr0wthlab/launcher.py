@@ -75,6 +75,7 @@ class Resolved:
             "codex": str(self.codex_bin),
             "codex_version": self.codex_version,
             "model": self.config["codex"]["model"],
+            "reasoning_effort": self.config["codex"]["reasoning_effort"],
             "working_directory": str(self.boundary.working_directory),
             "filesystem_policy": filesystem_policy(self.boundary),
             "command": self.command,

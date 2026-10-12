@@ -776,7 +776,7 @@ class FailuresTest(CycleTestCase):
         code, out = self.run_cycle()
         self.assertEqual(code, 0, out)
         report = self.report()
-        self.assertIn("| Package review (contradictions) | complete | the agent finished its review |", report)
+        self.assertIn(f"| Package review (contradictions) | complete | {cycle.REVIEW_SAID_COMPLETE} |", report)
         self.assertIn("- checked=14 acted=0 note=nothing new needed action\n", report)
         self.assertEqual(self.queue()["open"], [])
 

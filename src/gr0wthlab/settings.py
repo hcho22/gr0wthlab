@@ -67,6 +67,7 @@ class Settings:
     waitlist_live_since: date | None
     beta_batch_size: int
     agent: Agent
+    shown_output_chars: int
 
     def waitlist_live(self, today: date) -> bool:
         """Whether the Waitlist is live: only once a reviewed change has set the date it went live."""
@@ -137,6 +138,16 @@ def load_agent(data: object) -> Agent:
     return Agent(float(limit))
 
 
+def load_shown_output(data: object) -> int:
+    """config/run.json's work_counts.shown_output_characters: how much of one command's output Codex shows the model,
+    which the run report's counts of the agent's work are made with. It is a fact about Codex, set through a reviewed
+    change, and no flag: the launcher sets no limit of its own."""
+    shown = data.get("shown_output_characters") if isinstance(data, dict) else None
+    if isinstance(shown, bool) or not isinstance(shown, int) or shown < 2:
+        raise ConfigError(f"{RUN_CONFIG}: work_counts.shown_output_characters must be a whole number from 2")
+    return shown
+
+
 def load_window(data: object, sitting_day: str) -> Window:
     """config/run.json's window; its first sitting, on the schedule's day, and its slot stay unset until the Founder
     sets them, and are never inferred."""
@@ -187,6 +198,7 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
         live_since = load_live_since(data["waitlist"])
         batch_size = load_batch_size(data["beta_recruiting"])
         agent = load_agent(data.get("agent"))
+        shown_output = load_shown_output(data.get("work_counts"))
     except (KeyError, TypeError, ValueError, schedule.ScheduleError) as error:
         raise ConfigError(f"{RUN_CONFIG} is incomplete or malformed: {error}") from error
     for source in not_connected:
@@ -206,6 +218,7 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
         live_since,
         batch_size,
         agent,
+        shown_output,
     )
 
 

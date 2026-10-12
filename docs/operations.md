@@ -28,13 +28,14 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
    Until that record exists it does nothing more about the Beta Cohort, and the run report lists the approval as not recorded.
    Once it exists, it takes in the Founder's Beta Cohort reports (`ledger/evidence/beta-recruiting/reports/`) and fixes the run's next invitation batch: the next sign-ups that asked for a beta invitation and that no batch holds, good Fit first, then by sign-up date, at most the batch size in `config/run.json`.
    It offers at most one batch at a time, and the next only after the Founder has decided the last.
-   It writes the agent's brief and runs the agent in the sandbox with the task definition `src/instructions/weekly-run.md`.
+   It writes the agent's brief and runs the agent in the sandbox with the task definition `src/instructions/weekly-run.md`, at the reasoning effort [`config/guardrails/runtime.json`](../config/guardrails/runtime.json) sets, which is high.
    The agent writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records, and never write there.
    The agent has a time limit; one still running at it is stopped, and the run goes on without it ([When a run times out](#when-a-run-times-out)).
 7. Once the agent finishes, it restores its owner's read and write access to anything under `workspace/` the agent left without it, and the run report names every entry it fixed, before or after the agent.
    It queues the items the agent wrote to `workspace/review-queue/incoming/` that pass the format, sets the rest aside, and turns every problem into one notice.
    A post or a message written there is always set aside: the launcher queues those two kinds only from a Draft that passes its checks.
    The package review counts as complete only when the agent's summary ends with the line `Review: complete`; otherwise the run report marks it incomplete and the notice says so.
+   That line is the agent's own word, so the run report also shows what the launcher itself counted of the session ([Reading the agent's work](#reading-the-agents-work)).
    It checks each post Draft the agent wrote in `workspace/drafts/posts/` and queues a post only for one that passes; a blocked Draft is named in the run report and the notice with every failing rule or checklist line, and every check is kept in `ledger/evidence/post-drafts/`.
    It files the brand lint's word-list proposal once, and never again whatever the Founder decides.
    It checks each recruiting Draft the brief asked for in `workspace/drafts/beta-recruiting/`, and queues the invitation, with its batch attached, or the Waitlist ask only from a Draft that passes; a blocked Draft is named in the run report and the notice with every failing rule.
@@ -116,6 +117,36 @@ Only one run works at a time in each checkout: a run started while another is in
 A run that cannot finish, for example because a file it must write cannot be written, stops with exit code 6 instead of a crash, and the next run report says so too, as it does when a run could not write its report.
 A run whose agent was stopped at its time limit also ends with exit code 6, after it has written its own report, which says it timed out.
 Each checkout keeps its run lock (`ledger/run.lock`, never committed) and these notes for its next report (`ledger/notes/`) in its own `ledger/`, so a run in a firstmate worktree never blocks or hides a production run.
+
+## Reading the agent's work
+
+A run is one agent session, and it ends when the agent writes its final message.
+The launcher checks everything the agent wrote, but whether the agent did all its work is something only the agent says, in the `Review:` line that ends its summary.
+That line has read `Review: complete` after sessions that did the least, so no run should be judged by it alone.
+
+Each run report therefore has an `Agent's work` section, and a line in its summary, that set two things side by side and name each for what it is:
+
+- What the launcher counted, from Codex's record of the session, the Draft files the run left, and the Review Queue.
+  None of it comes from what the agent says of itself.
+- The agent's own word: its closing `Review:` line, quoted.
+
+The counts:
+
+- `Agent time`, against the limit, with the model and reasoning effort the agent ran at.
+- `Commands run`: the shell commands that ran to their end; how many read the Product's code, how many ran one of the launcher's checks (`check-incoming`, `check-drafts`, `check-beta-drafts`), and how many returned more output than Codex shows the model.
+- `Package files read`: how many of the package files the brief listed came back to the model.
+  Codex shows the model at most about 40,000 characters of one command's output, the first and last halves of that, and cuts the middle.
+  A session that prints every package file in one command is shown the first and last few, so naming a file in a command is not reading it.
+  The launcher counts a file as read when at least half of its lines are in the part of some command's output the model was shown; the figure is `work_counts` in [`config/run.json`](../config/run.json), a fact about Codex that needs measuring again after a Codex upgrade or a change of model.
+- `File edits`: the edits the agent made with its file-editing tool.
+- `Post Drafts`: how many of the days due have a Draft, and how many of those this run wrote or changed.
+- `Draft claims`: how many claims the Drafts list, how many name a code location, for how many of those the launcher found the quoted code at that location, and how many name none.
+- `Review Queue items the agent wrote`: how many were queued, how many of those are package-change proposals, and how many were set aside.
+
+The counts inform the Founder and gate nothing: nothing is queued, blocked, or marked incomplete because of one, and every check of an item or a Draft is what it was.
+The run's log record in `~/Library/Logs/gr0wthlab/` holds the same counts under `work`, with the name of every package file not read.
+
+MEASURED_RUNS_PARAGRAPH
 
 ## When a run times out
 
