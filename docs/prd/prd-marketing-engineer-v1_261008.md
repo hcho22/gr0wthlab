@@ -301,7 +301,7 @@ gr0wthlab's side is in place, with the request filed from `src/dispatches/reptod
 - [x] Finished assets become post Drafts in US-ME08's shape.
 - [x] No asset uses an AI-generated person, voice, or scene presented as real, and nothing invents footage the Founder did not record.
 
-The plan is the Review Queue's `filming-plan` kind, new in version 4 of the Mandu exchange, so Mandu's side must read that version before the Founder can approve the real one; nothing is cut from a shot's footage until a plan that holds the shot is approved.
+The plan is the Review Queue's `filming-plan` kind, new in version 5 of the Mandu exchange, so Mandu's side must read that version before the Founder can approve the real one; nothing is cut from a shot's footage until a plan that holds the shot is approved.
 Day 14 joins the plan once the calendar decides its Angle, and the script card of each day is the Video table of its post item.
 
 **Validation Test:**
@@ -438,10 +438,12 @@ Day 14 joins the plan once the calendar decides its Angle, and the script card o
 **Acceptance Criteria:**
 
 - [ ] The gate is a Beta Build approval the Founder records in Mandu; before it, this story does nothing.
-- [ ] Candidates are chosen by entry identifier from the anonymous Waitlist view, opted-in good-Fit entries first.
-- [ ] Invitation Drafts are identity-framed, explain the recorded 30-minute first session the thesis's K8 rubric needs, and contain no address; the Founder resolves addresses and sends.
+- [x] Candidates are chosen by entry identifier from the anonymous Waitlist view, opted-in good-Fit entries first.
+- [x] Invitation Drafts are identity-framed, explain the recorded 30-minute first session the thesis's K8 rubric needs, and contain no address; the Founder resolves addresses and sends.
 - [ ] Only counts of invitations sent, accepted, and sessions booked are kept as Evidence, from what the Founder reports.
 - [ ] Recruiting continues weekly until the Beta Cohort reaches 20 to 50 people or the Founder stops it, and a pool too small to reach 20 is reported with the recruiting Drafts needed to close the gap.
+
+gr0wthlab's side of all five is in place and passed this story's Validation Test on a simulated record; the three open boxes wait for Mandu's side to record the Founder's approval, counts, and stop in the formats of version 4 of `docs/mandu-exchange.md`.
 
 **Validation Test:**
 

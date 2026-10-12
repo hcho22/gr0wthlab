@@ -1,5 +1,5 @@
-"""The Mandu exchange formats in docs/mandu-exchange.md: the Review Queue items gr0wthlab writes, and the decision
-and sitting records Mandu writes for gr0wthlab to read.
+"""The Mandu exchange formats in docs/mandu-exchange.md: the Review Queue items gr0wthlab writes, and the decision,
+sitting, Beta Build, and Beta Cohort report records Mandu writes for gr0wthlab to read.
 
 Everything here is pure parsing and rendering, so the agent's own check (check-incoming) and the launcher's
 post-run validation apply exactly the same rules.
@@ -13,7 +13,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
-EXCHANGE_VERSION = 4
+EXCHANGE_VERSION = 5
+# The version that added the Beta Build record and the Beta Cohort report; neither exists at an earlier one.
+BETA_SINCE = 4
 
 # Each kind's body heading, in the order a week's non-post items are presented; posts come first by nearest slot.
 KINDS = {
@@ -40,6 +42,10 @@ MAX_ID = 80
 MAX_TITLE = 120
 MAX_ITEM_CHARS = 12000
 MAX_LINE = 300
+RECRUITING_OPEN = "open"
+RECRUITING_STOPPED = "stopped"
+# The three counts the Founder reports once invitations go out, each a total to date.
+BETA_COUNTS = ("invitations_sent", "accepted", "sessions_booked")
 # An Evidence line names its source as a URL or as a path in backticks.
 SOURCE_PATTERN = re.compile(r"https?://\S+|`[^`\s]*[/.][^`]*`")
 
@@ -134,7 +140,7 @@ def check_fields(fields: Mapping[str, str], products: Sequence[str], published: 
             for key in ("window", "day"):
                 if not re.fullmatch(r"[1-9][0-9]*", fields.get(key, "")):
                     problems.append(f"a post needs {key}: a whole number from 1")
-        # Version 4: a post whose video is finished names it by its path under ledger/.
+        # Version 5: a post whose video is finished names it by its path under ledger/.
         asset = fields.get("asset")
         if asset is not None and not ASSET_PATTERN.fullmatch(asset):
             problems.append("asset must be the finished video's path under ledger/, such as assets/window-1/day-03.mp4")
@@ -343,3 +349,93 @@ def parse_sitting(stem: str, data: object) -> tuple[Sitting | None, list[str]]:
     if problems:
         return None, problems
     return Sitting(stem, minutes, note), []
+
+
+@dataclass(frozen=True)
+class BetaBuild:
+    """The Founder's record that a Product's Beta Build passed Apple's review, and whether recruiting is open."""
+
+    product: str
+    approved_on: str
+    build: str | None
+    recruiting: str
+    stopped_on: str | None
+    recorded_at: str
+
+
+@dataclass(frozen=True)
+class BetaReport:
+    """What the Founder reported on one date; a count the Founder left out is None, never zero."""
+
+    product: str
+    day: str
+    counts: Mapping[str, int | None]
+    recorded_at: str
+
+
+def check_beta_version(data: Mapping, problems: list[str]) -> None:
+    before = len(problems)
+    check_version(data, problems)
+    if len(problems) == before and data["exchange"] < BETA_SINCE:
+        problems.append(f"exchange must be {BETA_SINCE} or later, the version that added this record")
+
+
+def parse_beta_build(stem: str, data: object) -> tuple[BetaBuild | None, list[str]]:
+    """A Beta Build record from beta-builds/<Product>.json; other fields are Mandu's own and are ignored."""
+    problems: list[str] = []
+    if not isinstance(data, dict):
+        return None, ["the record must be a JSON object"]
+    check_beta_version(data, problems)
+    if data.get("product") != stem:
+        problems.append(f"product must equal the file name {stem!r}")
+    approved_on = data.get("approved_on")
+    if not isinstance(approved_on, str) or not valid_date(approved_on):
+        problems.append("approved_on must be the YYYY-MM-DD date Apple approved the Beta Build")
+        approved_on = None
+    recorded_at = data.get("recorded_at")
+    recorded = parse_datetime(recorded_at) if isinstance(recorded_at, str) else None
+    if recorded is None:
+        problems.append("recorded_at must be an ISO 8601 time with its UTC offset")
+    elif approved_on and date.fromisoformat(approved_on) > recorded.date():
+        problems.append("approved_on is after the day the record was made")
+    build = one_line(data.get("build"), "build", problems, required=False)
+    recruiting = data.get("recruiting")
+    if recruiting not in (RECRUITING_OPEN, RECRUITING_STOPPED):
+        problems.append(f"recruiting must be {RECRUITING_OPEN!r} or {RECRUITING_STOPPED!r}")
+    stopped_on = data.get("stopped_on")
+    if recruiting == RECRUITING_STOPPED:
+        if not isinstance(stopped_on, str) or not valid_date(stopped_on):
+            problems.append("a stop needs stopped_on: the YYYY-MM-DD date the Founder stopped recruiting")
+        elif approved_on and stopped_on < approved_on:
+            problems.append("stopped_on is before approved_on")
+    elif stopped_on is not None:
+        problems.append("stopped_on belongs only to a record whose recruiting is stopped")
+    if problems:
+        return None, problems
+    return BetaBuild(stem, approved_on, build, recruiting, stopped_on, recorded_at), []
+
+
+def parse_beta_report(stem: str, data: object) -> tuple[BetaReport | None, list[str]]:
+    """A Beta Cohort report from beta-reports/<Product>-<YYYY-MM-DD>.json. Only its counts are read: every other
+    field is Mandu's own, and nothing else in the record is ever kept."""
+    problems: list[str] = []
+    if not isinstance(data, dict):
+        return None, ["the record must be a JSON object"]
+    check_beta_version(data, problems)
+    product, day = data.get("product"), data.get("date")
+    if not isinstance(day, str) or not valid_date(day) or not isinstance(product, str) or stem != f"{product}-{day}":
+        problems.append(f"the file name {stem!r} must be <product>-<date>, with date a YYYY-MM-DD date")
+    recorded_at = data.get("recorded_at")
+    if not isinstance(recorded_at, str) or parse_datetime(recorded_at) is None:
+        problems.append("recorded_at must be an ISO 8601 time with its UTC offset")
+    counts: dict[str, int | None] = {}
+    for key in BETA_COUNTS:
+        value = data.get(key)
+        if value is not None and (isinstance(value, bool) or not isinstance(value, int) or value < 0):
+            problems.append(f"{key} must be a whole number from 0, or null when the Founder did not report it")
+        counts[key] = value
+    if not problems and all(value is None for value in counts.values()):
+        problems.append(f"the record reports none of {', '.join(BETA_COUNTS)}")
+    if problems:
+        return None, problems
+    return BetaReport(product, day, counts, recorded_at), []

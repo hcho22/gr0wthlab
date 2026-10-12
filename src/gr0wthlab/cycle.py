@@ -3,15 +3,17 @@
 Order: bring the production clone up to origin's main; snapshot the Go-To-Market Package; take in the Founder's
 decisions from Mandu; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests
 that need filing; plan the post Drafts from the 14-day kit (posts.prepare); file the filming plan and list and
-measure the footage place (filming.prepare); brief the agent and run it inside the sandbox (launcher.run); queue the
-items it wrote to workspace/review-queue/incoming/ that pass the format, a post for each Draft it wrote that passes
-every check, with the video cut from its edit record when it has one (posts.take), and the reviewed brand-rules
-proposal when it needs filing; write the Review Queue and the run report; commit and push workspace/ and ledger/.
-Every step but the agent is deterministic code outside the sandbox. The launcher's records live in ledger/, which the
-agent can read and never write, so nothing it does can change them; in workspace/ the launcher only restores its
-owner's access to entries the agent left without it, reads the post Drafts and the edit records, and reads and
-removes the incoming items it takes in. One run at a time per checkout holds the run lock in its ledger/ from the
-sync to the saved records; a run started meanwhile refuses to start, and the next report says so.
+measure the footage place (filming.prepare); read the Founder's Beta Build record and, only once it exists, plan the
+Beta Cohort's next invitation batch (beta.prepare); brief the agent and run it inside the sandbox (launcher.run);
+queue the items it wrote to workspace/review-queue/incoming/ that pass the format, a post for each Draft it wrote
+that passes every check, with the video cut from its edit record when it has one (posts.take), the recruiting Drafts
+that pass theirs (beta.take), and the reviewed brand-rules proposal when it needs filing; write the Review Queue and
+the run report; commit and push workspace/ and ledger/. Every step but the agent is deterministic code outside the
+sandbox. The launcher's records live in ledger/, which the agent can read and never write, so nothing it does can
+change them; in workspace/ the launcher only restores its owner's access to entries the agent left without it, reads
+the post and recruiting Drafts and the edit records, removes a recruiting Draft that holds what looks like an email
+address, and reads and removes the incoming items it takes in. One run at a time per checkout holds the run lock in
+its ledger/ from the sync to the saved records; a run started meanwhile refuses to start, and the next report says so.
 """
 
 from __future__ import annotations
@@ -21,7 +23,6 @@ import hashlib
 import json
 import os
 import stat
-import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
@@ -30,6 +31,7 @@ from pathlib import Path
 from typing import TextIO
 
 from . import (
+    beta,
     dispatch,
     exchange,
     filming,
@@ -37,6 +39,7 @@ from . import (
     launcher,
     package,
     posts,
+    process,
     proposals,
     records,
     report,
@@ -52,7 +55,7 @@ from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLi
 PRE_RUN_ENV = "GR0WTHLAB_PRE_RUN"
 EXIT_RECORDS = 4
 EXIT_BUSY = 5
-EXIT_STOPPED = 6
+EXIT_STOPPED = launcher.EXIT_STOPPED
 LOCK_FILE = "run.lock"
 NOTES_DIR = "notes"
 RUN_REPORTS = "run-reports"
@@ -67,11 +70,10 @@ def entry_point(repo_root: Path) -> Path:
 
 def head(repo_root: Path) -> str:
     try:
-        return subprocess.run(
-            ["git", "-C", str(repo_root), "rev-parse", "--short", "HEAD"], capture_output=True, text=True, check=True
-        ).stdout.strip()
-    except (OSError, subprocess.CalledProcessError):
+        asked = process.run(["git", "-C", str(repo_root), "rev-parse", "--short", "HEAD"], process.QUICK)
+    except OSError:
         return "unknown"
+    return asked.stdout.strip() if asked.ok else "unknown"
 
 
 def output_titles(config: settings.Settings, keys: Sequence[str]) -> tuple[str, ...]:
@@ -396,6 +398,8 @@ class Cycle:
         """Bring the Review Queue state into line with the ledger, note every difference, and save every state."""
         hashes, _ = run_state.item_hashes(self.store.root, ledger.entries, products, states.review_queue)
         states.review_queue, state.state_notes = run_state.reconcile(states.review_queue, ledger.entries, hashes)
+        if state.beta is not None:
+            state.state_notes += state.beta.notes
         run_state.save(self.store, states, state.run_id, now.isoformat())
 
     def tallies(self, state: RunState, ledger: Ledger, incoming: int, ledger_ok: bool) -> list[run_state.Tally]:
@@ -412,6 +416,7 @@ class Cycle:
         # (Weekly Reads), its items count under the Review Queue with the launcher's notices.
         outcome = state.post_outcome
         drafting = set(outcome.published if outcome else ()) | ({state.filed} if state.filed else set())
+        drafting |= set(state.beta_outcome.published if state.beta_outcome else ())
         if state.filming is not None and state.filming.standing.acted:
             drafting.add(state.filming.standing.item)
         proposals = sum(
@@ -456,6 +461,7 @@ class Cycle:
             ),
             self.post_tally(state),
             self.filming_tally(state),
+            self.beta_tally(state),
             run_state.Tally("listening", 0, 0, "not built until US-ME13"),
             run_state.Tally("outreach", 0, 0, "not built until US-ME14"),
         ]
@@ -498,6 +504,30 @@ class Cycle:
             return run_state.Tally("filming", 0, 0, state.filming_problem, state.filming_problem)
         return filming.tally(state.filming)
 
+    def beta_tally(self, state: RunState) -> run_state.Tally:
+        """What Beta Cohort recruiting checked and acted on: the sign-ups that asked for an invitation, and each item
+        queued or withdrawn. Before the Founder's gate it checks and acts on nothing, and says why."""
+        plan, outcome = state.beta, state.beta_outcome
+        if plan is None:
+            return run_state.Tally(beta.WORKFLOW, 0, 0, "no Product recruits a Beta Cohort")
+        if not plan.active:
+            why = (
+                "no Beta Build approval is recorded in Mandu"
+                if plan.gate.status == beta.NOT_RECORDED
+                else "the Beta Build record in Mandu could not be used"
+            )
+            return run_state.Tally(beta.WORKFLOW, 0, 0, f"not started: {why}")
+        reading = plan.reading
+        checked = len(reading.candidates) if reading is not None and reading.status == package.READ else 0
+        acted = len(outcome.published) + len(outcome.withdrawn) if outcome else 0
+        note = state.beta_problem or beta.batch_line(plan, outcome)
+        if plan.gap:
+            note += f"; the pool is {plan.gap} short of {plan.rules.minimum}"
+        return run_state.Tally(beta.WORKFLOW, checked, acted, note, "; ".join(self.beta_gaps(state)))
+
+    def beta_gaps(self, state: RunState) -> list[str]:
+        return beta.gaps(state.beta, state.beta_outcome, state.beta_problem, state.agent_gap())
+
     def post_gaps(self, state: RunState) -> list[str]:
         """Why the post Drafts are incomplete this run: a kit file, the code, or the brand rules could not be used,
         a due day has no Draft, or the agent or the take-in fell short. A blocked Draft is the check working, not a
@@ -512,14 +542,17 @@ class Cycle:
             missing = [str(result.day) for result in outcome.results if result.status == posts.MISSING]
             if missing:
                 gaps.append(f"no Draft for day {', '.join(missing)}")
-        if plan.days and state.agent.get("exit_code") != 0:
-            gaps.append("the agent did not finish")
+        if plan.days and state.agent_gap():
+            gaps.append(state.agent_gap())
         return gaps
 
     def outputs(self, state: RunState, config: settings.Settings, ledger_ok: bool) -> None:
         """Each output's status: a built output is incomplete when a failed source it needs names it, or when its own
-        step fell short."""
+        step fell short. A step that needed the agent names the agent's not finishing among its gaps, and the outputs
+        whose rows hold that gap are the ones the run's notice names; the rows are therefore worked out before that
+        notice is written, and again once the Review Queue holds it."""
         failed = state.failed_sources()
+        agent_gap = state.agent_gap()
         decisions = next((line.detail for line in state.sources if line.name == "Mandu decisions"), "")
         queued = report.plural(len(state.queue_after), "open item") + (
             f"; {len(state.set_aside)} set aside" if state.set_aside else ""
@@ -527,6 +560,10 @@ class Cycle:
         review_gap = state.review_gap()
         reading = state.waitlist
         skipped = {"waitlist-counts": reading.detail} if reading and reading.status == SKIPPED else {}
+        if state.beta is None or state.beta.gate.status == beta.NOT_RECORDED:
+            skipped[beta.WORKFLOW] = (
+                "the Founder has recorded no approved Beta Build in Mandu" if state.beta else "no Product recruits one"
+            )
         if state.filming is None and not state.filming_problem:
             skipped["filming-plan"] = "no active Product films"
         own = {
@@ -544,12 +581,13 @@ class Cycle:
                 f"`{state.waitlist_file}`",
             ),
             "post-drafts": (self.post_gaps(state), self.post_tally(state).note),
+            beta.WORKFLOW: (self.beta_gaps(state), self.beta_tally(state).note),
             "filming-plan": (
                 filming.gaps(state.filming) if state.filming is not None else [state.filming_problem],
                 self.filming_tally(state).note,
             ),
         }
-        rows = []
+        rows, agent_incomplete = [], []
         for key, output in config.outputs.items():
             title = str(output.get("title", key))
             if not output.get("built"):
@@ -559,9 +597,12 @@ class Cycle:
                 rows.append([title, SKIPPED, skipped[key]])
                 continue
             gaps, done = own.get(key, ([], ""))
+            if agent_gap and agent_gap in gaps:
+                agent_incomplete.append(title)
             gaps = [f"{line.name} could not be read" for line in failed if title in line.needed_by] + gaps
             rows.append([title, INCOMPLETE if gaps else COMPLETE, "; ".join(gaps) or done])
         state.outputs = rows
+        state.agent_incomplete = tuple(agent_incomplete)
 
     def prepare_posts(
         self, state: RunState, config: settings.Settings, registry, boundary: Boundary, ledger: Ledger
@@ -690,6 +731,99 @@ class Cycle:
             state.problems.append(f"`{filing.source}` could not be filed: {filing.detail}")
         state.filing = proposals.describe(filing, ledger)
 
+    def prepare_beta(
+        self,
+        state: RunState,
+        config: settings.Settings,
+        rules: beta.Rules | None,
+        folder: Path,
+        registry,
+        boundary: Boundary,
+        ledger: Ledger,
+        ledger_ok: bool,
+        areas: Areas,
+        previous: run_state.BetaRecruitingState,
+    ) -> None:
+        """Read the Founder's Beta Build record, the gate, as one of the run's sources. Before it exists nothing else
+        happens here: the Founder's reports are not read, no entry is chosen, and nothing is written. Once it does,
+        fix the run's recruiting plan and record which Drafts are due for check-beta-drafts. A run whose Review Queue
+        could not be read stops at the gate as well, since only the Review Queue says who is invited or offered."""
+        if rules is None:
+            return
+        needs = output_titles(config, (beta.WORKFLOW,))
+        found, problems, failure = read_records(folder / beta.BUILDS)
+        unusable = [(Path(record.name).name, "; ".join(record.problems)) for record in problems]
+        gate = beta.read_gate(rules.product, found, unusable, failure)
+        if gate.recorded and not ledger_ok:
+            state.beta = beta.Plan(rules, gate, state.run_id)
+            state.beta_problem = "not prepared: the Review Queue could not be read"
+        else:
+            reports, reports_failure = None, None
+            if gate.recorded:
+                reports, problems, reports_failure = read_records(folder / beta.REPORTS)
+                for record in problems:
+                    name = beta.mandu_file(beta.REPORTS, Path(record.name).name)
+                    state.problems.append(f"{name} could not be used ({'; '.join(record.problems)})")
+            try:
+                state.beta = beta.prepare(
+                    rules,
+                    gate,
+                    reports,
+                    reports_failure,
+                    registry,
+                    boundary,
+                    ledger,
+                    previous,
+                    state.waitlist,
+                    state.waitlist_file,
+                    self.store,
+                    state.run_id,
+                    self.now(),
+                )
+                if state.beta.active:
+                    record = self.store.path(RUN_REPORTS, beta.plan_file(state.run_id))
+                    self.store.write_json(record, beta.plan_record(state.beta, areas))
+            except (ConfigError, OSError) as error:
+                state.beta = beta.Plan(rules, gate, state.run_id)
+                state.beta_problem = f"not prepared: {error}"
+                state.problems.append(f"Beta Cohort recruiting could not be prepared ({error})")
+        for name, status, detail in beta.source_lines(state.beta):
+            state.sources.append(SourceLine(name, status, detail, needs))
+
+    def take_beta(
+        self,
+        state: RunState,
+        areas: Areas,
+        ledger: Ledger,
+        products: Sequence[str],
+        run_id: str,
+        now: datetime,
+    ) -> None:
+        """Queue each recruiting Draft that passes, the invitation with its batch attached, and record every check."""
+        plan = state.beta
+        if plan is None or not plan.active or plan.batch is None or state.beta_problem:
+            return
+        try:
+            state.beta_outcome = beta.take(plan, areas, self.store, ledger, run_id, now, products)
+            state.published += state.beta_outcome.published
+        except (OSError, ConfigError) as error:
+            state.beta_problem = f"not taken in: {error}"
+            state.problems.append(f"the Beta Cohort recruiting Drafts could not be taken in ({error})")
+
+    def settle_beta(
+        self, state: RunState, ledger: Ledger, states: run_state.States, run_id: str, now: datetime
+    ) -> None:
+        """Once the run's notice exists: take the recruiting items that no longer stand off the queue, bring the run
+        state to where the Review Queue now stands, and keep the run's recruiting Evidence."""
+        if state.beta_outcome is None:
+            return
+        beta.withdraw(ledger, state.beta_outcome, state.notice, run_id, now)
+        states.beta_recruiting = beta.settle(states.beta_recruiting, ledger.entries, state.beta)
+        try:
+            beta.record(state.beta, state.beta_outcome, self.store, run_id, now)
+        except (OSError, ConfigError) as error:
+            state.problems.append(f"the Beta Cohort recruiting Evidence could not be written ({error})")
+
     def leave_note(self, run_id: str, line: str) -> None:
         """A one-line note in ledger/notes/, which the next run's report shows."""
         self.store.write_text(self.store.path(NOTES_DIR, f"{run_id}.txt"), line + "\n")
@@ -803,6 +937,7 @@ class Cycle:
             registry = load_json(self.repo_root / "config" / "products.json")
             folder = settings.exchange_dir(registry, boundary, self.env, self.home)
             rules = settings.waitlist(registry, boundary, self.env, self.home)
+            beta_rules = beta.rules(registry, config)
             footage_place = filming.place(registry, boundary, self.env, self.home)
         except ConfigError as error:
             self.say(f"refusing to start: {error}")
@@ -848,6 +983,9 @@ class Cycle:
             for entry in ledger.entries.values()
             if entry["kind"] == "package-change-proposal" and entry["status"] != OPEN
         ]
+        self.prepare_beta(
+            state, config, beta_rules, folder, registry, boundary, ledger, ledger_ok, areas, states.beta_recruiting
+        )
         areas.ensure_folder(areas.path("review_queue", INCOMING))
         brief = self.store.path(RUN_REPORTS, f"{run_id}.brief.md")
         self.store.write_text(
@@ -865,6 +1003,7 @@ class Cycle:
                 now=started,
                 facts=[f"Run brief, read it first: {brief}"],
                 run_id=run_id,
+                time_limit=config.agent.time_limit,
             )
         except OSError as error:
             state.agent = {"exit_code": launcher.EXIT_CONFIG, "agent_started": False, "error": str(error)}
@@ -877,6 +1016,9 @@ class Cycle:
         state.usage = report.token_usage(log_dir / f"{run_id}.events.jsonl")
         if state.usage:
             state.cost = report.cost(state.usage, config.prices)
+        left = report.left_running(state.stop) if state.timed_out else None
+        if left:
+            state.problems.append(left)
         state.problems += records.restore_access(canonical(self.repo_root))
 
         now = self.now()
@@ -887,6 +1029,7 @@ class Cycle:
         incoming = len(published) + len(state.set_aside)
         if ledger_ok:
             self.take_posts(state, areas, ledger, products, run_id, now, seen)
+            self.take_beta(state, areas, ledger, products, run_id, now)
         elif state.posts is not None:
             state.posts_problem = "not taken in: the Review Queue could not be read"
         report_path = self.store.path(RUN_REPORTS, f"{run_id}.md")
@@ -909,6 +1052,7 @@ class Cycle:
                     " report is the only place it is told"
                 )
         state.queue_after = ledger.ordered()
+        self.outputs(state, config, ledger_ok)
         notice = report.problems_notice(state, self.store.relative(report_path))
         if notice and ledger_ok:
             state.notice = self.queue_notice(
@@ -916,6 +1060,8 @@ class Cycle:
             )
         if ledger_ok and state.post_outcome is not None and state.post_outcome.withdrawn:
             posts.withdraw(ledger, state.post_outcome, state.notice, run_id, now)
+        if ledger_ok:
+            self.settle_beta(state, ledger, states, run_id, now)
         state.queue_after = ledger.ordered()
         self.outputs(state, config, ledger_ok)
         if ledger_ok:

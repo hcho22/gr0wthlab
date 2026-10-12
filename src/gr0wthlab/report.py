@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from . import exchange, filming, package, posts, schedule, waitlist
+from . import beta, exchange, filming, package, posts, process, schedule, waitlist
 from .state import Tally, run_tally
 
 SKIPPED = "skipped"
@@ -24,6 +24,9 @@ REVIEW_COMPLETE = "Review: complete"
 REVIEW_INCOMPLETE = "Review: incomplete"
 USAGE_FIELDS = ("input_tokens", "cached_input_tokens", "cache_write_input_tokens", "output_tokens")
 NOTICE_BODY_LIMIT = exchange.MAX_ITEM_CHARS // 2
+# Fewer seconds than this between the agent's wall-clock time and its awake time are the two clocks' own difference,
+# not the Mac asleep.
+ASLEEP_AT_LEAST = 5
 
 
 @dataclass
@@ -75,6 +78,7 @@ class RunState:
     set_aside: list = field(default_factory=list)  # queue.SetAside
     queue_after: list[Mapping[str, object]] = field(default_factory=list)
     agent: Mapping[str, object] = field(default_factory=dict)
+    agent_incomplete: tuple[str, ...] = ()  # the titles of the outputs the agent's not finishing leaves incomplete
     agent_summary: str = ""
     review: str = ""  # the last line of the agent's whole summary
     usage: Mapping[str, int] | None = None
@@ -96,6 +100,9 @@ class RunState:
     filed: str | None = None  # the brand-rules proposal, when this run filed it
     filming: filming.Filming | None = None
     filming_problem: str = ""  # why filming was not planned, when a Product films and it was not
+    beta: beta.Plan | None = None  # Beta Cohort recruiting: the gate, and once it is recorded, the run's plan
+    beta_outcome: beta.Outcome | None = None
+    beta_problem: str = ""  # why recruiting was not prepared or not taken in, when it was not
 
     @property
     def lateness(self) -> timedelta | None:
@@ -111,11 +118,39 @@ class RunState:
     def failed_sources(self) -> list[SourceLine]:
         return [line for line in self.sources if line.status == package.FAILED]
 
+    @property
+    def timed_out(self) -> bool:
+        """Whether the launcher stopped the agent at its time limit."""
+        return bool(self.agent.get("timed_out"))
+
+    @property
+    def time_limit(self) -> str:
+        """The agent's time limit in words."""
+        return process.limit_text(float(self.agent.get("time_limit_seconds") or 0))
+
+    @property
+    def asleep(self) -> float:
+        """About how many seconds of the agent's time the Mac was asleep, its wall-clock time less its awake time; 0
+        when the agent did not run or the Mac stayed awake."""
+        gap = float(self.agent.get("agent_seconds") or 0) - float(self.agent.get("agent_awake_seconds") or 0)
+        return gap if gap >= ASLEEP_AT_LEAST else 0.0
+
+    @property
+    def stop(self) -> process.Stop:
+        """What stopping a timed-out agent took, as the launcher's run record keeps it."""
+        return process.Stop.from_json(self.agent.get("stopped") or {})
+
+    def agent_gap(self) -> str:
+        """Why every output that needs the agent is incomplete this run, or "" when the agent finished."""
+        if self.timed_out:
+            return f"the agent was stopped at its {self.time_limit} time limit"
+        return "" if self.agent.get("exit_code") == 0 else "the agent did not finish"
+
     def review_gap(self) -> str:
         """Why the agent's package review is incomplete, or "" when it finished: it must stop with exit code 0 and end
         its summary with the line `Review: complete`, so a summary that says otherwise, or says nothing, is not."""
-        if self.agent.get("exit_code") != 0:
-            return "the agent did not finish"
+        if self.agent_gap():
+            return self.agent_gap()
         if self.review == REVIEW_COMPLETE:
             return ""
         if self.review.startswith(REVIEW_INCOMPLETE):
@@ -221,7 +256,11 @@ def start_line(state: RunState) -> str:
 
 
 def cost_line(state: RunState) -> str:
+    """The run's approximate cost from the token counts Codex reported, or that there is none to state: Codex reports
+    them as each turn ends, so an agent stopped at its time limit leaves at most a part of them, never a zero."""
     if not state.usage:
+        if state.timed_out:
+            return "Approximate cost: not available; the agent was stopped before it reported any token counts."
         return "Approximate cost: unknown; the agent reported no token counts."
     usage = state.usage
     tokens = (
@@ -229,7 +268,36 @@ def cost_line(state: RunState) -> str:
         f"and {usage['output_tokens']:,} output tokens"
     )
     amount = f"{state.cost:.2f}" if state.cost >= 0.1 else f"{state.cost:.3f}"
+    if state.timed_out:
+        return (
+            f"Approximate cost: at least ${amount} at API prices, for the {tokens} reported before the agent was"
+            " stopped; what its unfinished turn used is not available."
+        )
     return f"Approximate cost: about ${amount} at API prices, for {tokens}."
+
+
+def span_text(seconds: float) -> str:
+    """How long something took, in hours, minutes, and seconds."""
+    minutes, rest = divmod(int(round(seconds)), 60)
+    hours, minutes = divmod(minutes, 60)
+    return " ".join([f"{hours} h"] * bool(hours) + [f"{minutes} min"] * bool(hours or minutes) + [f"{rest} s"])
+
+
+def left_running(stop: process.Stop) -> str | None:
+    """The launcher problem a stop leaves when it could not show that none of the processes it found is still running;
+    the process ids stay in the run report's Agent section, so the same problem reads the same at every run."""
+    if stop.left:
+        count = "1 process" if len(stop.left) == 1 else f"{len(stop.left)} processes"
+        return (
+            f"{count} the agent started could not be stopped and may still be running; the run report's Agent section"
+            " names each"
+        )
+    if not stop.proven:
+        return (
+            "the process table could not be read after the agent was stopped, so nothing shows whether a process it"
+            " started is still running"
+        )
+    return None
 
 
 def file_line(file: package.FileResult) -> str:
@@ -346,7 +414,7 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
     lines += table(["File", "This run"], rows) + ["", "## Changes since the previous snapshot", ""]
     lines += package_changes(state)
     lines += ["", "## Failed sources", ""]
-    failed = state.failed_sources()
+    failed = [line for line in state.failed_sources() if line.name not in beta.LAUNCHER_SOURCES]
     if failed:
         lines += [
             "A failed source blocks only the work that needs it: never guess what it says, and do everything else.",
@@ -365,8 +433,8 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
     if state.queue_before:
         lines += [
             "Do not queue these again; to change one, write a new item with `supersedes: <id>`.",
-            "An item filed by the launcher changes only through a reviewed change to its source text, and a post only"
-            " through its Draft, so an item that supersedes either is refused.",
+            "An item filed by the launcher changes only through a reviewed change to its source text, and a post or a"
+            " message only through its Draft, so an item that supersedes any of them is refused.",
         ]
         for entry in state.queue_before:
             filed = ", filed by the launcher" if entry.get("origin") else ""
@@ -395,6 +463,9 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
         lines += [""] + posts.brief_lines(state.posts, repo_root)[:-1]
     if state.filming is not None:
         lines += [""] + filming.brief_lines(state.filming, repo_root)[:-1]
+    if state.beta is not None and not state.beta_problem:
+        recruiting = beta.brief_lines(state.beta, repo_root)
+        lines += [""] * bool(recruiting) + recruiting[:-1]
     lines += [
         "",
         "## Where to write",
@@ -418,10 +489,21 @@ def summary_lines(state: RunState) -> list[str]:
     lines += [f"- {line}" for line in state.notes]
     if agent == 0:
         lines.append("- The run finished.")
+    elif state.timed_out:
+        lines.append(
+            f"- The run timed out: the agent was still running at its {state.time_limit} time limit, so the launcher"
+            " stopped it and finished the run without it. What the agent had written was checked as always, and each"
+            " output that needed the agent this run is incomplete; see Outputs and Agent below."
+        )
     elif not state.agent.get("agent_started"):
         lines.append("- The agent did not start; see Agent below. Everything the launcher does alone still ran.")
     else:
         lines.append(f"- The agent stopped with exit code {agent}; its work this run may be incomplete.")
+    if state.asleep:
+        lines.append(
+            f"- The Mac was asleep for about {span_text(state.asleep)} while the agent ran, which counts toward the"
+            " agent's time limit."
+        )
     refused = sum(1 for line in state.sources if line.status == waitlist.REFUSED)
     lines.append(
         f"- Sources: {len(failed)} failed"
@@ -446,6 +528,9 @@ def summary_lines(state: RunState) -> list[str]:
         lines.append(f"- Post Drafts: {state.posts_problem}")
     if state.filming is not None or state.filming_problem:
         lines.append(f"- Filming: {state.filming_problem or filming.tally(state.filming).note}.")
+    recruiting = beta.summary(state.beta, state.beta_outcome, state.beta_problem)
+    if recruiting:
+        lines.append(f"- {recruiting}")
     if state.notice:
         lines.append(f"- Problems this run are listed in the notice `{state.notice}`.")
     lines.append(f"- {cost_line(state)}")
@@ -477,6 +562,8 @@ def render_report(state: RunState) -> str:
     lines += [""] + posts.report_lines(state.posts, state.post_outcome, state.filing, state.posts_problem)
     if state.filming is not None or state.filming_problem:
         lines += [""] + filming.report_lines(state.filming, state.filming_problem)
+    recruiting = beta.report_lines(state.beta, state.beta_outcome, state.beta_problem)
+    lines += [""] * bool(recruiting) + recruiting
     lines += ["", "## Run state", ""]
     lines += [f"- {tally.workflow}: {tally.line()}" for tally in state.tallies]
     if state.state_notes:
@@ -494,7 +581,15 @@ def render_report(state: RunState) -> str:
         lines.append(f"- Configuration fingerprint: `{state.agent['fingerprint']}`")
     if state.agent.get("error"):
         lines.append(f"- Did not start: {state.agent['error']}")
-    lines.append(f"- Exit code: {state.agent.get('exit_code', 'none')}")
+    if state.agent.get("agent_seconds") is not None:
+        took = span_text(float(state.agent["agent_seconds"]))
+        asleep = f", about {span_text(state.asleep)} of it with the Mac asleep" if state.asleep else ""
+        lines.append(f"- Agent time: {took}{asleep}; time limit {state.time_limit}.")
+    if state.timed_out:
+        lines.append(f"- Timed out: {state.stop.describe()}.")
+        lines.append(f"- Exit code: {state.agent.get('exit_code')}, the run's own for an agent stopped at its limit")
+    else:
+        lines.append(f"- Exit code: {state.agent.get('exit_code', 'none')}")
     lines.append(f"- Code: {state.code}" + (f"; {state.sync['detail']}" if state.sync else ""))
     lines.append(f"- Task definition: `{state.instruction}`")
     if state.agent_summary.strip():
@@ -514,6 +609,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     """One notice for the Founder per run with problems, in plain outcome language; None if there were none.
 
     A notice about one kind of problem says what it is in its title; a notice about several counts every problem.
+    A run that timed out says so first, in its title and its text, whatever else went wrong.
     """
     day = wall_clock(state.started).strftime("%Y-%m-%d")
     sections: list[tuple[int, str, str]] = []  # how many problems, the title, the text
@@ -558,6 +654,9 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     unfilmed = filming.notice_section(state.filming, day)
     if unfilmed:
         sections.append(unfilmed)
+    recruiting = beta.notice_section(state.beta_outcome, day)
+    if recruiting:
+        sections.append(recruiting)
     if state.set_aside:
         sections.append(
             (
@@ -572,6 +671,20 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     if not state.agent.get("agent_started"):
         error = state.agent.get("error") or "see the run report"
         sections.append((1, f"the agent did not start on {day}", f"The agent did not start: {error}."))
+    elif state.timed_out:
+        needs = ", ".join(state.agent_incomplete) or "nothing"
+        sections.insert(
+            0,
+            (
+                1,
+                f"the run timed out on {day}",
+                f"The agent was still running at its {state.time_limit} time limit, so the launcher stopped it and"
+                " finished the run without it. What the agent had written by then was checked as always: anything"
+                " queued from it passed every check, and anything unfinished was set aside or blocked. Incomplete this"
+                f" run: {needs}. The next run does this work again; if runs keep timing out, the limit is"
+                " `agent.time_limit_seconds` in `config/run.json`.",
+            ),
+        )
     elif agent != 0:
         sections.append(
             (
@@ -612,11 +725,13 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
         )
     if not sections:
         return None
-    title = (
-        f"Notice: {sections[0][1]}"
-        if len(sections) == 1
-        else f"Notice: the run on {day} had {plural(sum(count for count, _, _ in sections), 'problem')}"
-    )
+    total = sum(count for count, _, _ in sections)
+    if len(sections) == 1:
+        title = f"Notice: {sections[0][1]}"
+    elif state.timed_out:
+        title = f"Notice: the run timed out on {day} and had {plural(total - 1, 'other problem')}"
+    else:
+        title = f"Notice: the run on {day} had {plural(total, 'problem')}"
     body = "\n\n".join(text for _, _, text in sections)
     if len(body) > NOTICE_BODY_LIMIT:
         cut = body.rfind("\n", 0, NOTICE_BODY_LIMIT)

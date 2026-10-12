@@ -20,6 +20,7 @@ The edit record's format is in the task definition, and the launcher's checks de
 - Read the brief's Filming table: it lists, for each calendar day due, the shots the edit must show, the length the Format gives, the files the footage place holds for each shot with what was measured, and whether the day is ready.
 - Write an edit record only for a day marked ready.
   A day is not ready while its filming plan is not approved, while a shot has no file or lacks a take the day needs, or while the video tooling is missing; the table says which, and so should your summary.
+- When the table says to leave a day's edit record as it is, leave it exactly so: the day's post already shows its video, the video cannot be cut again this run, and the post keeps it only while the record is in place and the Draft is unchanged.
 - Read the day's post Draft: its beats set the video's length and the time of every line of text.
   The edit runs exactly to the last beat's end.
 
@@ -64,4 +65,5 @@ The edit record's format is in the task definition, and the launcher's checks de
 
 - check-edits names the rule: fix what the edit record can fix, such as a range past the end of a file or a length that does not match the Draft.
 - A record the footage cannot satisfy is removed, never bent to pass: say which shot or file is the problem, so the Founder films it again.
+  A record check-edits reports as kept is not such a record: its day's post shows its video, so the record stays as it is until it can be cut again.
 - Never use a file as a shot it is not named for, and never name a file the brief does not list.

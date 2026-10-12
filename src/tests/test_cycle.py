@@ -190,14 +190,14 @@ class FirstRunTest(CycleTestCase):
 
 class DecisionRoundTripTest(CycleTestCase):
     KINDS = {
-        "message": ("network-ask", ""),
         "package-change-proposal": ("name-status-stale", ""),
         "dispatch-request": ("waitlist", ""),
         "weekly-read-decision": ("angle-keep", ""),
         "notice": ("example-notice", ""),
     }
 
-    def test_one_item_of_each_kind_two_approved_two_rejected_two_undecided(self):
+    def test_one_item_of_each_kind_the_agent_files_and_a_post_two_approved_one_rejected_two_undecided(self):
+        """A message is queued only from a recruiting Draft, so its round trip is in test_beta_cycle."""
         writes = {
             f"review-queue/incoming/{slug}.md": fakes.proposal(kind, extra, title=slug)
             for kind, (slug, extra) in self.KINDS.items()
@@ -211,14 +211,14 @@ class DecisionRoundTripTest(CycleTestCase):
         # Every kind but the filming plan, which only the launcher files, and only when a Product films
         # (test_filming).
         self.assertEqual(
-            [entry["kind"] for entry in first["open"]], [kind for kind in exchange.KINDS if kind != "filming-plan"]
+            [entry["kind"] for entry in first["open"]],
+            [kind for kind in exchange.KINDS if kind not in ("filming-plan", "message")],
         )
         ids = {entry["kind"]: entry["id"] for entry in first["open"]}
         self.assertEqual(ids["post"], "20261011-post-w1-day-01")
 
         self.decide(ids["post"], "approve", note="Good hook.")
         self.decide(ids["notice"], "approve")
-        self.decide(ids["message"], "reject", reason="Too salesy for my network.")
         self.decide(ids["package-change-proposal"], "reject", reason="Wait for counsel.")
         day = self.sit()
         fakes.set_window(self.repo, fakes.QUIET_WINDOW)
@@ -233,17 +233,19 @@ class DecisionRoundTripTest(CycleTestCase):
         )
         closed = {entry["id"]: entry["status"] for entry in second["closed"]}
         self.assertEqual(closed[ids["post"]], "approved")
-        self.assertEqual(closed[ids["message"]], "rejected")
+        self.assertEqual(closed[ids["package-change-proposal"]], "rejected")
         evidence = self.ledger() / "evidence/decisions"
-        rejected = json.loads((evidence / f"{ids['message']}.json").read_text(encoding="utf-8"))
-        self.assertEqual((rejected["decision"], rejected["reason"]), ("reject", "Too salesy for my network."))
-        self.assertEqual(rejected["item_file"], f"review-queue/items/{ids['message']}.md")
-        self.assertEqual(rejected["source"]["path"], str(self.exchange / f"decisions/{ids['message']}.json"))
+        rejected = json.loads((evidence / f"{ids['package-change-proposal']}.json").read_text(encoding="utf-8"))
+        self.assertEqual((rejected["decision"], rejected["reason"]), ("reject", "Wait for counsel."))
+        self.assertEqual(rejected["item_file"], f"review-queue/items/{ids['package-change-proposal']}.md")
+        self.assertEqual(
+            rejected["source"]["path"], str(self.exchange / f"decisions/{ids['package-change-proposal']}.json")
+        )
         approved = json.loads((evidence / f"{ids['post']}.json").read_text(encoding="utf-8"))
         self.assertEqual(approved["note"], "Good hook.")
         self.assertTrue((self.ledger() / "evidence/sittings/2026-10-11.json").is_file())
         report = self.report()
-        self.assertIn("| Mandu decisions | changed | 4 records, 4 new since the previous run |", report)
+        self.assertIn("| Mandu decisions | changed | 3 records, 3 new since the previous run |", report)
         self.assertIn("Reason: Wait for counsel.", report)
         self.assertIn(f"Sitting {day}: 41 minutes.", report)
         self.assertIn(f"carried over from the sitting on {day}", report)
@@ -254,7 +256,6 @@ class DecisionRoundTripTest(CycleTestCase):
             {
                 ids["post"]: "approved",
                 ids["notice"]: "approved",
-                ids["message"]: "rejected",
                 ids["package-change-proposal"]: "rejected",
             },
         )
@@ -262,7 +263,7 @@ class DecisionRoundTripTest(CycleTestCase):
             {key: value["carried_over_from"] for key, value in recorded["carried"].items()},
             {ids["dispatch-request"]: day, ids["weekly-read-decision"]: day},
         )
-        self.assertIn("review-queue 4 decisions taken in", report)
+        self.assertIn("review-queue 3 decisions taken in", report)
 
         rejected_again = {"review-queue/incoming/again.md": fakes.proposal(title="name-status-stale")}
         fakes.behave(self.codex_dir, {"write": rejected_again})
@@ -272,7 +273,7 @@ class DecisionRoundTripTest(CycleTestCase):
         notice = (self.ledger() / third["open"][2]["file"]).read_text(encoding="utf-8")
         self.assertIn(f"asks the same as {ids['package-change-proposal']}, which is rejected", notice)
         self.assertIn(f"carried over from the sitting on {day}", self.report())
-        self.assertIn("4 records, 0 new since the previous run", self.report())
+        self.assertIn("3 records, 0 new since the previous run", self.report())
         self.assertIn("rejected: Approve package change: name-status-stale. Reason: Wait for counsel.", self.brief())
 
     def test_a_decision_on_an_item_superseded_before_it_was_taken_in_is_kept(self):
@@ -1291,7 +1292,10 @@ class PostDraftsTest(CycleTestCase):
             report,
         )
         self.assertIn("| 3 | P03 / AB-2 leg A | kept |", report)
-        self.assertIn("and a post only through its Draft, so an item that supersedes either is refused.", self.brief())
+        self.assertIn(
+            "and a post or a message only through its Draft, so an item that supersedes any of them is refused.",
+            self.brief(),
+        )
 
     def test_a_withdrawn_post_is_counted_once_and_leaves_the_report_s_count_of_open_items(self):
         self.first_batch()

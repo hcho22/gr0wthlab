@@ -66,6 +66,7 @@ WITHHELD = "not offered"
 NO_EDIT = "no edit record"
 READY = "ready to cut"
 SETTLED = "the Founder approved its post with its video, so nothing is cut again and its edit record stays as it is"
+KEEPS = "its post keeps the video it shows"
 
 
 def plural(count: int, noun: str) -> str:
@@ -300,6 +301,8 @@ class Filming:
     unplanned: dict[int, str] = field(default_factory=dict)
     posted: dict[int, dict[str, object]] = field(default_factory=dict)  # each calendar day's standing post
     due: dict[int, bool] = field(default_factory=dict)  # each due day: whether its video is already approved
+    approved: dict[int, dict[str, object]] = field(default_factory=dict)  # each due day's approved post, if any
+    rejected: dict[int, list[dict[str, object]]] = field(default_factory=dict)  # each due day's rejected posts
     problem: str = ""  # why nothing could be planned this run
     calendar_lines: list[int] = field(default_factory=list)  # the calendar rows the plan read
     screen_rule: shots.ScreenRule | None = None
@@ -307,6 +310,7 @@ class Filming:
     record: str | None = None
     env: Mapping[str, str] = field(default_factory=dict)  # what the video tooling runs with
     apart: list[str] = field(default_factory=list)  # each pair whose two videos differ, as the Founder is told
+    shown: set[int] = field(default_factory=set)  # the due days whose post shows a video when the run ends
 
     def edit_path(self, number: int) -> Path:
         return self.edits / f"day-{number:02d}.json"
@@ -386,17 +390,48 @@ class Filming:
                     f"a file could not be read or written while it was cut ({error.strerror or error}{where})"
                 )
 
-    def leave(self, changed: Mapping[int, bool], store: Store) -> None:
+    def leave(self, changed: Mapping[int, Asset | None], store: Store) -> None:
         """The pair check of a run, once the post-Draft workflow knows what it is about to queue and before it queues
-        anything: changed holds each day whose post is about to change, and whether the post is about to show the
-        video this run cut for it."""
-        self.pair_check(
-            {
-                number: read_json(store.path(self.results[number].record)) if shows else None
-                for number, shows in changed.items()
-            },
-            store,
-        )
+        anything: changed holds each day whose post is about to change, with the video the post is about to show,
+        the one this run cut for it or the one its post showed carried over, or None when it is about to show
+        none."""
+        fresh = {
+            number: read_json(store.path(asset.record)) if asset is not None else None
+            for number, asset in changed.items()
+        }
+        self.pair_check(fresh, changed, store)
+
+    def carry(self, held: Asset, store: Store) -> Asset | None:
+        """The video a day's standing post shows, as a finished asset the post that replaces it can show again, for
+        a day whose video could not be cut again this run, which held says why; None when the finished file is gone
+        or is no longer the file its record and its post name."""
+        posted, made = self.posted.get(held.day) or {}, self.standing_video(held.day, store)
+        try:
+            if not footage.fingerprint(store.path(str(made["asset"])))[0] == made["sha256"] == posted["asset_sha256"]:
+                return None
+            asset = Asset(
+                held.day,
+                FINISHED,
+                held.detail,
+                made["edit"]["path"],
+                made["edit"]["sha256"],
+                path=made["asset"],
+                sha256=made["sha256"],
+                bytes=made["bytes"],
+                facts=video.Facts.from_json(made["facts"]),
+                record=str(posted["asset_record"]),
+                reused=True,
+                checks=list(made["checks"]),
+                opening=made["opening"],
+            )
+            clock = 0.0
+            for cut in made["cuts"]:
+                segment = edits.Segment(cut["shot"], cut["source"], cut["in"], cut["out"], cut["speed"])
+                asset.cuts.append(dict(segment.as_json(), at=round(clock, 3), until=round(clock + segment.length, 3)))
+                clock += segment.length
+        except (ConfigError, OSError, KeyError, TypeError, ValueError):
+            return None
+        return asset
 
     def preview(self, areas: Areas, store: Store) -> None:
         """Each due day's edit record as check-edits sees it before anything is cut: its own checks, then the pair
@@ -415,17 +450,18 @@ class Filming:
                 stands = False
             if not stands:
                 fresh[number] = would
-        self.pair_check(fresh, store)
+        self.pair_check(fresh, self.results, store)
 
-    def pair_check(self, fresh: Mapping[int, Mapping | None], store: Store) -> None:
+    def pair_check(self, fresh: Mapping[int, Mapping | None], assets: Mapping[int, Asset | None], store: Store) -> None:
         """The one rule of an A/B pair's videos: when a run ends, the two posts of a pair never both show a video
         unless the two videos show the same source ranges outside each one's opening.
 
         Checked once per pair, on what the run is about to leave standing. fresh holds each day whose post the run is
         about to change, with the record of the video the post is about to show, or None when it is about to show
-        none; any other day keeps the video its standing post shows. Each video is judged by its own record in the
-        ledger, which holds each cut with the fingerprint of the file it was made from and where the opening is,
-        never by the files in place or by their names.
+        none, and assets what the launcher made of that video, where the outcome is written; any other day keeps the
+        video its standing post shows. Each video is judged by its own record in the ledger, which holds each cut
+        with the fingerprint of the file it was made from and where the opening is, never by the files in place or
+        by their names.
 
         When the two videos differ, nothing the run changed for the pair is offered, so what stood before stays, and
         the run report and the notice name the pair and say why. A leg's checks say it shows the same source ranges
@@ -438,9 +474,7 @@ class Filming:
             theirs = fresh[other] if other in fresh else self.standing_video(other, store)
             cut = [leg for leg in (number, other) if fresh.get(leg) is not None]
             if theirs is None:
-                self.results[number].checks.append(
-                    f"day {other}, its pair's other leg, has no video to compare with yet"
-                )
+                assets[number].checks.append(f"day {other}, its pair's other leg, has no video to compare with yet")
                 continue
             try:
                 differ = edits.unlike(fresh[number], theirs)
@@ -449,9 +483,7 @@ class Filming:
             if differ == "":
                 where = "after the re-cut opening" if day.spec.recut else "from the first frame to the last"
                 for leg in cut:
-                    self.results[leg].checks.append(
-                        f"the same source ranges as day {number + other - leg}'s leg {where}"
-                    )
+                    assets[leg].checks.append(f"the same source ranges as day {number + other - leg}'s leg {where}")
                 continue
             where = "after each one's opening" if day.spec.recut else "from the first frame to the last"
             said = (
@@ -467,7 +499,7 @@ class Filming:
                 for leg in (number, other)
             }
             for leg in cut:
-                asset = self.results[leg]
+                asset = assets[leg]
                 asset.status, asset.detail = WITHHELD, f"the video cut for it and {names[number + other - leg]} {said}"
             first, second = sorted((number, other))
             self.apart.append(
@@ -480,6 +512,19 @@ class Filming:
         record = (self.posted.get(number) or {}).get("asset_record")
         return read_json(store.path(str(record))) if record else None
 
+    def waits(self, number: int) -> bool:
+        """Whether a day that cannot be cut this run has an open post that shows a video. That post keeps the video
+        while its Draft is the one it was queued from, and the day's edit record stays as it is until it can be cut
+        again, so nothing the agent is shown may ask it to change or remove that record."""
+        day, posted = self.days.get(number), self.posted.get(number) or {}
+        shows = posted.get("status") == OPEN and bool(posted.get("asset_sha256"))
+        return day is not None and not day.ready and not self.due.get(number) and shows
+
+    def keeps(self, number: int) -> bool:
+        """Whether a day's post shows a video when the run ends though the Founder has not approved one for it, so
+        that a video that could not be cut for it this run leaves it with the one it shows."""
+        return number in self.shown and not self.due.get(number)
+
     def hold(self, number: int, why: str) -> None:
         """Account for a day the post-Draft workflow asked no video of for a reason the Founder must be told."""
         self.results[number] = Asset(number, HELD, why, told=True)
@@ -487,12 +532,23 @@ class Filming:
     def settle(self, outcome: posts.Outcome | None) -> None:
         """Account for each due day the post-Draft workflow did not ask a video of, so the report names every day.
         A video is cut only from a Draft that passes, so a day with an edit record and no video gets the reason
-        its post got; outcome is None when the Drafts could not be taken in at all."""
+        its post got; outcome is None when the Drafts could not be taken in at all.
+
+        It also notes which due days' posts show a video when the run ends, so that the report and the notice never
+        say a day has no video while its post shows one: the post queued for the day when it has a video, and
+        otherwise the post that stood, unless the run withdrew it."""
         taken = {result.day: result for result in outcome.results} if outcome else {}
         for number, day in self.days.items():
+            result = taken.get(number)
+            if result is not None and result.status == posts.QUEUED:
+                shows = result.asset is not None and result.asset.finished
+            else:
+                shows = not (result and result.withdrawn) and bool((self.posted.get(number) or {}).get("asset_sha256"))
+            if shows:
+                self.shown.add(number)
             if number in self.results:
                 continue
-            exists, result = self.wanted(number), taken.get(number)
+            exists = self.wanted(number)
             if not exists or self.due.get(number):
                 why = day.why if not day.ready else "it is ready for an edit record and has none"
             else:
@@ -606,6 +662,8 @@ class Filming:
             "unplanned": {str(number): why for number, why in self.unplanned.items()},
             "posted": {str(number): post for number, post in self.posted.items()},
             "due": {str(number): approved for number, approved in self.due.items()},
+            "approved": {str(number): post for number, post in self.approved.items()},
+            "rejected": {str(number): entries for number, entries in self.rejected.items()},
             "drafts": str(self.drafts),
             "edits": str(self.edits),
         }
@@ -649,6 +707,8 @@ def from_record(data: object) -> Filming:
             unplanned={int(number): str(why) for number, why in data["unplanned"].items()},
             posted={int(number): dict(post) for number, post in data["posted"].items()},
             due={int(number): approved is True for number, approved in data["due"].items()},
+            approved={int(number): dict(post) for number, post in data["approved"].items()},
+            rejected={int(number): [dict(entry) for entry in entries] for number, entries in data["rejected"].items()},
             problem=str(data["problem"]),
         )
     except (AttributeError, KeyError, TypeError, ValueError) as error:
@@ -891,7 +951,8 @@ def file_plan(
     if current is None and refused is not None:
         reason = f": {refused['reason']}" if refused.get("reason") else ""
         return Standing(DECIDED, str(refused["id"]), reason, approved=held)
-    previous = current or (mine[-1] if mine else None)
+    decided = [entry for entry in mine if {APPROVED, REJECTED} & {entry["status"], entry.get("decided")}]
+    previous = current or next(reversed(decided or mine), None)
     item = plan_item(filming, previous)
     if previous is not None:
         item = exchange.Item(
@@ -1072,6 +1133,9 @@ def prepare(
     for due in plan.days:
         number, day = due.day.day, due.day
         filming.due[number] = bool(due.approved and due.approved.get("asset_sha256"))
+        if due.approved:
+            filming.approved[number] = dict(due.approved)
+        filming.rejected[number] = [dict(entry) for entry in due.rejected]
         job = found.job_for(number)
         if job is None:
             continue
@@ -1135,8 +1199,8 @@ def brief_lines(filming: Filming, repo_root: Path) -> list[str]:
     lines += [
         "",
         f"Write an edit record for each day marked ready, as `{filming.edits}/day-NN.json`, in the format the task"
-        " definition gives, and for no other day. Check them before you finish:"
-        f" `{check_command(filming, repo_root)}`.",
+        " definition gives, and for no other day. Where the table says to leave a day's edit record as it is, change"
+        f" nothing in it and do not remove it. Check them before you finish: `{check_command(filming, repo_root)}`.",
         "",
         "| Day | Shots its edit must show | Length | Footage files | Edit record |",
         "| --- | --- | --- | --- | --- |",
@@ -1156,6 +1220,8 @@ def brief_lines(filming: Filming, repo_root: Path) -> list[str]:
         else:
             pair = ""
         state = "ready" if day.ready else f"not ready: {day.why}"
+        if filming.waits(number):
+            state += f"; {KEEPS} while its Draft stays as it is, so leave its edit record as it is"
         lines.append(
             f"| {number} | {posts.cell('; '.join(shot_rules(shot) for shot in spec.shots))} | {span(spec.length)}{pair}"
             f" | {posts.cell('; '.join(files) or 'none yet')} | {posts.cell(state)} |"
@@ -1218,6 +1284,8 @@ def report_lines(filming: Filming | None, skipped: str = "") -> list[str]:
         asset = filming.results.get(number)
         status = asset.status if asset else (NO_EDIT if day.ready else HELD)
         detail = result_line(asset) if asset else day.why
+        if asset is not None and asset.held and filming.keeps(number):
+            detail += f"; {KEEPS}"
         names = ", ".join(shot.id for shot in day.spec.shots)
         lines.append(f"| {number} | {names} | {status} | {posts.cell(detail)} |")
     if filming.apart:
@@ -1233,7 +1301,8 @@ def notice_section(filming: Filming | None, day_text: str) -> tuple[int, str, st
     videos differ, so that nothing the run changed for it is offered; None when there is nothing. Before any footage
     is in the window's folder nothing is missing yet, so no shot is named, and neither is a shot of a day whose video
     the Founder already approved. An edit record that failed a check blocked its day's post, so the post Drafts' part
-    of the notice names it."""
+    of the notice names it. A day whose post shows a video when the run ends is never said to have none: its video
+    could not be cut again, and its post keeps the video it shows."""
     if filming is None:
         return None
     lines = []
@@ -1255,7 +1324,10 @@ def notice_section(filming: Filming | None, day_text: str) -> tuple[int, str, st
                 reasons.append(no_shared_take(unshared, spec.recut))
             if unopened:
                 reasons.append(no_own_take(unopened[0], spec.leg))
-            lines.append(f"- Day {number} has no video: {' and '.join(reasons)}, and nothing is substituted.")
+            if filming.keeps(number):
+                lines.append(f"- Day {number}'s video could not be cut again: {' and '.join(reasons)}; {KEEPS}.")
+            else:
+                lines.append(f"- Day {number} has no video: {' and '.join(reasons)}, and nothing is substituted.")
     for clip in inventory.unmatched():
         lines.append(f"- `{clip.name}` in the footage place is footage of no shot: {clip.problem}.")
     for clip in inventory.unmeasured():
@@ -1263,12 +1335,21 @@ def notice_section(filming: Filming | None, day_text: str) -> tuple[int, str, st
     waiting = sorted(asset.day for asset in filming.results.values() if asset.held and asset.edit)
     if waiting and not filming.tooling.ok:
         many = len(waiting) > 1
+        kept = [number for number in waiting if filming.keeps(number)]
+        keeping = (
+            f"; the {'posts' if len(kept) > 1 else 'post'} of {'days' if len(kept) > 1 else 'day'} {listed(kept)}"
+            f" {'keep the videos they show' if len(kept) > 1 else 'keeps the video it shows'}"
+            if kept
+            else ""
+        )
         lines.append(
             f"- The {'edits' if many else 'edit'} of {'days' if many else 'day'} {listed(waiting)}"
-            f" {'were' if many else 'was'} skipped: {filming.tooling.problem}."
+            f" {'were' if many else 'was'} skipped: {filming.tooling.problem}{keeping}."
         )
     for asset in sorted(filming.results.values(), key=lambda asset: asset.day):
-        if asset.told:
+        if asset.told and filming.keeps(asset.day):
+            lines.append(f"- Day {asset.day}'s video could not be cut again: {asset.detail}; {KEEPS}.")
+        elif asset.told:
             lines.append(f"- Day {asset.day}'s video was not cut: {asset.detail}.")
     lines += [f"- {line}" for line in filming.apart]
     if not lines:

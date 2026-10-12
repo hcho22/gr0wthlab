@@ -60,7 +60,11 @@ class ItemCheckTest(unittest.TestCase):
         self.assertEqual(check.problems, [])
         self.assertEqual(check.item.fields["asset"], "assets/window-1/day-03-0a1b2c3d4e5f.mp4")
         rendered = exchange.render_item(
-            dict(check.item.fields, exchange="4", id="20261011-post-w1-day-03"), "Ask", "B", "T", "E"
+            dict(check.item.fields, exchange=str(exchange.EXCHANGE_VERSION), id="20261011-post-w1-day-03"),
+            "Ask",
+            "B",
+            "T",
+            "E",
         )
         self.assertIn("day: 3\nasset: assets/window-1/day-03-0a1b2c3d4e5f.mp4\n---", rendered)
         for elsewhere in (

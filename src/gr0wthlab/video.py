@@ -16,12 +16,13 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import subprocess
 import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from fractions import Fraction
 from pathlib import Path
+
+from . import process
 
 FFMPEG_ENV = "GR0WTHLAB_FFMPEG_BIN"
 FFPROBE_ENV = "GR0WTHLAB_FFPROBE_BIN"
@@ -245,11 +246,24 @@ def locate(name: str, override: str | None, env: Mapping[str, str]) -> tuple[Pat
     return (Path(found), "") if found else (None, f"{name} was not found on the PATH or in {' or '.join(SEARCH)}")
 
 
+def run(command: Sequence[str], limit: float, env: Mapping[str, str], cwd: str | None = None) -> process.Completed:
+    """Start ffmpeg or ffprobe as the launcher starts every process, with a time limit; one that could not be
+    started, or was stopped at its limit, is a VideoError."""
+    name = Path(command[0]).name
+    try:
+        completed = process.run(command, limit, env=environment(env), cwd=cwd)
+    except OSError as error:
+        raise VideoError(f"{name} could not be run ({error})") from error
+    if completed.timed_out:
+        raise VideoError(
+            f"{name} did not finish within {process.limit_text(limit)} and was stopped; {completed.stop.describe()}"
+        )
+    return completed
+
+
 def listed(binary: Path, flag: str, env: Mapping[str, str]) -> set[str]:
     """The names an ffmpeg listing (-filters, -encoders) holds: the second word of each line that has one."""
-    completed = subprocess.run(
-        [str(binary), "-hide_banner", flag], capture_output=True, text=True, env=environment(env), timeout=PROBE_TIMEOUT
-    )
+    completed = run([str(binary), "-hide_banner", flag], PROBE_TIMEOUT, env)
     return {words[1] for words in (line.split() for line in completed.stdout.splitlines()) if len(words) > 2}
 
 
@@ -260,17 +274,11 @@ def find(env: Mapping[str, str], canvas: Canvas | None = None) -> Tooling:
     if problem or probe_problem:
         return Tooling(ffmpeg, ffprobe, problem=problem or probe_problem)
     try:
-        banner = subprocess.run(
-            [str(ffmpeg), "-hide_banner", "-version"],
-            capture_output=True,
-            text=True,
-            env=environment(env),
-            timeout=PROBE_TIMEOUT,
-        )
+        banner = run([str(ffmpeg), "-hide_banner", "-version"], PROBE_TIMEOUT, env)
         version = " ".join((banner.stdout.splitlines() or [""])[0].split()[:3])
         filters, encoders = listed(ffmpeg, "-filters", env), listed(ffmpeg, "-encoders", env)
-    except (OSError, subprocess.SubprocessError) as error:
-        return Tooling(ffmpeg, ffprobe, problem=f"ffmpeg could not be run ({error})")
+    except VideoError as error:
+        return Tooling(ffmpeg, ffprobe, problem=str(error))
     if banner.returncode != 0 or not version:
         return Tooling(ffmpeg, ffprobe, problem="ffmpeg did not report its version")
     missing = [f"the {name} filter" for name in FILTERS + SOUND_FILTERS if name not in filters]
@@ -335,10 +343,7 @@ def probe(tooling: Tooling, path: Path, env: Mapping[str, str]) -> Facts:
         "-show_streams",
         str(path),
     ]
-    try:
-        completed = subprocess.run(command, capture_output=True, text=True, env=environment(env), timeout=PROBE_TIMEOUT)
-    except (OSError, subprocess.SubprocessError) as error:
-        raise VideoError(f"ffprobe could not be run ({error})") from error
+    completed = run(command, PROBE_TIMEOUT, env)
     if completed.returncode != 0:
         said = " ".join(completed.stderr.split())[-200:] or "no reason given"
         raise VideoError(f"ffprobe could not read it ({said})")
@@ -484,17 +489,10 @@ def render(
             Path(scratch, "fonts").mkdir()
             os.symlink(str(canvas.font), str(Path(scratch, "fonts", canvas.font.name)))
         try:
-            completed = subprocess.run(
-                command(tooling, canvas, cuts, bool(overlays), partial),
-                capture_output=True,
-                text=True,
-                env=environment(env),
-                cwd=scratch,
-                timeout=RENDER_TIMEOUT,
-            )
-        except (OSError, subprocess.SubprocessError) as error:
+            completed = run(command(tooling, canvas, cuts, bool(overlays), partial), RENDER_TIMEOUT, env, cwd=scratch)
+        except VideoError:
             partial.unlink(missing_ok=True)
-            raise VideoError(f"ffmpeg could not be run ({error})") from error
+            raise
     if completed.returncode != 0 or not partial.is_file():
         partial.unlink(missing_ok=True)
         said = " ".join(completed.stderr.split())[-300:] or "no reason given"

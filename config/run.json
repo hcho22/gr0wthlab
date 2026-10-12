@@ -1,11 +1,15 @@
 {
-  "description": "How each Marketing Engineer run works around the agent: its task definition, weekly schedule, the 14-day window, whether the Waitlist is live, the outputs and sources its run report accounts for, the records step that saves workspace/ and ledger/ to main, and the prices behind its approximate cost. The launcher reads this file; the agent cannot write it (G8). The exchange with Mandu: docs/mandu-exchange.md. Operating the production clone: docs/operations.md. Where a Product's raw footage is: config/products.json.",
+  "description": "How each Marketing Engineer run works around the agent: its task definition, weekly schedule, the agent's time limit, the 14-day window, whether the Waitlist is live, the size of a Beta Cohort invitation batch, the outputs and sources its run report accounts for, the records step that saves workspace/ and ledger/ to main, and the prices behind its approximate cost. The launcher reads this file; the agent cannot write it (G8). The exchange with Mandu: docs/mandu-exchange.md. Operating the production clone: docs/operations.md. Where a Product's raw footage is: config/products.json.",
   "instruction": "src/instructions/weekly-run.md",
   "schedule": {
     "day": "sunday",
     "time": "16:00",
     "why": "The Founder's Mandu sitting is Sunday evening. 16:00 in the Mac's local time zone leaves a few hours to finish, or to re-run on demand, before it.",
     "late_after_minutes": 15
+  },
+  "agent": {
+    "time_limit_seconds": 1800,
+    "why": "Every run must end with its report (US-ME17), so the launcher stops an agent still running this many seconds after it started, with every process the Mac's process table shows it started, and finishes the run as timed out. The seconds are wall-clock time from the agent's start, the Mac's sleep included: nothing keeps the Mac awake for a run and a sleeping Mac runs nothing, so the stop of an agent the Mac slept past the limit starts within about a second of the Mac waking, and the run report says about how long the Mac slept. Awake time is counted too, and the agent is stopped at whichever count reaches the limit first, so a wall clock set back cannot extend a run; one set forward can end it early. Basis: the 46 weekly runs with the real agent that ran to their end on the Founder's Mac between 2026-10-09 and 2026-10-11 took 18 to 218 seconds from the run's start to the agent's end, median 49, 35 of them under 90; the longest wrote the first batch's seven post Drafts and three proposals. 1800 seconds, 30 minutes, is about 8 times the longest, which leaves room for the workflows still to be built, and a run that starts at 16:00 on a Mac that stays awake and is cut at the limit still ends hours before the Sunday evening sitting; on a Mac that sleeps past the limit, the run ends when the Mac wakes. There is no separate, shorter limit on silence: Codex's event stream reports only whole steps, with no sign of progress inside one. The longest run went 35 seconds without an event while it worked, and nothing bounds a step but the work in it, so a long step and a stalled model stream look the same from outside. Raise the limit here, through a reviewed change, if run reports show healthy runs coming near it; it must be above zero and at most 86400, a day."
   },
   "window": {
     "number": 1,
@@ -16,6 +20,10 @@
   "waitlist": {
     "live_since": null,
     "why": "No public post may go out before the Waitlist is live (FR-9). live_since is the date (YYYY-MM-DD) the Waitlist went live, set here through a reviewed change once US-ME05's Validation Test has passed on reptoday.app, and never inferred from whether a source is connected or what it is named. While it is null, or a date still ahead, every post item, the run brief, and the run report say that nothing can be published until the Waitlist is live."
+  },
+  "beta_recruiting": {
+    "batch_size": 20,
+    "why": "How many Waitlist entries one Beta Cohort invitation batch offers the Founder (US-ME15), the Founder's call, changed here through a reviewed change. The Founder confirmed capped batches and chose 20 on 2026-10-11. At most one batch is open at a time, and the next is offered only after the Founder has decided the last, so a week's sends and first sessions stay manageable. It cannot be larger than the cohort's maximum in config/products.json."
   },
   "records": {
     "production_clone": "~/gr0wthlab",
@@ -51,14 +59,13 @@
     "weekly-read": {"title": "Weekly Read memo", "story": "US-ME12", "built": false},
     "listening": {"title": "Listening Evidence", "story": "US-ME13", "built": false},
     "outreach-drafts": {"title": "Outreach Drafts", "story": "US-ME14", "built": false},
-    "beta-recruiting": {"title": "Beta Cohort recruiting", "story": "US-ME15", "built": false}
+    "beta-recruiting": {"title": "Beta Cohort recruiting", "story": "US-ME15", "built": true}
   },
   "sources_not_connected": [
     {"name": "Scheduling service", "story": "US-ME10", "needed_by": ["scheduler-drafts"]},
     {"name": "YouTube results", "story": "US-ME11", "needed_by": ["results", "weekly-read"]},
     {"name": "TikTok export in Mandu", "story": "US-ME11", "needed_by": ["results", "weekly-read"]},
     {"name": "Listening sources", "story": "US-ME13", "needed_by": ["listening"]},
-    {"name": "Beta Build approval in Mandu", "story": "US-ME15", "needed_by": ["beta-recruiting"]},
     {"name": "Immerse Listening confirmation in Mandu", "story": "US-ME18", "needed_by": []}
   ]
 }

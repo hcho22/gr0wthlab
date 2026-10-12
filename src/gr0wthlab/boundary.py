@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+
+from . import process
 
 RUNTIME_CONFIG = Path("config/guardrails/runtime.json")
 PRODUCT_REGISTRY = Path("config/products.json")
@@ -132,16 +133,16 @@ def git_dirs(repo_root: Path) -> list[Path]:
     """The checkout's git directories; a linked worktree keeps them outside the repository root."""
     dirs = []
     for flag in ("--git-dir", "--git-common-dir"):
+        command = ["git", "-C", str(repo_root), "rev-parse", "--path-format=absolute", flag]
         try:
-            output = subprocess.run(
-                ["git", "-C", str(repo_root), "rev-parse", "--path-format=absolute", flag],
-                check=True,
-                capture_output=True,
-                text=True,
-            ).stdout.strip()
-        except (OSError, subprocess.CalledProcessError) as error:
+            asked = process.run(command, process.QUICK)
+        except OSError as error:
             raise ConfigError(f"{repo_root} is not a git checkout: {error}") from error
-        path = canonical(Path(output))
+        if asked.timed_out:
+            raise ConfigError(f"git did not answer for {repo_root} within {process.limit_text(asked.limit)}")
+        if asked.returncode != 0:
+            raise ConfigError(f"{repo_root} is not a git checkout: {' '.join(asked.stderr.split()) or 'no output'}")
+        path = canonical(Path(asked.stdout.strip()))
         if path not in dirs:
             dirs.append(path)
     return dirs

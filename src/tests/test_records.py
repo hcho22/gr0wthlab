@@ -292,5 +292,23 @@ class SaveTest(RecordsTestCase):
         self.assertEqual(self.save().status, records.PUSHED)
 
 
+class GitLimitTest(RecordsTestCase):
+    def tearDown(self):
+        fakes.stop_leftovers(self.root)
+        super().tearDown()
+
+    def test_git_still_running_at_its_limit_is_stopped_with_what_it_started(self):
+        """A fetch or a push waits on a helper git starts for the network, which must not outlive the limit."""
+        stalled = self.root / "bin" / "git"
+        stalled.parent.mkdir()
+        stalled.write_text(f'#!/bin/sh\n/bin/sleep 600 &\necho $! > "{self.root}/pids.txt"\nwait\n')
+        stalled.chmod(0o755)
+        git = records.Git(self.clone, dict(self.env, PATH=f"{stalled.parent}{os.pathsep}{self.env['PATH']}"))
+        with self.assertRaises(records.GitError) as stopped:
+            git.run("push", "--quiet", "origin", "main", timeout=2)
+        self.assertEqual(str(stopped.exception), "git push --quiet origin main failed: timed out after 2s")
+        self.assertTrue(fakes.all_gone(fakes.agent_pids(self.root)))
+
+
 if __name__ == "__main__":
     unittest.main()

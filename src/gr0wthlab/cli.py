@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import codex, cycle, exchange, filming, launcher, posts, probe, schedule, settings
+from . import beta, beta_drafts, codex, cycle, exchange, filming, launcher, posts, probe, schedule, settings
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import LEDGER, PRODUCT_REGISTRY, ConfigError, load_json, load_runtime_config, resolve_boundary
@@ -38,6 +38,15 @@ def parser() -> argparse.ArgumentParser:
         required=True,
         metavar="RUN_ID",
         help="the run in progress, as its brief's check-drafts command names it",
+    )
+    recruiting = commands.add_parser(
+        "check-beta-drafts", help="check a run's Beta Cohort recruiting Drafts as the launcher will"
+    )
+    recruiting.add_argument(
+        "--run",
+        required=True,
+        metavar="RUN_ID",
+        help="the run in progress, as its brief's check-beta-drafts command names it",
     )
 
     edits = commands.add_parser("check-edits", help="check a run's edit records in drafts/edits/ as the launcher will")
@@ -181,12 +190,17 @@ def check_drafts(run_id: str, out=sys.stdout) -> int:
             )
             continue
         verdict = posts.check_day(plan, day_plan, draft, areas, products)[0]
-        rejected = posts.rejected_as(day_plan, draft) if verdict.passed else None
+        edits_folder = areas.path("drafts", filming.EDITS, f"window-{plan.window.number}")
+        edit = filming.read_edit(areas, edits_folder / f"day-{number:02d}.json")[0]
+        rejected = None
+        if verdict.passed:
+            rejected = posts.refused(day_plan.rejected, draft.sha256, edit.sha256 if edit else None)
         failed += not verdict.passed or bool(rejected)
         if rejected:
+            changes = "the Draft or its edit record changes" if rejected.get("asset_sha256") else "it changes"
             print(
                 f"REJECTED day {number}: {draft.path}: the Founder rejected this Draft as {rejected['id']}, so it is"
-                " not asked again until it changes",
+                f" not asked again until {changes}",
                 file=out,
             )
             continue
@@ -210,7 +224,8 @@ def check_edits(run_id: str, out=sys.stdout) -> int:
     never opened here. Nothing is rendered either: the launcher renders a record that passes once the run ends, only
     if the day's post Draft passes too, and then measures the result. The two legs of an A/B pair are compared as
     the videos a run that ended now would leave: the one a new record that passes would be cut into, otherwise the
-    one the leg's post shows.
+    one the leg's post shows. A record that cannot be cut this run, for a day whose open post shows a video, is no
+    problem to fix: the record stays as it is, and so does the post's video while its Draft is unchanged.
     """
     registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
     # As in check_drafts: reading the areas needs no git directories.
@@ -228,11 +243,31 @@ def check_edits(run_id: str, out=sys.stdout) -> int:
             file=out,
         )
         return 1
-    found.preview(Areas(boundary), store)
+    areas = Areas(boundary)
+    found.preview(areas, store)
     failed = 0
     for number, day in sorted(found.days.items()):
         asset = found.results[number]
-        if asset.status == filming.READY:
+        draft = posts.read_draft(areas, found.draft_path(number))[0] if asset.status == filming.READY else None
+        approved = found.approved.get(number) or {}
+        video_posts = [entry for entry in found.rejected.get(number, ()) if entry.get("asset_sha256")]
+        rejected = draft and posts.refused(video_posts, draft.sha256, asset.edit_sha256)
+        if draft and approved and draft.sha256 != approved.get("draft_sha256"):
+            failed += 1
+            print(
+                f"PROBLEM day {number}: {asset.edit} will not be cut this run: the Founder approved its copy as"
+                f" {approved['id']}, and its Draft is no longer that copy",
+                file=out,
+            )
+        elif rejected:
+            failed += 1
+            print(
+                f"REJECTED day {number}: {asset.edit}: the Founder rejected the post made from this edit record and"
+                f" its Draft as {rejected['id']}, so it is not asked again until the Draft or the edit record"
+                " changes",
+                file=out,
+            )
+        elif asset.status == filming.READY:
             print(f"OK day {number}: {asset.edit}: it passes; the launcher renders and measures it", file=out)
         elif asset.withheld:
             failed += 1
@@ -242,6 +277,20 @@ def check_edits(run_id: str, out=sys.stdout) -> int:
             print(f"BLOCKED day {number}: {asset.edit or found.edit_path(number)}", file=out)
             for finding in asset.blocks:
                 print(f"  - {finding.line()}", file=out)
+        elif asset.edit and found.waits(number):
+            current, unread = posts.read_draft(areas, found.draft_path(number))
+            queued_from = found.posted[number].get("draft_sha256")
+            keeps = (current is None and not unread) or (current is not None and current.sha256 == queued_from)
+            then = (
+                "the day's post keeps the video it shows"
+                if keeps
+                else "the day's video is cut from it again once it can be"
+            )
+            print(
+                f"KEPT day {number}: {asset.edit}: it cannot be cut this run ({asset.detail}), so leave it as it is:"
+                f" {then}",
+                file=out,
+            )
         elif asset.edit:
             failed += 1
             print(f"PROBLEM day {number}: {asset.edit} will not be cut this run: {asset.detail}", file=out)
@@ -263,6 +312,64 @@ def rebuild_asset(record: str, env: dict[str, str], home: Path, out=sys.stdout) 
     for line in lines:
         print(line, file=out)
     return 0 if ok else 1
+
+
+def check_beta_drafts(run_id: str, out=sys.stdout) -> int:
+    """The launcher's own checks of each recruiting Draft a run asked for, for the agent to use before it finishes.
+
+    Which Drafts are due, and which the Founder already rejected, is read from the record the launcher wrote for that
+    run before the agent started; without it no Draft is checked, and the output says so. That record names no
+    Waitlist entry, and neither does anything printed here: who is invited is the launcher's alone.
+    """
+    env = dict(os.environ)
+    home = Path.home()
+    config = settings.load(REPO_ROOT, env, home)
+    registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
+    boundary = resolve_boundary(REPO_ROOT, load_runtime_config(REPO_ROOT), registry, env, home, git=[])
+    rules = beta.rules(registry, config)
+    if rules is None:
+        print("No Product recruits a Beta Cohort, so there is no recruiting Draft to check.", file=out)
+        return 0
+    areas = Areas(boundary)
+    try:
+        record = Store(LEDGER_DIR).path(cycle.RUN_REPORTS, beta.plan_file(run_id))
+        due = beta.restore(json.loads(read_plain(record).decode("utf-8")), areas.workspace)
+    except (ConfigError, OSError, UnsafeFile, ValueError) as error:
+        print(
+            f"PROBLEM the recruiting plan of run {run_id} could not be read ({error}), so no Draft was checked; the"
+            " launcher checks every Draft once you finish.",
+            file=out,
+        )
+        return 1
+    context = beta.context(rules, boundary)
+    failed = 0
+    for draft_plan in due:
+        label = beta.LABELS[draft_plan.purpose]
+        draft, problem = beta.read_draft(areas, draft_plan.path)
+        standing = f"; the open {draft_plan.open['id']} stands" if draft_plan.open and not problem else ""
+        if draft is None:
+            failed += bool(problem) or not standing
+            print(
+                f"{'PROBLEM' if problem or not standing else 'OK'} {label}: {problem or 'no Draft'}{standing}", file=out
+            )
+            continue
+        verdict = beta_drafts.evaluate(draft, context, draft_plan.purpose)
+        rejected = beta.rejected_as(draft_plan, draft) if verdict.passed else None
+        failed += not verdict.passed or bool(rejected)
+        if rejected:
+            print(
+                f"REJECTED {label}: {draft.path}: the Founder rejected this Draft as {rejected['id']}, so it is not"
+                " asked again until it changes",
+                file=out,
+            )
+            continue
+        print(f"{'OK' if verdict.passed else 'BLOCKED'} {label}: {draft.path}", file=out)
+        for line in beta.grouped(verdict.blocks):
+            print(f"  - {line}", file=out)
+        for line in beta.grouped(verdict.warnings):
+            print(f"  - warning, which does not block: {line}", file=out)
+    print(f"{len(due)} Draft{'' if len(due) == 1 else 's'} due, {failed} with problems", file=out)
+    return 1 if failed else 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -292,6 +399,8 @@ def main(argv: list[str] | None = None) -> int:
             return check_edits(args.run)
         if args.command == "rebuild-asset":
             return rebuild_asset(args.record, env, home)
+        if args.command == "check-beta-drafts":
+            return check_beta_drafts(args.run)
         if args.command == "launch-agent":
             config = settings.load(REPO_ROOT, env, home)
             if args.boundary_check:

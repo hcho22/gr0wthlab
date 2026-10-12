@@ -13,14 +13,16 @@ The launcher has already done the deterministic work before you start, and does 
 - It read the 14-day kit from Mandu, worked out which calendar days this run prepares post Drafts for, and fixed the Product's code to one commit for claim checks.
 - It read each asset's shot list from the kit, filed the filming plan the Founder approves before filming, when it needs filing, and listed the footage place and measured every file in it.
   The footage place is outside what you can read, and you could not watch a video if you opened one: the brief names each file with its length, size, frame rate, and whether it has sound.
-- After you finish, it checks every item you wrote, queues the valid ones, checks every post Draft and queues a post only for one that passes, orders the Review Queue, writes the run report, and saves the records.
+- It read the Founder's Beta Build record in Mandu, which is the Founder's word that a Beta Build passed Apple's review.
+  Only once that record exists does it choose who the next Beta Cohort invitations go to, from the view you cannot read; the brief then has a `## Beta Cohort recruiting` section, which never names anyone.
+- After you finish, it checks every item you wrote, queues the valid ones, checks every post Draft and queues a post only for one that passes, checks every recruiting Draft the same way and attaches the people it chose to the invitation, orders the Review Queue, writes the run report, and saves the records.
   It also checks every edit record you wrote, renders each that passes into the day's finished video with the text of the day's post Draft drawn over it, measures the result, and shows it in the day's post.
 
 ## Steps
 
 1. Read the run brief named in the header above, before anything else.
    It lists the package files with their results, what changed, failed sources and what they block, the decisions taken in this run, the open Review Queue with any decision the Founder took on an item an open one replaced, the package-change proposals already decided, and where this run's Waitlist counts are.
-2. Read your working guidance in `workspace/instructions/`: `package-review.md` for step 3, `post-drafts.md` for step 5, and `filming.md` for step 6.
+2. Read your working guidance in `workspace/instructions/`: `package-review.md` for step 3, `post-drafts.md` for step 5, `filming.md` for step 6, and `beta-recruiting.md` for step 7.
 3. Review the Go-To-Market Package for contradictions, doing every pass in the guidance's "How to review"; the review is finished when every pass is, not when you find a contradiction.
    Read every package file the brief lists, and any other file in the same package folders that you need to find every place a contradiction appears.
 4. Write one package-change proposal for each contradiction you find that is not already open or decided in the brief.
@@ -33,10 +35,17 @@ The launcher has already done the deterministic work before you start, and does 
    A day is ready once the Founder approved a filming plan that holds its shots and the footage place has every take the day needs: a file for each shot, and for a pair leg a take both legs can use wherever the legs share their footage, and its own opening take where the Founder says the Hook on camera.
    The table says why any other day is not.
    When the brief has no Filming section, or marks no day ready, write no edit record.
-7. Check your items with the brief's check-incoming command, your Drafts with its check-drafts command, and your edit records with its check-edits command, and fix every problem any of them reports that the Draft or the edit record can fix.
+   Where the table says to leave a day's edit record as it is, the day's post already shows its video and the video cannot be cut again this run, for example while its footage is away or the video tooling is missing: change nothing in that record and never remove it, since the post keeps its video only while the record is in place.
+7. Only when the brief has a `## Beta Cohort recruiting` section, write each recruiting Draft its table lists, except one it shows as open or approved with nothing to change, as "Writing a recruiting Draft" describes.
+   When the brief has no such section, write nothing about the Beta Cohort: recruiting has not started, or nothing is due this run.
+   A recruiting Draft is one short message and depends on nothing else in the run: write each one the table lists even when a post Draft is blocked or your package review is unfinished.
+   The run is not finished until every recruiting Draft the table lists is written, or your summary says why it has none.
+   Never judge for yourself whether a Beta Build is approved, and never choose, name, or look for who is invited.
+8. Check your items with the brief's check-incoming command, your post Drafts with its check-drafts command, your edit records with its check-edits command, and your recruiting Drafts with its check-beta-drafts command, and fix every problem any of them reports that the Draft or the edit record can fix.
    A Draft blocked by the package itself (a frozen Hook that fails a brand rule or says the app does something no code supports, or an open checklist line) stays as the package requires: never change a Hook, signal, or kill criterion to pass a check; write a package-change proposal that cites both sides instead, unless one is already open or decided.
    An edit record the footage cannot satisfy (a shot with no file, a recording too short for its beats, or one that would need a cut its shot list forbids) is removed, not bent: say in your summary which shot or file is the problem, and the Founder films it again.
-8. Finish with a short summary as your final message: what you checked (including each recorded outcome you traced), what you found, what you queued, which Drafts you wrote and what check-drafts said of each, which edit records you wrote and what check-edits said of each, and anything you skipped or could not do, with the reason.
+   A record check-edits reports as kept is not one of these, and is no problem to fix: it belongs to a day whose post shows its video, so it stays exactly as it is.
+9. Finish with a short summary as your final message: what you checked (including each recorded outcome you traced), what you found, what you queued, which Drafts you wrote and what check-drafts or check-beta-drafts said of each, which edit records you wrote and what check-edits said of each, and anything you skipped or could not do, with the reason.
    The launcher puts that summary in the run report as your account.
    End it with exactly one of these lines, as plain text on its own line with nothing after it:
    `Review: complete` when you finished every pass of step 3, or `Review: incomplete: <the passes you did not finish, and why>` otherwise.
@@ -179,6 +188,7 @@ leg: A
   Shows may quote more than one of the cited lines: start each further line with two spaces, like the Code and Shows lines, and close the backtick after the last one.
 - Rewrite an open day's Draft only to change it for a reason, such as a package change or the Founder's decision; an unchanged Draft keeps its item.
 - A Draft the Founder rejected is not asked again until it changes: rewrite it to answer the reason the brief gives.
+  A post the Founder rejected with its video is asked again once its Draft or its edit record changes; until one of them does, check-drafts and check-edits report the day as rejected.
 
 ## Writing an edit record
 
@@ -206,6 +216,7 @@ Write it as the file `day-NN.json` (such as `day-01.json`) in the edits folder t
 - A shot the brief marks as never cut is one segment, or neighbouring segments that run on from each other in the same file with no gap and at the same speed; no other shot plays between its segments.
 - Every shot the brief lists for the day appears at least once.
   If a shot has no file, there is no video: write no edit record and say so.
+  An edit record already in place for a day whose post keeps the video it shows stays as it is, as the brief says of that day.
 - A segment may add `"speed"`, a number other than 1, only for a shot the brief says may run at another speed, such as a timelapse; it then plays for `out` minus `in`, divided by the speed.
 - A segment holds no other key: how a source fits the frame and whether it has sound are the launcher's rules, never yours to choose.
   Every source is shown whole in the 9:16 frame, scaled down with black beside it and never cropped.
@@ -225,6 +236,46 @@ Write it as the file `day-NN.json` (such as `day-01.json`) in the edits folder t
   Fix the leg it names, and to move a pair to other footage change both legs' edit records alike in the same run.
   A leg the Founder approved with its video is settled: nothing is cut for it again, and its other leg is compared with the approved video.
 
+## Writing a recruiting Draft
+
+Write each recruiting Draft as the file the brief's Beta Cohort recruiting table names, with your file-editing tool, holding exactly these parts in this order:
+
+```markdown
+---
+draft: message
+product: RepToday
+purpose: beta-invitation
+---
+
+# <a few words naming the message for the Founder>
+
+## Subject
+
+<the subject, on one line>
+
+## Message
+
+<the message, in short paragraphs, the same words for everyone who gets it>
+
+## Sources
+
+- Quote: "<words copied exactly from one package line>"
+  File: `<the file's path inside the Mandu checkout>` line <n>
+```
+
+- `purpose` is `beta-invitation` for the invitation and `waitlist-ask` for the Waitlist ask, as the brief's table says.
+- The message goes to people the launcher chose, whom you never learn: write no name, no greeting by name, and no entry identifier.
+- Write no email address anywhere in the file, not even one to reply to: the Founder resolves addresses and sends.
+  The launcher removes a Draft that holds anything that looks like one.
+- Write no link and no web address in the subject or the message.
+  How the Founder invites, by a TestFlight public link or by individual email invitation, is the Founder's undecided call, so the message works either way and the Founder adds what the route needs.
+- Each source quotes four or more words copied exactly from one line of a package file the brief lists as citable, with that line's number; quote only the words the message uses.
+- Every figure the message states, in digits or as a word, must be in a line you cite.
+  State no count of places, people, or days of your own, and nothing that presses for a quick answer.
+- An invitation cites at least one line of the thesis's K8 files, says that the first session is recorded, and says how many minutes it takes, as a line you cite gives it.
+- The subject and the message pass the brand lint, as post copy does; among other things, neither asks a question.
+- Rewrite an open or approved Draft only to change it for a reason, such as a package change or the Founder's decision; a Draft the Founder rejected is not asked again until it changes, so rewrite it to answer the reason the brief gives.
+
 ## Rules
 
 - You cannot watch or listen to footage, and no tool here can.
@@ -236,7 +287,7 @@ Write it as the file `day-NN.json` (such as `day-01.json`) in the edits folder t
 - Never assume a file is unreadable: read it, and if the read fails, report the exact error.
 - Do not queue an item that is already open; to replace one, write a new item with `supersedes: <id>` in its front matter.
   An item the brief marks as filed by the launcher, such as a Dispatch request, cannot be superseded: only a reviewed change to its source text replaces it.
-  A post cannot be superseded either: it changes only through its Draft.
+  A post or a message cannot be superseded either: each changes only through its Draft.
 - Do not propose again what the Founder already rejected unless new Evidence answers the reason.
   The launcher refuses an item that asks the same as an open or decided one, and rewording an ask does not make it new.
 - Quote only the specific package text a proposal uses or replaces, citing its file; never copy a package file or a large part of one.
@@ -245,5 +296,8 @@ Write it as the file `day-NN.json` (such as `day-01.json`) in the edits folder t
   The README files in `workspace/` are documentation; a change to one is never saved.
 - Do not change `workspace/instructions/` in this run; refining your guidance arrives with a later story.
 - Write post Drafts only in the Drafts folder the brief names, and never write a post item yourself: the launcher queues a post only from a Draft that passes its checks.
-- Do not produce message Drafts, Dispatch requests, or Weekly Read items in this run; later stories add them to this task, and the launcher files the reviewed Dispatch requests itself.
+- Write recruiting Drafts only as the files the brief names, and never write a message item yourself: the launcher queues a recruiting message only from a Draft that passes its checks, with the people it chose attached.
+  The launcher sets aside any post or message item written to the incoming folder, whatever it says.
+- Do not produce any other message Draft, a Dispatch request, or a Weekly Read item in this run; later stories add them to this task, and the launcher files the reviewed Dispatch requests itself.
 - Never look for the Waitlist's sign-ups or an email address; the Waitlist reaches you only as the counts the brief names.
+  Who is invited to the Beta Cohort is never yours to know, choose, or write down.

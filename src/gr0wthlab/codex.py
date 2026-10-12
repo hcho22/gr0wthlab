@@ -11,12 +11,12 @@ import json
 import os
 import pwd
 import shutil
-import subprocess
 import tempfile
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+from . import process
 from .boundary import Boundary, ConfigError, canonical, filesystem_policy
 
 SYSTEM_PATH = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
@@ -71,14 +71,10 @@ def resolve_codex_binary(env: Mapping[str, str]) -> Path:
 def user_temp_dir() -> str:
     """The per-user temporary directory, the same under launchd and in a terminal."""
     try:
-        value = subprocess.run(
-            ["/usr/bin/getconf", "DARWIN_USER_TEMP_DIR"], check=True, capture_output=True, text=True
-        ).stdout.strip()
-        if value:
-            return value
-    except (OSError, subprocess.CalledProcessError):
-        pass
-    return tempfile.gettempdir()
+        asked = process.run(["/usr/bin/getconf", "DARWIN_USER_TEMP_DIR"], process.QUICK)
+    except OSError:
+        return tempfile.gettempdir()
+    return (asked.stdout.strip() if asked.ok else "") or tempfile.gettempdir()
 
 
 def child_environment(home: Path, codex_bin: Path, temp_dir: str) -> dict[str, str]:
@@ -122,11 +118,14 @@ def fingerprint(command: Sequence[str], environment: Mapping[str, str], codex_ve
 
 def codex_version(codex_bin: Path, environment: Mapping[str, str]) -> str:
     try:
-        return subprocess.run(
-            [str(codex_bin), "--version"], check=True, capture_output=True, text=True, env=dict(environment)
-        ).stdout.strip()
-    except (OSError, subprocess.CalledProcessError) as error:
+        asked = process.run([str(codex_bin), "--version"], process.QUICK, env=environment)
+    except OSError as error:
         raise ConfigError(f"cannot run {codex_bin} --version: {error}") from error
+    if asked.timed_out:
+        raise ConfigError(f"{codex_bin} --version did not finish within {process.limit_text(asked.limit)}")
+    if asked.returncode != 0:
+        raise ConfigError(f"{codex_bin} --version exited {asked.returncode}: {asked.stderr.strip()[-500:]}")
+    return asked.stdout.strip()
 
 
 # Runs inside the sandbox: try to create one uniquely named empty file per target and report each outcome.
@@ -208,6 +207,7 @@ def run_preflight(
     The probe uses an empty Codex home so no user configuration can change the policy it sees, and probes the
     directories of both the run's environment and its own.
     A sentinel that lands outside the areas is deleted here, outside the sandbox, and the run is refused.
+    A probe that does not finish in time is stopped and fails the preflight, so the agent is not started.
     """
     name = PREFLIGHT_PREFIX + run_id
     with tempfile.TemporaryDirectory(prefix="gr0wthlab-preflight-") as empty_home:
@@ -221,18 +221,16 @@ def run_preflight(
             + ["--", "/bin/sh", "-c", PREFLIGHT_SCRIPT, "preflight", name]
             + [str(path) for path in allowed + forbidden]
         )
-        completed = subprocess.run(
-            command,
-            capture_output=True,
-            text=True,
-            env=sandbox_environment,
-            cwd=str(boundary.working_directory),
-        )
+        completed = process.run(command, process.QUICK, env=sandbox_environment, cwd=str(boundary.working_directory))
     result = evaluate_preflight(completed.stdout, name, allowed, forbidden)
     for sentinel in result.breaches:
         if sentinel.is_file() and sentinel.stat().st_size == 0:
             sentinel.unlink()
-    if completed.returncode != 0:
+    failure = None
+    if completed.timed_out:
+        failure = f"codex sandbox did not finish within {process.limit_text(completed.limit)} and was stopped"
+    elif completed.returncode != 0:
         failure = f"codex sandbox exited {completed.returncode}: {completed.stderr.strip()[-500:]}"
+    if failure:
         return PreflightResult(result.allowed, result.refused, result.breaches, result.failures + (failure,))
     return result
