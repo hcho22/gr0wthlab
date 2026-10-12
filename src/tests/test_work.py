@@ -51,14 +51,16 @@ class SessionTest(unittest.TestCase):
             fakes.command_event("rg -n missing package", "", exit_code=1),
             fakes.command_event("git -C /code/RepToday show abc:App/Ready.swift", "struct Ready {}\n"),
             fakes.command_event("/usr/bin/python3 /repo/src/bin/gr0wthlab check-drafts --run R", "day 1: blocked\n", 1),
-            fakes.command_event("/usr/bin/python3 /repo/src/bin/gr0wthlab check-incoming", "no items\n"),
+            fakes.command_event("/usr/bin/python3 '/repo/src/bin/gr0wthlab' check-incoming", "no items\n"),
+            fakes.command_event('A=/m /usr/bin/python3 "/repo/src/bin/gr0wthlab" check-beta-drafts --run R', "", 1),
+            fakes.command_event("cat /repo/src/bin/gr0wthlab; rg check-drafts /repo/docs", "the entry point\n"),
             fakes.edit_event("/repo/workspace/drafts/posts/window-1/day-01.md"),
             json.dumps({"type": "turn.completed", "usage": {"output_tokens": 9}}),
             '{"type": "item.completed", "item": {"type": "command_execution", "comm',
             checkout=Path("/code/RepToday"),
         )
-        self.assertEqual((session.commands, session.edits, session.cut), (5, 1, 0))
-        self.assertEqual((session.code_reads, session.checks), (1, 2))
+        self.assertEqual((session.commands, session.edits, session.cut), (7, 1, 0))
+        self.assertEqual((session.code_reads, session.checks), (1, 3))
         self.assertIn("struct Ready {}", session.shown)
 
     def test_no_stream_is_no_session_and_an_empty_one_is_a_session_that_did_nothing(self):

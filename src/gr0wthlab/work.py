@@ -9,6 +9,7 @@ counts inform the Founder: nothing is queued, blocked, or marked incomplete beca
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,7 +20,9 @@ from .drafts import none
 
 # A line shorter than this is too common to show that one file's text came back, unless the file holds no longer one.
 TELLING_LINE = 24
-CHECKS = ("check-incoming", "check-drafts", "check-beta-drafts")
+# One of the launcher's own checks, as a command names it: the entry point, then the check. The agent often quotes the
+# entry point's path, and Codex records the command inside a quoted shell argument, so quotes may follow the path.
+CHECK = re.compile(r"""gr0wthlab['"]*\s+check-(?:incoming|drafts|beta-drafts)\b""")
 # The report names the package files that were not read only when they are this few; the run's log record names all.
 NAMED_AT_MOST = 6
 
@@ -70,7 +73,7 @@ def read_session(events: Path, shown_chars: int, code_checkout: Path | None = No
         commands += 1
         cut += len(output) > shown_chars
         code_reads += code_checkout is not None and str(code_checkout) in command
-        checks += any(f"gr0wthlab {check}" in command for check in CHECKS)
+        checks += CHECK.search(command) is not None
         shown.append(shown_part(output, shown_chars))
     return Session(commands, cut, code_reads, checks, edits, "\n".join(shown))
 
