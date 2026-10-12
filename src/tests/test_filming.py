@@ -360,6 +360,12 @@ class FilmingPlanTest(FilmingRunCase):
             report,
         )
         self.assertFalse((self.ledger() / "assets").exists())
+        # Its reason is counted as filming's own, in the brief, the run report, and the learning ledger.
+        self.assertIn(f'- `{PLAN}` (filming): "Split the screen recordings over two evenings."', self.brief())
+        self.assertIn("- filming: 1 rejection, 0 of 1 coded.", report)
+        learned = json.loads((self.ledger() / "evidence/learning/ledger.json").read_text(encoding="utf-8"))
+        self.assertEqual(list(learned["workflows"]), ["filming"])
+        self.assertEqual([(reason["item"], reason["workflow"]) for reason in learned["reasons"]], [(PLAN, "filming")])
 
     def test_only_a_kit_change_to_what_must_be_filmed_replaces_the_plan(self):
         self.run_ok()
@@ -1541,6 +1547,30 @@ class EditRunTest(FilmingRunCase):
             self.report(),
         )
 
+    def test_an_edit_record_with_a_number_too_large_or_nested_too_deep_blocks_its_day_and_the_run_goes_on(self):
+        self.approved_plan()
+        self.clip("d01-s1.mov")
+        deep = fakes.edit_record(1, DAY_1).replace('"RepToday"', "[" * 100000 + "]" * 100000)
+        for edit, problem in (
+            (fakes.edit_record(1, ("d01-s1", "d01-s1.mov", 2, 10**400)), "segment 1: in, out, and speed are numbers"),
+            (deep, "it is nested too deep to read"),
+        ):
+            with self.subTest(problem=problem):
+                queue = self.run_ok({fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): edit})
+                self.assertEqual([entry for entry in queue["open"] if entry["kind"] == "post"], [])
+                self.assertFalse((self.ledger() / "assets").exists())
+                report = self.report()
+                self.assertIn("- The run finished.", report)
+                self.assertIn("| 1 | d01-s1 | blocked | edit-format: " + problem, report)
+                self.assertIn(f"edit-format: {problem}", self.notice())
+                code, text = self.check_edits(queue["updated_by_run"])
+                self.assertEqual(code, 1, text)
+                self.assertIn(f"  - edit-format: {problem}", text)
+                # check-drafts reads the same record for its digest, and still gives the Draft its own verdict.
+                code, text = self.check_drafts(queue["updated_by_run"])
+                self.assertEqual(code, 0, text)
+                self.assertIn("OK day 1: drafts/posts/window-1/day-01.md", text)
+
     def test_missing_tooling_skips_the_edit_with_the_reason_and_the_run_still_finishes(self):
         self.approved_plan()
         self.clip("d01-s1.mov")
@@ -2216,6 +2246,41 @@ class EditRunTest(FilmingRunCase):
         self.assertRegex(
             self.brief(), r"`window-1/d01-s1.mov` for d01-s1: 14.00s, 886x1920, 60 fps, no sound \| ready \|"
         )
+
+    def test_a_ready_day_with_no_edit_record_is_a_gap_only_when_the_agent_did_not_finish(self):
+        self.approved_plan()
+        writes = {fakes.draft_path(1): fakes.filming_draft(1)}
+        none = "| 1 | d01-s1 | no edit record | it is ready for an edit record and has none |"
+        line = r"\n- filming: checked=2 acted=0 note=plan approved as [^\n]*, 1 footage file measured"
+
+        def agent_fails(more=None):
+            fakes.behave(self.codex_dir, {"write": dict(writes, **(more or {})), "exit": 1})
+            code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=self.runs))
+            self.runs += 1
+            self.assertEqual(code, 1, out)
+            return self.report()
+
+        # No day is ready before its footage is there, so the agent was asked for no edit record.
+        report = agent_fails()
+        self.assertIn("| 1 | d01-s1 | no edit record | no footage yet for shot d01-s1 |", report)
+        self.assertIn("| Post Drafts | incomplete | the agent did not finish |", report)
+        self.assertIn("| Filming plan and edits | complete | plan approved as", report)
+        # A ready day the agent finished without an edit record for is named, and is not a gap on its own.
+        self.clip("d01-s1.mov")
+        self.run_ok(writes)
+        report = self.report()
+        self.assertIn(none, report)
+        self.assertIn("| Filming plan and edits | complete | plan approved as", report)
+        self.assertRegex(report, line + r"\n")
+        # The same day left without one by an agent that ended with an error is.
+        report = agent_fails()
+        self.assertIn(none, report)
+        self.assertIn("| Filming plan and edits | incomplete | the agent did not finish |", report)
+        self.assertRegex(report, line + r"; incomplete: the agent did not finish\n")
+        # Once the record is there, the agent's not finishing leaves nothing of filming's undone.
+        report = agent_fails({fakes.edit_path(1): fakes.edit_record(1, DAY_1)})
+        self.assertIn("| 1 | d01-s1 | finished |", report)
+        self.assertIn("| Filming plan and edits | complete | plan approved as", report)
 
     def test_a_finished_asset_can_be_rebuilt_from_its_record_and_the_footage(self):
         queue = self.day_1()

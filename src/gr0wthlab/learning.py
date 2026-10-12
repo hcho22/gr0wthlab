@@ -93,9 +93,11 @@ def workflow_of(entry: Mapping[str, object]) -> str:
         return "listening" if purpose == "reply" else "outreach"
     if item_kind == "package-change-proposal":
         return "listening" if entry.get("listening") else "package-review"
-    return {"dispatch-request": "dispatch-requests", "weekly-read-decision": "weekly-read"}.get(
-        item_kind, "review-queue"
-    )
+    return {
+        "filming-plan": "filming",
+        "dispatch-request": "dispatch-requests",
+        "weekly-read-decision": "weekly-read",
+    }.get(item_kind, "review-queue")
 
 
 # The Founder's reasons, as the decisions' Evidence holds them.

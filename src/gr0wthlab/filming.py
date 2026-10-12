@@ -1362,7 +1362,7 @@ def notice_section(filming: Filming | None, day_text: str) -> tuple[int, str, st
     )
 
 
-def tally(filming: Filming | None) -> Tally:
+def tally(filming: Filming | None, agent_gap: str) -> Tally:
     """What the filming workflow checked and acted on: each asset planned, each footage file measured, each edit
     record examined, the plan when this run filed it, and each video it rendered."""
     if filming is None:
@@ -1385,14 +1385,15 @@ def tally(filming: Filming | None) -> Tally:
         len(filming.requirements.jobs) + len(filming.inventory.clips) + len(examined),
         int(filming.standing.acted) + len(rendered),
         note,
-        "; ".join(gaps(filming)),
+        "; ".join(gaps(filming, agent_gap)),
     )
 
 
-def gaps(filming: Filming) -> list[str]:
+def gaps(filming: Filming, agent_gap: str) -> list[str]:
     """Why the filming output is incomplete this run: the kit or the canvas could not be read, the plan could not be
-    filed, or the footage place could not be listed. An edit that waits on footage, approval, or tooling is not a
-    gap: the report names it as not cut."""
+    filed, the footage place could not be listed, or the agent did not finish and left a day that was ready for an
+    edit record without one. An edit that waits on footage, approval, or tooling is not a gap: the report names it
+    as not cut. Neither is a ready day that an agent which finished left without an edit record."""
     found = []
     if filming.problem:
         found.append(filming.problem)
@@ -1400,6 +1401,8 @@ def gaps(filming: Filming) -> list[str]:
         found.append(f"the filming plan was not filed ({filming.standing.detail})")
     if filming.inventory.status == footage.FAILED:
         found.append(filming.inventory.detail)
+    if agent_gap and any(day.ready and not filming.wanted(number) for number, day in filming.days.items()):
+        found.append(agent_gap)
     return found
 
 

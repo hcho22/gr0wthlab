@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from itertools import groupby
@@ -179,7 +180,11 @@ class DaySpec:
 def number(value: object) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    return float(value)
+    try:
+        found = float(value)
+    except OverflowError:
+        return None
+    return found if math.isfinite(found) else None
 
 
 def parse(text: str, path: str) -> Edit:
@@ -190,6 +195,9 @@ def parse(text: str, path: str) -> Edit:
         data = json.loads(text)
     except ValueError as error:
         problems.append(f"it is not JSON ({error})")
+        return edit
+    except RecursionError:
+        problems.append("it is nested too deep to read")
         return edit
     if not isinstance(data, dict) or sorted(data) != sorted(TOP_KEYS):
         problems.append(f"it holds exactly the keys {', '.join(TOP_KEYS)}")

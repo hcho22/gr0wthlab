@@ -368,6 +368,7 @@ class CodesTest(unittest.TestCase):
             ({"kind": "package-change-proposal", "listening": {"proposal": "angle"}}, "listening"),
             ({"kind": "package-change-proposal"}, "package-review"),
             ({"kind": "dispatch-request"}, "dispatch-requests"),
+            ({"kind": "filming-plan"}, "filming"),
             ({"kind": "notice"}, "review-queue"),
         ):
             self.assertEqual(learning.workflow_of(entry), workflow)

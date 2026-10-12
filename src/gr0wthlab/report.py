@@ -555,7 +555,7 @@ def summary_lines(state: RunState) -> list[str]:
     elif state.posts_problem:
         lines.append(f"- Post Drafts: {state.posts_problem}")
     if state.filming is not None or state.filming_problem:
-        lines.append(f"- Filming: {state.filming_problem or filming.tally(state.filming).note}.")
+        lines.append(f"- Filming: {state.filming_problem or filming.tally(state.filming, state.agent_gap()).note}.")
     recruiting = beta.summary(state.beta, state.beta_outcome, state.beta_problem)
     if recruiting:
         lines.append(f"- {recruiting}")

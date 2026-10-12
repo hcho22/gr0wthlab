@@ -531,7 +531,7 @@ class Cycle:
     def filming_tally(self, state: RunState) -> run_state.Tally:
         if state.filming is None and state.filming_problem:
             return run_state.Tally("filming", 0, 0, state.filming_problem, state.filming_problem)
-        return filming.tally(state.filming)
+        return filming.tally(state.filming, state.agent_gap())
 
     def beta_tally(self, state: RunState) -> run_state.Tally:
         """What Beta Cohort recruiting checked and acted on: the sign-ups that asked for an invitation, and each item
@@ -612,7 +612,7 @@ class Cycle:
             "post-drafts": (self.post_gaps(state), self.post_tally(state).note),
             beta.WORKFLOW: (self.beta_gaps(state), self.beta_tally(state).note),
             "filming-plan": (
-                filming.gaps(state.filming) if state.filming is not None else [state.filming_problem],
+                filming.gaps(state.filming, agent_gap) if state.filming is not None else [state.filming_problem],
                 self.filming_tally(state).note,
             ),
             "listening": (

@@ -90,6 +90,8 @@ class ParseTest(unittest.TestCase):
                 self.assertEqual(bad.segments, [])
 
     def test_what_does_not_follow_the_format_is_named(self):
+        whole = fakes.edit_record(1, ("d01-s1", "d01-s1.mov", 2, 12))
+        deep = "[" * 100000 + "]" * 100000
         for text, problem in (
             ("not json", "it is not JSON"),
             ('{"edit": 1}', "it holds exactly the keys edit, product, window, day, segments"),
@@ -97,9 +99,18 @@ class ParseTest(unittest.TestCase):
             (fakes.edit_record(1), "segments must list at least one piece of the timeline"),
             (fakes.edit_record(1, ("d01-s1", "d01-s1.mov", "2", 12)), "segment 1: in, out, and speed are numbers"),
             (fakes.edit_record(1, ("d01-s1", "d01-s1.mov", True, 12)), "segment 1: in, out, and speed are numbers"),
-            (fakes.edit_record(1, ("d01-s1", "d01-s1.mov", 2, 12)).replace('"day": 1', '"day": "one"'), "day must be"),
+            (whole.replace('"day": 1', '"day": "one"'), "day must be"),
+            # A number too large to read, written as a whole number or with an exponent, is not a number of seconds.
+            (whole.replace('"out": 12', f'"out": {10**400}'), "segment 1: in, out, and speed are numbers"),
+            (whole.replace('"in": 2', f'"in": {10**400}'), "segment 1: in, out, and speed are numbers"),
+            (whole.replace('"out": 12', f'"out": 12, "speed": {10**400}'), "segment 1: in, out, and speed are numbers"),
+            (whole.replace('"out": 12', '"out": 1e999'), "segment 1: in, out, and speed are numbers"),
+            (whole.replace('"in": 2', '"in": NaN'), "segment 1: in, out, and speed are numbers"),
+            (deep, "it is nested too deep to read"),
+            (whole.replace('"RepToday"', deep), "it is nested too deep to read"),
         ):
-            with self.subTest(problem=problem):
+            with self.subTest(text=text[:200], problem=problem):
+                self.assertNotEqual(text, whole)
                 self.assertTrue(any(problem in found for found in edits.parse(text, "x.json").problems))
 
     def test_an_edit_has_a_bounded_number_of_segments(self):
