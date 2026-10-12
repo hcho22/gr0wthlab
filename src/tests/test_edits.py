@@ -300,11 +300,14 @@ class OverlayTest(unittest.TestCase):
 
 
 class PairTest(EditTestCase):
-    def shown(self, edit, day, hooks=None, text=None):
-        """A video cut from an edit record, as far as its own record in the ledger tells the pair check."""
+    def shown(self, edit, day, hooks=None, text=None, clips=None):
+        """A video cut from an edit record, as far as its own record in the ledger tells the pair check: each cut
+        with the fingerprint of the file it was made from, and where the opening is."""
         hooks = self.spec(day).hooks if hooks is None else hooks
         opening = [list(window) for window in edits.opening_windows(text or draft(day), hooks)]
-        return {"day": day, "edit": {"record": edit.as_json()}, "opening": opening}
+        files = dict(self.clips, **(clips or {}))
+        cuts = [dict(segment.as_json(), sha256=files[segment.source].sha256) for segment in edit.segments]
+        return {"day": day, "opening": opening, "cuts": cuts}
 
     def pair(self, mine, day, theirs, other):
         return edits.unlike(self.shown(mine, day), self.shown(theirs, other))
@@ -319,6 +322,43 @@ class PairTest(EditTestCase):
         self.assertEqual(
             self.pair(record(8, ("d01-s1", "d01-s1.mov", 3, 13)), 8, day_1, 1),
             "day 8's shows `window-1/d01-s1.mov` 3-13s, and day 1's shows `window-1/d01-s1.mov` 2-12s",
+        )
+
+    def test_footage_is_the_file_it_was_cut_from_whatever_the_file_is_named(self):
+        held = self.clips["window-1/d01-s1.mov"]
+        day_1 = self.shown(record(1, ("d01-s1", "d01-s1.mov", 2, 12)), 1)
+        # Another recording under the same name is other footage. The two ranges read alike, so the file is named.
+        retake = {held.name: replace(held, sha256="0" * 64)}
+        again = self.shown(record(8, ("d01-s1", "d01-s1.mov", 2, 12)), 8, clips=retake)
+        self.assertEqual(
+            edits.unlike(again, day_1),
+            "both show `window-1/d01-s1.mov` 2-12s, but `window-1/d01-s1.mov` is no longer the file day 1's video was"
+            " cut from",
+        )
+        # Other ranges of it are told as any other difference is.
+        later = self.shown(record(8, ("d01-s1", "d01-s1.mov", 3, 13)), 8, clips=retake)
+        self.assertEqual(
+            edits.unlike(later, day_1),
+            "day 8's shows `window-1/d01-s1.mov` 3-13s, and day 1's shows `window-1/d01-s1.mov` 2-12s",
+        )
+        # The same file under another name is the same footage.
+        moved = {"window-1/d01-s1-take-2.mov": replace(held, name="window-1/d01-s1-take-2.mov")}
+        renamed = self.shown(record(8, ("d01-s1", "d01-s1-take-2.mov", 2, 12)), 8, clips=moved)
+        self.assertEqual(renamed["cuts"][0]["source"], "window-1/d01-s1-take-2.mov")
+        self.assertEqual(edits.unlike(renamed, day_1), "")
+        # In a re-cut pair a leg's own opening take is no part of what the legs share, and a file they share is.
+        tail = (("d02-s2", "d02-s2.mov", 2, 13), ("d02-s1", "d02-s1-closing.mov", 5, 11))
+        day_2 = self.shown(record(2, ("d02-s1", "d02-s1a-take-1.mov", 1, 4), *tail), 2)
+        day_9 = record(9, ("d02-s1", "d02-s1b-take-1.mov", 0.5, 3.5), *tail)
+        opening = self.clips["window-1/d02-s1b-take-1.mov"]
+        self.assertEqual(
+            edits.unlike(self.shown(day_9, 9, clips={opening.name: replace(opening, sha256="1" * 64)}), day_2), ""
+        )
+        screen = self.clips["window-1/d02-s2.mov"]
+        self.assertEqual(
+            edits.unlike(self.shown(day_9, 9, clips={screen.name: replace(screen, sha256="2" * 64)}), day_2),
+            "both show `window-1/d02-s2.mov` 2-13s, `window-1/d02-s1-closing.mov` 5-11s, but `window-1/d02-s2.mov` is"
+            " no longer the file day 2's video was cut from",
         )
 
     def test_the_videos_of_a_plain_pair_may_not_differ_even_in_their_first_seconds(self):

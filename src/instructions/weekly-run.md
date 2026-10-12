@@ -218,6 +218,8 @@ Write it as the file `day-NN.json` (such as `day-01.json`) in the edits folder t
   The launcher keeps one rule for a pair's videos: when a run ends, the two posts of a pair never both show a video unless the two videos show the same source ranges outside each one's opening.
   It checks this once per pair, on the two videos the run is about to leave in the pair's posts: for each leg the video cut in this run when the leg's post is about to show it, otherwise the video the leg's post already shows.
   It reads what a video shows from its own record of that video, never from the edit record or the Draft in place, so nothing you write in one leg's files changes what the other leg's standing video is taken to show.
+  That record knows each footage file by its content, not by its name: the same file under another name is the same footage, and another file put in its place under the same name is not.
+  When check-edits says a file is no longer the one the other leg's video was cut from, no change to an edit record resolves it: leave the record as it is, and say in your summary which file it is, so the Founder can put the first recording back.
   When the two videos differ, nothing this run changed for either leg is offered and the posts that stood stay as they were; the run report and a notice name the pair and the source ranges each video shows.
   check-edits tells you beforehand: it reports a leg whose video would not be offered as a problem, with both videos' source ranges.
   Fix the leg it names, and to move a pair to other footage change both legs' edit records alike in the same run.

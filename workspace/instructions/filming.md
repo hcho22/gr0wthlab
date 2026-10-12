@@ -52,6 +52,8 @@ The edit record's format is in the task definition, and the launcher's checks de
 - When the other leg's video is already in an open or approved post, never change that leg's edit record to make the two match: change the newer leg.
 - The launcher compares the two legs as videos, never as files: for each leg the video it cuts in this run when that leg's post is about to show it, otherwise the video the leg's post already shows.
   It reads what a video shows from its own record of that video, so a leg you leave alone is judged by the video its post shows, whatever you write for the other leg.
+  A footage file is known there by its content, not by its name: a renamed file is the same footage, and another recording under an old name is not.
+  When check-edits says a file is no longer the one the other leg's video was cut from, leave the edit record as it is and say so in your summary: only the Founder can put the first recording back.
 - When the two videos show different source ranges outside their openings, nothing the run changed for either leg is offered: the posts that stood stay, and the run report and a notice name the pair with both videos' source ranges.
   check-edits reports it beforehand as a problem on each leg whose video would not be offered; a leg it reports as passing needs no change.
 - To move both legs to other footage, change both edit records alike in the same run, so the two new videos match each other.

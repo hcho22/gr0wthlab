@@ -74,8 +74,10 @@ class FilmingExampleSetTest(unittest.TestCase):
         shown = [
             {
                 "day": text.day,
-                "edit": {"record": record.as_json()},
                 "opening": [list(window) for window in edits.opening_windows(text, self.spec(text).hooks)],
+                "cuts": [
+                    dict(segment.as_json(), sha256=self.clips[segment.source].sha256) for segment in record.segments
+                ],
             }
             for record, text in ((edit, draft), (theirs, their_draft))
         ]

@@ -599,7 +599,7 @@ def take(
         changed.update({result.day: result.asset is not None and result.asset.finished for _, _, result in offers})
         video.leave(changed, store)
     for day_plan, draft, result in offers:
-        queue_day(plan, day_plan, draft, result, store, ledger, run_id, now, outcome)
+        queue_day(plan, day_plan, draft, result, store, ledger, run_id, now, products, outcome)
     outcome.results.sort(key=lambda result: result.day)
     return outcome
 
@@ -703,10 +703,13 @@ def queue_day(
     ledger: Ledger,
     run_id: str,
     now: datetime,
+    products: Sequence[str],
     outcome: Outcome,
 ) -> None:
     """Queue the post a day was settled to offer, with its video when the run cut one. A video the pair check did
-    not let through changes nothing for its day this run: no post is queued, and what stood before stays."""
+    not let through changes nothing for its day this run: no post is queued, and what stood before stays. The item
+    queued is the one checked here, with what the pair check added to its video's checks: one that does not follow
+    the item format blocks the day, as in settle_day."""
     number, asset, approved = day_plan.day.day, result.asset, day_plan.approved
     if asset is not None and asset.withheld:
         if day_plan.open:
@@ -718,7 +721,12 @@ def queue_day(
         else:
             result.status, result.detail = NOT_OFFERED, asset.detail
         return
-    item = render(plan, day_plan, draft, result.verdict, asset)
+    item = offer(plan, day_plan, draft, result.verdict, products, asset)
+    if not result.verdict.passed:
+        result.status = BLOCKED
+        if day_plan.open:
+            result.withdrawn = str(day_plan.open["id"])
+        return
     if day_plan.open:
         item = exchange.Item(
             dict(item.fields, supersedes=str(day_plan.open["id"])), item.ask, item.body, item.touches, item.evidence

@@ -101,7 +101,7 @@ Once a post's video is finished, its `## Draft` also holds a Video file block: t
 gr0wthlab offers a video only after measuring it as 9:16 at the expected resolution and checking its cuts against the shot list, and every frame of it is the Founder's footage with text drawn over it.
 A post queued before its video existed is replaced by one that shows it; a day whose copy the Founder approved before its video existed is offered once more with the video, and that item says so.
 The two posts of an A/B pair never both show a video unless the two videos show the same footage outside each one's opening.
-gr0wthlab checks this once per pair before a run queues anything, on the two videos the run is about to leave in the pair's posts, reading each from its own record of what that video was cut from.
+gr0wthlab checks this once per pair before a run queues anything, on the two videos the run is about to leave in the pair's posts, reading each from its own record of what that video was cut from, in which a footage file is known by its content and not by its name.
 When the two differ, nothing the run changed for the pair is queued: the posts that stood stay as they were, and a notice names the pair and what each video shows.
 
 A filming plan asks the Founder to approve what a 14-day window must film before any of it is filmed: the sittings, and one shot list per asset, each stating what to record, on which device, in real time or not, and what may not be cut, in the words of the Angle's Format in the package.

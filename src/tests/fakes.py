@@ -364,11 +364,12 @@ print(json.dumps({{"streams": streams, "format": {{"duration": str(facts["durati
 
 # Stands in for ffmpeg. It answers the version and the listings a run checks, and "renders" by writing the facts of
 # the asset the command asks for, with the command's inputs and the text file it was given, so a test can read what
-# a render was made from. ffmpeg.json beside it overrides the facts written, or makes the render fail part way, as
+# a render was made from, and with a digest of each input's bytes, so that other footage renders as another file, as
+# it does for real. ffmpeg.json beside it overrides the facts written, or makes the render fail part way, as
 # ffmpeg does: with half a file already at the output, whose path it then adds to partial.log beside it. With "only",
 # just the renders whose output path holds that text fail.
 FAKE_FFMPEG = """#!{python}
-import json, re, sys
+import hashlib, json, re, sys
 from pathlib import Path
 
 here = Path(__file__).resolve().parent
@@ -394,10 +395,12 @@ if behavior.get("fail") and behavior.get("only", "") in args[-1]:
     sys.exit(1)
 graph = args[args.index("-filter_complex") + 1]
 width, height = re.search(r"pad=(\\d+):(\\d+)", graph).groups()
+inputs = [args[i + 1] for i, arg in enumerate(args) if arg == "-i"]
 facts = {{
     "duration": float(args[len(args) - 4]), "width": int(width), "height": int(height),
     "fps": int(re.search(r"fps=(\\d+)", graph).group(1)), "codec": "h264", "pix_fmt": "yuv420p",
-    "sound": "[ac]" in graph, "inputs": [args[i + 1] for i, arg in enumerate(args) if arg == "-i"],
+    "sound": "[ac]" in graph, "inputs": inputs,
+    "footage": [hashlib.sha256(Path(name).read_bytes()).hexdigest() for name in inputs],
     "seeks": [args[i + 1] for i, arg in enumerate(args) if arg == "-ss"], "graph": graph,
     "text": Path("overlay.ass").read_text() if Path("overlay.ass").exists() else "",
 }}

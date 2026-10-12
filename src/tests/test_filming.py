@@ -78,19 +78,19 @@ class FilmingRunCase(CycleTestCase):
         return {day: entry for day, entry in found.items() if entry.get("asset")}
 
     def footage_shown(self, entry):
-        """Every quarter second of a post's video outside its opening, as the footage file and the moment of it shown
-        there, read from the record of the very file the post names."""
+        """Every quarter second of a post's video outside its opening, as the footage file, known by its fingerprint,
+        and the moment of it shown there, read from the record of the very file the post names."""
         record = json.loads((self.ledger() / entry["asset_record"]).read_text(encoding="utf-8"))
         self.assertEqual(
             (record["asset"], record["sha256"], record["day"]), (entry["asset"], entry["asset_sha256"], entry["day"])
         )
         found, clock = [], 0.0
-        for piece in record["edit"]["record"]["segments"]:
-            steps = round((piece["out"] - piece["in"]) / piece["speed"] * 4)
+        for cut in record["cuts"]:
+            steps = round((cut["out"] - cut["in"]) / cut["speed"] * 4)
             for step in range(steps):
                 at = clock + step / 4
                 if not any(start <= at < end for start, end in record["opening"]):
-                    found.append((piece["source"], piece["in"] + step / 4 * piece["speed"]))
+                    found.append((cut["sha256"], cut["in"] + step / 4 * cut["speed"]))
             clock += steps / 4
         return found
 
@@ -937,6 +937,101 @@ class EditRunTest(FilmingRunCase):
         )
         self.assertIn(named, self.notice())
         self.assertNotIn("withdrawn", self.notice())
+
+    def test_a_leg_cut_from_another_file_under_the_same_name_is_not_offered_beside_its_other_leg(self):
+        queue = self.day_1()
+        day_1 = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.decide(day_1["id"], "approve")
+        # Another recording takes the file's place under its name: a retake as long as the first.
+        clip = self.footage / "window-1" / "d01-s1.mov"
+        first = clip.read_bytes()
+        self.clip("d01-s1.mov", take=2)
+        self.assertNotEqual(clip.read_bytes(), first)
+        # A week on, day 8's edit record names the same file and the same range, and shows other footage.
+        queue = self.day_8()
+        self.assertEqual(self.posts_open(), {})
+        differ = (
+            f"do not show the same footage {WHOLE} (both show `window-1/d01-s1.mov` 2-12s, but `window-1/d01-s1.mov`"
+            " is no longer the file day 1's video was cut from)"
+        )
+        why = f"the video cut for it and the video in day 1's post `{day_1['id']}` {differ}"
+        self.assertIn(f"| 8 | P01 / AB-1 leg B | not offered | {why} |", self.report())
+        self.assertIn(
+            f"- Pair AB-1, days 1 and 8: the video in day 1's post `{day_1['id']}` and the video cut for day 8"
+            f" {differ}. Nothing this run changed for either day is offered, and what stood before stays.",
+            self.notice(),
+        )
+        self.assertEqual(self.checks_of(8), OWN_CHECKS)
+        code, said = self.check_edits(queue["updated_by_run"])
+        self.assertEqual(code, 1, said)
+        self.assertIn(f"PROBLEM day 8: drafts/edits/window-1/day-08.json would not be offered: {why}", said)
+        # With the first recording back in its place, day 8 is cut from the file day 1 was cut from, and offered.
+        clip.write_bytes(first)
+        queue = self.run_ok()
+        self.assertIn(f"; the same source ranges as day 1's leg {WHOLE}.", self.item(self.posts_open()[8]))
+        self.assertEqual(self.pairs_shown(), [[1, 8]])
+        self.assertEqual(self.check_edits(queue["updated_by_run"])[0], 0)
+
+    def test_a_leg_cut_from_the_same_file_under_another_name_shows_the_footage_its_other_leg_shows(self):
+        queue = self.day_1()
+        day_1 = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.decide(day_1["id"], "approve")
+        clip = self.footage / "window-1" / "d01-s1.mov"
+        clip.rename(clip.with_name("d01-s1-take-1.mov"))
+        queue = self.day_8(("d01-s1", "d01-s1-take-1.mov", 2, 12))
+        day_8 = self.posts_open()[8]
+        text = self.item(day_8)
+        self.assertIn("| 0-10s | d01-s1 | `window-1/d01-s1-take-1.mov` | 2s | 12s | as recorded |", text)
+        self.assertIn(f"; the same source ranges as day 1's leg {WHOLE}.", text)
+        cuts = [
+            json.loads((self.ledger() / entry["asset_record"]).read_text(encoding="utf-8"))["cuts"][0]
+            for entry in (day_1, day_8)
+        ]
+        self.assertEqual([cut["source"] for cut in cuts], ["window-1/d01-s1.mov", "window-1/d01-s1-take-1.mov"])
+        self.assertEqual(cuts[0]["sha256"], cuts[1]["sha256"])
+        self.assertEqual(self.pairs_shown(), [[1, 8]])
+        code, said = self.check_edits(queue["updated_by_run"])
+        self.assertEqual(code, 0, said)
+        self.assertIn("OK day 8: drafts/edits/window-1/day-08.json: it passes", said)
+
+    def test_a_post_the_pair_check_s_line_takes_over_the_item_limit_is_blocked_and_never_queued(self):
+        queue = self.day_1()
+        post = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        added = "; day 8, its pair's other leg, has no video to compare with yet"
+        self.assertIn(f"{added}.", self.item(post))
+        held = exchange.check_item(self.item(post), ["RepToday", "Immerse"], published=True).item
+        size = len(exchange.render_content("post", held.ask, held.body, held.touches, held.evidence))
+        limit = exchange.MAX_ITEM_CHARS
+
+        def grown(by):
+            """Day 1's Draft with a filming note that makes its item that many characters longer."""
+            note = "Hold on the session list and the one Start button."
+            more = ("steady " * by)[: by - 2] + "y"
+            self.assertEqual((len(more), "  " in more), (by - 1, False))
+            draft = fakes.filming_draft(1)
+            self.assertEqual(draft.count(note), 1)
+            return draft.replace(note, f"{note} {more}")
+
+        # The Draft grows until its item fits the limit as it is checked before the pair check, and is ten
+        # characters over it with the line that check adds. The item that would be queued is the one that counts.
+        self.assertLess(10, len(added))
+        self.run_ok({fakes.draft_path(1): grown(limit + 10 - size)})
+        self.assertEqual(self.posts_open(), {})
+        report = self.report()
+        self.assertIn(
+            f"| 1 | P01 / AB-1 leg A | blocked | 1 failing check, listed below; the open `{post['id']}` was"
+            " withdrawn |",
+            report,
+        )
+        self.assertIn(f"- item: the item is {limit + 10} characters; keep it under {limit}", report)
+        self.assertIn(
+            f"- The open post `{post['id']}` for day 1 is withdrawn, since its Draft no longer passes.", self.notice()
+        )
+        # One character under the limit with that line, it is queued, and the queued item follows the format.
+        queue = self.run_ok({fakes.draft_path(1): grown(limit - 1 - size)})
+        again = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.assertIn(f"{added}.", self.item(again))
+        self.assertEqual(exchange.check_item(self.item(again), ["RepToday", "Immerse"], published=True).problems, [])
 
     def test_a_leg_is_not_offered_while_the_record_of_its_other_leg_s_video_cannot_be_read(self):
         queue = self.day_1()
@@ -2220,6 +2315,8 @@ class PairWalkTest(FilmingRunCase):
         ("an approval", 4),
         ("a rejection", 1),
         ("a record saved again", 4),
+        ("a file replaced under its name", None),
+        ("a file renamed", None),
     )
     # The events a third run is walked for, after any two of them.
     CORE = (("a new edit record", 1), ("a new edit record", 4), ("a cut that fails", 4))
@@ -2248,12 +2345,27 @@ class PairWalkTest(FilmingRunCase):
     def draft(self, leg):
         return fakes.filming_draft(self.DRAFTS[leg]).replace(f"day: {self.DRAFTS[leg]}", f"day: {leg}")
 
-    def moved(self, leg):
-        """The leg's edit record with its one source range a second later, or back at the start once it reaches the
-        end of the file, so that the two legs' records come to differ and to agree again."""
+    def clip_now(self):
+        """The pair's one footage file, under whatever name it has now."""
+        return next((self.footage / "window-1").iterdir())
+
+    def record(self, leg, later=0):
+        """The leg's edit record as it is, naming the footage file as it is named now, with its one source range
+        that many seconds later, or back at the start once it reaches the end of the file, so that the two legs'
+        records come to differ and to agree again."""
         start = json.loads((self.workspace() / fakes.edit_path(leg)).read_text(encoding="utf-8"))["segments"][0]["in"]
-        start = 2 + (start - 1) % 3
-        return {fakes.edit_path(leg): fakes.edit_record(leg, ("d01-s1", "d01-s1.mov", start, start + 10))}
+        start = 2 + (start - 2 + later) % 3
+        return {fakes.edit_path(leg): fakes.edit_record(leg, ("d01-s1", self.clip_now().name, start, start + 10))}
+
+    def as_it_began(self):
+        """Whether the run just made left the pair as the walk began it: no post of the pair decided, and each
+        leg's post open and showing the video its Draft, its edit record, and the footage in place are cut into.
+        What can follow such a run is what the walk's first runs already tried."""
+        decided = [entry for entry in self.entries() if entry["status"] in ("approved", "rejected")]
+        drafted = self.report().split("## Post Drafts")[1].split("## Filming")[0].splitlines()
+        rows = [row for row in drafted if row.startswith(tuple(f"| {leg} |" for leg in self.LEGS))]
+        shown = ("; with its finished video |", ", with its finished video |", ", and so is its video |")
+        return not decided and len(rows) == len(self.LEGS) and all(row.endswith(shown) for row in rows)
 
     def happen(self, what, leg):
         """One event, then the run that meets it."""
@@ -2263,7 +2375,7 @@ class PairWalkTest(FilmingRunCase):
         post = self.posts_open().get(leg)
         writes = {}
         if what == "a new edit record":
-            writes = self.moved(leg)
+            writes = self.record(leg, later=1)
         elif what == "a Draft changed":
             writes = {fakes.draft_path(leg): self.draft(leg) + "\n" * self.saves}
         elif what == "a Draft blocked":
@@ -2275,7 +2387,7 @@ class PairWalkTest(FilmingRunCase):
         elif what == "a Draft unreadable":
             writes = {fakes.draft_path(leg): "not a Draft\n"}
         elif what == "a cut that fails":
-            writes = self.moved(leg)
+            writes = self.record(leg, later=1)
             failing.write_text(json.dumps({"fail": "Error opening output files", "only": f"day-{leg:02d}"}))
         elif what in ("an approval", "a rejection") and post is not None:
             approve = what == "an approval"
@@ -2283,6 +2395,12 @@ class PairWalkTest(FilmingRunCase):
         elif what == "a record saved again":
             path = self.workspace() / fakes.edit_path(leg)
             writes = {fakes.edit_path(leg): json.dumps(json.loads(path.read_text(encoding="utf-8")), indent=self.saves)}
+        elif what == "a file replaced under its name":
+            fakes.fake_clip(self.clip_now(), 14.0, take=self.saves)
+        elif what == "a file renamed":
+            clip = self.clip_now()
+            clip.rename(clip.with_name(f"d01-s1-take-{self.saves}.mov"))
+            writes = {path: record for each in self.LEGS for path, record in self.record(each).items()}
         self.run_ok(writes)
         report = self.report()
         drafted = report.split("## Post Drafts")[1].split("## Filming")[0]
@@ -2293,6 +2411,7 @@ class PairWalkTest(FilmingRunCase):
         self.seen["a cut that failed"] += FAILURE in report
         self.seen["a leg settled"] += "the Founder approved it, so it is not asked again" in drafted
         self.seen["a Draft not asked again"] += "| not queued again | " in drafted
+        self.seen["a file that is no longer the one a video was cut from"] += " is no longer the file day " in report
         self.seen["a compared leg"] += f"the same source ranges as day {self.LEGS[0]}'s leg" in json.dumps(
             self.checks_of(self.LEGS[1])
         )
@@ -2301,29 +2420,36 @@ class PairWalkTest(FilmingRunCase):
         drafts = self.one_week_pair()
         self.run_ok(dict(drafts, **self.both(DAY_1)))
         self.assertEqual(self.pairs_shown(), [[1, 4]])
+        self.assertTrue(self.as_it_began())
         start = self.snapshot()
-        walked = 0
+        walked = collections.Counter()
         for first in self.EVENTS:
             self.restore(start)
             with self.subTest(events=(first,)):
                 self.happen(*first)
-                walked += 1
+                walked[1] += 1
+                if self.as_it_began():
+                    continue
                 after_one = self.snapshot()
                 for second in self.EVENTS:
                     self.restore(after_one)
                     with self.subTest(events=(first, second)):
                         self.happen(*second)
-                        walked += 1
-                        if first not in self.CORE or second not in self.CORE:
+                        walked[2] += 1
+                        if first not in self.CORE or second not in self.CORE or self.as_it_began():
                             continue
                         after_two = self.snapshot()
                         for third in self.CORE:
                             self.restore(after_two)
                             with self.subTest(events=(first, second, third)):
                                 self.happen(*third)
-                                walked += 1
-        count, core = len(self.EVENTS), len(self.CORE)
-        self.assertEqual(walked, count + count**2 + core**3)
+                                walked[3] += 1
+        # Every event was tried first, most of them leave the pair other than it began and were walked on from with
+        # every event, and some of those twice.
+        self.assertEqual(walked[1], len(self.EVENTS))
+        self.assertEqual(walked[2] % len(self.EVENTS), 0)
+        self.assertGreater(walked[2], len(self.EVENTS) ** 2 // 2)
+        self.assertGreater(walked[3], len(self.CORE) ** 2)
         # The walk met every way a pair's posts can come out of a run, so the rule was tried against each.
         for outcome in (
             "both posts show a video",
@@ -2333,6 +2459,7 @@ class PairWalkTest(FilmingRunCase):
             "a cut that failed",
             "a leg settled",
             "a Draft not asked again",
+            "a file that is no longer the one a video was cut from",
             "a compared leg",
         ):
             self.assertGreater(self.seen[outcome], 0, outcome)

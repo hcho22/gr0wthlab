@@ -35,7 +35,7 @@ What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
    For a Draft that passes, it checks the day's edit record in `workspace/drafts/edits/`, if the agent wrote one, against the shot list and the footage, renders it with `ffmpeg` into `ledger/assets/` with the Draft's text drawn over it, and measures the result; the day's post then shows the finished video.
    An edit record that fails a check renders nothing and blocks the day's post, naming the rule; missing video tooling is reported as a skipped edit, never as a failed run; every check is kept in `ledger/evidence/filming/`.
    A cut that fails for a reason outside the edit record (a tooling error, footage that changed while the run worked, a record that could not be written) holds the video as missing tooling does: nothing is blocked, an open post stands, and the run's notice names the failure.
-   Before it queues any post, it compares the two videos each A/B pair's posts are about to show, reading each from its own record in `ledger/evidence/filming/assets/`: when they show different footage outside their openings, nothing the run changed for the pair is offered, the posts that stood stay, and the run report and the notice name the pair.
+   Before it queues any post, it compares the two videos each A/B pair's posts are about to show, reading each from its own record in `ledger/evidence/filming/assets/`, which knows every footage file by its fingerprint and not by its name: when they show different footage outside their openings, nothing the run changed for the pair is offered, the posts that stood stay, and the run report and the notice name the pair.
    A day whose copy the Founder approved before its video existed gets its video only while its Draft is still that copy; otherwise no video is cut and the notice says so.
    It files the brand lint's word-list proposal once, and never again whatever the Founder decides.
 8. It writes `ledger/review-queue/queue.json`, each workflow's run state (`ledger/run-reports/state/`), and the run report (`ledger/run-reports/<run id>.md`), whose first line is `checked=N acted=N note=...` even when nothing happened.
@@ -107,6 +107,8 @@ The change touches `config/products.json`, so it needs the boundary check below.
 gr0wthlab only ever reads the footage place: it fingerprints and measures each file and cuts finished videos from them, and nothing in it writes, renames, moves, or deletes anything there.
 The sandboxed agent never opens it.
 Keep the footage there for as long as its videos may need rebuilding.
+Leave a file as it is once a video was cut from it, since a file is known by its content: another recording put in its place under the same name is other footage, so the later leg of an A/B pair cut from it is not offered beside a video cut from the first, the notice names the file, and `rebuild-asset` refuses it.
+A file that is only renamed is still the same footage.
 
 Name each file for its shot in the approved filming plan, in one folder per 14-day window:
 

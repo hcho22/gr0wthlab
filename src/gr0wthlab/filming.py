@@ -214,9 +214,11 @@ class Asset:
         """A video that was cut and is not offered, since it and the video of its pair's other leg differ."""
         return self.status == WITHHELD
 
-    def shows(self) -> dict[str, object]:
-        """What a video cut from this record shows, as far as its record in the ledger tells the pair check."""
-        return {"day": self.day, "edit": {"record": self.parsed.as_json()}, "opening": self.opening}
+    def shows(self, clips: Mapping[str, edits.Clip]) -> dict[str, object]:
+        """What a video cut from this record shows, as far as its record in the ledger tells the pair check: each
+        cut with the fingerprint of the file it is made from, and where the opening is."""
+        cuts = [dict(segment.as_json(), sha256=clips[segment.source].sha256) for segment in self.parsed.segments]
+        return {"day": self.day, "opening": self.opening, "cuts": cuts}
 
     def entry(self) -> dict[str, object]:
         """What a post's Review Queue entry keeps of its video."""
@@ -399,14 +401,20 @@ class Filming:
     def preview(self, areas: Areas, store: Store) -> None:
         """Each due day's edit record as check-edits sees it before anything is cut: its own checks, then the pair
         check on the videos a run that ended now would leave. A record that passes would be cut into a video for its
-        day's post, unless it is the record the video of the day's standing post was cut from, which stands."""
+        day's post, unless that video would show, cut for cut, what the video of the day's standing post shows,
+        which then stands."""
         fresh = {}
         for number in sorted(self.days):
             asset = self.results[number] = self.examine(number, areas)
-            standing = self.standing_video(number, store) or {}
-            cut_from = (standing.get("edit") or {}).get("sha256"), standing.get("opening")
-            if asset.status == READY and cut_from != (asset.edit_sha256, asset.opening):
-                fresh[number] = asset.shows()
+            if asset.status != READY:
+                continue
+            would, standing = asset.shows(self.inventory.clips), self.standing_video(number, store)
+            try:
+                stands = (edits.footage(standing), standing["opening"]) == (edits.footage(would), would["opening"])
+            except (KeyError, TypeError):
+                stands = False
+            if not stands:
+                fresh[number] = would
         self.pair_check(fresh, store)
 
     def pair_check(self, fresh: Mapping[int, Mapping | None], store: Store) -> None:
@@ -416,7 +424,8 @@ class Filming:
         Checked once per pair, on what the run is about to leave standing. fresh holds each day whose post the run is
         about to change, with the record of the video the post is about to show, or None when it is about to show
         none; any other day keeps the video its standing post shows. Each video is judged by its own record in the
-        ledger, which holds the edit record it was cut from and where its opening is, never by the files in place.
+        ledger, which holds each cut with the fingerprint of the file it was made from and where the opening is,
+        never by the files in place or by their names.
 
         When the two videos differ, nothing the run changed for the pair is offered, so what stood before stays, and
         the run report and the notice name the pair and say why. A leg's checks say it shows the same source ranges

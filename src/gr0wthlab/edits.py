@@ -450,13 +450,15 @@ def check(
     return found
 
 
+def footage(video: Mapping) -> list[tuple]:
+    """What a finished video shows, cut by cut, read from the video's own record: the file each cut was made from,
+    known by the fingerprint the record holds for it and never by its name, with the range and the speed."""
+    return [(cut["sha256"], cut["in"], cut["out"], cut["speed"]) for cut in video["cuts"]]
+
+
 def outside(video: Mapping) -> list[tuple]:
-    """The source ranges a finished video shows outside its opening, read from the video's own record: the parsed
-    edit record it was cut from, and where its opening is."""
-    segments = [
-        Segment(piece["shot"], piece["source"], piece["in"], piece["out"], piece["speed"])
-        for piece in video["edit"]["record"]["segments"]
-    ]
+    """The source ranges a finished video shows outside its opening, each of a file known by its fingerprint."""
+    segments = [Segment("", *cut) for cut in footage(video)]
     return pieces(segments, [tuple(window) for window in video["opening"]])
 
 
@@ -464,11 +466,26 @@ def unlike(one: Mapping, two: Mapping) -> str:
     """How the videos of the two legs of an A/B pair differ outside each one's opening, or "" when both show the same
     source ranges in the same order there; judged from the two videos' own records alone. In a pair the kit does not
     mark as a re-cut neither video has an opening: the legs share every source range, and only the Hook drawn over
-    them differs."""
-    ours, theirs = outside(one), outside(two)
-    if ours == theirs:
+    them differs.
+
+    A file is the same footage only when it is the same file: one renamed is still the footage it was, and another
+    put in its place under its name is not. File names are for the wording alone."""
+    files = outside(one), outside(two)
+    if files[0] == files[1]:
         return ""
-    return f"day {one['day']}'s shows {describe(ours)}, and day {two['day']}'s shows {describe(theirs)}"
+    told = []
+    for video, ranges in zip((one, two), files):
+        names = {cut["sha256"]: cut["source"] for cut in video["cuts"]}
+        told.append([(names[file], *shown) for file, *shown in ranges])
+    ours, theirs = told
+    if ours != theirs:
+        return f"day {one['day']}'s shows {describe(ours)}, and day {two['day']}'s shows {describe(theirs)}"
+    replaced = sorted({f"`{name}`" for (name, *_), mine, other in zip(ours, *files) if mine[0] != other[0]})
+    many = len(replaced) > 1
+    return (
+        f"both show {describe(ours)}, but {' and '.join(replaced)} {'are' if many else 'is'} no longer the"
+        f" file{'s' if many else ''} day {two['day']}'s video was cut from"
+    )
 
 
 def describe(ranges: Sequence[tuple]) -> str:
