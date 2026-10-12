@@ -16,7 +16,7 @@ says:
 
 The agent is only the instrument that exercises the runtime, so the launcher leaves it as little to get wrong as it
 can: it writes every step out in full, one patch per target for the file tool and one script for every shell step.
-A step the agent skipped or sent mangled says nothing about the runtime, so the check hands the agent the steps that
+A step that has no record after a probe run proves nothing either way, so the check hands the agent the steps that
 still have no record again, PROBE_RUNS times at most, and fails if one is still unproven. Anything that does say
 something about the runtime ends the check as failed at once: a sentinel that landed, a connection that got through,
 a change outside the areas, a run that did not exit cleanly, or a record of Codex's that is not whole.
@@ -424,10 +424,13 @@ def tool_record(log_dir: Path, run_id: str, clean_exit: bool) -> tuple[list[code
     return calls, problems
 
 
-def last_error(log_dir: Path, run_id: str) -> str | None:
-    """Codex's own last error in a run's event stream, or None if it reported none."""
+def event_stream(log_dir: Path, run_id: str) -> tuple[bool, str | None]:
+    """Whether a run left an event stream, which every run whose agent was started does, and Codex's own last error in
+    it, or None if it holds none."""
     events = log_dir / f"{run_id}.events.jsonl"
-    return codex.last_error(events.read_text(encoding="utf-8", errors="replace")) if events.is_file() else None
+    if not events.is_file():
+        return False, None
+    return True, codex.last_error(events.read_text(encoding="utf-8", errors="replace"))
 
 
 def verify(
@@ -514,14 +517,16 @@ def verify(
         and changes == {}
     )
     not_tested = bool(record.get("agent_started")) and exit_code != 0 and not calls and left_nothing
+    streamed, error = event_stream(log_dir, run_id)
     result: dict[str, object] = {
         "run_id": run_id,
         "fingerprint": record.get("fingerprint"),
         "trigger": record.get("trigger"),
         "run_exit_code": exit_code,
         "timed_out": bool(record.get("timed_out")),
-        "agent_started": bool(record.get("agent_started")),
-        "codex_last_error": last_error(log_dir, run_id),
+        "agent_started": record.get("agent_started"),
+        "codex_event_stream": streamed,
+        "codex_last_error": error,
         "preflight": record.get("preflight"),
         "steps_needed": [step.name for step in steps],
         "escaped_and_removed": [str(path) for path in landed],
@@ -551,12 +556,15 @@ def verify(
 
 def how_ended(result: Mapping[str, object]) -> str:
     """How a probe run ended, as its records show: its exit code, whether the launcher stopped it at the agent's time
-    limit, and how far the agent had got. A run whose launcher was stopped before it ended left no exit code."""
-    code, calls = result["run_exit_code"], result["codex_tool_record"]["calls"]
+    limit, and how far the agent had got. A run whose launcher was stopped before it ended left no exit code, and one
+    the launcher holds no record of at all left neither that nor whether its agent was started."""
+    code, calls, started = result["run_exit_code"], result["codex_tool_record"]["calls"], result["agent_started"]
+    if code is None and started is None:
+        return "left no run record"
     ended = "left no exit code" if code is None else f"ended with exit code {code}"
     if result["timed_out"]:
         ended += ", stopped by the launcher at the agent's time limit,"
-    if not result["agent_started"]:
+    if started is False:
         return f"{ended} before the agent was started"
     if calls:
         return f"{ended} after {calls} tool call{'' if calls == 1 else 's'}"
@@ -564,24 +572,31 @@ def how_ended(result: Mapping[str, object]) -> str:
 
 
 def codex_said(result: Mapping[str, object]) -> str:
+    """What a verdict adds of Codex's own errors: its last, or that it reported none, from the run's event stream, and
+    nothing for a run that left no stream."""
+    if not result["codex_event_stream"]:
+        return ""
     error = result["codex_last_error"]
-    return f"Codex's last error: {error}" if error else "Codex reported no error"
+    return "; " + (f"Codex's last error: {error}" if error else "Codex reported no error")
 
 
 def unclean_exit(result: Mapping[str, object]) -> str:
     """What a verdict's first line says of a run that did not exit cleanly: how it ended, what its records show of
     the boundary having been tested, and Codex's own last error."""
-    if not result["agent_started"]:
+    unproven, needed = result["unproven"], result["steps_needed"]
+    if result["agent_started"] is False:
         tested = ", so the probe tested nothing"
     elif result["not_tested"]:
         tested = " and left nothing, so the boundary was not tested"
     elif not result["codex_tool_record"]["calls"]:
         tested = ""
-    elif result["unproven"]:
+    elif not unproven:
+        tested = ": every step was proven, and the run did not exit cleanly"
+    elif len(unproven) < len(needed):
         tested = ", so the boundary was tested only in part"
     else:
-        tested = ": every step was proven, and the run did not exit cleanly"
-    return f"the run {how_ended(result)}{tested}; {codex_said(result)}"
+        tested = ", and no step was proven"
+    return f"the run {how_ended(result)}{tested}{codex_said(result)}"
 
 
 def summarize(result: Mapping[str, object], out: TextIO, again: bool = False) -> None:
@@ -608,10 +623,14 @@ def summarize(result: Mapping[str, object], out: TextIO, again: bool = False) ->
     lines = [
         first,
         f"  steps this run had to prove: {len(needed)}",
-        f"  sentinels that escaped (removed): {len(escaped)}",
+        f"  sentinels that escaped (files among them removed): {len(escaped)}",
         *(f"    {path}" for path in escaped),
-        f"  permitted writes: {sum(len(files) for files in written.values())} files across {len(written)} areas",
     ]
+    if result["agent_started"] is not False:
+        asked = [name for name in needed if name.split(":")[0] in written]
+        lines.append(f"  permitted sentinels written: {len(asked) - len(result['permitted_missing'])} of {len(asked)}")
+    if result["agent_report"]:
+        lines.append(f"  the agent's report was kept as {result['agent_report']}")
     if attempted and result["permitted_missing"]:
         lines.append(f"  missing permitted writes: {', '.join(result['permitted_missing'])}")
     if result["unlistable_areas"]:
@@ -625,7 +644,8 @@ def summarize(result: Mapping[str, object], out: TextIO, again: bool = False) ->
     lines += [
         f"  Codex's record of the run's tool calls: {problem}" for problem in result["codex_tool_record"]["problems"]
     ]
-    lines.append(f"  kernel Seatbelt denials naming this run: {len(result['kernel_sandbox_denials'])}")
+    denials = len(result["kernel_sandbox_denials"])
+    lines.append(f"  kernel Seatbelt denials naming this run's sentinels or the check's listeners: {denials}")
     if result.get("kernel_log_cut_short"):
         lines.append(
             f"  the kernel log query did not finish within {process.limit_text(process.SLOW)} and was stopped, so later"
@@ -642,9 +662,9 @@ def summarize(result: Mapping[str, object], out: TextIO, again: bool = False) ->
         lines.append(f"  local connections that got through: {', '.join(reached) or 'none'}")
     changes = result["changed_outside_areas"]
     if changes is None:
-        lines.append("  changes outside the areas: not checked; --verify has no snapshot from before the run")
+        lines.append("  changes since a snapshot: not checked; --verify has no snapshot from before the run")
     else:
-        lines.append(f"  changes outside the areas: {changes or 'none'}")
+        lines.append(f"  changes since the snapshot from before the check: {changes or 'none'}")
     if again:
         lines.append(f"  asking again for: {', '.join(result['ask_again'])}")
     print("\n".join(lines), file=out)
@@ -656,14 +676,14 @@ def conclude(results: Sequence[Mapping[str, object]], out: TextIO) -> None:
     not clean."""
     runs = f"{len(results)} probe run{'' if len(results) == 1 else 's'}"
     endings = [
-        f"  {result['run_id']}: {how_ended(result)}" + (f"; {codex_said(result)}" * (result["run_exit_code"] != 0))
+        f"  {result['run_id']}: {how_ended(result)}" + codex_said(result) * (result["run_exit_code"] != 0)
         for result in results
     ]
     if all(result["not_tested"] for result in results):
         lines = [
             f"boundary check: NOT TESTED after {runs}: no probe run made a tool call, so the boundary was not tested"
         ]
-        lines += endings + ["  read those errors before running the check again"]
+        lines += endings + ["  read how each run ended before running the check again"]
     elif len(results) == 1:
         return
     elif results[-1]["passed"]:

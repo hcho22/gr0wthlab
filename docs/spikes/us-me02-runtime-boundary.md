@@ -472,7 +472,7 @@ Asking again.
 The agent is the instrument that exercises the runtime, and an instrument slips: even with every step written out, it mistyped a path in 2 of the 12 attempts of an earlier draft of this fix.
 A step that has no record after a run proves nothing either way, so the check hands the steps that still have no record over again, in at most three probe runs, and fails if one is still unproven.
 What a run must prove is the check's own list of steps, not whatever the run was handed.
-Anything that does say something about the runtime fails the check at once, with no further run: a sentinel that landed, a connection that got through, a change outside the areas, a run that did not exit cleanly, or a record of Codex's that is not whole.
+Anything that does say something about the runtime fails the check at once, with no further run: a sentinel that landed, a connection that got through, a change against the snapshot, a run that did not exit cleanly, or a record of Codex's that is not whole.
 Asking again cannot hide a hole, because a hole shows as one of those, and none of them is ever asked about twice.
 One unclean exit was later set apart from the rest, a run that ended before its agent's first tool call and left nothing; [the section on it](#a-run-that-made-no-tool-call) says why that cannot hide a hole either.
 
@@ -615,7 +615,7 @@ An attempt that got through would fail the check at once, like any write that la
 Whether the agent tries the route is its own call, on this wording as on `main`'s.
 In the 12 attempts below and the re-check after them, 13 probe runs in all, Codex's record holds no `exec` call that reaches for a filesystem or process API.
 Eleven of the 13 reports call the route unavailable or not attempted, and two leave it out.
-The nine attempts of the second streak below that reached the model did not try it either.
+The nine attempts of the second streak below whose agents made tool calls did not try it either.
 On `main`'s wording it was tried now and then: of the six probe reports kept in the Founder's log folder from checks on `main`, one records an attempt, `20261012T055304Z-on-demand-feb1`, answered `undefined`, and five call the route unavailable.
 So taking the sentence out did not make the agent try the route in these runs.
 Making every probe run try it would take spelling the route out for `exec`, as the scratch clone did, where the check still passed; that is another change to the probe's wording, and it is left for the Founder to decide.
@@ -698,7 +698,7 @@ That was only in the line above the verdict, `finished with exit code 1`, and in
 
 #### A run that made no tool call
 
-The runs of this section were made from 00:57 to 02:00 on 2026-10-12, Mac local time.
+The runs of this section were made from 00:57 to 02:27 on 2026-10-12, Mac local time.
 The second streak above left a defect in view: a probe run that ended before any tool call failed the check at once, with a verdict that said nothing of how the run had ended.
 In the recorded runs such a run ended in about two seconds with exit code 1.
 The check took that exit for a verdict on the runtime.
@@ -762,7 +762,7 @@ The first step's wording broke that rule, and this is exactly what changed:
 
 - The closing line of a check in which no probe run made a tool call had said that the model could not be reached, that this said nothing about the boundary or the launcher, and that the check should be run again once Codex answered.
   No record shows any of the three, and the scratch clone above with the unusable model is a case where each is false, since there the configuration named the model and no later run could differ.
-  The closing lines now say that no probe run made a tool call and that the boundary was not tested, give each run's exit code and Codex's own last error, or that Codex reported none, and tell the reader to read those errors before running the check again.
+  The closing lines now say that no probe run made a tool call and that the boundary was not tested, and say how each run ended.
 - A run the launcher stopped at the agent's time limit is never asked again, whether or not it had made a tool call.
   Under the first step one stopped before its first tool call was asked again, so a check could take three time limits; now the check ends there, and the verdict says that the launcher stopped the agent at its time limit and how far it had got.
   A run that ended by itself before any tool call and left nothing is still asked again.
@@ -778,7 +778,7 @@ What passes did not change.
 The same records are required for a pass and are read the same way, every case's exit status is as it was, and the only run whose asking again changed is the one stopped at the time limit before any tool call, which is no longer asked again.
 So the streak on `f30cccc` stands as the evidence for what passes, and no other streak was run.
 
-The second step was shown live in scratch clones again:
+The second step was shown live in scratch clones again; the lines quoted are as the check then printed them:
 
 | Scratch change | What the check printed |
 | --- | --- |
@@ -790,26 +790,57 @@ The second step was shown live in scratch clones again:
 
 Codex's log and event stream from two runs that ended before any tool call are fixtures of the unit tests: `20261012T072302Z-on-demand-8f37` of the second streak above, whose last error was the `429`, and `20261012T080314Z-on-demand-b13c` of the first scratch table, whose last error was the `400`.
 The tests cover such a run followed by a clean one, which passes; three such runs with the `400`, which end not tested with each run's error in the closing lines; an agent stopped at its time limit before its first tool call, which is not asked again, and one stopped after a tool call; one step left out of the first run and then two runs with no tool call, which close with that step and how each run ended; every step proven and then an unclean exit; an unclean exit after a tool call with steps unproven; a failed preflight; and an unclean run with no tool call that left files, a kernel denial, or a sentinel, each of which fails at once.
-The fixture for the indented patch line was rebuilt in this step, since the report in the first run's log held em dashes: the scratch probe was run again as it was, the first of those runs, `20261012T084312Z-on-demand-59ff`, held them too, and the second, `20261012T084444Z-on-demand-9319`, held none.
+The fixture for the indented patch line was rebuilt in the second step, since the report in the first run's log held em dashes: the scratch probe was run again as it was, the first of those runs, `20261012T084312Z-on-demand-59ff`, held them too, and the second, `20261012T084444Z-on-demand-9319`, held none.
+
+The third step is a sweep, made after review found two more lines that said more than a record shows.
+Every line the check and the preflight can print was read against the rule, in each case it can be printed in: an agent never started, no tool call, an unclean exit after a tool call, steps unproven, every step proven, and a run stopped at the time limit.
+That is 40 kinds of line: the preflight's summary and its four failure texts, the launcher's seven lines around a probe run, the sixteen kinds of line in a run's verdict, the six of a check's closing, and the six errors that stop a check before it judges a run.
+Seven of them were changed and one was added, all in `probe.py`, and this is everything that changed in the launcher's code since the second step:
+
+- `permitted writes: N files across M areas` counted every file in the areas named for the run, the launcher's own script and the agent's report among them.
+  A run whose agent was never started was shown one permitted write, and a passing run fourteen where twelve are permitted sentinels.
+  The line is now `permitted sentinels written: X of Y`, counting only the permitted files the run had to prove, and it is not printed for a run whose agent was never started.
+- The agent's report has a line of its own, the one added: `the agent's report was kept as`, with the path of the kept copy, when a report was kept.
+- A verdict's first line, and the line a check's closing gives each run, said `Codex reported no error` whenever no error was found, also for a run that left no event stream because Codex was never started.
+  Both now say it only of a run whose event stream exists and holds no error, and say nothing of Codex for a run that left no stream.
+- The first line also said that an unclean run with tool calls had tested the boundary only in part when no step at all had its record, and that a run the launcher holds no record of, which `--verify` can be given, had ended before the agent was started.
+  It now says `no step was proven` of the first and `the run left no run record` of the second.
+- `sentinels that escaped (removed)` said every escaped entry was removed, though the check removes only files; it now reads `sentinels that escaped (files among them removed)`.
+- `kernel Seatbelt denials naming this run` also counted the denials of connections to the check's listeners, which name a listener and not the run; it now reads `kernel Seatbelt denials naming this run's sentinels or the check's listeners`.
+- `changes outside the areas` listed every change against the snapshot, one inside an area among them, such as a permitted file left under a mistyped name; it now reads `changes since the snapshot from before the check`, and under `--verify`, `changes since a snapshot: not checked`.
+- `read those errors before running the check again` closed a check in which no run made a tool call, also when no run had an error; it now reads `read how each run ended before running the check again`.
+
+The other 32 kinds of line passed the reading as they stood.
+The same sweep read every sentence in [operations](../operations.md#after-a-change-to-the-launcher-or-configuration), `AGENTS.md`, and this note that says what the check's output means.
+It corrected eight in operations and added four there for lines operations had not described; it corrected six here, which are the two sentences review named, the list of what fails the check at once, the limit about a check that ends not tested, and the two descriptions of the second step that quoted lines changed since; and it found none to correct in `AGENTS.md`.
+The module docstring of `probe.py` now also says a step that has no record after a probe run, where it had said a step the agent skipped or sent mangled.
+
+What passes did not change in this step either: the same records are required and read the same way, every case's exit status is as it was, and no run is asked again that was not before.
+The streak on `f30cccc` still stands as the evidence for what passes, and no other streak was run.
+The unit tests pin each changed line, with one for each case review traced: a run whose agent was never started, with the launcher's script in the areas, whose whole verdict is compared, and a passing run with the script and a report in the areas, which counts twelve of twelve.
+The first case was also run live in a scratch clone with `src/` made writable, `20261012T092011Z-on-demand-e71b`: its verdict held no count of permitted writes and no word of Codex.
+A second scratch clone, with a model the account cannot use, showed the new closing line after three runs with no tool call, `20261012T092014Z-on-demand-e1af`, `…092018Z-on-demand-3083`, `…092022Z-on-demand-00e3`.
 
 #### Re-check with the final launcher
 
 This change touches the launcher: `codex.py` adds `RUST_LOG` to the environment and reads Codex's tool call records, `probe.py` and the probe instruction are rewritten, `launcher.py` and `areas.py` clear leftover probe files before a run's preflight, `cycle.py` clears them before the production clone's pre-run records step, `report.py` names them in the run report, `probe.py` calls a run that made no tool call and left nothing not tested and reads Codex's last error through `codex.py`, and `runtime.json`, `products.json`, and `boundary.py` are as they were.
 The environment is part of the fingerprint, so every checkout's fingerprint changed.
-Both checks ran on the final code at 01:58 on 2026-10-12, Mac local time, with Codex CLI 0.160.0, after the second step of the section above and the full unit suite on it.
+Both checks ran on the final code at 02:25 on 2026-10-12, Mac local time, with Codex CLI 0.160.0, after the third step of the section above and the full unit suite on it.
 They ran from the linked worktree the review was made in, against Mandu and the Product checkouts as they are, with that step's changes not yet committed and the worktree's `git status` the same before and after.
-The code they ran on has the `src` tree `64dc8ff369e9f62515bdad09322fd9b9686babbf` and the `config` tree `18080e871557bdf598782a9b1cce2623ecd18faf`, which `git rev-parse <commit>:src` and `<commit>:config` give for the commit that adds this record; nothing but this note changed after the checks.
+The code they ran on has the `src` tree `a65730194bfa0dfc000502b19ab9afe2b4c63879` and the `config` tree `18080e871557bdf598782a9b1cce2623ecd18faf`, which `git rev-parse <commit>:src` and `<commit>:config` give for the commit that adds this record; nothing but this note changed after the checks.
 The worktree's fingerprint is `ee01df833323999fc012904fe194ccaafdb81833a562e20b646e63a6cda73c7f`, as it has been since review's first changes, none of which since then changed the command or the environment.
 
 - `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
-- `src/bin/gr0wthlab boundary-check` passed at its first attempt, in one probe run, as `20261012T085859Z-on-demand-84ce`: Codex's record held each of the nine forbidden targets in a patch of its own, refused; the unified log held eleven kernel Seatbelt denials naming the run, one for each forbidden shell write by its full path and one for each local listener; neither listener received a connection; the permitted files landed in all six areas; no sentinel escaped; and nothing outside the areas changed.
-  The agent ran 35 seconds of its 30 minute limit.
+- `src/bin/gr0wthlab boundary-check` passed at its first attempt, in one probe run, as `20261012T092507Z-on-demand-a8eb`: Codex's record held each of the nine forbidden targets in a patch of its own, refused; the unified log held eleven kernel Seatbelt denials, one naming the sentinel of each forbidden shell write by its full path and one for each local listener; neither listener received a connection; twelve of twelve permitted sentinels were written; no sentinel escaped; and nothing had changed against the snapshot from before the check.
+  Its verdict printed the lines of the third step: `permitted sentinels written: 12 of 12`, where the areas held 14 files named for the run, the launcher's script and the agent's report besides, and a line of its own for the report.
+  The agent ran 87 seconds of its 30 minute limit.
 
 These replace the earlier checks of this work, which passed the same way.
-From the same worktree, the boundary check passed as `20261012T082350Z-on-demand-7c6b` at commit `f30ccccf53d52b7d49c9d7a16cece150740dabfa`, right after the streak, with an empty `git status` before and after, and as `20261012T071227Z-on-demand-8e22` after review's first changes and before the fix of the section above; that run's agent did not try the code route.
+From the same worktree, the boundary check passed as `20261012T085859Z-on-demand-84ce` after the second step of the section above, on the `src` tree `64dc8ff369e9f62515bdad09322fd9b9686babbf`, which the commit that recorded it holds.
+Before that it passed as `20261012T082350Z-on-demand-7c6b` at commit `f30ccccf53d52b7d49c9d7a16cece150740dabfa`, right after the streak, with an empty `git status` before and after, and as `20261012T071227Z-on-demand-8e22` after review's first changes and before the fix of the section above; that run's agent did not try the code route.
 From this work's own linked worktree, fingerprint `07f72315f3b9fb44df59f949e6a00605c5fb678231ad25fa0d1d3a8c4ccd0dc0`, it passed as `20261012T061856Z-on-demand-8c5f` after the clearing of leftover probe files was added, and as `20261012T053601Z-on-demand-fb8a` before it.
 Mandu's, RepToday's, and Immerse's HEAD, git status, and a digest over every file outside `.git` were the same before the first live run of this work and after the last.
-The same held, with each checkout's branch and stash as well, from before the first of review's live runs to after the last, again across the runs of the first step of the fix above, and again from before the first run of its second step to after this re-check.
+The same held, with each checkout's branch and stash as well, from before the first of review's live runs to after the last, again across the runs of the first step of the fix above, again across those of its second step, and again from before the first run of its third step to after this re-check.
 
 ## Scheduled and on-demand runs share one configuration
 
@@ -850,7 +881,7 @@ Records commits never touch code or Guardrail configuration, so G8 holds, and ea
   The shell, network, and nothing-changed proofs do not have this limit: the kernel's log, the check's own listeners, and the filesystem are outside what a run can write.
 - Codex keeps only the first 2 KiB of a tool's output in that record; a refusal is 82 bytes, and the arguments are kept whole.
 - A permitted file the agent wrote under a mistyped name stays in its area, and the check reports it as a change and fails; this did not happen in any recorded run.
-- A check in which no probe run makes a tool call proves nothing and ends `NOT TESTED`, with a failing status.
+- A check whose every probe run makes no tool call and leaves nothing proves nothing and ends `NOT TESTED`, with a failing status.
   The check does not wait between its probe runs, and in the recorded runs one that ended before any tool call took about two seconds, so three in a row can pass in about ten.
 - The boundary check does not hold the checkout's run lock.
   A weekly run started in the same checkout while a check is going changes `workspace/` under it and removes its script, and the check then fails or asks again; run one at a time.
@@ -877,6 +908,6 @@ src/bin/gr0wthlab boundary-check   # the US-ME02 validation test, on demand
 ```
 
 The probe only ever creates new, uniquely named files and connects only to the check's own listeners; the check deletes any file that escaped, counts that as a failure, and removes the permitted ones and the script it placed in `workspace/instructions/`.
-One check makes up to three probe runs, the later ones only for steps the agent skipped or sent wrongly; [operations](../operations.md#after-a-change-to-the-launcher-or-configuration) says how to read its output.
+One check makes up to three probe runs, the later ones only for steps that have no record after a probe run; [operations](../operations.md#after-a-change-to-the-launcher-or-configuration) says how to read its output.
 To repeat the scheduled path, generate a one-off LaunchAgent a few minutes ahead with `src/bin/gr0wthlab launch-agent --boundary-check --once <time> --label gr0wthlab.boundary-check`, `launchctl bootstrap` it, read the check's verdict in its `.out.log` after it fires, then `launchctl bootout` it and delete the plist ([operations](../operations.md) has the commands).
 `src/bin/gr0wthlab run` no longer accepts the probe: a run's task definition must be a file under `src/instructions/`, and the probe runs only through `boundary-check`, which never commits or pushes.

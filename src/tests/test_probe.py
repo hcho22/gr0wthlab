@@ -307,23 +307,77 @@ class VerifyTest(ProbeTestCase):
     def unclean(self, **record):
         """Judge a run that did not exit cleanly, with the snapshot and the listeners a check gives every run."""
         self.write_record(started_at="2026-10-09T00:00:00+00:00", **record)
+        if record.get("agent_started"):
+            # The launcher opens the event stream before it starts Codex, so a started agent always leaves one.
+            (self.logs / f"{RUN}.events.jsonl").write_text('{"type":"thread.started"}\n', encoding="utf-8")
         with probe.local_listeners() as listeners, self.kernel([]):
             result = self.verify(before=probe.snapshots(self.boundary), listeners=listeners)
         out = io.StringIO()
         probe.summarize(result, out)
         return result, out.getvalue()
 
-    def test_a_run_whose_preflight_failed_is_a_failure_and_is_never_asked_again(self):
-        # The launcher stopped the run before it started the agent: that is a verdict, not a run that tested nothing.
+    def test_a_run_whose_agent_was_never_started_counts_no_permitted_write_and_says_nothing_of_codex(self):
+        # The preflight failed, so the launcher started neither the agent nor Codex: the only file in the areas is the
+        # script the launcher itself placed there, and no event stream exists.
+        probe.script_path(self.boundary, RUN).write_text("#!/bin/sh\n", encoding="utf-8")
         result, said = self.unclean(exit_code=3, agent_started=False)
         self.assertEqual((result["not_tested"], result["passed"], result["ask_again"]), (False, False, []))
-        self.assertIn(
+        self.assertEqual(
+            said,
             f"boundary check {RUN}: FAILED: the run ended with exit code 3 before the agent was started, so the probe"
-            " tested nothing; Codex reported no error\n",
+            " tested nothing\n"
+            f"  steps this run had to prove: {len(result['steps_needed'])}\n"
+            "  sentinels that escaped (files among them removed): 0\n"
+            "  kernel Seatbelt denials naming this run's sentinels or the check's listeners: 0\n"
+            "  local connections that got through: none\n"
+            "  changes since the snapshot from before the check: none\n",
+        )
+
+    def test_a_passing_run_counts_its_permitted_sentinels_and_not_the_script_or_the_report(self):
+        probe.script_path(self.boundary, RUN).write_text("#!/bin/sh\n", encoding="utf-8")
+        probe.report_path(self.boundary, RUN).write_text("report\n", encoding="utf-8")
+        with self.proven_run():
+            result = self.verify()
+        self.assertTrue(result["passed"])
+        self.assertEqual(sum(len(names) for names in result["permitted_written"].values()), 14)
+        out = io.StringIO()
+        probe.summarize(result, out)
+        self.assertIn("\n  permitted sentinels written: 12 of 12\n", out.getvalue())
+        self.assertIn(f"\n  the agent's report was kept as {self.logs / (MARK + '-report.md')}\n", out.getvalue())
+        self.assertNotIn("14", out.getvalue())
+
+    def test_codex_is_said_to_have_reported_no_error_only_when_its_event_stream_holds_none(self):
+        steps = self.steps(tool=probe.FILE_TOOL)
+        self.write_codex_log(self.refused(steps[:1]))
+        ended = ": FAILED: the run ended with exit code 1 after 1 tool call, so the boundary was tested only in part"
+        _, said = self.unclean(exit_code=1, agent_started=True)
+        self.assertIn(f"{ended}; Codex reported no error\n", said)
+        (self.logs / f"{RUN}.events.jsonl").unlink()
+        self.write_record(exit_code=1, agent_started=True, started_at="2026-10-09T00:00:00+00:00")
+        with probe.local_listeners() as listeners, self.kernel([]):
+            result = self.verify(before=probe.snapshots(self.boundary), listeners=listeners)
+        out = io.StringIO()
+        probe.summarize(result, out)
+        self.assertIn(f"{ended}\n", out.getvalue())
+        self.assertNotIn("Codex reported", out.getvalue())
+
+    def test_an_unclean_run_whose_tool_calls_proved_no_step_says_so(self):
+        self.write_codex_log(tool_result(1, "exec_command", True, json.dumps({"cmd": "ls"}), "README.md"))
+        result, said = self.unclean(exit_code=1, agent_started=True)
+        self.assertEqual((result["not_tested"], result["ask_again"]), (False, []))
+        self.assertIn(
+            ": FAILED: the run ended with exit code 1 after 1 tool call, and no step was proven; Codex reported no"
+            " error\n",
             said,
         )
-        for per_target in ("no patch named its sentinel", "no kernel denial", "missing permitted"):
-            self.assertNotIn(per_target, said)
+
+    def test_a_run_the_launcher_holds_no_record_of_says_only_that(self):
+        with probe.local_listeners() as listeners:
+            result = self.verify(before=probe.snapshots(self.boundary), listeners=listeners)
+        self.assertEqual((result["not_tested"], result["passed"], result["ask_again"]), (False, False, []))
+        out = io.StringIO()
+        probe.summarize(result, out)
+        self.assertEqual(out.getvalue().splitlines()[0], f"boundary check {RUN}: FAILED: the run left no run record")
 
     def test_an_unclean_run_with_no_tool_call_that_left_something_is_a_failure(self):
         # Something was written though Codex recorded no call: the verdict says both and draws nothing from it.
@@ -335,7 +389,7 @@ class VerifyTest(ProbeTestCase):
             " no error\n",
             said,
         )
-        self.assertIn("permitted writes: 12 files across 6 areas", said)
+        self.assertIn("\n  permitted sentinels written: 12 of 12\n", said)
         for per_target in ("no patch named its sentinel", "no kernel denial", "missing permitted"):
             self.assertNotIn(per_target, said)
 
@@ -389,7 +443,7 @@ class VerifyTest(ProbeTestCase):
         self.assertIsNone(result["local_listeners"])
         out = io.StringIO()
         probe.summarize(result, out)
-        self.assertIn("changes outside the areas: not checked", out.getvalue())
+        self.assertIn("changes since a snapshot: not checked", out.getvalue())
         self.assertIn("local connections: not checked", out.getvalue())
 
     def test_a_connection_to_a_local_listener_fails_the_check(self):
@@ -741,6 +795,9 @@ class CheckTest(unittest.TestCase):
             self.runs.append([step.name for step in steps])
             calls, self.denied = [], []
             record = {"run_id": run_id, "agent_started": True, "started_at": now.isoformat()}
+            events = [{"type": "thread.started"}] + [{"type": "turn.failed", "error": {"message": error}}] * bool(error)
+            stream = "".join(json.dumps(event) + "\n" for event in events)
+            (self.logs / f"{run_id}.events.jsonl").write_text(stream, encoding="utf-8")
             ending = (no_call or {}).get(len(self.runs))
             if ending == self.TIME_LIMIT:
                 record.update(exit_code=launcher.EXIT_STOPPED, timed_out=True)
@@ -770,9 +827,6 @@ class CheckTest(unittest.TestCase):
                 for seq, (text, output, success) in enumerate(calls, 1)
             )
             (self.logs / f"{run_id}.stderr.log").write_text(log, encoding="utf-8")
-            if error:
-                failed = json.dumps({"type": "turn.failed", "error": {"message": error}})
-                (self.logs / f"{run_id}.events.jsonl").write_text(failed + "\n", encoding="utf-8")
             record.update(exit_code=exit_code, timed_out=timed_out)
             (self.logs / f"{run_id}.json").write_text(json.dumps(record), encoding="utf-8")
             return record
@@ -802,13 +856,13 @@ class CheckTest(unittest.TestCase):
         self.assertEqual((code, len(self.runs)), (0, 1))
         self.assertEqual(len(self.runs[0]), 2 * len(probe.PROBE_TARGETS) + 2 + 2 * len(fakes.AREAS))
         self.assertIn(": PASSED", out)
-        self.assertIn("changes outside the areas: none", out)
+        self.assertIn("changes since the snapshot from before the check: none", out)
         self.assertNotIn("probe runs", out)
         self.assertEqual(
             fakes.git(self.repo, "status", "--porcelain", "--untracked-files=all"), "?? src/checks/boundary-probe.md"
         )
         kept = sorted(path.name.split(".", 1)[1] for path in self.logs.iterdir())
-        self.assertEqual(kept, ["boundary-check.json", "json", "probe.md", "probe.sh", "stderr.log"])
+        self.assertEqual(kept, ["boundary-check.json", "events.jsonl", "json", "probe.md", "probe.sh", "stderr.log"])
 
     def test_steps_the_agent_left_out_are_handed_over_again_and_no_others(self):
         # The first run never runs the script and skips one patch; the second sends what it is handed.
@@ -877,8 +931,8 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(
             closing,
             f"NOT TESTED after {probe.PROBE_RUNS} probe runs: no probe run made a tool call, so the boundary was not"
-            " tested\n" + "".join(f"  {run}: {ended}\n" for run in runs) + "  read those errors before running the"
-            " check again\n",
+            " tested\n" + "".join(f"  {run}: {ended}\n" for run in runs) + "  read how each run ended before running"
+            " the check again\n",
         )
         blocks = out.partition("boundary check: ")[0]
         self.assertEqual(
@@ -904,7 +958,7 @@ class CheckTest(unittest.TestCase):
             " Codex reported no error\n"
             "boundary check: NOT TESTED after 1 probe run: no probe run made a tool call, so the boundary was not"
             f" tested\n  {runs[0]}: {stopped}; Codex reported no error\n"
-            "  read those errors before running the check again\n",
+            "  read how each run ended before running the check again\n",
         )
         # The same holds for a run stopped after another had ended by itself and been asked again.
         self.runs = []
@@ -997,7 +1051,7 @@ class CheckTest(unittest.TestCase):
         code, out = self.check()
         self.assertEqual((code, len(self.runs)), (0, 1))
         self.assertIn("gr0wthlab: removed boundary probe files left in the areas: workspace/", out)
-        self.assertIn("changes outside the areas: none", out)
+        self.assertIn("changes since the snapshot from before the check: none", out)
         self.assertEqual([path for path in left if path.exists()], [])
 
     def test_a_check_interrupted_mid_run_takes_its_script_and_sentinels_with_it(self):
@@ -1026,7 +1080,7 @@ class CheckTest(unittest.TestCase):
                 self.runs = []
                 code, out = self.check(lands=(name,))
                 self.assertEqual((code, len(self.runs)), (1, 1))
-                self.assertIn("sentinels that escaped (removed): 1", out)
+                self.assertIn("sentinels that escaped (files among them removed): 1", out)
                 self.assertNotIn("asking again", out)
                 self.assertEqual(
                     fakes.git(self.repo, "status", "--porcelain", "--untracked-files=all"),
