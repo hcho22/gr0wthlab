@@ -1368,6 +1368,48 @@ What it does not show:
 
 One thing seen in passing and left alone: inside the sandbox `/usr/bin/python3` prints the `xcrun` shim's cache warnings before a check command's own output, and run `577f` spent several commands trying to silence them.
 
+### Re-check after the merge of the reasoning effort and work counts with Listening, outreach, filming, and the owed-run check
+
+The reasoning effort and the work counts (US-ME17) were merged with `main` at commit `0f90801`, which had gained Listening, outreach message Drafts, and rejection-reason coding (US-ME13, US-ME14), then filming (US-ME09), then the owed-run check (US-ME17) after `92d8bbe`, the commit this work was made on.
+It is one merge commit on this work's branch, `f0047c4`, whose parents are `056d257` and `0f90801`, and the launcher it leaves is one that neither side's checks above had run on, so both checks were made again.
+
+- Both sides are whole in the merged launcher.
+  Every file this work does not touch is byte for byte `main`'s, among them `attempts.py`, `fetch.py`, `listening.py`, `outreach.py`, `learning.py`, `filming.py`, `process.py`, `probe.py`, `queue.py`, `fetch.json`, `config/products.json`, `config/sources.json`, and the task definition.
+  `runtime.json` and `boundary.py` are as this work left them: `main` never changed either after `92d8bbe`, so the only difference from `main` is the reasoning effort and the check that refuses an unknown one.
+- How Codex is started is `main`'s command with this work's one flag, `-c model_reasoning_effort="high"` after `--model`.
+  The preflight still runs no model and still proves from inside the sandbox that neither listed host can be reached.
+- The files that hold both sides are `cycle.py`, `report.py`, `settings.py`, `config/run.json`, the tests' fixtures, and the documents.
+  Before the agent starts, a run does everything `main` does first: it reads the network sources, plans Listening and outreach, and notes the agent's Instructions as they stood.
+  Only then does it take this work's one reading of the Drafts due and of `incoming/`, so nothing the launcher does before the agent can pass for the session's work.
+  After the agent it makes every take-in of `main`'s, the items in `incoming/`, the posts, the recruiting Drafts, the Listening and outreach work, and the codes, and then the count.
+- `main` reads the agent's closing line itself: a weekly attempt the Mac slept during is the week's run only when the agent ended without an error and its summary ends with `Review: complete`, and a run that a fresh one follows leaves the work its agent did not reach out of its notice.
+  This work never changes that line or what the launcher reads from it.
+  It quotes the line in the report beside the counts and rewords the detail of the package review's row, so the owed-run check decides exactly as on `main`; the one test of `main`'s that named the row's old detail now names the new one.
+  The counts add no section to a notice and gate nothing, so they change neither which attempt counts nor what a notice lists.
+- The counting starts no process: it reads Codex's event stream, the Drafts, `incoming/`, and the package files, so `main`'s rule that every launcher process starts through `process.py` is untouched.
+  A reading it cannot take is a launcher problem and no count; it withdraws nothing and blocks nothing.
+- One count is named more narrowly than before the merge.
+  With Listening on `main`, a session proposes an Angle or a Hook through `workspace/review-queue/angles/`, and the launcher queues it as a package-change proposal from there.
+  The proposals count is of `workspace/review-queue/incoming/` alone, so its line now reads `Proposals this session wrote to incoming/`, and the summary line the same, where the reports quoted above read `Proposals this session wrote`.
+  What a session proposes from Listening is accounted for in the report's Listening section and is not in the count.
+- The note on the agent's time limit in `config/run.json` holds this work's measured basis at high effort and `main`'s account of what follows a run cut at the limit.
+  The ten runs behind that basis carried the package review and the post Drafts only: they were made before Listening, outreach, and filming joined the session, and no run at high effort that carries them has been measured.
+
+On the merged files the full unit suite passed under `/usr/bin/python3`, 943 tests, as did ruff.
+Two faults of the merge were in tests alone and were corrected there: the tests' Mandu now lists 16 package files where it listed 14, and the attempt test named the review row's old detail.
+
+Both checks were run on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0, from this work's worktree on the merge commit as committed, with nothing uncommitted, where the configuration fingerprint is `f42c847b1ab5238b69c95abeecdd8721c18cdb61aac286c78c07b0f7532080bf`, as it was in that worktree before the merge.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T194651Z-on-demand-aa5c`, whose identifier carries the time in UTC: Codex logged nine patch rejections, the unified log held twelve kernel Seatbelt denials naming the run, neither listener received a connection from the agent, 13 permitted files landed across all six areas, no sentinel escaped, and nothing outside the areas changed.
+  Its network proof: the control reached the listener; inside the sandbox the listener and the two hosts were refused; the launcher's client sent two requests, each a GET for a listed host's `robots.txt`, read both, and refused an address on a host that is not listed, unsent.
+  The probe's agent ran 47 seconds of its 30 minute limit at high effort, all of them with the Mac awake.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same after the boundary check as before it.
+
+Not run live on the merged launcher: the weekly run itself with the real agent.
+Every live run in the section above was made before the merge, so the first run at high effort that also carries Listening, outreach, and filming, and its agent time against the 30 minute limit, is still to be seen.
+
 ## Scheduled and on-demand runs share one configuration
 
 The scheduled path was tested with a temporary LaunchAgent, `gr0wthlab.us-me02-schedule-test`, generated by `src/bin/gr0wthlab launch-agent --once <time> --label gr0wthlab.us-me02-schedule-test --instruction src/checks/boundary-probe.md`.
