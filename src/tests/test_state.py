@@ -175,12 +175,24 @@ class FilesTest(unittest.TestCase):
         self.assertEqual(invalid, [])
         states.listening.mark("https://example.com/t/1", date(2026, 10, 11))
         state.save(self.store, states, "RUN1", "2026-10-11T23:00:00+00:00")
+        # Beta Cohort recruiting has held nothing yet, so it has no file until the Founder's gate.
+        self.assertFalse(state.state_path(self.store, state.BETA_RECRUITING).exists())
+        states.beta_recruiting.entries["Qm7tLx2a"] = {
+            "status": state.INVITED,
+            "item": "20261011-beta-invitation-batch-01",
+        }
+        state.save(self.store, states, "RUN1", "2026-10-11T23:00:00+00:00")
         for workflow in state.WORKFLOWS:
             record = json.loads(state.state_path(self.store, workflow).read_text(encoding="utf-8"))
             self.assertEqual((record["format"], record["workflow"], record["updated_by_run"]), (1, workflow, "RUN1"))
         again, invalid = state.load(self.store)
         self.assertEqual(invalid, [])
         self.assertTrue(again.listening.seen("https://example.com/t/1"))
+        self.assertEqual(again.beta_recruiting.entries, states.beta_recruiting.entries)
+        # Once it has a file, an emptied state is written too, so a freed entry never lingers in it.
+        again.beta_recruiting.entries.clear()
+        state.save(self.store, again, "RUN2", "2026-10-18T23:00:00+00:00")
+        self.assertEqual(state.load(self.store)[0].beta_recruiting.entries, {})
 
     def test_an_invalid_or_linked_file_is_reported_not_trusted(self):
         directory = self.repo / "ledger/run-reports/state"

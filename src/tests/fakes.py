@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import re
@@ -15,6 +16,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 AREAS = ("evidence", "drafts", "review-queue", "weekly-reads", "run-reports", "instructions")
 EXAMPLES = REPO / "src" / "examples" / "post-drafts"
+BETA_EXAMPLES = REPO / "src" / "examples" / "beta-recruiting"
 # A window whose days all fall far in the future, so a run that is not about post Drafts has none due.
 QUIET_WINDOW = {"number": 1, "first_sitting": "2099-01-04", "slot": "19:00"}
 
@@ -324,3 +326,130 @@ def kit_context(code_checkout: Path, env: dict[str, str], mandu: Path | None = N
     platforms = lint.load_platforms(json.loads((REPO / "config" / "platforms.json").read_text(encoding="utf-8")))
     code = codebase.open_code(product, code_checkout, "main", env)
     return drafts.Context(product, 1, parsed, rules, problem, platforms, code, dict(roles))
+
+
+# Beta Cohort recruiting, on the synthetic thesis, K8 rubric, and channel plan in src/examples/beta-recruiting.
+
+BETA_BUILD = {
+    "exchange": 4,
+    "product": "RepToday",
+    "approved_on": "2026-10-09",
+    "build": "1.0 (42)",
+    "recruiting": "open",
+    "stopped_on": None,
+    "recorded_at": "2026-10-10T19:40:00-07:00",
+}
+INVITATION = "drafts/beta-recruiting/RepToday/invitation.md"
+WAITLIST_ASK = "drafts/beta-recruiting/RepToday/waitlist-ask.md"
+# The seeded view's sign-ups that asked for a beta invitation, in invitation order: good Fit first, then by date.
+GOOD_FIT_OPT_INS = ["Qm7tLx2a", "Ka0zMn2p", "Xf9mKa3i", "Jd2wGs6u", "Lr6jFq5s"]
+OTHER_OPT_INS = ["Ne5qTb1o", "Wi7cJx4l", "Hc8nRy4e"]
+
+
+def beta_mandu(path: Path) -> Path:
+    """A Mandu holding the synthetic kit and, over it, the Beta Cohort example set's thesis, K8 rubric, channel plan,
+    and brand guidelines."""
+    if not path.exists():
+        make_mandu(path)
+    shutil.copytree(str(BETA_EXAMPLES / "files" / "mandu"), str(path), dirs_exist_ok=True)
+    return path
+
+
+def beta_draft(name: str = "invitation-clean", old: str = "", new: str = "") -> str:
+    """One of the example set's recruiting Drafts, with old replaced by new."""
+    text = (BETA_EXAMPLES / "files" / "drafts" / f"{name}.md").read_text(encoding="utf-8")
+    assert not old or old in text, old
+    return text.replace(old, new) if old else text
+
+
+def beta_report(day: str, **counts) -> dict:
+    return {"exchange": 4, "product": "RepToday", "date": day, **counts, "recorded_at": f"{day}T19:55:00-07:00"}
+
+
+def write_record(folder: Path, name: str, record) -> Path:
+    """One of Mandu's records in its exchange folder; a string is written as it is."""
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / name
+    path.write_text(record if isinstance(record, str) else json.dumps(record), encoding="utf-8")
+    return path
+
+
+def batch_entry(batch: dict, product: str = "RepToday") -> dict:
+    """A Review Queue entry for an invitation batch a scenario says was already queued."""
+    return {
+        "kind": "message",
+        "ask": f"Approve Beta Cohort invitation, batch {batch['batch']}",
+        "file": f"review-queue/items/{batch['id']}.md",
+        "product": product,
+        "published_by_run": "20261004T230000Z-scheduled-0000",
+        "beta": "beta-invitation",
+        "draft": INVITATION,
+        "draft_sha256": "0" * 64,
+        **batch,
+    }
+
+
+def beta_plan(root: Path, scenario: dict, view: dict | None):
+    """A run's recruiting plan for a scenario, built as the cycle builds it: the gate from the scenario's Beta Build
+    record, the reading from the view, and the batches already queued. Returns the plan, the store it wrote its
+    Evidence to, and the ledger."""
+    from gr0wthlab import beta, boundary, settings, waitlist
+    from gr0wthlab.areas import Store
+    from gr0wthlab.queue import Ledger
+    from gr0wthlab.state import BetaRecruitingState
+
+    registry = json.loads((REPO / "config" / "products.json").read_text(encoding="utf-8"))
+    runtime = json.loads((REPO / "config" / "guardrails" / "runtime.json").read_text(encoding="utf-8"))
+    repo = root / "gr0wthlab"
+    for area in runtime["writable_areas"].values():
+        (repo / area).mkdir(parents=True, exist_ok=True)
+    env = {"GR0WTHLAB_MANDU_DIR": str(beta_mandu(root / "Mandu"))}
+    resolved = boundary.resolve_boundary(repo, runtime, registry, env, root, git=[])
+    config = settings.load(REPO, {}, root)
+    config = dataclasses.replace(config, beta_batch_size=scenario.get("batch_size", config.beta_batch_size))
+    rules = beta.rules(registry, config)
+    started = datetime.fromisoformat(scenario["run_started"])
+    reading = None
+    if view is not None:
+        block = next(product for product in registry["products"] if product["name"] == rules.product)["waitlist"]
+        counted = settings.Waitlist(
+            rules.product,
+            write_view(root / "exports" / "waitlist-view.json", view),
+            tuple(block["source_tags"]),
+            tuple(block["fit_answers"]),
+            tuple(block["good_fit"]),
+            block["beta_cohort_bar"],
+        )
+        reading = waitlist.read(counted, started)
+    exchange_dir = root / "exchange"
+    build = scenario.get("beta_build")
+    name = f"{rules.product}.json"
+    found = [(name, exchange_dir / beta.BUILDS / name, json.dumps(build).encode("utf-8"))] if build else []
+    gate = beta.read_gate(rules.product, found, [], None)
+    reports = [
+        (
+            f"{report['product']}-{report['date']}.json",
+            exchange_dir / beta.REPORTS / f"{report['product']}-{report['date']}.json",
+            json.dumps(report).encode("utf-8"),
+        )
+        for report in scenario.get("reports", [])
+    ]
+    ledger = Ledger([batch_entry(batch) for batch in scenario.get("batches", [])])
+    store = Store(resolved.ledger)
+    read = reading is not None and reading.status == "read"
+    plan = beta.prepare(
+        rules,
+        gate,
+        reports if gate.recorded else None,
+        None,
+        registry,
+        resolved,
+        ledger,
+        BetaRecruitingState(),
+        reading,
+        "evidence/waitlist/RUN.json" if read else "",
+        store,
+        "20261011T230000Z-on-demand-0000",
+        started,
+    )
+    return plan, store, ledger

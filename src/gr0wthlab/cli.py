@@ -8,7 +8,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import codex, cycle, exchange, launcher, posts, probe, schedule, settings
+from . import beta, beta_drafts, codex, cycle, exchange, launcher, posts, probe, schedule, settings
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import LEDGER, PRODUCT_REGISTRY, ConfigError, load_json, load_runtime_config, resolve_boundary
@@ -38,6 +38,15 @@ def parser() -> argparse.ArgumentParser:
         required=True,
         metavar="RUN_ID",
         help="the run in progress, as its brief's check-drafts command names it",
+    )
+    recruiting = commands.add_parser(
+        "check-beta-drafts", help="check a run's Beta Cohort recruiting Drafts as the launcher will"
+    )
+    recruiting.add_argument(
+        "--run",
+        required=True,
+        metavar="RUN_ID",
+        help="the run in progress, as its brief's check-beta-drafts command names it",
     )
 
     agent = commands.add_parser("launch-agent", help="print a LaunchAgent plist that runs the launcher on a schedule")
@@ -192,6 +201,64 @@ def check_drafts(run_id: str, out=sys.stdout) -> int:
     return 1 if failed else 0
 
 
+def check_beta_drafts(run_id: str, out=sys.stdout) -> int:
+    """The launcher's own checks of each recruiting Draft a run asked for, for the agent to use before it finishes.
+
+    Which Drafts are due, and which the Founder already rejected, is read from the record the launcher wrote for that
+    run before the agent started; without it no Draft is checked, and the output says so. That record names no
+    Waitlist entry, and neither does anything printed here: who is invited is the launcher's alone.
+    """
+    env = dict(os.environ)
+    home = Path.home()
+    config = settings.load(REPO_ROOT, env, home)
+    registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
+    boundary = resolve_boundary(REPO_ROOT, load_runtime_config(REPO_ROOT), registry, env, home, git=[])
+    rules = beta.rules(registry, config)
+    if rules is None:
+        print("No Product recruits a Beta Cohort, so there is no recruiting Draft to check.", file=out)
+        return 0
+    areas = Areas(boundary)
+    try:
+        record = Store(LEDGER_DIR).path(cycle.RUN_REPORTS, beta.plan_file(run_id))
+        due = beta.restore(json.loads(read_plain(record).decode("utf-8")), areas.workspace)
+    except (ConfigError, OSError, UnsafeFile, ValueError) as error:
+        print(
+            f"PROBLEM the recruiting plan of run {run_id} could not be read ({error}), so no Draft was checked; the"
+            " launcher checks every Draft once you finish.",
+            file=out,
+        )
+        return 1
+    context = beta.context(rules, boundary)
+    failed = 0
+    for draft_plan in due:
+        label = beta.LABELS[draft_plan.purpose]
+        draft, problem = beta.read_draft(areas, draft_plan.path)
+        standing = f"; the open {draft_plan.open['id']} stands" if draft_plan.open and not problem else ""
+        if draft is None:
+            failed += bool(problem) or not standing
+            print(
+                f"{'PROBLEM' if problem or not standing else 'OK'} {label}: {problem or 'no Draft'}{standing}", file=out
+            )
+            continue
+        verdict = beta_drafts.evaluate(draft, context, draft_plan.purpose)
+        rejected = beta.rejected_as(draft_plan, draft) if verdict.passed else None
+        failed += not verdict.passed or bool(rejected)
+        if rejected:
+            print(
+                f"REJECTED {label}: {draft.path}: the Founder rejected this Draft as {rejected['id']}, so it is not"
+                " asked again until it changes",
+                file=out,
+            )
+            continue
+        print(f"{'OK' if verdict.passed else 'BLOCKED'} {label}: {draft.path}", file=out)
+        for line in beta.grouped(verdict.blocks):
+            print(f"  - {line}", file=out)
+        for line in beta.grouped(verdict.warnings):
+            print(f"  - warning, which does not block: {line}", file=out)
+    print(f"{len(due)} Draft{'' if len(due) == 1 else 's'} due, {failed} with problems", file=out)
+    return 1 if failed else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = sys.argv[1:] if argv is None else argv
     args = parser().parse_args(arguments)
@@ -215,6 +282,8 @@ def main(argv: list[str] | None = None) -> int:
             return check_incoming()
         if args.command == "check-drafts":
             return check_drafts(args.run)
+        if args.command == "check-beta-drafts":
+            return check_beta_drafts(args.run)
         if args.command == "launch-agent":
             config = settings.load(REPO_ROOT, env, home)
             if args.boundary_check:
