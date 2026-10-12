@@ -44,9 +44,6 @@ RUN_REPORTS = "run-reports"
 SNAPSHOTS = "package-snapshots"
 SUMMARY_LIMIT = 4000
 WAITLIST_NEEDS = ("waitlist-counts", "weekly-read", "beta-recruiting")
-# The outputs the launcher makes alone. Every other built output needs the agent, so a run whose agent did not finish
-# marks it incomplete.
-LAUNCHER_OUTPUTS = ("package-snapshot", "decisions", "review-queue", "waitlist-counts")
 
 
 def entry_point(repo_root: Path) -> Path:
@@ -495,24 +492,13 @@ class Cycle:
             gaps.append(state.agent_gap())
         return gaps
 
-    def agent_incomplete(self, state: RunState, config: settings.Settings) -> tuple[str, ...]:
-        """The titles of the built outputs left incomplete because the agent did not finish, none when it did: every
-        built output but the ones the launcher makes alone, except that the post Drafts need the agent only in a run
-        with a day due."""
-        gap = state.agent_gap()
-        if not gap:
-            return ()
-        spared = set(LAUNCHER_OUTPUTS) | (set() if gap in self.post_gaps(state) else {"post-drafts"})
-        return tuple(
-            str(output.get("title", key))
-            for key, output in config.outputs.items()
-            if output.get("built") and key not in spared
-        )
-
     def outputs(self, state: RunState, config: settings.Settings, ledger_ok: bool) -> None:
         """Each output's status: a built output is incomplete when a failed source it needs names it, or when its own
-        step fell short; one with no step of its own here is incomplete when the agent it needs did not finish."""
+        step fell short. A step that needed the agent names the agent's not finishing among its gaps, and the outputs
+        whose rows hold that gap are the ones the run's notice names; the rows are therefore worked out before that
+        notice is written, and again once the Review Queue holds it."""
         failed = state.failed_sources()
+        agent_gap = state.agent_gap()
         decisions = next((line.detail for line in state.sources if line.name == "Mandu decisions"), "")
         queued = report.plural(len(state.queue_after), "open item") + (
             f"; {len(state.set_aside)} set aside" if state.set_aside else ""
@@ -536,7 +522,7 @@ class Cycle:
             ),
             "post-drafts": (self.post_gaps(state), self.post_tally(state).note),
         }
-        rows = []
+        rows, agent_incomplete = [], []
         for key, output in config.outputs.items():
             title = str(output.get("title", key))
             if not output.get("built"):
@@ -545,10 +531,13 @@ class Cycle:
             if key in skipped:
                 rows.append([title, SKIPPED, skipped[key]])
                 continue
-            gaps, done = own.get(key, ([state.agent_gap()] if title in state.agent_incomplete else [], ""))
+            gaps, done = own.get(key, ([], ""))
+            if agent_gap and agent_gap in gaps:
+                agent_incomplete.append(title)
             gaps = [f"{line.name} could not be read" for line in failed if title in line.needed_by] + gaps
             rows.append([title, INCOMPLETE if gaps else COMPLETE, "; ".join(gaps) or done])
         state.outputs = rows
+        state.agent_incomplete = tuple(agent_incomplete)
 
     def prepare_posts(
         self, state: RunState, config: settings.Settings, registry, boundary: Boundary, ledger: Ledger
@@ -838,7 +827,7 @@ class Cycle:
                     " report is the only place it is told"
                 )
         state.queue_after = ledger.ordered()
-        state.agent_incomplete = self.agent_incomplete(state, config)
+        self.outputs(state, config, ledger_ok)
         notice = report.problems_notice(state, self.store.relative(report_path))
         if notice and ledger_ok:
             state.notice = self.queue_notice(

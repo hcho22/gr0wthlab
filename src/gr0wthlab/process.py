@@ -52,18 +52,14 @@ ZOMBIE = "Z"
 
 @dataclass(frozen=True)
 class Stop:
-    """What stopping a process at its time limit took: the processes asked to stop, the ones then forced, and the ones
-    still running after that; proven is whether the process table could be read to confirm what is left."""
+    """What stopping a process at its time limit took: the processes asked to stop, the processes forced after the
+    grace period, which can include one first found after the ask, and the ones still running after that; proven is
+    whether the process table could be read to confirm what is left."""
 
     asked: tuple[int, ...]
     forced: tuple[int, ...]
     left: tuple[int, ...]
     proven: bool
-
-    @property
-    def clean(self) -> bool:
-        """Whether the process table shows that none of the processes the stop found is still running."""
-        return self.proven and not self.left
 
     def as_json(self) -> dict[str, object]:
         return {"asked": list(self.asked), "forced": list(self.forced), "left": list(self.left), "proven": self.proven}
@@ -75,16 +71,23 @@ class Stop:
 
     def describe(self) -> str:
         """What the stop took and whether any process it found is still running, in one sentence without its full
-        stop."""
-        one = len(self.asked) == 1
-        took = ("1 process" if one else f"{len(self.asked)} processes") + " asked to stop"
-        if self.forced:
-            took += (", then" if one else f", {len(self.forced)} of them") + f" forced after {limit_text(STOP_GRACE)}"
+        stop. The forced are counted among the asked only when each of them was asked: a process answering the ask
+        can start another, which is then found after the ask and forced without having been asked."""
+        late = sum(1 for pid in self.forced if pid not in self.asked)
+        found = len(self.asked) + late
+        one = found == 1
+        grace = limit_text(STOP_GRACE)
+        took = f"{processes(len(self.asked))} asked to stop"
+        if late:
+            which = "" if len(self.forced) == 1 else f"{late} of them "
+            took += f", then {processes(len(self.forced))} forced after {grace}, {which}found after the ask"
+        elif self.forced:
+            took += (", then" if one else f", {len(self.forced)} of them") + f" forced after {grace}"
         if self.left:
             return f"{took}; still running after that: process {', '.join(str(pid) for pid in self.left)}"
         if not self.proven:
             return f"{took}; the process table could not be read to confirm that nothing is left running"
-        if not self.asked:
+        if not found:
             return f"{took}; the stop found none still running in the process table"
         return f"{took}; the process table shows {'it is no longer running' if one else 'none of them left running'}"
 
@@ -140,6 +143,10 @@ def limit_text(span: float) -> str:
     if span >= 60 and span % 60 == 0:
         return f"{int(span // 60)} min"
     return f"{span:g} s"
+
+
+def processes(count: int) -> str:
+    return "1 process" if count == 1 else f"{count} processes"
 
 
 def table() -> dict[int, tuple[int, str, str]] | None:

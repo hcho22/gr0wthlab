@@ -25,6 +25,13 @@ WHOLE_ITEM = "review-queue/incoming/name-status-stale.md"
 TURN = {"input_tokens": 200000, "cached_input_tokens": 150000, "cache_write_input_tokens": 0, "output_tokens": 4000}
 
 
+def incomplete_for(text, gap):
+    """The outputs a run report's Outputs table marks incomplete with a gap among the reasons."""
+    rows = text.split("## Outputs\n\n")[1].split("\n\n")[0].splitlines()[2:]
+    cells = [[cell.strip() for cell in row.strip("|").split(" | ", 2)] for row in rows]
+    return [title for title, status, detail in cells if status == "incomplete" and gap in detail.split("; ")]
+
+
 class TimeLimitTestCase(CycleTestCase):
     def setUp(self):
         super().setUp()
@@ -132,13 +139,15 @@ class EntryPointTest(TimeLimitTestCase):
         self.assertIn("- Set aside, not queued: `half-written.md`: sections must be exactly:", timed_out)
         self.assertIn("| 1 | P01 / AB-1 leg A | blocked | 1 failing check, listed below |", timed_out)
         self.assertIn("- format: the Draft needs exactly one ## Claims section", timed_out)
-        self.assertIn(f"| Post Drafts | incomplete | the agent was stopped at its {LIMIT} s time limit |", timed_out)
+        gap = f"the agent was stopped at its {LIMIT} s time limit"
+        self.assertIn(f"| Post Drafts | incomplete | {gap} |", timed_out)
         self.assertRegex(queued["notice"]["ask"], r"^Notice: the run timed out on \S+ and had 2 other problems$")
         notice = self.notice()
         self.assertTrue(
             notice.split("## Notice\n\n")[1].startswith(f"The agent was still running at its {LIMIT} s time limit"),
             notice,
         )
+        self.assertEqual(incomplete_for(timed_out, gap), ["Package review (contradictions)", "Post Drafts"])
         self.assertIn("Incomplete this run: Package review (contradictions), Post Drafts.", notice)
         self.assertIn("- `half-written.md`: sections must be exactly:", notice)
         self.assertIn("- Day 1 (`drafts/posts/window-1/day-01.md`): format:", notice)
@@ -200,6 +209,7 @@ class TimedOutRunTest(TimeLimitTestCase):
 
         notice = self.notice()
         self.assertIn("# Notice: the run timed out on 2026-10-11\n", notice)
+        self.assertEqual(incomplete_for(text, gap), ["Package review (contradictions)"])
         self.assertIn("Incomplete this run: Package review (contradictions). The next run does this work again", notice)
         self.assertEqual(exchange.check_item(notice, ["RepToday", "Immerse"], published=True).problems, [])
 
@@ -394,6 +404,41 @@ class TimedOutReportTest(unittest.TestCase):
                 self.assertIn(f"- Timed out: {said}", text)
                 self.assertNotIn("of them", text)
 
+    def test_the_stop_line_counts_a_process_found_after_the_ask_among_the_forced_and_not_among_the_asked(self):
+        none_left = "the process table shows none of them left running"
+        for stopped, said in (
+            (
+                {"asked": [11, 12, 13], "forced": [13, 14]},
+                "3 processes asked to stop, then 2 processes forced after 10 s, 1 of them found after the ask;"
+                f" {none_left}.",
+            ),
+            (
+                {"asked": [11], "forced": [11, 12]},
+                "1 process asked to stop, then 2 processes forced after 10 s, 1 of them found after the ask;"
+                f" {none_left}.",
+            ),
+            (
+                {"asked": [11, 12], "forced": [11, 12, 13]},
+                "2 processes asked to stop, then 3 processes forced after 10 s, 1 of them found after the ask;"
+                f" {none_left}.",
+            ),
+            (
+                {"asked": [11, 12], "forced": [13]},
+                f"2 processes asked to stop, then 1 process forced after 10 s, found after the ask; {none_left}.",
+            ),
+            (
+                {"asked": [11], "forced": [11, 12], "left": [12]},
+                "1 process asked to stop, then 2 processes forced after 10 s, 1 of them found after the ask; still"
+                " running after that: process 12.",
+            ),
+            (
+                {"asked": [11, 12, 13], "forced": [12, 13]},
+                f"3 processes asked to stop, 2 of them forced after 10 s; {none_left}.",
+            ),
+        ):
+            with self.subTest(**stopped):
+                self.assertIn(f"- Timed out: {said}\n", report.render_report(self.state(**stopped)))
+
     def test_the_report_says_the_mac_slept_while_the_agent_ran_only_when_it_did_and_for_about_how_long(self):
         state = self.state()
         self.assertNotIn("asleep", report.render_report(state))
@@ -410,9 +455,7 @@ class TimedOutReportTest(unittest.TestCase):
             " the agent's time limit.\n",
             slept,
         )
-        self.assertIn(
-            "- Agent time: 12 min 3 s, about 9 min 40 s of it with the Mac asleep; time limit 30 min.", slept
-        )
+        self.assertIn("- Agent time: 12 min 3 s, about 9 min 40 s of it with the Mac asleep; time limit 30 min.", slept)
         state.agent = dict(state.agent, agent_seconds=143.0 + report.ASLEEP_AT_LEAST - 1)
         self.assertNotIn("asleep", report.render_report(state))
 

@@ -77,10 +77,17 @@ class RunTest(unittest.TestCase):
             root, shell, stubborn = fakes.agent_pids(Path(self.tmp.name))
             with mock.patch.object(process, "STOP_GRACE", 2):
                 stopped = process.stop(family)
+                said = stopped.describe()
             left_without_its_parent = int(late.read_text())
             self.assertTrue({root, shell, stubborn} <= set(stopped.asked), stopped)
+            self.assertNotIn(left_without_its_parent, stopped.asked)
             self.assertEqual(set(stopped.forced), {stubborn, left_without_its_parent})
-            self.assertEqual((stopped.left, stopped.proven, stopped.clean), ((), True, True))
+            self.assertEqual((stopped.left, stopped.proven), ((), True))
+            self.assertEqual(
+                said,
+                f"{len(stopped.asked)} processes asked to stop, then 2 processes forced after 2 s, 1 of them found"
+                " after the ask; the process table shows none of them left running",
+            )
             self.assertTrue(fakes.all_gone([root, shell, stubborn, left_without_its_parent]))
         finally:
             family.stdout.close()
@@ -141,7 +148,7 @@ class RunTest(unittest.TestCase):
     def test_a_table_that_cannot_be_read_still_stops_the_process_and_says_it_proved_nothing_else(self):
         with mock.patch.object(process, "table", return_value=None):
             done = process.run([sys.executable, "-c", "import time; time.sleep(600)"], 1)
-        self.assertEqual((done.stop.left, done.stop.proven, done.stop.clean), ((), False, False))
+        self.assertEqual((done.stop.left, done.stop.proven), ((), False))
         self.assertEqual(done.returncode, -signal.SIGTERM)
 
     def test_the_family_never_takes_in_the_launcher_or_its_other_children(self):
