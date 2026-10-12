@@ -110,7 +110,8 @@ The launcher asks the Mac for its power state (`pmset -g systemstate`), which on
 What a week looks like:
 
 - The Mac is in use on Sunday at 16:00: the run starts then, and its report says it started on time.
-- The Mac is asleep or off at 16:00: the run starts within about two minutes of the Mac next being fully awake, and its report says when it was due, when it started, and how long after its time that was.
+- The Mac is asleep or off at 16:00: the run starts within about two minutes of the Mac next being fully awake, and its report says when it was due and when it started.
+  A start more than `schedule.late_after_minutes` minutes after its time, 15 today, reads as started late, with how long after its time that was.
 - The Mac goes to sleep in the middle of a run: the run is frozen while the Mac sleeps and goes on whenever the Mac is running, a dark wake included.
   If it finishes that way, it is the week's run.
   If it does not, whatever ended it and wherever in the run the Mac slept, the run does not count as the week's run: its report, where it has one, says that the Mac's sleep cut it short and for about how long the Mac slept, and a fresh, whole run starts by itself once the Mac is fully awake.
