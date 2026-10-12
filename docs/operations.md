@@ -155,7 +155,8 @@ Until `first_sitting` is set, every run prepares calendar days 1 to 7 as the fir
 Once it is set, each run prepares the calendar days from the next day through the end of the week after the coming sitting (on the sitting's own day, exactly that week), skipping any day already approved, and each post's slot is its date at `slot`.
 A changed slot reaches an open post at the next run, which replaces the post with one that carries it.
 A post that shows a video keeps it through that change even when the video cannot be cut again in that run, for example while its footage is away or `ffmpeg` is missing: the post that replaces it shows the same finished file, as long as its Draft and its edit record are the ones it was made from and the file is still the one its record names.
-Otherwise the open post stands as it is, the run report says so, with where the finished file stands when that is the reason, and the slot reaches it once the video is cut again.
+With another edit record, or a finished file that could not be read, the open post stands as it is, the run report says so, and the slot reaches it once the video is cut again.
+With a finished file that is gone or changed, the post that carries the slot shows no video ("Video tooling and finished videos" below).
 
 ## Set the footage place
 
@@ -231,9 +232,14 @@ A video no open or approved post names can simply be deleted.
 A finished file is the only copy of its video, since it never enters git, so every run checks the file of each video an open or approved post names: it must be on disk, and its fingerprint must be the SHA-256 the video's record and the post's queue entry hold.
 The launcher says a post shows or keeps a video only when that check passes.
 When the file is gone, or is no longer the file its record names, the run report and a notice name the post and the file and say exactly that, nothing is substituted, and whatever is at that path is left as it is.
-An open post's video is then cut again by the rules that cut any video, once its footage and the video tooling are there and its day is due; until then every run's notice says so again, and the open post stands as it is, still naming the file.
-An approved post is never cut again, so its notice gives the `rebuild-asset` command that makes the file again from the footage.
-A file that cannot be read is not a file that is gone: the report and the notice give the reason the read failed, nothing is said of whether the post keeps its video, no post changes, and the report marks the filming output incomplete.
+An open post in that state no longer has the video it names, so it does not stay in front of the Founder (the Founder's decision of 2026-10-12).
+When the run can cut the video again, it does, and the post stands or is replaced as for any video.
+When it cannot, for example while the footage or `ffmpeg` is away, it queues the same post in the open one's place without a video: the new item says there is none yet and why, approving it approves the copy and the beat plan only, and the video comes back for approval in a later item once it is cut again.
+Where nothing may be asked in its place, because the Founder already approved the day's copy or rejected that very Draft, the open post leaves the queue instead, and the notice says so.
+This needs the day's Draft in place and passing and the day due in that run: an open post whose Draft is gone or was not checked, or whose day is no longer due, stands as it is, and every run's notice names it and its file until the video is cut again.
+An approved post is never asked again and never cut again, so its notice only gives the `rebuild-asset` command that makes the file again from the footage.
+The pair rule holds across the replacement: a leg whose post now shows no video has nothing to compare, and its video is compared with the other leg's again when it is cut again.
+A file that cannot be read is not a file that is gone: the report and the notice give the reason the read failed, nothing is said of whether the post keeps its video, the open post stands, and the report marks the filming output incomplete.
 The same holds when the video's own record under `ledger/evidence/filming/assets/` cannot be read or does not name the file the post names.
 
 ## Mark the Waitlist live

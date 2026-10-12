@@ -232,6 +232,7 @@ class Shown:
         if self.file.unknown:
             return f"{said}, so nothing is said of whether the post keeps the video, and the post is left as it is"
         if self.open:
+            # A post the run could ask again without its video gave way to that one; this one stands and is named.
             return (
                 f"{said}, so the post is not said to keep the video: nothing is substituted, and it is cut again once"
                 " it can be"
@@ -302,6 +303,7 @@ class Asset:
     checks: list[str] = field(default_factory=list)
     parsed: edits.Edit | None = None
     opening: list[list[float]] = field(default_factory=list)  # where its Draft puts a re-cut leg's opening
+    dropped: bool = False  # its day's open post gives way to one with no video, as the video's finished file is lost
 
     @property
     def finished(self) -> bool:
@@ -413,6 +415,8 @@ class Filming:
     env: Mapping[str, str] = field(default_factory=dict)  # what the video tooling runs with
     apart: list[str] = field(default_factory=list)  # each pair whose two videos differ, as the Founder is told
     videos: dict[int, Shown] = field(default_factory=dict)  # each day whose post names a video, as last looked at
+    dropped: dict[int, str] = field(default_factory=dict)  # each day whose open post lost its video: that post
+    replaced: list[str] = field(default_factory=list)  # each such post that left the queue, as the Founder is told
 
     def edit_path(self, number: int) -> Path:
         return self.edits / f"day-{number:02d}.json"
@@ -666,6 +670,16 @@ class Filming:
         """Each standing post whose video's finished file is not the file the post names, as the Founder is told."""
         return [shown.account(number) for number, shown in sorted(self.videos.items()) if not shown.file.intact]
 
+    def drop(self, held: Asset, file: OnDisk) -> None:
+        """Account for a day whose open post names a video it no longer has: the finished file is gone or changed,
+        and the video could not be cut again this run, which held says why. The post-Draft workflow then queues the
+        same post in its place without a video, and held's reason, with where the file stands, is what that post,
+        the report, and the notice give."""
+        post = str(self.posted[held.day]["id"])
+        held.detail = f"{held.detail}, and {file.told(f' of the video `{post}` named')}"
+        held.dropped = True
+        self.dropped[held.day] = post
+
     def hold(self, number: int, why: str) -> None:
         """Account for a day the post-Draft workflow asked no video of for a reason the Founder must be told."""
         self.results[number] = Asset(number, HELD, why, told=True)
@@ -690,6 +704,19 @@ class Filming:
                     self.videos[number] = Shown(str(result.item), True, str(asset.record), file)
             elif result.withdrawn:
                 self.videos.pop(number, None)
+        for number, post in sorted(self.dropped.items()):
+            result, why = taken[number], self.results[number].detail
+            later = "the video comes back for approval once it is cut again"
+            if result.status == posts.QUEUED:
+                self.replaced.append(
+                    f"Day {number}'s post `{post}` gave way to `{result.item}`, which shows no video: {why}."
+                    f" Approving it approves the copy alone, and {later}."
+                )
+            elif result.withdrawn == post:
+                self.replaced.append(
+                    f"Day {number}'s post `{post}` left the queue: {why}. Nothing is asked in its place, since the"
+                    f" Founder already decided this day's copy, and {later}."
+                )
         for number, day in self.days.items():
             result = taken.get(number)
             if number in self.results:
@@ -1431,6 +1458,8 @@ def report_lines(filming: Filming | None, skipped: str = "") -> list[str]:
         lost = ["", "Posts whose video's finished file is not the file they name:", ""] + [
             f"- {line}." for line in lost
         ]
+    if filming.replaced:
+        lost += ["", "Posts that lost the video they named:", ""] + [f"- {line}" for line in filming.replaced]
     if not filming.days:
         return lines + ["", "No calendar day due this run has a shot list."] + lost
     lines += ["", "| Day | Shots | Edit | Detail |", "| --- | --- | --- | --- |"]
@@ -1510,6 +1539,7 @@ def notice_section(filming: Filming | None, day_text: str) -> tuple[int, str, st
             lines.append(f"- Day {asset.day}'s video was not cut: {asset.detail}.")
     lines += [f"- {line}" for line in filming.apart]
     lines += [f"- {line}." for line in filming.lost()]
+    lines += [f"- {line}" for line in filming.replaced]
     if not lines:
         return None
     title = f"{plural(len(lines), 'filming problem')} on {day_text}"
