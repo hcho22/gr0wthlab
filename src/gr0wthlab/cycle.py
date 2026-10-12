@@ -47,7 +47,6 @@ from . import (
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
-from .drafts import PostDraft
 from .queue import INCOMING, OPEN, QUEUE_FILE, REVIEW_QUEUE, SET_ASIDE, SUPERSEDED, Ledger, QueueError
 from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLine, Unusable
 
@@ -64,6 +63,8 @@ WAITLIST_NEEDS = ("waitlist-counts", "weekly-read", "beta-recruiting")
 # The package review's row when it is complete: complete by the agent's closing line alone, so the row says whose word
 # that is and where the launcher's own counts are.
 REVIEW_SAID_COMPLETE = "the agent said it finished its review; the launcher's counts are under Agent's work"
+# The two counts made from what stands in workspace/ before the agent starts and once it has ended.
+WRITTEN = "the Draft claims and the proposals"
 T = TypeVar("T")
 
 
@@ -763,17 +764,12 @@ class Cycle:
             return None
 
     def count_work(
-        self,
-        state: RunState,
-        config: settings.Settings,
-        log_dir: Path,
-        areas: Areas,
-        drafts_before: Mapping[int, PostDraft | None] | None,
-        proposals: int,
+        self, state: RunState, config: settings.Settings, log_dir: Path, written: work.Written | None, taken_in: bool
     ) -> None:
-        """Count what the agent's session did, once it has ended and its items are taken in. drafts_before is each due
-        day's Draft as it stood before the agent started, so that only the claims of the Drafts this session wrote or
-        changed are counted; without it the Draft claims are not counted."""
+        """Count what the agent's session did, once it has ended and its items are taken in. written is what this
+        session wrote or changed of the Drafts due and the proposals in incoming/, so that nothing an earlier run left
+        is counted as its work; without it neither the Draft claims nor the proposals are counted. taken_in says
+        whether the launcher took in what stood in incoming/."""
         mandu = Path(state.mandu)
         files = {
             file.path: mandu / file.path
@@ -781,11 +777,11 @@ class Cycle:
             for file in result.files
             if file.status != package.FAILED
         }
-        claims = None
-        if drafts_before is not None:
-            claims = self.counted(
-                state, "the Draft claims", lambda: work.count_claims(drafts_before, work.due_drafts(state.posts, areas))
-            )
+        claims = proposals = None
+        if written is not None:
+            set_aside = {item.name for item in state.set_aside}
+            queued = [name for name in written.proposals if taken_in and name not in set_aside]
+            claims, proposals = written.claims, work.count_proposals(written.proposals, queued)
         state.work = self.counted(
             state,
             "the agent's work",
@@ -955,7 +951,7 @@ class Cycle:
             state, config, beta_rules, folder, registry, boundary, ledger, ledger_ok, areas, states.beta_recruiting
         )
         areas.ensure_folder(areas.path("review_queue", INCOMING))
-        drafts_before = self.counted(state, "the Draft claims", lambda: work.due_drafts(state.posts, areas))
+        before = self.counted(state, WRITTEN, lambda: work.standing(state.posts, areas, products))
         brief = self.store.path(RUN_REPORTS, f"{run_id}.brief.md")
         self.store.write_text(
             brief, report.render_brief(state, canonical(self.repo_root), areas.workspace, self.store.root)
@@ -991,6 +987,11 @@ class Cycle:
         state.problems += records.restore_access(canonical(self.repo_root))
 
         now = self.now()
+        written = None
+        if before is not None and state.agent.get("agent_started"):
+            written = self.counted(
+                state, WRITTEN, lambda: work.written(before, work.standing(state.posts, areas, products))
+            )
         published: list[str] = []
         if ledger_ok:
             published, state.set_aside = ledger.take_incoming(areas, self.store, products, run_id, now, seen)
@@ -1002,10 +1003,7 @@ class Cycle:
         elif state.posts is not None:
             state.posts_problem = "not taken in: the Review Queue could not be read"
         if state.agent.get("agent_started"):
-            proposals = sum(
-                1 for identifier in published if ledger.entries[identifier]["kind"] == "package-change-proposal"
-            )
-            self.count_work(state, config, log_dir, areas, drafts_before, proposals)
+            self.count_work(state, config, log_dir, written, ledger_ok)
         report_path = self.store.path(RUN_REPORTS, f"{run_id}.md")
         state.problems += areas.problems
         areas.problems.clear()

@@ -144,8 +144,12 @@ The counts:
   The launcher therefore takes the fingerprint of each due day's Draft before the agent starts, and counts a Draft as this session's only when it is new or its fingerprint differs once the agent has ended.
   The line says how many of the Drafts due those are, and a session that wrote or changed none has no Draft claims to count.
   A claim item that does not follow the format names no code location, so the two figures add up to the claims listed.
-  When a Draft due cannot be read before the agent starts or once it has ended, for example in a folder left closed, the Draft claims are not counted and the launcher problems say why; the run starts and goes on as it would have.
-- `Proposals queued`: how many package-change proposals the agent wrote that the launcher queued.
+- `Proposals this session wrote`: how many package-change proposals this session wrote or changed in `workspace/review-queue/incoming/` that the launcher queued.
+  A run queues everything standing in `incoming/`, and a run that could not read the Review Queue, or was stopped before it took its items in, leaves its session's items there for the next run.
+  The launcher tells those apart as it does the Drafts, by each file's fingerprint before the agent starts and once it has ended, and the line names them beside the session's own: `0 queued; 5 more queued in this run were left by an earlier run`.
+
+The launcher takes one reading of the Drafts due and of `incoming/` before the agent starts, and one once it has ended.
+When either cannot be taken, for example in a folder left closed, neither the Draft claims nor the proposals are counted and the launcher problems say why; the run starts and goes on as it would have.
 
 The counts inform the Founder and gate nothing: nothing is queued, blocked, or marked incomplete because of one, and every check of an item or a Draft is what it was.
 A count that cannot be made is listed as a launcher problem, and the run goes on without it; that holds for the one reading the launcher makes for a count before the agent starts as well.

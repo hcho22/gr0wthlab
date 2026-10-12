@@ -408,17 +408,20 @@ How Codex is started changed in one place: `codex exec` takes `-c model_reasonin
 The preflight's `codex sandbox` command is unchanged, since it runs no model, and the permission profile, the environment, and every other flag are as they were; the configuration fingerprint changes with the command.
 Everything else is launcher code that runs outside the sandbox (`work.py`, with `cycle.py`, `report.py`, `settings.py`, and one counter in `drafts.py`).
 Once the agent has ended it reads Codex's event stream in the launcher's log folder, the post Drafts in `workspace/drafts/posts/` as the Draft check already reads them, the package files in Mandu the snapshot already reads, and the Review Queue.
-Before the agent starts it reads the post Drafts due once, the same way, so that it can tell afterwards which of them this session wrote or changed; a Draft it cannot read then is a launcher problem, the Draft claims are not counted, and the run starts as it would have.
+Before the agent starts it reads the post Drafts due once, the same way, and the files in `workspace/review-queue/incoming/`, as the take-in reads them, so that it can tell afterwards which of them this session wrote or changed; a file it cannot read then is a launcher problem, the Draft claims and the proposals are not counted, and the run starts as it would have.
 It writes nothing in `workspace/`, Mandu, or a Product checkout; the counts go into the run report in `ledger/` and the run's log record.
 
 Both checks were made on the final launcher, as review left it, on 2026-10-12, Mac local time, with Codex CLI 0.160.0, from the linked worktree the review was made in, against Mandu and the Product checkouts as they are.
 The configuration fingerprint there is `791a5a98da39278e8541c16fdd49eb0748a2fd4005fb2aa965cb712b97459f83`, and no change to the launcher or its configuration came after them.
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the two checks and after them.
 
 - `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas and refused 14 paths, `ledger/` among them.
-- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T070050Z-on-demand-e49a`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files, 13 of them, landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
-  The probe's agent ran 58 seconds at high effort, all of them with the Mac awake.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261012T074058Z-on-demand-ab41`: Codex logged nine patch rejections, the unified log held eleven kernel Seatbelt denials naming the run, one for each of the nine forbidden shell targets and both local listeners, neither listener received a connection, the permitted files, 13 of them, landed in all six areas, no sentinel escaped, and nothing outside the areas changed.
+  The probe's agent ran 53 seconds at high effort, all of them with the Mac awake.
 
-Both had also passed twice before, on the launcher as it then was, each time with the boundary check at its first and only attempt: before review, from the worktree the change was made in, as run `20261012T055318Z-on-demand-8727`, whose agent ran 37 seconds, and after review's first round, with the same fingerprint as above, as run `20261012T062443Z-on-demand-6c97`, whose agent ran 58 seconds.
+Both had also passed three times before, on the launcher as it then was, each time with the boundary check at its first and only attempt.
+Before review, from the worktree the change was made in, it passed as run `20261012T055318Z-on-demand-8727`, whose agent ran 37 seconds.
+After review's first and second rounds, with the same fingerprint as above, it passed as runs `20261012T062443Z-on-demand-6c97` and `20261012T070050Z-on-demand-e49a`, whose agents ran 58 seconds each.
 
 Three facts about Codex that the change rests on were measured on 2026-10-11 with the real agent, started with the launcher's own Codex command from a throwaway clone.
 
@@ -435,7 +438,7 @@ Mandu's and RepToday's HEAD, branch, git status, stash, and a digest over every 
 The thirteen runs cost $1.05 at API prices.
 Their reports also showed counts that review then removed (commands run and what they did, file edits, post Drafts written, claims whose quoted code the launcher found, items queued and set aside, and reasoning tokens in the cost line), so the tables below keep only the counts the report still shows, beside the agent's own word and the cost.
 Review also made the count of package files read stricter for a file with no line of 24 characters or more; none of the 24 package files is one, so the figures below stand.
-It then made the Draft claims count the session's own, leaving out a Draft an earlier run left; each of the thirteen was a first run in a fresh clone, where every Draft is the session's own, so those figures stand too.
+It then made the Draft claims and the proposals count the session's own, leaving out a Draft or a proposal an earlier run left; each of the thirteen was a first run in a fresh clone, where every Draft and every proposal is the session's own, so those figures stand too.
 
 The anchor: three runs on `main` as it was before this change (`92d8bbe`), at Codex's default medium effort, all three at once.
 That launcher counted nothing, so these rows were counted afterwards with the same code over each run's event stream, Drafts, and Review Queue.
@@ -471,9 +474,9 @@ Run `20261012T062330Z-on-demand-a2d7` ended with exit code 0, no launcher proble
 This session read fewer package files than any of the ten before it and still said the review was complete: it printed whole package folders in single commands, one returning 314,707 characters, and Codex cut each to its first and last 20,000.
 The launcher as it was before review counts the same 10 of 24 over this run's event stream.
 
-The report's final shape, and the first evidence of a second week, come from a two-run sequence on the launcher as review left it: a first run in a fresh throwaway clone with an empty `ledger/`, and then a second run in the same clone, both on demand, against the same Mandu and RepToday at the registry's own locations.
+The report's shape, and the first evidence of a second week, come from a two-run sequence on the launcher as review's second round left it: a first run in a fresh throwaway clone with an empty `ledger/`, and then a second run in the same clone, both on demand, against the same Mandu and RepToday at the registry's own locations.
 Both ended with exit code 0, no launcher problem, and no item set aside, at $0.10 and $0.079.
-The boundary check above ran its probe during the first run's first and second minutes.
+That round's boundary check, run `e49a`, ran its probe during the first run's first and second minutes.
 
 The first run, `20261012T070026Z-on-demand-000d`.
 Its summary held these two lines, the second reading as the cost line reads on `main`:
@@ -513,10 +516,12 @@ Its summary line and its count lines:
 ```
 
 Each run's log record held the same counts under `work`, six keys and no others.
+Review's third round then made the proposals count the session's own as well, and that is the one line of these reports that reads differently today: `Proposals this session wrote: 6 queued.` and `2 queued.` in place of the last count line of each, and `6 proposals this session wrote queued` and `2 proposals this session wrote queued` in the summary lines.
+The figures are the same, since nothing stood in `incoming/` before either session; a run that queues proposals an earlier run left there, as after a run that could not read the Review Queue, is shown by the unit tests only.
 The second session wrote all seven Drafts again, each of which the first run's Draft check had blocked, and the launcher's post-Draft Evidence for the two runs holds a different fingerprint for every one of the seven days, which agrees with the count.
 So the sequence shows the count on a second run, and it does not show a session that leaves the Drafts alone: the line for that, "this session wrote or changed none of the 7 Drafts due, so it has no Draft claims to count", and the count of a single changed Draft are shown by the unit tests only.
 The second run also listed `Mandu decisions` as a failed source, as the launcher on `main` does once items are open: Mandu's exchange folder does not exist yet, so its report marked `Founder decisions taken in` and `Review Queue` incomplete.
-Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the sequence and after it and the boundary check, as they were around run `a2d7`.
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the sequence and after it and that round's boundary check, as they were around run `a2d7`.
 None of these three runs is in the figures below, which are of the thirteen.
 
 What the sample shows:
