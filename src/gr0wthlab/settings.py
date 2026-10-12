@@ -140,8 +140,8 @@ def load_agent(data: object) -> Agent:
 
 def load_shown_output(data: object) -> int:
     """config/run.json's work_counts.shown_output_characters: how much of one command's output Codex shows the model,
-    which the run report's counts of the agent's work are made with. It is a fact about Codex, set through a reviewed
-    change, and no flag: the launcher sets no limit of its own."""
+    which the run report's counts of the agent's work are made with. It describes Codex and is not passed to it: the
+    launcher sets no output limit of its own."""
     shown = data.get("shown_output_characters") if isinstance(data, dict) else None
     if isinstance(shown, bool) or not isinstance(shown, int) or shown < 2:
         raise ConfigError(f"{RUN_CONFIG}: work_counts.shown_output_characters must be a whole number from 2")

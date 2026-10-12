@@ -490,14 +490,18 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
 
 
 def review_word(state: RunState) -> str:
-    """The agent's own closing line, quoted as its word, or that it left none."""
+    """The agent's own closing line, quoted as its word, or that it left none. A line that is neither closing line,
+    as one wrapped in backticks is not, is quoted as it stands, since the launcher reads it as no confirmation."""
     if not state.agent_summary.strip():
         return "none; the agent left no summary"
     line = " ".join(state.review.split())
     shown = line if len(line) <= REVIEW_WORD_LIMIT else line[:REVIEW_WORD_LIMIT].rstrip() + "..."
     if state.review == REVIEW_COMPLETE or state.review.startswith(REVIEW_INCOMPLETE):
         return f'"{shown}"'
-    return f'its summary ends with neither `{REVIEW_COMPLETE}` nor `{REVIEW_INCOMPLETE}`, but with "{shown}"'
+    return (
+        f'its last line, "{shown}", is neither of the closing lines the launcher accepts, the plain text'
+        f" `{REVIEW_COMPLETE}` or `{REVIEW_INCOMPLETE}: ...`"
+    )
 
 
 def agent_setting(state: RunState) -> str:

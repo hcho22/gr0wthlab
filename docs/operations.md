@@ -146,7 +146,18 @@ The counts:
 The counts inform the Founder and gate nothing: nothing is queued, blocked, or marked incomplete because of one, and every check of an item or a Draft is what it was.
 The run's log record in `~/Library/Logs/gr0wthlab/` holds the same counts under `work`, with the name of every package file not read.
 
-MEASURED_RUNS_PARAGRAPH
+What the counts looked like when they were introduced, on 2026-10-11, against Mandu and RepToday as they were.
+Each run was on demand in a fresh clone, so each was a first week: a package review and the first batch's seven post Drafts.
+
+| Reasoning effort | Runs | Ended with the words `Review: complete` | Package files read, of 24 | Draft claims naming code | Proposals queued | Agent time | Cost a run |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| medium, Codex's default, on `main` before the change | 3 | 0 | 6, 11, and 24 | 4 of 25 | 0 to 1 | 59 s to 2 min 38 s | $0.012 to $0.028 |
+| high | 10 | 10 | 11 to 24, all 24 in four runs | 78 of 97 | 2 to 13 | 4 min 43 s to 18 min 42 s | $0.056 to $0.158 |
+
+Read a report against these counts.
+A run that says `Review: complete` after few commands, few package files read, or with most claims naming no code did less than the runs at high effort did, whatever its closing line says.
+High effort does not make every session thorough: two of the ten read 11 and 17 of the 24 files and still said the review was complete.
+[The US-ME02 spike note](spikes/us-me02-runtime-boundary.md#re-check-after-the-agents-reasoning-effort-and-the-work-counts-us-me17) lists every run and says what the sample does not show.
 
 ## When a run times out
 
@@ -154,7 +165,8 @@ Every run ends with its report, so the agent has a time limit: `agent.time_limit
 The limit counts wall-clock time from the moment the agent starts, the Mac's sleep included.
 Nothing keeps the Mac awake for a run, and a sleeping Mac runs nothing, so the stop of an agent the Mac slept past its limit starts within about a second of the Mac waking, not at the time of day the limit fell.
 Awake time is counted as well, and the agent is stopped at whichever count reaches the limit first, so a wall clock set back cannot extend a run; one set forward can end a run early.
-The 46 weekly runs recorded with the real agent took 18 to 218 seconds, so a healthy run on a Mac that stays awake ends long before the limit and is never touched by it.
+At high reasoning effort the agent took 283 to 1,122 seconds, median 646, in the ten runs measured on 2026-10-11, each a package review and one batch of post Drafts, most with four or five sessions running at once on the Mac.
+A healthy run on a Mac that stays awake therefore ends inside the limit, the longest measured at 62 percent of it; at Codex's default medium effort the 46 runs recorded before took 18 to 218 seconds.
 An agent still running at the limit, for example because its model stream stalled, is stopped with every process the Mac's process table shows it started, which is its descendants and every process in a session one of them leads: each is asked to stop, and any still running after 10 seconds of awake time is forced.
 The launcher then reads the process table again to confirm that none of them is left, and finishes the run as it finishes any run.
 The stop does not find a process the agent detached earlier in the run: one in a session of its own whose parent has already ended, as a shell command that has finished can leave.

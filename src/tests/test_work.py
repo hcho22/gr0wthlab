@@ -225,12 +225,16 @@ class CountLinesTest(unittest.TestCase):
     def test_the_agent_s_word_is_quoted_as_it_ended_or_named_as_missing(self):
         incomplete = self.state(work.Work(work.Session()), "Stopped.\n\nReview: incomplete: pass 2, out of time.\n")
         self.assertEqual(report.review_word(incomplete), '"Review: incomplete: pass 2, out of time."')
-        other = self.state(work.Work(work.Session()), "All done here, nothing else to add " + "x" * 400)
-        self.assertRegex(
-            report.review_word(other),
-            r'^its summary ends with neither `Review: complete` nor `Review: incomplete`, but with "All.*x\.\.\."$',
+        ticked = self.state(work.Work(work.Session()), "Reviewed it all.\n\n`Review: complete`\n")
+        self.assertEqual(
+            report.review_word(ticked),
+            'its last line, "`Review: complete`", is neither of the closing lines the launcher accepts, the plain text'
+            " `Review: complete` or `Review: incomplete: ...`",
         )
-        self.assertLess(len(report.review_word(other)), 400)
+        self.assertEqual(ticked.review_gap(), "the agent did not confirm that it finished every pass")
+        other = self.state(work.Work(work.Session()), "All done here, nothing else to add " + "x" * 400)
+        self.assertRegex(report.review_word(other), r'^its last line, "All done.*x\.\.\.", is neither of the closing')
+        self.assertLess(len(report.review_word(other)), 450)
         self.assertEqual(
             report.review_word(self.state(work.Work(work.Session()), "")), "none; the agent left no summary"
         )
