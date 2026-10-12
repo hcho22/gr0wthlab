@@ -121,7 +121,10 @@ class CommandTest(CodexTestCase):
 class EnvironmentTest(CodexTestCase):
     def test_environment_is_built_from_scratch(self):
         env = codex.child_environment(self.home, self.codex_bin, "/tmp/user")
-        self.assertEqual(set(env), {"HOME", "USER", "LOGNAME", "SHELL", "LANG", "TMPDIR", "PATH", "CODEX_HOME"})
+        names = {"HOME", "USER", "LOGNAME", "SHELL", "LANG", "TMPDIR", "PATH", "CODEX_HOME", "RUST_LOG"}
+        self.assertEqual(set(env), names)
+        # Every run has Codex keep its record of each tool call, which the boundary check reads.
+        self.assertEqual(env["RUST_LOG"], "error,codex_otel.log_only=info")
         self.assertEqual(env["PATH"].split(os.pathsep), [str(self.codex_bin.parent)] + list(codex.SYSTEM_PATH))
         self.assertEqual(env["TMPDIR"], "/tmp/user")
         self.assertEqual(env["CODEX_HOME"], str(self.home / ".codex"))
@@ -134,6 +137,73 @@ class EnvironmentTest(CodexTestCase):
         self.install_fake_codex("#!/bin/sh\n")
         self.assertEqual(codex.resolve_codex_binary({"PATH": str(self.codex_bin.parent)}), self.codex_bin)
         self.assertEqual(codex.resolve_codex_binary({"GR0WTHLAB_CODEX_BIN": str(self.codex_bin)}), self.codex_bin)
+
+
+CLOSING = (
+    " mcp_server= mcp_server_origin= event.timestamp=2026-10-09T00:00:01.000Z conversation.id=c app.version=0.160.0"
+    ' auth_mode="Chatgpt" originator=codex_exec terminal.type=unknown model=model-a slug=model-a'
+)
+
+
+def tool_result(seq, tool="apply_patch", success="false", body="patch output=refused" + CLOSING):
+    return (
+        f'2026-10-09T00:00:0{seq}.000000Z  INFO codex_otel.log_only: event.name="codex.tool_result"'
+        f" tool_result_seq={seq} tool_name={tool} tool_namespace=functions call_id=call-{seq} duration_ms=0"
+        f" success={success} output_truncated=false agent_name=/root arguments={body}\n"
+    )
+
+
+class ToolRecordTest(unittest.TestCase):
+    """Reading the record Codex keeps of each tool call, whose arguments and output are free text on many lines."""
+
+    def test_calls_are_read_in_order_among_the_log_s_other_records(self):
+        patch = "*** Begin Patch\n*** Add File: /r/x.txt\n+probe\n*** End Patch"
+        log = (
+            '2026-10-09T00:00:00.000000Z  INFO codex_otel.log_only: event.name="codex.conversation_starts" a=b\n'
+            + tool_result(1, body=f"{patch} output=refused{CLOSING}")
+            + "2026-10-09T00:00:01.500000Z ERROR codex_core::tools::router: error=refused\n"
+            + tool_result(2, "exec_command", "true", '{"cmd":"pwd"} output=Output:\n/r\n' + CLOSING)
+        )
+        calls, problems = codex.tool_results(log)
+        self.assertEqual(problems, [])
+        self.assertEqual(
+            [(call.seq, call.tool, call.success) for call in calls],
+            [(1, "apply_patch", False), (2, "exec_command", True)],
+        )
+        self.assertEqual(calls[0].gave("refused"), patch)
+        self.assertEqual(calls[0].said(), "refused")
+        self.assertEqual(calls[1].gave("Output:\n/r\n"), '{"cmd":"pwd"}')
+        self.assertEqual(calls[1].said(), "Output: /r")
+
+    def test_a_call_gave_an_output_only_when_its_record_ends_with_exactly_that(self):
+        call = codex.tool_results(tool_result(1, body=f"patch output=refused{CLOSING}"))[0][0]
+        self.assertEqual(call.gave("refused"), "patch")
+        self.assertIsNone(call.gave("fused"), "the output must be whole")
+        self.assertIsNone(call.gave("refuse"))
+        # Arguments that end with the words of an output are still arguments: the real output follows them.
+        quoting = codex.tool_results(tool_result(1, body=f"patch output=refused output=invalid patch{CLOSING}"))[0][0]
+        self.assertIsNone(quoting.gave("refused"))
+        self.assertEqual(quoting.gave("invalid patch"), "patch output=refused")
+        # A record that does not end with Codex's closing fields was cut off or is not a record.
+        cut = codex.tool_results(tool_result(1, body="patch output=refused"))[0][0]
+        self.assertIsNone(cut.gave("refused"))
+        self.assertEqual(cut.said(), "refused")
+
+    def test_calls_written_out_of_order_are_whole_and_a_missing_or_repeated_number_is_not(self):
+        swapped = tool_result(2) + tool_result(1) + tool_result(3)
+        self.assertEqual(codex.tool_results(swapped)[1], [])
+        for numbers in ((1, 3), (1, 2, 2), (2, 3)):
+            calls, problems = codex.tool_results("".join(tool_result(seq) for seq in numbers))
+            self.assertEqual(len(calls), len(numbers))
+            self.assertIn(f"numbered {list(numbers)}, not 1 to {len(numbers)} once each", problems[0])
+        self.assertEqual(codex.tool_results("no records here\n"), ([], []))
+
+    def test_a_line_inside_a_record_that_only_looks_like_a_tool_call_is_not_read_as_one(self):
+        # A record starts at a line that starts with a timestamp and a level; text further along a line never does.
+        inside = tool_result(7).rstrip("\n")
+        log = tool_result(1, "exec_command", "true", f'{{"cmd":"echo"}} output=said: {inside}{CLOSING}')
+        calls, problems = codex.tool_results(log)
+        self.assertEqual(([call.seq for call in calls], problems), ([1], []))
 
 
 class PreflightTest(CodexTestCase):
