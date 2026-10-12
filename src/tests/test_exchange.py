@@ -8,12 +8,21 @@ from gr0wthlab import exchange
 PRODUCTS = ["RepToday", "Immerse"]
 
 
-def item(kind="package-change-proposal", heading=None, extra_fields="", body="Change the line.", evidence=None):
+def item(
+    kind="package-change-proposal",
+    heading=None,
+    extra_fields="",
+    body="Change the line.",
+    evidence=None,
+    declared="new_angle: no\n",
+):
     heading = heading or exchange.KINDS[kind]
     evidence = evidence or "- The checklist records it done: `projects/RepToday/02-checklist.md` line 24"
     options = "\n".join(f"- {option}" for option in exchange.options(kind))
+    declared = declared if kind == "package-change-proposal" else ""
     return (
-        f"---\nkind: {kind}\nproduct: RepToday\n{extra_fields}---\n\n# Approve package change: fix the status\n\n"
+        f"---\nkind: {kind}\nproduct: RepToday\n{declared}{extra_fields}---\n\n"
+        "# Approve package change: fix the status\n\n"
         f"## {heading}\n\n{body}\n\n## Touches\n\n- `projects/RepToday/gtm/README.md`\n\n"
         f"## Evidence\n\n{evidence}\n\n## Options\n\n{options}\n"
     )
@@ -137,6 +146,50 @@ class ItemCheckTest(unittest.TestCase):
         again = exchange.check_item(text, PRODUCTS, published=True)
         self.assertEqual(again.problems, [])
         self.assertEqual(again.item.fields["supersedes"], "20261004-old")
+
+    def test_a_package_change_proposal_declares_whether_it_adds_or_changes_an_angle_or_hook(self):
+        needs = "a package-change proposal needs new_angle: yes when it adds or changes an Angle or Hook"
+        for value in ("yes", "no"):
+            check = exchange.check_item(item(declared=f"new_angle: {value}\n"), PRODUCTS)
+            self.assertEqual((check.problems, check.item.fields["new_angle"]), ([], value))
+        for declared in ("", "new_angle: maybe\n", "new_angle:\n", "new_angle: Yes\n"):
+            with self.subTest(declared=declared):
+                check = exchange.check_item(item(declared=declared), PRODUCTS)
+                self.assertIsNone(check.item)
+                self.assertTrue(any(needs in problem for problem in check.problems), check.problems)
+        stated_older = item(declared="", extra_fields="exchange: 3\n")
+        self.assertIsNone(exchange.check_item(stated_older, PRODUCTS).item, "an item the agent writes always declares")
+        for kind in ("notice", "message", "dispatch-request"):
+            with self.subTest(kind=kind):
+                problems = exchange.check_item(item(kind, extra_fields="new_angle: no\n"), PRODUCTS).problems
+                self.assertEqual(problems, ["only a package-change proposal has new_angle"])
+
+    def test_the_declaration_is_on_the_queued_item_and_an_item_of_an_earlier_version_reads_without_one(self):
+        check = exchange.check_item(item(declared="new_angle: yes\n"), PRODUCTS)
+        fields = dict(check.item.fields, exchange=str(exchange.EXCHANGE_VERSION), id="20261011-fix-status")
+        text = exchange.render_item(fields, check.item.ask, check.item.body, check.item.touches, check.item.evidence)
+        self.assertIn("\nkind: package-change-proposal\nproduct: RepToday\nnew_angle: yes\n---\n", text)
+        self.assertEqual(exchange.check_item(text, PRODUCTS, published=True).item.fields["new_angle"], "yes")
+        undeclared = text.replace("new_angle: yes\n", "")
+        self.assertIsNone(exchange.check_item(undeclared, PRODUCTS, published=True).item)
+        for version in range(1, exchange.EXCHANGE_VERSION):
+            earlier = undeclared.replace(f"exchange: {exchange.EXCHANGE_VERSION}\n", f"exchange: {version}\n")
+            self.assertEqual(exchange.check_item(earlier, PRODUCTS, published=True).problems, [], version)
+
+    def test_evidence_names_each_record_exactly_as_it_is_written_in_backticks(self):
+        text = (
+            "- One: `evidence/listening/quotes/d-0123456789ab.json` line 2\n"
+            "- Two, see evidence/listening/quotes/d-aaaaaaaaaaaa.json: `notes/evidence/decisions/x.json.txt`\n"
+            "  and `evidence/decisions/x.json`, at https://example.com/a"
+        )
+        self.assertEqual(
+            exchange.references(text),
+            {
+                "evidence/listening/quotes/d-0123456789ab.json",
+                "notes/evidence/decisions/x.json.txt",
+                "evidence/decisions/x.json",
+            },
+        )
 
 
 DECISION = {

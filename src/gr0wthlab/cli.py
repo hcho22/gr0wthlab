@@ -6,9 +6,28 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
-from . import beta, beta_drafts, codex, cycle, exchange, launcher, posts, probe, schedule, settings
+from . import (
+    beta,
+    beta_drafts,
+    codex,
+    cycle,
+    evidence,
+    exchange,
+    fetch,
+    launcher,
+    learning,
+    listening,
+    messages,
+    outreach,
+    posts,
+    probe,
+    schedule,
+    settings,
+    sources,
+)
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import LEDGER, PRODUCT_REGISTRY, ConfigError, load_json, load_runtime_config, resolve_boundary
@@ -30,7 +49,9 @@ def parser() -> argparse.ArgumentParser:
     run.add_argument("--once", metavar="YYYY-MM-DDTHH:MM", help="the one-off time a scheduled run was due at")
 
     commands.add_parser("show-config", help="print the resolved run configuration and its fingerprint")
-    commands.add_parser("preflight", help="prove the write boundary in the sandbox, with no model")
+    commands.add_parser(
+        "preflight", help="prove the write boundary and the closed network in the sandbox, with no model"
+    )
     commands.add_parser("check-incoming", help="check the Review Queue items waiting in review-queue/incoming/")
     drafts = commands.add_parser("check-drafts", help="check a run's post Drafts in drafts/posts/ as the launcher will")
     drafts.add_argument(
@@ -47,6 +68,13 @@ def parser() -> argparse.ArgumentParser:
         required=True,
         metavar="RUN_ID",
         help="the run in progress, as its brief's check-beta-drafts command names it",
+    )
+
+    work = commands.add_parser(
+        "check-work", help="check a run's quote records, Angle and Hook proposals, messages, and rejection codes"
+    )
+    work.add_argument(
+        "--run", required=True, metavar="RUN_ID", help="the run in progress, as its brief's check-work command names it"
     )
 
     agent = commands.add_parser("launch-agent", help="print a LaunchAgent plist that runs the launcher on a schedule")
@@ -101,9 +129,10 @@ def check_incoming(out=sys.stdout) -> int:
     ledger, seen, warning = queued(products)
     if warning:
         print(warning, file=out)
+    kept = evidence.records(Store(LEDGER_DIR))
     failed = 0
     for name in names:
-        item, problems = ledger.check_incoming(INCOMING / name, name, products, seen)
+        item, problems = ledger.check_incoming(INCOMING / name, name, products, seen, kept)
         if item is not None:
             seen[exchange.item_hash(item)] = name
         failed += bool(problems)
@@ -259,6 +288,116 @@ def check_beta_drafts(run_id: str, out=sys.stdout) -> int:
     return 1 if failed else 0
 
 
+def work_context(run_id: str, config, registry, boundary, env, out):
+    """The kit, brand rules, and Product code a message is checked against, with the code fixed to the commit the
+    launcher recorded for the run, as check-drafts reads it; None when no active Product has a kit."""
+    plan = posts.context_plan(REPO_ROOT, config, registry, boundary, env)
+    if plan is None:
+        return None
+    try:
+        record = Store(LEDGER_DIR).path(cycle.RUN_REPORTS, posts.plan_file(run_id))
+        posts.restore(plan, json.loads(read_plain(record).decode("utf-8")))
+    except (ConfigError, OSError, UnsafeFile, ValueError) as error:
+        print(
+            f"The post plan of run {run_id} could not be read ({error}), so claims are checked against the code as it"
+            " is now; the launcher checks them at the commit it recorded.",
+            file=out,
+        )
+    return plan.context
+
+
+def check_work(run_id: str, out=sys.stdout) -> int:
+    """The launcher's own checks of a run's Listening work, outreach Drafts, and proposed rejection codes, for the
+    agent to use before it finishes. Nothing is written, kept, or queued here.
+
+    What may be offered is read from the record the launcher wrote for the run before the agent started, never
+    worked out again: the Founder's decisions and records it rests on are saved only when the run ends. Every quote
+    is checked against that run's snapshot, which the launcher fetched and keeps only while the run is in progress;
+    this command never touches the network.
+    """
+    env = dict(os.environ)
+    home = Path.home()
+    config = settings.load(REPO_ROOT, env, home)
+    registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
+    boundary = resolve_boundary(REPO_ROOT, load_runtime_config(REPO_ROOT), registry, env, home, git=[])
+    products = [product["name"] for product in registry.get("products", [])]
+    store, areas = Store(LEDGER_DIR), Areas(boundary)
+    try:
+        record = json.loads(read_plain(store.path(cycle.RUN_REPORTS, f"{run_id}.work-plan.json")).decode("utf-8"))
+        policy = fetch.load_policy(REPO_ROOT)
+        source_config = sources.load(REPO_ROOT, policy)
+        planned = record.get("listening") or {}
+        snapshot = (
+            sources.load_snapshot(store.path(*Path(planned["snapshot"]).parts)) if planned.get("snapshot") else None
+        )
+    except (ConfigError, OSError, UnsafeFile, ValueError, sources.SourceError) as error:
+        print(
+            f"PROBLEM the plan of run {run_id} could not be read ({error}), so nothing was checked; the launcher"
+            " checks everything once you finish.",
+            file=out,
+        )
+        return 1
+    context = work_context(run_id, config, registry, boundary, env, out)
+    ledger, seen, warning = queued(products)
+    if warning:
+        print(warning, file=out)
+    now = datetime.now(timezone.utc)
+    checked = failed = 0
+
+    def say(ok: bool, line: str, problems=()) -> None:
+        nonlocal checked, failed
+        checked += 1
+        failed += not ok
+        print(line, file=out)
+        for problem in problems:
+            print(f"  - {problem}", file=out)
+
+    def say_message(outcome: messages.Outcome, what: str) -> None:
+        good = outcome.status in (messages.QUEUED, messages.KEPT, messages.APPROVED_BEFORE)
+        quiet = outcome.status == messages.NOT_DUE
+        word = "OK" if good else "NOT OFFERED" if quiet else outcome.status.upper()
+        if outcome.status == messages.BLOCKED and outcome.verdict is not None:
+            say(False, f"{word} {what}", messages.failing(outcome))
+        else:
+            say(good or quiet, f"{word} {what}" + (f": {outcome.detail}" if outcome.detail else ""))
+        if outcome.verdict:
+            for finding in sorted({finding.line() for finding in outcome.verdict.warnings}):
+                print(f"  - warning, which does not block: {finding}", file=out)
+
+    if record.get("listening"):
+        empty = sources.Snapshot(run_id, now.isoformat(), now.astimezone().date().isoformat())
+        plan = listening.restore(record["listening"], source_config, snapshot or empty, store, run_id)
+        result = listening.take(plan, context, areas, store, ledger, run_id, now, products, dict(seen), publish=False)
+        for quote in result.accepted:
+            say(True, f"OK quote {quote.id}: its words stand in the text fetched from {quote.link}")
+        for name, problems in result.rejected:
+            say(False, f"PROBLEM quote {name}", problems)
+        for name, _ in result.proposed:
+            say(True, f"OK proposal {name}: every source it cites is validated Listening Evidence")
+        for name, problems in result.discarded:
+            say(False, f"PROBLEM proposal {name}", problems)
+        for outcome in result.replies:
+            say_message(outcome, f"reply {outcome.target.key}")
+    if record.get("outreach"):
+        plan = outreach.restore(record["outreach"], areas, run_id)
+        if plan.problem:
+            print(f"{plan.problem[0].upper()}{plan.problem[1:]}.", file=out)
+        elif context is None:
+            say(False, "PROBLEM no active Product has a kit, so no message could be checked")
+        else:
+            for outcome in outreach.take(plan, context, areas, store, ledger, run_id, now, products, False).outcomes:
+                say_message(outcome, f"{outcome.target.label}, {outreach.kind_of(outcome.target)}")
+    coded = learning.take(areas, store, ledger, products, run_id, now, publish=False)
+    for item, code in coded.coded:
+        say(True, f"OK code {item}: {code}, {learning.kind(code)}")
+    for name, problems in coded.set_aside:
+        say(False, f"PROBLEM code {name}", problems)
+    for reason in coded.uncoded():
+        say(False, f"PROBLEM code {reason.item}: its rejection reason has no code yet")
+    print(f"{checked} checked, {failed} with problems", file=out)
+    return 1 if failed else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     arguments = sys.argv[1:] if argv is None else argv
     args = parser().parse_args(arguments)
@@ -276,14 +415,19 @@ def main(argv: list[str] | None = None) -> int:
             result = codex.run_preflight(
                 resolved.config, resolved.boundary, resolved.codex_bin, resolved.environment, "manual"
             )
-            print(json.dumps(launcher.preflight_summary(result), indent=2))
-            return 0 if result.ok else launcher.EXIT_BOUNDARY
+            network = codex.run_network_probe(
+                resolved.config, resolved.boundary, resolved.codex_bin, resolved.environment, resolved.network_targets
+            )
+            print(json.dumps(dict(launcher.preflight_summary(result), network=network.as_json()), indent=2))
+            return 0 if result.ok and network.ok else launcher.EXIT_BOUNDARY
         if args.command == "check-incoming":
             return check_incoming()
         if args.command == "check-drafts":
             return check_drafts(args.run)
         if args.command == "check-beta-drafts":
             return check_beta_drafts(args.run)
+        if args.command == "check-work":
+            return check_work(args.run)
         if args.command == "launch-agent":
             config = settings.load(REPO_ROOT, env, home)
             if args.boundary_check:

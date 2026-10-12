@@ -45,6 +45,7 @@ class Code:
     problem: str | None = None
     env: Mapping[str, str] = field(default_factory=dict)
     files: dict[str, list[str] | str] = field(default_factory=dict)
+    failed: set[str] = field(default_factory=set)  # each path git could not read, which is not a file that is not there
 
     @property
     def short(self) -> str:
@@ -70,6 +71,7 @@ class Code:
                 except (OSError, ValueError) as error:
                     completed = None
                     self.files[path] = f"git could not read it ({error})"
+                    self.failed.add(path)
                 if completed is not None:
                     self.files[path] = (
                         completed.stdout.splitlines()
@@ -99,6 +101,16 @@ class Code:
         if squash(excerpt) not in squash(" ".join(lines[start - 1 : end])):
             return f"{path} lines {start}-{end} at {self.short} do not contain {squash(excerpt)!r}"
         return None
+
+    def unread(self, location: str) -> str:
+        """Why the code a verified claim's location names could not be read at all: the checkout, or git's read of
+        that one file. "" when it was read, or when the file is not there."""
+        if self.problem:
+            return f"{self.name}'s code could not be read"
+        match = LOCATION.fullmatch(location.strip())
+        if match and match.group(1) in self.failed:
+            return f"git could not read `{match.group(1)}` in {self.name}'s code"
+        return ""
 
 
 def open_code(name: str, checkout: Path, branch: str, env: Mapping[str, str]) -> Code:

@@ -61,7 +61,7 @@ The PRD's Guardrails section says what enforces each one.
 | [`workspace/instructions/`](workspace/instructions/) | The Marketing Engineer's Instructions | Yes |
 | [`ledger/`](ledger/) | The launcher's records: the published Review Queue, the launcher's own Evidence, run reports, and run state | No |
 | [`src/`](src/) | Code | No |
-| [`config/`](config/) | Guardrail configuration, the Product registry, the run's settings, and platform facts | No |
+| [`config/`](config/) | Guardrail configuration, the Product registry, the run's settings, platform facts, and the network sources | No |
 | `docs/`, `CONTEXT.md`, this README | Specification and decision records | No |
 
 `workspace/` is the only tree the agent may write (G1); `ledger/` is written only by the launcher, outside the sandbox, and everything else changes only through firstmate's reviewed pull requests (G8).
@@ -69,6 +69,7 @@ The PRD's Guardrails section says what enforces each one.
 ## Runs
 
 Every run, scheduled or on demand, starts through `src/bin/gr0wthlab run`, which runs Codex inside the write boundary in [`config/guardrails/runtime.json`](config/guardrails/runtime.json) with the task definition in [`src/instructions/`](src/instructions/).
+The agent has no network: before it starts, the launcher itself reads the fixed list of sources in [`config/sources.json`](config/sources.json), with credential-free reads of the hosts in [`config/guardrails/fetch.json`](config/guardrails/fetch.json) and only where each host's `robots.txt` allows, and hands the agent a snapshot it can read and never write.
 The weekly run is scheduled for Sunday afternoon, before the Founder's Sunday evening sitting; [`config/run.json`](config/run.json) holds the schedule and the step that saves each run's `workspace/` and `ledger/` records to `main`.
 Setting up the production clone and the schedule, and removing them: [operations](docs/operations.md).
 How the Review Queue reaches Mandu and the Founder's decisions come back: [the Mandu exchange](docs/mandu-exchange.md).

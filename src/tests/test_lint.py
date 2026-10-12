@@ -76,6 +76,7 @@ class BrandRulesTest(unittest.TestCase):
                 "invented proof",
                 "fake scarcity",
                 "allowed phrases",
+                "loss framing",
             ],
         )
         self.assertEqual(full_rules().pending(), [])

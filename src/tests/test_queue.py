@@ -260,8 +260,8 @@ class OrderAndPersistenceTest(LedgerTestCase):
         self.assertEqual(
             problems["network-ask.md"],
             (
-                "a message is queued only from its Draft in drafts/beta-recruiting/, after the launcher's checks;"
-                " never write one here",
+                "a message is queued only from its Draft in drafts/messages/ or drafts/beta-recruiting/, after the"
+                " launcher's checks; never write one here",
             ),
         )
         self.assertEqual(self.ledger.entries, {})
@@ -269,6 +269,80 @@ class OrderAndPersistenceTest(LedgerTestCase):
         self.drop("name-status-stale.md", fakes.PROPOSAL)
         published, set_aside = self.take("RUN2")
         self.assertEqual((len(published), set_aside), (2, []))
+
+    BANK = "projects/RepToday/gtm/05-social-pmf/angles.md"
+    PAIRS = "projects/RepToday/gtm/05-social-pmf/ab-pairs.md"
+    KEPT = "evidence/listening/quotes/d-0123456789ab.json"
+
+    def declared(self, title, new_angle, touches=None, evidence=""):
+        """A package-change proposal with this ask and declaration, touching that package file, with that Evidence
+        line before its own."""
+        text = fakes.proposal(title=title, new_angle=new_angle)
+        if touches:
+            text = text.replace("- `projects/RepToday/gtm/02-brand/brand-guidelines.md`", f"- `{touches}`")
+        return text.replace("- Cleared and reserved:", f"{evidence}\n- Cleared and reserved:".lstrip("\n"))
+
+    def take_kept(self):
+        """Take incoming/ in as a run whose ledger keeps one Listening quote."""
+        return self.ledger.take_incoming(self.areas, self.store, PRODUCTS, "RUN1", NOW, None, {self.KEPT})
+
+    def test_a_package_change_proposal_that_declares_nothing_is_set_aside(self):
+        self.drop("fix.md", fakes.proposal(new_angle=None))
+        published, set_aside = self.take_kept()
+        self.assertEqual(published, [])
+        self.assertIn(
+            "a package-change proposal needs new_angle: yes when it adds or changes an Angle or Hook",
+            set_aside[0].problems[0],
+        )
+
+    def test_a_declared_angle_or_hook_is_queued_only_when_its_evidence_names_a_kept_quote_exactly(self):
+        title = "introduce Angle P07 for desk workers"
+        for evidence in (
+            "",
+            "- Sourced pain: `evidence/listening/quotes/d-000000000000.json`",
+            "- The Founder's reason: `evidence/decisions/20261011-fit-wording.json`",
+            f"- Sourced pain: `notes/{self.KEPT}.txt`",
+            f"- Sourced pain, in {self.KEPT}: `{self.BANK}` line 3",
+        ):
+            with self.subTest(evidence=evidence):
+                self.drop("angle.md", self.declared(title, "yes", self.BANK, evidence))
+                published, set_aside = self.take_kept()
+                self.assertEqual(published, [])
+                (problem,) = set_aside[0].problems
+                self.assertIn(
+                    "it declares new_angle: yes, and a proposal that adds or changes an Angle or Hook", problem
+                )
+                self.assertIn(
+                    "any Hook, signal, or kill criterion included (FR-7), is queued only with sourced pain", problem
+                )
+                self.assertIn("no record its Evidence names is a Listening quote the launcher keeps", problem)
+                self.assertIn("Name one exactly in an Evidence line, as `evidence/listening/quotes/", problem)
+        self.drop("angle.md", self.declared(title, "yes", self.BANK, f"- Sourced pain: `{self.KEPT}`"))
+        published, set_aside = self.take_kept()
+        self.assertEqual((published, set_aside), (["20261011-angle"], []))
+        entry = self.ledger.entries["20261011-angle"]
+        self.assertEqual(entry["new_angle"], "yes")
+        queued = (self.store.root / entry["file"]).read_text(encoding="utf-8")
+        self.assertIn("\nnew_angle: yes\n---\n", queued, "the declaration is on the item the Founder reads")
+
+    def test_a_proposal_that_declares_no_angle_or_hook_is_queued_whatever_it_touches_or_says(self):
+        for title, touches in (
+            ("add the Hook's missing kill criterion to day 4", self.PAIRS),
+            ("mark the new Hook on day 9 as frozen", self.PAIRS),
+            ("record the cleared name in the Angle bank's caveat", self.BANK),
+            ("add the Hook freeze date to the calendar", None),
+            ("add Angle P03's missing source link", self.BANK),
+            ("add hook-word-cap note to the brand guidelines", None),
+            ("introduce Angle P07 for desk workers", self.BANK),
+        ):
+            with self.subTest(title=title):
+                self.drop("fix.md", self.declared(title, "no", touches))
+                published, set_aside = self.take_kept()
+                self.assertEqual((len(published), set_aside), (1, []))
+                entry = self.ledger.entries[published[0]]
+                self.assertEqual(entry["new_angle"], "no")
+                queued = (self.store.root / entry["file"]).read_text(encoding="utf-8")
+                self.assertIn("\nnew_angle: no\n---\n", queued, "the Founder reads what it declared")
 
     def test_no_item_the_agent_writes_supersedes_a_post(self):
         post = self.post("day-3", 3)
@@ -295,7 +369,7 @@ class OrderAndPersistenceTest(LedgerTestCase):
             sorted(problem for item in set_aside for problem in item.problems),
             [
                 f"supersedes {identifier}, a message the launcher queued from its Draft; only a change to that Draft in"
-                " drafts/beta-recruiting/ replaces it"
+                " drafts/messages/ or drafts/beta-recruiting/ replaces it"
                 for identifier in sorted(queued)
             ],
         )

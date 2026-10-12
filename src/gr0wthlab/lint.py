@@ -3,9 +3,10 @@ field of copy, plus the platform facts in config/platforms.json.
 
 brand-rules.json began as a lint of the Hook alone; each of its checks now runs on every field a viewer reads
 (Hooks, spoken lines, on-screen text, captions, titles, hashtags, and alt text), except the Hook's word cap, which is
-about the Hook itself. The newer rule types (stock phrases, capped words, long sentences, invented proof, and fake
-scarcity) run with whatever lists brand-rules.json holds; one it does not hold yet is reported as pending, never
-filled in from anywhere else. A key gr0wthlab does not know blocks every Draft until a reviewed change teaches it,
+about the Hook itself. The newer rule types (stock phrases, capped words, long sentences, invented proof, fake
+scarcity, and loss framing) run with whatever lists brand-rules.json holds; one it does not hold yet is reported as
+pending, never filled in from anywhere else. A message to a creator is also read for the sponsorship asks the file
+lists, which no post is. A key gr0wthlab does not know blocks every Draft until a reviewed change teaches it,
 so no rule in Mandu is ever skipped silently. A filming note, such as a beat's visual action, is no copy: it may
 describe real screens and numbers, so only the social-proof rule reads it.
 
@@ -55,6 +56,8 @@ KNOWN_RULES = {
     "invented_proof_quantities": "quantity words the invented-proof rule reads before a term, such as thousands of",
     "fake_scarcity": "no scarcity or urgency phrase",
     "lint_allow_phrases": "phrases no word or phrase rule counts",
+    "loss_framing": "no copy uses a loss-framed phrase",
+    "sponsorship_asks": "no message to a creator asks for a sponsorship or a paid placement",
 }
 # The rule types F1 added, each with the keys it needs before it runs.
 NEW_RULE_TYPES = {
@@ -65,9 +68,14 @@ NEW_RULE_TYPES = {
     "fake scarcity": ("fake_scarcity",),
     "allowed phrases": ("lint_allow_phrases",),
 }
+# The rule types US-ME14 added, each with the key it needs: loss framing is read in every field of copy, like the F1
+# types, and sponsorship asks only in a message to a creator.
+LOSS_FRAMING = {"loss framing": ("loss_framing",)}
+CREATOR_RULE_TYPES = {"sponsorship asks": ("sponsorship_asks",)}
 NOT_FOR_POSTS = {
     "required_sections": "the layout of the dry-run creative briefs; a post Draft has its own format",
     "required_disclosure": "screens shown as simulated; the kit's posts are real-device recordings",
+    "sponsorship_asks": "asks a message to a creator may not make; a post is not read for them",
 }
 
 
@@ -187,6 +195,8 @@ class Rules:
             "invented_proof_quantities",
             "fake_scarcity",
             "lint_allow_phrases",
+            "loss_framing",
+            "sponsorship_asks",
         ):
             if key in data:
                 self.lists[key] = string_list(data, key, words=key != "banned_characters_anywhere")
@@ -219,7 +229,7 @@ class Rules:
                 rows.append(RuleStatus(key, NOT_APPLICABLE, NOT_FOR_POSTS[key]))
             else:
                 rows.append(RuleStatus(key, APPLIED, KNOWN_RULES[key]))
-        for name, keys in NEW_RULE_TYPES.items():
+        for name, keys in {**NEW_RULE_TYPES, **LOSS_FRAMING}.items():
             missing = [key for key in keys if key not in self.data]
             if missing:
                 rows.append(RuleStatus(name, PENDING, "brand-rules.json has no " + ", ".join(missing) + " yet"))
@@ -227,6 +237,19 @@ class Rules:
 
     def pending(self) -> list[str]:
         return [row.rule for row in self.statuses() if row.status == PENDING]
+
+    def creator_pending(self) -> list[str]:
+        """The rule types a message to a creator is read for whose lists brand-rules.json does not hold yet."""
+        return [name for name, keys in CREATOR_RULE_TYPES.items() if not self.has(*keys)]
+
+    def sponsorship(self, copy: Copy) -> list[Finding]:
+        """A message to a creator asks for nothing paid: no phrase brand-rules.json lists as a sponsorship ask."""
+        text = self.masked(plain(copy.text))
+        return [
+            Finding("sponsorship_asks", copy.field, f"sponsorship ask {term!r}")
+            for term in self.lists.get("sponsorship_asks", ())
+            if words_pattern(term).search(text)
+        ]
 
     def masked(self, text: str) -> str:
         """The text with every allowed phrase blanked out, so no word or phrase rule counts inside one."""
@@ -309,6 +332,9 @@ class Rules:
         for term in self.lists.get("fake_scarcity", ()):
             if words_pattern(term, plural=False).search(words_text):
                 block("fake_scarcity", f"scarcity or urgency {term!r}")
+        for term in self.lists.get("loss_framing", ()):
+            if words_pattern(term, plural=False).search(words_text):
+                block("loss_framing", f"loss-framed phrase {term!r}")
         if NEED_MARKER.search(text):
             block(
                 "need-marker", f"still asks for proof: {NEED_MARKER.search(text).group(0)}; a Draft never fills it in"

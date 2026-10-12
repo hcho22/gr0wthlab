@@ -1,5 +1,5 @@
 {
-  "description": "How each Marketing Engineer run works around the agent: its task definition, weekly schedule, the agent's time limit, the 14-day window, whether the Waitlist is live, the size of a Beta Cohort invitation batch, the outputs and sources its run report accounts for, the records step that saves workspace/ and ledger/ to main, and the prices behind its approximate cost. The launcher reads this file; the agent cannot write it (G8). The exchange with Mandu: docs/mandu-exchange.md. Operating the production clone: docs/operations.md.",
+  "description": "How each Marketing Engineer run works around the agent: its task definition, weekly schedule, the agent's time limit, the 14-day window, whether the Waitlist is live, the size of a Beta Cohort invitation batch, the outreach messages it prepares, the outputs and sources its run report accounts for, the records step that saves workspace/ and ledger/ to main, and the prices behind its approximate cost. The launcher reads this file; the agent cannot write it (G8). The exchange with Mandu: docs/mandu-exchange.md. Operating the production clone: docs/operations.md.",
   "instruction": "src/instructions/weekly-run.md",
   "schedule": {
     "day": "sunday",
@@ -24,6 +24,16 @@
   "beta_recruiting": {
     "batch_size": 20,
     "why": "How many Waitlist entries one Beta Cohort invitation batch offers the Founder (US-ME15), the Founder's call, changed here through a reviewed change. The Founder confirmed capped batches and chose 20 on 2026-10-11. At most one batch is open at a time, and the next is offered only after the Founder has decided the last, so a week's sends and first sessions stay manageable. It cannot be larger than the cohort's maximum in config/products.json."
+  },
+  "outreach": {
+    "network_ask_source": "network",
+    "follow_up_wait_days": 7,
+    "creators": [
+      {"key": "gmb-fitness", "name": "GMB Fitness"},
+      {"key": "hybrid-calisthenics", "name": "Hybrid Calisthenics"},
+      {"key": "the-bioneer", "name": "The Bioneer"}
+    ],
+    "why": "The personal-network ask carries the link of the Source tagged network_ask_source, exactly as the reviewed Waitlist Dispatch request in src/dispatches/ defines it; null prepares no ask. creators are the three the PRD names, each with the key its Draft file and its Review Queue items are named for; a run drafts a message only for one the channel plan in Mandu still names (the Product registry's outreach.channel_plan). A creator who has not replied may be offered one follow-up follow_up_wait_days after the Founder records the first message as sent in Mandu: each creator message states that period, approving it approves the period, and the Founder's record may set another."
   },
   "records": {
     "production_clone": "~/gr0wthlab",
@@ -57,15 +67,15 @@
     "scheduler-drafts": {"title": "Scheduling-service drafts", "story": "US-ME10", "built": false},
     "results": {"title": "Post results", "story": "US-ME11", "built": false},
     "weekly-read": {"title": "Weekly Read memo", "story": "US-ME12", "built": false},
-    "listening": {"title": "Listening Evidence", "story": "US-ME13", "built": false},
-    "outreach-drafts": {"title": "Outreach Drafts", "story": "US-ME14", "built": false},
+    "listening": {"title": "Listening Evidence", "story": "US-ME13", "built": true},
+    "outreach-drafts": {"title": "Outreach Drafts", "story": "US-ME14", "built": true},
+    "rejection-codes": {"title": "Rejection reasons coded", "story": "US-ME16 (F4)", "built": true},
     "beta-recruiting": {"title": "Beta Cohort recruiting", "story": "US-ME15", "built": true}
   },
   "sources_not_connected": [
     {"name": "Scheduling service", "story": "US-ME10", "needed_by": ["scheduler-drafts"]},
     {"name": "YouTube results", "story": "US-ME11", "needed_by": ["results", "weekly-read"]},
     {"name": "TikTok export in Mandu", "story": "US-ME11", "needed_by": ["results", "weekly-read"]},
-    {"name": "Listening sources", "story": "US-ME13", "needed_by": ["listening"]},
     {"name": "Immerse Listening confirmation in Mandu", "story": "US-ME18", "needed_by": []}
   ]
 }
