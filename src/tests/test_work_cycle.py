@@ -4,7 +4,6 @@ it keeps of the agent's work, and what it refuses, whatever the agent wrote."""
 import io
 import json
 import os
-import shutil
 import unittest
 from datetime import timedelta
 from unittest import mock
@@ -168,7 +167,6 @@ class ListeningCycleTest(WorkCycleTestCase):
         )
         self.assertEqual(exchange.check_item(text, ["RepToday", "Immerse"], published=True).problems, [])
 
-        self.exchange.mkdir()  # Mandu's side exists, with no decision yet
         report = self.go(weeks=1)
         self.assertEqual(len(self.items("notice")), 2, "asked once, not at every run")
         self.assertIn("| r/fitness30plus threads | read | 1 document, 0 not read by an earlier run |", report)
@@ -587,7 +585,9 @@ class OutreachCycleTest(WorkCycleTestCase):
         hallway = self.item_text("20261011-message-creator-hallway-moves")
         self.assertIn("It offers a founder conversation and asks for nothing", hallway)
         self.assertIn(f"If Hallway Moves {disclose} disclose.", hallway, "it names no offer this message does not make")
-        self.assertIn("One follow-up may be offered 7 days after you record this message as sent in Mandu", slow)
+        self.assertIn(
+            "One follow-up may be offered 7 days after you record this message as sent on the sitting page", slow
+        )
         self.assertEqual(self.web.requests, [], "no message to a creator rests on anything read over the network")
         self.assertIn(
             "| Hallway Moves | the one follow-up | not due | the first message to Hallway Moves is not approved yet |",
@@ -595,7 +595,7 @@ class OutreachCycleTest(WorkCycleTestCase):
         )
         self.assertIn("| Outreach Drafts | complete | 7 messages: 4 queued, 3 not due |", report)
         self.assertIn("- Outreach: 7 messages: 4 queued, 3 not due.", report)
-        self.assertIn("| Mandu outreach records | skipped | no message has been recorded as sent yet |", report)
+        self.assertIn("| Outreach records | skipped | no message has been recorded as sent yet |", report)
         brief = self.brief()
         self.assertIn("| your personal network, ask | `purpose: network-ask`, `to: network` |", brief)
         self.assertIn("| Slow Strength, the one follow-up | `purpose: creator-follow-up`, `to: slow-strength` |", brief)
@@ -622,8 +622,8 @@ class OutreachCycleTest(WorkCycleTestCase):
             report,
         )
         self.assertIn(
-            "| Desk Reset | the one follow-up | not due | the first message to Desk Reset is not recorded as sent in"
-            " Mandu yet |",
+            "| Desk Reset | the one follow-up | not due | the first message to Desk Reset is not recorded as sent yet"
+            " |",
             report,
         )
         self.assertIn(
@@ -631,7 +631,7 @@ class OutreachCycleTest(WorkCycleTestCase):
             " 2026-10-19 (7 days)",
             report,
         )
-        self.assertIn("| Mandu outreach records | read | 2 records |", report)
+        self.assertIn("| Outreach records | read | 2 records |", report)
         self.assertIn(
             "Hallway Moves: first message sent 2026-10-12, replied 2026-10-14; so no follow-up is ever offered", report
         )
@@ -702,49 +702,52 @@ class OutreachCycleTest(WorkCycleTestCase):
         self.assertIn(follow_up, [entry["id"] for entry in self.items("message")])
         self.assertEqual(self.item_text(follow_up), item)
         self.assertEqual([entry["id"] for entry in self.queue()["closed"] if entry.get("withdrawn")], [])
-        self.assertIn(f"| Mandu outreach records | failed | `{folder}` could not be read: Permission denied. |", report)
-        unread = (
-            "Slow Strength, the one follow-up: Mandu's outreach records could not be read (Permission denied), so the"
-            f" open `{follow_up}` stays as it is"
+        self.assertIn(
+            "| Outreach records | failed | `founder/outreach/` could not be read: Permission denied. |", report
         )
-        self.assertIn(f"| Outreach Drafts | incomplete | Mandu outreach records could not be read; {unread}; ", report)
+        unread = (
+            "Slow Strength, the one follow-up: the Founder's outreach records could not be read (Permission denied), so"
+            f" the open `{follow_up}` stays as it is"
+        )
+        self.assertIn(f"| Outreach Drafts | incomplete | Outreach records could not be read; {unread}; ", report)
         self.assertIn(f"- Not prepared: {unread}.", self.section("Outreach"))
         self.assertIn(f"- Not prepared: {unread}.", self.brief())
         self.assertNotIn("is not recorded as sent", report + self.brief())
         notice = self.item_text(self.items("notice")[-1]["id"])
         self.assertIn("# Notice: 1 source could not be read on", notice)
-        self.assertIn(f"- Mandu outreach records: `{folder}` could not be read: Permission denied.", notice)
+        self.assertIn("- Outreach records: `founder/outreach/` could not be read: Permission denied.", notice)
         self.assertIn("Incomplete: Outreach Drafts.", notice)
 
         self.agent()
         report = self.go(weeks=4)
         self.assertEqual(self.ever_queued(self.SLOW), [follow_up], "it keeps its id and is never queued twice")
         self.assertIn(follow_up, [entry["id"] for entry in self.items("message")])
-        self.assertIn("| Mandu outreach records | read | 1 record |", report)
+        self.assertIn("| Outreach records | read | 1 record |", report)
         self.assertIn(f"| Slow Strength | the one follow-up | kept | `{follow_up}`; its Draft is unchanged", report)
 
-    def test_a_follow_up_stays_open_when_the_folder_its_record_was_in_is_gone(self):
+    def test_a_follow_up_stays_open_when_the_record_it_rested_on_is_gone(self):
         ids = self.first_messages()
         (follow_up,) = self.open_follow_ups(ids, self.SLOW)
-        shutil.rmtree(str(self.exchange / "outreach"))
+        for record in (self.exchange / "outreach").glob("*.json"):
+            record.unlink()
         self.agent()
         report = self.go(weeks=3)
         self.assertEqual(self.ever_queued(self.SLOW), [follow_up])
         self.assertIn(follow_up, [entry["id"] for entry in self.items("message")])
         unread = (
-            f"Slow Strength, the one follow-up: `outreach/{ids[self.SLOW]}.json`, the Founder's record of the first"
-            f" message, is missing, so the open `{follow_up}` stays as it is"
+            f"Slow Strength, the one follow-up: `founder/outreach/{ids[self.SLOW]}.json`, the Founder's record of the"
+            f" first message, is missing, so the open `{follow_up}` stays as it is"
         )
-        self.assertIn(f"| Mandu outreach records | failed | {unread}. |", report)
-        self.assertIn(f"| Outreach Drafts | incomplete | Mandu outreach records could not be read; {unread} |", report)
+        self.assertIn(f"| Outreach records | failed | {unread}. |", report)
+        self.assertIn(f"| Outreach Drafts | incomplete | Outreach records could not be read; {unread} |", report)
         self.assertNotIn("the first message to Slow Strength is not recorded as sent", report)
         self.assertIn(
-            "| Desk Reset | the one follow-up | not due | the first message to Desk Reset is not recorded as sent in"
-            " Mandu yet |",
+            "| Desk Reset | the one follow-up | not due | the first message to Desk Reset is not recorded as sent yet"
+            " |",
             report,
         )
         notice = self.item_text(self.items("notice")[-1]["id"])
-        self.assertIn(f"- Mandu outreach records: {unread}. Incomplete: Outreach Drafts.", notice)
+        self.assertIn(f"- Outreach records: {unread}. Incomplete: Outreach Drafts.", notice)
 
     def test_only_the_follow_up_resting_on_a_record_that_cannot_be_used_is_left_alone(self):
         ids = self.first_messages()
@@ -763,10 +766,10 @@ class OutreachCycleTest(WorkCycleTestCase):
         )
         unread = (
             "Slow Strength, the one follow-up: the Founder's record of the first message could not be used"
-            f" (`outreach/{ids[self.SLOW]}.json`: not JSON: "
+            f" (`founder/outreach/{ids[self.SLOW]}.json`: not JSON: "
         )
-        self.assertIn(f"| Mandu outreach records | failed | {unread}", report)
-        self.assertIn(f"| Outreach Drafts | incomplete | Mandu outreach records could not be read; {unread}", report)
+        self.assertIn(f"| Outreach records | failed | {unread}", report)
+        self.assertIn(f"| Outreach Drafts | incomplete | Outreach records could not be read; {unread}", report)
         self.assertIn(f"so the open `{slow}` stays as it is", report)
         self.assertNotIn("the first message to Slow Strength is not recorded as sent", report)
         self.assertEqual(self.ever_queued(self.SLOW), [slow])
@@ -860,13 +863,13 @@ class OutreachCycleTest(WorkCycleTestCase):
         report = self.go(weeks=2)
         outreach = self.section("Outreach")
         self.assertIn("records a message as sent that the Founder has not approved", outreach)
-        self.assertIn("`outreach/20261011-no-such-item.json` names no message in the Review Queue", outreach)
-        self.assertIn("`outreach/20261011-message-creator-desk-reset.json`: not JSON", outreach)
+        self.assertIn("`founder/outreach/20261011-no-such-item.json` names no message in the Review Queue", outreach)
+        self.assertIn("`founder/outreach/20261011-message-creator-desk-reset.json`: not JSON", outreach)
         self.assertIn(
             "| Slow Strength | the one follow-up | not due | the first message to Slow Strength is not approved yet |",
             report,
         )
-        self.assertIn("| Mandu outreach records | read | 3 records, 1 could not be used |", report)
+        self.assertIn("| Outreach records | read | 3 records, 1 could not be used |", report)
 
     def test_the_lists_the_lint_lacks_are_proposed_once_and_named_as_pending(self):
         rules = self.mandu / "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json"

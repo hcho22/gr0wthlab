@@ -1,4 +1,4 @@
-"""The Review Queue: every item ever queued, which are still open, and the order Mandu presents them in.
+"""The Review Queue: every item ever queued, which are still open, and the order the sitting page presents them in.
 
 The ledger lives in ledger/review-queue/queue.json, beside the published items; only the launcher writes there, and
 the agent can only read it. The agent proposes items in workspace/review-queue/incoming/, which the launcher checks.
@@ -41,7 +41,7 @@ class QueueError(Exception):
 
 @dataclass(frozen=True)
 class DecisionOutcome:
-    """What became of one decision record Mandu holds."""
+    """What became of one of the Founder's decision records."""
 
     decision: exchange.Decision
     status: str  # taken, already-taken, conflict, unknown-item
@@ -103,7 +103,7 @@ class Ledger:
     def take_decisions(
         self, decisions: Sequence[exchange.Decision], run_id: str, now: datetime
     ) -> list[DecisionOutcome]:
-        """Close each open item Mandu recorded a decision for; a decided item is never reopened or re-asked."""
+        """Close each open item the Founder decided; a decided item is never reopened or re-asked."""
         outcomes = []
         for decision in sorted(decisions, key=lambda decision: decision.item):
             entry = self.entries.get(decision.item)

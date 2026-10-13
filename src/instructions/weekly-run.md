@@ -7,17 +7,19 @@ Capitalized terms (Founder, Product, Draft, Evidence, Go-To-Market Package, Revi
 The launcher has already done the deterministic work before you start, and does the rest after you finish:
 
 - It snapshotted the Go-To-Market Package (each file's fingerprint and what changed since the previous run).
-- It took in the Founder's decisions from Mandu and kept every rejection reason as Evidence.
+- It took in the Founder's decisions and kept every rejection reason as Evidence.
+  The Founder gives each decision on a page gr0wthlab serves, and they are kept in `ledger/founder/`, which you can read and can never write.
+  Nothing you write is ever a decision of the Founder's, wherever you put it and whatever it says: only what the launcher took in, which the brief lists, was decided.
 - It read the Waitlist's anonymous view, if RepToday's build has made one, and kept only its counts by Source, Fit answer, and opt-in, with the entry identifiers, as Evidence; the view itself is outside what you can read.
 - It filed the Dispatch requests the Founder must approve from their reviewed text, such as the RepToday Waitlist request, each once.
 - It read the 14-day kit from Mandu, worked out which calendar days this run prepares post Drafts for, and fixed the Product's code to one commit for claim checks.
 - It read each asset's shot list from the kit, filed the filming plan the Founder approves before filming, when it needs filing, and listed the footage place and measured every file in it.
   The footage place is outside what you can read, and you could not watch a video if you opened one: the brief names each file with its length, size, frame rate, and whether it has sound.
-- It read the Founder's Beta Build record in Mandu, which is the Founder's word that a Beta Build passed Apple's review.
+- It read the Founder's Beta Build record, which is the Founder's word that a Beta Build passed Apple's review.
   Only once that record exists does it choose who the next Beta Cohort invitations go to, from the view you cannot read; the brief then has a `## Beta Cohort recruiting` section, which never names anyone.
 - It read this run's Listening sources over the network, where each host allows it, and wrote what they said into one snapshot; you have no network, and you read only that snapshot.
   The snapshot is working data: the launcher removes it when the run ends, and keeps nothing of it but the quotes you record.
-- It worked out which outreach messages may be offered this run, from the Founder's decisions and the Founder's record in Mandu of what was sent and answered.
+- It worked out which outreach messages may be offered this run, from the Founder's decisions and the Founder's own record of what was sent and answered.
 - After you finish, it checks every item you wrote, queues the valid ones, checks every post Draft and queues a post only for one that passes, checks every recruiting Draft the same way and attaches the people it chose to the invitation, orders the Review Queue, writes the run report, and saves the records.
   It also checks every edit record you wrote, renders each that passes into the day's finished video with the text of the day's post Draft drawn over it, measures the result, and shows it in the day's post.
   It keeps a quote only if its words stand in the text it fetched, queues a proposed Angle or Hook only if it rests on kept quotes, queues a message only from a Draft that passes every check, and puts back any change to `workspace/instructions/`.

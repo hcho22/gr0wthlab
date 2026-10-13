@@ -5,8 +5,8 @@ Before the agent starts, the launcher works out which messages may be offered th
 Dispatch request defines the personal-network Source link; a message for each creator in config/run.json that the
 channel plan in Mandu still names; and a follow-up only for a creator whose first message the Founder approved and
 recorded as sent, who has not replied, once the waiting period the Founder approved has passed, and only once. What
-was sent and who replied is the Founder's record in Mandu (docs/mandu-exchange.md); the run state is rebuilt from
-that record and the Review Queue every run, and any difference is repaired in their favor.
+was sent and who replied is the Founder's outreach record, made on the sitting page (founder.py); the run state is
+rebuilt from that record and the Review Queue every run, and any difference is repaired in their favor.
 
 After the agent finishes, each Draft is checked (messages.check) and queued only if it passes. A message whose
 follow-up is not due, or whose creator replied, is never offered, whatever a Draft says, and an item still open for
@@ -21,9 +21,9 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from . import exchange, messages, proposals
+from . import exchange, founder, messages, proposals
 from .areas import Areas, Store
-from .boundary import ConfigError
+from .boundary import FOUNDER, ConfigError
 from .drafts import Context
 from .exchange import plural
 from .queue import APPROVED, Ledger
@@ -33,6 +33,7 @@ WORKFLOW = "outreach"
 EVIDENCE = "outreach"
 FOLDER = (*messages.DRAFTS, "outreach")
 NETWORK_KEY = "network"
+RECORDS = f"{FOUNDER}/{founder.OUTREACH}"  # where the Founder's outreach records are, under ledger/
 RULES_PROPOSAL = proposals.PROPOSALS / "outreach-word-lists.md"
 
 
@@ -110,7 +111,7 @@ def package_role(registry: Mapping) -> tuple[str, str] | None:
 
 @dataclass(frozen=True)
 class Records:
-    """The Founder's outreach records as a run read them from Mandu's exchange folder: those in the format, why each
+    """The Founder's outreach records as a run read them from ledger/founder/outreach/: those in the format, why each
     other file there could not be used, by its name, and why the folder could not be read, if it could not."""
 
     read: tuple[exchange.Outreach, ...] = ()
@@ -149,7 +150,7 @@ def usable_records(
     problems: dict[str, str] = {}
     for record in records.read:
         entry = ledger.entries.get(record.item)
-        name = f"`outreach/{record.item}.json`"
+        name = f"`{RECORDS}/{record.item}.json`"
         if entry is None or entry["kind"] != "message":
             problems[record.item] = f"{name} names no message in the Review Queue"
         elif APPROVED not in (entry["status"], entry.get("decided")):
@@ -159,7 +160,7 @@ def usable_records(
         else:
             usable[record.item] = record
     for name, why in records.unusable.items():
-        problems[name[: -len(".json")] if name.endswith(".json") else name] = f"`outreach/{name}`: {why}"
+        problems[name[: -len(".json")] if name.endswith(".json") else name] = f"`{RECORDS}/{name}`: {why}"
     return usable, problems
 
 
@@ -254,11 +255,11 @@ def follow_up(
     elif record is None:
         lost = ""
         if plan.records_failure:
-            lost = f"Mandu's outreach records could not be read ({plan.records_failure})"
+            lost = f"the Founder's outreach records could not be read ({plan.records_failure})"
         elif sent in plan.record_problems:
             lost = f"the Founder's record of the first message could not be used ({plan.record_problems[sent]})"
         elif slot.open:
-            lost = f"`outreach/{sent}.json`, the Founder's record of the first message, is missing"
+            lost = f"`{RECORDS}/{sent}.json`, the Founder's record of the first message, is missing"
         if lost and not slot.approved:
             stays = f"the open `{slot.open['id']}` stays as it is" if slot.open else "no follow-up is offered"
             plan.unread.append((f"{creator.name}, the one follow-up", f"{lost}, so {stays}"))
@@ -266,7 +267,7 @@ def follow_up(
         target.reason = (
             "the one follow-up was already approved; no further contact"
             if lost
-            else f"the first message to {creator.name} is not recorded as sent in Mandu yet"
+            else f"the first message to {creator.name} is not recorded as sent yet"
         )
     else:
         wait = record.wait_days or wait_days
@@ -493,8 +494,9 @@ def report_lines(plan: Plan | None, result: Result | None, filing: str, problem:
     if plan.problem:
         lines.append(f"{plan.problem[0].upper()}{plan.problem[1:]}.")
     lines += [f"- Not prepared: {who}: {why}." for who, why in plan.skipped + plan.unread]
-    lines += [f"- From the Founder's records in Mandu: {line}." for line in plan.record_lines]
-    lines += [f"- A record in Mandu could not be used: {line}." for line in plan.record_problems.values()]
+    lines += [f"- From the Founder's outreach records: {line}." for line in plan.record_lines]
+    unusable = plan.record_problems.values()
+    lines += [f"- One of the Founder's outreach records could not be used: {line}." for line in unusable]
     if filing:
         lines.append(f"- Proposed loss-framing and sponsorship lists: {filing}")
     if result is None:
@@ -536,7 +538,7 @@ def notice_section(
     for outcome in taken_back:
         lines.append(f"- The open `{outcome.withdrawn}` is withdrawn: {outcome.detail}.")
     for problem in plan.record_problems.values():
-        lines.append(f"- A record in Mandu could not be used, so it changed nothing: {problem}.")
+        lines.append(f"- One of the Founder's outreach records could not be used, so it changed nothing: {problem}.")
     if not lines:
         return None
     count = len(blocked) + len(missing) + len(taken_back) + len(plan.record_problems)

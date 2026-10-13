@@ -15,7 +15,7 @@ import tempfile
 from collections.abc import Collection, Iterator, Mapping
 from pathlib import Path
 
-from .boundary import Boundary, ConfigError, is_within
+from .boundary import FOUNDER, Boundary, ConfigError, is_within
 
 # How every name starts that the boundary check puts at the top of an area, or has its agent put there.
 PROBE_PREFIX = "gr0wthlab-boundary-probe-"
@@ -163,7 +163,8 @@ class Areas:
 
 class Store:
     """The launcher's records in ledger/: the Review Queue, the launcher's own Evidence, run reports and briefs, run
-    state, and notes for the next report. The run can read them and never write them."""
+    state, and notes for the next report. The run can read them and never write them. The Founder's records are in
+    ledger/ too and are not the launcher's: no path here ever lies among them, so nothing a run does can write one."""
 
     def __init__(self, root: Path):
         self.root = root
@@ -172,6 +173,8 @@ class Store:
         path = Path(os.path.abspath(str(self.root.joinpath(*parts))))
         if not is_within(path, self.root) or path == self.root:
             raise ConfigError(f"refusing to touch {path}: it is outside {self.root}")
+        if is_within(path, self.root / FOUNDER):
+            raise ConfigError(f"refusing to touch {path}: only `gr0wthlab sitting` writes the Founder's records")
         return path
 
     def relative(self, path: Path) -> str:
@@ -185,26 +188,30 @@ class Store:
         self.write_text(path, json.dumps(data, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
 
     def write_bytes(self, path: Path, data: bytes) -> None:
-        """Write atomically, so a reader such as Mandu never sees half a file, through a temporary with a fresh,
-        unpredictable name that is created only if nothing stands there, never through a link."""
         path = self.path(self.relative(path))
         path.parent.mkdir(parents=True, exist_ok=True)
-        descriptor, temporary = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.")
-        try:
-            with os.fdopen(descriptor, "wb") as handle:
-                os.fchmod(handle.fileno(), 0o644)
-                handle.write(data)
-            os.replace(temporary, str(path))
-        except BaseException:
-            if os.path.lexists(temporary):
-                os.unlink(temporary)
-            raise
+        write_whole(path, data)
 
     def move(self, path: Path, target: Path) -> None:
         """Move one of the records to another place among them."""
         target = self.path(self.relative(target))
         target.parent.mkdir(parents=True, exist_ok=True)
         os.replace(str(self.path(self.relative(path))), str(target))
+
+
+def write_whole(path: Path, data: bytes) -> None:
+    """Write a file atomically, so a reader such as Mandu never sees half of one, through a temporary with a fresh,
+    unpredictable name that is created only if nothing stands there, never through a link."""
+    descriptor, temporary = tempfile.mkstemp(dir=str(path.parent), prefix=f".{path.name}.")
+    try:
+        with os.fdopen(descriptor, "wb") as handle:
+            os.fchmod(handle.fileno(), 0o644)
+            handle.write(data)
+        os.replace(temporary, str(path))
+    except BaseException:
+        if os.path.lexists(temporary):
+            os.unlink(temporary)
+        raise
 
 
 def read_plain(path: Path) -> bytes:

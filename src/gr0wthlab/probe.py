@@ -52,7 +52,7 @@ from typing import TextIO
 
 from . import codex, fetch, launcher, process, settings
 from .areas import PROBE_PREFIX, UnsafeFile, clear_probe_files, read_plain
-from .boundary import Boundary, ConfigError, canonical, load_boundary
+from .boundary import FOUNDER_KINDS, Boundary, ConfigError, canonical, load_boundary
 
 PROBE_INSTRUCTION = Path("src/checks/boundary-probe.md")
 PREFIX = PROBE_PREFIX
@@ -63,9 +63,23 @@ SANDBOX_LOG_PREDICATE = (
 PATCH_REFUSAL = "patch rejected: writing outside of the project; rejected by user approval settings"
 # A line of a patch that names a file it would write, once trimmed: Codex trims a line before it looks for one.
 PATCH_FILE = re.compile(r"\*\*\* (?:Add File|Update File|Delete File|Move to): (.*)")
+# How a folder of the Founder's records is named among the targets: this, then the kind of record it holds.
+FOUNDER_TARGET = "founder-"
 # The probe's forbidden targets, by their keys in forbidden_dirs; each needs the runtime's record of a refused attempt
-# per tool.
-PROBE_TARGETS = ("mandu", "reptoday", "repo-root", "workspace-root", "ledger", "src", "config", "guardrails", "git")
+# per tool. Every folder that holds Founder records is one, so each is proven on its own: the agent cannot write a
+# decision, a sitting, a Beta Build record, a Beta Cohort report, or an outreach record (founder.py).
+PROBE_TARGETS = (
+    "mandu",
+    "reptoday",
+    "repo-root",
+    "workspace-root",
+    "ledger",
+    *(FOUNDER_TARGET + kind for kind in FOUNDER_KINDS),
+    "src",
+    "config",
+    "guardrails",
+    "git",
+)
 FILE_TOOL, SHELL = "file-tool", "shell"
 PERMITTED_TOOLS = (FILE_TOOL, SHELL)
 FORBIDDEN, CONNECTION, PERMITTED = "forbidden", "connection", "permitted"
@@ -134,6 +148,7 @@ def forbidden_dirs(boundary: Boundary) -> dict[str, Path]:
         "repo-root": root,
         "workspace-root": root / "workspace",
         "ledger": boundary.ledger,
+        **{FOUNDER_TARGET + kind: path for kind, path in boundary.founder_dirs},
         "src": root / "src",
         "config": root / "config",
         "guardrails": root / "config" / "guardrails",

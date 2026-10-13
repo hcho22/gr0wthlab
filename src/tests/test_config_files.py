@@ -78,11 +78,24 @@ class RunConfigTest(unittest.TestCase):
         title = platforms["YouTube Shorts"].field("title")
         self.assertEqual((title.name, title.max_chars, title.visible_chars), ("Title", 100, 70))
 
-    def test_the_exchange_folder_is_read_only_and_overridable(self):
-        exchange = self.registry["mandu"]["exchange"]
-        self.assertEqual(exchange["access"], "read-only")
-        self.assertEqual(exchange["env"], "GR0WTHLAB_EXCHANGE_DIR")
-        self.assertTrue((REPO / exchange["spec"]).is_file())
+    def test_mandu_holds_the_package_and_no_exchange_folder(self):
+        mandu = self.registry["mandu"]
+        self.assertEqual(mandu["access"], "read-only")
+        self.assertNotIn("exchange", mandu)
+        self.assertNotIn("GR0WTHLAB_EXCHANGE_DIR", json.dumps(self.registry))
+        self.assertIn("ledger/founder/", mandu["holds"])
+
+    def test_the_repository_holds_every_folder_of_the_founders_records(self):
+        """A fresh clone must have the five folders, since a run refuses to start without them."""
+        from gr0wthlab import founder
+
+        founder.check(REPO / "ledger")
+        for kind, folder in founder.folders(REPO / "ledger").items():
+            with self.subTest(kind=kind):
+                self.assertTrue((folder / ".gitkeep").is_file())
+        ignored = (REPO / ".gitignore").read_text(encoding="utf-8").splitlines()
+        self.assertIn("/ledger/founder.lock", ignored)
+        self.assertIn("/ledger/sitting.lock", ignored)
 
     def test_filming_is_built_and_its_footage_place_waits_for_the_founder(self):
         from gr0wthlab import video

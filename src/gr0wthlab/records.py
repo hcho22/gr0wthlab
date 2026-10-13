@@ -2,9 +2,11 @@
 
 Before a run, restore the owner's access to everything under workspace/, then bring main up to the reviewed code on
 origin by fast-forward, or by replaying unpushed records commits on top of it.
-After a run, commit the changed workspace/ and ledger/ paths, the agent's outputs and the launcher's records, and push
-them to main, never anything else and never by force; a README in either is documentation, which only a reviewed pull
-request changes, so a change to one is put back instead.
+After a run, commit the changed workspace/ and ledger/ paths, the agent's outputs, the launcher's records, and the
+records the Founder made on the sitting page since the last run (ledger/founder/), and push them to main, never
+anything else and never by force; a README in either is documentation, which only a reviewed pull request changes, so
+a change to one is put back instead. A Founder record that holds what looks like an email address, as only one changed
+by hand can, is never committed.
 Only the production clone (config/run.json's records.production_clone) runs either step; every other checkout,
 such as a firstmate worktree, runs without touching git.
 """
@@ -17,8 +19,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import process
-from .boundary import LEDGER
+from . import founder, process
+from .boundary import FOUNDER, LEDGER
 from .report import plural
 
 RECORD_DIRS = ("workspace/", f"{LEDGER}/")
@@ -29,6 +31,8 @@ GIT_CONTROL_FILES = (".gitattributes", ".gitignore", ".gitmodules")
 DOCUMENTATION = "README.md"
 # Finished video lives outside git: .gitignore leaves this folder out, and nothing in it is ever committed.
 ASSETS = f"{LEDGER}/assets/"
+# The Founder's records, which the sitting page writes and the records step saves with the launcher's own.
+FOUNDER_RECORDS = f"{LEDGER}/{FOUNDER}/"
 PLAIN_MODES = ("100644", "100755")
 
 # Pre-run outcomes.
@@ -199,7 +203,7 @@ def update(repo: Path, remote: str, branch: str, started: str, env: Mapping[str,
             detail = f"{branch} has local commits that change files outside workspace/ and ledger/"
             return Sync(REFUSED, detail, ok_to_run=False)
         excluded: list[str] = []
-        leftover = save_commit(git, f"chore(records): outputs left by a run before {started}", max_bytes, excluded)
+        leftover = save_commit(git, f"chore(records): records left before the run of {started}", max_bytes, excluded)
         before = git.head()
         fetched = git.run("fetch", "--quiet", remote, branch, timeout=NETWORK_TIMEOUT, check=False)
         if fetched.returncode != 0:
@@ -246,7 +250,7 @@ def note_unpushed(ahead: int, leftover: str | None) -> str:
     if ahead:
         parts.append(f"this run pushes {plural(ahead, 'unpushed records commit')}")
     if leftover:
-        parts.append("outputs left by an earlier run were committed first")
+        parts.append("records left before this run, an earlier run's or a sitting's, were committed first")
     return "; " + "; ".join(parts) if parts else ""
 
 
@@ -291,6 +295,13 @@ def unsafe(repo: Path, mode: str, path: str, max_bytes: int) -> str | None:
         return "not a plain file with one link"
     if info.st_size > max_bytes:
         return f"{info.st_size} bytes, over the {max_bytes}-byte limit"
+    if path.startswith(FOUNDER_RECORDS):
+        try:
+            held = founder.holds_address(Path(path).name, (repo / path).read_bytes())
+        except OSError as error:
+            return error.strerror
+        if held:
+            return "one of the Founder's records that holds what looks like an email address, which never enters git"
     return None
 
 
@@ -317,7 +328,9 @@ def save_commit(git: Git, message: str, max_bytes: int, excluded: list[str] | No
             if Path(path).name == DOCUMENTATION:
                 git.run("checkout", "--quiet", "HEAD", "--", path, check=False)
             if excluded is not None:
-                excluded.append(f"{path} ({reason})")
+                # A file name can be typed by hand, so one that looks like an address is never repeated.
+                named = "a file whose name is not repeated here" if founder.holds_address(path, b"") else path
+                excluded.append(f"{named} ({reason})")
     if not staged(git):
         return None
     git.run("commit", "--quiet", "-m", message)

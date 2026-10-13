@@ -31,7 +31,7 @@ class CycleTestCase(unittest.TestCase):
         self.repo = fakes.make_repo(self.root / "gr0wthlab", self.env)
         self.mandu = fakes.make_mandu(self.root / "Mandu")
         self.code = fakes.make_code(self.root / "RepToday", self.env)
-        self.exchange = self.root / "exchange"
+        self.exchange = self.repo / "ledger" / "founder"  # the Founder's records, which only the sitting page writes
         self.codex_dir = self.root / "codex-bin"
         codex = fakes.install_codex(self.codex_dir)
         self.logs = self.root / "logs"
@@ -41,7 +41,6 @@ class CycleTestCase(unittest.TestCase):
             GR0WTHLAB_MANDU_DIR=str(self.mandu),
             GR0WTHLAB_REPTODAY_DIR=str(self.root / "RepToday"),
             GR0WTHLAB_IMMERSE_DIR=str(self.root / "Immerse"),
-            GR0WTHLAB_EXCHANGE_DIR=str(self.exchange),
             GR0WTHLAB_PRODUCTION_CLONE=str(self.root / "production"),
         )
         self.clock = fakes.Clock(fakes.SUNDAY_RUN)
@@ -102,7 +101,7 @@ class CycleTestCase(unittest.TestCase):
         (folder / f"{item}.json").write_text(json.dumps(record), encoding="utf-8")
 
     def sit(self, day=None):
-        """Mandu's record of a sitting, by default on the Mac's local date of the first run."""
+        """The Founder's record of a sitting, by default on the Mac's local date of the first run."""
         day = day or fakes.SUNDAY_RUN.astimezone().strftime("%Y-%m-%d")
         folder = self.exchange / "sittings"
         folder.mkdir(parents=True, exist_ok=True)
@@ -150,7 +149,8 @@ class FirstRunTest(CycleTestCase):
             self.assertTrue((ledger / f"run-reports/state/{workflow}.json").is_file(), workflow)
         self.assertIn("On demand, started", report)
         self.assertIn("| RepToday package: `projects/RepToday/gtm/05-social-pmf/angles.md` | read |", report)
-        self.assertIn("| Mandu decisions | skipped | no Review Queue item is waiting for a decision yet |", report)
+        self.assertIn("| Founder decisions | read | 0 records, 0 new since the previous run |", report)
+        self.assertIn("| Sittings | read | 0 records, 0 new |", report)
         self.assertIn("| YouTube results | skipped | not connected until US-ME11 |", report)
         self.assertIn("First snapshot", report)
         self.assertRegex(report, r"Approximate cost: about \$0\.00[89] at API prices, for 200,000 input tokens")
@@ -250,12 +250,12 @@ class DecisionRoundTripTest(CycleTestCase):
         rejected = json.loads((evidence / f"{ids['message']}.json").read_text(encoding="utf-8"))
         self.assertEqual((rejected["decision"], rejected["reason"]), ("reject", "Too salesy for my network."))
         self.assertEqual(rejected["item_file"], f"review-queue/items/{ids['message']}.md")
-        self.assertEqual(rejected["source"]["path"], str(self.exchange / f"decisions/{ids['message']}.json"))
+        self.assertEqual(rejected["source"]["path"], f"founder/decisions/{ids['message']}.json")
         approved = json.loads((evidence / f"{ids['post']}.json").read_text(encoding="utf-8"))
         self.assertEqual(approved["note"], "Good hook.")
         self.assertTrue((self.ledger() / "evidence/sittings/2026-10-11.json").is_file())
         report = self.report()
-        self.assertIn("| Mandu decisions | changed | 4 records, 4 new since the previous run |", report)
+        self.assertIn("| Founder decisions | changed | 4 records, 4 new since the previous run |", report)
         self.assertIn("Reason: Wait for counsel.", report)
         self.assertIn(f"Sitting {day}: 41 minutes.", report)
         self.assertIn(f"carried over from the sitting on {day}", report)
@@ -289,7 +289,6 @@ class DecisionRoundTripTest(CycleTestCase):
 
     def test_a_decision_on_an_item_superseded_before_it_was_taken_in_is_kept(self):
         old, new = "20261011-name-status-stale", "20261011-name-status-cleared"
-        self.exchange.mkdir()
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
         self.run_cycle()
         newer = fakes.proposal(extra=f"supersedes: {old}\n", title="record the name as cleared and reserved")
@@ -328,12 +327,11 @@ class DecisionRoundTripTest(CycleTestCase):
 
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
         self.assertEqual([entry["id"] for entry in self.queue()["open"]], [new])
-        self.assertIn("| Mandu decisions | read | 1 record, 0 new since the previous run |", self.report())
+        self.assertIn("| Founder decisions | read | 1 record, 0 new since the previous run |", self.report())
         self.assertIn(replaced, self.brief())
 
     def test_records_about_no_open_item_are_reported_once_until_they_change(self):
         old = "20261011-name-status-stale"
-        self.exchange.mkdir()
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
         self.run_cycle()
         newer = fakes.proposal(extra=f"supersedes: {old}\n", title="record the name as cleared and reserved")
@@ -347,16 +345,16 @@ class DecisionRoundTripTest(CycleTestCase):
         kinds = [entry["kind"] for entry in queue["open"]]
         self.assertEqual(kinds, ["package-change-proposal", "notice"])
         notice = (self.ledger() / queue["open"][1]["file"]).read_text(encoding="utf-8")
-        self.assertIn("# Notice: 2 Mandu records could not be used on", notice)
-        self.assertIn(f"`decisions/{old}.json`: reason is required", notice)
+        self.assertIn("# Notice: 2 records of yours could not be used on", notice)
+        self.assertIn(f"`founder/decisions/{old}.json`: reason is required", notice)
         self.assertIn("no queued item has this identifier", notice)
-        self.assertNotIn("must replace", notice)
+        self.assertNotIn("again on the sitting page", notice)
 
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
         self.assertEqual([entry["kind"] for entry in self.queue()["open"]], kinds)
         report = self.report()
         self.assertIn(
-            "| Mandu decisions | read | 2 records, 0 new since the previous run, 2 could not be used |", report
+            "| Founder decisions | read | 2 records, 0 new since the previous run, 2 could not be used |", report
         )
         self.assertIn("- Not listed again: 2 records that could not be used, reported by an earlier run", report)
         self.assertNotIn("Could not use", report)
@@ -366,7 +364,7 @@ class DecisionRoundTripTest(CycleTestCase):
         queue = self.queue()
         self.assertEqual([entry["kind"] for entry in queue["open"]], kinds + ["notice"])
         notice = (self.ledger() / queue["open"][2]["file"]).read_text(encoding="utf-8")
-        self.assertIn("`decisions/20261011-unknown.json`", notice)
+        self.assertIn("`founder/decisions/20261011-unknown.json`", notice)
         self.assertNotIn(old, notice)
 
     def test_a_malformed_decision_on_an_item_superseded_in_the_same_run_is_reported_once(self):
@@ -381,32 +379,37 @@ class DecisionRoundTripTest(CycleTestCase):
         self.assertEqual([entry["kind"] for entry in queue["open"]], ["package-change-proposal", "notice"])
         self.assertEqual(queue["open"][0]["supersedes"], old)
         notice = (self.ledger() / queue["open"][1]["file"]).read_text(encoding="utf-8")
-        self.assertIn("# Notice: 1 Mandu record could not be used on", notice)
-        self.assertIn(f"`decisions/{old}.json`: reason is required", notice)
-        self.assertNotIn("must replace", notice)
-        self.assertNotIn("must replace", self.report())
+        self.assertIn("# Notice: 1 record of yours could not be used on", notice)
+        self.assertIn(f"`founder/decisions/{old}.json`: reason is required", notice)
+        self.assertNotIn("again on the sitting page", notice)
+        self.assertNotIn("again on the sitting page", self.report())
 
         fakes.behave(self.codex_dir, {})
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
         self.assertEqual(len(self.queue()["open"]), 2)
         self.assertNotIn("Could not use", self.report())
 
-    def test_a_missing_exchange_folder_keeps_what_was_already_reported(self):
+    def test_a_missing_records_folder_stops_the_run_before_it_starts(self):
+        """A folder of the Founder's records that is not there cannot be proven refused, so nothing starts."""
+        item = "20261011-name-status-stale"
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
         self.run_cycle()
-        self.decide("20261011-unknown", "approve")
         fakes.behave(self.codex_dir, {})
-        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
-        self.assertIn("- Could not use `decisions/20261011-unknown.json`", self.report())
-        away = self.exchange.with_name("exchange-away")
-        self.exchange.rename(away)
-        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
-        self.assertIn("| Mandu decisions | failed |", self.report())
-        away.rename(self.exchange)
-        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=21))
-        report = self.report()
-        self.assertNotIn("Could not use", report)
-        self.assertIn("- Not listed again: 1 record that could not be used", report)
+        self.decide(item, "approve")
+        away = self.exchange / "decisions-away"
+        (self.exchange / "decisions").rename(away)
+        reports = sorted((self.ledger() / "run-reports").glob("*.md"))
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(code, launcher.EXIT_CONFIG, out)
+        self.assertIn("refusing to start: the Founder's records folder", out)
+        self.assertIn("founder/decisions must be a real folder", out)
+        self.assertEqual(sorted((self.ledger() / "run-reports").glob("*.md")), reports, "no run was made")
+        self.assertEqual([entry["id"] for entry in self.queue()["open"]], [item])
+
+        away.rename(self.exchange / "decisions")
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7, minutes=5))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.queue()["open"], [])
 
     @unittest.skipIf(os.geteuid() == 0, "root can list any folder")
     def test_an_unreadable_decisions_folder_fails_only_its_own_source(self):
@@ -415,16 +418,18 @@ class DecisionRoundTripTest(CycleTestCase):
         self.decide("20261011-unknown", "approve")
         fakes.behave(self.codex_dir, {})
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
-        self.assertIn("- Could not use `decisions/20261011-unknown.json`", self.report())
+        self.assertIn("- Could not use `founder/decisions/20261011-unknown.json`", self.report())
         decisions = self.exchange / "decisions"
         decisions.chmod(0o300)
         code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
         self.assertEqual(code, 0, out)
         report = self.report()
-        self.assertIn(f"| Mandu decisions | failed | `{decisions}` could not be read: Permission denied. |", report)
-        self.assertIn("| Mandu sittings | read |", report)
-        self.assertIn("| Founder decisions taken in | incomplete | Mandu decisions could not be read |", report)
-        self.assertIn("| Review Queue | incomplete | Mandu decisions could not be read |", report)
+        self.assertIn(
+            "| Founder decisions | failed | `founder/decisions/` could not be read: Permission denied. |", report
+        )
+        self.assertIn("| Sittings | read |", report)
+        self.assertIn("| Founder decisions taken in | incomplete | Founder decisions could not be read |", report)
+        self.assertIn("| Review Queue | incomplete | Founder decisions could not be read |", report)
         notice = (self.ledger() / self.queue()["open"][-1]["file"]).read_text(encoding="utf-8")
         self.assertIn("could not be read, so the work that needs them is incomplete", notice)
         self.assertIn("Permission denied", notice)
@@ -436,7 +441,9 @@ class DecisionRoundTripTest(CycleTestCase):
         self.assertIn("- Not listed again: 1 record that could not be used", report)
 
     @unittest.skipIf(os.geteuid() == 0, "root can search any folder")
-    def test_an_unsearchable_exchange_folder_fails_both_its_sources_with_the_reason(self):
+    def test_an_unsearchable_records_area_stops_the_run_before_it_starts(self):
+        """Folders that cannot be examined cannot be shown to be real folders, so nothing starts, and nothing is
+        taken back: the item stays open."""
         item = "20261011-name-status-stale"
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
         self.run_cycle()
@@ -445,12 +452,9 @@ class DecisionRoundTripTest(CycleTestCase):
         self.exchange.chmod(0o600)
         fakes.behave(self.codex_dir, {})
         code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
-        self.assertEqual(code, 0, out)
-        report = self.report()
-        for folder in ("decisions", "sittings"):
-            detail = f"`{self.exchange / folder}` could not be read: Permission denied."
-            self.assertIn(f"| Mandu {folder} | failed | {detail} |", report)
-        self.assertEqual([entry["id"] for entry in self.queue()["open"] if entry["kind"] != "notice"], [item])
+        self.assertEqual(code, launcher.EXIT_CONFIG, out)
+        self.assertIn("must be a real folder that can be read", out)
+        self.assertEqual([entry["id"] for entry in self.queue()["open"]], [item])
 
     def test_an_unreadable_review_queue_matches_no_decision_and_still_takes_in_sittings(self):
         item = "20261011-name-status-stale"
@@ -464,8 +468,8 @@ class DecisionRoundTripTest(CycleTestCase):
         self.assertEqual(code, 0, out)
         report = self.report()
         self.assertIn(
-            "| Mandu decisions | skipped | the Review Queue could not be read, so no decision could be matched to its"
-            " item |",
+            "| Founder decisions | skipped | the Review Queue could not be read, so no decision could be matched to"
+            " its item |",
             report,
         )
         self.assertIn(
@@ -474,7 +478,7 @@ class DecisionRoundTripTest(CycleTestCase):
         )
         self.assertNotIn("Could not use", report)
         self.assertFalse((self.ledger() / f"evidence/decisions/{item}.json").exists())
-        self.assertIn("| Mandu sittings | changed | 1 record, 1 new |", report)
+        self.assertIn("| Sittings | changed | 1 record, 1 new |", report)
         self.assertTrue((self.ledger() / f"evidence/sittings/{day}.json").is_file())
 
     def test_a_malformed_decision_on_an_open_item_is_reported_every_run_until_replaced(self):
@@ -490,10 +494,13 @@ class DecisionRoundTripTest(CycleTestCase):
                 [entry["kind"] for entry in queue["open"]], ["package-change-proposal"] + ["notice"] * week
             )
             notice = (self.ledger() / queue["open"][week]["file"]).read_text(encoding="utf-8")
-            self.assertIn("# Notice: 1 decision in Mandu could not be taken in on", notice)
-            self.assertIn(f"`decisions/{item}.json`, for `{item}`: reason is required", notice)
-            self.assertIn("Mandu must replace each with a valid record of the same decision", notice)
-            self.assertIn(f"Mandu must replace it with a valid record of the decision on `{item}`", self.report())
+            self.assertIn("# Notice: 1 decision could not be taken in on", notice)
+            self.assertIn(f"`founder/decisions/{item}.json`, for `{item}`: reason is required", notice)
+            self.assertIn("Decide each item again on the sitting page, which replaces its record", notice)
+            self.assertIn(
+                f"It is not a decision, so `{item}` stays undecided: decide it again on the sitting page",
+                self.report(),
+            )
 
         self.decide(item, "reject", reason="Wait for counsel.")
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=21))
@@ -502,23 +509,23 @@ class DecisionRoundTripTest(CycleTestCase):
         closed = next(entry for entry in queue["closed"] if entry["id"] == item)
         self.assertEqual((closed["status"], closed["reason"]), ("rejected", "Wait for counsel."))
         report = self.report()
-        self.assertIn("| Mandu decisions | changed | 1 record, 1 new since the previous run |", report)
+        self.assertIn("| Founder decisions | changed | 1 record, 1 new since the previous run |", report)
         self.assertNotIn("Could not use", report)
 
-    def test_a_missing_exchange_folder_fails_once_items_wait(self):
+    def test_items_that_wait_with_no_decision_are_a_quiet_read(self):
+        """An undecided item needs nothing written, so a week with no decision is no failed source."""
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
         self.run_cycle()
         fakes.behave(self.codex_dir, {})
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
         report = self.report()
-        self.assertIn("| Mandu decisions | failed | Mandu's exchange folder", report)
-        self.assertIn("| Founder decisions taken in | incomplete | Mandu decisions could not be read |", report)
-        self.assertIn("| Review Queue | incomplete | Mandu decisions could not be read |", report)
+        self.assertIn("| Founder decisions | read | 0 records, 0 new since the previous run |", report)
+        self.assertIn("| Founder decisions taken in | complete |", report)
+        self.assertNotIn("Notice:", report)
 
 
 class CarryOverTest(CycleTestCase):
     def test_an_item_carries_over_only_once_a_sitting_has_left_it_undecided(self):
-        self.exchange.mkdir()
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
         self.run_cycle()
         fakes.behave(self.codex_dir, {})
@@ -614,7 +621,6 @@ class FailuresTest(CycleTestCase):
 
     def test_the_same_problems_are_not_queued_twice(self):
         (self.mandu / "projects/RepToday/gtm/05-social-pmf/angles.md").unlink()
-        self.exchange.mkdir()
         self.run_cycle()
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=30))
         self.assertEqual([entry["kind"] for entry in self.queue()["open"]], ["notice"])
@@ -632,7 +638,6 @@ class FailuresTest(CycleTestCase):
         self.assertIn("`broken.md`: sections must be exactly", notice)
 
     def test_look_alikes_in_the_agent_s_areas_never_change_the_launcher_s_records(self):
-        self.exchange.mkdir()
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
         self.run_cycle()
         forged = {"exchange": exchange.EXCHANGE_VERSION, "open": [], "closed": []}
@@ -646,7 +651,6 @@ class FailuresTest(CycleTestCase):
         self.assertFalse((self.ledger() / "evidence/decisions/20261011-name-status-stale.json").exists())
 
     def test_a_link_or_file_in_place_of_incoming_is_noted_and_repaired(self):
-        self.exchange.mkdir()
         outside = self.root / "outside"
         (outside / "empty").mkdir(parents=True)
         replacements = {
@@ -891,7 +895,6 @@ class WaitlistRunTest(CycleTestCase):
         super().setUp()
         self.view = self.root / "RepToday-exports" / "waitlist-view.json"
         self.env["GR0WTHLAB_WAITLIST_VIEW"] = str(self.view)
-        self.exchange.mkdir()
 
     def assert_no_address_anywhere(self):
         """Every output of every run so far: the records, the agent's areas, the logs, and what the agent was told."""
@@ -1112,6 +1115,35 @@ class ProductionCloneTest(CycleTestCase):
         self.assertNotIn("workspace/drafts/README.md", changed)
         self.assertNotIn("ledger/run.lock", changed)
         self.assertEqual((self.clone / "workspace/drafts/README.md").read_text(encoding="utf-8"), "# drafts\n")
+        self.assertEqual(fakes.git(self.clone, "status", "--porcelain", env=self.env), "")
+
+    def test_what_the_founder_recorded_at_a_sitting_is_saved_with_the_next_run_s_records(self):
+        """The Founder's records are kept and saved with the launcher's own: the next run's first records step commits
+        what a sitting wrote, the run takes it in, and both reach main."""
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        code, out = self.run_cycle(repo=self.clone)
+        self.assertEqual(code, 0, out)
+        item = "20261011-name-status-stale"
+        self.exchange = self.clone / "ledger" / "founder"  # the Founder's records are each checkout's own
+        self.decide(item, "reject", reason="Wait for counsel.")
+        day = self.sit()
+        fakes.behave(self.codex_dir, {})
+        code, out = self.run_cycle(repo=self.clone, at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(code, 0, out)
+        self.assertIn("records left before this run, an earlier run's or a sitting's, were committed first", out)
+        self.assertIn("records: pushed: pushed 2 records commits", out)
+        subjects = fakes.git(self.remote, "log", "--format=%s", "-2", env=self.env).splitlines()
+        self.assertTrue(subjects[1].startswith("chore(records): records left before the run of "), subjects)
+        before = fakes.git(self.remote, "show", "--name-only", "--format=", "HEAD~1", env=self.env).split()
+        self.assertEqual(
+            sorted(before), [f"ledger/founder/decisions/{item}.json", f"ledger/founder/sittings/{day}.json"]
+        )
+        after = fakes.git(self.remote, "show", "--name-only", "--format=", "HEAD", env=self.env).split()
+        self.assertIn(f"ledger/evidence/decisions/{item}.json", after)
+        self.assertEqual([path for path in after if path.startswith("ledger/founder/")], [], "a run writes none")
+        saved = fakes.git(self.remote, "show", f"HEAD:ledger/founder/decisions/{item}.json", env=self.env)
+        self.assertEqual(json.loads(saved)["reason"], "Wait for counsel.")
+        self.assertEqual(self.queue(self.clone)["closed"][0]["status"], "rejected")
         self.assertEqual(fakes.git(self.clone, "status", "--porcelain", env=self.env), "")
 
     def leave_probe_files(self, repo):
@@ -1389,7 +1421,6 @@ class PostDraftsTest(CycleTestCase):
 
     def test_a_withdrawn_post_is_counted_once_and_leaves_the_report_s_count_of_open_items(self):
         self.first_batch()
-        self.exchange.mkdir()
         caption = "No grind here, only a score that forgives."
         fakes.behave(self.codex_dir, {"write": {fakes.draft_path(3): fakes.draft(3, caption=caption)}})
         code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))

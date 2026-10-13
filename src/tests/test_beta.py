@@ -1,5 +1,5 @@
-"""Beta Cohort recruiting outside a whole run: the records Mandu writes, the order invitations go out in, the checks
-of a recruiting Draft, the run's one decision about the batch, and the run state."""
+"""Beta Cohort recruiting outside a whole run: the records the Founder makes, the order invitations go out in, the
+checks of a recruiting Draft, the run's one decision about the batch, and the run state."""
 
 import dataclasses
 import json
@@ -90,7 +90,9 @@ class RecordsTest(unittest.TestCase):
     def test_a_record_holding_an_address_is_refused_whole_and_never_repeated(self):
         record = dict(fakes.BETA_BUILD, build=f"sent from {fakes.ADDRESS}")
         data = json.dumps(record).encode("utf-8")
-        gate = beta.read_gate("RepToday", [("RepToday.json", Path("/m/beta-builds/RepToday.json"), data)], [], None)
+        gate = beta.read_gate(
+            "RepToday", [("RepToday.json", Path("founder/beta-builds/RepToday.json"), data)], [], None
+        )
         self.assertEqual(gate.status, beta.UNUSABLE)
         self.assertFalse(gate.recorded)
         self.assertIn("looks like an email address", gate.detail)
@@ -110,13 +112,15 @@ class RecordsTest(unittest.TestCase):
         self.assertEqual(
             problems,
             [
-                "a file in `beta-reports/` whose name is not repeated here: it holds something that looks like an"
-                " email address, so nothing in it was read or kept"
+                "a file in `founder/beta-reports/` whose name is not repeated here: it holds something that looks like"
+                " an email address, so nothing in it was read or kept"
             ],
         )
         misnamed = "RepToday-2026-10-17.json"
         _, problems = beta.read_reports("RepToday", [(misnamed, Path("/m") / misnamed, data)])
-        self.assertIn("`beta-reports/RepToday-2026-10-17.json`: the file name 'RepToday-2026-10-17'", problems[0])
+        self.assertIn(
+            "`founder/beta-reports/RepToday-2026-10-17.json`: the file name 'RepToday-2026-10-17'", problems[0]
+        )
 
     def test_only_a_valid_record_named_for_the_product_opens_the_gate(self):
         missing = beta.read_gate("RepToday", [], [], None)
@@ -127,14 +131,17 @@ class RecordsTest(unittest.TestCase):
         misnamed = beta.read_gate("RepToday", other, stray, None)
         self.assertEqual((misnamed.status, misnamed.recorded), (beta.NOT_RECORDED, False))
         self.assertIn(
-            "; `beta-builds/` holds `RepToday.txt`, `reptoday.json`, and only `RepToday.json` is", misnamed.detail
+            "; `founder/beta-builds/` holds `RepToday.txt`, `reptoday.json`, and only `RepToday.json` is",
+            misnamed.detail,
         )
         hidden = beta.read_gate("RepToday", [(f"{fakes.ADDRESS}.json", Path("/m/x.json"), b"{}")], [], None)
-        self.assertIn("`beta-builds/` holds 1 whose name is not repeated here", hidden.detail)
+        self.assertIn("`founder/beta-builds/` holds 1 whose name is not repeated here", hidden.detail)
         self.assertNotIn("jane", hidden.detail)
         unreadable_file = beta.read_gate("RepToday", [], [("RepToday.json", "Permission denied")], None)
         self.assertEqual(unreadable_file.status, beta.UNUSABLE)
-        self.assertIn("`beta-builds/RepToday.json` could not be used (Permission denied)", unreadable_file.detail)
+        self.assertIn(
+            "`founder/beta-builds/RepToday.json` could not be used (Permission denied)", unreadable_file.detail
+        )
         unreadable = beta.read_gate("RepToday", [], [], "Permission denied")
         self.assertEqual((unreadable.status, unreadable.recorded), (beta.UNUSABLE, False))
         broken = beta.read_gate("RepToday", [("RepToday.json", Path("/m/RepToday.json"), b"{not json")], [], None)
@@ -240,7 +247,7 @@ class ConfigTest(unittest.TestCase):
         )
         run = json.loads((fakes.REPO / "config" / "run.json").read_text(encoding="utf-8"))
         self.assertTrue(run["outputs"]["beta-recruiting"]["built"])
-        self.assertNotIn("Beta Build approval in Mandu", [source["name"] for source in run["sources_not_connected"]])
+        self.assertNotIn("Beta Build approval", [source["name"] for source in run["sources_not_connected"]])
 
     def test_a_registry_that_names_it_wrongly_stops_the_run(self):
         def without(key):

@@ -23,6 +23,12 @@ REQUIRED_AREAS = ("evidence", "drafts", "review_queue", "weekly_reads", "run_rep
 WORKSPACE = PurePosixPath("workspace")
 # The launcher's own records, outside every area: a run reads them and never writes them.
 LEDGER = "ledger"
+# The Founder's records, a folder of ledger/: a run reads them too, and only `gr0wthlab sitting` writes them
+# (founder.py).
+FOUNDER = "founder"
+# Its five folders, one for each kind of Founder record. Each is a forbidden target of every run's preflight and of the
+# boundary check; founder.py names the kinds and holds the rules.
+FOUNDER_KINDS = ("decisions", "sittings", "beta-builds", "beta-reports", "outreach")
 # The reasoning efforts Codex's model catalog lists for the run's model. Codex passes any other text on, and the model's
 # service refuses it only once the agent starts, after everything a run does before its agent.
 REASONING_EFFORTS = ("low", "medium", "high", "xhigh", "max")
@@ -57,6 +63,11 @@ class Boundary:
     @property
     def ledger(self) -> Path:
         return self.repo_root / LEDGER
+
+    @property
+    def founder_dirs(self) -> tuple[tuple[str, Path], ...]:
+        """Each folder of the Founder's records, by the kind of record it holds."""
+        return tuple((kind, self.ledger / FOUNDER / kind) for kind in FOUNDER_KINDS)
 
 
 def load_json(path: Path) -> dict:

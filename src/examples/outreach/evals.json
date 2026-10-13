@@ -277,7 +277,7 @@
         {
           "kind": "deterministic",
           "check": "not_offered",
-          "reason": "is not recorded as sent in Mandu yet"
+          "reason": "is not recorded as sent yet"
         }
       ],
       "files": [

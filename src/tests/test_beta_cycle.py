@@ -22,7 +22,6 @@ class BetaCycleTestCase(CycleTestCase):
         self.view = self.root / "RepToday-exports" / "waitlist-view.json"
         self.env["GR0WTHLAB_WAITLIST_VIEW"] = str(self.view)
         fakes.write_view(self.view, fakes.waitlist_view())
-        self.exchange.mkdir()
         self.week = 0
 
     def approve_build(self, **changes):
@@ -81,9 +80,13 @@ class BetaCycleTestCase(CycleTestCase):
         return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
 
     def assert_no_address_anywhere(self, *parts):
-        """Every output of every run so far: the records, the agent's areas, the logs, and what the agent was told."""
+        """Every output of every run so far: the records, the agent's areas, the logs, and what the agent was told.
+        The Founder's own records are no output of a run: a test that puts an address in one by hand finds it there,
+        and nowhere else, and the records step never commits such a file (test_records)."""
         for place in (self.ledger(), self.workspace(), self.logs, self.codex_dir):
             for path in place.rglob("*"):
+                if self.exchange in path.parents:
+                    continue
                 if path.is_file() and path.name != "behavior.json":
                     data = path.read_bytes()
                     for part in (fakes.ADDRESS, "jane", "example.com", *parts):
@@ -114,11 +117,11 @@ class ValidationTest(BetaCycleTestCase):
         self.assertNotIn("beta-plan", prompt)
         report = self.report()
         for line in (
-            "| Beta Build approval in Mandu | skipped | not recorded: the Founder has recorded no approved Beta Build"
-            " for RepToday in Mandu, so Beta Cohort recruiting has not started |",
-            "| Beta Cohort reports in Mandu | skipped | not read: Beta Cohort recruiting has not started |",
-            "| Beta Cohort recruiting | skipped | the Founder has recorded no approved Beta Build in Mandu |",
-            "- beta-recruiting: checked=0 acted=0 note=not started: no Beta Build approval is recorded in Mandu",
+            "| Beta Build approval | skipped | not recorded: the Founder has recorded no approved Beta Build"
+            " for RepToday, so Beta Cohort recruiting has not started |",
+            "| Beta Cohort reports | skipped | not read: Beta Cohort recruiting has not started |",
+            "| Beta Cohort recruiting | skipped | the Founder has recorded no approved Beta Build |",
+            "- beta-recruiting: checked=0 acted=0 note=not started: no Beta Build approval is recorded",
         ):
             self.assertIn(line, report)
         self.assertNotIn("## Beta Cohort recruiting", report)
@@ -145,7 +148,7 @@ class ValidationTest(BetaCycleTestCase):
         self.assertEqual(record["batch"]["candidates"], invitation["candidates"])
         self.assertEqual((record["batch"]["action"], record["batch"]["good_fit"]), ("new", 5))
         self.assertEqual(record["beta_build"]["approved_on"], "2026-10-09")
-        self.assertEqual(record["beta_build"]["source"]["path"], str(self.exchange / "beta-builds/RepToday.json"))
+        self.assertEqual(record["beta_build"]["source"]["path"], "founder/beta-builds/RepToday.json")
         self.assertEqual(record["founder_counts"]["not_reported"], list(exchange.BETA_COUNTS))
         self.assertEqual(record["pool"], {"not_offered_yet": 0, "gap": 12})
         self.assertEqual((record["invited"], sorted(record["offered"])), ([], sorted(invitation["candidates"])))
@@ -157,9 +160,9 @@ class ValidationTest(BetaCycleTestCase):
 
         report = self.report()
         for line in (
-            "| Beta Build approval in Mandu | changed | approved on 2026-10-09, build 1.0 (42), recorded"
+            "| Beta Build approval | changed | approved on 2026-10-09, build 1.0 (42), recorded"
             " 2026-10-10T19:40:00-07:00; recruiting is open |",
-            "| Beta Cohort reports in Mandu | read | 0 records, 0 new |",
+            "| Beta Cohort reports | read | 0 records, 0 new |",
             f"- Beta Cohort recruiting: batch 1 queued as `{invitation['id']}`: 8 entries (5 good Fit, 3 with another"
             " Fit answer or none); the pool is too small to reach 20: 8 sign-ups asked for a beta invitation in all,"
             " so even if every one accepted, the Beta Cohort would be 12 short of 20.",
@@ -193,14 +196,12 @@ class ValidationTest(BetaCycleTestCase):
         self.assertEqual(code, 0, out)
         report = self.report()
         self.assertIn(
-            "| Beta Build approval in Mandu | failed | `beta-builds/RepToday.json` could not be used (recruiting must"
+            "| Beta Build approval | failed | `founder/beta-builds/RepToday.json` could not be used (recruiting must"
             " be 'open' or 'stopped'), so nothing shows an approval and recruiting has not started. |",
             report,
         )
-        self.assertIn(
-            "| Beta Cohort recruiting | incomplete | Beta Build approval in Mandu could not be read |", report
-        )
-        self.assertIn("note=not started: the Beta Build record in Mandu could not be used", report)
+        self.assertIn("| Beta Cohort recruiting | incomplete | Beta Build approval could not be read |", report)
+        self.assertIn("note=not started: the Beta Build record could not be used", report)
         self.assertFalse((self.ledger() / "evidence/beta-recruiting").exists())
         self.assertIsNone(self.recruiting_state())
         (notice,) = self.queue()["open"]
@@ -213,7 +214,7 @@ class ValidationTest(BetaCycleTestCase):
         code, out = self.run_cycle()
         self.assertEqual(code, 0, out)
         self.assertIn(
-            "| Beta Build approval in Mandu | failed | `beta-builds/RepToday.json` could not be used (it holds"
+            "| Beta Build approval | failed | `founder/beta-builds/RepToday.json` could not be used (it holds"
             " something that looks like an email address",
             self.report(),
         )
@@ -226,8 +227,8 @@ class ValidationTest(BetaCycleTestCase):
         code, out = self.run_cycle()
         self.assertEqual(code, 0, out)
         self.assertIn(
-            "| Beta Build approval in Mandu | skipped | not recorded: the Founder has recorded no approved Beta Build"
-            " for RepToday in Mandu, so Beta Cohort recruiting has not started; `beta-builds/` holds `Immerse.json`,"
+            "| Beta Build approval | skipped | not recorded: the Founder has recorded no approved Beta Build"
+            " for RepToday, so Beta Cohort recruiting has not started; `founder/beta-builds/` holds `Immerse.json`,"
             " `RepToday.txt`, and only `RepToday.json` is RepToday's record |",
             self.report(),
         )
@@ -564,8 +565,7 @@ class WeekByWeekTest(BetaCycleTestCase):
         )
         for line in (
             "- Beta Cohort recruiting: not prepared: the Review Queue could not be read",
-            "| Beta Cohort reports in Mandu | skipped | not taken in: Beta Cohort recruiting was not prepared this"
-            " run |",
+            "| Beta Cohort reports | skipped | not taken in: Beta Cohort recruiting was not prepared this run |",
             "| Beta Cohort recruiting | incomplete | not prepared: the Review Queue could not be read |",
             "- beta-recruiting: checked=0 acted=0 note=not prepared: the Review Queue could not be read",
         ):
@@ -580,7 +580,7 @@ class WeekByWeekTest(BetaCycleTestCase):
         self.next_week()
         self.assertEqual(self.invitation()["id"], second["id"])
         report = self.report()
-        self.assertIn("| Beta Cohort reports in Mandu | changed | 1 record, 1 new |", report)
+        self.assertIn("| Beta Cohort reports | changed | 1 record, 1 new |", report)
         self.assertIn(
             "2 entries approved for invitation, 2 offered and waiting for the Founder's decision, 4 sign-ups", report
         )
@@ -618,9 +618,9 @@ class WeekByWeekTest(BetaCycleTestCase):
                 ]
             ),
         )
-        self.assertEqual(kept["source"]["path"], str(record))
+        self.assertEqual(kept["source"]["path"], f"founder/beta-reports/{record.name}")
         report = self.report()
-        self.assertIn("| Beta Cohort reports in Mandu | changed | 1 record, 1 new |", report)
+        self.assertIn("| Beta Cohort reports | changed | 1 record, 1 new |", report)
         self.assertIn(
             f"- The Founder's counts, as reported on {day}: invitations sent 2, accepted 1, sessions booked not"
             " reported.",
@@ -632,7 +632,7 @@ class WeekByWeekTest(BetaCycleTestCase):
         self.assertNotIn("sessions booked 0", report)
         self.assertEqual(self.evidence()["founder_counts"]["sessions_booked"], None)
         self.next_week()
-        self.assertIn("| Beta Cohort reports in Mandu | read | 1 record, 0 new |", self.report())
+        self.assertIn("| Beta Cohort reports | read | 1 record, 0 new |", self.report())
 
     def test_a_report_that_cannot_be_used_fails_its_source_and_changes_no_count(self):
         self.next_week()
@@ -641,12 +641,12 @@ class WeekByWeekTest(BetaCycleTestCase):
         self.next_week()
         report = self.report()
         self.assertIn(
-            "| Beta Cohort reports in Mandu | failed | 2 records, 1 new; 1 could not be used:"
-            " `beta-reports/RepToday-2026-10-31.json`: it holds something that looks like an email address",
+            "| Beta Cohort reports | failed | 2 records, 1 new; 1 could not be used:"
+            " `founder/beta-reports/RepToday-2026-10-31.json`: it holds something that looks like an email address",
             report,
         )
         self.assertIn("as reported on 2026-10-24: invitations sent not reported, accepted 1,", report)
-        self.assertIn("| Beta Cohort recruiting | incomplete | Beta Cohort reports in Mandu could not be read", report)
+        self.assertIn("| Beta Cohort recruiting | incomplete | Beta Cohort reports could not be read", report)
         self.assert_no_address_anywhere()
 
     def test_a_report_file_name_that_looks_like_an_address_is_never_repeated(self):
@@ -657,14 +657,14 @@ class WeekByWeekTest(BetaCycleTestCase):
         self.next_week()
         report = self.report()
         self.assertIn(
-            "| Beta Cohort reports in Mandu | failed | 1 record, 0 new; 1 could not be used: a file in"
-            " `beta-reports/` whose name is not repeated here: it holds something that looks like an email address,"
-            " so nothing in it was read or kept. |",
+            "| Beta Cohort reports | failed | 1 record, 0 new; 1 could not be used: a file in"
+            " `founder/beta-reports/` whose name is not repeated here: it holds something that looks like an email"
+            " address, so nothing in it was read or kept. |",
             report,
         )
         self.assertIn(
-            "a file in `beta-reports/` whose name is not repeated here could not be used (only <name>.json record"
-            " files belong here)",
+            "a file in `founder/beta-reports/` whose name is not repeated here could not be used (only <name>.json"
+            " record files belong here)",
             report,
         )
         self.assertIn("The Founder's counts, none reported yet", report)
@@ -783,7 +783,7 @@ class WeekByWeekTest(BetaCycleTestCase):
             self.assertEqual(sorted((self.ledger() / "evidence/beta-recruiting").glob("*.json")), evidence)
             self.assertNotIn("## Beta Cohort recruiting", self.brief() + self.report())
             self.assertNotIn("check-beta-drafts", self.brief())
-        self.assertIn("| Beta Build approval in Mandu | failed |", self.report())
+        self.assertIn("| Beta Build approval | failed |", self.report())
         record.write_text(text, encoding="utf-8")
         self.next_week()
         second = self.invitation()

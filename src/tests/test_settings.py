@@ -90,32 +90,34 @@ class RunSettingsTest(unittest.TestCase):
             settings.instruction_path(REPO, Path("src/instructions/absent.md"))
 
 
-class ExchangeFolderTest(unittest.TestCase):
+class NoExchangeFolderTest(unittest.TestCase):
+    """gr0wthlab reads no record from Mandu any more, and a configuration that still points there is refused with
+    where the records are now, never read around."""
+
     def setUp(self):
         self.registry = json.loads((REPO / "config/products.json").read_text(encoding="utf-8"))
-        self.boundary = boundary.resolve_boundary(
-            Path("/srv/home/gr0wthlab"), CONFIG, self.registry, {}, Path("/srv/home"), git=[]
-        )
 
-    def test_inside_mandu_unless_overridden(self):
-        folder = settings.exchange_dir(self.registry, self.boundary, {}, Path("/srv/home"))
-        self.assertEqual(folder, Path("/srv/home/Mandu/projects/gr0wthlab/exchange"))
-        env = {"GR0WTHLAB_EXCHANGE_DIR": "/srv/tmp/exchange"}
-        self.assertEqual(
-            settings.exchange_dir(self.registry, self.boundary, env, Path("/srv/home")),
-            Path(env["GR0WTHLAB_EXCHANGE_DIR"]),
-        )
+    def test_the_committed_configuration_names_no_exchange_folder(self):
+        settings.no_exchange(self.registry, {})
+        self.assertNotIn("exchange", self.registry["mandu"])
 
-    def test_never_inside_the_repository_where_the_agent_writes(self):
-        for override in ("/srv/home/gr0wthlab/workspace/evidence", "/srv/home"):
-            with self.subTest(override=override), self.assertRaises(ConfigError):
-                settings.exchange_dir(
-                    self.registry, self.boundary, {"GR0WTHLAB_EXCHANGE_DIR": override}, Path("/srv/home")
-                )
+    def test_a_registry_that_still_sets_the_folder_stops_the_run_and_says_where_the_records_are(self):
         registry = copy.deepcopy(self.registry)
-        registry["mandu"]["exchange"]["path"] = "../escape"
-        with self.assertRaises(ConfigError):
-            settings.exchange_dir(registry, self.boundary, {}, Path("/srv/home"))
+        registry["mandu"]["exchange"] = {"path": "projects/gr0wthlab/exchange/", "access": "read-only"}
+        with self.assertRaises(ConfigError) as raised:
+            settings.no_exchange(registry, {})
+        message = str(raised.exception)
+        self.assertIn("config/products.json still sets mandu.exchange; remove it", message)
+        self.assertIn("ledger/founder/", message)
+        self.assertIn("src/bin/gr0wthlab sitting", message)
+
+    def test_the_variable_that_moved_the_folder_stops_the_run_too(self):
+        with self.assertRaises(ConfigError) as raised:
+            settings.no_exchange(self.registry, {"GR0WTHLAB_EXCHANGE_DIR": "/srv/tmp/exchange"})
+        message = str(raised.exception)
+        self.assertIn("GR0WTHLAB_EXCHANGE_DIR is set; unset it, and take it out of any LaunchAgent", message)
+        self.assertIn("ledger/founder/", message)
+        settings.no_exchange(self.registry, {"GR0WTHLAB_EXCHANGE_DIR": ""})
 
 
 class WaitlistSettingsTest(unittest.TestCase):

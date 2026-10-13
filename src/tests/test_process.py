@@ -185,6 +185,7 @@ class EveryWaitIsBoundedTest(FilmingRunCase):
         fakes.git(self.root, "clone", "--quiet", str(remote), str(clone), env=self.env)
         code, out = self.run_cycle(repo=clone, at=fakes.SUNDAY_RUN)
         self.assertEqual(code, 0, out)
+        self.exchange = clone / "ledger" / "founder"  # the Founder's records are each checkout's own
         self.decide(PLAN, "approve")
         self.clip("d01-s1.mov")
         writes = {fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): fakes.edit_record(1, DAY_1)}

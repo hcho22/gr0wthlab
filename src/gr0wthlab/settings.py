@@ -1,5 +1,4 @@
-"""config/run.json, and the Mandu exchange folder and the Waitlist view from config/products.json, validated before a
-run starts."""
+"""config/run.json, and the Waitlist view from config/products.json, validated before a run starts."""
 
 from __future__ import annotations
 
@@ -244,25 +243,22 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
     )
 
 
-def exchange_dir(registry: Mapping, boundary: Boundary, env: Mapping[str, str], home: Path) -> Path:
-    """Mandu's exchange folder: inside the Mandu checkout unless overridden, and never inside this repository,
-    where the agent could write a decision the Founder never made."""
-    mandu = registry.get("mandu") or {}
-    exchange = mandu.get("exchange")
-    if not isinstance(exchange, dict) or exchange.get("access") != "read-only":
-        raise ConfigError("the Product registry must name Mandu's exchange folder as read-only")
-    override = env.get(exchange.get("env") or "")
-    if override:
-        path = resolve_home_path(None, "exchange", exchange.get("env"), env, home)
-    else:
-        relative = PurePosixPath(str(exchange.get("path", "")))
-        if not relative.parts or relative.is_absolute() or ".." in relative.parts:
-            raise ConfigError("mandu.exchange.path must be relative to the Mandu checkout")
-        mandu_path = next(location.path for location in boundary.locations if location.label == "Mandu")
-        path = canonical(mandu_path / relative)
-    if is_within(path, boundary.repo_root) or is_within(boundary.repo_root, path):
-        raise ConfigError(f"the exchange folder {path} overlaps the repository; the agent could write in it")
-    return path
+# What a configuration set while the Founder's records were still in Mandu: the folder in the Product registry, and the
+# variable that moved it on one machine.
+EXCHANGE_ENV = "GR0WTHLAB_EXCHANGE_DIR"
+RECORDS_MOVED = (
+    "gr0wthlab reads no record from Mandu any more: the Founder's decisions and records are in ledger/founder/ of"
+    " this repository, written by `src/bin/gr0wthlab sitting` (docs/adr/0002-the-founder-decides-in-gr0wthlab.md)"
+)
+
+
+def no_exchange(registry: Mapping, env: Mapping[str, str]) -> None:
+    """Refuse a configuration that still points at Mandu's exchange folder, and say where the records are now: a run
+    that went on would quietly read no decision from the folder its configuration names."""
+    if "exchange" in (registry.get("mandu") or {}):
+        raise ConfigError(f"config/products.json still sets mandu.exchange; remove it: {RECORDS_MOVED}")
+    if env.get(EXCHANGE_ENV):
+        raise ConfigError(f"{EXCHANGE_ENV} is set; unset it, and take it out of any LaunchAgent: {RECORDS_MOVED}")
 
 
 @dataclass(frozen=True)

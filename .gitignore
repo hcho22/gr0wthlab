@@ -1,5 +1,8 @@
 __pycache__/
 /ledger/run.lock
+# The locks of the sitting page: one it shares with a run around a decision, one it holds while it serves.
+/ledger/founder.lock
+/ledger/sitting.lock
 # Finished video: rebuilt from the footage and its record in ledger/evidence/filming/, never committed.
 /ledger/assets/
 /ledger/working/

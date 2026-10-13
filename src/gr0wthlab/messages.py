@@ -420,9 +420,9 @@ def intro_lines(draft: MessageDraft, target: Target, context: Context, limits: L
     ]
     if draft.purpose == CREATOR:
         lines.append(
-            f"One follow-up may be offered {plural(target.wait_days, 'day')} after you record this message as sent in"
-            " Mandu, only while no reply is recorded, and after it nothing more. Approving this item approves that"
-            " waiting period; to set another, give it in the record when you send."
+            f"One follow-up may be offered {plural(target.wait_days, 'day')} after you record this message as sent on"
+            " the sitting page, only while no reply is recorded, and after it nothing more. Approving this item"
+            " approves that waiting period; to set another, give it when you record the message as sent."
         )
     else:
         lines.append(
