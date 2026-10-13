@@ -144,5 +144,5 @@ Each run cost one or two cents at API prices.
 ### What this round did not exercise
 
 A finished file changed in place or one that cannot be read, an approved day, an A/B pair, a slot change, and missing video tooling were not run live on this commit and stand on the unit tests and on the rounds above.
-The agent wrote a Draft that passes in none of the three runs where it wrote one, so the post that shows the video came from the example set's Draft, put in place by hand.
+The agent's first Draft of day 1 passed and its rewrite in the second run did not, so the post that shows the video came from the example set's Draft, put in place by hand.
 No weekly run was made on a schedule, the Founder's real footage does not exist yet, and Mandu's side was not shown the notices.
