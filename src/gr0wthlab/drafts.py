@@ -607,5 +607,7 @@ def check_claims(draft: PostDraft, code: Code, verdict: Verdict) -> None:
         unsupported = none(claim.location)
         problem = "no code supports it" if unsupported else code.verify(claim.location, claim.excerpt)
         verdict.claims.append(ClaimResult(claim, problem))
-        if problem:
-            verdict.block("claim-unsupported" if unsupported else "claim-location", f"{claim.text!r}: {problem}")
+        if unsupported:
+            verdict.block("claim-unsupported", f"{claim.text!r}: {problem}")
+        elif problem:
+            verdict.block("claim-location", f"{claim.text!r}: {problem}", unread=code.unread(claim.location))

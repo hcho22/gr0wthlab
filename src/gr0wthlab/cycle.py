@@ -17,7 +17,8 @@ filing; count what each session did, for the report to show beside that session'
 Queue and the run report; commit and push workspace/ and ledger/. Every step but the sessions is deterministic code
 outside the sandbox. The launcher's records live in ledger/, which an agent can read and never write, so nothing it
 does can change them; in workspace/ the launcher only restores its owner's access to entries a session left without
-it, reads the Drafts and the edit records, reads the items in incoming/ before each session starts and once it has
+it, removes what a stopped boundary check left at the top of the areas, before the first records step can commit it,
+reads the Drafts and the edit records, reads the items in incoming/ before each session starts and once it has
 ended, removes a recruiting Draft that holds what looks like an email address, reads and removes the items, quote
 records, proposals, and codes it takes in, and puts the agent's Instructions back as they were. Nothing is taken in
 while a session can still write: one take-in, after the last session, keeps every take-in rule what it was when a run
@@ -78,9 +79,9 @@ from . import (
     work,
 )
 from . import state as run_state
-from .areas import Areas, Store, UnsafeFile, read_plain
+from .areas import Areas, Store, UnsafeFile, clear_probe_files, read_plain
 from .boundary import LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
-from .queue import INCOMING, OPEN, QUEUE_FILE, REVIEW_QUEUE, SET_ASIDE, SUPERSEDED, Ledger, QueueError
+from .queue import INCOMING, OPEN, QUEUE_FILE, REVIEW_QUEUE, SET_ASIDE, SUPERSEDED, Ledger, QueueError, Stands
 from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLine, Unusable
 from .sessions import Session
 
@@ -96,6 +97,7 @@ SUMMARY_LIMIT = 4000
 WAITLIST_NEEDS = ("waitlist-counts", "weekly-read", "beta-recruiting")
 WORKING = "working"
 FILMING = "filming"
+STRAY = "only <name>.json record files belong here"  # a file that is no record, which is not a read that failed
 # The folders, each inside one of the agent's areas, that the launcher takes the agent's work in from.
 INTAKE = (
     ("evidence", listening.QUOTES_IN),
@@ -153,7 +155,7 @@ def read_records(directory: Path) -> tuple[list[tuple[str, Path, bytes]], list[U
             continue
         try:
             if not name.endswith(".json") or package.file_type(path) != stat.S_IFREG:
-                problems.append(unusable(f"{directory.name}/{name}", ["only <name>.json record files belong here"]))
+                problems.append(unusable(f"{directory.name}/{name}", [STRAY]))
                 continue
             found.append((name, path, path.read_bytes()))
         except OSError as error:
@@ -402,11 +404,20 @@ class Cycle:
             self.store.write_json(path, waitlist.evidence(reading, state.run_id, self.now()))
             state.waitlist_file = self.store.relative(path)
 
-    def file_dispatches(self, state: RunState, ledger: Ledger, products: Sequence[str], seen: dict[str, str]) -> None:
+    def file_dispatches(
+        self,
+        state: RunState,
+        ledger: Ledger,
+        products: Sequence[str],
+        seen: dict[str, str],
+        hashes: Mapping[str, str],
+    ) -> None:
         """File each reviewed Dispatch request that needs filing, before the agent starts, so its brief lists it."""
         requests, problems = dispatch.load(self.repo_root, products)
         state.problems += problems
-        state.dispatches = dispatch.file(ledger, self.store, requests, products, seen, state.run_id, self.now())
+        state.dispatches = dispatch.file(ledger, self.store, requests, products, seen, state.run_id, self.now(), hashes)
+        state.problems += [filing.account() for filing in state.dispatches if filing.status == dispatch.HELD]
+        state.dispatch_unread = dispatch.unread(problems, state.dispatches)
         state.published += [str(filing.identifier) for filing in state.dispatches if filing.acted]
 
     def queue_notice(
@@ -529,6 +540,7 @@ class Cycle:
                 len(filed),
                 "; ".join(filing.account() for filing in state.dispatches)
                 or ("no reviewed Dispatch request" if ledger_ok else "none filed: the Review Queue could not be read"),
+                "; ".join(state.dispatch_unread),
             ),
             self.post_tally(state),
             self.filming_tally(state),
@@ -602,8 +614,9 @@ class Cycle:
 
     def post_gaps(self, state: RunState) -> list[str]:
         """Why the post Drafts are incomplete this run: a kit file, the code, or the brand rules could not be used,
-        a due day has no Draft, or the post Drafts session or the take-in fell short. A blocked Draft is the check
-        working, not a gap."""
+        a Draft could not be checked because something its check needs could not be read, a due day has no Draft, or
+        the post Drafts session or the take-in fell short. A Draft blocked by a check the launcher could make is the
+        check working, not a gap."""
         plan, outcome = state.posts, state.post_outcome
         if plan is None:
             return [state.posts_problem] if state.posts_problem else []
@@ -611,6 +624,7 @@ class Cycle:
         if outcome is None:
             gaps.append(state.posts_problem or "the Drafts were not taken in")
         else:
+            gaps += [reason for reason in outcome.unread if reason not in gaps]
             missing = [str(result.day) for result in outcome.results if result.status == posts.MISSING]
             if missing:
                 gaps.append(f"no Draft for day {', '.join(missing)}")
@@ -618,6 +632,40 @@ class Cycle:
         if plan.days and gap:
             gaps.append(gap)
         return gaps
+
+    def queue_gaps(self, state: RunState) -> list[str]:
+        """Why the Review Queue is incomplete this run though the ledger was read: an item file could not be, so a
+        reviewed Dispatch request, or an item the agent wrote, could not be compared with the item it would replace,
+        which therefore stands, or with one it may ask again, so it was not queued."""
+        review_queue = [reason for title, kept in state.stood if title == state.queue_title for reason in kept.unread]
+        return list(dict.fromkeys(state.dispatch_unread + state.queue_unread + review_queue))
+
+    def left_standing(self, state: RunState, config: settings.Settings, ledger: Ledger) -> None:
+        """Gather each open item this run left exactly as it was because a read its standing rests on could not be
+        made, with the output it belongs to: what every workflow decided through queue.stands, in one list, so the
+        run's notice names each item and the read that failed."""
+        state.queue_title = output_titles(config, ("review-queue",))[0]
+        found: list[tuple[str, Stands]] = []
+
+        def add(key: str, results: Sequence) -> None:
+            title = output_titles(config, (key,))[0]
+            found.extend((title, Stands(str(result.item), tuple(result.unread))) for result in results if result.stood)
+
+        add("post-drafts", state.post_outcome.results if state.post_outcome else ())
+        if state.filming is not None and state.filming.stood:
+            found.append((output_titles(config, ("filming-plan",))[0], state.filming.stood))
+        add(beta.WORKFLOW, state.beta_outcome.results if state.beta_outcome else ())
+        add("listening", state.listening_result.replies if state.listening_result else ())
+        add("outreach-drafts", state.outreach_result.outcomes if state.outreach_result else ())
+        if state.outreach is not None:
+            found += [(output_titles(config, ("outreach-drafts",))[0], kept) for kept in state.outreach.stood]
+        found += [
+            (state.queue_title, Stands(str(filing.identifier), (filing.unread,)))
+            for filing in state.dispatches
+            if filing.status == dispatch.UNREAD
+        ]
+        found += [(state.queue_title, kept) for kept in ledger.stood]
+        state.stood = found
 
     def outputs(self, state: RunState, config: settings.Settings, ledger_ok: bool) -> None:
         """Each output's status: a built output is incomplete when a failed source it needs names it, or when its own
@@ -648,7 +696,7 @@ class Cycle:
             "package-review": ([review_gap] if review_gap else [], reviewed),
             "decisions": ([] if ledger_ok else ["the ledger could not be read; no decision was matched"], decisions),
             "review-queue": (
-                [] if ledger_ok else ["the ledger could not be read; the queue was left as it was"],
+                self.queue_gaps(state) if ledger_ok else ["the ledger could not be read; the queue was left as it was"],
                 queued,
             ),
             "waitlist-counts": (
@@ -795,7 +843,7 @@ class Cycle:
                 state.posts_problem = f"not taken in: {error}"
                 state.problems.append(f"the post Drafts could not be taken in ({error})")
         if state.filming is not None:
-            state.filming.settle(state.post_outcome)
+            state.filming.settle(state.post_outcome, self.store)
             try:
                 filming.record(state.filming, self.store, run_id, now)
             except (OSError, ConfigError) as error:
@@ -850,12 +898,13 @@ class Cycle:
             state.beta = beta.Plan(rules, gate, state.run_id)
             state.beta_problem = "not prepared: the Review Queue could not be read"
         else:
-            reports, reports_failure = None, None
+            reports, reports_failure, unreadable = None, None, []
             if gate.recorded:
                 reports, problems, reports_failure = read_records(folder / beta.REPORTS)
                 for record in problems:
                     name = beta.mandu_file(beta.REPORTS, Path(record.name).name)
                     state.problems.append(f"{name} could not be used ({'; '.join(record.problems)})")
+                unreadable = [Path(record.name).name for record in problems if record.problems != (STRAY,)]
             try:
                 state.beta = beta.prepare(
                     rules,
@@ -871,6 +920,7 @@ class Cycle:
                     self.store,
                     state.run_id,
                     self.now(),
+                    unreadable,
                 )
                 if state.beta.active:
                     record = self.store.path(RUN_REPORTS, beta.plan_file(state.run_id))
@@ -915,6 +965,19 @@ class Cycle:
             beta.record(state.beta, state.beta_outcome, self.store, run_id, now)
         except (OSError, ConfigError) as error:
             state.problems.append(f"the Beta Cohort recruiting Evidence could not be written ({error})")
+
+    def clear_probe_files(self) -> list[str]:
+        """Remove what a stopped boundary check left in the areas before the pre-run records step commits workspace/,
+        and return it. A checkout whose boundary cannot be resolved is left as it is: no check could start in it
+        either, and whether this run starts is for the code the sync brings to say."""
+        try:
+            _, boundary = load_boundary(self.repo_root, self.env, self.home)
+        except ConfigError:
+            return []
+        left = clear_probe_files(boundary)
+        if left:
+            self.say(f"pre-run: removed boundary probe files left in the areas: {', '.join(left)}")
+        return left
 
     def research_apps(
         self, state: RunState, config: sources.Config, mandu: Path
@@ -1612,6 +1675,7 @@ class Cycle:
         elif not config.records.sync_before_run:
             sync = {"status": "off", "detail": "the pre-run sync is turned off in config/run.json"}
         else:
+            removed = self.clear_probe_files()
             result = records.prepare(
                 self.repo_root,
                 config.records.remote,
@@ -1624,7 +1688,7 @@ class Cycle:
             if not result.ok_to_run:
                 self.say("refusing to start; the production clone needs attention first")
                 return EXIT_RECORDS
-            sync = result.as_json()
+            sync = dict(result.as_json(), probe_files_removed=removed)
             if result.code_changed:
                 # Run the reviewed code just fetched, not the code already loaded in this process.
                 entry = str(entry_point(self.repo_root))
@@ -1675,6 +1739,11 @@ class Cycle:
         sittings = self.sitting_runs(state)
         hashes, unreadable = run_state.item_hashes(self.store.root, ledger.entries, products, states.review_queue)
         state.problems += unreadable
+        lost = {
+            identifier: f"`{entry['file']}`, its item file, could not be read"
+            for identifier, entry in ledger.entries.items()
+            if identifier not in hashes
+        }
         seen: dict[str, str] = {}
         for identifier, fingerprint in hashes.items():
             seen.setdefault(fingerprint, identifier)
@@ -1689,7 +1758,7 @@ class Cycle:
             )
         self.read_waitlist(state, config, rules)
         if ledger_ok:
-            self.file_dispatches(state, ledger, products, seen)
+            self.file_dispatches(state, ledger, products, seen, hashes)
         self.prepare_posts(state, config, registry, boundary, ledger)
         self.prepare_filming(state, config, footage_place, areas, ledger, ledger_ok, products, seen)
         state.queue_before = ledger.ordered()
@@ -1706,6 +1775,11 @@ class Cycle:
         self.prepare_work(
             state, config, registry, boundary, areas, ledger if ledger_ok else None, states, folder, network
         )
+        # A stopped boundary check's script sits among the agent's Instructions, so every run removes what such a check
+        # left before it remembers them: the guard would put back after the agent whatever it had remembered.
+        state.probe_files_removed = clear_probe_files(boundary)
+        if state.probe_files_removed:
+            self.say(f"removed boundary probe files left in the areas: {', '.join(state.probe_files_removed)}")
         state.guidance = learning.remember(areas)
         state.problems += state.guidance.problems
         self.plan_sessions(state, config)
@@ -1717,7 +1791,10 @@ class Cycle:
         published: list[str] = []
         if ledger_ok:
             kept = evidence.records(self.store)
-            published, state.set_aside = ledger.take_incoming(areas, self.store, products, run_id, now, seen, kept)
+            published, state.set_aside = ledger.take_incoming(
+                areas, self.store, products, run_id, now, seen, kept, lost
+            )
+            state.queue_unread = ledger.unsettled
             state.published += published
         incoming = len(published) + len(state.set_aside)
         if ledger_ok:
@@ -1747,6 +1824,7 @@ class Cycle:
                     " report is the only place it is told"
                 )
         state.queue_after = ledger.ordered()
+        self.left_standing(state, config, ledger)
         self.outputs(state, config, ledger_ok)
         notice = report.problems_notice(state, self.store.relative(report_path))
         if notice and ledger_ok:

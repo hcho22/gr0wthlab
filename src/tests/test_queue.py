@@ -146,6 +146,58 @@ class IncomingTest(LedgerTestCase):
         self.assertEqual(published, [])
         self.assertIn("not an open item", set_aside[0].problems[0])
 
+    def test_supersedes_never_withdraws_an_open_item_whose_item_file_could_not_be_read(self):
+        """The reason given states what the records show: the file could not be read, so the open item stands."""
+        self.drop("first.md", fakes.PROPOSAL)
+        self.take()
+        self.drop("second.md", fakes.proposal(extra="supersedes: 20261011-first\n", title="record it another way"))
+        self.drop("third.md", fakes.proposal(extra="supersedes: 20261011-first\n", title="record it a third way"))
+        lost = {"20261011-first": "`review-queue/items/20261011-first.md`, its item file, could not be read"}
+        published, set_aside = self.ledger.take_incoming(self.areas, self.store, PRODUCTS, "RUN2", NOW, {}, (), lost)
+        self.assertEqual(published, [])
+        reason = (
+            "supersedes 20261011-first: `review-queue/items/20261011-first.md`, its item file, could not be read,"
+            " so the open item stands and nothing replaces it in this run"
+        )
+        self.assertEqual(
+            sorted((item.name, item.problems) for item in set_aside),
+            [("second.md", (reason,)), ("third.md", (reason,))],
+        )
+        self.assertEqual(self.ledger.entries["20261011-first"]["status"], OPEN)
+        self.assertEqual(
+            [(kept.item, kept.unread) for kept in self.ledger.stood],
+            [("20261011-first", (lost["20261011-first"],))],
+            "the one open item stands once, however many items would have replaced it",
+        )
+
+    def test_an_item_with_the_kind_and_ask_of_a_queued_one_whose_item_file_could_not_be_read_is_never_queued(self):
+        """Its fingerprint is then unknown, so nothing shows the item is not the ask the Founder decided."""
+        self.drop("first.md", fakes.PROPOSAL)
+        self.take()
+        self.ledger.take_decisions([decision("20261011-first", "reject", "No.")], "RUN2", NOW)
+        rejected = dict(self.ledger.entries["20261011-first"])
+        lost = {"20261011-first": "`review-queue/items/20261011-first.md`, its item file, could not be read"}
+        self.drop("again.md", fakes.PROPOSAL.replace("cleared\n", "  CLEARED \n").replace("stale caveat", "caveat"))
+        self.drop("other.md", fakes.proposal(title="record it another way"))
+        self.drop("notice.md", fakes.proposal("notice"))
+        published, set_aside = self.ledger.take_incoming(self.areas, self.store, PRODUCTS, "RUN2", NOW, {}, (), lost)
+        self.assertEqual(published, ["20261011-notice", "20261011-other"], "the ledger shows these ask something else")
+        self.assertEqual(
+            [(item.name, item.problems) for item in set_aside],
+            [
+                (
+                    "again.md",
+                    (
+                        "has the kind and ask of 20261011-first, which is rejected: `review-queue/items/"
+                        "20261011-first.md`, its item file, could not be read, so nothing shows this item asks"
+                        " anything else",
+                    ),
+                )
+            ],
+        )
+        self.assertEqual((self.ledger.unsettled, self.ledger.stood), ([lost["20261011-first"]], []))
+        self.assertEqual(self.ledger.entries["20261011-first"], rejected)
+
     def test_an_item_the_launcher_filed_from_reviewed_text_is_never_superseded(self):
         request = exchange.check_item(fakes.proposal("dispatch-request"), PRODUCTS).item
         filed = self.ledger.publish(self.store, request, "waitlist", "RUN1", NOW, origin="dispatch/waitlist")

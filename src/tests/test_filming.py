@@ -15,6 +15,7 @@ from pathlib import Path
 from unittest import mock
 
 from gr0wthlab import boundary, cli, cycle, exchange, filming, footage, posts, shots, video
+from gr0wthlab.areas import Store
 from gr0wthlab.boundary import ConfigError
 from tests import fakes
 from tests.test_cycle import CycleTestCase
@@ -197,6 +198,21 @@ class FilmingRunCase(CycleTestCase):
             fakes.draft_path(1): fakes.filming_draft(1),
             fakes.draft_path(4): fakes.filming_draft(8).replace("day: 8", "day: 4"),
         }
+
+    def filming_row(self, day):
+        """A day's row of the Filming table in the latest run, which is what a Filming session is told of the day."""
+        return self.filming_section().split(f"\n| {day} |")[1].split("\n")[0]
+
+    def day_1_beside_other_footage(self):
+        """Day 1's post, open with its video, in a window whose footage place also holds footage of day 2, so that
+        footage has begun to arrive whatever becomes of day 1's own file."""
+        self.approved_plan(days=(1, 2, 8))
+        self.clip("d01-s1.mov")
+        self.clip("d02-s2.mov", 16.0)
+        self.run_ok({fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): fakes.edit_record(1, DAY_1)})
+        post = self.posts_open()[1]
+        self.assertIn("asset", post)
+        return post
 
     @staticmethod
     def both(edit):
@@ -521,6 +537,20 @@ class FilmingPlanTest(FilmingRunCase):
         report = self.report()
         self.assertIn(f"Nothing could be planned this run: the kit could not be read: `{ANGLES}` (", report)
         self.assertIn("| Filming plan and edits | incomplete | the kit could not be read:", report)
+
+    def test_an_open_plan_stands_under_its_id_while_the_kit_it_is_compared_with_cannot_be_read(self):
+        queue = self.run_ok(days=(1, 8))
+        (plan,) = [entry for entry in queue["open"] if entry["kind"] == "filming-plan"]
+        angles = self.mandu / ANGLES
+        text = angles.read_text(encoding="utf-8")
+        angles.write_text("# Angle bank\n\nNo table here.\n", encoding="utf-8")
+        self.run_ok()
+        self.assert_stands(plan, "Filming plan and edits", f"the kit could not be read: `{ANGLES}` (")
+        self.assertIn(f"The open plan `{plan['id']}` stands as it is.", self.report())
+        angles.write_text(text, encoding="utf-8")
+        self.run_ok()
+        self.assert_never_asked_again(plan)
+        self.assertIn(f"- Filming plan: open as `{plan['id']}`.", self.report())
 
     def test_a_run_whose_product_does_not_film_files_no_plan(self):
         fakes.set_filming(self.repo, False)
@@ -1657,7 +1687,7 @@ class EditRunTest(FilmingRunCase):
         # the post keeps its video only while its Draft stays as it is.
         self.assertFalse(self.filming_session_ran())
         self.assertIn(
-            f"- Day 1's open post shows its video, which cannot be cut again this run ({why}): its post keeps the"
+            f"- Day 1's open post names a video that cannot be cut again this run ({why}): its post keeps the"
             " video it shows only while its Draft stays as it is, so rewrite that Draft only when it must change.",
             self.brief(session="post-drafts"),
         )
@@ -1689,15 +1719,11 @@ class EditRunTest(FilmingRunCase):
         self.assertIn("- Day 2: `day-02.md` is in place", told)
         self.assertNotIn("- Day 1: ", told.split("## Post Drafts in place")[1])
         self.assertIn(
-            "- Day 1's open post shows its video, which cannot be cut again this run (no footage yet for shot"
+            "- Day 1's open post names a video that cannot be cut again this run (no footage yet for shot"
             " d01-s1): its post keeps the video it shows only while its Draft stays as it is",
             self.brief(session="post-drafts"),
         )
         self.assertIn("asset", self.posts_open()[1])
-
-    def filming_row(self, day):
-        """A day's row of the Filming table in the latest run, which is what a Filming session is told of the day."""
-        return self.filming_section().split(f"\n| {day} |")[1].split("\n")[0]
 
     def slot_set_while_the_video_cannot_be_cut(self, stop):
         """Day 1's post is open with its video, and another day's footage is in the footage place too; the
@@ -1748,17 +1774,6 @@ class EditRunTest(FilmingRunCase):
             said,
         )
         return post, moved
-
-    def day_1_beside_other_footage(self):
-        """Day 1's post, open with its video, in a window whose footage place also holds footage of day 2, so that
-        footage has begun to arrive whatever becomes of day 1's own file."""
-        self.approved_plan(days=(1, 2, 8))
-        self.clip("d01-s1.mov")
-        self.clip("d02-s2.mov", 16.0)
-        self.run_ok({fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): fakes.edit_record(1, DAY_1)})
-        post = self.posts_open()[1]
-        self.assertIn("asset", post)
-        return post
 
     def test_a_slot_set_while_the_footage_is_away_keeps_the_post_s_video_and_shows_the_new_slot(self):
         def footage_away():
@@ -1838,7 +1853,7 @@ class EditRunTest(FilmingRunCase):
         self.assertEqual(code, 0, said)
         self.assertIn(f"{kept} the day's video is cut from it again once it can be", said)
 
-    def test_a_slot_set_while_the_video_cannot_be_cut_and_its_file_is_gone_leaves_the_open_post_standing(self):
+    def test_a_slot_set_while_the_video_cannot_be_cut_and_its_file_is_gone_is_shown_by_a_post_without_a_video(self):
         queue = self.day_1()
         post = next(entry for entry in queue["open"] if entry["kind"] == "post")
         clip = self.footage / "window-1" / "d01-s1.mov"
@@ -1847,25 +1862,27 @@ class EditRunTest(FilmingRunCase):
         (self.ledger() / post["asset"]).unlink()
         fakes.set_window(self.repo, fakes.window_from(date(2026, 10, 11)))
         self.run_ok()
-        self.assertEqual(self.posts_open()[1], post)
+        bare = self.posts_open()[1]
+        self.assertEqual((bare["supersedes"], "asset" in bare, "asset_sha256" in bare), (post["id"], False, False))
+        self.assertIn("T", bare["slot"])
+        why = (
+            f"no footage yet for shot d01-s1, and the finished file `{post['asset']}` of the video `{post['id']}`"
+            " named is gone"
+        )
+        self.assertIn(f"**Video file**: none yet ({why}).", self.item(bare))
         self.assertIn(
-            f"| 1 | P01 / AB-1 leg A | kept | `{post['id']}`; its video was not cut again (no footage yet for shot"
-            " d01-s1), and its finished file is gone or is no longer the file its record names; the open item stands,"
-            " and its new slot reaches it once the video is cut again |",
+            f"| 1 | P01 / AB-1 leg A | queued | `{bare['id']}`; replaces `{post['id']}`, without the video that one"
+            f" named, which was not cut again this run ({why}) |",
             self.report(),
         )
-        # A finished file that is no longer the file its record names is not shown again either.
-        (self.ledger() / post["asset"]).write_text("another file")
-        self.run_ok()
-        self.assertEqual(self.posts_open()[1], post)
-        # With the footage back the video is cut again, and the post that replaces the open one has the slot.
+        # With the footage back the video is cut again, and the post that shows it has the slot too.
         clip.write_bytes(held)
         self.run_ok()
         moved = self.posts_open()[1]
-        self.assertEqual((moved["supersedes"], moved["asset_sha256"]), (post["id"], post["asset_sha256"]))
-        self.assertIn("T", moved["slot"])
+        self.assertEqual((moved["supersedes"], moved["asset_sha256"]), (bare["id"], post["asset_sha256"]))
+        self.assertEqual(moved["slot"], bare["slot"])
         self.assertIn(
-            f"| 1 | P01 / AB-1 leg A | queued | `{moved['id']}`; replaces `{post['id']}`, with its finished video |",
+            f"| 1 | P01 / AB-1 leg A | queued | `{moved['id']}`; replaces `{bare['id']}`, with its finished video |",
             self.report(),
         )
 
@@ -1895,6 +1912,91 @@ class EditRunTest(FilmingRunCase):
         self.decide(PLAN, "approve")
         queue = self.run_ok()
         self.assertIn("asset", next(entry for entry in queue["open"] if entry["kind"] == "post"))
+
+    def test_an_open_post_stands_under_its_id_while_its_edit_record_cannot_be_read(self):
+        queue = self.day_1()
+        post = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.assertIn("asset", post)
+        record = self.workspace() / fakes.edit_path(1)
+        written = record.read_bytes()
+        record.write_bytes(b"\xff\xfe not text")
+        self.run_ok()
+        unread = "`drafts/edits/window-1/day-01.json` could not be read ("
+        self.assert_stands(post, "Post Drafts", unread)
+        report = self.report()
+        self.assertRegex(report, r"\| Filming plan and edits \| incomplete \| `drafts/edits/window-1/day-01\.json`")
+        self.assertIn(f"| 1 | P01 / AB-1 leg A | kept | `{post['id']}`; not checked again, since {unread}", report)
+        self.assertNotIn("its edit record does not pass", self.notices())
+        self.assertTrue((self.ledger() / post["asset"]).is_file())
+        record.write_bytes(written)
+        self.run_ok()
+        self.assert_never_asked_again(post)
+        self.assertIn("its Draft is unchanged and passes, and so is its video |", self.report())
+
+    def test_an_open_post_stands_under_its_id_while_a_footage_file_its_edit_names_cannot_be_measured(self):
+        self.approved_plan()
+        self.clip("d01-s1.mov")
+        take = self.clip("d01-s1-take-2.mov")
+        edit = fakes.edit_record(1, ("d01-s1", "d01-s1-take-2.mov", 2, 12))
+        queue = self.run_ok({fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): edit})
+        post = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.assertIn("asset", post)
+        measured = take.read_bytes()
+        take.write_bytes(b"not a video any more")
+        self.run_ok()
+        unread = "the footage file `window-1/d01-s1-take-2.mov` could not be measured ("
+        self.assert_stands(post, "Post Drafts", unread)
+        self.assertRegex(
+            self.report(), r"\| Filming plan and edits \| incomplete \| the footage file `window-1/d01-s1-ta"
+        )
+        self.assertNotIn("its edit record does not pass", self.notices())
+        take.write_bytes(measured)
+        self.run_ok()
+        self.assert_never_asked_again(post)
+        self.assertIn("its Draft is unchanged and passes, and so is its video |", self.report())
+
+    def test_an_edit_that_names_a_footage_file_no_longer_in_the_footage_place_still_withdraws_the_day_s_post(self):
+        self.approved_plan()
+        self.clip("d01-s1.mov")
+        take = self.clip("d01-s1-take-2.mov")
+        edit = fakes.edit_record(1, ("d01-s1", "d01-s1-take-2.mov", 2, 12))
+        queue = self.run_ok({fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): edit})
+        post = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        take.unlink()
+        self.run_ok()
+        self.assertTrue(self.entry(post["id"])["withdrawn"])
+        notice = self.notice()
+        self.assertIn("footage-place: the footage place holds no file 'window-1/d01-s1-take-2.mov'", notice)
+        self.assertIn(f"- The open post `{post['id']}` for day 1 is withdrawn, since its edit record does not", notice)
+        self.assertNotIn("left exactly as it is", notice)
+
+    def test_an_open_post_stands_under_its_id_while_the_record_of_its_video_cannot_be_read(self):
+        """Cut again without it, a video could come out as another file and take the open post's place."""
+        queue = self.day_1()
+        post = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        record = self.ledger() / post["asset_record"]
+        kept = record.read_text(encoding="utf-8")
+        record.write_text("{", encoding="utf-8")
+        asset = self.ledger() / post["asset"]
+        stamp = asset.stat().st_mtime_ns
+        self.run_ok()
+        unread = f"`{post['asset_record']}`, the record of the video cut from it, could not be read"
+        self.assert_stands(post, "Post Drafts", unread)
+        self.assertEqual(asset.stat().st_mtime_ns, stamp, "nothing was cut again")
+        self.assertEqual(record.read_text(encoding="utf-8"), "{", "and the record was not written over")
+        notice = self.notice()
+        self.assertIn(f"- Day 1's video could not be cut again: {unread}, so nothing was cut again.\n", notice)
+        # The video-file check reads the same record, and says the same of the post: it is left as it is.
+        self.assertIn(
+            f"- Day 1's open post `{post['id']}`: the record `{post['asset_record']}` of the video it names cannot be"
+            " read or does not name that video, so nothing is said of whether the post keeps the video, and the post"
+            " is left as it is.",
+            notice,
+        )
+        record.write_text(kept, encoding="utf-8")
+        self.run_ok()
+        self.assert_never_asked_again(post)
+        self.assertIn("its Draft is unchanged and passes, and so is its video |", self.report())
 
     def test_an_unchanged_asset_is_kept_not_rendered_again_and_its_post_stands(self):
         queue = self.day_1()
@@ -1995,6 +2097,44 @@ class EditRunTest(FilmingRunCase):
         code, said = self.check_edits(queue["updated_by_run"])
         self.assertEqual(code, 0, said)
         self.assertIn("OK day 1: drafts/edits/window-1/day-01.json: it passes", said)
+
+    def test_an_approved_copy_s_draft_that_cannot_be_read_is_the_run_s_gap_and_its_open_video_post_is_untouched(self):
+        """No video is cut for the day, whose post is not judged: the Draft is named as the source that failed."""
+        self.approved_plan()
+        queue = self.run_ok({fakes.draft_path(1): fakes.filming_draft(1)})
+        copy = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.decide(copy["id"], "approve")
+        self.clip("d01-s1.mov")
+        queue = self.run_ok({fakes.edit_path(1): fakes.edit_record(1, DAY_1)})
+        (video_post,) = [entry for entry in queue["open"] if entry["kind"] == "post"]
+        self.assertIn("asset", video_post)
+        path = self.workspace() / fakes.draft_path(1)
+        written = path.read_bytes()
+        path.write_bytes(b"\xff\xfe not text")
+        queue = self.run_ok()
+        self.assertEqual([entry for entry in queue["open"] if entry["kind"] == "post"], [video_post])
+        self.assertEqual([entry["id"] for entry in queue["closed"] if entry.get("withdrawn")], [])
+        report = self.report()
+        self.assertIn(
+            f"| 1 | P01 / AB-1 leg A | approved earlier | `{copy['id']}`; the Founder approved its copy; its Draft"
+            " could not be read, so no video is cut for it |",
+            report,
+        )
+        unread = f"`{fakes.draft_path(1)}` could not be read ("
+        self.assertRegex(report, r"\| Post Drafts \| incomplete \| [^|\n]*" + re.escape(unread))
+        notice = self.notice()
+        self.assertRegex(
+            notice,
+            r"- Day 1's video (could not be cut again|was not cut): the Founder approved its copy as"
+            rf" `{copy['id']}`, and its Draft could not be read",
+        )
+        self.assertNotIn(
+            f"- `{video_post['id']}` (Post Drafts)", notice, "its post was not judged, so it is not listed"
+        )
+        path.write_bytes(written)
+        queue = self.run_ok()
+        self.assertEqual([entry for entry in queue["open"] if entry["kind"] == "post"], [video_post])
+        self.assertNotIn(unread, self.report())
 
     def test_a_post_rejected_with_its_video_is_asked_again_only_once_something_changes(self):
         queue = self.day_1()
@@ -2408,6 +2548,541 @@ class EditRunTest(FilmingRunCase):
                 f"`../config/run.json` cannot be rebuilt: refusing to touch {self.repo}/config/run.json: it is outside"
                 f" {self.repo}/ledger\n",
             )
+
+
+class LostVideoTest(FilmingRunCase):
+    """The launcher never says a post shows or keeps a video unless the finished file is on disk and is the file the
+    video's record and the post's entry name. Each place that speaks of a video the run does not cut is met here with
+    the file gone, changed, and unreadable; the file in place is what every other test of those places holds."""
+
+    GONE = "is gone"
+    CHANGED = "is no longer the file its record names"
+    UNREAD = "could not be read (Permission denied)"
+    AWAY = "no footage yet for shot d01-s1"
+
+    def day_1(self):
+        self.approved_plan()
+        self.clip("d01-s1.mov")
+        self.run_ok({fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): fakes.edit_record(1, DAY_1)})
+        return self.posts_open()[1]
+
+    def unreadable(self, post):
+        """Make the finished file of a post's video one the launcher cannot read, until the returned call."""
+        real, asset = footage.fingerprint, self.ledger() / post["asset"]
+
+        def refuse(path):
+            if Path(path) == asset:
+                raise PermissionError(13, "Permission denied", str(path))
+            return real(path)
+
+        patch = mock.patch.object(footage, "fingerprint", refuse)
+        patch.start()
+        self.addCleanup(patch.stop)
+        return patch.stop
+
+    def lost(self, post, how, due=True):
+        """What the report and the notice say of an open post whose video's finished file is not the file it names,
+        in a run its day is due in or not."""
+        said = (
+            f"Day {post['day']}'s open post `{post['id']}`: the finished file `{post['asset']}` of the video it names"
+            f" {how}"
+        )
+        if how == self.UNREAD:
+            return f"- {said}, so nothing is said of whether the post keeps the video, and the post is left as it is."
+        said += ", so the post is not said to keep the video: nothing is substituted, and"
+        if due:
+            return f"- {said} it is cut again once it can be."
+        return f"- {said} day {post['day']} is not due this run, so nothing is cut for it and the post stands as it is."
+
+    def row(self, post, how):
+        """What a day's row says of the video its post names, in the report, the brief, and check-edits."""
+        said = f"the finished file `{post['asset']}` of the video its post names {how}"
+        if how == self.UNREAD:
+            return f"{said}, so nothing is said of whether the post keeps it, and the post is left as it is"
+        return f"{said}, so the post is not said to keep it: nothing is substituted, and it is cut again once it can be"
+
+    def told(self, post, how, why, skipped=""):
+        """One run with day 1's video not cut again for why and its finished file not intact: the open post is as it
+        was, and the report rows, the notice, the brief, and check-edits say where the file stands, never that the
+        post keeps the video."""
+        self.run_ok()
+        self.assertEqual(self.posts_open()[1], post)
+        report, notice = self.report(), self.notice()
+        self.assertIn(
+            f"| 1 | P01 / AB-1 leg A | kept | `{post['id']}`; its video was not cut again ({why}), and the finished"
+            f" file `{post['asset']}` of the video it names {how}; the open item stands |",
+            report,
+        )
+        self.assertIn(f"| 1 | d01-s1 | not cut | {why}; {self.row(post, how)} |", report)
+        self.assertIn(
+            "Posts whose video's finished file was not confirmed as the file they name:\n\n" + self.lost(post, how),
+            report,
+        )
+        self.assertIn(self.lost(post, how), notice)
+        self.assertIn(skipped or "- Day 1's video could not be cut again: shot d01-s1 has no footage.\n", notice)
+        for text in (report, notice, self.brief()):
+            self.assertNotIn("keeps the video it shows", text.replace("the post of day 2 keeps", ""))
+        output = next(line for line in report.splitlines() if line.startswith("| Filming plan and edits |"))
+        if how == self.UNREAD:
+            self.assertIn(
+                f"| incomplete | the finished file `{post['asset']}` of the video day 1's post names {how} |", output
+            )
+        else:
+            self.assertIn("| complete |", output)
+        self.assertEqual(
+            self.filming_row(1).split(" | ")[-1],
+            f"not ready: {why}; {self.row(post, how)}; leave its edit record as it is |",
+        )
+        code, said = self.check_edits(self.queue()["updated_by_run"])
+        self.assertEqual(code, 0, said)
+        self.assertIn(
+            f"KEPT day 1: drafts/edits/window-1/day-01.json: it cannot be cut this run ({why}), so leave it as it is:"
+            f" {self.row(post, how)}\n",
+            said,
+        )
+        self.assertNotIn("keeps the video it shows", said)
+
+    def keeps(self, post, why):
+        """One run with the finished file intact again: everything says the post keeps its video, as before."""
+        self.run_ok()
+        self.assertEqual(self.posts_open()[1], post)
+        report = self.report()
+        self.assertIn(f"| 1 | d01-s1 | not cut | {why}; its post keeps the video it shows |", report)
+        self.assertNotIn("finished file", report)
+        self.assertIn("| Filming plan and edits | complete |", report)
+        self.assertEqual(self.filming_row(1).split(" | ")[-1], f"not ready: {why}; {LEAVE} |")
+        self.assertIn("the day's post keeps the video it shows", self.check_edits(self.queue()["updated_by_run"])[1])
+
+    def gives_way(self, post, how, why, skipped=""):
+        """One run with day 1's video not cut again for why and its finished file gone or changed: the same post is
+        queued in the open one's place without a video, and the item, the report rows, and the notice give the real
+        reason. Returns the post that shows no video."""
+        self.run_ok()
+        bare = self.posts_open()[1]
+        self.assertEqual(bare["supersedes"], post["id"])
+        for key in ("asset", "asset_sha256", "asset_record"):
+            self.assertNotIn(key, bare)
+        self.assertEqual((bare["draft"], bare["draft_sha256"]), (post["draft"], post["draft_sha256"]))
+        closed = next(entry for entry in self.queue()["closed"] if entry["id"] == post["id"])
+        self.assertEqual((closed["status"], closed["superseded_by"]), ("superseded", bare["id"]))
+        self.assertNotIn("withdrawn", closed)
+        lost = f"{why}, and the finished file `{post['asset']}` of the video `{post['id']}` named {how}"
+        text = self.item(bare)
+        self.assertEqual(exchange.check_item(text, ["RepToday", "Immerse"], published=True).problems, [])
+        self.assertNotIn("asset:", text.split("---")[1])
+        self.assertIn(
+            f"**Video file**: none yet ({lost}). Approving this item approves its copy and its beat plan; the"
+            " finished video comes back with this copy for approval.",
+            text,
+        )
+        # Its copy is the copy the Founder was shown: only what it says of its video differs.
+        before = self.ledger() / next(e for e in self.queue()["closed"] if e["id"] == post["id"])["file"]
+        copy = [words.split("**TikTok**")[1].split("## Touches")[0] for words in (text, before.read_text("utf-8"))]
+        self.assertEqual(copy[0], copy[1])
+        report, notice = self.report(), self.notice()
+        self.assertIn(
+            f"| 1 | P01 / AB-1 leg A | queued | `{bare['id']}`; replaces `{post['id']}`, without the video that one"
+            f" named, which was not cut again this run ({lost}) |",
+            report,
+        )
+        self.assertIn(f"| 1 | d01-s1 | not cut | {lost} |", report)
+        told = (
+            f"- Day 1's post `{post['id']}` gave way to `{bare['id']}`, which shows no video: {lost}. Approving it"
+            " approves the copy alone, and the video comes back for approval once it is cut again."
+        )
+        self.assertIn("Posts that lost the video they named:\n\n" + told, report)
+        self.assertIn(told, notice)
+        self.assertIn(
+            skipped or "- Day 1 has no video: shot d01-s1 has no footage, and nothing is substituted.", notice
+        )
+        self.assertNotIn("keeps the video it shows", (report + notice).replace("the post of day 2 keeps", ""))
+        self.assertNotIn("Posts whose video's finished file was not confirmed as the file they name", report)
+        self.assertIn("| Filming plan and edits | complete |", report)
+        # The next run has nothing more to say of it: the post that shows no video stands.
+        self.run_ok()
+        self.assertEqual(self.posts_open()[1], bare)
+        self.assertNotIn("gave way", self.report() + self.notice())
+        self.assertNotIn("finished file", self.report())
+        return bare
+
+    def cut_again(self, post, bare):
+        """One run with the video cut again: it comes back for approval in a post that takes the bare one's place."""
+        self.run_ok()
+        shown = self.posts_open()[1]
+        self.assertEqual((shown["supersedes"], shown["asset"]), (bare["id"], post["asset"]))
+        self.assertEqual((shown["asset_sha256"], shown["draft_sha256"]), (post["asset_sha256"], post["draft_sha256"]))
+        self.assertEqual(footage.fingerprint(self.ledger() / post["asset"])[0], post["asset_sha256"])
+        report = self.report()
+        self.assertIn(
+            f"| 1 | P01 / AB-1 leg A | queued | `{shown['id']}`; replaces `{bare['id']}`, with its finished video |",
+            report,
+        )
+        self.assertNotIn("finished file", report)
+        return shown
+
+    def test_footage_away_and_the_finished_file_deleted_gives_way_to_a_post_that_shows_no_video(self):
+        # As the Founder meets it: a post shows its video, the footage is put away, the finished file is deleted.
+        post = self.day_1_beside_other_footage()
+        clip, asset = self.footage / "window-1" / "d01-s1.mov", self.ledger() / post["asset"]
+        held = clip.read_bytes()
+        clip.unlink()
+        self.keeps(post, self.AWAY)
+        self.assertIn("could not be cut again: shot d01-s1 has no footage; its post keeps the video", self.notice())
+        asset.unlink()
+        bare = self.gives_way(post, self.GONE, self.AWAY)
+        self.assertFalse(asset.exists())
+        clip.write_bytes(held)
+        self.cut_again(post, bare)
+
+    def test_footage_away_and_the_finished_file_changed_gives_way_and_the_file_is_left_until_it_is_cut_again(self):
+        post = self.day_1_beside_other_footage()
+        clip, asset = self.footage / "window-1" / "d01-s1.mov", self.ledger() / post["asset"]
+        held = clip.read_bytes()
+        clip.unlink()
+        asset.write_text("another file")
+        bare = self.gives_way(post, self.CHANGED, self.AWAY)
+        self.assertEqual(asset.read_text(), "another file")
+        clip.write_bytes(held)
+        self.cut_again(post, bare)
+
+    def test_footage_away_and_the_finished_file_unreadable_leaves_the_open_post_and_reads_incomplete(self):
+        post = self.day_1_beside_other_footage()
+        (self.footage / "window-1" / "d01-s1.mov").unlink()
+        readable = self.unreadable(post)
+        self.told(post, self.UNREAD, self.AWAY)
+        readable()
+        self.keeps(post, self.AWAY)
+
+    def test_a_post_whose_finished_file_is_gone_stands_while_its_draft_cannot_be_read_and_gives_way_once_it_can(self):
+        """Where the two rules meet. A post whose video is lost gives way only to the same post without it, and a post
+        is queued only from a Draft the launcher could read and check; so while the Draft cannot be read the open
+        post stands, said to have lost its video's file, and the first run that reads the Draft replaces it."""
+        post = self.day_1_beside_other_footage()
+        (self.footage / "window-1" / "d01-s1.mov").unlink()
+        (self.ledger() / post["asset"]).unlink()
+        draft = self.workspace() / fakes.draft_path(1)
+        written = draft.read_bytes()
+        draft.write_bytes(b"\xff\xfe not text")
+        self.run_ok()
+        self.assert_stands(post, "Post Drafts", "`drafts/posts/window-1/day-01.md` could not be read (")
+        report, notice = self.report(), self.notice()
+        self.assertIn(self.lost(post, self.GONE), report)
+        self.assertIn(self.lost(post, self.GONE), notice)
+        for text in (report, notice):
+            self.assertNotIn("gave way", text)
+            self.assertNotIn("keeps the video it shows", text.replace("the post of day 2 keeps", ""))
+        draft.write_bytes(written)
+        self.gives_way(post, self.GONE, self.AWAY)
+
+    def no_ffmpeg(self):
+        self.env["GR0WTHLAB_FFMPEG_BIN"] = str(self.root / "no-ffmpeg")
+        problem = f"ffmpeg is not an executable at `{self.root / 'no-ffmpeg'}`"
+        return (
+            problem,
+            f"the video tooling cannot be used ({problem})",
+            f"- The edit of day 1 was skipped: {problem}.\n",
+        )
+
+    def ffmpeg_away(self, how):
+        post = self.day_1()
+        asset = self.ledger() / post["asset"]
+        _, why, skipped = self.no_ffmpeg()
+        asset.unlink()
+        if how == self.CHANGED:
+            asset.write_text("another file")
+        bare = self.gives_way(post, how, why, skipped)
+        self.env["GR0WTHLAB_FFMPEG_BIN"] = str(self.tools / "ffmpeg")
+        self.cut_again(post, bare)
+
+    def test_ffmpeg_away_and_the_finished_file_gone_gives_way_to_a_post_that_shows_no_video(self):
+        self.ffmpeg_away(self.GONE)
+
+    def test_ffmpeg_away_and_the_finished_file_changed_gives_way_to_a_post_that_shows_no_video(self):
+        self.ffmpeg_away(self.CHANGED)
+
+    def test_ffmpeg_away_and_the_finished_file_unreadable_leaves_the_open_post_and_reads_incomplete(self):
+        post = self.day_1()
+        problem, why, skipped = self.no_ffmpeg()
+        readable = self.unreadable(post)
+        self.told(post, self.UNREAD, why, skipped)
+        readable()
+        self.keeps(post, why)
+        self.assertIn(
+            f"- The edit of day 1 was skipped: {problem}; the post of day 1 keeps the video it", self.notice()
+        )
+
+    def left_the_queue(self, post, why):
+        """One run after which a post that lost its video is off the queue with nothing asked in its place."""
+        queue = self.run_ok()
+        self.assertEqual(self.posts_open(), {})
+        closed = next(entry for entry in queue["closed"] if entry["id"] == post["id"])
+        self.assertEqual((closed["status"], closed["withdrawn"]), ("superseded", True))
+        told = (
+            f"- Day 1's post `{post['id']}` left the queue: {why}, and the finished file `{post['asset']}` of the"
+            f" video `{post['id']}` named is gone. Nothing is asked in its place, since the Founder already decided"
+            " this day's copy, and the video comes back for approval once it is cut again."
+        )
+        self.assertIn(told, self.report())
+        self.assertIn(told, self.notice())
+        self.assertEqual(closed["superseded_by"], max(e["id"] for e in queue["open"] if e["kind"] == "notice"))
+        self.assertIn(f"the open `{post['id']}` was withdrawn", self.report())
+
+    def test_a_post_that_adds_a_lost_video_to_an_approved_copy_leaves_the_queue_and_the_copy_is_not_asked_again(self):
+        self.approved_plan()
+        self.run_ok({fakes.draft_path(1): fakes.filming_draft(1)})
+        copy = self.posts_open()[1]
+        self.decide(copy["id"], "approve")
+        clip = self.clip("d01-s1.mov")
+        self.run_ok({fakes.edit_path(1): fakes.edit_record(1, DAY_1)})
+        post = self.posts_open()[1]
+        self.assertIn("asset", post)
+        clip = self.footage / "window-1" / "d01-s1.mov"
+        held = clip.read_bytes()
+        clip.unlink()
+        (self.ledger() / post["asset"]).unlink()
+        self.left_the_queue(post, self.AWAY)
+        self.assertEqual([entry["id"] for entry in self.entries(status="approved")], [copy["id"]])
+        self.assertIn(
+            f"| 1 | P01 / AB-1 leg A | approved earlier | `{copy['id']}`; the Founder approved its copy;", self.report()
+        )
+        # The video comes back for approval beside the approved copy once it is cut again.
+        clip.write_bytes(held)
+        self.run_ok()
+        again = self.posts_open()[1]
+        self.assertEqual(again["asset_sha256"], post["asset_sha256"])
+        self.assertIn(f"`{copy['id']}` before its video existed; this item adds the video.", self.item(again))
+
+    def test_a_post_of_a_draft_the_founder_rejected_that_loses_its_video_leaves_the_queue_and_is_not_asked_alone(self):
+        first = self.day_1()
+        self.decide(first["id"], "reject", reason="Start the recording a second later.")
+        self.run_ok({fakes.edit_path(1): fakes.edit_record(1, LATER)})
+        post = self.posts_open()[1]
+        self.assertNotEqual(post["asset"], first["asset"])
+        (self.footage / "window-1" / "d01-s1.mov").unlink()
+        (self.ledger() / post["asset"]).unlink()
+        self.left_the_queue(post, self.AWAY)
+        self.assertIn(
+            f"| 1 | P01 / AB-1 leg A | not queued again | `{first['id']}`; the Founder rejected", self.report()
+        )
+
+    def checklist_grown(self, by):
+        """Add lines to the calendar's own checklist, which every post item lists, so that each post item is that
+        many characters longer."""
+        calendar = self.mandu / CALENDAR
+        lines = calendar.read_text(encoding="utf-8").splitlines()
+        self.assertTrue(lines[-1].startswith("- "), lines[-1])
+        while by:
+            lead = len(f"  Line {len(lines) + 1}: \n")
+            length = by - lead if by <= lead + 240 else 120
+            self.assertLess(0, length)
+            lines.append("- " + ("steady " * length)[: length - 1] + "y")
+            by -= lead + length
+        calendar.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def test_a_post_that_loses_its_video_and_is_blocked_without_it_leaves_the_queue_and_no_decision_is_claimed(self):
+        first = self.day_1()
+        clip, asset = self.footage / "window-1" / "d01-s1.mov", self.ledger() / first["asset"]
+        held, limit = clip.read_bytes(), exchange.MAX_ITEM_CHARS
+        # The item that says where the lost file stands is measured as a run queues it, and the video is cut again.
+        clip.unlink()
+        asset.unlink()
+        self.run_ok()
+        bare = self.posts_open()[1]
+        item = exchange.check_item(self.item(bare), ["RepToday", "Immerse"], published=True).item
+        size = len(exchange.render_content("post", item.ask, item.body, item.touches, item.evidence))
+        clip.write_bytes(held)
+        self.run_ok()
+        post = self.posts_open()[1]
+        self.assertEqual((post["supersedes"], post["asset"]), (bare["id"], first["asset"]))
+        # The kit's own checklist then grows until that item, naming this post, is ten characters over the limit,
+        # while the item that says only why the video was not cut still fits: the Draft passes until the post is
+        # settled to give way, and the post that would take its place is blocked as it is queued.
+        lost = f"{self.AWAY}, and the finished file `{post['asset']}` of the video `{post['id']}` named is gone"
+        self.assertLess(10, len(lost) - len(self.AWAY))
+        self.checklist_grown(limit + 10 - size - len(post["id"]) + len(first["id"]))
+        clip.unlink()
+        asset.unlink()
+        queue = self.run_ok()
+        self.assertEqual(self.posts_open(), {})
+        closed = next(entry for entry in queue["closed"] if entry["id"] == post["id"])
+        self.assertEqual((closed["status"], closed["withdrawn"]), ("superseded", True))
+        self.assertEqual(closed["superseded_by"], max(e["id"] for e in queue["open"] if e["kind"] == "notice"))
+        report, notice = self.report(), self.notice()
+        self.assertIn(
+            f"| 1 | P01 / AB-1 leg A | blocked | 1 failing check, listed below; the open `{post['id']}` was"
+            " withdrawn |",
+            report,
+        )
+        self.assertIn(f"- item: the item is {limit + 10} characters; keep it under {limit}", report)
+        self.assertIn(
+            f"- The open post `{post['id']}` for day 1 is withdrawn, since its Draft no longer passes.", notice
+        )
+        # The line that names the lost video gives that reason and no other: no record shows a decision.
+        told = (
+            f"- Day 1's post `{post['id']}` left the queue: {lost}. Nothing is asked in its place, since its Draft no"
+            " longer passes."
+        )
+        self.assertIn("Posts that lost the video they named:\n\n" + told, report)
+        for text in (report, notice):
+            self.assertEqual([line for line in text.splitlines() if "left the queue" in line], [told])
+            self.assertNotIn("keeps the video it shows", text)
+
+    def test_one_leg_that_loses_its_video_shows_none_and_is_compared_with_the_other_leg_once_it_is_cut_again(self):
+        drafts = self.one_week_pair()
+        self.run_ok({**drafts, **self.both(DAY_1)})
+        day_1, day_4 = self.posts_open()[1], self.posts_open()[4]
+        self.assertEqual(self.matched, [[1, 4]])
+        clip = self.footage / "window-1" / "d01-s1.mov"
+        held = clip.read_bytes()
+        clip.unlink()
+        (self.ledger() / day_1["asset"]).unlink()
+        # The pair check sees day 1 about to show no video, so the pair's rule has nothing to compare: day 4, whose
+        # finished file is intact, keeps its video, and no pair is named as differing.
+        self.run_ok()
+        bare = self.posts_open()[1]
+        self.assertEqual((bare["supersedes"], "asset" in bare), (day_1["id"], False))
+        self.assertEqual(self.posts_open()[4], day_4)
+        self.assertEqual(self.matched, [])
+        report = self.report()
+        self.assertIn(f"| 4 | d01-s1 | not cut | {self.AWAY}; its post keeps the video it shows |", report)
+        self.assertNotIn("A/B pairs whose two videos differ", report)
+        # Cut again, day 1's video is judged against the video day 4's post shows, as any leg cut alone is.
+        clip.write_bytes(held)
+        self.run_ok()
+        shown = self.posts_open()[1]
+        self.assertEqual((shown["supersedes"], shown["asset_sha256"]), (bare["id"], day_1["asset_sha256"]))
+        self.assertEqual(self.posts_open()[4], day_4)
+        self.assertEqual(self.matched, [[1, 4]])
+        self.assertIn(f"the same source ranges as day 4's leg {WHOLE}", self.item(shown))
+        # A leg cut again from other footage than its other leg shows is not offered, and what stood stays.
+        clip.unlink()
+        (self.ledger() / day_4["asset"]).unlink()
+        self.run_ok()
+        bare_4 = self.posts_open()[4]
+        self.assertNotIn("asset", bare_4)
+        clip.write_bytes(held)
+        self.run_ok({fakes.edit_path(4): fakes.edit_record(4, LATER)})
+        self.assertEqual(self.posts_open()[4], bare_4)
+        self.assertEqual(self.posts_open()[1], shown)
+        self.assertIn("A/B pairs whose two videos differ", self.report())
+
+    def test_a_slot_set_while_the_finished_file_cannot_be_read_leaves_the_open_post_and_carries_nothing_over(self):
+        post = self.day_1()
+        (self.footage / "window-1" / "d01-s1.mov").unlink()
+        readable = self.unreadable(post)
+        fakes.set_window(self.repo, fakes.window_from(date(2026, 10, 11)))
+        self.run_ok()
+        self.assertEqual(self.posts_open()[1], post)
+        report = self.report()
+        self.assertIn(
+            f"| 1 | P01 / AB-1 leg A | kept | `{post['id']}`; its video was not cut again ({self.AWAY}), and the"
+            f" finished file `{post['asset']}` of the video it names {self.UNREAD}; the open item stands, and its new"
+            " slot reaches it once the video is cut again |",
+            report,
+        )
+        self.assertIn(f"| incomplete | the finished file `{post['asset']}` of the video day 1's post names", report)
+        self.assertIn(self.lost(post, self.UNREAD), self.notice())
+        # Once it can be read it is the file its record names, so the post that carries the slot shows it again.
+        readable()
+        self.run_ok()
+        moved = self.posts_open()[1]
+        self.assertEqual((moved["supersedes"], moved["asset_sha256"]), (post["id"], post["asset_sha256"]))
+        self.assertIn(f"| 1 | d01-s1 | not cut | {self.AWAY}; its post keeps the video it shows |", self.report())
+
+    def test_nothing_is_said_of_the_finished_file_of_a_post_the_founder_approved(self):
+        post = self.day_1()
+        self.decide(post["id"], "approve")
+        self.run_ok()
+        approved = self.entries(status="approved")[0]
+        asset = self.ledger() / post["asset"]
+        held = asset.read_bytes()
+
+        def run():
+            queue = self.run_ok()
+            self.assertEqual(self.entries(status="approved"), [approved])
+            self.assertEqual(self.posts_open(), {})
+            self.assertNotIn("finished file", self.report())
+            self.assertIn("| Filming plan and edits | complete |", self.report())
+            self.assertEqual([e for e in queue["open"] if e["published_by_run"] == queue["updated_by_run"]], [])
+
+        asset.unlink()
+        run()
+        asset.write_text("another file")
+        run()
+        asset.write_bytes(held)
+        self.unreadable(post)
+        run()
+
+    def test_a_post_of_a_day_no_longer_due_is_named_and_never_said_to_be_cut_again(self):
+        post = self.day_1()
+        (self.ledger() / post["asset"]).unlink()
+        fakes.set_window(self.repo, fakes.window_from(date(2026, 10, 4)))
+        self.run_ok()
+        self.assertEqual(self.posts_open()[1], post)
+        self.assertNotIn("| 1 | d01-s1 |", self.report())
+        # No run cuts a day that is not due, so the one line that names the post says it stands, and no more.
+        told = self.lost(post, self.GONE, due=False)
+        for text in (self.report(), self.notice()):
+            self.assertIn(told, text)
+            named = [line for line in text.splitlines() if f"post `{post['id']}`" in line]
+            self.assertEqual(len(named), 1, named)
+            self.assertNotIn("cut again", named[0])
+
+    def test_a_run_that_could_not_queue_the_post_without_a_video_still_ends_with_its_report(self):
+        post = self.day_1_beside_other_footage()
+        (self.footage / "window-1" / "d01-s1.mov").unlink()
+        (self.ledger() / post["asset"]).unlink()
+        publish = posts.Ledger.publish
+
+        def full(ledger, store, item, slug, *more, **named):
+            if slug.startswith("post-"):
+                raise OSError("the disk is full")
+            return publish(ledger, store, item, slug, *more, **named)
+
+        # The day's open post was settled to give way, and then nothing could be queued in its place.
+        with mock.patch.object(posts.Ledger, "publish", full):
+            self.run_ok()
+        self.assertEqual(self.posts_open()[1], post)
+        report, lost = self.report(), self.lost(post, self.GONE)
+        self.assertIn("- Post Drafts: not taken in: the disk is full", report)
+        self.assertNotIn("gave way", report + self.notice())
+        self.assertIn("Posts whose video's finished file was not confirmed as the file they name:\n\n" + lost, report)
+        self.assertIn(lost, self.notice())
+        # The next run queues what that one could not.
+        self.gives_way(post, self.GONE, self.AWAY)
+
+    def test_the_one_check_reads_no_link_and_needs_the_record_and_the_entry_to_name_the_same_file(self):
+        post = self.day_1()
+        store = Store(self.ledger())
+        asset, record = self.ledger() / post["asset"], self.ledger() / post["asset_record"]
+        self.assertEqual(filming.posted_file(post, store), filming.OnDisk(filming.INTACT, post["asset"]))
+        self.assertIsNone(filming.posted_file({"id": "a post with no video"}, store))
+        self.assertIsNone(filming.posted_file(None, store))
+        # A link is never read through, even to the very bytes the record names, and neither is a folder.
+        moved = asset.with_name("elsewhere.mp4")
+        asset.rename(moved)
+        asset.symlink_to(moved)
+        self.assertEqual(filming.posted_file(post, store).state, filming.UNREAD)
+        asset.unlink()
+        asset.mkdir()
+        self.assertEqual(filming.posted_file(post, store).state, filming.UNREAD)
+        asset.rmdir()
+        moved.rename(asset)
+        # The entry and the record must name one file with one digest.
+        other = dict(post, asset_sha256="0" * 64)
+        unrecorded = filming.OnDisk(filming.UNRECORDED, post["asset_record"])
+        self.assertEqual(filming.posted_file(other, store), unrecorded)
+        self.assertEqual(filming.posted_file(dict(post, asset_record="../config/run.json"), store).state, "no record")
+        text = record.read_text(encoding="utf-8")
+        record.unlink()
+        self.assertEqual(filming.posted_file(post, store), unrecorded)
+        self.assertTrue(unrecorded.unknown)
+        self.assertEqual(
+            unrecorded.told(" of the video it names"),
+            f"the record `{post['asset_record']}` of the video it names cannot be read or does not name that video",
+        )
+        record.write_text(text, encoding="utf-8")
+        self.assertTrue(filming.posted_file(post, store).intact)
 
 
 class RecutRunTest(FilmingRunCase):
@@ -2893,6 +3568,46 @@ class RealToolingRunTest(FilmingRunCase):
         self.assertGreater(likeness(3.2, 6.5), 0.995)
         self.assertLess(likeness(0, 2.8), 0.99)
         self.assertEqual(fakes.tree_digest(self.footage), before)
+
+    def test_a_real_finished_file_deleted_while_its_footage_is_away_gives_way_and_is_cut_again_the_same(self):
+        tooling, _, why = fakes.real_video_tools()
+        if why:
+            self.skipTest(why)
+        shutil.copy(str(fakes.REPO / "config" / "platforms.json"), str(self.repo / "config" / "platforms.json"))
+        for name in ("GR0WTHLAB_FFMPEG_BIN", "GR0WTHLAB_FFPROBE_BIN"):
+            del self.env[name]
+        self.env["PATH"] = os.environ["PATH"]
+        self.approved_plan()
+        clip = self.footage / "window-1" / "d01-s1.mov"
+        fakes.make_test_clip(tooling, clip, 14, 886, 1920, 60)
+        self.run_ok({fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): fakes.edit_record(1, DAY_1)})
+        post = self.posts_open()[1]
+        asset = self.ledger() / post["asset"]
+        away = self.root / "put-away.mov"
+        clip.rename(away)
+        asset.unlink()
+        self.run_ok()
+        bare = self.posts_open()[1]
+        self.assertEqual((bare["supersedes"], "asset" in bare), (post["id"], False))
+        why = (
+            f"no footage yet for shot d01-s1, and the finished file `{post['asset']}` of the video `{post['id']}`"
+            " named is gone"
+        )
+        self.assertIn(f"**Video file**: none yet ({why}).", self.item(bare))
+        gone = (
+            f"- Day 1's post `{post['id']}` gave way to `{bare['id']}`, which shows no video: {why}. Approving it"
+            " approves the copy alone, and the video comes back for approval once it is cut again."
+        )
+        self.assertIn(gone, self.report())
+        self.assertIn(gone, self.notice())
+        self.assertNotIn("keeps the video it shows", self.report() + self.notice() + self.brief())
+        self.assertFalse(asset.exists())
+        away.rename(clip)
+        self.run_ok()
+        shown = self.posts_open()[1]
+        self.assertEqual((shown["supersedes"], shown["asset_sha256"]), (bare["id"], post["asset_sha256"]))
+        self.assertEqual(footage.fingerprint(asset)[0], post["asset_sha256"])
+        self.assertNotIn("finished file", self.report())
 
 
 if __name__ == "__main__":

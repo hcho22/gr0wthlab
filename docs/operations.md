@@ -21,6 +21,10 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
 5. It files each reviewed Dispatch request in `src/dispatches/` that needs filing, such as RepToday's Waitlist, under an identifier that never changes.
    A filed request stays open until the Founder decides it: any reviewed change to its text, the ask or any section, files the new text in its place, and no item the agent writes can replace it.
    A request is never filed again once the Founder approved it, and the same whole text is never asked again once the Founder rejected it.
+   A request is compared with its open item by reading that item's file in `ledger/review-queue/items/`: while the file cannot be read, nothing shows a reviewed change, so the open item stays as it is, the Review Queue output is incomplete, and the run's notice names the file.
+   A request with no open item is compared with each item of it the Founder rejected in the same way.
+   While a rejected item's file cannot be read, the fingerprint the run state holds for that item (of its ask and its request, not its Touches or Evidence) stands in for the file: the reviewed text's own fingerprint means the Founder rejected this ask, so it is not filed again, and another fingerprint means that item asked something else.
+   Where the run state holds no fingerprint either, nothing shows whether the Founder rejected this text, so the request is held: nothing is filed and nothing is withdrawn, the Review Queue output is incomplete, the run report and the run's notice name the file with the reason, and the next run compares them again.
    Two exceptions arise only after a reviewed change to the request's text while an item of it is open, which is firstmate's own reviewed act.
    A reviewed change that brings back a text the Founder rejected, while another text is open, files the rejected text again in that open item's place.
    An approval the Founder gave an item that a reviewed change had already replaced still counts as the request's approval, though Mandu hands no superseded item to firstmate: the replacement stays open for the Founder to decide, no reviewed change replaces it any more, nothing is filed after it, and the run report says so.
@@ -48,6 +52,19 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
 7. Once the last session has ended, it takes in what all of them wrote, in one pass.
    It queues the items the sessions wrote to `workspace/review-queue/incoming/` that pass the format, sets the rest aside, each copied whole to `ledger/review-queue/set-aside/<run id>/`, and turns every problem into one notice.
    A post or a message written there is always set aside: the launcher queues those two kinds only from a Draft that passes its checks.
+   An item there that supersedes an open one is set aside too while that open item's file in `ledger/review-queue/items/` cannot be read and no run state remembers its fingerprint: the open item stands, and nothing replaces it in that run.
+   So is an item there with the kind and ask of any queued item, open or decided, whose file cannot be read and whose fingerprint no run state remembers: the ledger still shows that item's kind and ask, so an item with another kind or ask is queued as always, and the Review Queue output is incomplete and names the file.
+   In every workflow, only what the launcher could read takes an open item off the Review Queue: a decision the Founder recorded, a newer item that supersedes it, or a Draft or record that was read and no longer passes.
+   A read that fails is told in one of two ways, by what the launcher was doing when it failed.
+   Where it was judging an open item, and the failed read would otherwise have taken that item back or asked it again, the item stays exactly as it is under its identifier, not checked again, whatever else the check found.
+   The read may be a file that is unreadable, not in its format, or missing where the launcher itself keeps it, or a git read that fails.
+   The run report says so where it tells of the item, that workflow's output is incomplete with the read that failed as the reason, and the run's notice lists each item left that way; the next run checks it again.
+   Those places are the check of an open post, message, reply, or recruiting item against its Draft and what that check reads; an open invitation or Waitlist ask while a report of the Founder's cannot be read; an open follow-up whose record of the first message cannot be read; the open filming plan while the kit cannot be read; a Dispatch request's open item whose item file cannot be read; and an item in `incoming/` that supersedes an open item whose item file cannot be read.
+   Where a whole step did not run because its source could not be read, the launcher judged no item: that workflow's output always reads incomplete in the run report, with the real reason, and no item of that step is touched or listed.
+   Those are Beta Cohort recruiting while the Waitlist view or the Beta Build record cannot be used; a Dispatch request whose reviewed text in `src/dispatches/` cannot be read; the post Drafts while the calendar cannot be read; outreach while the channel plan or the kit cannot be read; replies while the kit cannot be read; and the video of a day whose copy the Founder approved, while that day's Draft cannot be read.
+   The run's notice names such a source only where its read failed as a source, as a package file the snapshot could not read, the Waitlist view, or the Beta Build record does, or where it was recorded as a launcher problem, as a reviewed Dispatch text or a kit that could not be prepared is; for the video of an approved day, the notice's line that no video was cut says its Draft could not be read.
+   A file that was read but could not then be parsed or decoded, which is how the calendar fails when it has lost its table and the channel plan when it is not UTF-8, is told in the run report, and the notice has no line of its own for it.
+   While the window's filming plan is open, a kit file that fails this way, the calendar among them, is why that plan stands, so the notice's list of open items not checked again names the plan with that file as its reason; with no such plan open and nothing else wrong, the run queues no notice.
    Every package-change proposal there declares whether it adds or changes an Angle or Hook (`new_angle`), and the Founder sees the declaration on the item.
    One that declares it does is set aside, with what to add, unless its Evidence names the record of a Listening quote the launcher already keeps; one that declares it does not is queued whatever it touches or says.
    The launcher never checks a declaration against a proposal's wording: the Founder is the check on a wrong declaration, at the sitting.
@@ -56,10 +73,14 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    It checks each post Draft in `workspace/drafts/posts/` and queues a post only for one that passes; a blocked Draft is named in the run report and the notice with every failing rule or checklist line, and every check is kept in `ledger/evidence/post-drafts/`.
    For a Draft that passes, it checks the day's edit record in `workspace/drafts/edits/`, if there is one, against the shot list and the footage, renders it with `ffmpeg` into `ledger/assets/` with the Draft's text drawn over it, and measures the result; the day's post then shows the finished video.
    An edit record that fails a check renders nothing and blocks the day's post, naming the rule; missing video tooling is reported as a skipped edit, never as a failed run; every check is kept in `ledger/evidence/filming/`.
+   For a post, what may be unread is its Draft, the Draft of its A/B pair's other leg, the day's edit record, a footage file that record names and that could not be read or measured, the ledger's record of the video cut from it, a kit file, the brand rules, the Product's code, or git's read of one file a claim cites.
+   A claim that cites a file the commit does not hold, and an edit record that names a footage file no longer in the footage place, are checks the launcher could make: the Draft is blocked and an open post withdrawn.
+   A post whose video's finished file is gone or changed still gives way to the same post without a video, but only through a Draft that was read and passes: while something that Draft's check needs cannot be read, the open post stands, the notice says where the file stands, and the first run that reads everything replaces it.
    A cut that fails for a reason outside the edit record (a tooling error, footage that changed while the run worked, a record that could not be written) holds the video as missing tooling does: nothing is blocked, an open post stands, and the run's notice names the failure.
-   Where the day's post shows a video when the run ends, the notice and the run report say that the video could not be cut again and that the post keeps the video it shows; they say a day has no video only when its post shows none.
-   The Filming session's brief and `check-edits` tell the agent the same beforehand: the edit record of a day whose open post shows a video stays as it is while the video cannot be cut again, and is never reported as a problem to fix.
-   The post Drafts session's brief names each such day too, since that post keeps its video only while its Draft stays as it is.
+   Where the day's post names a video when the run ends, the notice and the run report say that the video could not be cut again; they say a day has no video only when its post names none.
+   They say that the post keeps the video it shows only when the finished file is on disk and is the file the video's record and the post's queue entry name, which the launcher checks by fingerprint every time before it says so ("Video tooling and finished videos" below has what it says otherwise).
+   The Filming session's brief and `check-edits` tell the agent the same beforehand: the edit record of a day whose open post names a video stays as it is while the video cannot be cut again, and is never reported as a problem to fix.
+   The post Drafts session's brief names each such day too, since that post can keep its video only while its Draft stays as it is.
    Before it queues any post, it compares the two videos each A/B pair's posts are about to show, reading each from its own record in `ledger/evidence/filming/assets/`, which knows every footage file by its fingerprint and not by its name: when they show different footage outside their openings, nothing the run changed for the pair is offered, the posts that stood stay, and the run report and the notice name the pair.
    A day whose copy the Founder approved before its video existed gets its video only while its Draft is still that copy; otherwise no video is cut and the notice says so.
    It files each reviewed proposal in `src/proposals/` once, and never again whatever the Founder decides: the brand lint's word lists, and, in a run with outreach messages to offer, the loss-framing and sponsorship-ask lists.
@@ -68,6 +89,11 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    It withdraws an open recruiting item whose Draft stopped passing, or that outlived the end of recruiting, at the Founder's stop or once the Founder reports the cohort full, and keeps the run's recruiting Evidence in `ledger/evidence/beta-recruiting/`.
    It replaces an open invitation that holds a sign-up who left the Waitlist with the batch made again without them, and withdraws it when that batch cannot be made.
    It replaces an open Waitlist ask whose stated gap changed with one that states the current gap, and withdraws it once the cohort can reach its minimum.
+   While a report of the Founder's in `beta-reports/` cannot be read, no reported count ends recruiting and an open Waitlist ask is not judged by its gap, since a later report may correct a count; a recruiting Draft, or a package file it cites, that cannot be read leaves its open item as it is.
+   A report that cannot be read holds back only what rests on the Founder's counts.
+   It does not hold back what the Waitlist's view shows, since the view was read: an open invitation that holds a sign-up who left the Waitlist or its beta opt-in is still taken back.
+   It is replaced by the batch made again without them, as above, unless the counts that were read say the cohort is full: then it is withdrawn with that reason and no batch is made in its place, since a later report may correct that count, the notice names the report, and the Beta Cohort recruiting output is incomplete.
+   Nor does it hold back the address check: a recruiting Draft the brief asked for is read, and removed when it holds what looks like an email address, before anything else is weighed.
    It puts back any change the run's sessions made in `workspace/instructions/`, and names it in the run report.
    An entry there that it could not read before the first session started is not guarded: it is left exactly as it is, and the run report names it.
    It keeps each quote record whose words stand in the text it fetched from that record's link (`ledger/evidence/listening/quotes/`), and refuses every other: a refused record is removed, and only its file name and the reasons are kept.
@@ -76,7 +102,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    It checks each message Draft in `workspace/drafts/messages/` and queues a message only for one that passes; an open message that may no longer be offered, such as a follow-up to a creator who has since replied, is withdrawn.
    Only a record that was read withdraws a follow-up: when Mandu's `outreach/` folder cannot be read, or the record of a creator's first message is missing after a follow-up was queued from it, cannot be read, or is not valid, that follow-up is neither offered nor withdrawn, an open one stays as it is, and the run report names Mandu's outreach records as failed and the Outreach output as incomplete, with the reason.
    For a message Draft, a source it is checked against that cannot be read withdraws nothing either: an open message or reply stands, not checked again, and the Outreach or Listening output is incomplete and names the source.
-   Those sources are the Angle bank, the checklist, and the brand rules; the Product's code, or git's read of one file a claim names when that read times out or cannot start; and the kept quote record a reply answers (`ledger/evidence/listening/quotes/`).
+   Those sources are the message's own Draft; the Angle bank, the checklist, and the brand rules; the Product's code, or git's read of one file a claim names when that read times out, cannot start, or fails on a file the commit holds; and the kept quote record a reply answers (`ledger/evidence/listening/quotes/`).
    A claim that names a file that is not there, and a reply whose quote record is absent altogether, are checks the launcher could make: the Draft is blocked and an open item withdrawn.
    It takes in the code the agent proposed for each rejection reason, writes it beside the Founder's words in that decision's Evidence, and rebuilds the learning ledger (`ledger/evidence/learning/ledger.json`), whose counts read "3 of 7".
    A proposed code that fails its check is set aside: its file is removed, and the run report and notice name it with the reasons.
@@ -87,13 +113,13 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    If `origin/main` moved meanwhile, it replays the records commit on top and retries once; a commit that cannot be pushed stays local and goes with the next run, and the run log says why the replay failed.
 
 The schedule, how often a start of the weekly schedule checks whether the week's run is owed, how many attempts it may take, each session's time limit and the bound on all of a run's sessions together, the production clone's path, and the records step are in [`config/run.json`](../config/run.json).
-Launcher logs, each session's event stream from Codex, and each run's record go to `~/Library/Logs/gr0wthlab/`: a run's own record is `<run id>.json`, and each session's files carry its workflow after the run's identifier, as in `<run id>.post-drafts.events.jsonl`.
+Launcher logs, each session's event stream from Codex, Codex's own log of that session with its record of each tool call, and each run's record go to `~/Library/Logs/gr0wthlab/`: a run's own record is `<run id>.json`, and each session's files carry its workflow after the run's identifier, as in `<run id>.post-drafts.events.jsonl`.
 
 ## One session per workflow
 
 A run does not hand the agent everything at once.
 It starts one sandboxed agent session for each workflow that has work due, one after another, and takes in what they all wrote once the last has ended.
-Until 2026-10-12 a run was one session that did every workflow's work, so each workflow added to it made that session longer for every other; [the US-ME02 spike note](spikes/us-me02-runtime-boundary.md#one-session-per-workflow-us-me17) has the design and why.
+Until 2026-10-12 a run was one session that did every workflow's work, so each workflow added to it made that session longer for every other; [the change's own record](live-checks/20261012-gr0wthlab-session-per-workflow.md#one-session-per-workflow-us-me17) has the design and why.
 
 The sessions, in the order a run starts them:
 
@@ -299,7 +325,8 @@ Until `first_sitting` is set, every run prepares calendar days 1 to 7 as the fir
 Once it is set, each run prepares the calendar days from the next day through the end of the week after the coming sitting (on the sitting's own day, exactly that week), skipping any day already approved, and each post's slot is its date at `slot`.
 A changed slot reaches an open post at the next run, which replaces the post with one that carries it.
 A post that shows a video keeps it through that change even when the video cannot be cut again in that run, for example while its footage is away or `ffmpeg` is missing: the post that replaces it shows the same finished file, as long as its Draft and its edit record are the ones it was made from and the file is still the one its record names.
-Otherwise the open post stands as it is, the run report says so, and the slot reaches it once the video is cut again.
+With another edit record, or a finished file that could not be read, the open post stands as it is, the run report says so, and the slot reaches it once the video is cut again.
+With a finished file that is gone or changed, the post that carries the slot shows no video ("Video tooling and finished videos" below).
 
 ## Set the footage place
 
@@ -370,6 +397,30 @@ Its record, `ledger/evidence/filming/assets/window-<n>-day-<nn>-<recipe>.json`, 
 The command renders the video again beside where its record says it was, measures it, and puts it in place only if it came out byte for byte the file its record names.
 Anything else, such as a render by other tooling, which can encode the same frames differently, is reported and discarded, and whatever is at that path stays as it was.
 A video no open or approved post names can simply be deleted.
+
+A finished file is the only copy of its video, since it never enters git, so every run checks the file of each video an open post names: it must be on disk, and its fingerprint must be the SHA-256 the video's record and the post's queue entry hold.
+The launcher says a post shows or keeps a video only when that check passes.
+A post the Founder approved is never asked again, so its file is not checked and nothing about its file is reported.
+When an open post's file is gone, or is no longer the file its record names, nothing is substituted, and whatever is at that path is left as it is.
+When the run can cut the video again, it does, and the post stands or is replaced as for any video.
+When it cannot, for example while the footage or `ffmpeg` is away, the open post no longer has the video it names, and one of three things becomes of it, each decided by a standing rule and not by this check:
+
+- It is replaced by the same post without a video (the Founder's decision of 2026-10-12) when the run checks the post's own Draft and may ask for it again: the day is due in that run, the Draft the post was queued from is in place and passes, and the day's edit record is in place.
+  The rule is the one for any due day whose Draft passes while no video can be cut for it: its post is queued without one.
+  The new item says there is no video yet and why, approving it approves the copy and the beat plan only, and the video comes back for approval in a later item once it is cut again.
+  The run report and the notice name both posts and the file.
+- It leaves the queue when the run checks that Draft the same way and nothing may be asked in the post's place.
+  Two of the rules keep a decision from being asked again: a day's copy the Founder approved is never asked again, and a Draft the Founder rejected is not asked again until it changes.
+  The third is the item format: the post without a video is checked against it once more as it is queued, and one that does not follow it blocks the day as any failing check does, so nothing is queued.
+  The run report and the notice name the post and the file and say that nothing is asked in its place, and why: under the first two rules that the Founder already decided the day's copy, and under the third that its Draft no longer passes.
+- It stands as it is, and every run's report and notice name it and its file, when the run does not check the post's own Draft.
+  The rules are these: a run prepares, checks, and cuts only the days due in it, so nothing is cut for a day that is not due; an open post stands while its Draft is gone; an open post is not checked again, and so not withdrawn, while its Draft or anything else its check reads cannot be read (step 7 of [What one run does](#what-one-run-does) lists what that may be for a post); and a day whose copy the Founder approved is checked again only while its Draft is still that copy and it has an edit record.
+  It also stands, named the same way, when the run cut a video for the day and the pair check did not let it through, since nothing a run changed for a pair whose two videos differ is offered.
+
+Whatever else changed for the day, such as a Draft that was rewritten or fails a check, or an edit record that is gone, is settled as for any open post.
+The pair rule holds across the replacement: a leg whose post now shows no video has nothing to compare, and its video is compared with the other leg's again when it is cut again.
+A file that cannot be read is not a file that is gone: the report and the notice give the reason the read failed, nothing is said of whether the post keeps its video, the open post stands, and the report marks the filming output incomplete.
+The same holds when the video's own record under `ledger/evidence/filming/assets/` cannot be read or does not name the file the post names.
 
 ## Mark the Waitlist live
 
@@ -491,7 +542,7 @@ Read a report against these counts.
 The six sessions together took about as long as the single session's median, 10 min 46 s, and cost about a fifth more than its average, $0.099, while doing four more workflows' work than those ten runs carried.
 A session that says `Session: complete` after little agent time, few package files read, or with most claims naming no code did less than these did, whatever its closing line says.
 Splitting the work did not make a session read everything: the Package review session read 19 of its 25 files and the Post Drafts session 13 of its 18.
-It is one reading, on a busy Mac, of a week with nothing for Listening to read; [the spike note](spikes/us-me02-runtime-boundary.md#the-weekly-run-timed-with-one-session-per-workflow) has the set-up and what the run does not show.
+It is one reading, on a busy Mac, of a week with nothing for Listening to read; [the change's own record](live-checks/20261012-gr0wthlab-session-per-workflow.md#the-weekly-run-timed-with-one-session-per-workflow) has the set-up and what the run does not show.
 
 ## When a session times out
 
@@ -574,6 +625,49 @@ Setting the footage place is one such change: the place is never one of the loca
 ```sh
 cd ~/gr0wthlab && src/bin/gr0wthlab preflight && src/bin/gr0wthlab boundary-check
 ```
+
+The boundary check passes only when the runtime's own records show all of this, never the agent's report:
+
+- Each of the nine forbidden targets was attempted and refused once per tool, each on its own: Codex's record of the run holds a patch that names that target's sentinel alone, refused as outside the permission profile, and the kernel's log holds a refused shell write to that target's sentinel by its full path.
+- Nothing changed in this clone, Mandu, or any Product checkout against a snapshot taken before the check, once the check has removed the run's own files from the areas.
+- The kernel refused the connection to each of the check's two local listeners, and neither received one.
+- With no model, a probe inside the same sandbox reached neither the check's own listener nor any host listed in `config/guardrails/fetch.json`, each attempt refused by the kernel, after the same probe outside the sandbox reached that listener; and the launcher's own client sent nothing but a GET to a listed host and refused an address outside the list.
+  The kernel's refusals of that probe's processes never count as the agent's own connection attempts.
+- Both permitted files landed in every area.
+
+The launcher writes every step for the agent: one patch per target, and one script, placed in `workspace/instructions/` for the length of the run, that holds every shell step.
+Every line the check prints states what a record shows, and names no cause beyond it.
+A step that has no record after a probe run is handed over again, in at most three probe runs per check; the output then shows `NOT YET PROVEN` for the earlier run and what it asks again for.
+These end the check as failed at once, with no further run: a sentinel that landed, a connection that got through, a change against the snapshot, a network proof that falls short in any way, a run that did not exit cleanly, with the one exception below, or a record of Codex's that is not whole.
+A `FAILED` run whose agent made a tool call names each target that has no record and what the record shows for it, for example `no patch named its sentinel`.
+A check that ends after more than one probe run with steps unproven closes with those steps and with how each probe run ended: its exit code, how far the agent had got, and, for an exit that was not clean, what the run's event stream holds of Codex's own errors.
+Read how each run ended before running the check again.
+
+A probe run that did not exit cleanly says so in the first line of its verdict: its exit code, whether the launcher stopped it at the agent's time limit, and how far the agent had got.
+If the run left an event stream, which every run whose agent was started does, the line adds Codex's own last error in it, or that Codex reported none; of a run whose agent was never started it says nothing about Codex.
+One such run is asked again: a run whose agent was started and that ended by itself before any tool call, leaving nothing behind.
+Its verdict is `NOT TESTED`, with no line for any target, and the check hands the same steps over again, within the same three probe runs.
+A run the launcher stopped at the agent's time limit is never asked again, whether or not it had made a tool call: the check ends there.
+A check whose every probe run made no tool call and left nothing, each with its agent started, ends `NOT TESTED`: its closing lines say that no probe run made a tool call and that the boundary was not tested, and say how each run ended.
+That is not a pass, so the command exits with a failing status; read how each run ended before running the check again.
+A run that ended uncleanly after a tool call, or that left anything behind, fails the check at once.
+Its first line says how far it got, after how many tool calls or with no tool call on record.
+Of a run with tool calls it also says one of three things: that every step was proven and the run did not exit cleanly, that the boundary was tested only in part, or that no step was proven.
+A run whose agent the launcher never started, after a failed preflight or a configuration it refused, fails the check at once too; its verdict counts no permitted write, since it made none.
+
+In a run's verdict, `permitted sentinels written` counts, of the permitted files the run had to prove, those that stand in their areas; the launcher's own script is not among them, and the agent's report has a line of its own when one was kept.
+
+A check stopped before it has judged its run, by Ctrl-C, a kill, or the Mac going down, can leave its script and the run's sentinels in `workspace/`.
+The next run of any kind, weekly or check, removes every file at the top of an area whose name starts with `gr0wthlab-boundary-probe-`, and says `removed boundary probe files left in the areas` with their paths.
+A weekly run in this clone does it before its pre-run sync commits `workspace/`, and every run does it before its agent starts, so no agent finds them and no records step commits them.
+A weekly run's report names what was removed in its Agent section.
+Run one thing at a time in a checkout: the check does not hold the run lock, and a run started while a check is going removes that check's script.
+
+Each probe run leaves, in `~/Library/Logs/gr0wthlab/`, the instruction it handed over (`<run id>.probe.md`), its script (`<run id>.probe.sh`), Codex's log (`<run id>.stderr.log`), and the verdict with its evidence (`<run id>.boundary-check.json`).
+Every run, weekly or check, starts Codex with `RUST_LOG=error,codex_otel.log_only=info`, so its log keeps a record of each tool call with its arguments and output, and the Codex account's email address on each record; the logs stay on the Mac.
+A run that exited cleanly and whose log holds no such record fails the check with `Codex's log holds no tool call`.
+Two records are worth reading then, both in `<run id>.json`: `environment.RUST_LOG`, and `codex_version`, since the reading of the log in `src/gr0wthlab/codex.py` was written against Codex CLI 0.160.0.
+Change that reading only through a reviewed change, never by loosening the check.
 
 To repeat the check on the scheduled path, generate a one-off LaunchAgent a few minutes ahead, then remove it once it has run:
 

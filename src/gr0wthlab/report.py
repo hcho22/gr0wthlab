@@ -105,6 +105,11 @@ class RunState:
     waitlist_file: str = ""  # the Waitlist Evidence this run wrote, relative to ledger/
     breach_notice: str | None = None
     dispatches: list = field(default_factory=list)  # dispatch.Filing, one per reviewed Dispatch request
+    dispatch_unread: list[str] = field(default_factory=list)  # each file a request's filing rests on that was unread
+    queue_unread: list[str] = field(default_factory=list)  # each item file an item in incoming/ may repeat, unread
+    # Each open item left as it was on a read that could not be made: (its output's title, queue.Stands).
+    stood: list = field(default_factory=list)
+    queue_title: str = ""  # the Review Queue output's title, which a Dispatch request's item counts under
     tallies: list[Tally] = field(default_factory=list)
     state_notes: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
@@ -132,6 +137,8 @@ class RunState:
     learning_problem: str = ""  # why the rejection reasons were not read or coded, when they were not
     guidance: learning.Guidance | None = None  # the agent's Instructions as they were before it started
     put_back: list[str] = field(default_factory=list)  # each change to them the launcher undid
+    # what a stopped boundary check had left in the areas, removed before the Instructions were remembered
+    probe_files_removed: list[str] = field(default_factory=list)
     work_published: list[str] = field(default_factory=list)  # the items Listening and outreach queued this run
     check_work: str = ""  # the command the agent checks its Listening and outreach work with
     attempt: attempts.Attempt | None = None  # a weekly scheduled run: which attempt at the run due, and those before
@@ -420,6 +427,15 @@ def span_text(seconds: float) -> str:
     minutes, rest = divmod(int(round(seconds)), 60)
     hours, minutes = divmod(minutes, 60)
     return " ".join([f"{hours} h"] * bool(hours) + [f"{minutes} min"] * bool(hours or minutes) + [f"{rest} s"])
+
+
+def probe_files_removed(state: RunState) -> list[str]:
+    """What a stopped boundary check had left in the areas and this run removed, as paths from the repository: the
+    production clone's pre-run step removes it before its records step can commit it, and every run before it
+    remembers the agent's Instructions and again before each session's preflight."""
+    before_records = (state.sync or {}).get("probe_files_removed") or []
+    by_sessions = [path for session in state.sessions for path in session.record.get("probe_files_removed") or []]
+    return [*before_records, *state.probe_files_removed, *by_sessions]
 
 
 def left_running(session: Session) -> str | None:
@@ -732,17 +748,24 @@ def item_lines(state: RunState, standing: Sequence[tuple[str, str]]) -> list[str
 
 
 def kept_video_lines(found: filming.Filming | None) -> list[str]:
-    """What the post Drafts session is told of each day whose open post shows a video that cannot be cut again this
-    run: the post keeps that video only while its Draft is the one it was queued from. The Filming table says so to
-    the session that writes edit records, which is no longer the one that writes the Drafts."""
+    """What the post Drafts session is told of each day whose open post names a video that cannot be cut again this
+    run. Where the finished file is intact the post keeps that video, and only while its Draft is the one it was
+    queued from; otherwise the line says where the file stands, in the words filming.kept gives the Filming table,
+    and never that the post keeps it. The Filming table says so to the session that writes edit records, which is no
+    longer the one that writes the Drafts."""
     if found is None:
         return []
-    return [
-        f"- Day {number}'s open post shows its video, which cannot be cut again this run ({day.why}): {filming.KEEPS}"
-        " only while its Draft stays as it is, so rewrite that Draft only when it must change."
-        for number, day in sorted(found.days.items())
-        if found.waits(number)
-    ]
+    lines = []
+    for number, day in sorted(found.days.items()):
+        if not found.waits(number):
+            continue
+        said = (
+            f"{filming.KEEPS} only while its Draft stays as it is, so rewrite that Draft only when it must change."
+            if found.intact(number)
+            else f"{found.kept(number)}; rewrite that Draft only when it must change."
+        )
+        lines.append(f"- Day {number}'s open post names a video that cannot be cut again this run ({day.why}): {said}")
+    return lines
 
 
 def draft_lines(found: filming.Filming, drafts: Sequence[tuple[int, str]]) -> list[str]:
@@ -1038,6 +1061,12 @@ def agent_lines(state: RunState) -> list[str]:
     """What every session of the run was started with: the boundary each was proved against before its agent
     started, the configuration fingerprint, the code, and where the task definitions are."""
     lines = []
+    removed = probe_files_removed(state)
+    if removed:
+        lines.append(
+            "- Removed boundary probe files left in the areas, before any agent could find them: "
+            + ", ".join(f"`{path}`" for path in removed)
+        )
     tried = [session for session in state.sessions if session.record.get("preflight")]
     failed = [session.title for session in tried if not (session.record["preflight"] or {}).get("ok")]
     if tried:
@@ -1130,6 +1159,20 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 "Some records in Mandu could not be used, so nothing was taken from them; a decision already taken"
                 " stands, and Mandu need not change them. Each is reported once, and again only if it changes:\n"
                 + "\n".join(bullet(f"`{record.name}`: {'; '.join(record.problems)}") for record in others),
+            )
+        )
+    if state.stood:
+        count = len(state.stood)
+        sections.append(
+            (
+                count,
+                f"{plural(count, 'open item')} not checked again on {day}",
+                "Something the check of these open items needs could not be read this run, so each was left exactly"
+                " as it is: nothing was withdrawn or replaced on that account, each keeps its identifier, and the next"
+                " run checks it again:\n"
+                + "\n".join(
+                    bullet(f"`{kept.item}` ({title}): {'; '.join(kept.unread)}") for title, kept in state.stood
+                ),
             )
         )
     blocked = posts.notice_section(state.post_outcome, day, state.again)

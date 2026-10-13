@@ -14,10 +14,10 @@ Steps:
    A day is ready once the Founder approved a filming plan that holds its shots and the footage place has every take the day needs: a file for each shot, and for a pair leg a take both legs can use wherever the legs share their footage, and its own opening take where the Founder says the Hook on camera.
    The table says why any other day is not.
    A ready day with no post Draft in place has no edit record this run, since the record runs exactly as long as the Draft: say so in your summary.
-   Where the table says to leave a day's edit record as it is, the day's post already shows its video and the video cannot be cut again this run, for example while its footage is away or the video tooling is missing: change nothing in that record and never remove it, since the post keeps its video only while the record is in place.
+   Where the table says to leave a day's edit record as it is, the day's open post names a video that cannot be cut again this run, for example while its footage is away or the video tooling is missing, and the table says whether the post keeps it: change nothing in that record and never remove it, since the post can keep its video only while the record is in place.
 2. Check your edit records with the brief's check-edits command.
    An edit record the footage cannot satisfy (a shot with no file, a recording too short for its beats, or one that would need a cut its shot list forbids) is removed, not bent: say in your summary which shot or file is the problem, and the Founder films it again.
-   A record check-edits reports as kept is not one of these, and is no problem to fix: it belongs to a day whose post shows its video, so it stays exactly as it is.
+   A record check-edits reports as kept is not one of these, and is no problem to fix: it belongs to a day whose open post names a video that cannot be cut again this run, the KEPT line of check-edits says whether the post keeps it, and either way the record stays exactly as it is and is never removed.
 
 In your summary, say which edit records you wrote and what check-edits said of each, and that the Founder must watch each video.
 

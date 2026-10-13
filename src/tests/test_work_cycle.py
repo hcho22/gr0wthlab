@@ -400,14 +400,32 @@ class ListeningCycleTest(WorkCycleTestCase):
         self.assertIn("; the open item stands", report)
         self.assertNotIn("is not validated Listening Evidence", report)
         self.assertIn(f"| Listening Evidence | incomplete | {unread}", report)
-        for notice in self.items("notice"):
-            self.assertNotIn(reply, self.item_text(notice["id"]), "no notice says the reply is taken back")
+        notices = "\n".join(self.item_text(notice["id"]) for notice in self.items("notice"))
+        self.assertNotIn("is withdrawn", notices, "no notice says the reply is taken back")
+        self.assertIn(f"- `{reply}` (Listening Evidence): {unread}", notices, "one says it was left as it is")
         record.write_text(kept, encoding="utf-8")
         self.agent()
         self.go(weeks=3)
         queue = self.queue()
         replies = [entry["id"] for entry in queue["open"] + queue["closed"] if "message-reply" in entry["id"]]
         self.assertEqual(replies, [reply], "it keeps its id and is never queued again")
+
+    def test_an_open_reply_stands_under_its_id_while_its_draft_cannot_be_read(self):
+        self.agent(dict(quote_file(intent="asking"), **reply_file()))
+        self.go()
+        self.decide(RULES_FIT, "approve")
+        self.agent()
+        self.go(weeks=1)
+        (reply,) = self.items("message")
+        path = self.workspace() / fakes.message_path("reply", POST)
+        written = path.read_bytes()
+        path.write_bytes(b"\xff\xfe not text")
+        self.go(weeks=2)
+        self.assert_stands(reply, "Listening Evidence", f"`{fakes.message_path('reply', POST)}` could not be read (")
+        path.write_bytes(written)
+        report = self.go(weeks=3)
+        self.assert_never_asked_again(reply)
+        self.assertIn(f"kept: `{reply['id']}`; its Draft is unchanged and passes", report)
 
     def test_a_reply_whose_quote_record_is_gone_is_still_blocked_and_its_open_item_withdrawn(self):
         self.agent(dict(quote_file(intent="asking"), **reply_file()))
@@ -703,6 +721,7 @@ class OutreachCycleTest(WorkCycleTestCase):
     def test_a_follow_up_stays_open_under_its_id_while_the_records_cannot_be_read(self):
         ids = self.first_messages()
         (follow_up,) = self.open_follow_ups(ids, self.SLOW)
+        before = self.entry(follow_up)
         item = self.item_text(follow_up)
         folder = self.exchange / "outreach"
         os.chmod(str(folder), 0)
@@ -711,6 +730,8 @@ class OutreachCycleTest(WorkCycleTestCase):
             report = self.go(weeks=3)
         finally:
             os.chmod(str(folder), 0o755)
+        lost = "Mandu's outreach records could not be read (Permission denied)"
+        self.assert_stands(before, "Outreach Drafts", lost)
         self.assertIn(follow_up, [entry["id"] for entry in self.items("message")])
         self.assertEqual(self.item_text(follow_up), item)
         self.assertEqual([entry["id"] for entry in self.queue()["closed"] if entry.get("withdrawn")], [])
@@ -724,12 +745,14 @@ class OutreachCycleTest(WorkCycleTestCase):
         self.assertIn(f"- Not prepared: {unread}.", self.brief())
         self.assertNotIn("is not recorded as sent", report + self.brief())
         notice = self.item_text(self.items("notice")[-1]["id"])
-        self.assertIn("# Notice: 1 source could not be read on", notice)
+        self.assertRegex(notice, r"# Notice: the run on \d{4}-\d{2}-\d{2} had 2 problems\n")
         self.assertIn(f"- Mandu outreach records: `{folder}` could not be read: Permission denied.", notice)
         self.assertIn("Incomplete: Outreach Drafts.", notice)
+        self.assertIn(f"- `{follow_up}` (Outreach Drafts): {lost}", notice)
 
         self.agent()
         report = self.go(weeks=4)
+        self.assert_never_asked_again(before)
         self.assertEqual(self.ever_queued(self.SLOW), [follow_up], "it keeps its id and is never queued twice")
         self.assertIn(follow_up, [entry["id"] for entry in self.items("message")])
         self.assertIn("| Mandu outreach records | read | 1 record |", report)
@@ -738,15 +761,15 @@ class OutreachCycleTest(WorkCycleTestCase):
     def test_a_follow_up_stays_open_when_the_folder_its_record_was_in_is_gone(self):
         ids = self.first_messages()
         (follow_up,) = self.open_follow_ups(ids, self.SLOW)
+        before = self.entry(follow_up)
         shutil.rmtree(str(self.exchange / "outreach"))
         self.agent()
         report = self.go(weeks=3)
+        lost = f"`outreach/{ids[self.SLOW]}.json`, the Founder's record of the first message, is missing"
+        self.assert_stands(before, "Outreach Drafts", lost)
         self.assertEqual(self.ever_queued(self.SLOW), [follow_up])
         self.assertIn(follow_up, [entry["id"] for entry in self.items("message")])
-        unread = (
-            f"Slow Strength, the one follow-up: `outreach/{ids[self.SLOW]}.json`, the Founder's record of the first"
-            f" message, is missing, so the open `{follow_up}` stays as it is"
-        )
+        unread = f"Slow Strength, the one follow-up: {lost}, so the open `{follow_up}` stays as it is"
         self.assertIn(f"| Mandu outreach records | failed | {unread}. |", report)
         self.assertIn(f"| Outreach Drafts | incomplete | Mandu outreach records could not be read; {unread} |", report)
         self.assertNotIn("the first message to Slow Strength is not recorded as sent", report)
@@ -782,6 +805,10 @@ class OutreachCycleTest(WorkCycleTestCase):
         self.assertIn(f"so the open `{slow}` stays as it is", report)
         self.assertNotIn("the first message to Slow Strength is not recorded as sent", report)
         self.assertEqual(self.ever_queued(self.SLOW), [slow])
+        notices = self.notices()
+        lost = "the Founder's record of the first message could not be used ("
+        self.assertIn(f"- `{slow}` (Outreach Drafts): {lost}", notices, "the one left as it is is named as such")
+        self.assertNotIn(f"- `{hallway}` (Outreach Drafts)", notices)
 
     def test_open_messages_stand_under_their_ids_while_the_brand_rules_cannot_be_read(self):
         self.agent(self.drafts())
@@ -807,6 +834,28 @@ class OutreachCycleTest(WorkCycleTestCase):
         queue = self.queue()
         messages_ever = sorted(entry["id"] for entry in queue["open"] + queue["closed"] if entry["kind"] == "message")
         self.assertEqual(messages_ever, sorted(queued), "none is queued again under a new id")
+        self.assertIn("| Outreach Drafts | complete | 7 messages: 4 kept, 3 not due |", report)
+
+    def test_an_open_message_stands_under_its_id_while_its_draft_cannot_be_read(self):
+        self.agent(self.drafts())
+        self.go()
+        slow = next(entry for entry in self.items("message") if entry["id"].endswith("creator-slow-strength"))
+        path = self.workspace() / fakes.message_path("creator", self.SLOW)
+        written = path.read_bytes()
+        path.unlink()
+        (self.root / "elsewhere.md").write_bytes(written)
+        path.symlink_to(self.root / "elsewhere.md")
+        self.agent()
+        report = self.go(weeks=1)
+        unread = f"`{fakes.message_path('creator', self.SLOW)}` could not be read ("
+        self.assert_stands(slow, "Outreach Drafts", unread)
+        self.assertIn(
+            f"| Slow Strength | first message | kept | `{slow['id']}`; not checked again, since {unread}", report
+        )
+        path.unlink()
+        path.write_bytes(written)
+        report = self.go(weeks=2)
+        self.assert_never_asked_again(slow)
         self.assertIn("| Outreach Drafts | complete | 7 messages: 4 kept, 3 not due |", report)
 
     def test_with_every_source_read_a_draft_changed_to_fail_a_check_still_withdraws_its_open_item(self):

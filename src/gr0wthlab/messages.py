@@ -32,7 +32,7 @@ from .drafts import BLOCKS, DONE, OPEN, ChecklistLine, Claim, ClaimResult, Conte
 from .drafts import parse_claims as parse_claim_items
 from .exchange import plural, quoted
 from .lint import APPLIED, Copy, snippet
-from .queue import APPROVED, REJECTED, SUPERSEDED, Ledger
+from .queue import APPROVED, REJECTED, SUPERSEDED, Ledger, stands
 from .queue import OPEN as OPEN_ITEM
 from .waitlist import looks_like_address
 
@@ -562,6 +562,11 @@ class Outcome:
     withdrawn: str | None = None
     unread: list[str] = field(default_factory=list)  # each source its check needs that could not be read this run
 
+    @property
+    def stood(self) -> bool:
+        """Whether its open item was left as it is because a source its check needs could not be read."""
+        return self.status == KEPT and bool(self.unread)
+
 
 def marker(target: Target) -> dict[str, str]:
     """How a queue entry names the message it holds."""
@@ -614,8 +619,9 @@ def take(
     publish: bool = True,
 ) -> Outcome | None:
     """Check one message's Draft and queue it when it passes; None when it has no Draft and none is due. An open
-    item passed when it was queued, so a source that cannot be read now does not withdraw it: it stands, not checked
-    again. With publish off nothing is written, and the outcome says what a run would do."""
+    item passed when it was queued, so a source that cannot be read now, its own Draft included, does not withdraw
+    it: it stands, not checked again (queue.stands). With publish off nothing is written, and the outcome says what
+    a run would do."""
     target = slot.target
     if slot.approved:
         detail = "the Founder approved it, so it is not asked again"
@@ -625,16 +631,19 @@ def take(
         return Outcome(target, NOT_DUE, target.reason, withdrawn=str(slot.open["id"]) if slot.open else None)
     draft, problem = read(areas, slot.path)
     if draft is None:
+        kept = stands(slot.open, [problem] if problem else [])
+        if kept:
+            return Outcome(target, KEPT, kept.detail, kept.item, unread=list(kept.unread))
         if problem:
-            return Outcome(target, BLOCKED, problem, withdrawn=str(slot.open["id"]) if slot.open else None)
+            return Outcome(target, BLOCKED, problem, unread=[problem])
         if slot.open:
             return Outcome(target, KEPT, "no new Draft; the open item stands", str(slot.open["id"]))
         return Outcome(target, MISSING, f"no Draft at `{areas.relative(slot.path)}`") if slot.required else None
     verdict = check(draft, context, target, limits)
     outcome = Outcome(target, BLOCKED, "", None, draft.path, draft.sha256, verdict, unread=verdict.unread)
-    if slot.open and outcome.unread:
-        outcome.status, outcome.item = KEPT, str(slot.open["id"])
-        outcome.detail = f"not checked again, since {'; '.join(outcome.unread)}; the open item stands"
+    kept = stands(slot.open, outcome.unread)
+    if kept:
+        outcome.status, outcome.item, outcome.detail = KEPT, kept.item, kept.detail
         return outcome
     item = None
     if verdict.passed:

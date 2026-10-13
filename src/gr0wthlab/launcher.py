@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import TextIO
 
 from . import codex, fetch, process
+from .areas import clear_probe_files
 from .boundary import Boundary, ConfigError, filesystem_policy, load_boundary
 
 TRIGGERS = ("on-demand", "scheduled")
@@ -145,6 +146,9 @@ def run(
     is the run's configuration when the run resolved it once for all its sessions; the boundary is still proved
     before this session's agent starts, and the fingerprint recorded is of this session's own command.
     record["agent_started"] says whether Codex itself was started, after the preflight passed.
+    record["probe_files_removed"] names what a stopped boundary check had left in the areas, removed before the
+    preflight so that no agent finds it and the records step after the run cannot commit it. The production clone's
+    pre-run records step comes before this, so the cycle clears the areas ahead of it as well.
     time_limit is how many seconds the agent has, by the wall clock or awake, whichever the clock shows first. One
     still running then is stopped with every process the process table shows it started: record["timed_out"] is True,
     record["exit_code"] is EXIT_STOPPED whatever status the stopped agent left, and record["stopped"] names the
@@ -182,6 +186,10 @@ def run(
     record.update(resolved.describe(command))
     said = f"run {run_id}, session {session}" if session else f"run {run_id}"
     print(f"gr0wthlab: {said} ({trigger}), configuration {record['fingerprint']}", file=out)
+    left = clear_probe_files(resolved.boundary, keep=run_id)
+    if left:
+        record["probe_files_removed"] = left
+        print(f"gr0wthlab: removed boundary probe files left in the areas: {', '.join(left)}", file=out)
 
     preflight = codex.run_preflight(
         resolved.config, resolved.boundary, resolved.codex_bin, resolved.environment, run_id
