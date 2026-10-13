@@ -1,5 +1,8 @@
 # Spike US-ME02: the runtime enforces the write boundary
 
+Since 2026-10-12 a change records its live checks in a new file of its own under [`docs/live-checks/`](../live-checks/README.md), never in this note.
+The re-checks below stay here as history.
+
 **Date:** 2026-10-08, on the Founder's Mac (macOS 26.6.2).
 **Runtime:** Codex CLI 0.160.0, started as `codex exec` by the gr0wthlab launcher, both from a LaunchAgent and on demand.
 **Verdict: go.**
