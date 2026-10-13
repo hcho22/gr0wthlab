@@ -709,6 +709,7 @@ class OutreachCycleTest(WorkCycleTestCase):
     def test_a_follow_up_stays_open_under_its_id_while_the_records_cannot_be_read(self):
         ids = self.first_messages()
         (follow_up,) = self.open_follow_ups(ids, self.SLOW)
+        before = self.entry(follow_up)
         item = self.item_text(follow_up)
         folder = self.exchange / "outreach"
         os.chmod(str(folder), 0)
@@ -717,6 +718,8 @@ class OutreachCycleTest(WorkCycleTestCase):
             report = self.go(weeks=3)
         finally:
             os.chmod(str(folder), 0o755)
+        lost = "Mandu's outreach records could not be read (Permission denied)"
+        self.assert_stands(before, "Outreach Drafts", lost)
         self.assertIn(follow_up, [entry["id"] for entry in self.items("message")])
         self.assertEqual(self.item_text(follow_up), item)
         self.assertEqual([entry["id"] for entry in self.queue()["closed"] if entry.get("withdrawn")], [])
@@ -730,12 +733,14 @@ class OutreachCycleTest(WorkCycleTestCase):
         self.assertIn(f"- Not prepared: {unread}.", self.brief())
         self.assertNotIn("is not recorded as sent", report + self.brief())
         notice = self.item_text(self.items("notice")[-1]["id"])
-        self.assertIn("# Notice: 1 source could not be read on", notice)
+        self.assertRegex(notice, r"# Notice: the run on \d{4}-\d{2}-\d{2} had 2 problems\n")
         self.assertIn(f"- Mandu outreach records: `{folder}` could not be read: Permission denied.", notice)
         self.assertIn("Incomplete: Outreach Drafts.", notice)
+        self.assertIn(f"- `{follow_up}` (Outreach Drafts): {lost}", notice)
 
         self.agent()
         report = self.go(weeks=4)
+        self.assert_never_asked_again(before)
         self.assertEqual(self.ever_queued(self.SLOW), [follow_up], "it keeps its id and is never queued twice")
         self.assertIn(follow_up, [entry["id"] for entry in self.items("message")])
         self.assertIn("| Mandu outreach records | read | 1 record |", report)
@@ -744,15 +749,15 @@ class OutreachCycleTest(WorkCycleTestCase):
     def test_a_follow_up_stays_open_when_the_folder_its_record_was_in_is_gone(self):
         ids = self.first_messages()
         (follow_up,) = self.open_follow_ups(ids, self.SLOW)
+        before = self.entry(follow_up)
         shutil.rmtree(str(self.exchange / "outreach"))
         self.agent()
         report = self.go(weeks=3)
+        lost = f"`outreach/{ids[self.SLOW]}.json`, the Founder's record of the first message, is missing"
+        self.assert_stands(before, "Outreach Drafts", lost)
         self.assertEqual(self.ever_queued(self.SLOW), [follow_up])
         self.assertIn(follow_up, [entry["id"] for entry in self.items("message")])
-        unread = (
-            f"Slow Strength, the one follow-up: `outreach/{ids[self.SLOW]}.json`, the Founder's record of the first"
-            f" message, is missing, so the open `{follow_up}` stays as it is"
-        )
+        unread = f"Slow Strength, the one follow-up: {lost}, so the open `{follow_up}` stays as it is"
         self.assertIn(f"| Mandu outreach records | failed | {unread}. |", report)
         self.assertIn(f"| Outreach Drafts | incomplete | Mandu outreach records could not be read; {unread} |", report)
         self.assertNotIn("the first message to Slow Strength is not recorded as sent", report)
@@ -788,6 +793,10 @@ class OutreachCycleTest(WorkCycleTestCase):
         self.assertIn(f"so the open `{slow}` stays as it is", report)
         self.assertNotIn("the first message to Slow Strength is not recorded as sent", report)
         self.assertEqual(self.ever_queued(self.SLOW), [slow])
+        notices = self.notices()
+        lost = "the Founder's record of the first message could not be used ("
+        self.assertIn(f"- `{slow}` (Outreach Drafts): {lost}", notices, "the one left as it is is named as such")
+        self.assertNotIn(f"- `{hallway}` (Outreach Drafts)", notices)
 
     def test_open_messages_stand_under_their_ids_while_the_brand_rules_cannot_be_read(self):
         self.agent(self.drafts())

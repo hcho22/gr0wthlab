@@ -135,3 +135,48 @@ The whole unit suite was not run in this round.
 The boundary check was run once, not as a streak.
 No file was made unreadable in Mandu, in a real Product checkout, or in a real `ledger/`.
 No weekly run was made on a schedule, and Mandu's side was not shown a notice.
+
+## Re-check after the fourth review
+
+The third review's one change was a sentence in `AGENTS.md`, with no launcher code, so it has no round here.
+The fourth review asked for three changes, and this round is the re-check of the code that holds them.
+An open follow-up whose record of the first message could not be read stayed open, but it was not weighed through `queue.stands`, so the run's notice did not name it among the open items not checked again.
+`outreach.follow_up` now weighs it there and keeps it on the run's plan, and `cycle.left_standing` gathers it, so the notice names it as it names every other workflow's.
+The follow-up still stays open under its identifier, and the Outreach Drafts output still reads incomplete with the same reason.
+One thing the Founder sees changes with it: the notice of a run whose only problem was that failed read now holds two sections, so its title counts two problems where it named the one source before.
+The reason given to an item in `incoming/` that supersedes an open item whose file cannot be read now states only what the records show: the file could not be read, so the open item stands and nothing replaces it in this run.
+What happens to both items is as before: the new one is set aside and the open one stands.
+The module docstring of `codebase.py` now names `ls-tree` among the git reads.
+The round changes launcher code in `outreach.py`, `cycle.py`, and `queue.py`, and that docstring.
+It changes nothing in the permission profile, the Codex command, the fetch policy, the Product registry, or the exchange format, which stays version 6.
+
+Every check below ran on 2026-10-12, Mac local time (PDT), with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort.
+
+- `ruff check src src/bin/gr0wthlab` and `ruff format --check src src/bin/gr0wthlab` passed, with ruff 0.15.20.
+- `/usr/bin/python3 -m unittest tests.test_messages tests.test_queue tests.test_cycle tests.test_work_cycle.OutreachCycleTest`, started once from `src/`, ran 151 tests, and all passed; `tests.test_messages` holds the outreach unit tests.
+- The five tests this round changes were also run on the code of `64b1c839d72e7852f480655b0ca585cf3645e86c`, the commit before the fixes, in a throwaway copy in the Mac's temporary folder with this round's test files copied over it, and none passed.
+  The three follow-up tests failed where they look for the follow-up among the notice's open items not checked again, and the two take-in tests failed on the wording of the reason.
+
+### The boundary
+
+Both checks ran from the review's linked worktree, on `64b1c839d72e7852f480655b0ca585cf3645e86c` with this round's changes in place and not yet committed.
+Its `src/` is tree `3a56be4bdacff5a1f70dc4da7c9a3e73ae4800ea` and its `config/` is tree `bfa79f76f468035578efd8d2c901b92c40c3adf9`, the `config/` tree of every round above; both were the same after the boundary check as before the preflight.
+`git status` was not empty, since the round's commit comes after its checks: it listed the same eight changed files, and nothing else, before the preflight and after the boundary check.
+The checks ran against Mandu and the Product checkouts as they are, and their logs went to a folder in the Mac's temporary directory, named with `GR0WTHLAB_LOG_DIR`.
+The configuration fingerprint `show-config` prints there is `1fd7a1300daef25aba4297d52d84ad86d0341312a75c395ab0192f8737bcda14`, the one of the two rounds above.
+
+- `src/bin/gr0wthlab preflight`, started at 23:03, passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, started at 23:03, passed at its first attempt, as `20261013T060325Z-on-demand-a90a`: 32 steps to prove, nine of nine file-tool targets refused in a patch of their own, eleven kernel denials naming the run's sentinels or the check's listeners, twelve of twelve permitted sentinels, no sentinel escaped, no local connection, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, both a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed since the snapshot.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the preflight and after the boundary check.
+
+### What this re-check did not exercise
+
+No run was started with `src/bin/gr0wthlab run` in this round, so no change of it was seen live.
+The follow-up change stands on three whole-run tests with a stand-in agent, one for each read a follow-up rests on: Mandu's `outreach/` folder that cannot be read, the record of the first message that is missing, and that record not in its format.
+A fourth, which this round did not change, holds that a reply that was read still takes an open follow-up back.
+The reason's wording stands on the ledger's own test and on one whole-run test.
+The whole unit suite was not run in this round.
+The boundary check was run once, not as a streak.
+No file was made unreadable in Mandu, in a real Product checkout, or in a real `ledger/`.
+No weekly run was made on a schedule, and Mandu's side was not shown a notice.

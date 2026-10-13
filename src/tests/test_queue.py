@@ -147,7 +147,7 @@ class IncomingTest(LedgerTestCase):
         self.assertIn("not an open item", set_aside[0].problems[0])
 
     def test_supersedes_never_withdraws_an_open_item_whose_item_file_could_not_be_read(self):
-        """Its fingerprint is then unknown, so nothing shows the newer item is not the same ask over again."""
+        """The reason given states what the records show: the file could not be read, so the open item stands."""
         self.drop("first.md", fakes.PROPOSAL)
         self.take()
         self.drop("second.md", fakes.proposal(extra="supersedes: 20261011-first\n", title="record it another way"))
@@ -157,8 +157,8 @@ class IncomingTest(LedgerTestCase):
         self.assertEqual(
             set_aside[0].problems,
             (
-                "supersedes 20261011-first, which stays as it is: `review-queue/items/20261011-first.md`, its item"
-                " file, could not be read, so nothing shows this item asks anything else",
+                "supersedes 20261011-first: `review-queue/items/20261011-first.md`, its item file, could not be read,"
+                " so the open item stands and nothing replaces it in this run",
             ),
         )
         self.assertEqual(self.ledger.entries["20261011-first"]["status"], OPEN)

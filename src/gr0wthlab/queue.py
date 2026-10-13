@@ -286,10 +286,10 @@ class Ledger:
 
         name is the file's path inside incoming/; seen maps each queued item's fingerprint to its identifier, and
         kept holds the record of each Listening quote the launcher keeps. unread holds each queued item whose item
-        file could not be read, so that seen lacks its fingerprint: nothing then shows an item that supersedes it is
-        not that same ask over again, so the open item stands, and nothing shows an item with its kind and ask is
-        not a repeat of it, open or decided, so that item is not queued. The item comes back only when there is no
-        problem.
+        file could not be read, so that seen lacks its fingerprint: an open one of them stands, and no item that
+        supersedes it takes its place in this run, and nothing shows an item with the kind and ask of one of them,
+        open or decided, is not a repeat of it, so that item is not queued. The item comes back only when there is
+        no problem.
         """
         problems: list[str] = []
         slug = slug_of(name)
@@ -334,7 +334,7 @@ class Ledger:
             if stood:
                 self.stood.append(stood)
                 problems.append(
-                    f"supersedes {target}, which stays as it is: {lost}, so nothing shows this item asks anything else"
+                    f"supersedes {target}: {lost}, so the open item stands and nothing replaces it in this run"
                 )
         fingerprint = exchange.item_hash(item)
         if fingerprint in seen:

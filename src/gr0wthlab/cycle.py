@@ -645,6 +645,8 @@ class Cycle:
         add(beta.WORKFLOW, state.beta_outcome.results if state.beta_outcome else ())
         add("listening", state.listening_result.replies if state.listening_result else ())
         add("outreach-drafts", state.outreach_result.outcomes if state.outreach_result else ())
+        if state.outreach is not None:
+            found += [(output_titles(config, ("outreach-drafts",))[0], kept) for kept in state.outreach.stood]
         found += [
             (state.queue_title, Stands(str(filing.identifier), (filing.unread,)))
             for filing in state.dispatches

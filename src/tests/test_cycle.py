@@ -243,7 +243,7 @@ class FirstRunTest(CycleTestCase):
 
 class TakeInTest(CycleTestCase):
     def test_an_item_that_supersedes_an_open_one_whose_file_cannot_be_read_is_set_aside_and_the_open_one_stands(self):
-        """Nothing then shows the new item is not the same ask over again, which is never queued twice."""
+        """The open item's file could not be read, so it stands and nothing replaces it in that run."""
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
         self.run_cycle()
         (first,) = [entry for entry in self.queue()["open"] if entry["kind"] == "package-change-proposal"]
@@ -258,8 +258,8 @@ class TakeInTest(CycleTestCase):
         unread = f"`{first['file']}`, its item file, could not be read"
         self.assert_stands(first, "Review Queue", unread)
         self.assertIn(
-            f"`name-status-again.md`: supersedes {first['id']}, which stays as it is: {unread}, so nothing shows this"
-            " item asks anything else",
+            f"`name-status-again.md`: supersedes {first['id']}: {unread}, so the open item stands and nothing replaces"
+            " it in this run",
             self.report(),
         )
         file.write_text(text, encoding="utf-8")

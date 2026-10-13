@@ -2,8 +2,8 @@
 
 The launcher resolves the branch to one commit before the agent starts and checks every claim at that commit, so a
 claim is checked against the code the agent was told to read, whatever the checkout's working tree holds. Only git's
-object reads are used (rev-parse and cat-file), with optional locks off, so the checkout's index, refs, and working
-tree are never written.
+object reads are used (rev-parse, cat-file, and ls-tree), with optional locks off, so the checkout's index, refs, and
+working tree are never written.
 """
 
 from __future__ import annotations
