@@ -49,6 +49,9 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    Every session writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records, and never write there.
    Every session runs under the same time limit, counted for it alone; one still running at it is stopped, and the run goes on to the next session ([When a session times out](#when-a-session-times-out)).
    After each session it restores its owner's read and write access to anything under `workspace/` that session left without it, and the run report names every entry it fixed, before or after a session.
+   It then puts back any change in `workspace/instructions/`, before the next session starts, so every session starts from the Instructions as the run noted them before its first session and none reads what another session changed.
+   The run report names each change once, with the session it was found after.
+   An entry there that it could not read before the first session started is not guarded: it is left exactly as it is, and the run report names it.
 7. Once the last session has ended, it takes in what all of them wrote, in one pass.
    It queues the items the sessions wrote to `workspace/review-queue/incoming/` that pass the format, sets the rest aside, each copied whole to `ledger/review-queue/set-aside/<run id>/`, and turns every problem into one notice.
    A post or a message written there is always set aside: the launcher queues those two kinds only from a Draft that passes its checks.
@@ -94,8 +97,6 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    It does not hold back what the Waitlist's view shows, since the view was read: an open invitation that holds a sign-up who left the Waitlist or its beta opt-in is still taken back.
    It is replaced by the batch made again without them, as above, unless the counts that were read say the cohort is full: then it is withdrawn with that reason and no batch is made in its place, since a later report may correct that count, the notice names the report, and the Beta Cohort recruiting output is incomplete.
    Nor does it hold back the address check: a recruiting Draft the brief asked for is read, and removed when it holds what looks like an email address, before anything else is weighed.
-   It puts back any change the run's sessions made in `workspace/instructions/`, and names it in the run report.
-   An entry there that it could not read before the first session started is not guarded: it is left exactly as it is, and the run report names it.
    It keeps each quote record whose words stand in the text it fetched from that record's link (`ledger/evidence/listening/quotes/`), and refuses every other: a refused record is removed, and only its file name and the reasons are kept.
    Once the sessions' work is taken in and the run ends, it removes the snapshot.
    It queues a proposed Angle or Hook only when every source it cites is a kept quote, with the confidence it counts itself, and discards an unsourced one with a note: the discarded file is removed, and only its name and the reasons are kept.
@@ -159,6 +160,12 @@ The launcher takes nothing in while a session can still write.
 One take-in, once the last session has ended, keeps every take-in rule what it was when a run had one session: a post is queued together with its video, the two videos of an A/B pair are compared once, and the Review Queue is written once.
 A later session reads an earlier one's work as files in `workspace/`, never as queued items.
 Every session has the same six areas, so a later one can change a file an earlier one wrote before the launcher has read it; the counts below are made per session, by fingerprint, so the report shows it.
+The agent's Instructions are the exception, since every session is told to read its working guidance there.
+The launcher notes `workspace/instructions/` before the first session and puts it back as noted after every session, in the same step that restores access to `workspace/` and before the next session starts or anything is counted or taken in.
+So no session works from Instructions another session of the same run changed, and a file one session added there is gone before the next starts.
+That step is a restore and no take-in: nothing else in `workspace/` is read or changed by it.
+The report's Learning section and the notice say once what was changed and put back, each line with the session it was found after, as in ``after the Listening session: `instructions/outreach.md` was changed during the run and put back as it was``.
+A change that could not be put back is told the same way, and the next session then reads the file as it stands.
 
 One workflow's trouble stays its own.
 A session that does not start, is stopped at its time limit, or ends with an error leaves the sessions after it to run.

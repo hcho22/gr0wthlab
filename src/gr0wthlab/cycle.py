@@ -8,8 +8,9 @@ Cohort's next invitation batch (beta.prepare); read the fixed list of network so
 the launcher's only way onto the network), which is working data removed when the run ends, and plan Listening from it
 and outreach from the Founder's records; decide which workflows have work for the agent, and for each of those, one
 after another in a fixed order, write its brief and run one agent session inside the sandbox, which has no network
-(sessions.py, launcher.run); once the last session has ended, put back any change the run made to its own
-Instructions; queue the items the sessions wrote to workspace/review-queue/incoming/ that pass the format, a post for
+(sessions.py, launcher.run), and after each session put back any change it made to the agent's Instructions, so no
+session works from Instructions another changed; once the last session has ended, queue the items the sessions
+wrote to workspace/review-queue/incoming/ that pass the format, a post for
 each Draft that passes every check, with the video cut from its edit record when it has one (posts.take), the
 recruiting Drafts that pass theirs (beta.take), the quotes, proposals, and messages that pass theirs (listening.take,
 outreach.take), the code proposed for each rejection reason (learning.take), and the reviewed proposals that need
@@ -20,7 +21,8 @@ does can change them; in workspace/ the launcher only restores its owner's acces
 it, removes what a stopped boundary check left at the top of the areas, before the first records step can commit it,
 reads the Drafts and the edit records, reads the items in incoming/ before each session starts and once it has
 ended, removes a recruiting Draft that holds what looks like an email address, reads and removes the items, quote
-records, proposals, and codes it takes in, and puts the agent's Instructions back as they were. Nothing is taken in
+records, proposals, and codes it takes in, and after each session puts the agent's Instructions back as they were.
+Nothing is taken in
 while a session can still write: one take-in, after the last session, keeps every take-in rule what it was when a run
 had one session. One run at a time per checkout holds the run lock in its ledger/ from the sync to the saved records;
 a run started meanwhile refuses to start, and the next report says so.
@@ -1170,11 +1172,8 @@ class Cycle:
         now: datetime,
         seen: dict[str, str],
     ) -> None:
-        """After the last session: put back any change to the agent's Instructions, then take in the Listening
-        work, the outreach Drafts, and the codes proposed for rejection reasons, each on its own."""
-        if state.guidance is not None:
-            state.put_back = learning.put_back(state.guidance, areas)
-            state.problems += [f"{line}; no run may change its own Instructions yet" for line in state.put_back]
+        """After the last session: take in the Listening work, the outreach Drafts, and the codes proposed for
+        rejection reasons, each on its own."""
         if not ledger_ok:
             unread = "not taken in: the Review Queue could not be read"
             state.listening_problem = state.listening_problem or unread
@@ -1424,7 +1423,10 @@ class Cycle:
         workspace/ before and after each, for the counts. Each session is a fresh Codex process with the same
         command, proved against the boundary before its agent starts, with its own brief and task definition, under
         the one time limit every session has. A session that does not start, is stopped at its limit, or ends with
-        an error leaves the next to run.
+        an error leaves the next to run. Once a session has ended, the launcher takes back its access to what the
+        session left and puts the agent's Instructions back as the run noted them before its first session, so
+        every session starts from those and none reads what another changed; each change it undoes is told once,
+        with the session it was found after.
         A session starts only while the bound on all of the run's sessions together has time left, and gets what is
         left of it when that is less than a session's limit."""
         root = canonical(self.repo_root)
@@ -1481,6 +1483,9 @@ class Cycle:
                 state.problems.append(left_running)
             # Before the next session reads workspace/, and before anything is counted or taken in from it.
             state.problems += [problem for problem in records.restore_access(root) if problem not in state.problems]
+            undone = [f"after the {session.title} session: {line}" for line in learning.put_back(state.guidance, areas)]
+            state.put_back += undone
+            state.problems += [f"{line}; no run may change its own Instructions yet" for line in undone]
             if session.started:
                 after = (
                     self.counted(state, WRITTEN, lambda: work.standing(state.posts, areas, products))

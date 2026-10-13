@@ -136,7 +136,7 @@ class RunState:
     learning: learning.Result | None = None
     learning_problem: str = ""  # why the rejection reasons were not read or coded, when they were not
     guidance: learning.Guidance | None = None  # the agent's Instructions as they were before it started
-    put_back: list[str] = field(default_factory=list)  # each change to them the launcher undid
+    put_back: list[str] = field(default_factory=list)  # each change to them the launcher undid, and after which session
     # what a stopped boundary check had left in the areas, removed before the Instructions were remembered
     probe_files_removed: list[str] = field(default_factory=list)
     work_published: list[str] = field(default_factory=list)  # the items Listening and outreach queued this run
@@ -1115,7 +1115,9 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     A weekly scheduled run that the Mac's sleep cut short queues no notice for that alone while a fresh run follows
     by itself, and its notice then leaves out the work its agents did not reach, which that run does again and
     reports on itself; once the run due then has no attempt left, the notice lists everything and says so in its
-    title.
+    title. Such a run always has a part that says it was cut short and what follows: one for each session that fell
+    short, and one for each session that ended without an error and did not confirm its work, the package review's
+    being the part it has in any run.
     """
     day = wall_clock(state.started).strftime("%Y-%m-%d")
     sections: list[tuple[int, str, str]] = []  # how many problems, the title, the text
@@ -1277,6 +1279,17 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 f" it again.{'' if told or late else follows}",
             )
         )
+    for session in state.ran if slept else ():
+        if session.finished and not session.confirmed and session is not review:
+            told.append(
+                (
+                    1,
+                    f"the {session.title} session did not confirm that it finished on {day}",
+                    f"The {session.title} session ended without an error, but the Mac slept during the run and its"
+                    " summary did not confirm that it finished, so its work this run may be incomplete; the run"
+                    f" report's Sessions section has its own word.{'' if told or late else follows}",
+                )
+            )
     sections = late + sections + told
     if state.problems:
         sections.append(

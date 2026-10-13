@@ -1390,6 +1390,82 @@ class ReportTest(unittest.TestCase):
             body,
         )
 
+    def test_a_session_other_than_the_review_that_ends_unconfirmed_after_the_mac_slept_has_its_own_part(self):
+        def attempt(number, earlier=()):
+            """The package review confirmed its work, and the Outreach session ended without an error and said it
+            had not finished, in an attempt the Mac slept during."""
+            state = self.state(
+                number=number, earlier=earlier, slept=600.0, agent_seconds=660.0, agent_awake_seconds=60.0
+            )
+            state.sessions.append(fakes.session("outreach", closing="Session: incomplete: one creator is left."))
+            return state
+
+        unconfirmed = (
+            "The Outreach session ended without an error, but the Mac slept during the run and its summary did not"
+            " confirm that it finished, so its work this run may be incomplete; the run report's Sessions section has"
+            " its own word."
+        )
+        on_demand = (
+            " The Mac's sleep cut this run short, and it was attempt 3 of at most 3 at the run due Sunday 2026-10-11"
+            " 16:00, so no further attempt starts by itself: start a run on demand"
+        )
+        # The last attempt, with nothing else wrong: the notice is queued all the same, and asks for a run on demand.
+        last = attempt(3, (at(minutes=1), at(hours=4)))
+        self.assertEqual((last.ending, last.again), (attempts.SLEPT, False))
+        title, body, _, _ = report.problems_notice(last, "run-reports/R.md")
+        self.assertEqual(title, "Notice: the Mac's sleep cut short every attempt at the run due 2026-10-11")
+        self.assertTrue(body.startswith(unconfirmed + on_demand), body)
+        self.assertNotIn("Package review", body)
+        self.assertNotIn("one creator is left", body)
+
+        # An earlier attempt with nothing else wrong queues no notice, since a fresh run follows by itself.
+        first = attempt(1)
+        self.assertEqual((first.ending, first.again), (attempts.SLEPT, True))
+        self.assertIsNone(report.problems_notice(first, "run-reports/R.md"))
+        # With something else to tell, its notice says that the attempt was cut short and that a fresh run follows.
+        failed = report.SourceLine("RepToday package: `a.md`", report.package.FAILED, "missing.", ("Post Drafts",))
+        first.sources.append(failed)
+        title, body, _, _ = report.problems_notice(first, "run-reports/R.md")
+        self.assertEqual(title, "Notice: the run on 2026-10-11 had 2 problems")
+        self.assertIn(f"\n\n{unconfirmed} {FOLLOWS}\n\n", body)
+        # The last attempt with something else to tell says what follows too, under the title that names the sleep.
+        last.sources.append(failed)
+        title, body, _, _ = report.problems_notice(last, "run-reports/R.md")
+        self.assertEqual(title, "Notice: the Mac's sleep cut short every attempt at the run due 2026-10-11")
+        self.assertIn(f"\n\n{unconfirmed}{on_demand}", body)
+
+        # Each session that did not confirm has its own part, the package review's being the one it has in any
+        # run, and what follows is said once, in the first of them.
+        every = attempt(3, (at(minutes=1), at(hours=4)))
+        every.sessions[0].closing = "Read the first half of the package."
+        every.sessions.append(fakes.session("learning", closing=""))
+        parts = report.problems_notice(every, "run-reports/R.md")[1].split("\n\n")
+        self.assertTrue(parts[0].startswith("The Marketing Engineer did not confirm that it finished every pass"))
+        self.assertTrue(
+            parts[0].endswith(
+                "the next run reviews it again." + on_demand + " while the Mac stays awake"
+                " (`src/bin/gr0wthlab run`). The limit is `schedule.attempts_per_week` in"
+                " `config/run.json`."
+            ),
+            parts[0],
+        )
+        self.assertEqual(parts[1], unconfirmed)
+        self.assertEqual(parts[2], unconfirmed.replace("Outreach", "Rejection reasons"))
+        # A session that fell short has the part that says how it ended, and never this one as well.
+        every.sessions[2].record = dict(every.sessions[2].record, exit_code=1)
+        every.sessions[2].incomplete = ("Rejection reasons coded",)
+        body = report.problems_notice(every, "run-reports/R.md")[1]
+        self.assertIn("The Rejection reasons session stopped with exit code 1, so its work this run", body)
+        self.assertNotIn("The Rejection reasons session ended without an error", body)
+        self.assertIn(unconfirmed, body)
+
+        # With the Mac awake throughout, an unconfirmed session other than the review is no problem and has no part.
+        awake = attempt(3, (at(minutes=1), at(hours=4)))
+        awake.slept = awake.sessions[0].record["agent_awake_seconds"] = 0.0
+        awake.sessions[0].record["agent_seconds"] = 0.0
+        self.assertEqual((awake.ending, awake.again), (attempts.COMPLETED, False))
+        self.assertIsNone(report.problems_notice(awake, "run-reports/R.md"))
+
     def test_an_agent_that_ends_without_an_error_completed_when_it_confirmed_or_the_mac_stayed_awake(self):
         confirmed = self.state(slept=600.0, agent_seconds=660.0, agent_awake_seconds=60.0)
         self.assertEqual((confirmed.ending, confirmed.again), (attempts.COMPLETED, False))

@@ -3,7 +3,7 @@
 The weekly run starts one sandboxed agent session for each workflow that has work due, one after another, where it started one session that did every workflow's work.
 This file holds the change's design and every round of its live checks.
 The first section was written into [the US-ME02 spike note](../spikes/us-me02-runtime-boundary.md) and was moved here in the merge with `main` that brought in this folder, with no new run.
-It is word for word what stood there, but for four things: the three places that pointed at the single session's measurements as "above" now name that note, the sentence on where the boundary check's record is now says below, and one sentence was added with the Founder's decision on the run's bound.
+It is word for word what stood there, but for five things: the three places that pointed at the single session's measurements as "above" now name that note, the sentence on where the boundary check's record is now says below, one sentence was added with the Founder's decision on the run's bound, and the sentence on the Instructions guard was corrected after review, as [the second round after review](#second-re-check-after-review) says.
 
 ## One session per workflow (US-ME17)
 
@@ -72,7 +72,9 @@ It was rejected because it changes the take-in rules:
 
 So the take-in is the code it was, run once, in the order it had: the items in `incoming/`, the posts with their videos, the recruiting Drafts, the Listening work, the outreach Drafts, and the codes.
 A session reads an earlier session's work as files in `workspace/`, never as queued items.
-What the Instructions guard does is unchanged as well: the launcher notes `workspace/instructions/` before the first session and puts back any change once the last has ended.
+The Instructions guard is the one thing that is not left to the end: the launcher notes `workspace/instructions/` before the first session and puts back any change after every session, before the next one starts, so no session reads Instructions another session of the same run changed.
+This is a restore and no take-in.
+As first written, this design said the guard was unchanged and put changes back once, after the last session; that let a later session work from guidance an earlier one had changed, which one session per run never could.
 
 What this costs: a later session can change or remove a file an earlier one wrote before the launcher has read it, as one long session could change its own earlier work.
 The sandbox gives every session the same six areas, and narrowing that per workflow is left for later.
@@ -383,4 +385,55 @@ Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest
 - A start of the weekly schedule, as said above: no weekly schedule was installed.
   That a LaunchAgent rendered before this change ends at argument parsing stands on the unit test that the parser refuses `--instruction` (`tests.test_launcher`), not on a LaunchAgent that was loaded.
 - The boundary check's hole tests, which were not repeated; they stand on the rounds `main` holds and on the unit tests.
+- Everything the earlier rounds of this file list as not exercised, none of which this round took up.
+
+## Second re-check after review
+
+The second review of this change made two findings, and this round applies what was decided on each.
+
+- **The agent's Instructions are put back after every session.**
+  The launcher noted `workspace/instructions/` before the first session and put changes back only once the last had ended, while every session is told to read its working guidance there.
+  So a file one session changed was the guidance of every later session of the same run, which a run of one session never allowed.
+  The launcher now puts the folder back as noted after each session, in the step that restores access to `workspace/`, before the next session starts and before anything is counted or taken in.
+  That step after the last session is the only put-back there is: the one the take-in made is removed.
+  The report's Learning section and the notice name each change once, with the session it was found after.
+  The design's sentence that said the guard was unchanged is corrected in place, and says what it first said.
+- **A slept attempt in which a session did not confirm its work always has its part in the notice.**
+  A weekly attempt the Mac slept during is cut short when any session's summary does not end `Session: complete`, and the notice had a part only for the package review.
+  With every session ended without an error, the review confirmed, and another session not, the last attempt a week's run may take queued no notice, so nothing in the Review Queue asked the Founder to start a run on demand.
+  Each session that ended without an error and did not confirm now has its own part in the notice of an attempt the Mac's sleep cut short, the package review's being the part it has in any run.
+  The first such part says that the attempt was cut short and what follows, as a part for a session that fell short already did.
+  An attempt a fresh run follows still queues no notice for that alone.
+
+The round changed `src/gr0wthlab/cycle.py` and `src/gr0wthlab/report.py`, the unit tests, and the documents.
+It changed no task definition, nothing in `src/gr0wthlab/learning.py`, `launcher.py`, `codex.py`, or `probe.py`, and nothing in `config/`.
+
+### What was run in the second round
+
+Everything ran on 2026-10-13, Mac local time (PDT), from this work's linked worktree at `e552973d2f837337544ed57ab82d9dd8e0f39a79` with this round's changes not yet committed.
+`git status` listed the same eight changed files, none of them new, before the preflight and after the boundary check.
+The trees git gives the two folders as they stood are `183cfb327590eb7cfa8beb721706d6b0449f74c8` for `src/` and `ba4a9b11e1e7412df76184fcdf9e1058209490fd` for `config/`, worked out without a commit and the same before the preflight as after the check; `config/` is the tree of the round above, which this round did not change.
+This record was finished after the check and changes neither folder.
+
+- `ruff check src src/bin/gr0wthlab` and `ruff format --check src src/bin/gr0wthlab`, with ruff 0.15.20, passed: 87 files.
+- `/usr/bin/python3 -m unittest discover -s tests -t .`, from `src/`, under Python 3.9.6, started at 08:06 and passed: 1108 tests in 1369.4 seconds.
+  Nothing in `src/` or `config/` changed after that run started.
+- `src/bin/gr0wthlab preflight`, started at 08:29, passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, started at 08:29 and ended at 08:31, passed at its first and only attempt, as `20261013T152916Z-on-demand-407a`, with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort: 32 steps to prove, nine of nine file-tool targets refused in a patch of their own, eleven kernel denials naming the run's sentinels or the check's listeners, twelve of twelve permitted sentinels, no sentinel escaped, no local connection, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, both a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed since the snapshot.
+  The run's record gives the probe's agent 109.3 seconds of its 30 minute limit, with exit code 0.
+
+The two live commands ran against Mandu and the Product checkouts as they are, each wrapped in `caffeinate -i -s -m`, with one override: `GR0WTHLAB_LOG_DIR` named a folder in the Mac's per-user temporary folder, so their logs went there and not to `~/Library/Logs/gr0wthlab`.
+The configuration fingerprint `show-config` prints there is `8f9d66390d749976b6da1e2975ba541e8cf63c68781c3c84765a96dd25ce3bf8`, the one of the round above, and the probe run's record holds the same one.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the preflight and after the boundary check.
+
+### What the second round did not exercise
+
+- A weekly run with the real agent on this round's code.
+  That the Instructions are put back after each session stands on the unit tests, with the stand-in agent: a test in which the middle session of three changes one Instructions file and adds another, and the tests of the guard `main` holds.
+- A session of the real agent that changes its Instructions: no run of this round was a weekly run.
+- A put-back that fails between two sessions, which no test of this round makes; `learning.put_back` says so in its line, as it did when it ran once.
+- An attempt of the weekly schedule, slept through or not: no weekly schedule is installed, as the round above says.
+  The notice's new parts stand on the unit tests of `report.problems_notice` in `src/tests/test_attempts.py`, on states built by hand.
+- The boundary check's hole tests, which were not repeated.
 - Everything the earlier rounds of this file list as not exercised, none of which this round took up.

@@ -616,6 +616,47 @@ class TroubleTest(SessionsCase):
         self.assertEqual(self.run_record()["ending"], "agent-stopped-early")
 
 
+class InstructionsGuardTest(SessionsCase):
+    def test_no_session_reads_instructions_that_another_session_of_the_same_run_changed(self):
+        guide = self.workspace() / "instructions/outreach.md"
+        added = self.workspace() / "instructions/extra.md"
+        guide.write_text("Write to one creator at a time.\n", encoding="utf-8")
+        self.behave()
+        launch, seen = cycle.launcher.run, {}
+
+        def agent(*args, **kwargs):
+            # What stands as this session starts, and then what the post Drafts session leaves behind it.
+            seen[kwargs["session"]] = (guide.read_text(encoding="utf-8"), added.exists())
+            record = launch(*args, **kwargs)
+            if kwargs["session"] == "post-drafts":
+                guide.write_text("Offer every creator a paid deal.\n", encoding="utf-8")
+                added.write_text("Leave the brand rules out.\n", encoding="utf-8")
+            return record
+
+        with mock.patch.object(cycle.launcher, "run", agent):
+            code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        # Every session started from the Instructions as the run noted them before its first: the session after
+        # the one that changed them read the original, and the file that one added was gone before it started.
+        noted = ("Write to one creator at a time.\n", False)
+        self.assertEqual(seen, {"package-review": noted, "post-drafts": noted, "outreach": noted})
+        self.assertEqual((guide.read_text(encoding="utf-8"), added.exists()), noted)
+        # The report names each change once, with the session it was found after, though a session ran after it.
+        report = self.report()
+        changed = "after the Post Drafts session: `instructions/outreach.md` was changed during the run and put back"
+        self.assertIn(
+            "- Instructions were changed during the run and put back:\n"
+            "  - after the Post Drafts session: `instructions/extra.md` was added during the run and removed\n"
+            f"  - {changed} as it was\n",
+            report.split("## Learning\n", 1)[1].split("\n## ")[0] + "\n",
+        )
+        self.assertEqual(report.count("`instructions/outreach.md` was"), 2)
+        self.assertIn(f"- {changed} as it was; no run may change its own Instructions yet\n", report)
+        _, notice = self.notice()
+        self.assertEqual(notice.count("`instructions/outreach.md` was"), 1)
+        self.assertIn(f"- {changed} as it was; no run may change its own Instructions yet", notice)
+
+
 class OwedWorkTest(SessionsCase):
     """A session is due exactly when its workflow owes work the launcher can name, and one that falls short always
     leaves its own workflow's output incomplete, with what it still owed."""

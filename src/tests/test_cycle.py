@@ -881,7 +881,11 @@ class FailuresTest(CycleTestCase):
             self.assertIn(f"- `{entry}` {restored}", problems)
         self.assertEqual((self.workspace() / "drafts/sub/draft.md").read_text(encoding="utf-8"), "a draft\n")
         self.assertEqual((self.workspace() / "instructions/README.md").read_text(encoding="utf-8"), "# instructions\n")
-        self.assertIn("- `instructions/README.md` was changed during the run and put back as it was;", problems)
+        self.assertIn(
+            "- after the Package review session: `instructions/README.md` was changed during the run and put back as"
+            " it was; no run may change its own Instructions yet\n",
+            problems,
+        )
         queue = self.queue()
         self.assertEqual([entry["kind"] for entry in queue["open"]], ["package-change-proposal", "notice"])
         notice = (self.ledger() / queue["open"][1]["file"]).read_text(encoding="utf-8")
