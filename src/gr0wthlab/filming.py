@@ -659,7 +659,8 @@ class Filming:
         return f"{said}, so the post is not said to keep it: nothing is substituted, and it is cut again once it can be"
 
     def lost(self) -> list[str]:
-        """Each open post whose video's finished file is not the file the post names, as the Founder is told."""
+        """Each open post whose video's finished file was not confirmed as the file the post names, as the Founder is
+        told."""
         return [
             shown.account(number, number in self.due)
             for number, shown in sorted(self.videos.items())
@@ -1453,7 +1454,7 @@ def report_lines(filming: Filming | None, skipped: str = "") -> list[str]:
         lines.append(f"- Every file measured and every edit checked: `{filming.record}`.")
     lost = filming.lost()
     if lost:
-        lost = ["", "Posts whose video's finished file is not the file they name:", ""] + [
+        lost = ["", "Posts whose video's finished file was not confirmed as the file they name:", ""] + [
             f"- {line}." for line in lost
         ]
     if filming.replaced:

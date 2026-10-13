@@ -2415,7 +2415,10 @@ class LostVideoTest(FilmingRunCase):
             report,
         )
         self.assertIn(f"| 1 | d01-s1 | not cut | {why}; {self.row(post, how)} |", report)
-        self.assertIn("Posts whose video's finished file is not the file they name:\n\n" + self.lost(post, how), report)
+        self.assertIn(
+            "Posts whose video's finished file was not confirmed as the file they name:\n\n" + self.lost(post, how),
+            report,
+        )
         self.assertIn(self.lost(post, how), notice)
         self.assertIn(skipped or "- Day 1's video could not be cut again: shot d01-s1 has no footage.\n", notice)
         for text in (report, notice, self.brief()):
@@ -2494,7 +2497,7 @@ class LostVideoTest(FilmingRunCase):
             skipped or "- Day 1 has no video: shot d01-s1 has no footage, and nothing is substituted.", notice
         )
         self.assertNotIn("keeps the video it shows", (report + notice).replace("the post of day 2 keeps", ""))
-        self.assertNotIn("Posts whose video's finished file is not the file they name", report)
+        self.assertNotIn("Posts whose video's finished file was not confirmed as the file they name", report)
         self.assertIn("| Filming plan and edits | complete |", report)
         # The next run has nothing more to say of it: the post that shows no video stands.
         self.run_ok()
@@ -2761,7 +2764,7 @@ class LostVideoTest(FilmingRunCase):
         report, lost = self.report(), self.lost(post, self.GONE)
         self.assertIn("- Post Drafts: not taken in: the disk is full", report)
         self.assertNotIn("gave way", report + self.notice())
-        self.assertIn("Posts whose video's finished file is not the file they name:\n\n" + lost, report)
+        self.assertIn("Posts whose video's finished file was not confirmed as the file they name:\n\n" + lost, report)
         self.assertIn(lost, self.notice())
         # The next run queues what that one could not.
         self.gives_way(post, self.GONE, self.AWAY)
