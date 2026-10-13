@@ -2381,23 +2381,19 @@ class LostVideoTest(FilmingRunCase):
         self.addCleanup(patch.stop)
         return patch.stop
 
-    def lost(self, post, how, approved=False):
-        """What the report and the notice say of a post whose video's finished file is not the file it names."""
+    def lost(self, post, how, due=True):
+        """What the report and the notice say of an open post whose video's finished file is not the file it names,
+        in a run its day is due in or not."""
         said = (
-            f"Day {post['day']}'s {'approved' if approved else 'open'} post `{post['id']}`: the finished file"
-            f" `{post['asset']}` of the video it names {how}"
+            f"Day {post['day']}'s open post `{post['id']}`: the finished file `{post['asset']}` of the video it names"
+            f" {how}"
         )
         if how == self.UNREAD:
             return f"- {said}, so nothing is said of whether the post keeps the video, and the post is left as it is."
-        if approved:
-            return (
-                f"- {said}, and nothing is cut again for a post the Founder approved: `src/bin/gr0wthlab"
-                f" rebuild-asset {post['asset_record']}` makes the file again from its footage."
-            )
-        return (
-            f"- {said}, so the post is not said to keep the video: nothing is substituted, and it is cut again once it"
-            " can be."
-        )
+        said += ", so the post is not said to keep the video: nothing is substituted, and"
+        if due:
+            return f"- {said} it is cut again once it can be."
+        return f"- {said} day {post['day']} is not due this run, so nothing is cut for it and the post stands as it is."
 
     def row(self, post, how):
         """What a day's row says of the video its post names, in the report, the brief, and check-edits."""
@@ -2708,7 +2704,7 @@ class LostVideoTest(FilmingRunCase):
         self.assertEqual((moved["supersedes"], moved["asset_sha256"]), (post["id"], post["asset_sha256"]))
         self.assertIn(f"| 1 | d01-s1 | not cut | {self.AWAY}; its post keeps the video it shows |", self.report())
 
-    def test_an_approved_post_whose_finished_file_is_not_intact_is_named_with_the_way_to_make_it_again(self):
+    def test_nothing_is_said_of_the_finished_file_of_a_post_the_founder_approved(self):
         post = self.day_1()
         self.decide(post["id"], "approve")
         self.run_ok()
@@ -2716,69 +2712,59 @@ class LostVideoTest(FilmingRunCase):
         asset = self.ledger() / post["asset"]
         held = asset.read_bytes()
 
-        def run(how):
+        def run():
             queue = self.run_ok()
             self.assertEqual(self.entries(status="approved"), [approved])
             self.assertEqual(self.posts_open(), {})
-            self.assertIn(self.lost(post, how, approved=True), self.report())
-            self.assertIn(self.lost(post, how, approved=True), self.notice())
-            self.assertEqual(self.notice().count("`: the finished file"), 1)
-            return queue
+            self.assertNotIn("finished file", self.report())
+            self.assertIn("| Filming plan and edits | complete |", self.report())
+            self.assertEqual([e for e in queue["open"] if e["published_by_run"] == queue["updated_by_run"]], [])
 
         asset.unlink()
-        run(self.GONE)
-        self.assertIn("| Filming plan and edits | complete |", self.report())
+        run()
         asset.write_text("another file")
-        run(self.CHANGED)
+        run()
         asset.write_bytes(held)
-        readable = self.unreadable(post)
-        run(self.UNREAD)
-        self.assertIn(
-            f"| incomplete | the finished file `{post['asset']}` of the video day 1's post names", self.report()
-        )
-        readable()
-        # In place again, nothing is said of it and no notice is queued for it.
-        queue = self.run_ok()
-        self.assertNotIn("finished file", self.report())
-        self.assertEqual([e for e in queue["open"] if e["published_by_run"] == queue["updated_by_run"]], [])
+        self.unreadable(post)
+        run()
 
-    def test_a_post_of_a_day_no_longer_due_is_still_named_when_its_finished_file_is_gone(self):
+    def test_a_post_of_a_day_no_longer_due_is_named_and_never_said_to_be_cut_again(self):
         post = self.day_1()
         (self.ledger() / post["asset"]).unlink()
         fakes.set_window(self.repo, fakes.window_from(date(2026, 10, 4)))
         self.run_ok()
         self.assertEqual(self.posts_open()[1], post)
         self.assertNotIn("| 1 | d01-s1 |", self.report())
-        self.assertIn(self.lost(post, self.GONE), self.report())
-        self.assertIn(self.lost(post, self.GONE), self.notice())
+        # No run cuts a day that is not due, so the one line that names the post says it stands, and no more.
+        told = self.lost(post, self.GONE, due=False)
+        for text in (self.report(), self.notice()):
+            self.assertIn(told, text)
+            named = [line for line in text.splitlines() if f"post `{post['id']}`" in line]
+            self.assertEqual(len(named), 1, named)
+            self.assertNotIn("cut again", named[0])
 
-    def test_a_rebuild_that_puts_nothing_in_place_says_what_stands_there(self):
-        post = self.day_1()
-        asset = self.ledger() / post["asset"]
-        held = asset.read_bytes()
+    def test_a_run_that_could_not_queue_the_post_without_a_video_still_ends_with_its_report(self):
+        post = self.day_1_beside_other_footage()
         (self.footage / "window-1" / "d01-s1.mov").unlink()
+        (self.ledger() / post["asset"]).unlink()
+        publish = posts.Ledger.publish
 
-        def rebuild():
-            out = io.StringIO()
-            with (
-                mock.patch.object(cli, "REPO_ROOT", self.repo),
-                mock.patch.object(cli, "LEDGER_DIR", self.repo / "ledger"),
-            ):
-                self.assertEqual(cli.rebuild_asset(post["asset_record"], self.env, self.home, out), 1)
-            first, standing = out.getvalue().splitlines()
-            self.assertEqual(first, f"`{post['asset_record']}` cannot be rebuilt: No such file or directory")
-            return standing
+        def full(ledger, store, item, slug, *more, **named):
+            if slug.startswith("post-"):
+                raise OSError("the disk is full")
+            return publish(ledger, store, item, slug, *more, **named)
 
-        named = f"As it stands, the finished file `{post['asset']}`"
-        self.assertEqual(rebuild(), f"{named} is on disk and is the file its record names.")
-        asset.unlink()
-        self.assertEqual(rebuild(), f"{named} {self.GONE}.")
-        asset.write_text("another file")
-        self.assertEqual(rebuild(), f"{named} {self.CHANGED}.")
-        self.assertEqual(asset.read_text(), "another file")
-        asset.write_bytes(held)
-        self.unreadable(post)
-        self.assertEqual(rebuild(), f"{named} {self.UNREAD}.")
+        # The day's open post was settled to give way, and then nothing could be queued in its place.
+        with mock.patch.object(posts.Ledger, "publish", full):
+            self.run_ok()
+        self.assertEqual(self.posts_open()[1], post)
+        report, lost = self.report(), self.lost(post, self.GONE)
+        self.assertIn("- Post Drafts: not taken in: the disk is full", report)
+        self.assertNotIn("gave way", report + self.notice())
+        self.assertIn("Posts whose video's finished file is not the file they name:\n\n" + lost, report)
+        self.assertIn(lost, self.notice())
+        # The next run queues what that one could not.
+        self.gives_way(post, self.GONE, self.AWAY)
 
     def test_the_one_check_reads_no_link_and_needs_the_record_and_the_entry_to_name_the_same_file(self):
         post = self.day_1()

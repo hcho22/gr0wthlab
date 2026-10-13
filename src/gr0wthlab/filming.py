@@ -173,10 +173,10 @@ class OnDisk:
         """Whether the file's standing could not be learned, which is never taken for a file that is gone."""
         return self.state in (UNREAD, UNRECORDED)
 
-    def told(self, of: str = "") -> str:
+    def told(self, of: str) -> str:
         """The file's standing in a clause, with the real reason; of says whose video it is."""
         if self.state == UNRECORDED:
-            return f"the record `{self.path}`{of or ' of the video'} cannot be read or does not name that video"
+            return f"the record `{self.path}`{of} cannot be read or does not name that video"
         standing = {
             INTACT: "is on disk and is the file its record names",
             GONE: "is gone",
@@ -217,30 +217,23 @@ def posted_file(posted: Mapping[str, object] | None, store: Store) -> OnDisk | N
 
 @dataclass(frozen=True)
 class Shown:
-    """The video a calendar day's post names when the launcher last looked: the post, and where the file stands."""
+    """The video a calendar day's open post names when the launcher last looked: the post, and where the file
+    stands. Nothing is looked at or said of the video of a post the Founder approved, which is never asked again."""
 
     post: str
-    open: bool
-    record: str
     file: OnDisk
 
-    def account(self, number: int) -> str:
-        """What the Founder is told of a post whose video's finished file is not the file the post names."""
-        said = f"Day {number}'s {'open' if self.open else 'approved'} post `{self.post}`: " + self.file.told(
-            " of the video it names"
-        )
+    def account(self, number: int, due: bool) -> str:
+        """What the Founder is told of an open post whose video's finished file is not the file the post names; due
+        is whether the day is due this run, since no run cuts a video for a day that is not."""
+        said = f"Day {number}'s open post `{self.post}`: " + self.file.told(" of the video it names")
         if self.file.unknown:
             return f"{said}, so nothing is said of whether the post keeps the video, and the post is left as it is"
-        if self.open:
-            # A post the run could ask again without its video gave way to that one; this one stands and is named.
-            return (
-                f"{said}, so the post is not said to keep the video: nothing is substituted, and it is cut again once"
-                " it can be"
-            )
-        return (
-            f"{said}, and nothing is cut again for a post the Founder approved: `src/bin/gr0wthlab rebuild-asset"
-            f" {self.record}` makes the file again from its footage"
-        )
+        # A post the run could ask again without its video gave way to that one; this one stands and is named.
+        said += ", so the post is not said to keep the video: nothing is substituted, and "
+        if due:
+            return f"{said}it is cut again once it can be"
+        return f"{said}day {number} is not due this run, so nothing is cut for it and the post stands as it is"
 
 
 # What the plan and each day's edit come to.
@@ -414,7 +407,7 @@ class Filming:
     record: str | None = None
     env: Mapping[str, str] = field(default_factory=dict)  # what the video tooling runs with
     apart: list[str] = field(default_factory=list)  # each pair whose two videos differ, as the Founder is told
-    videos: dict[int, Shown] = field(default_factory=dict)  # each day whose post names a video, as last looked at
+    videos: dict[int, Shown] = field(default_factory=dict)  # each day whose open post names a video, as last looked at
     dropped: dict[int, str] = field(default_factory=dict)  # each day whose open post lost its video: that post
     replaced: list[str] = field(default_factory=list)  # each such post that left the queue, as the Founder is told
 
@@ -625,14 +618,13 @@ class Filming:
         return posted_file(self.posted.get(number), store)
 
     def look(self, store: Store) -> None:
-        """Note where the finished file of every standing post's video stands, before anything is said of one."""
+        """Note where the finished file of every open post's video stands, before anything is said of one. A post
+        the Founder approved is never asked again, so its file is not read and nothing is said of it."""
         self.videos = {}
         for number, posted in self.posted.items():
-            file = self.file(number, store)
+            file = self.file(number, store) if posted.get("status") == OPEN else None
             if file is not None:
-                self.videos[number] = Shown(
-                    str(posted["id"]), posted.get("status") == OPEN, str(posted.get("asset_record")), file
-                )
+                self.videos[number] = Shown(str(posted["id"]), file)
 
     def waits(self, number: int) -> bool:
         """Whether a day that cannot be cut this run has an open post that names a video. The day's edit record stays
@@ -667,8 +659,12 @@ class Filming:
         return f"{said}, so the post is not said to keep it: nothing is substituted, and it is cut again once it can be"
 
     def lost(self) -> list[str]:
-        """Each standing post whose video's finished file is not the file the post names, as the Founder is told."""
-        return [shown.account(number) for number, shown in sorted(self.videos.items()) if not shown.file.intact]
+        """Each open post whose video's finished file is not the file the post names, as the Founder is told."""
+        return [
+            shown.account(number, number in self.due)
+            for number, shown in sorted(self.videos.items())
+            if not shown.file.intact
+        ]
 
     def drop(self, held: Asset, file: OnDisk) -> None:
         """Account for a day whose open post names a video it no longer has: the finished file is gone or changed,
@@ -701,12 +697,14 @@ class Filming:
                 self.videos.pop(number, None)
                 if asset is not None:
                     file = on_disk(store, asset.path, asset.sha256)
-                    self.videos[number] = Shown(str(result.item), True, str(asset.record), file)
+                    self.videos[number] = Shown(str(result.item), file)
             elif result.withdrawn:
                 self.videos.pop(number, None)
         for number, post in sorted(self.dropped.items()):
-            result, why = taken[number], self.results[number].detail
+            result, why = taken.get(number), self.results[number].detail
             later = "the video comes back for approval once it is cut again"
+            if result is None:
+                continue
             if result.status == posts.QUEUED:
                 self.replaced.append(
                     f"Day {number}'s post `{post}` gave way to `{result.item}`, which shows no video: {why}."
@@ -1481,7 +1479,7 @@ def notice_section(filming: Filming | None, day_text: str) -> tuple[int, str, st
     """What the Founder must know of this run's footage: each shot of an approved plan with no footage it can be
     cut from once footage has begun to arrive, each file that is footage of no shot or could not be measured, edits
     skipped for want of tooling, each video not cut for a reason outside its edit record, and each A/B pair whose two
-    videos differ, so that nothing the run changed for it is offered, and each standing post whose video's finished
+    videos differ, so that nothing the run changed for it is offered, and each open post whose video's finished
     file is gone, changed, or could not be read; None when there is nothing. Before any footage is in the window's
     folder nothing is missing yet, so no shot is named, and neither is a shot of a day whose video the Founder already
     approved. An edit record that failed a check blocked its day's post, so the post Drafts' part of the notice names
@@ -1579,10 +1577,10 @@ def tally(filming: Filming | None, agent_gap: str) -> Tally:
 
 def gaps(filming: Filming, agent_gap: str) -> list[str]:
     """Why the filming output is incomplete this run: the kit or the canvas could not be read, the plan could not be
-    filed, the footage place could not be listed, the finished file of a video a post names could not be read, or the
-    agent did not finish and left a day that was ready for an edit record without one. An edit that waits on footage,
-    approval, or tooling is not a gap: the report names it as not cut. Neither is a ready day that an agent which
-    finished left without an edit record, nor a finished file that is gone or changed, which the notice names."""
+    filed, the footage place could not be listed, the finished file of a video an open post names could not be read, or
+    the agent did not finish and left a day that was ready for an edit record without one. An edit that waits on
+    footage, approval, or tooling is not a gap: the report names it as not cut. Neither is a ready day that an agent
+    which finished left without an edit record, nor a finished file that is gone or changed, which the notice names."""
     found = []
     if filming.problem:
         found.append(filming.problem)
@@ -1656,7 +1654,6 @@ def rebuild(store: Store, relative: str, where: Path | None, env: Mapping[str, s
     """Render a finished asset again from its record and the footage place alone, and put it back where its record
     says it was only if it comes out byte for byte the asset the record names; the footage is read as ever, and a
     render that is anything else leaves whatever is there as it was."""
-    made = None
     try:
         path = store.path(relative)
         made = json.loads(read_plain(path).decode("utf-8"))
@@ -1676,18 +1673,12 @@ def rebuild(store: Store, relative: str, where: Path | None, env: Mapping[str, s
             facts = video.Facts.from_json(cut["facts"])
             cuts.append(video.Cut(source, cut["in"], cut["out"], cut["speed"], facts))
     except (ConfigError, UnsafeFile, OSError, KeyError, TypeError, ValueError) as error:
-        return False, [
-            f"`{relative}` cannot be rebuilt: {getattr(error, 'strerror', None) or error}",
-            *left(made, store),
-        ]
+        return False, [f"`{relative}` cannot be rebuilt: {getattr(error, 'strerror', None) or error}"]
     tooling = video.find(env, canvas)
     try:
         facts, problems = produce(tooling, canvas, cuts, overlays, target, env, named)
     except (video.VideoError, OSError) as error:
-        return False, [
-            f"`{made['asset']}` was not rebuilt: {getattr(error, 'strerror', None) or error}",
-            *left(made, store),
-        ]
+        return False, [f"`{made['asset']}` was not rebuilt: {getattr(error, 'strerror', None) or error}"]
     if not problems:
         return True, [
             f"`{made['asset']}` rebuilt with {tooling.version}: {facts.describe()}.",
@@ -1700,13 +1691,4 @@ def rebuild(store: Store, relative: str, where: Path | None, env: Mapping[str, s
     lines += [f"PROBLEM {problem}" for problem in problems]
     if maker != tooling.version:
         lines.append(f"Its record says it was made by {maker}; other tooling encodes the same frames differently.")
-    return False, lines + left(made, store)
-
-
-def left(made: object, store: Store) -> list[str]:
-    """What stands where a record says its asset is, for a rebuild that put nothing there; nothing when the record
-    does not name an asset."""
-    if not isinstance(made, dict) or not isinstance(made.get("asset"), str) or not isinstance(made.get("sha256"), str):
-        return []
-    told = on_disk(store, made["asset"], made["sha256"]).told()
-    return [f"As it stands, {told}."]
+    return False, lines

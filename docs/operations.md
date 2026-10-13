@@ -306,18 +306,27 @@ Its record, `ledger/evidence/filming/assets/window-<n>-day-<nn>-<recipe>.json`, 
 
 The command renders the video again beside where its record says it was, measures it, and puts it in place only if it came out byte for byte the file its record names.
 Anything else, such as a render by other tooling, which can encode the same frames differently, is reported and discarded, and whatever is at that path stays as it was.
-When it puts nothing in place, its last line says what stands at that path now: the file its record names, a file that is no longer that one, nothing, or a file that could not be read.
 A video no open or approved post names can simply be deleted.
 
-A finished file is the only copy of its video, since it never enters git, so every run checks the file of each video an open or approved post names: it must be on disk, and its fingerprint must be the SHA-256 the video's record and the post's queue entry hold.
+A finished file is the only copy of its video, since it never enters git, so every run checks the file of each video an open post names: it must be on disk, and its fingerprint must be the SHA-256 the video's record and the post's queue entry hold.
 The launcher says a post shows or keeps a video only when that check passes.
-When the file is gone, or is no longer the file its record names, the run report and a notice name the post and the file and say exactly that, nothing is substituted, and whatever is at that path is left as it is.
-An open post in that state no longer has the video it names, so it does not stay in front of the Founder (the Founder's decision of 2026-10-12).
+A post the Founder approved is never asked again, so its file is not checked and nothing about its file is reported.
+When an open post's file is gone, or is no longer the file its record names, nothing is substituted, and whatever is at that path is left as it is.
 When the run can cut the video again, it does, and the post stands or is replaced as for any video.
-When it cannot, for example while the footage or `ffmpeg` is away, it queues the same post in the open one's place without a video: the new item says there is none yet and why, approving it approves the copy and the beat plan only, and the video comes back for approval in a later item once it is cut again.
-Where nothing may be asked in its place, because the Founder already approved the day's copy or rejected that very Draft, the open post leaves the queue instead, and the notice says so.
-This needs the day's Draft in place and passing and the day due in that run: an open post whose Draft is gone or was not checked, or whose day is no longer due, stands as it is, and every run's notice names it and its file until the video is cut again.
-An approved post is never asked again and never cut again, so its notice only gives the `rebuild-asset` command that makes the file again from the footage.
+When it cannot, for example while the footage or `ffmpeg` is away, the open post no longer has the video it names, and one of three things becomes of it, each decided by a rule that stood before this check:
+
+- It is replaced by the same post without a video (the Founder's decision of 2026-10-12) when the run checks the post's own Draft and may ask for it again: the day is due in that run, the Draft the post was queued from is in place and passes, and the day's edit record is in place.
+  The rule is the one for any due day whose Draft passes while no video can be cut for it: its post is queued without one.
+  The new item says there is no video yet and why, approving it approves the copy and the beat plan only, and the video comes back for approval in a later item once it is cut again.
+  The run report and the notice name both posts and the file.
+- It leaves the queue when the run checks that Draft the same way and nothing may be asked in the post's place.
+  The rules are the two that keep a decision from being asked again: a day's copy the Founder approved is never asked again, and a Draft the Founder rejected is not asked again until it changes.
+  The run report and the notice name the post and the file and say that nothing is asked in its place.
+- It stands as it is, and every run's report and notice name it and its file, when the run does not check the post's own Draft.
+  The rules are these: a run prepares, checks, and cuts only the days due in it, so nothing is cut for a day that is not due; an open post stands while its Draft is gone; an open post is not checked again, and so not withdrawn, while a kit file, the brand rules, or the Product's code cannot be read; and a day whose copy the Founder approved is checked again only while its Draft is still that copy and it has an edit record.
+  It also stands, named the same way, when the run cut a video for the day and the pair check did not let it through, since nothing a run changed for a pair whose two videos differ is offered.
+
+Whatever else changed for the day, such as a Draft that was rewritten or fails a check, or an edit record that is gone, is settled as for any open post.
 The pair rule holds across the replacement: a leg whose post now shows no video has nothing to compare, and its video is compared with the other leg's again when it is cut again.
 A file that cannot be read is not a file that is gone: the report and the notice give the reason the read failed, nothing is said of whether the post keeps its video, the open post stands, and the report marks the filming output incomplete.
 The same holds when the video's own record under `ledger/evidence/filming/assets/` cannot be read or does not name the file the post names.
