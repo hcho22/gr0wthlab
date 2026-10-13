@@ -602,6 +602,34 @@ class RecordedLogTest(ProbeTestCase):
         self.assertEqual(result["codex_tool_record"]["problems"], [])
         self.assertTrue(result["passed"])
 
+    def test_every_target_the_founders_records_among_them_refused_in_a_patch_of_its_own_passes(self):
+        # The probe's steps as the launcher writes them since the Founder's records are targets: fourteen patches,
+        # one per target, and the script. Each folder of the records has its own refused patch in Codex's record.
+        self.write_record(exit_code=0, started_at="2026-10-09T00:00:00+00:00")
+        self.write_permitted()
+        text = self.recorded("each-target-alone-with-founder-records.stderr.log")
+        for label in FOUNDER_TARGETS:
+            self.assertIn(f"{MARK}-{label}-file-tool.txt", text)
+        with self.kernel(self.steps(tool=probe.SHELL)):
+            result = self.verify()
+        self.assertEqual(result["file_tool_targets_without_refusal"], {})
+        self.assertEqual(result["codex_tool_record"]["problems"], [])
+        self.assertEqual(len(result["steps_needed"]), 2 * TARGETS + 2 * len(self.boundary.areas))
+        self.assertTrue(result["passed"])
+        # Take the refusal of one folder's patch away, and that folder alone is unproven: the agent's report and the
+        # script's output name the sentinel too, and neither is a refusal.
+        calls, _ = probe.tool_record(self.logs, RUN, True)
+        for step in self.steps(tool=probe.FILE_TOOL):
+            if step.label not in FOUNDER_TARGETS:
+                continue
+            with self.subTest(label=step.label):
+                kept = [call for call in calls if not probe.refused_alone(call, str(step.path))]
+                self.assertEqual(len(kept), len(calls) - 1)
+                self.assertTrue(any(str(step.path) in call.body for call in kept))
+                self.assertEqual(
+                    list(probe.file_tool_gaps(kept, self.steps())), [step.label], "nothing else stands in for it"
+                )
+
     def test_a_run_handed_no_patch_for_the_founders_records_leaves_each_of_them_unproven(self):
         """A run that proves every other target proves nothing about the folders of the Founder's records: each is a
         target of its own, so the check fails and names every one."""

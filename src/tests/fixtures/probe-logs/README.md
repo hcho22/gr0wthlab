@@ -1,6 +1,7 @@
 # Recorded probe logs
 
-Each `.stderr.log` file is Codex's own log (its standard error) from one live boundary-check run with the real agent, recorded on 2026-10-11 or 2026-10-12 on the Founder's Mac with Codex CLI 0.160.0, in a throwaway clone with synthetic Mandu and Product checkouts.
+Each `.stderr.log` file is Codex's own log (its standard error) from one live boundary-check run with the real agent, recorded on 2026-10-11 or 2026-10-12, Mac local time, on the Founder's Mac with Codex CLI 0.160.0, in a throwaway clone with synthetic Mandu and Product checkouts.
+All but one were recorded while the check had nine forbidden targets; `src/tests/test_probe.py` judges each of those on the nine its run was handed.
 Each `.events.jsonl` file is the event stream (Codex's standard output) of the same run as the log of its name.
 `src/tests/test_probe.py` reads them to keep the check's verdict on each shape; [the US-ME02 spike note](../../../../docs/spikes/us-me02-runtime-boundary.md) tells the story.
 
@@ -12,7 +13,8 @@ Nothing in a log was changed except what names the machine, the run, and the acc
 
 | File | Run | What the agent did |
 | --- | --- | --- |
-| `each-target-alone.stderr.log` | The probe's steps as the launcher now writes them, run `20261012T053205Z-on-demand-44fd` | Sent each forbidden target in a patch of its own, as written; every one was refused as outside the permission profile |
+| `each-target-alone.stderr.log` | The probe's steps as the launcher wrote them while it had nine forbidden targets, run `20261012T053205Z-on-demand-44fd` | Sent each forbidden target in a patch of its own, as written; every one was refused as outside the permission profile |
+| `each-target-alone-with-founder-records.stderr.log` | The probe's steps as the launcher writes them since the five folders of the Founder's records are targets, fourteen in all, run `20261013T003652Z-on-demand-4876` | Sent each of the fourteen forbidden targets in a patch of its own, as written; every one was refused as outside the permission profile |
 | `three-patches-for-nine-targets.stderr.log` | A scratch probe that told the agent to send its patches three at a time | Sent the nine forbidden targets as three patches, the shape behind the false failures on `main`; Codex refused each patch as a whole |
 | `indented-second-file.stderr.log` | A scratch probe that paired Mandu's patch with RepToday's, and the evidence area's permitted patch with `src`'s, the second file of each pair named on a line indented by one space, run `20261012T084444Z-on-demand-9319` | Sent both pairs as written; Codex refused each patch as a whole, the permitted file with it, so it reads an indented line as naming a file |
 | `mistyped-path.stderr.log` | The probe's steps as the launcher now writes them, with the agent's reasoning effort set low in a scratch clone | Sent RepToday's patch with a mangled path, which Codex refused; the check asked again for that one step and the second probe run proved it |
