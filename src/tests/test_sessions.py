@@ -835,8 +835,15 @@ class BoundaryTest(SessionsCase):
             [command for command in calls if command[1:2] == ["exec"]], [record["command"] for record in records]
         )
         report = self.report()
+        # A preflight probes the forbidden paths the machine has, and /private/tmp and /private/var/tmp are the Mac's:
+        # the count is the one every session's record holds, and each record holds the repository's own paths.
+        refused = [record["preflight"]["refused"] for record in records]
+        for paths in refused:
+            self.assertLessEqual({str(self.repo), str(self.repo / "src"), str(self.repo / "config")}, set(paths))
+        self.assertEqual(len({len(paths) for paths in refused}), 1, refused)
         self.assertIn(
-            "- Boundary preflight: passed, run before each of 3 sessions; it refused 13 paths and allowed 6 areas.",
+            f"- Boundary preflight: passed, run before each of 3 sessions; it refused {len(refused[0])} paths and"
+            " allowed 6 areas.",
             report,
         )
         self.assertIn(f"- Configuration fingerprint: `{resolved.fingerprint}`, the same for every session", report)
