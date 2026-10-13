@@ -338,7 +338,7 @@ The launcher says a post shows or keeps a video only when that check passes.
 A post the Founder approved is never asked again, so its file is not checked and nothing about its file is reported.
 When an open post's file is gone, or is no longer the file its record names, nothing is substituted, and whatever is at that path is left as it is.
 When the run can cut the video again, it does, and the post stands or is replaced as for any video.
-When it cannot, for example while the footage or `ffmpeg` is away, the open post no longer has the video it names, and one of three things becomes of it, each decided by a rule that stood before this check:
+When it cannot, for example while the footage or `ffmpeg` is away, the open post no longer has the video it names, and one of three things becomes of it, each decided by a standing rule and not by this check:
 
 - It is replaced by the same post without a video (the Founder's decision of 2026-10-12) when the run checks the post's own Draft and may ask for it again: the day is due in that run, the Draft the post was queued from is in place and passes, and the day's edit record is in place.
   The rule is the one for any due day whose Draft passes while no video can be cut for it: its post is queued without one.
@@ -349,7 +349,7 @@ When it cannot, for example while the footage or `ffmpeg` is away, the open post
   The third is the item format: the post without a video is checked against it once more as it is queued, and one that does not follow it blocks the day as any failing check does, so nothing is queued.
   The run report and the notice name the post and the file and say that nothing is asked in its place, and why: under the first two rules that the Founder already decided the day's copy, and under the third that its Draft no longer passes.
 - It stands as it is, and every run's report and notice name it and its file, when the run does not check the post's own Draft.
-  The rules are these: a run prepares, checks, and cuts only the days due in it, so nothing is cut for a day that is not due; an open post stands while its Draft is gone; an open post is not checked again, and so not withdrawn, while a kit file, the brand rules, or the Product's code cannot be read; and a day whose copy the Founder approved is checked again only while its Draft is still that copy and it has an edit record.
+  The rules are these: a run prepares, checks, and cuts only the days due in it, so nothing is cut for a day that is not due; an open post stands while its Draft is gone; an open post is not checked again, and so not withdrawn, while its Draft or anything else its check reads cannot be read (step 7 of [What one run does](#what-one-run-does) lists what that may be for a post); and a day whose copy the Founder approved is checked again only while its Draft is still that copy and it has an edit record.
   It also stands, named the same way, when the run cut a video for the day and the pair check did not let it through, since nothing a run changed for a pair whose two videos differ is offered.
 
 Whatever else changed for the day, such as a Draft that was rewritten or fails a check, or an edit record that is gone, is settled as for any open post.
