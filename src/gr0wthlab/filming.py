@@ -224,8 +224,8 @@ class Shown:
     file: OnDisk
 
     def account(self, number: int, due: bool) -> str:
-        """What the Founder is told of an open post whose video's finished file is not the file the post names; due
-        is whether the day is due this run, since no run cuts a video for a day that is not."""
+        """What the Founder is told of an open post whose video's finished file was not confirmed as the file the post
+        names; due is whether the day is due this run, since no run cuts a video for a day that is not."""
         said = f"Day {number}'s open post `{self.post}`: " + self.file.told(" of the video it names")
         if self.file.unknown:
             return f"{said}, so nothing is said of whether the post keeps the video, and the post is left as it is"
