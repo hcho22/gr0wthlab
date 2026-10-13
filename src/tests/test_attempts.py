@@ -744,11 +744,11 @@ class UnreachedWorkTest(OwedRunTestCase):
         cut_short = self.report()
         self.assertIn("- Post Drafts: 7 no Draft.\n", cut_short)
         self.assertIn(
-            "| Post Drafts | incomplete | no Draft for day 1, 2, 3, 4, 5, 6, 7; its session did not start: the 90 min"
+            "| Post Drafts | incomplete | no Draft for day 1, 2, 3, 4, 5, 6, 7; its session did not start: the 60 min"
             " that bounds all of a run's sessions together was used up before its turn |",
             cut_short,
         )
-        self.assertIn("| Post Drafts | did not start: the 90 min that bounds all of a run's sessions", cut_short)
+        self.assertIn("| Post Drafts | did not start: the 60 min that bounds all of a run's sessions", cut_short)
         self.assertIn(f"- {FOLLOWS}\n", cut_short)
         self.assertNotIn("Problems this run are listed in the notice", cut_short)
         self.assertEqual(self.queue()["open"], [])
@@ -774,7 +774,7 @@ class UnreachedWorkTest(OwedRunTestCase):
         # What follows is said once, with the first session that fell short; the second has its own part.
         self.assertIn(f"Incomplete this run: Package review (contradictions). {FOLLOWS}\n", notice)
         self.assertEqual(notice.count("a fresh, whole run starts by itself"), 1)
-        self.assertIn("The Post Drafts session did not start: the 90 min that bounds all of a run's sessions", notice)
+        self.assertIn("The Post Drafts session did not start: the 60 min that bounds all of a run's sessions", notice)
         self.assertIn("used up before its turn. Incomplete this run: Post Drafts.\n", notice)
         self.assertNotIn("agent.run_time_limit_seconds", notice)
         self.assertNotIn("has no Draft", notice)
@@ -1616,7 +1616,7 @@ class SeveralSessionsTest(OwedRunTestCase):
         cut_short = self.report()
         self.assertIn(f"| Package review (contradictions) | complete | {cycle.REVIEW_SAID_COMPLETE} |", cut_short)
         self.assertIn("- The Post Drafts session timed out: its agent was still running at its 30 min time", cut_short)
-        self.assertIn("- The Outreach session did not start: the 90 min that bounds all of a run's sessions", cut_short)
+        self.assertIn("- The Outreach session did not start: the 60 min that bounds all of a run's sessions", cut_short)
         self.assertIn(f"- The Mac was asleep for about 3 h 0 min 0 s {ASLEEP_IN_A_SESSION}- {FOLLOWS}\n", cut_short)
         self.assertEqual(self.endings(), [("scheduled", attempts.SLEPT)])
         self.assertEqual(datetime.fromisoformat(self.queue()["next_run"]), DUE.astimezone())

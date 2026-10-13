@@ -293,7 +293,7 @@ class OrderTest(SessionsCase):
         run = self.run_record()
         self.assertEqual([found["workflow"] for found in run["sessions"]], list(sessions.KEYS))
         self.assertEqual([found["due"] for found in run["sessions"]], [True, True, False, False, False, True, False])
-        self.assertEqual((run["exit_code"], run["timed_out"], run["run_time_limit_seconds"]), (0, False, 5400))
+        self.assertEqual((run["exit_code"], run["timed_out"], run["run_time_limit_seconds"]), (0, False, 3600))
         for key in ("package-review", "post-drafts", "outreach"):
             for kind in ("json", "events.jsonl", "stderr.log", "last-message.md"):
                 self.assertTrue((self.logs / f"{run['run_id']}.{key}.{kind}").is_file(), (key, kind))
@@ -617,7 +617,7 @@ class LimitsTest(SessionsCase):
             [600, 120, 300],
         )
         self.assertRegex(self.report(), r"\n- Agent time: \d+ s of its 2 min limit, with ")
-        self.assertIn("of the 90 min that bounds all of a run's sessions together.", self.report())
+        self.assertIn("of the 60 min that bounds all of a run's sessions together.", self.report())
 
     def test_the_bound_on_the_whole_run_cuts_a_session_short_and_leaves_the_next_no_time(self):
         fakes.set_run(self.repo, "agent", {"time_limit_seconds": 4, "run_time_limit_seconds": 5})
