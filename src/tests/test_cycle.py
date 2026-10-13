@@ -1305,6 +1305,24 @@ class DispatchRunTest(CycleTestCase):
         self.assertEqual([e["id"] for e in self.queue()["open"] if e["kind"] == "dispatch-request"], [identifier])
         self.assertIn(f"note=reptoday-waitlist open as `{identifier}`", self.report())
 
+    def test_an_item_with_the_kind_and_ask_of_a_request_filed_in_the_same_run_is_queued_as_always(self):
+        """The request's item file was written this run and no read of it failed, so it is no unread item."""
+        reviewed = (fakes.REPO / "src/dispatches/reptoday-waitlist.md").read_text(encoding="utf-8")
+        another = reviewed.replace("\n## Touches\n", "\nBuild it another way.\n\n## Touches\n", 1)
+        self.assertNotEqual(another, reviewed)
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/waitlist-another-way.md": another}})
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        day = f"{fakes.SUNDAY_RUN.astimezone():%Y%m%d}"
+        filed, written = f"{day}-reptoday-waitlist", f"{day}-waitlist-another-way"
+        queue = self.queue()
+        self.assertEqual(sorted(entry["id"] for entry in queue["open"]), sorted([filed, written]), "no notice either")
+        self.assertEqual(self.entry(filed)["ask"], self.entry(written)["ask"])
+        report = self.report()
+        self.assertIn("| Review Queue | complete | 2 open items |", report)
+        self.assertNotIn("Set aside, not queued", report)
+        self.assertNotIn(f"`{self.entry(filed)['file']}`, its item file, could not be read", report)
+
 
 class ProductionCloneTest(CycleTestCase):
     """The production clone syncs from its remote before a run and pushes workspace/ and ledger/ after it."""

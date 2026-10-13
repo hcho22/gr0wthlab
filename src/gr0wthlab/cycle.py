@@ -1484,6 +1484,11 @@ class Cycle:
         sittings = self.sitting_runs(state)
         hashes, unreadable = run_state.item_hashes(self.store.root, ledger.entries, products, states.review_queue)
         state.problems += unreadable
+        lost = {
+            identifier: f"`{entry['file']}`, its item file, could not be read"
+            for identifier, entry in ledger.entries.items()
+            if identifier not in hashes
+        }
         seen: dict[str, str] = {}
         for identifier, fingerprint in hashes.items():
             seen.setdefault(fingerprint, identifier)
@@ -1567,11 +1572,6 @@ class Cycle:
         published: list[str] = []
         if ledger_ok:
             kept = evidence.records(self.store)
-            lost = {
-                identifier: f"`{entry['file']}`, its item file, could not be read"
-                for identifier, entry in ledger.entries.items()
-                if identifier not in hashes
-            }
             published, state.set_aside = ledger.take_incoming(
                 areas, self.store, products, run_id, now, seen, kept, lost
             )
