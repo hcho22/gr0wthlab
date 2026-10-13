@@ -8,6 +8,14 @@ says:
   refused as outside the permission profile. A refused patch that names several paths shows only that one of them
   was refused, so it proves none of them.
   The shell: the kernel's Seatbelt log holds a refused write to that target's sentinel, by its full path.
+- Every forbidden read was really attempted and really refused by the runtime, each on its own: the footage place and
+  each footage folder in it (boundary.keep_footage_unread), as they are on disk when the check runs.
+  The shell: the kernel's Seatbelt log holds a refused read of that folder, by its full path, by the very process
+  Codex's record of the run's shell call shows the launcher's script started for that folder.
+  The file tool, which reads only files: for a footage folder that holds a footage file, Codex's own record of the
+  run holds a `view_image` call that names the folder's first footage file, refused with the system's permission
+  error. A listing or a read that landed ends the check as failed at once. A call whose record shows neither that
+  refusal nor a read, as of a file that was no longer there, proves nothing either way, like a step with no record.
 - Nothing changed outside the writable areas: no sentinel landed in a forbidden place, and the git status and file
   digests of the repository and every read-only location match a snapshot from before the check.
 - Nothing reached the network or a local socket: the kernel refused the connection to each of the check's own
@@ -15,7 +23,8 @@ says:
 - The permitted writes landed, so the run was not simply unable to write.
 
 The agent is only the instrument that exercises the runtime, so the launcher leaves it as little to get wrong as it
-can: it writes every step out in full, one patch per target for the file tool and one script for every shell step.
+can: it writes every step out in full, one patch per target and one path per read for the file tool, and one script
+for every shell step.
 A step that has no record after a probe run proves nothing either way, so the check hands the agent the steps that
 still have no record again, PROBE_RUNS times at most, and fails if one is still unproven. Anything that does say
 something about the runtime ends the check as failed at once: a sentinel that landed, a connection that got through,
@@ -52,7 +61,8 @@ from typing import TextIO
 
 from . import codex, fetch, launcher, process, settings
 from .areas import PROBE_PREFIX, UnsafeFile, clear_probe_files, read_plain
-from .boundary import Boundary, ConfigError, canonical, load_boundary
+from .boundary import FOOTAGE_PLACE, Boundary, ConfigError, canonical, footage_dirs, load_boundary
+from .footage import VIDEO_SUFFIXES
 
 PROBE_INSTRUCTION = Path("src/checks/boundary-probe.md")
 PREFIX = PROBE_PREFIX
@@ -68,7 +78,13 @@ PATCH_FILE = re.compile(r"\*\*\* (?:Add File|Update File|Delete File|Move to): (
 PROBE_TARGETS = ("mandu", "reptoday", "repo-root", "workspace-root", "ledger", "src", "config", "guardrails", "git")
 FILE_TOOL, SHELL = "file-tool", "shell"
 PERMITTED_TOOLS = (FILE_TOOL, SHELL)
-FORBIDDEN, CONNECTION, PERMITTED = "forbidden", "connection", "permitted"
+FORBIDDEN, CONNECTION, PERMITTED, READ = "forbidden", "connection", "permitted", "read"
+# Codex's tool that reads a file, and all it says when the system refuses it the read; and its shell tool, whose
+# record holds what the launcher's script printed.
+IMAGE_TOOL, SHELL_TOOL = "view_image", "exec_command"
+READ_REFUSAL = "unable to read image at `{path}`: Operation not permitted (os error 1)"
+# All it says of a footage file it read: a video is no image, so the call fails once the file's data is in hand.
+READ_UNSHOWN = "unable to process image: invalid or unsupported image data"
 # How many probe runs one check makes at most: the first hands the agent every step, and each later one only the steps
 # that still have no record.
 PROBE_RUNS = 3
@@ -181,9 +197,39 @@ def write_step(kind: str, directory: Path, run_id: str, label: str, tool: str, c
     return Step(kind, label, tool, f"*** Begin Patch\n*** Add File: {named}\n+probe\n*** End Patch", path)
 
 
+def first_footage_file(folder: Path) -> Path | None:
+    """The first footage file directly in a footage folder, by name, for the file tool to be refused: a plain file of
+    a video type, which no image tool could show even if it were read. Only names are read here."""
+    try:
+        entries = sorted(os.scandir(str(folder)), key=lambda entry: entry.name)
+    except OSError:
+        return None
+    for entry in entries:
+        plain = not entry.name.startswith(".") and entry.is_file(follow_symlinks=False)
+        if plain and entry.name.lower().endswith(VIDEO_SUFFIXES):
+            return folder / entry.name
+    return None
+
+
+def read_steps(boundary: Boundary) -> list[Step]:
+    """The forbidden reads of one probe run: a listing of the footage place and of each footage folder in it, by the
+    shell, and, for each footage folder that holds a footage file, a read of its first by the file tool. path is
+    what the runtime's record of the refusal must name."""
+    steps = []
+    for label, folder in footage_dirs(boundary).items():
+        clip = first_footage_file(folder) if label != FOOTAGE_PLACE else None
+        for path in filter(None, (folder, clip)):
+            if "\n" in str(path) or "\r" in str(path):
+                raise ConfigError(f"the boundary probe cannot name {str(path)!r} in a step: it holds a line break")
+        steps.append(Step(READ, label, SHELL, f"{codex.LIST} {shlex.quote(str(folder))} >/dev/null 2>&1", folder))
+        if clip is not None:
+            steps.append(Step(READ, label, FILE_TOOL, str(clip), clip))
+    return steps
+
+
 def probe_steps(boundary: Boundary, run_id: str, listeners: Sequence[Listener] = ()) -> list[Step]:
-    """Every step of one probe run: two per forbidden target and two per writable area, one per tool, and one per
-    listener."""
+    """Every step of one probe run: two per forbidden target and two per writable area, one per tool, one per
+    listener, and the forbidden reads."""
     dirs = forbidden_dirs(boundary)
     missing = [label for label in PROBE_TARGETS if label not in dirs]
     if missing:
@@ -192,6 +238,7 @@ def probe_steps(boundary: Boundary, run_id: str, listeners: Sequence[Listener] =
     steps = [
         write_step(FORBIDDEN, dirs[label], run_id, label, tool) for label in PROBE_TARGETS for tool in PERMITTED_TOOLS
     ]
+    steps += read_steps(boundary)
     steps += [Step(CONNECTION, listener.label, SHELL, listener.command) for listener in listeners]
     steps += [
         write_step(PERMITTED, path, run_id, key, tool, cwd) for key, path in boundary.areas for tool in PERMITTED_TOOLS
@@ -211,8 +258,16 @@ def script(steps: Sequence[Step]) -> str:
     """A run's shell steps as one script: each tries one thing and prints what came of it, and none stops the rest.
     The agent runs it with one command, so it retypes no path; the kernel's log, not this output, is the proof."""
     lines = ["#!/bin/sh", "# The boundary probe's shell steps for one run, written by the launcher."]
-    for step in steps:
+    # The reads come first: Codex keeps only the start of a call's output in its record, about 2 KiB, and a read is
+    # proven through the line this script prints for it there.
+    for step in sorted(steps, key=lambda step: step.kind != READ):
         if step.tool != SHELL:
+            continue
+        if step.kind == READ:
+            # A read leaves no file to find, so the line names the process that tried: the kernel's denial of that
+            # very process is the proof, and Codex's record of this output is how the check learns which it was.
+            listed, refused = (shlex.quote(f"{step.label}: {word} ") + '"$pid"' for word in ("listed", "refused"))
+            lines.append(f'( {step.text} & pid=$!; wait "$pid" && echo {listed} || echo {refused} )')
             continue
         done = shlex.quote(f"{step.label}: {'connected' if step.kind == CONNECTION else 'written'}")
         lines.append(f"( {step.text} ) && echo {done} || echo {shlex.quote(step.label + ': refused')}")
@@ -229,7 +284,12 @@ def render_steps(steps: Sequence[Step], run_script: Path) -> str:
             f"```sh\nsh {shlex.quote(str(run_script))}\n```"
         )
     for step in steps:
-        if step.tool == FILE_TOOL:
+        if step.tool == FILE_TOOL and step.kind == READ:
+            blocks.append(
+                f"`{step.label}`, a forbidden read: one `{IMAGE_TOOL}` call with exactly this path.\n\n"
+                f"```text\n{step.text}\n```"
+            )
+        elif step.tool == FILE_TOOL:
             what = "a permitted write, expected to succeed" if step.kind == PERMITTED else "a forbidden write"
             blocks.append(
                 f"`{step.label}`, {what}: one `apply_patch` call with exactly this patch.\n\n```text\n{step.text}\n```"
@@ -311,6 +371,16 @@ def permitted(boundary: Boundary, run_id: str) -> tuple[dict[str, list[Path]], d
     return found, unlistable
 
 
+def file_digest(path: Path) -> str:
+    """A file's SHA-256, read a piece at a time: raw footage the Founder keeps in Mandu's working tree is among the
+    files a snapshot fingerprints, and one of those can be larger than memory."""
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def snapshot(path: Path) -> dict[str, str]:
     """Each changed or untracked path in a checkout, with a digest of its content, or a marker if it cannot be read."""
     if not (path / ".git").exists():
@@ -326,7 +396,7 @@ def snapshot(path: Path) -> dict[str, str]:
         status, name = entry[:2], entry[3:]
         target = path / name
         try:
-            digest = hashlib.sha256(target.read_bytes()).hexdigest() if target.is_file() else ""
+            digest = file_digest(target) if target.is_file() else ""
         except OSError:
             digest = "unreadable"
         entries[name] = f"{status} {digest}"
@@ -491,6 +561,88 @@ def file_tool_gaps(calls: Sequence[codex.ToolResult], steps: Sequence[Step]) -> 
     return gaps
 
 
+def image_path(call: codex.ToolResult) -> str | None:
+    """The path a view_image call named, read loosely from its record, where nothing marks the end of the arguments;
+    None when the record cannot be read that way."""
+    head = call.body
+    while " output=" in head:
+        head = head.rpartition(" output=")[0]
+        try:
+            arguments = json.loads(head)
+        except ValueError:
+            continue
+        return arguments.get("path") if isinstance(arguments, dict) else None
+    return None
+
+
+def read_refused(call: codex.ToolResult, path: str) -> bool:
+    """Whether Codex recorded this call as a read of this one file by its file tool, refused by the system."""
+    if call.tool != IMAGE_TOOL or call.success:
+        return False
+    arguments = call.gave(READ_REFUSAL.format(path=path))
+    try:
+        named = json.loads(arguments) if arguments is not None else None
+    except ValueError:
+        return False
+    return isinstance(named, dict) and named.get("path") == path
+
+
+def read_made(call: codex.ToolResult) -> bool:
+    """Whether Codex's record of a view_image call shows the file read: the call succeeded, or failed only because
+    what it read is no image."""
+    return call.success or call.gave(READ_UNSHOWN) is not None
+
+
+def script_pids(calls: Sequence[codex.ToolResult], label: str, word: str) -> list[int]:
+    """The processes that Codex's record of the run's shell calls shows the script started for one read step, and
+    that the script said were refused, or listed the folder."""
+    line = re.compile(rf"^{re.escape(label)}: {word} (\d+)$", re.MULTILINE)
+    return [int(pid) for call in calls if call.tool == SHELL_TOOL for pid in line.findall(call.body)]
+
+
+def read_gaps(
+    calls: Sequence[codex.ToolResult], steps: Sequence[Step], denials: Sequence[str]
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Each forbidden read the runtime's records do not show refused on its own, with what they show, and each that
+    they show went through, which no later run can make good.
+
+    The shell: a kernel denial of a read of the folder, by the process Codex's record of the script's output names
+    for that step. The file tool: Codex's record of a view_image call that names the footage file, refused by the
+    system. A call on that file whose record shows neither that refusal nor a read, as when the file was no longer
+    there, proves nothing either way and leaves the read without a refusal. denials is every kernel Seatbelt denial
+    since the run started.
+    """
+    gaps, landed = {}, {}
+    for step in steps:
+        path = str(step.path)
+        if step.tool == SHELL:
+            listed = script_pids(calls, step.label, "listed")
+            tried = script_pids(calls, step.label, "refused")
+            if listed:
+                landed[step.name] = f"the script listed {path} (process {listed[0]})"
+            elif not tried:
+                gaps[step.name] = "Codex's record of the run's shell calls holds no line of the script for it"
+            elif not any(
+                f"({pid}) deny(" in denial and denial.endswith(f" file-read-data {path}")
+                for pid in tried
+                for denial in denials
+            ):
+                gaps[step.name] = f"no kernel denial names a read of {path} by process {tried[-1]}"
+            continue
+        naming = [call for call in calls if call.tool == IMAGE_TOOL and image_path(call) == path]
+        made = [call for call in naming if read_made(call)]
+        if made:
+            landed[step.name] = f"Codex did not refuse the read of {path}; Codex said: {made[-1].said()}"
+        elif not naming:
+            gaps[step.name] = f"no `{IMAGE_TOOL}` call named {path}"
+        elif not any(read_refused(call, path) for call in naming):
+            gaps[step.name] = (
+                f"the `{IMAGE_TOOL}` call that named {path} was not refused with the system's permission error, and"
+                f" its record shows no read; Codex said: {naming[-1].said()}"
+            )
+    return gaps, landed
+
+
 def tool_record(log_dir: Path, run_id: str, clean_exit: bool) -> tuple[list[codex.ToolResult], list[str]]:
     """The tool calls Codex recorded for a run, and why that record cannot be taken as whole, if it cannot.
 
@@ -579,6 +731,11 @@ def verify(
     network_problems = bool((network or {}).get("problems"))
     calls, record_problems = tool_record(log_dir, run_id, exit_code == 0)
     gaps = file_tool_gaps(calls, [step for step in steps if step.kind == FORBIDDEN])
+    # A read is proven by the process that tried it, never by the folder's name alone: the preflight's own probe is
+    # refused the same folders, and its refusals are that probe's record.
+    unread, read_landed = read_gaps(
+        calls, [step for step in steps if step.kind == READ], denial_messages(log.stdout) if log else []
+    )
     undenied = [
         step.label
         for step in steps
@@ -599,6 +756,7 @@ def verify(
             for listener in listeners
         }
     unproven = [f"{label}:{FILE_TOOL}" for label in gaps] + [f"{label}:{SHELL}" for label in undenied] + missing
+    unproven += list(unread)
     reached = any(entry["connections"] for entry in (listened or {}).values())
     changes = changed(before, snapshots(boundary)) if before is not None else None
     left_nothing = (
@@ -637,6 +795,9 @@ def verify(
         "kernel_sandbox_denials": denials,
         "kernel_log_cut_short": any(found is not None and found.timed_out for found in (log, network_log)),
         "shell_targets_without_kernel_denial": undenied,
+        "forbidden_reads": {step.name: str(step.path) for step in steps if step.kind == READ},
+        "forbidden_reads_without_refusal": unread,
+        "forbidden_reads_not_refused": read_landed,
         "local_listeners": listened,
         "changed_outside_areas": changes,
         "unproven": unproven,
@@ -645,7 +806,8 @@ def verify(
     }
     # What says something about the runtime, or leaves the run's records unfit to judge by: never asked again.
     wrong = network_problems or (
-        not not_tested and bool(exit_code != 0 or landed or unlistable or record_problems or reached or changes)
+        not not_tested
+        and bool(exit_code != 0 or landed or unlistable or record_problems or reached or changes or read_landed)
     )
     result["ask_again"] = [] if wrong or result["timed_out"] else unproven
     result["passed"] = not wrong and not unproven
@@ -755,6 +917,14 @@ def summarize(result: Mapping[str, object], out: TextIO, again: bool = False) ->
     unproven = result["shell_targets_without_kernel_denial"]
     if attempted and unproven:
         lines.append(f"  shell targets with no kernel denial: {', '.join(unproven)}")
+    reads = result["forbidden_reads"]
+    if attempted and reads:
+        short = dict(result["forbidden_reads_without_refusal"], **result["forbidden_reads_not_refused"])
+        lines.append(
+            f"  forbidden reads of the footage place and its footage folders the runtime refused, each on its own:"
+            f" {len(reads) - len(short)} of {len(reads)}"
+        )
+        lines += [f"    {name}: {reason}" for name, reason in short.items()]
     listened = result["local_listeners"]
     if listened is None:
         lines.append("  local connections: not checked; --verify opens no listeners")

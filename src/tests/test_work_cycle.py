@@ -1422,6 +1422,33 @@ class SandboxNetworkTest(WorkCycleTestCase):
             report,
         )
 
+    def test_a_network_probe_that_ends_with_an_error_stops_the_run_and_nothing_says_the_sandbox_reached_a_host(self):
+        self.agent(network_probe="fails")
+        code, out = self.run_cycle()
+        self.assertEqual(code, launcher.EXIT_BOUNDARY, out)
+        said = (
+            "the check that the sandbox cannot reach the network did not finish: www.reddit.com:443 was not probed;"
+            " itunes.apple.com:443 was not probed; codex sandbox exited 71: the profile could not be applied"
+        )
+        self.assertIn(
+            "gr0wthlab: the check that the sandbox cannot reach the network did not finish; the agent was not"
+            " started\n",
+            out,
+        )
+        self.assertFalse((self.codex_dir / "prompt.txt").exists(), "the agent never saw its instruction")
+        report, notices = self.report(), self.notices()
+        self.assertIn(f"its session did not start: {said}", report)
+        self.assertIn(f"| Package review | did not start: {said} |", report)
+        self.assertIn(f"The Package review session did not start: {said}. Incomplete this run: ", notices)
+        for told in (out, report, notices):
+            self.assertNotIn("reached the network", told)
+            self.assertNotIn("was not closed", told)
+        self.assertIn(
+            "- Sandbox network: 2 listed hosts tried from inside the sandbox before 0 of 1 session, reached: none;"
+            " not tried before the Package review session: `www.reddit.com:443`, `itunes.apple.com:443`.\n",
+            report,
+        )
+
 
 class EvidenceLedgerTest(unittest.TestCase):
     def test_confidence_is_never_a_field_the_agent_writes(self):

@@ -585,6 +585,12 @@ class TroubleTest(SessionsCase):
         self.assertIn(
             "- Boundary preflight: FAILED before the Post Drafts session, run before each of 3 sessions;", report
         )
+        # The network probe runs only once the write proof has passed, so it never ran before that session.
+        self.assertIn(
+            "- Sandbox network: 2 listed hosts tried from inside the sandbox before 2 of 3 sessions, reached: none;"
+            " nothing tried before the Post Drafts session.\n",
+            report,
+        )
         self.assertIn("### Post Drafts\n\n- Did not start: the boundary preflight failed: ", report)
         ask, notice = self.notice()
         self.assertIn("The Post Drafts session did not start: the boundary preflight failed: ", notice)

@@ -365,7 +365,7 @@ What gr0wthlab does with it:
 
 ## No address in any record
 
-The Marketing Engineer must never see, store, or send an email address, and it reads the whole Mandu checkout.
+The Marketing Engineer must never see, store, or send an email address, and it reads every record Mandu writes in the exchange folder and each Product's package paths in the Mandu checkout.
 Never write an email address, a name, or anything else about a person on the Waitlist into a decision, a sitting record, a Beta Build record, a Beta Cohort report, or an outreach record, including a reason, a note, or a field of Mandu's own; a person is only ever an entry identifier.
 gr0wthlab refuses a Beta Build record or a Beta Cohort report that holds anything that looks like an email address: it reads nothing from it, keeps nothing, and reports the record without repeating what it holds.
 Resolving an entry identifier to its address, and sending, happen on the Founder's side, outside the gr0wthlab, Mandu, and RepToday checkouts.

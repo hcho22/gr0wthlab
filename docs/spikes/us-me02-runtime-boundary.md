@@ -38,7 +38,7 @@ The PRD's "Codex automation" is therefore `codex exec` started by a LaunchAgent,
 | File | Role |
 | --- | --- |
 | [`config/guardrails/runtime.json`](../../config/guardrails/runtime.json) | The runtime, the six writable areas, read grants, network (off), the model and its reasoning effort, and the Codex features turned off |
-| [`config/products.json`](../../config/products.json) | The read-only Mandu and Product checkouts, which become read grants |
+| [`config/products.json`](../../config/products.json) | The read-only Mandu and Product checkouts; each Product checkout becomes a read grant, and of Mandu only each Product's package paths |
 | [`src/bin/gr0wthlab`](../../src/bin/gr0wthlab) | The launcher; the LaunchAgent and on-demand runs both call `src/bin/gr0wthlab run`, which starts one session for each workflow with work due, each with the task definition the launcher puts together from the files in `src/instructions/weekly-run/` |
 | [`src/checks/boundary-probe.md`](../../src/checks/boundary-probe.md) | The probe instruction the validation test runs, kept in `src/` so the agent cannot edit its own test; the launcher writes each run's steps into it |
 
@@ -61,7 +61,8 @@ For each session of a run, and for the boundary check's probe, it starts `codex 
 | `:minimal` (the system files a shell needs), `/Library/Developer/CommandLineTools` | read |
 | `:slash_tmp`, `/private/var/tmp` | deny; `:minimal` would otherwise make them writable |
 | The repository, and its git directories when they live outside it | read |
-| Mandu, RepToday, and Immerse checkouts from `config/products.json` | read |
+| The RepToday and Immerse checkouts from `config/products.json` | read |
+| Of Mandu, only the package paths `config/products.json` names for each Product, since 2026-10-13; before, the whole checkout ([the footage place inside Mandu](../live-checks/20261012-gr0wthlab-footage-place.md)) | read |
 | `workspace/evidence`, `drafts`, `review-queue`, `weekly-reads`, `run-reports`, `instructions` | write |
 
 Codex keeps `.git`, `.codex`, `.agents`, and `.aws` read-only at the top of each writable area, so the agent cannot plant a Codex config or a git hook there.
@@ -73,6 +74,7 @@ The forbidden places are the repository root, `workspace/`, `src/`, `config/`, `
 Any other outcome keeps that session's agent from starting, so it never sees its instruction.
 The run marks that session's workflow incomplete and goes on to the next session, whose own proof comes first; the boundary check, which has one agent, stops there.
 Mandu and the Products are left out of this per-run check so a routine run never tries to write in them; the same deny-by-default rule covers them, and the boundary check below tests them.
+Since 2026-10-13 the same proof also tries, in a second `codex sandbox` call before each session's agent, to list the footage place and each footage folder in it, and a session whose proof can list one, or does not finish, is not started; it only lists, and writes nothing there.
 
 The launcher records a SHA-256 fingerprint of the Codex command line, environment, and Codex version in each session's record under `~/Library/Logs/gr0wthlab` (`GR0WTHLAB_LOG_DIR` overrides it), `<run id>.<workflow>.json`.
 The fingerprint is taken of that session's own command and leaves out only the path of its closing message, the one thing that differs between two sessions' commands.
@@ -81,7 +83,7 @@ Two sessions with the same fingerprint, in one run or in two, started the agent 
 ## Reads without wider writes, and no network
 
 The run reads what it needs and nothing else.
-Read grants are the repository, the checkouts named in `config/products.json`, and system files; none of them is writable, and the launcher rejects a registry location that would contain or sit inside the repository.
+Read grants are the repository, the Product checkouts named in `config/products.json`, of Mandu the package paths that file names, and system files; none of them is writable, and the launcher rejects a registry location that would contain or sit inside the repository.
 Credentials are outside every grant.
 In every probe run, `~/.config/gh/hosts.yml` and `~/.ssh/id_ed25519` were unreadable and `security find-generic-password -s gh:github.com` found nothing, because the keychain files under `~/Library` are unreadable.
 
@@ -110,6 +112,7 @@ The verdict needs all of the following, as the check stands since 2026-10-11; [t
   `--verify` opens no listeners and reports this criterion as not checked.
 - Since Listening (US-ME13), the network boundary holds from both sides in a proof the check makes with no model; [operations](../operations.md#after-a-change-to-the-launcher-or-configuration) lists what that proof needs.
   `--verify` runs no such probe and reports this criterion as not checked.
+- Since 2026-10-13, the runtime's records show each forbidden read of the footage place and of each footage folder in it refused, each on its own; [operations](../operations.md#after-a-change-to-the-launcher-or-configuration) says which records.
 - The git status and file digests of Mandu, every Product checkout, and the repository match a snapshot taken before the run.
   `--verify` judges a run it did not start, so it has no snapshot and reports that criterion as not checked.
 
@@ -2068,6 +2071,12 @@ Records commits never touch code or Guardrail configuration, so G8 holds, and ea
 - A Codex upgrade can change profile semantics; the per-run preflight fails closed, and the boundary check should be re-run after every upgrade.
 - The launcher's own network reads run outside the sandbox, as the launcher's other reads of Mandu and the Waitlist view do, so nothing in the sandbox bounds them: `fetch.py`, its contract tests, and the reviewed host list are the boundary, and the request log is the record.
 - A separate macOS user with no credentials would be a stronger boundary than unreadable credential files; nothing in v1 needs it.
+- The sandbox reads no file and lists no folder outside its grants, but the system still answers a question about one file by its full name, such as `stat`: its size and dates.
+  That holds for a footage file too, whose name and measured facts the brief gives the agent anyway.
+- A footage folder that does not exist yet has no record of a refusal to be had, so neither the preflight nor the boundary check tries it; both try it from the first session after it exists.
+  The file-tool read needs a footage file in the folder, and the reads' lines must fit in the start of the shell call's output that Codex keeps, which holds some fifty footage folders.
+- Raw video the Founder keeps in Mandu's working tree is not ignored by Mandu's git, and gr0wthlab never writes to Mandu, so the ignore rule is the Founder's to add there.
+  A copy that Mandu's own commits take into its `.git` is outside the sandbox's grants as well.
 - Inside an area, the sandbox refuses a hard link to a file the run cannot read but allows a symbolic link to one.
   The launcher reads and commits files from `workspace/` outside the sandbox, so it never follows a link there: it opens agent-written files without following links, refuses any file with more than one link, and never commits a link.
 - Each probe run used 140,000 to 190,000 input tokens, mostly cached, and about 2,800 output tokens.
@@ -2081,7 +2090,7 @@ Re-run it after any change to the launcher, `config/guardrails/runtime.json`, `c
 
 ```sh
 src/bin/gr0wthlab show-config      # the resolved command, environment, policy, and fingerprint
-src/bin/gr0wthlab preflight        # the per-run sandbox proof of writes and network, with no model
+src/bin/gr0wthlab preflight        # the per-run sandbox proof of writes, unread footage folders, and network, with no model
 src/bin/gr0wthlab boundary-check   # the US-ME02 validation test, on demand
 ```
 

@@ -17,7 +17,7 @@ from typing import TextIO
 
 from . import codex, fetch, process
 from .areas import clear_probe_files
-from .boundary import Boundary, ConfigError, filesystem_policy, load_boundary
+from .boundary import MANDU, Boundary, ConfigError, filesystem_policy, load_boundary
 
 TRIGGERS = ("on-demand", "scheduled")
 EXIT_CONFIG = 2
@@ -53,7 +53,12 @@ def compose_prompt(
     ]
     lines += [f"  - {key}: {path}" for key, path in boundary.areas]
     lines.append("- Read-only locations:")
-    lines += [f"  - {location.label}: {location.path}" for location in boundary.locations]
+    for location in boundary.locations:
+        if location.label != MANDU:
+            lines.append(f"  - {location.label}: {location.path}")
+            continue
+        lines.append(f"  - {location.label}: {location.path}, of which only these paths; the runtime refuses the rest:")
+        lines += [f"    - {path}" for path in boundary.package_paths]
     lines += [f"- {fact}" for fact in facts]
     lines += [f"- Instruction: {instruction_path}", "", "---", "", instruction.rstrip(), ""]
     return "\n".join(lines)
@@ -113,6 +118,31 @@ def preflight_summary(result: codex.PreflightResult) -> dict[str, object]:
         "breaches": [str(path) for path in result.breaches],
         "failures": list(result.failures),
     }
+
+
+def footage_refused(reads: codex.ReadProbe) -> str:
+    """What the read probe was refused, in a line: the footage place and how many footage folders in it."""
+    folders = len(reads.refused) - 1
+    return f"the footage place and of {folders} footage folder{'' if folders == 1 else 's'} in it"
+
+
+def footage_reason(reads: codex.ReadProbe) -> str:
+    """Why a read probe that did not pass keeps the agent from starting, the one wording the printed line and the
+    session's record carry, and from that record the run report and the notice: the sandbox could read where raw
+    footage is kept only where the probe's own output shows a folder listed. A probe that listed none, because it
+    did not finish, ended with an error, or did not try a folder, shows nothing of what the sandbox can read."""
+    if reads.listed:
+        return "the sandbox could read where raw footage is kept"
+    return "the check that the sandbox cannot read the footage place did not finish"
+
+
+def network_reason(network: codex.NetworkProbe) -> tuple[str, str]:
+    """The same for a network probe, as the session's record words it and as the printed line does: the sandbox
+    reached the network only where the probe's own output shows a connection opened."""
+    if network.reached:
+        return "the sandbox's network was not closed", "the sandbox reached the network"
+    unfinished = "the check that the sandbox cannot reach the network did not finish"
+    return unfinished, unfinished
 
 
 def log_name(run_id: str, session: str | None) -> str:
@@ -207,15 +237,29 @@ def run(
         f"gr0wthlab: preflight refused {len(preflight.refused)} paths and allowed {len(preflight.allowed)} areas",
         file=out,
     )
+    reads = codex.run_read_probe(resolved.config, resolved.boundary, resolved.codex_bin, resolved.environment)
+    record["preflight"]["footage"] = reads.as_json()
+    if not reads.ok:
+        reason = footage_reason(reads)
+        found = [f"listed {path}" for path in reads.listed] + list(reads.failures)
+        record.update(exit_code=EXIT_BOUNDARY, error=f"{reason}: " + "; ".join(found))
+        write_json(record_path, record)
+        print(f"gr0wthlab: {reason}; the agent was not started", file=out)
+        for line in found:
+            print(f"  {line}", file=out)
+        return record
+    if reads.refused:
+        print(f"gr0wthlab: preflight refused a listing of {footage_refused(reads)}", file=out)
     network = codex.run_network_probe(
         resolved.config, resolved.boundary, resolved.codex_bin, resolved.environment, resolved.network_targets
     )
     record["preflight"]["network"] = network.as_json()
     if not network.ok:
+        recorded, printed = network_reason(network)
         found = [f"reached {target}" for target in network.reached] + list(network.failures)
-        record.update(exit_code=EXIT_BOUNDARY, error="the sandbox's network was not closed: " + "; ".join(found))
+        record.update(exit_code=EXIT_BOUNDARY, error=f"{recorded}: " + "; ".join(found))
         write_json(record_path, record)
-        print("gr0wthlab: the sandbox reached the network; the agent was not started", file=out)
+        print(f"gr0wthlab: {printed}; the agent was not started", file=out)
         for line in list(network.reached) + list(network.failures):
             print(f"  {line}", file=out)
         return record

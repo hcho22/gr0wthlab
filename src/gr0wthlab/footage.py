@@ -2,11 +2,11 @@
 
 Raw footage is private and irreplaceable, so everything here only reads: a file is opened read-only, without
 following a link, to fingerprint it, and handed to ffprobe to be measured. Nothing in gr0wthlab writes, renames, or
-deletes anything in the footage place, and the sandboxed agent never opens it: the launcher tells the agent each
-file's name and measured facts instead, since an agent cannot watch video.
+deletes anything in the footage place, and the sandboxed agent never opens a footage folder in it: the launcher
+tells the agent each file's name and measured facts instead, since an agent cannot watch video.
 
-The place holds one folder per 14-day window, window-<n>/, with each file named for the shot of the filming plan it
-is footage of. A link, a folder, and a file that is not a video are named and left alone.
+The place holds one footage folder per 14-day window, window-<n>/, with each file named for the shot of the filming
+plan it is footage of. A link, a folder, and a file that is not a video are named and left alone.
 """
 
 from __future__ import annotations

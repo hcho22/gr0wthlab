@@ -4,8 +4,9 @@ from the footage the Founder then drops in the footage place.
 Before the agent starts, the launcher reads the shot lists from the kit (shots.py), groups them into the fewest
 sittings, and files the filming plan as one Review Queue item under an identifier that never changes. The plan is
 never asked again once the Founder decided it, and a new one replaces it only when the kit changes what must be
-filmed. The launcher then lists the footage place, read-only, and measures each file, since the agent cannot watch
-video: the agent learns each file's name and measured facts from the brief, never the file.
+filmed. The launcher then lists the window's footage folder in the footage place, read-only, and measures each file,
+since the agent cannot watch video: the agent learns each file's name and measured facts from the brief, never the
+file.
 
 The agent's part is an edit record per calendar day (edits.py): which source ranges of which files make up the day's
 video. Once the agent has finished, the launcher checks each record against the shot list, renders it with the text
@@ -37,10 +38,10 @@ from pathlib import Path
 
 from . import edits, exchange, footage, posts, shots, video
 from .areas import Areas, Store, UnsafeFile, read_plain
-from .boundary import Boundary, ConfigError, is_within, load_json
+from .boundary import FOOTAGE_FOLDER, ConfigError, is_within, load_json
+from .boundary import FootagePlace as Place
 from .lint import Finding
 from .queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger, Stands, stands
-from .settings import resolve_home_path, sandbox_readable
 from .state import Tally
 
 KIND = "filming-plan"
@@ -95,56 +96,6 @@ def shot_names(names: Sequence[str]) -> str:
 def record_file(run_id: str) -> str:
     """The name, among the run reports, of a run's record of its filming standing."""
     return f"{run_id}.filming.json"
-
-
-# The footage place, from the Product registry.
-
-
-@dataclass(frozen=True)
-class Place:
-    """Where a Product's raw footage is, once the Founder has set it."""
-
-    product: str
-    path: Path | None
-    env: str
-
-
-def place(registry: Mapping, boundary: Boundary, env: Mapping[str, str], home: Path) -> Place | None:
-    """The footage place of the one active Product that films, or None when none does.
-
-    Only the launcher reads it, outside the sandbox, so the agent never opens raw footage: a footage place anywhere
-    the sandbox can read, which includes this repository, where runs write, stops the run before it starts.
-    """
-    found = [
-        product
-        for product in registry.get("products", [])
-        if product.get("filming") and product.get("status") == "active"
-    ]
-    if not found:
-        return None
-    if len(found) > 1:
-        raise ConfigError("only one Product may film until the run plans more than one")
-    name = str(found[0].get("name"))
-    try:
-        where = found[0]["filming"]["footage"]
-        if not isinstance(where, dict) or where.get("access") != "read-only":
-            raise ConfigError(f"{name}'s footage place must be declared read-only")
-        env_name = where.get("env")
-        if not isinstance(env_name, str) or not env_name:
-            raise ConfigError(f"{name}'s footage place needs an env override name")
-        path = None
-        if env.get(env_name) or where["local_path"] is not None:
-            path = resolve_home_path(where["local_path"], f"{name}.filming.footage.local_path", env_name, env, home)
-    except (KeyError, TypeError) as error:
-        raise ConfigError(f"{name}'s filming block in the Product registry is incomplete: {error}") from error
-    if path is not None:
-        for other in sandbox_readable(boundary):
-            if is_within(path, other) or is_within(other, path):
-                raise ConfigError(
-                    f"{name}'s footage place {path} overlaps {other}, which the sandboxed agent can read; raw"
-                    " footage lives outside every location the run reads"
-                )
-    return Place(name, path, env_name)
 
 
 # The finished file of a video a post names.
@@ -1695,8 +1646,10 @@ def rebuild(store: Store, relative: str, where: Path | None, env: Mapping[str, s
         overlays = [video.Overlay(**overlay) for overlay in made["overlays"]]
         cuts = []
         for cut in made["cuts"]:
-            if where is None or not edits.inside(str(cut["source"])):
-                raise ValueError("the footage place is not set, or a source is not inside it")
+            # Footage is read only from a footage folder: the place may hold more, as one inside Mandu does.
+            folder = str(cut["source"]).split("/")[0]
+            if where is None or not edits.inside(str(cut["source"])) or not FOOTAGE_FOLDER.fullmatch(folder):
+                raise ValueError("the footage place is not set, or a source is not in one of its footage folders")
             source = where / str(cut["source"])
             if footage.fingerprint(source)[0] != cut["sha256"]:
                 raise ValueError(f"`{cut['source']}` is no longer the footage this asset was cut from")

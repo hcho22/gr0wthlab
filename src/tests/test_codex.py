@@ -11,7 +11,7 @@ from unittest import mock
 
 from gr0wthlab import boundary, codex, process
 from gr0wthlab.boundary import ConfigError
-from tests.test_boundary import CONFIG, REGISTRY
+from tests.test_boundary import CONFIG, FILMING_REGISTRY, REGISTRY
 
 CODEX_CONFIG = dict(
     CONFIG,
@@ -315,6 +315,100 @@ class PreflightTest(CodexTestCase):
         self.assertFalse(result.ok)
         self.assertIn("codex sandbox did not finish within 1 s and was stopped", result.failures)
 
+    def footage(self, *folders):
+        """The boundary with a footage place inside Mandu beside the package, holding these folders."""
+        place = self.home / "Mandu" / "projects" / "RepToday"
+        for name in folders:
+            (place / name).mkdir(parents=True, exist_ok=True)
+        env = {"GR0WTHLAB_FOOTAGE_DIR": str(place)}
+        resolved = boundary.resolve_boundary(
+            self.repo, CODEX_CONFIG, FILMING_REGISTRY, env, self.home, git=[self.repo / ".git"]
+        )
+        return place, resolved
+
+    def test_the_profile_grants_of_mandu_only_the_package_paths(self):
+        place, resolved = self.footage("gtm", "window-1")
+        overrides = codex.config_overrides(CODEX_CONFIG, resolved)
+        profile = next(value for value in overrides if value.startswith("permissions.gr0wthlab.filesystem="))
+        self.assertIn(f'"{place}/gtm" = "read"', profile)
+        self.assertNotIn(f'"{self.home}/Mandu" =', profile)
+        self.assertNotIn(f'"{place}" =', profile)
+        self.assertNotIn("window-1", profile)
+
+    def test_read_probe_outcomes(self):
+        place, one, two = Path("/m/p"), Path("/m/p/window-1"), Path("/m/p/window 2")
+        output = "REFUSED 41 /m/p\nLISTED 42 /m/p/window-1\nREFUSED x /m/p/window 2\nnoise\n"
+        result = codex.evaluate_reads(output, [place, one, two])
+        self.assertEqual((result.refused, result.listed), (((place, 41),), (one,)))
+        self.assertEqual(result.failures, ("/m/p/window 2 was not probed",))
+        self.assertFalse(result.ok)
+        # The record names each folder the probe left untried, beside the reason that says so.
+        self.assertEqual((result.untried, result.as_json()["untried"]), ((two,), ["/m/p/window 2"]))
+        spaced = codex.evaluate_reads("REFUSED 7 /m/p/window 2\n", [two])
+        self.assertEqual((spaced.refused, spaced.ok), (((two, 7),), True))
+        self.assertEqual(
+            spaced.as_json(),
+            {
+                "ok": True,
+                "refused": [{"target": "/m/p/window 2", "pid": 7}],
+                "listed": [],
+                "failures": [],
+                "untried": [],
+            },
+        )
+
+    def test_a_run_with_no_footage_folder_to_read_starts_no_read_probe(self):
+        # No codex is installed here, so a probe that started one would raise.
+        self.assertEqual(
+            codex.run_read_probe(CODEX_CONFIG, self.boundary, self.codex_bin, self.environment),
+            codex.ReadProbe((), (), ()),
+        )
+        place = self.home / "Mandu" / "projects" / "RepToday"
+        env = {"GR0WTHLAB_FOOTAGE_DIR": str(place)}
+        unmade = boundary.resolve_boundary(self.repo, CODEX_CONFIG, FILMING_REGISTRY, env, self.home, git=[])
+        self.assertTrue(codex.run_read_probe(CODEX_CONFIG, unmade, self.codex_bin, self.environment).ok)
+
+    def test_a_sandbox_that_lists_a_footage_folder_is_caught_and_nothing_there_is_changed(self):
+        place, resolved = self.footage("gtm", "window-1", "window-2")
+        (place / "window-1" / "d01-s1.mov").write_text("stand-in", encoding="utf-8")
+        before = sorted((str(path), path.stat().st_mtime_ns) for path in place.rglob("*"))
+        self.install_fake_codex(FAKE_UNSANDBOXED_CODEX)
+        result = codex.run_read_probe(CODEX_CONFIG, resolved, self.codex_bin, self.environment)
+        self.assertFalse(result.ok)
+        self.assertEqual(result.listed, (place, place / "window-1", place / "window-2"))
+        self.assertEqual((result.refused, result.failures), ((), ()))
+        self.assertEqual(sorted((str(path), path.stat().st_mtime_ns) for path in place.rglob("*")), before)
+        sandbox_home = boundary.canonical(Path((self.codex_bin.parent / "codex-home").read_text(encoding="utf-8")))
+        self.assertNotEqual(sandbox_home, self.home / ".codex")
+
+    def test_a_sandbox_that_refuses_each_footage_folder_passes_with_the_process_that_tried(self):
+        place, resolved = self.footage("window-1")
+        # Stands in for a sandbox that refuses every listing: the script runs with a lister that always fails.
+        refusing = FAKE_UNSANDBOXED_CODEX.replace(
+            'exec "$@"', 'a="$1"; b="$2"; c="$3"; d="$4"; shift 5; exec "$a" "$b" "$c" "$d" /usr/bin/false "$@"'
+        )
+        self.install_fake_codex(refusing)
+        result = codex.run_read_probe(CODEX_CONFIG, resolved, self.codex_bin, self.environment)
+        self.assertTrue(result.ok, result)
+        self.assertEqual([target for target, _ in result.refused], [place, place / "window-1"])
+        self.assertTrue(all(pid > 1 for _, pid in result.refused))
+        self.assertEqual(len({pid for _, pid in result.refused}), 2)
+
+    def test_a_read_probe_that_fails_or_never_finishes_fails(self):
+        place, resolved = self.footage("window-1")
+        self.install_fake_codex("#!/bin/sh\necho 'policy error' >&2\nexit 2\n")
+        failed = codex.run_read_probe(CODEX_CONFIG, resolved, self.codex_bin, self.environment)
+        self.assertFalse(failed.ok)
+        self.assertEqual(len(failed.failures), 3)
+        self.assertTrue(any("policy error" in failure for failure in failed.failures))
+        self.assertEqual(failed.untried, (place, place / "window-1"))
+        # One stopped at its limit after it answered for the place alone left the footage folder untried.
+        self.codex_bin.write_text(f"#!/bin/sh\necho 'REFUSED 7 {place}'\nexec /bin/sleep 600\n", encoding="utf-8")
+        with mock.patch.object(process, "QUICK", 1):
+            hung = codex.run_read_probe(CODEX_CONFIG, resolved, self.codex_bin, self.environment)
+        self.assertIn("codex sandbox did not finish within 1 s and was stopped", hung.failures)
+        self.assertEqual((hung.refused, hung.untried), (((place, 7),), (place / "window-1",)))
+
     def test_a_codex_that_never_answers_its_version_refuses_the_run(self):
         self.install_fake_codex("#!/bin/sh\nexec /bin/sleep 600\n")
         with mock.patch.object(process, "QUICK", 1), self.assertRaises(ConfigError) as refused:
@@ -339,6 +433,9 @@ class NetworkProbeTest(unittest.TestCase):
         self.assertEqual(result.failures, ("forum.example.com:443 was not probed",))
         self.assertFalse(result.ok)
         self.assertEqual(result.as_json()["unreachable"], ["www.reddit.com:443"])
+        self.assertEqual(
+            (result.untried, result.as_json()["untried"]), (("forum.example.com:443",), ["forum.example.com:443"])
+        )
 
     def test_only_a_probe_that_tried_every_target_and_reached_none_passes(self):
         output = "".join(f"UNREACHABLE {target} {pid}\n" for pid, target in enumerate(self.TARGETS, 200))

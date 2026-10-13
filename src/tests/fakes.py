@@ -24,7 +24,11 @@ BETA_EXAMPLES = REPO / "src" / "examples" / "beta-recruiting"
 # A window whose days all fall far in the future, so a run that is not about post Drafts has none due.
 QUIET_WINDOW = {"number": 1, "first_sitting": "2099-01-04", "slot": "19:00"}
 
-# Stands in for codex. `codex sandbox` answers the preflight as an enforcing sandbox would, without running anything;
+# Stands in for codex. `codex sandbox` answers the preflight as an enforcing sandbox would, without running anything,
+# unless behavior.json says the sandbox reaches the network or reads where raw footage is kept, or that the probe of
+# either falls short ("network_probe", "footage_probe"): it "hangs", "stalls" once it has answered for its first target,
+# "fails" with an error, or "skips" every target. probe_next() has only the next probe of a kind fall short. One that
+# hangs or stalls first notes that it is waiting, so stopped_at_its_limit() can have it stopped without a race;
 # `codex exec` plays the agent of one session from behavior.json beside it, writing straight into the workspace. An
 # agent told to hang does its writing, starts its children, the first in a session of its own as Codex starts a shell
 # command, notes every process id in pids.txt, and then never exits and never reports its summary or its token counts.
@@ -59,10 +63,30 @@ args = sys.argv[1:]
 if args[:1] == ["--version"]:
     print("codex-cli 0.0.0-fake")
     sys.exit(0)
-if args[:1] == ["sandbox"] and args[args.index("--") + 4] == "network":
-    open_network = json.loads((here / "behavior.json").read_text()).get("sandbox_reaches_network")
-    for target in args[args.index("--") + 6:]:
-        print(("REACHED " if open_network else "UNREACHABLE ") + target + " 4242")
+if args[:1] == ["sandbox"] and args[args.index("--") + 4] in ("network", "footage"):
+    kind, targets = args[args.index("--") + 4], args[args.index("--") + 6:]
+    probe = json.loads((here / "behavior.json").read_text())
+    if kind == "network":
+        outcome = "REACHED " if probe.get("sandbox_reaches_network") else "UNREACHABLE "
+        answers = [outcome + target + " 4242" for target in targets]
+    else:
+        outcome = "LISTED 4242 " if probe.get("sandbox_reads_footage") else "REFUSED 4242 "
+        answers = [outcome + target for target in targets]
+    how, once = probe.get(kind + "_probe"), here / (kind + "-probe-next")
+    if once.exists():
+        how = once.read_text()
+        once.unlink()
+    if how == "fails":
+        sys.stderr.write("the profile could not be applied\\n")
+        sys.exit(71)
+    if how == "skips":
+        sys.exit(0)
+    if how in ("hangs", "stalls"):
+        if how == "stalls":
+            print(answers[0], flush=True)
+        (here / (kind + "-probe-waiting")).write_text("")
+        time.sleep(600)
+    print("\\n".join(answers))
     sys.exit(0)
 if args[:1] == ["sandbox"]:
     targets = args[args.index("--") + 6:]
@@ -160,9 +184,14 @@ def git(repo: Path, *args: str, env=None) -> str:
 
 
 def git_env(root: Path) -> dict[str, str]:
-    """An environment whose git has an identity and none of the developer's own configuration."""
+    """An environment whose git has an identity, none of the developer's own configuration, and no maintenance of
+    its own: git starts that detached after a commit, a fetch, a merge, a rebase, or a push it receives, so it would
+    still be writing in a repository while the test that made the repository removes it."""
     config = root / "gitconfig"
-    config.write_text("[user]\n\tname = Test\n\temail = test@example.com\n[init]\n\tdefaultBranch = main\n")
+    config.write_text(
+        "[user]\n\tname = Test\n\temail = test@example.com\n[init]\n\tdefaultBranch = main\n"
+        "[maintenance]\n\tauto = false\n"
+    )
     return dict(os.environ, GIT_CONFIG_GLOBAL=str(config), GIT_CONFIG_NOSYSTEM="1")
 
 
@@ -275,6 +304,34 @@ def behave(directory: Path, behavior: dict) -> None:
     started = directory / "sessions.txt"
     if started.exists():
         started.unlink()
+
+
+def probe_next(directory: Path, kind: str, how: str) -> None:
+    """Only the next no-model probe of that kind, "network" or "footage", falls short, as how says; the ones after
+    it behave as behave() set them."""
+    (directory / f"{kind}-probe-next").write_text(how, encoding="utf-8")
+
+
+def stopped_at_its_limit(directory: Path, kind: str):
+    """A patch under which a no-model probe of that kind that the fake leaves unfinished is stopped at its time limit
+    without a test waiting the limit out, and never before the fake has written all it is going to: once the fake
+    has noted that it is waiting, that probe's wall clock reads past its limit. Every other process, a later probe
+    of the same kind included, is timed as it is."""
+    from gr0wthlab import process
+
+    real, waiting = process.run, directory / f"{kind}-probe-waiting"
+
+    def run(command, timeout, **kwargs):
+        if kind not in command:
+            return real(command, timeout, **kwargs)
+        clock = process.Clock(time.monotonic, lambda: time.time() + (2 * timeout if waiting.exists() else 0))
+        try:
+            return real(command, timeout, **dict(kwargs, clock=clock))
+        finally:
+            if waiting.exists():
+                waiting.unlink()
+
+    return mock.patch.object(process, "run", run)
 
 
 def sessions_started(directory: Path) -> list[str]:

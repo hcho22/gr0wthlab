@@ -219,6 +219,285 @@ class FilmingRunCase(CycleTestCase):
         return {fakes.edit_path(1): fakes.edit_record(1, edit), fakes.edit_path(4): fakes.edit_record(4, edit)}
 
 
+class FoundersPlaceTest(FilmingRunCase):
+    """The footage place as the Founder has it: the Product's own folder in Mandu, where the window folders sit
+    beside the package the run reads."""
+
+    def setUp(self):
+        super().setUp()
+        # The registry's own place, with no override: the home folder holds Mandu, as the Founder's does.
+        del self.env["GR0WTHLAB_FOOTAGE_DIR"]
+        self.home = self.root
+        (self.home / ".codex").mkdir()
+        self.footage = self.mandu / "projects" / "RepToday"
+
+    def rebuild(self, record):
+        out = io.StringIO()
+        with mock.patch.object(cli, "REPO_ROOT", self.repo), mock.patch.object(cli, "LEDGER_DIR", self.repo / "ledger"):
+            return cli.rebuild_asset(record, self.env, self.home, out), out.getvalue()
+
+    def test_clips_dropped_beside_the_package_are_cut_and_mandu_is_left_exactly_as_it_was(self):
+        self.assertTrue((self.footage / "gtm").is_dir())
+        self.approved_plan()
+        clip = self.clip("d01-s1.mov")
+        # Video that is not in the window's folder is no footage, wherever in the place it is.
+        for stray in ("d01-s1.mov", "gtm/d01-s1.mov", "window-2/d01-s1.mov", "window-1/takes/d01-s1.mov"):
+            fakes.fake_clip(self.footage / stray, 20.0)
+        before = fakes.tree_digest(self.mandu)
+        queue = self.run_ok(
+            {fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): fakes.edit_record(1, DAY_1)}
+        )
+        post = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.assertRegex(post["asset"], r"^assets/window-1/day-01-[0-9a-f]{12}\.mp4$")
+        self.assertEqual(self.asset(post)["inputs"], [str(clip)])
+        report = self.report()
+        self.assertIn(f"| Footage place | read | 1 footage file in `{self.footage}/window-1` |", report)
+        self.assertIn("1 asset planned, 1 footage file measured; edits: 1 finished", report)
+        self.assertIn(
+            "- Left alone in the footage place: `window-1/takes` (a folder; footage files sit directly in window-1/).",
+            report,
+        )
+        evidence = json.loads((self.ledger() / f"evidence/filming/{queue['updated_by_run']}.json").read_text())
+        self.assertEqual([clip["name"] for clip in evidence["footage"]["clips"]], ["window-1/d01-s1.mov"])
+        # Nothing in Mandu was written, renamed, moved, or deleted: every entry has the bytes, mode, and time it had.
+        self.assertEqual(fakes.tree_digest(self.mandu), before)
+        # Every session of the run was started with the same profile, which grants the package and nothing else of
+        # Mandu, and before each one's agent started its own sandbox was shown unable to list the place and each
+        # footage folder. Each session's prompt names what it reads of Mandu, and no footage folder.
+        run = queue["updated_by_run"]
+        started = (self.codex_dir / "sessions.txt").read_text(encoding="utf-8").split()
+        self.assertGreater(len(started), 1)
+        self.assertIn("filming", started)
+        records = {key: json.loads((self.logs / f"{run}.{key}.json").read_text(encoding="utf-8")) for key in started}
+        self.assertEqual(len({record["fingerprint"] for record in records.values()}), 1)
+        for key, record in records.items():
+            with self.subTest(session=key):
+                self.assertEqual(
+                    [entry["target"] for entry in record["preflight"]["footage"]["refused"]],
+                    [str(self.footage), str(self.footage / "window-1"), str(self.footage / "window-2")],
+                )
+                self.assertEqual(record["preflight"]["footage"]["listed"], [])
+                granted = [Path(path) for path in record["filesystem_policy"] if not path.startswith(":")]
+                of_mandu = sorted(path for path in granted if boundary.is_within(path, self.mandu))
+                self.assertEqual(
+                    of_mandu, [self.footage / "02-marketing-launch-checklist_260807.md", self.footage / "gtm"]
+                )
+                profile = next(arg for arg in record["command"] if arg.startswith("permissions.gr0wthlab.filesystem="))
+                self.assertIn(f'"{self.footage / "gtm"}" = "read"', profile)
+                self.assertNotIn(f'"{self.mandu}" =', profile)
+                self.assertNotIn("window-", profile)
+                prompt = (self.codex_dir / f"prompt.{key}.txt").read_text(encoding="utf-8")
+                self.assertIn(
+                    f"  - Mandu: {self.mandu}, of which only these paths; the runtime refuses the rest:\n", prompt
+                )
+                self.assertIn(f"    - {self.footage / 'gtm'}\n", prompt)
+                self.assertNotIn("window-1\n", prompt)
+        self.assertIn(
+            f"- Sandbox footage: the footage place and 2 footage folders in it tried from inside the sandbox before"
+            f" each of {len(started)} sessions, each once it existed, listed: none.\n",
+            report,
+        )
+
+    def test_a_sandbox_that_can_list_a_footage_folder_starts_no_session_and_the_report_names_the_folder(self):
+        self.clip("d01-s1.mov")
+        before = fakes.tree_digest(self.mandu)
+        fakes.behave(self.codex_dir, {"sandbox_reads_footage": True})
+        code, out = self.run_cycle()
+        self.assertNotEqual(code, 0, out)
+        self.assertIn("the sandbox could read where raw footage is kept; the agent was not started", out)
+        self.assertIn(f"  listed {self.footage / 'window-1'}\n", out)
+        # No session's agent was started: each one's own preflight could list the folder, and each says so.
+        self.assertFalse((self.codex_dir / "sessions.txt").exists())
+        self.assertEqual(list(self.codex_dir.glob("prompt*.txt")), [])
+        tried = sorted(self.logs.glob("2*Z-on-demand-*.*.json"))
+        self.assertGreater(len(tried), 1)
+        for path in tried:
+            record = json.loads(path.read_text(encoding="utf-8"))
+            with self.subTest(session=record["session"]):
+                self.assertEqual((record["exit_code"], record["agent_started"]), (cycle.launcher.EXIT_BOUNDARY, False))
+                self.assertEqual(
+                    record["error"],
+                    f"the sandbox could read where raw footage is kept: listed {self.footage}; listed"
+                    f" {self.footage / 'window-1'}",
+                )
+        report = self.report()
+        self.assertIn(
+            "- Sandbox footage: the footage place and 1 footage folder in it tried from inside the sandbox before"
+            f" each of {len(tried)} sessions, each once it existed, listed: `{self.footage}`,"
+            f" `{self.footage / 'window-1'}`.\n",
+            report,
+        )
+        self.assertIn("its session did not start: the sandbox could read where raw footage is kept: listed", report)
+        self.assertEqual(fakes.tree_digest(self.mandu), before)
+
+    def test_a_read_probe_that_ends_with_an_error_starts_no_session_and_nothing_says_the_sandbox_could_read(self):
+        self.clip("d01-s1.mov")
+        fakes.behave(self.codex_dir, {"footage_probe": "fails"})
+        code, out = self.run_cycle()
+        self.assertNotEqual(code, 0, out)
+        said = (
+            "the check that the sandbox cannot read the footage place did not finish:"
+            f" {self.footage} was not probed; {self.footage / 'window-1'} was not probed;"
+            " codex sandbox exited 71: the profile could not be applied"
+        )
+        self.assertIn(
+            "gr0wthlab: the check that the sandbox cannot read the footage place did not finish; the agent was not"
+            " started\n",
+            out,
+        )
+        self.assertFalse((self.codex_dir / "sessions.txt").exists())
+        tried = sorted(self.logs.glob("2*Z-on-demand-*.*.json"))
+        self.assertGreater(len(tried), 1)
+        for path in tried:
+            record = json.loads(path.read_text(encoding="utf-8"))
+            with self.subTest(session=record["session"]):
+                self.assertEqual((record["exit_code"], record["agent_started"]), (cycle.launcher.EXIT_BOUNDARY, False))
+                self.assertEqual(record["error"], said)
+        # The session's record is the one wording: the report's outputs and Sessions table and the notice repeat it.
+        report, notice = self.report(), self.notice()
+        self.assertIn(f"its session did not start: {said}", report)
+        self.assertIn(f"| did not start: {said} |", report)
+        self.assertIn(f"session did not start: {said}. Incomplete this run: ", notice)
+        self.assertNotIn("the sandbox could read", out + report + notice)
+        # No session's record shows a folder tried, and none shows the network probe run at all.
+        untried = f"`{self.footage}`, `{self.footage / 'window-1'}`"
+        self.assertEqual(len(tried), 2)
+        self.assertEqual(
+            self.agent_line("Sandbox footage"),
+            "- Sandbox footage: the footage place and 1 footage folder in it tried from inside the sandbox before 0 of"
+            f" 2 sessions, each once it existed, listed: none; not tried before the Package review session: {untried};"
+            f" not tried before the Post Drafts session: {untried}.",
+        )
+        self.assertNotIn("- Sandbox network: ", report)
+
+    def three_sessions(self):
+        """A week in which the package review, the post Drafts, and outreach have work due, with one footage folder
+        in the footage place."""
+        self.clip("d01-s1.mov")
+        fakes.set_run(self.repo, "outreach", {"creators": fakes.creators(fakes.KIT_CREATORS[:1])})
+
+    def agent_line(self, name):
+        """One line of the run report's Agent section, whole."""
+        return next(line for line in self.report().splitlines() if line.startswith(f"- {name}: "))
+
+    def test_a_listing_stopped_after_the_place_alone_is_not_told_as_having_tried_the_footage_folder(self):
+        self.three_sessions()
+        fakes.probe_next(self.codex_dir, "footage", "stalls")
+        with fakes.stopped_at_its_limit(self.codex_dir, "footage"):
+            code, out = self.run_cycle()
+        self.assertEqual(code, cycle.launcher.EXIT_BOUNDARY, out)
+        self.assertEqual(fakes.sessions_started(self.codex_dir), ["post-drafts", "outreach"])
+        first = self.run_record("package-review")["preflight"]
+        self.assertEqual([entry["target"] for entry in first["footage"]["refused"]], [str(self.footage)])
+        self.assertEqual(first["footage"]["untried"], [str(self.footage / "window-1")])
+        self.assertNotIn("network", first)
+        for later in ("post-drafts", "outreach"):
+            footage = self.run_record(later)["preflight"]["footage"]
+            self.assertEqual(
+                ([entry["target"] for entry in footage["refused"]], footage["untried"]),
+                ([str(self.footage), str(self.footage / "window-1")], []),
+            )
+        self.assertEqual(
+            self.agent_line("Sandbox footage"),
+            "- Sandbox footage: the footage place and 1 footage folder in it tried from inside the sandbox before 2 of"
+            " 3 sessions, each once it existed, listed: none; not tried before the Package review session:"
+            f" `{self.footage / 'window-1'}`.",
+        )
+        # The network probe runs only once the listing has passed, so it never ran before the first session.
+        self.assertEqual(
+            self.agent_line("Sandbox network"),
+            "- Sandbox network: 2 listed hosts tried from inside the sandbox before 2 of 3 sessions, reached: none;"
+            " nothing tried before the Package review session.",
+        )
+
+    def test_a_network_probe_stopped_after_one_host_is_not_told_as_having_tried_the_other(self):
+        self.three_sessions()
+        fakes.probe_next(self.codex_dir, "network", "stalls")
+        with fakes.stopped_at_its_limit(self.codex_dir, "network"):
+            code, out = self.run_cycle()
+        self.assertEqual(code, cycle.launcher.EXIT_BOUNDARY, out)
+        self.assertEqual(fakes.sessions_started(self.codex_dir), ["post-drafts", "outreach"])
+        network = self.run_record("package-review")["preflight"]["network"]
+        self.assertEqual((len(network["unreachable"]), len(network["untried"])), (1, 1))
+        self.assertEqual(
+            self.agent_line("Sandbox network"),
+            "- Sandbox network: 2 listed hosts tried from inside the sandbox before 2 of 3 sessions, reached: none;"
+            f" not tried before the Package review session: `{network['untried'][0]}`.",
+        )
+        self.assertIn("tried from inside the sandbox before each of 3 sessions, ", self.agent_line("Sandbox footage"))
+
+    def test_a_session_whose_write_preflight_failed_is_not_counted_as_having_tried_either_probe(self):
+        self.three_sessions()
+        fakes.behave(self.codex_dir, {"sessions": {"package-review": {"breaks_next_preflight": True}}})
+        code, out = self.run_cycle()
+        self.assertEqual(code, cycle.launcher.EXIT_BOUNDARY, out)
+        self.assertEqual(fakes.sessions_started(self.codex_dir), ["package-review", "outreach"])
+        unproved = self.run_record("post-drafts")["preflight"]
+        self.assertEqual((unproved["ok"], "footage" in unproved, "network" in unproved), (False, False, False))
+        self.assertEqual(
+            self.agent_line("Sandbox footage"),
+            "- Sandbox footage: the footage place and 1 footage folder in it tried from inside the sandbox before 2 of"
+            " 3 sessions, each once it existed, listed: none; nothing tried before the Post Drafts session.",
+        )
+        self.assertEqual(
+            self.agent_line("Sandbox network"),
+            "- Sandbox network: 2 listed hosts tried from inside the sandbox before 2 of 3 sessions, reached: none;"
+            " nothing tried before the Post Drafts session.",
+        )
+
+    def test_an_edit_record_takes_footage_only_from_the_window_s_folder(self):
+        self.approved_plan()
+        self.clip("d01-s1.mov")
+        fakes.fake_clip(self.footage / "d01-s1.mov", 14.0)
+        fakes.fake_clip(self.footage / "gtm" / "d01-s1.mov", 14.0)
+        for source in ("d01-s1.mov", "gtm/d01-s1.mov", "window-1/../d01-s1.mov", "window-1/../gtm/d01-s1.mov"):
+            with self.subTest(source=source):
+                edit = json.dumps(
+                    {
+                        "edit": 1,
+                        "product": "RepToday",
+                        "window": 1,
+                        "day": 1,
+                        "segments": [{"shot": "d01-s1", "source": source, "in": 2, "out": 12}],
+                    }
+                )
+                queue = self.run_ok({fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): edit})
+                self.assertEqual([entry for entry in queue["open"] if entry["kind"] == "post"], [])
+                self.assertFalse((self.ledger() / "assets").exists())
+
+    def test_a_rebuild_takes_footage_only_from_a_footage_folder(self):
+        self.approved_plan()
+        self.clip("d01-s1.mov")
+        queue = self.run_ok(
+            {fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): fakes.edit_record(1, DAY_1)}
+        )
+        post = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        asset = self.ledger() / post["asset"]
+        original = asset.read_bytes()
+        before = fakes.tree_digest(self.mandu)
+        asset.unlink()
+        code, out = self.rebuild(post["asset_record"])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(asset.read_bytes(), original)
+        self.assertEqual(fakes.tree_digest(self.mandu), before)
+        # The same bytes beside the package, or in it, are not footage: a record that names them is refused.
+        record = self.ledger() / post["asset_record"]
+        made = json.loads(record.read_text(encoding="utf-8"))
+        clip = self.footage / "window-1" / "d01-s1.mov"
+        for source in ("d01-s1.mov", "gtm/d01-s1.mov", "window-1.mov"):
+            with self.subTest(source=source):
+                shutil.copy(str(clip), str(self.footage / source))
+                placed = fakes.tree_digest(self.mandu)
+                made["cuts"][0]["source"] = source
+                record.write_text(json.dumps(made), encoding="utf-8")
+                code, out = self.rebuild(post["asset_record"])
+                self.assertEqual(code, 1)
+                self.assertIn("a source is not in one of its footage folders", out)
+                self.assertEqual(fakes.tree_digest(self.mandu), placed)
+                (self.footage / source).unlink()
+        self.assertEqual(asset.read_bytes(), original)
+
+
 class FilmingPlanTest(FilmingRunCase):
     def test_the_plan_is_one_item_with_a_shot_list_for_every_asset_in_the_fewest_sittings(self):
         queue = self.run_ok()
@@ -578,17 +857,48 @@ class FilmingPlanTest(FilmingRunCase):
 
 
 class FootagePlaceTest(FilmingRunCase):
-    def test_the_footage_place_is_unset_until_the_founder_sets_it(self):
+    def test_the_footage_place_is_the_folder_the_founder_named_in_mandu(self):
         registry = json.loads((fakes.REPO / "config" / "products.json").read_text(encoding="utf-8"))
         block = next(product for product in registry["products"] if product["name"] == "RepToday")["filming"]["footage"]
         self.assertEqual(
-            (block["local_path"], block["access"], block["env"]), (None, "read-only", "GR0WTHLAB_FOOTAGE_DIR")
+            (block["local_path"], block["access"], block["env"]),
+            ("~/Mandu/projects/RepToday", "read-only", "GR0WTHLAB_FOOTAGE_DIR"),
         )
+
+        # The registry is public: it names every place on the Mac from the home folder, never with an account's name.
+        def places(node):
+            for key, value in node.items() if isinstance(node, dict) else enumerate(node):
+                if key in ("local_checkout", "local_path"):
+                    yield value
+                elif isinstance(value, (dict, list)):
+                    yield from places(value)
+
+        named = list(places(registry))
+        self.assertIn(block["local_path"], named)
+        for value in named:
+            self.assertTrue(value is None or value.startswith("~/"), value)
+        self.assertEqual(self.place(None).path, self.home / "Mandu" / "projects" / "RepToday")
+        # A machine whose home folder has no such Mandu yet runs all the same, with nothing to cut from.
         del self.env["GR0WTHLAB_FOOTAGE_DIR"]
         self.run_ok()
         report = self.report()
-        self.assertIn("| Footage place | skipped | the footage place is not set in config/products.json |", report)
+        place = self.home / "Mandu" / "projects" / "RepToday"
+        self.assertIn(f"| Footage place | skipped | `{place}/window-1` does not exist yet |", report)
         self.assertIn(f"- Filming plan: filed this run as `{PLAN}`.", report)
+
+    def test_an_unset_footage_place_is_skipped_and_never_inferred(self):
+        self.assertIsNone(self.place(None, local_path=None).path)
+        registry = self.repo / "config" / "products.json"
+        data = json.loads(registry.read_text(encoding="utf-8"))
+        next(product for product in data["products"] if product["name"] == "RepToday")["filming"]["footage"][
+            "local_path"
+        ] = None
+        registry.write_text(json.dumps(data), encoding="utf-8")
+        del self.env["GR0WTHLAB_FOOTAGE_DIR"]
+        self.run_ok()
+        self.assertIn(
+            "| Footage place | skipped | the footage place is not set in config/products.json |", self.report()
+        )
 
     def place(self, path, **registry_changes):
         registry = json.loads((self.repo / "config" / "products.json").read_text(encoding="utf-8"))
@@ -600,38 +910,45 @@ class FootagePlaceTest(FilmingRunCase):
             if path
             else {k: v for k, v in self.env.items() if k != "GR0WTHLAB_FOOTAGE_DIR"}
         )
-        resolved = boundary.resolve_boundary(self.repo, runtime, registry, env, self.home)
-        return filming.place(registry, resolved, env, self.home)
+        return boundary.resolve_boundary(self.repo, runtime, registry, env, self.home).footage
 
     def test_a_footage_place_the_sandbox_can_read_stops_the_run_before_it_starts(self):
+        package = self.mandu / "projects" / "RepToday" / "gtm"
         for inside in (
             self.repo / "workspace" / "drafts" / "footage",
             self.repo / "ledger" / "assets",
             self.repo,
-            self.root,
-            self.mandu / "projects" / "RepToday" / "footage",
-            self.mandu.parent,
             self.code / "footage",
+            package,
+            package / "footage",
+            package / "05-social-pmf" / "window-1",
         ):
             with (
                 self.subTest(place=inside),
                 self.assertRaisesRegex(
-                    ConfigError,
-                    "which the sandboxed agent can read; raw footage lives outside every location the run reads",
+                    ConfigError, "which the sandboxed agent can read, so the agent could open the raw footage"
                 ),
             ):
                 self.place(inside)
-        self.env["GR0WTHLAB_FOOTAGE_DIR"] = str(self.repo / "workspace" / "evidence")
-        code, out = self.run_cycle()
-        self.assertEqual(code, cycle.launcher.EXIT_CONFIG, out)
-        self.assertIn("refusing to start: RepToday's footage place", out)
+        for holding in (self.root, self.mandu.parent):
+            with (
+                self.subTest(place=holding),
+                self.assertRaisesRegex(ConfigError, "only a place inside the Mandu checkout may hold anything"),
+            ):
+                self.place(holding)
+        for refused in (self.repo / "workspace" / "evidence", package / "footage", self.root):
+            self.env["GR0WTHLAB_FOOTAGE_DIR"] = str(refused)
+            code, out = self.run_cycle()
+            self.assertEqual(code, cycle.launcher.EXIT_CONFIG, out)
+            self.assertIn("refusing to start: RepToday's footage place", out)
+            self.assertFalse((self.codex_dir / "prompt.txt").exists())
 
     def test_the_footage_place_is_declared_read_only_with_an_override_name(self):
         self.assertEqual(self.place(self.footage).path, self.footage)
         self.assertEqual(
             self.place(None, local_path="~/Movies/gr0wthlab-footage").path, self.home / "Movies/gr0wthlab-footage"
         )
-        self.assertIsNone(self.place(None).path)
+        self.assertIsNone(self.place(None, local_path=None).path)
         with self.assertRaisesRegex(ConfigError, "must be declared read-only"):
             self.place(self.footage, access="read-write")
         with self.assertRaisesRegex(ConfigError, "needs an env override name"):

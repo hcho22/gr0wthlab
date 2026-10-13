@@ -61,7 +61,8 @@ def parser() -> argparse.ArgumentParser:
 
     commands.add_parser("show-config", help="print the resolved run configuration and its fingerprint")
     commands.add_parser(
-        "preflight", help="prove the write boundary and the closed network in the sandbox, with no model"
+        "preflight",
+        help="prove the write boundary, the footage folders unread, and the closed network in the sandbox, no model",
     )
     commands.add_parser("check-incoming", help="check the Review Queue items waiting in review-queue/incoming/")
     drafts = commands.add_parser("check-drafts", help="check a run's post Drafts in drafts/posts/ as the launcher will")
@@ -350,7 +351,7 @@ def rebuild_asset(record: str, env: dict[str, str], home: Path, out=sys.stdout) 
     """Render a finished asset again from its record under ledger/ and the footage place, and say how it compares."""
     registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
     boundary = resolve_boundary(REPO_ROOT, load_runtime_config(REPO_ROOT), registry, env, home)
-    where = filming.place(registry, boundary, env, home)
+    where = boundary.footage
     ok, lines = filming.rebuild(Store(LEDGER_DIR), record, where.path if where else None, env)
     for line in lines:
         print(line, file=out)
@@ -545,11 +546,13 @@ def main(argv: list[str] | None = None) -> int:
             result = codex.run_preflight(
                 resolved.config, resolved.boundary, resolved.codex_bin, resolved.environment, "manual"
             )
+            reads = codex.run_read_probe(resolved.config, resolved.boundary, resolved.codex_bin, resolved.environment)
             network = codex.run_network_probe(
                 resolved.config, resolved.boundary, resolved.codex_bin, resolved.environment, resolved.network_targets
             )
-            print(json.dumps(dict(launcher.preflight_summary(result), network=network.as_json()), indent=2))
-            return 0 if result.ok and network.ok else launcher.EXIT_BOUNDARY
+            summary = dict(launcher.preflight_summary(result), footage=reads.as_json(), network=network.as_json())
+            print(json.dumps(summary, indent=2))
+            return 0 if result.ok and reads.ok and network.ok else launcher.EXIT_BOUNDARY
         if args.command == "check-incoming":
             return check_incoming()
         if args.command == "check-drafts":
