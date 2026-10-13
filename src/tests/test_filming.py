@@ -2622,6 +2622,13 @@ class LostVideoTest(FilmingRunCase):
         self.assertIn(skipped or "- Day 1's video could not be cut again: shot d01-s1 has no footage.\n", notice)
         for text in (report, notice, self.brief()):
             self.assertNotIn("keeps the video it shows", text.replace("the post of day 2 keeps", ""))
+        # The session that writes the Drafts is told where the file stands in the same words, never that the post
+        # keeps the video.
+        self.assertIn(
+            f"- Day 1's open post names a video that cannot be cut again this run ({why}): {self.row(post, how)};"
+            " rewrite that Draft only when it must change.\n",
+            self.brief(session="post-drafts") + "\n",
+        )
         output = next(line for line in report.splitlines() if line.startswith("| Filming plan and edits |"))
         if how == self.UNREAD:
             self.assertIn(

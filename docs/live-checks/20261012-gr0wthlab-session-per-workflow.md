@@ -267,3 +267,42 @@ He chose it on 2026-10-12: 60 minutes for all of a run's sessions together, with
 
 With the bound set and the documents changed, the full unit suite passed under `/usr/bin/python3`, 994 tests, as did ruff, and `src/bin/gr0wthlab preflight` passed from this work's worktree: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
 The boundary check is made on the launcher this branch and `main` leave together, and its record is the round below.
+
+## Re-check after the merge with `main`
+
+The branch was brought up to `main` at `109341f` with one merge commit, `326f93585ec6414e265d924c4eb6757e34ca9bb5`.
+`main` had gained the boundary check that proves each target on its own, this folder, the kept-video file check, and the rule that a failed read leaves an open item standing.
+The section above was moved here from the US-ME02 spike note in that commit.
+
+What the merge changed in the launcher this branch had, beyond taking both sides:
+
+- `launcher.run` removes what a stopped boundary check left in the areas before each session's preflight, as it did before the one agent's, and the run report gathers what was removed from every session's record.
+- The two sentences `main` changed in the single task definition now stand in the Filming session's part, `src/instructions/weekly-run/filming.md`, since this branch split that file.
+- What the post Drafts session's brief says of a day whose open post names a video that cannot be cut again follows `main`'s rule: it says the post keeps the video only when the finished file is intact, and otherwise says where that file stands, in the words `filming.kept` gives the Filming table.
+
+On the merge commit the full unit suite passed under `/usr/bin/python3`, 1106 tests in 42 modules, as did ruff 0.15.20.
+In the suite's one whole run the three tests of `main` that quote the report's line on removed probe files failed on that line's wording, which this merge changed for a run of several sessions; their module, `tests.test_cycle`, passed whole, 84 tests, once they quoted the line as the report now gives it.
+
+### The boundary
+
+Both checks ran on 2026-10-13, Mac local time (PDT), with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort, from this work's linked worktree at `326f93585ec6414e265d924c4eb6757e34ca9bb5`, whose `src/` is tree `1393b5b54d49b6f8369f8e1780da85a34b7e08c8` and whose `config/` is tree `b63fbe4023bdef4ff11226df3af0ee21939cdce3`, with `git status` empty before the preflight and after the check, against Mandu and the Product checkouts as they are.
+The configuration fingerprint `show-config` prints there is `f22e6c34ddca9db74825e6ade7696084d3188795d2f1bf37240bb704e4918b76`.
+Their logs went to `~/Library/Logs/gr0wthlab`.
+
+- `src/bin/gr0wthlab preflight`, started at 06:36, passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, started at 06:36, passed at its first and only attempt, as `20261013T133623Z-on-demand-41d4`: 32 steps to prove, nine of nine file-tool targets refused in a patch of their own, eleven kernel denials naming the run's sentinels or the check's listeners, twelve of twelve permitted sentinels, no sentinel escaped, no local connection, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, both a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed since the snapshot.
+  The run's record gives the probe's agent 99.9 seconds of its 30 minute limit, with exit code 0.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the preflight and after the boundary check.
+
+The commit that adds this record also adds one assertion to a unit test, on what the post Drafts session's brief says of a video whose finished file cannot be read; it changes nothing in `src/gr0wthlab/`, `src/instructions/`, or `config/`.
+
+### What this re-check did not exercise
+
+- A weekly run with the real agent on the merged code.
+  The one timed run above was made before the merge, and nothing here repeats it; what the merge changed in the launcher, listed above, stands on the unit tests.
+- A session that does not start, is stopped at its limit, ends with an error, or is refused by the model's provider; the run's bound being reached; the Mac asleep in a session; a start of the weekly schedule and its attempts.
+  Each stands on the unit tests, with the stand-in agent and a simulated Mac.
+- A stopped boundary check's files being removed before a session of a weekly run, which stands on the unit tests (`tests.test_launcher`, `tests.test_cycle`).
+- The boundary check's hole tests, which were not repeated; they stand on the rounds `main` holds and on the unit tests.
+- Listening with anything to read, and a video cut from an edit record in a run of several sessions, as the section above says.
