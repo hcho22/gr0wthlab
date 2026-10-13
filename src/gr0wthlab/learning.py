@@ -15,8 +15,8 @@ stay as they were given. A launcher-owned learning ledger counts the codes for e
 never as a percentage.
 
 Until US-ME16 builds the refinement loop, no run may change workspace/instructions/ at all: the launcher keeps what
-the folder held before the agent started and puts it back afterwards, so nothing a run read, a fetched post least of
-all, can rewrite the agent's own guidance.
+the folder held before the first session started and puts it back after every session, so nothing a run read, a
+fetched post least of all, can rewrite the agent's own guidance, for the next session or the next run.
 """
 
 from __future__ import annotations
