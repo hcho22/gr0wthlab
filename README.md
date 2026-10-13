@@ -68,8 +68,8 @@ The PRD's Guardrails section says what enforces each one.
 
 ## Runs
 
-Every run, scheduled or on demand, starts through `src/bin/gr0wthlab run`, which runs Codex inside the write boundary in [`config/guardrails/runtime.json`](config/guardrails/runtime.json) with the task definition in [`src/instructions/`](src/instructions/).
-The agent has no network: before it starts, the launcher itself reads the fixed list of sources in [`config/sources.json`](config/sources.json), with credential-free reads of the hosts in [`config/guardrails/fetch.json`](config/guardrails/fetch.json) and only where each host's `robots.txt` allows, and hands the agent a snapshot it can read and never write.
+Every run, scheduled or on demand, starts through `src/bin/gr0wthlab run`, which runs Codex inside the write boundary in [`config/guardrails/runtime.json`](config/guardrails/runtime.json): one session for each workflow that has work due, one after another, each with its task definition from [`src/instructions/weekly-run/`](src/instructions/weekly-run/) ([operations](docs/operations.md#one-session-per-workflow)).
+No session has a network: before the first starts, the launcher itself reads the fixed list of sources in [`config/sources.json`](config/sources.json), with credential-free reads of the hosts in [`config/guardrails/fetch.json`](config/guardrails/fetch.json) and only where each host's `robots.txt` allows, and hands the agent a snapshot it can read and never write.
 Each week's run falls due on Sunday afternoon, ahead of the Founder's Sunday evening sitting, and happens when the Mac is awake, Sunday night or Monday morning alike, since nothing holds the Mac awake for it; [`config/run.json`](config/run.json) holds the schedule and the step that saves each run's `workspace/` and `ledger/` records to `main`.
 Setting up the production clone and the schedule, and removing them: [operations](docs/operations.md).
 How the Review Queue reaches Mandu and the Founder's decisions come back: [the Mandu exchange](docs/mandu-exchange.md).

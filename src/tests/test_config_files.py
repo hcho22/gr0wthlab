@@ -107,9 +107,10 @@ class RunConfigTest(unittest.TestCase):
         self.assertEqual((canvas.width, canvas.height, canvas.fps), (1080, 1920, 30))
         self.assertEqual(canvas.ratio.numerator * 16, canvas.ratio.denominator * 9)
 
-    def test_the_weekly_task_definition_is_reviewed_code(self):
-        self.assertTrue(self.config["instruction"].startswith("src/instructions/"))
-        self.assertTrue((REPO / self.config["instruction"]).is_file())
+    def test_no_task_definition_is_chosen_in_configuration(self):
+        # The weekly run's task definitions are the reviewed files the launcher puts together for each session
+        # (sessions.py); configuration names none, so no setting can swap one out.
+        self.assertNotIn("instruction", self.config)
 
 
 class RuntimeConfigTest(unittest.TestCase):

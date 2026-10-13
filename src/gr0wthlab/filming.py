@@ -422,6 +422,12 @@ class Filming:
     def draft_path(self, number: int) -> Path:
         return self.drafts / f"day-{number:02d}.md"
 
+    def ready(self) -> list[int]:
+        """The days ready for an edit record, in order: the Filming session's work, which is to write each one's
+        record, or to check the one in place against the day's post Draft and the footage as they now stand and
+        write it again where it no longer passes."""
+        return sorted(number for number, day in self.days.items() if day.ready)
+
     def sittings(self) -> list[shots.Sitting]:
         return shots.sittings(self.requirements)
 
@@ -1384,7 +1390,6 @@ def brief_lines(filming: Filming, repo_root: Path) -> list[str]:
             f"- A finished video is {canvas.shape} at {canvas.fps} frames a second; the launcher renders it from"
             " your edit record, with the text of the day's post Draft drawn over it."
         )
-    ready = [number for number, day in filming.days.items() if day.ready]
     lines += [
         "",
         f"Write an edit record for each day marked ready, as `{filming.edits}/day-NN.json`, in the format the task"
@@ -1425,7 +1430,7 @@ def brief_lines(filming: Filming, repo_root: Path) -> list[str]:
         lines.append(f"- `{clip.name}` is footage of no shot ({clip.problem}); never use it.")
     for clip in inventory.unmeasured():
         lines.append(f"- `{clip.name}` could not be measured ({clip.problem}); never use it.")
-    if not ready:
+    if not filming.ready():
         lines.append("- No day is ready for an edit record this run.")
     return lines + [""]
 
@@ -1596,10 +1601,12 @@ def tally(filming: Filming | None, agent_gap: str) -> Tally:
 def gaps(filming: Filming, agent_gap: str) -> list[str]:
     """Why the filming output is incomplete this run: the kit or the canvas could not be read, the plan could not be
     filed, the footage place could not be listed, an edit record, a footage file it names, or the record of its video
-    could not be read, the finished file of a video an open post names could not be read, or the agent did not finish
-    and left a day that was ready for an edit record without one. An edit that waits on footage, approval, or tooling
-    is not a gap: the report names it as not cut. Neither is a ready day that an agent which finished left without an
-    edit record, nor a finished file that is gone or changed, which the notice names."""
+    could not be read, the finished file of a video an open post names could not be read, or the Filming session fell
+    short. A session that fell short is always a gap, whatever it had written by then, since a day was ready for an
+    edit record when it started, and with it each ready day still without one is named. An edit that waits on
+    footage, approval, or tooling is not a gap: the report names it as not cut. Neither is a ready day that a session
+    which finished left without an edit record, nor a finished file that is gone or changed, which the notice
+    names."""
     found = []
     if filming.problem:
         found.append(filming.problem)
@@ -1611,7 +1618,10 @@ def gaps(filming: Filming, agent_gap: str) -> list[str]:
     for number, shown in sorted(filming.videos.items()):
         if shown.file.unknown:
             found.append(shown.file.told(f" of the video day {number}'s post names"))
-    if agent_gap and any(day.ready and not filming.wanted(number) for number, day in filming.days.items()):
+    if agent_gap:
+        without = [number for number in filming.ready() if not filming.wanted(number)]
+        if without:
+            found.append(f"no edit record for day{'s' if len(without) > 1 else ''} {listed(without)}")
         found.append(agent_gap)
     return found
 

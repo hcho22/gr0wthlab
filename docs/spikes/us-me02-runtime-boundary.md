@@ -39,12 +39,12 @@ The PRD's "Codex automation" is therefore `codex exec` started by a LaunchAgent,
 | --- | --- |
 | [`config/guardrails/runtime.json`](../../config/guardrails/runtime.json) | The runtime, the six writable areas, read grants, network (off), the model and its reasoning effort, and the Codex features turned off |
 | [`config/products.json`](../../config/products.json) | The read-only Mandu and Product checkouts, which become read grants |
-| [`src/bin/gr0wthlab`](../../src/bin/gr0wthlab) | The launcher; the LaunchAgent and on-demand runs both call `src/bin/gr0wthlab run`, whose task definition is a file under `src/instructions/` |
+| [`src/bin/gr0wthlab`](../../src/bin/gr0wthlab) | The launcher; the LaunchAgent and on-demand runs both call `src/bin/gr0wthlab run`, which starts one session for each workflow with work due, each with the task definition the launcher puts together from the files in `src/instructions/weekly-run/` |
 | [`src/checks/boundary-probe.md`](../../src/checks/boundary-probe.md) | The probe instruction the validation test runs, kept in `src/` so the agent cannot edit its own test; the launcher writes each run's steps into it |
 
 The launcher fails closed.
 It refuses to start if `runtime.json` names anything other than the six areas under `workspace/` or turns network on, if a registry location overlaps the repository, or if Codex is missing.
-For each run it starts `codex exec` with:
+For each session of a run, and for the boundary check's probe, it starts `codex exec` with:
 
 - `--cd <repository>/workspace`, `--ignore-user-config`, `--ignore-rules`, `--ephemeral`, `--json`, and the model from `runtime.json` (`gpt-6-luna`) with its reasoning effort (`-c model_reasoning_effort="high"`, since 2026-10-11).
 - `-c default_permissions="gr0wthlab"`, the profile below, built by `filesystem_policy` in [`src/gr0wthlab/boundary.py`](../../src/gr0wthlab/boundary.py), and `-c permissions.gr0wthlab.network.enabled=false`.
@@ -66,15 +66,17 @@ For each run it starts `codex exec` with:
 
 Codex keeps `.git`, `.codex`, `.agents`, and `.aws` read-only at the top of each writable area, so the agent cannot plant a Codex config or a git hook there.
 
-Before the agent starts, every run proves the profile with no model.
+Before each session's agent starts, a run proves the profile with no model.
 The launcher runs `codex sandbox` with the same `-c` overrides and an empty Codex home, so no user configuration can change the policy it sees.
 It tries to create an empty, uniquely named file in each area, which must succeed and is deleted, and in each forbidden place, which must fail.
 The forbidden places are the repository root, `workspace/`, `src/`, `config/`, `config/guardrails/`, `/private/tmp`, `/private/var/tmp`, both git directories, the `HOME`, `TMPDIR`, and `CODEX_HOME` directories the launcher gives the agent, and the empty Codex home the probe itself runs with.
-Any other outcome stops the run before the agent sees its instruction.
+Any other outcome keeps that session's agent from starting, so it never sees its instruction.
+The run marks that session's workflow incomplete and goes on to the next session, whose own proof comes first; the boundary check, which has one agent, stops there.
 Mandu and the Products are left out of this per-run check so a routine run never tries to write in them; the same deny-by-default rule covers them, and the boundary check below tests them.
 
-The launcher records a SHA-256 fingerprint of the Codex command line, environment, and Codex version in each run record under `~/Library/Logs/gr0wthlab` (`GR0WTHLAB_LOG_DIR` overrides it).
-Two runs with the same fingerprint started the agent with the same configuration.
+The launcher records a SHA-256 fingerprint of the Codex command line, environment, and Codex version in each session's record under `~/Library/Logs/gr0wthlab` (`GR0WTHLAB_LOG_DIR` overrides it), `<run id>.<workflow>.json`.
+The fingerprint is taken of that session's own command and leaves out only the path of its closing message, the one thing that differs between two sessions' commands.
+Two sessions with the same fingerprint, in one run or in two, started the agent with the same configuration, and the run report says whether every session of a run had the same one.
 
 ## Reads without wider writes, and no network
 
@@ -2086,4 +2088,4 @@ src/bin/gr0wthlab boundary-check   # the US-ME02 validation test, on demand
 The probe only ever creates new, uniquely named files and connects only to the check's own listeners; the check deletes any file that escaped, counts that as a failure, and removes the permitted ones and the script it placed in `workspace/instructions/`.
 One check makes up to three probe runs, the later ones only for steps that have no record after a probe run; [operations](../operations.md#after-a-change-to-the-launcher-or-configuration) says how to read its output.
 To repeat the scheduled path, generate a one-off LaunchAgent a few minutes ahead with `src/bin/gr0wthlab launch-agent --boundary-check --once <time> --label gr0wthlab.boundary-check`, `launchctl bootstrap` it, read the check's verdict in its `.out.log` after it fires, then `launchctl bootout` it and delete the plist ([operations](../operations.md) has the commands).
-`src/bin/gr0wthlab run` no longer accepts the probe: a run's task definition must be a file under `src/instructions/`, and the probe runs only through `boundary-check`, which never commits or pushes.
+`src/bin/gr0wthlab run` takes no task definition and so cannot be handed the probe: the launcher puts each session's together from the reviewed files in `src/instructions/weekly-run/`, and the probe runs only through `boundary-check`, which never commits or pushes.

@@ -56,6 +56,25 @@ class FilmingRunCase(CycleTestCase):
         self.tools = self.root / "video-tools"
         self.env.update(fakes.install_video_tools(self.tools), GR0WTHLAB_FOOTAGE_DIR=str(self.footage))
         self.runs = 0
+        # What each run planned before its first session, kept so a test can read the run's filming standing.
+        planned, self.planned = cycle.Cycle.plan_sessions, None
+
+        def remember(runner, state, config):
+            self.planned = state
+            return planned(runner, state, config)
+
+        patched = mock.patch.object(cycle.Cycle, "plan_sessions", remember)
+        patched.start()
+        self.addCleanup(patched.stop)
+
+    def filming_section(self):
+        """The Filming section of a Filming session's brief in the latest run, from that run's own filming standing.
+        A Filming session is started only when a day is ready for an edit record; when none is, no agent is told
+        this, and it is what one would have been told."""
+        return "\n".join(filming.brief_lines(self.planned.filming, self.repo))
+
+    def filming_session_ran(self):
+        return "filming" in fakes.sessions_started(self.codex_dir)
 
     def run_ok(self, writes=None, days=None):
         """One more run, an hour after the last; writes is what the agent writes, days the calendar days kept.
@@ -181,8 +200,8 @@ class FilmingRunCase(CycleTestCase):
         }
 
     def filming_row(self, day):
-        """A day's row of the Filming table in the latest brief, which is what the agent is told of the day."""
-        return self.brief().split("## Filming")[1].split(f"\n| {day} |")[1].split("\n")[0]
+        """A day's row of the Filming table in the latest run, which is what a Filming session is told of the day."""
+        return self.filming_section().split(f"\n| {day} |")[1].split("\n")[0]
 
     def day_1_beside_other_footage(self):
         """Day 1's post, open with its video, in a window whose footage place also holds footage of day 2, so that
@@ -321,12 +340,15 @@ class FilmingPlanTest(FilmingRunCase):
         self.assertIn(
             f"- Every file measured and every edit checked: `evidence/filming/{queue['updated_by_run']}.json`.", report
         )
-        brief = self.brief()
-        self.assertIn("## Filming", brief)
+        # No day is ready before the plan is approved, so no Filming session is started and no agent is told this.
+        self.assertFalse(self.filming_session_ran())
+        self.assertIn("| Filming | no session: no calendar day is ready for an edit record |", report)
+        self.assertNotIn("## Filming", self.brief())
+        self.assertIn(f"- `{PLAN}` (filming-plan, filed by the launcher): Approve the filming plan", self.brief())
+        brief = self.filming_section()
         self.assertIn(
             f"- Filming plan: filed this run as `{PLAN}`. The launcher files it from the kit; never write one.", brief
         )
-        self.assertIn(f"- `{PLAN}` (filming-plan, filed by the launcher): Approve the filming plan", brief)
         self.assertIn("- No day is ready for an edit record this run.", brief)
         self.assertIn(
             "| 1 | d01-s1 (screen recording; one unbroken range, never cut; no speed change) | 10s; the same source"
@@ -442,7 +464,7 @@ class FilmingPlanTest(FilmingRunCase):
         self.run_ok()
         self.assertEqual([entry["status"] for entry in self.entries("filming-plan")], ["approved"])
         self.assertIn(f"- Filming plan: approved as `{PLAN}`; never asked again.", self.report())
-        self.assertRegex(self.brief().split("## Filming")[1], r"\| 1 \|[^\n]*\| ready \|")
+        self.assertRegex(self.filming_section(), r"\| 1 \|[^\n]*\| ready \|")
 
     def test_a_kit_change_after_approval_asks_again_only_for_the_jobs_it_changed(self):
         self.approved_plan(days=(1, 3, 8, 10))
@@ -1519,7 +1541,8 @@ class EditRunTest(FilmingRunCase):
         self.assertIn("| 2 | d02-s1, d02-s2 | no edit record | no footage yet for shot d02-s2 |", report)
         notice = self.notice()
         self.assertIn("- Day 2 has no video: shot d02-s2 has no footage, and nothing is substituted.", notice)
-        self.assertIn("not ready: no footage yet for shot d02-s2", self.brief())
+        self.assertIn("not ready: no footage yet for shot d02-s2", self.filming_section())
+        self.assertFalse(self.filming_session_ran())
         self.assertNotIn("Day 9", notice)  # not due this run
         # An edit record written all the same, without the shot, is blocked: nothing stands in for the shot.
         only = fakes.edit_record(2, ("d02-s1", "d02-s1a-take-1.mov", 0, 6))
@@ -1622,7 +1645,8 @@ class EditRunTest(FilmingRunCase):
         self.assertIn(f"**Video file**: none yet (the video tooling cannot be used ({problem})).", self.item(post))
         notice = self.notice()
         self.assertIn(f"- The edit of day 1 was skipped: {problem}.", notice)
-        self.assertIn("not ready: the video tooling cannot be used", self.brief())
+        self.assertIn("not ready: the video tooling cannot be used", self.filming_section())
+        self.assertFalse(self.filming_session_ran())
         # Once the tooling is back, the same record is cut and the post replaced by one that shows the video.
         self.env["GR0WTHLAB_FFMPEG_BIN"] = str(self.tools / "ffmpeg")
         queue = self.run_ok()
@@ -1659,6 +1683,15 @@ class EditRunTest(FilmingRunCase):
         # The agent is never asked to change or remove the record of a day whose post keeps its video.
         why = f"the video tooling cannot be used (ffmpeg is not an executable at `{self.root / 'no-ffmpeg'}`)"
         self.assertEqual(self.filming_row(1).split(" | ")[-1], f"not ready: {why}; {LEAVE} |")
+        # No day is ready, so no Filming session is started at all; the session that writes the Drafts is told that
+        # the post keeps its video only while its Draft stays as it is.
+        self.assertFalse(self.filming_session_ran())
+        self.assertIn(
+            f"- Day 1's open post names a video that cannot be cut again this run ({why}): its post keeps the"
+            " video it shows only while its Draft stays as it is, so rewrite that Draft only when it must change.",
+            self.brief(session="post-drafts"),
+        )
+        self.assertNotIn("cannot be cut again this run", self.brief(session="package-review"))
         code, said = self.check_edits(queue["updated_by_run"])
         self.assertEqual(code, 0, said)
         self.assertIn(
@@ -1667,6 +1700,30 @@ class EditRunTest(FilmingRunCase):
             said,
         )
         self.assertIn("1 day checked, 0 with problems", said)
+
+    def test_a_filming_session_started_for_another_day_is_told_to_leave_the_record_of_a_day_whose_post_keeps_its_video(
+        self,
+    ):
+        self.day_1_beside_other_footage()
+        (self.footage / "window-1" / "d01-s1.mov").unlink()
+        self.clip("d02-s1.mov", 6.0, 1080, 1920, 30, sound=True)
+        self.clip("d02-s1a.mov", 6.0, 1080, 1920, 30, sound=True)
+        self.run_ok({fakes.draft_path(2): fakes.filming_draft(2)})
+        # Day 2 is ready, so a Filming session runs, and its brief holds the whole table: day 1's row with it.
+        self.assertTrue(self.filming_session_ran())
+        told = self.brief(session="filming")
+        self.assertIn(self.filming_section(), told)
+        row = told.split("## Filming")[1].split("\n| 1 |")[1].split("\n")[0]
+        self.assertEqual(row.split(" | ")[-1], f"not ready: no footage yet for shot d01-s1; {LEAVE} |")
+        self.assertTrue(told.split("## Filming")[1].split("\n| 2 |")[1].split("\n")[0].endswith(" | ready |"))
+        self.assertIn("- Day 2: `day-02.md` is in place", told)
+        self.assertNotIn("- Day 1: ", told.split("## Post Drafts in place")[1])
+        self.assertIn(
+            "- Day 1's open post names a video that cannot be cut again this run (no footage yet for shot"
+            " d01-s1): its post keeps the video it shows only while its Draft stays as it is",
+            self.brief(session="post-drafts"),
+        )
+        self.assertIn("asset", self.posts_open()[1])
 
     def slot_set_while_the_video_cannot_be_cut(self, stop):
         """Day 1's post is open with its video, and another day's footage is in the footage place too; the
@@ -1764,7 +1821,7 @@ class EditRunTest(FilmingRunCase):
         self.assertNotIn("Day 1 has no video", notice)
         # The agent is told the same before it writes anything, and by check-edits before it finishes: the record
         # of a day whose post keeps its video is no problem to fix, and it stays as it is.
-        brief = self.brief().split("## Filming")[1]
+        brief = self.filming_section()
         self.assertIn(
             "Where the table says to leave a day's edit record as it is, change nothing in it and do not remove it.",
             brief,
@@ -2238,7 +2295,7 @@ class EditRunTest(FilmingRunCase):
         self.assertIn(
             "- Footage that could not be measured: `window-1/d01-s1.mov` (ffprobe could not read it (", report
         )
-        brief = self.brief().split("## Filming")[1]
+        brief = self.filming_section()
         self.assertIn(f"| `window-1/d01-s1.mov` for d01-s1: could not be measured | not ready: {why} |", brief)
         self.assertIn("- `window-1/d01-s1.mov` could not be measured (ffprobe could not read it (", brief)
         notice = self.notice()
@@ -2321,7 +2378,7 @@ class EditRunTest(FilmingRunCase):
         settled = (
             "the Founder approved its post with its video, so nothing is cut again and its edit record stays as it is"
         )
-        brief = self.brief().split("## Filming")[1]
+        brief = self.filming_section()
         self.assertIn(f"| not ready: {settled} |", brief)
         self.assertNotIn("| ready |", brief)
         self.assertIn("- No day is ready for an edit record this run.", brief)
@@ -2346,9 +2403,10 @@ class EditRunTest(FilmingRunCase):
 
         def agent(*args, **kwargs):
             result = launch(*args, **kwargs)
-            shutil.move(str(self.footage), str(self.root / "footage-away"))  # the sandbox cannot open it either
-            seen.append(self.check_edits(kwargs["run_id"]))
-            shutil.move(str(self.root / "footage-away"), str(self.footage))
+            if kwargs["session"] == "filming":
+                shutil.move(str(self.footage), str(self.root / "footage-away"))  # the sandbox cannot open it either
+                seen.append(self.check_edits(kwargs["run_id"]))
+                shutil.move(str(self.root / "footage-away"), str(self.footage))
             return result
 
         writes = {
@@ -2390,7 +2448,9 @@ class EditRunTest(FilmingRunCase):
             self.brief(), r"`window-1/d01-s1.mov` for d01-s1: 14.00s, 886x1920, 60 fps, no sound \| ready \|"
         )
 
-    def test_a_ready_day_with_no_edit_record_is_a_gap_only_when_the_agent_did_not_finish(self):
+    def test_a_filming_session_that_falls_short_always_leaves_filming_incomplete_and_names_a_ready_day_with_no_record(
+        self,
+    ):
         self.approved_plan()
         writes = {fakes.draft_path(1): fakes.filming_draft(1)}
         none = "| 1 | d01-s1 | no edit record | it is ready for an edit record and has none |"
@@ -2403,10 +2463,13 @@ class EditRunTest(FilmingRunCase):
             self.assertEqual(code, 1, out)
             return self.report()
 
-        # No day is ready before its footage is there, so the agent was asked for no edit record.
+        # No day is ready before its footage is there, so no Filming session was started: no agent was asked for an
+        # edit record, and the post Drafts session's error is the post Drafts' trouble alone.
+        gap = "its session ended with exit code 1"
         report = agent_fails()
+        self.assertFalse(self.filming_session_ran())
         self.assertIn("| 1 | d01-s1 | no edit record | no footage yet for shot d01-s1 |", report)
-        self.assertIn("| Post Drafts | incomplete | the agent did not finish |", report)
+        self.assertIn(f"| Post Drafts | incomplete | {gap} |", report)
         self.assertIn("| Filming plan and edits | complete | plan approved as", report)
         # A ready day the agent finished without an edit record for is named, and is not a gap on its own.
         self.clip("d01-s1.mov")
@@ -2415,15 +2478,32 @@ class EditRunTest(FilmingRunCase):
         self.assertIn(none, report)
         self.assertIn("| Filming plan and edits | complete | plan approved as", report)
         self.assertRegex(report, line + r"\n")
-        # The same day left without one by an agent that ended with an error is.
+        # A Filming session that ended with an error leaves filming incomplete, and the day it left without a
+        # record is named with it.
         report = agent_fails()
+        self.assertTrue(self.filming_session_ran())
         self.assertIn(none, report)
-        self.assertIn("| Filming plan and edits | incomplete | the agent did not finish |", report)
-        self.assertRegex(report, line + r"; incomplete: the agent did not finish\n")
-        # Once the record is there, the agent's not finishing leaves nothing of filming's undone.
+        self.assertIn(f"| Filming plan and edits | incomplete | no edit record for day 1; {gap} |", report)
+        self.assertRegex(report, line + rf"; incomplete: no edit record for day 1; {gap}\n")
+        named = (
+            "The Filming session stopped with exit code 1, so its work this run may be incomplete: Filming plan and"
+            " edits."
+        )
+        self.assertIn(named, self.notice())
+        # A session that fell short is a gap whatever it had written by then: with the record there, the video is
+        # cut and filming still reads incomplete, with no day to name.
         report = agent_fails({fakes.edit_path(1): fakes.edit_record(1, DAY_1)})
         self.assertIn("| 1 | d01-s1 | finished |", report)
-        self.assertIn("| Filming plan and edits | complete | plan approved as", report)
+        self.assertIn(f"| Filming plan and edits | incomplete | {gap} |", report)
+        self.assertIn(named, self.notice())
+        # The day stays ready while its video is not approved, so the next run starts a Filming session again, to
+        # check the record in place against the Draft and the footage; one that falls short is a gap as before.
+        report = agent_fails()
+        self.assertTrue(self.filming_session_ran())
+        self.assertIn("| Filming | ended with exit code 1 |", report)
+        self.assertIn(f"| Filming plan and edits | incomplete | {gap} |", report)
+        self.assertIn(named, self.notice())
+        self.assertNotIn("incomplete: nothing", self.notice())
 
     def test_a_finished_asset_can_be_rebuilt_from_its_record_and_the_footage(self):
         queue = self.day_1()
@@ -2560,6 +2640,13 @@ class LostVideoTest(FilmingRunCase):
         self.assertIn(skipped or "- Day 1's video could not be cut again: shot d01-s1 has no footage.\n", notice)
         for text in (report, notice, self.brief()):
             self.assertNotIn("keeps the video it shows", text.replace("the post of day 2 keeps", ""))
+        # The session that writes the Drafts is told where the file stands in the same words, never that the post
+        # keeps the video.
+        self.assertIn(
+            f"- Day 1's open post names a video that cannot be cut again this run ({why}): {self.row(post, how)};"
+            " rewrite that Draft only when it must change.\n",
+            self.brief(session="post-drafts") + "\n",
+        )
         output = next(line for line in report.splitlines() if line.startswith("| Filming plan and edits |"))
         if how == self.UNREAD:
             self.assertIn(
@@ -3044,7 +3131,7 @@ class RecutRunTest(FilmingRunCase):
         whole = fakes.edit_record(2, ("d02-s1", "d02-s1a.mov", 0, 20))
         queue = self.run_ok({fakes.draft_path(2): fakes.filming_draft(2), fakes.edit_path(2): whole})
         self.assertFalse((self.ledger() / "assets").exists())
-        brief = self.brief().split("## Filming")[1]
+        brief = self.filming_section()
         self.assertIn(
             f"| `window-1/d02-s1a.mov` for d02-s1: 20.00s, 1080x1920, 30 fps, with sound | not ready: {why} |", brief
         )
@@ -3060,7 +3147,7 @@ class RecutRunTest(FilmingRunCase):
         # The later leg is not ready either: its own opening take is there, and nothing it can share with day 2.
         fakes.set_window(self.repo, fakes.window_from(date(2026, 10, 4)))
         self.run_ok()
-        self.assertIn(f"| not ready: {why} |", self.brief().split("## Filming")[1].split("| 9 |")[1].split("\n")[0])
+        self.assertIn(f"| not ready: {why} |", self.filming_section().split("| 9 |")[1].split("\n")[0])
         self.assertIn(f"- Day 9 has no video: {why}, and nothing is substituted.", self.notice())
         self.assertFalse((self.ledger() / "assets").exists())
 
@@ -3079,7 +3166,7 @@ class RecutRunTest(FilmingRunCase):
         whole = fakes.edit_record(2, ("d02-s1", "d02-s1.mov", 0, 20))
         queue = self.run_ok({fakes.draft_path(2): fakes.filming_draft(2), fakes.edit_path(2): whole})
         self.assertFalse((self.ledger() / "assets").exists())
-        brief = self.brief().split("## Filming")[1]
+        brief = self.filming_section()
         self.assertIn(
             f"| `window-1/d02-s1.mov` for d02-s1: 20.00s, 1080x1920, 30 fps, with sound | not ready: {why('A')} |",
             brief,
@@ -3096,7 +3183,7 @@ class RecutRunTest(FilmingRunCase):
         # With leg A's own take there the day is ready, and a record that opens on the shared take is refused.
         self.clip("d02-s1a.mov", 6.0, 1080, 1920, 30, sound=True)
         queue = self.run_ok()
-        self.assertRegex(self.brief().split("## Filming")[1], r"\| 2 \|[^\n]*\| ready \|")
+        self.assertRegex(self.filming_section(), r"\| 2 \|[^\n]*\| ready \|")
         self.assertEqual([entry for entry in queue["open"] if entry["kind"] == "post"], [])
         self.assertFalse((self.ledger() / "assets" / "window-1").exists())
         self.assertIn(
@@ -3108,9 +3195,7 @@ class RecutRunTest(FilmingRunCase):
         # The later leg is not ready either, with leg A's take and the shared one there: its own is still to film.
         fakes.set_window(self.repo, fakes.window_from(date(2026, 10, 4)))
         self.run_ok()
-        self.assertIn(
-            f"| not ready: {why('B')} |", self.brief().split("## Filming")[1].split("| 9 |")[1].split("\n")[0]
-        )
+        self.assertIn(f"| not ready: {why('B')} |", self.filming_section().split("| 9 |")[1].split("\n")[0])
         self.assertIn(f"| 9 | d02-s1 | no edit record | {why('B')} |", self.report())
         self.assertIn(f"- Day 9 has no video: {why('B')}, and nothing is substituted.", self.notice())
         self.assertFalse((self.ledger() / "assets" / "window-1").exists())
@@ -3129,7 +3214,7 @@ class RecutRunTest(FilmingRunCase):
             "shot d02-s1 has no opening take of leg B's own (the Founder is on camera in it and each leg opens on its"
             " own Hook, so it needs a file named `d02-s1b`, such as `d02-s1b.mov`)"
         )
-        row = self.brief().split("## Filming")[1].split("| 9 |")[1].split("\n")[0]
+        row = self.filming_section().split("| 9 |")[1].split("\n")[0]
         files = "`window-1/d02-s2.mov` for d02-s2: 20.00s, 886x1920, 60 fps, no sound"
         self.assertIn(f"| {files} | not ready: {why} |", row)
         self.assertIn(f"| 9 | d02-s1, d02-s2 | no edit record | {why} |", self.report())
@@ -3152,7 +3237,7 @@ class RecutRunTest(FilmingRunCase):
         queue = self.run_ok(
             {fakes.draft_path(1): fakes.filming_draft(1), fakes.edit_path(1): fakes.edit_record(1, DAY_1)}
         )
-        brief = self.brief().split("## Filming")[1]
+        brief = self.filming_section()
         self.assertIn("10s; the same source ranges as day 8 after its opening", brief)
         self.assertRegex(brief, r"\| 1 \|[^\n]*\| ready \|")
         first = next(entry for entry in queue["open"] if entry["kind"] == "post")
@@ -3161,7 +3246,7 @@ class RecutRunTest(FilmingRunCase):
         queue = self.run_ok(
             {fakes.draft_path(8): fakes.filming_draft(8), fakes.edit_path(8): fakes.edit_record(8, DAY_1)}
         )
-        self.assertRegex(self.brief().split("## Filming")[1], r"\| 8 \|[^\n]*\| ready \|")
+        self.assertRegex(self.filming_section(), r"\| 8 \|[^\n]*\| ready \|")
         second = next(entry for entry in queue["open"] if entry.get("day") == 8)
         self.assertIn("the same source ranges as day 1's leg after the re-cut opening", self.item(second))
         ours, theirs = self.asset(first), self.asset(second)

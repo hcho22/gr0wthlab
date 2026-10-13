@@ -25,11 +25,31 @@ BETA_EXAMPLES = REPO / "src" / "examples" / "beta-recruiting"
 QUIET_WINDOW = {"number": 1, "first_sitting": "2099-01-04", "slot": "19:00"}
 
 # Stands in for codex. `codex sandbox` answers the preflight as an enforcing sandbox would, without running anything;
-# `codex exec` plays the agent from behavior.json beside it, writing straight into the workspace. An agent told to
-# hang does its writing, starts its children, the first in a session of its own as Codex starts a shell command, notes
-# every process id in pids.txt, and then never exits and never reports its summary or its token counts. One told to
-# detach first leaves what a shell command that has finished can leave, noted last: a process in a session of its own
-# whose parent has ended. One told to work takes that many seconds before it finishes.
+# `codex exec` plays the agent of one session from behavior.json beside it, writing straight into the workspace. An
+# agent told to hang does its writing, starts its children, the first in a session of its own as Codex starts a shell
+# command, notes every process id in pids.txt, and then never exits and never reports its summary or its token counts.
+# One told to detach first leaves what a shell command that has finished can leave, noted last: a process in a session
+# of its own whose parent has ended. One told to work takes that many seconds before it finishes.
+#
+# A run starts one session for each workflow with work due, so the fake is started several times in one run. What
+# behavior.json says at its top is how every session behaves, and "sessions" gives one workflow's session its own
+# behavior over that: {"sessions": {"post-drafts": {"hang": true}}}. What a behavior writes, removes, links, or
+# changes the mode of is done once in a run, by the session whose workflow the path belongs to (ROUTES), or by the
+# run's first session when that workflow has no session this run, so a test still says only what "the agent" wrote.
+# Each session's prompt is kept as prompt.<workflow>.txt, the last one also as prompt.txt, and sessions.txt lists the
+# sessions started, in order, since behave() was last called. A session told to break the next preflight leaves the
+# sandbox refusing every area once, so the session after it does not start and the one after that does; one told it is
+# refused ends as Codex does when the model's provider refuses a request, with that error and exit code 1.
+ROUTES = (
+    ("drafts/posts/", "post-drafts"),
+    ("drafts/edits/", "filming"),
+    ("drafts/beta-recruiting/", "beta-recruiting"),
+    ("evidence/listening/", "listening"),
+    ("review-queue/angles/", "listening"),
+    ("drafts/messages/replies/", "listening"),
+    ("drafts/messages/outreach/", "outreach"),
+    ("evidence/learning/", "learning"),
+)
 FAKE_CODEX = """#!{python}
 import json, os, re, shutil, signal, subprocess, sys, time
 from pathlib import Path
@@ -46,6 +66,11 @@ if args[:1] == ["sandbox"] and args[args.index("--") + 4] == "network":
     sys.exit(0)
 if args[:1] == ["sandbox"]:
     targets = args[args.index("--") + 6:]
+    if (here / "preflight-broken").exists():
+        (here / "preflight-broken").unlink()
+        for target in targets:
+            print("REFUSED " + target)
+        sys.exit(0)
     for target in targets:
         path = Path(target)
         writable = path.parent.name == "workspace" and path.name in {areas!r}
@@ -54,19 +79,44 @@ if args[:1] == ["sandbox"]:
 prompt = sys.stdin.read()
 (here / "prompt.txt").write_text(prompt)
 behavior = json.loads((here / "behavior.json").read_text())
+named = re.search(r"^- Session: (\\S+), the .* session, \\d+ of the \\d+ this run starts \\(([^)]*)\\)", prompt, re.M)
+session = named.group(1) if named else None
+running = named.group(2).split(", ") if named else []
+if session:
+    if session == running[0]:
+        for earlier in here.glob("prompt.*.txt"):
+            earlier.unlink()  # what an earlier run's sessions were told
+    (here / ("prompt." + session + ".txt")).write_text(prompt)
+    with (here / "sessions.txt").open("a") as started:
+        started.write(session + "\\n")
+    behavior = dict(behavior, **behavior.get("sessions", {{}}).get(session, {{}}))
+
+
+def mine(relative):
+    # Whether this session is the one that does a behavior's work on a path in workspace/.
+    if not session:
+        return True
+    owner = next((workflow for prefix, workflow in {routes!r} if relative.startswith(prefix)), running[0])
+    return session == (owner if owner in running else running[0])
+
+
 brief = Path(re.search(r"Run brief, read it first: (\\S+)", prompt).group(1))
 workspace = brief.parents[2] / "workspace"
 for relative in behavior.get("rmtree", []):
-    shutil.rmtree(workspace / relative)
+    if mine(relative):
+        shutil.rmtree(workspace / relative)
 for relative, text in behavior.get("write", {{}}).items():
-    target = workspace / relative
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(text)
+    if mine(relative):
+        target = workspace / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(text)
 for relative, target in behavior.get("symlink", {{}}).items():
-    (workspace / relative).parent.mkdir(parents=True, exist_ok=True)
-    (workspace / relative).symlink_to(target)
+    if mine(relative):
+        (workspace / relative).parent.mkdir(parents=True, exist_ok=True)
+        (workspace / relative).symlink_to(target)
 for relative, mode in behavior.get("chmod", {{}}).items():
-    os.chmod(workspace / relative, int(mode, 8))
+    if mine(relative):
+        os.chmod(workspace / relative, int(mode, 8))
 children = [
     subprocess.Popen(["/bin/sleep", "600"], start_new_session=number == 0).pid
     for number in range(behavior.get("children", 0))
@@ -79,13 +129,23 @@ if behavior.get("detach"):
     children.append(int(subprocess.run([sys.executable, "-c", detach], stdout=subprocess.PIPE, text=True).stdout))
 if behavior.get("ignore_stop"):
     signal.signal(signal.SIGTERM, signal.SIG_IGN)
-(here / "pids.txt").write_text(" ".join(str(pid) for pid in [os.getpid(), *children]))
+if behavior.get("breaks_next_preflight"):
+    (here / "preflight-broken").write_text("")
+pids = " ".join(str(pid) for pid in [os.getpid(), *children])
+(here / "pids.txt").write_text(pids)
+if session:
+    (here / ("pids." + session + ".txt")).write_text(pids)
 for line in behavior.get("events", []):
     print(line, flush=True)
 while behavior.get("hang"):
     time.sleep(600)
 time.sleep(behavior.get("work", 0))
-summary = behavior.get("summary", "Checked the package.\\n\\nReview: complete\\n")
+if behavior.get("refused"):
+    refusal = "exceeded retry limit, last status: 429 Too Many Requests"
+    print(json.dumps({{"type": "error", "message": refusal}}))
+    print(json.dumps({{"type": "turn.failed", "error": {{"message": refusal}}}}))
+    sys.exit(1)
+summary = behavior.get("summary", "Checked the package.\\n\\nSession: complete\\n")
 Path(args[args.index("--output-last-message") + 1]).write_text(summary)
 usage = {{"input_tokens": 200000, "cached_input_tokens": 150000, "cache_write_input_tokens": 0, "output_tokens": 4000}}
 print(json.dumps({{"type": "turn.completed", "usage": usage}}))
@@ -202,14 +262,47 @@ def make_code(path: Path, env: dict[str, str]) -> Path:
 def install_codex(directory: Path) -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     codex = directory / "codex"
-    codex.write_text(FAKE_CODEX.format(python=sys.executable, areas=set(AREAS)), encoding="utf-8")
+    codex.write_text(FAKE_CODEX.format(python=sys.executable, areas=set(AREAS), routes=ROUTES), encoding="utf-8")
     codex.chmod(codex.stat().st_mode | stat.S_IXUSR)
     behave(directory, {})
     return codex
 
 
 def behave(directory: Path, behavior: dict) -> None:
+    """How the fake agent behaves from now on: every session as the behavior says, and one workflow's session as
+    behavior["sessions"][<workflow>] says over that. The list of sessions started so far starts again."""
     (directory / "behavior.json").write_text(json.dumps(behavior), encoding="utf-8")
+    started = directory / "sessions.txt"
+    if started.exists():
+        started.unlink()
+
+
+def sessions_started(directory: Path) -> list[str]:
+    """The sessions the fake agent was started for since behave() was last called, in order, by workflow."""
+    started = directory / "sessions.txt"
+    return started.read_text(encoding="utf-8").split() if started.exists() else []
+
+
+def prompt(directory: Path, session: str = "package-review") -> str:
+    """The prompt one session of the last run was started with."""
+    return (directory / f"prompt.{session}.txt").read_text(encoding="utf-8")
+
+
+def prompts(directory: Path) -> str:
+    """Every prompt the last run's sessions were started with, one after another, so a test can say what none of
+    the run's agents was told."""
+    return "\n".join(path.read_text(encoding="utf-8") for path in sorted(directory.glob("prompt.*.txt")))
+
+
+def session(key: str = "package-review", closing: str = "Session: complete", limit: float = 1800.0, **record):
+    """One workflow's session as a run's state holds it once its agent has ended: with work due, started, ended by
+    itself, and closed with that line, unless the record given says otherwise."""
+    from gr0wthlab import sessions
+
+    kept = dict({"agent_started": True, "exit_code": 0, "time_limit_seconds": limit}, **record)
+    kept.setdefault("agent_awake_seconds", kept.get("agent_seconds"))
+    summary = f"Did the work.\n\n{closing}\n" if closing else ""
+    return sessions.Session(sessions.workflow(key), True, "", limit, kept, summary=summary, closing=closing)
 
 
 # Codex's event stream, as `codex exec --json` writes it: one line for each step that ran to its end.
@@ -358,16 +451,19 @@ class Mac:
 
         return process.Clock(time.monotonic, self.wall)
 
-    def asleep_in(self, word: str, seconds: float, after: float = 0.0):
+    def asleep_in(self, word: str, seconds: float, after: float = 0.0, session: str | None = None):
         """A patch under which every process the launcher waits for is timed on this Mac's clocks, and the Mac falls
-        asleep `after` seconds into the first one whose command line has `word`, to wake `seconds` later."""
+        asleep `after` seconds into the first one whose command line has `word`, to wake `seconds` later. With
+        session, it is the first such process of that workflow's session, whose command names that session's closing
+        message, so the Mac can sleep through a run's second or third agent and not its first."""
         from gr0wthlab import process
 
         real, left = process.run, [seconds]
 
         def run(command, timeout, **kwargs):
             clocks = self.clocks
-            if left and word in command:
+            named = session is None or any(str(part).endswith(f".{session}.last-message.md") for part in command)
+            if left and word in command and named:
                 begun = []
 
                 def wall() -> float:

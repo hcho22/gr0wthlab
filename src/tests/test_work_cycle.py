@@ -69,12 +69,14 @@ class WorkCycleTestCase(CycleTestCase):
         return self.report()
 
     def go_reading(self, repo=None):
-        """Run a cycle, and return what it printed with every working file the agent could read while it ran."""
+        """Run a cycle, and return what it printed with every working file the Listening session's agent could read
+        while it ran; every session of the run can read the same folder."""
         launch, working = cycle.launcher.run, []
 
         def agent(*args, **kwargs):
             folder = self.ledger(repo) / "working"
-            working.extend(path.read_text(encoding="utf-8") for path in sorted(folder.iterdir()))
+            if kwargs["session"] == "listening":
+                working.extend(path.read_text(encoding="utf-8") for path in sorted(folder.iterdir()))
             return launch(*args, **kwargs)
 
         with mock.patch.object(cycle.launcher, "run", agent):
@@ -83,8 +85,14 @@ class WorkCycleTestCase(CycleTestCase):
         return out, working
 
     def go_with_check_work(self, weeks=0):
-        """Run a cycle whose agent, once it has written its files, runs check-work for its run while the run is still
-        in progress, as the brief tells it to; returns check-work's exit code and its output."""
+        """Run a cycle whose sessions each run check-work for their run while the run is still in progress, once
+        they have written their files; returns the exit code and the output of the check the run's last session
+        made of everything, which is what one agent's check gave when a run had one session."""
+        return self.go_with_checks(weeks)[-1][1:]
+
+    def go_with_checks(self, weeks=0, part=False):
+        """As go_with_check_work, for every session: (session, exit code, output) in the order the sessions ran.
+        With part, each session checks its own part alone, as its brief tells it to."""
         launch, seen = cycle.launcher.run, []
 
         def agent(*args, **kwargs):
@@ -95,12 +103,13 @@ class WorkCycleTestCase(CycleTestCase):
                 mock.patch.object(cli, "LEDGER_DIR", self.repo / "ledger"),
                 mock.patch.dict(os.environ, self.env),
             ):
-                seen.append((cli.check_work(kwargs["run_id"], out), out.getvalue()))
+                own = kwargs["session"] if part and kwargs["session"] in cli.WORK_PARTS else None
+                seen.append((kwargs["session"], cli.check_work(kwargs["run_id"], out, part=own), out.getvalue()))
             return result
 
         with mock.patch.object(cycle.launcher, "run", agent):
             self.go(weeks)
-        return seen[0]
+        return seen
 
 
 class ListeningCycleTest(WorkCycleTestCase):
@@ -457,7 +466,10 @@ class ListeningCycleTest(WorkCycleTestCase):
         notice = self.item_text(self.items("notice")[-1]["id"])
         self.assertIn(f"- r/fitness30plus threads: {refusal} Incomplete: Listening Evidence.", notice)
         self.assertIn("is not a document in this run's snapshot", notice, "nothing is recorded from memory")
-        self.assertIn("No thread or review could be read this run, so there is nothing to record", self.brief())
+        # With nothing to read there is nothing to record, so no Listening session is started, and none is told of it.
+        self.assertEqual(fakes.sessions_started(self.codex_dir), ["package-review"])
+        self.assertIn("| Listening | no session: no thread or review could be read this run |", report)
+        self.assertNotIn("## Listening", self.brief())
         self.assertIn("- Replies in r/fitness30plus: no reply Draft is offered: its rules could not be read", report)
         log = self.read(next(iter((self.ledger() / "run-reports").glob("*.requests.json"))).relative_to(self.ledger()))
         self.assertEqual((log["sent"], log["not_sent"]), (1, 4))
@@ -502,7 +514,7 @@ class ListeningCycleTest(WorkCycleTestCase):
         self.assertIn("`guaranteed.md`: it cites no sourced pain", report)
         self.assertIn(f"- Reply Draft for `{document}` (no thread): blocked: no-link: a reply carries no link", report)
         self.assertIn(f"reply-evidence: '{document}' is not validated Listening Evidence", report)
-        for told in (self.brief(), (self.codex_dir / "prompt.txt").read_text(encoding="utf-8")):
+        for told in (self.brief(), fakes.prompts(self.codex_dir)):
             self.assertNotIn("evil.example.net", told)
             self.assertNotIn("Ignore your previous instructions", told)
         published = "".join(self.item_text(entry["id"]) for entry in self.queue()["open"] if "rules" in entry["id"])
@@ -1180,6 +1192,41 @@ class CheckWorkTest(WorkCycleTestCase):
         self.assertIn("1 quote kept, 1 refused; 1 Angle or Hook proposal queued, 1 discarded;", report)
         self.assertIn("| your personal network | ask | queued | `20261011-message-network-ask` |", report)
 
+    def test_each_session_checks_its_own_part_alone_as_its_brief_tells_it_to(self):
+        # A reason to code, so the run has a Rejection reasons session after Listening's and outreach's.
+        self.agent({"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL})
+        self.go()
+        self.decide("20261011-name-status-stale", "reject", reason="Too long to read in a minute.")
+        writes = quote_file(read_on="2026-10-18")
+        writes[fakes.message_path("network-ask")] = fakes.message("network-ask", "network", fakes.NETWORK_BODY)
+        self.agent(writes)
+        checks = {session: (code, text) for session, code, text in self.go_with_checks(weeks=1, part=True)}
+        self.assertEqual(list(checks), ["package-review", "listening", "outreach", "learning"])
+        # Listening's session runs before outreach's and the Rejection reasons': what they have not written yet is no
+        # problem of its, so its own check passes on its own work.
+        code, text = checks["listening"]
+        self.assertEqual(code, 0, text)
+        self.assertIn(f"OK quote {POST}: its words stand in the text fetched from", text)
+        self.assertNotIn("NO DRAFT", text)
+        self.assertNotIn("code 20261011-name-status-stale", text)
+        self.assertTrue(text.rstrip().endswith("1 checked, 0 with problems"), text[-60:])
+        code, text = checks["outreach"]
+        self.assertIn("OK your personal network, ask", text)
+        self.assertIn("NO DRAFT Slow Strength, first message", text)
+        self.assertNotIn("quote", text)
+        self.assertNotIn("code 20261011-name-status-stale", text)
+        code, text = checks["learning"]
+        self.assertEqual(code, 1, text)
+        self.assertEqual(
+            text,
+            "PROBLEM code 20261011-name-status-stale: its rejection reason has no code yet\n1 checked, 1 with"
+            " problems\n",
+        )
+        # Each of the three is given that command in its own brief, and no other session is.
+        for key in ("listening", "outreach", "learning"):
+            self.assertIn(f"check-work --run {self.run_record()['run_id']} --part {key}`", self.brief(session=key))
+        self.assertNotIn("check-work", self.brief(session="package-review"))
+
     def test_it_reads_the_decisions_this_run_took_in_and_the_reasons_still_to_code(self):
         self.agent({"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL})
         self.go()
@@ -1350,8 +1397,10 @@ class RetentionTest(WorkCycleTestCase):
 class SandboxNetworkTest(WorkCycleTestCase):
     def test_every_run_proves_the_sandbox_reaches_no_listed_host_before_the_agent_starts(self):
         report = self.go()
-        self.assertIn("- Sandbox network: 2 listed hosts tried from inside the sandbox, reached: none.", report)
-        record = json.loads(next(self.logs.glob("*-on-demand-*.json")).read_text(encoding="utf-8"))
+        self.assertIn(
+            "- Sandbox network: 2 listed hosts tried from inside the sandbox before its session, reached: none.", report
+        )
+        record = self.run_record("package-review")
         self.assertEqual(record["preflight"]["network"]["unreachable"], ["www.reddit.com:443", "itunes.apple.com:443"])
 
     def test_a_sandbox_that_reaches_the_network_stops_the_run_before_the_agent(self):
@@ -1361,10 +1410,15 @@ class SandboxNetworkTest(WorkCycleTestCase):
         self.assertIn("the sandbox reached the network; the agent was not started", out)
         self.assertFalse((self.codex_dir / "prompt.txt").exists(), "the agent never saw its instruction")
         report = self.report()
-        self.assertIn("- The agent did not start; see Agent below.", report)
+        self.assertIn("- The Package review session did not start; see Sessions below.", report)
         self.assertIn(
-            "- Sandbox network: 2 listed hosts tried from inside the sandbox, reached: www.reddit.com:443,"
-            " itunes.apple.com:443.",
+            "| Package review | did not start: the sandbox's network was not closed: reached www.reddit.com:443;"
+            " reached itunes.apple.com:443 |",
+            report,
+        )
+        self.assertIn(
+            "- Sandbox network: 2 listed hosts tried from inside the sandbox before its session, reached:"
+            " itunes.apple.com:443, www.reddit.com:443.",
             report,
         )
 

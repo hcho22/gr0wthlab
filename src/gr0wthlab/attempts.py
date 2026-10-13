@@ -51,12 +51,16 @@ SAID = {
     COMPLETED: "completed",
     SLEPT: "was cut short by the Mac's sleep",
     TIMED_OUT: "timed out with the Mac awake",
-    FAILED: "ended with its agent stopping early, the Mac awake",
-    NOT_STARTED: "never started its agent",
+    FAILED: "had a session stop early with the Mac awake",
+    NOT_STARTED: "could not start one of its sessions",
     REFUSED: "was refused before it started",
     STOPPED: "stopped before it finished",
     NO_REPORT: "left no report",
 }
+
+# Fewer seconds than this between a wall-clock time and the awake time of the same span are the two clocks' own
+# difference, not the Mac asleep.
+ASLEEP_AT_LEAST = 5
 
 PMSET = "/usr/bin/pmset"
 # The capability a Mac has only when it is fully awake; a dark wake has the CPU and the network without it.
@@ -223,20 +227,27 @@ def left_without_ending(store: Store) -> list[tuple[str, str]]:
     return lines
 
 
-def ending(agent: Mapping[str, object], asleep: float, confirmed: bool = True) -> str:
-    """How a run that reached its report ended, from the launcher's record of its agent and the seconds the Mac slept
-    from the run's start to its agent's end. A run whose agent did not finish counts as cut short by sleep whenever
-    the Mac slept in that time, wherever the sleep fell: whether the agent then never started, was stopped at its
-    limit, or ended with an error. confirmed is False only for a scheduled attempt whose agent's summary did not
-    confirm its review: an agent that sleep froze in the middle of its work can end without an error and with the
-    work unfinished, so such an attempt completed only if the Mac stayed awake, and was cut short by sleep otherwise."""
-    if agent.get("exit_code") == 0 and (confirmed or not asleep):
+def asleep_for(seconds: float, awake: float) -> float:
+    """About how many of a span's seconds the Mac was asleep, its wall-clock time less its awake time; 0 when the Mac
+    stayed awake."""
+    gap = seconds - awake
+    return gap if gap >= ASLEEP_AT_LEAST else 0.0
+
+
+def ending(shortfall: str | None, asleep: float, confirmed: bool = True) -> str:
+    """How a run that reached its report ended, from how its sessions ended and the seconds the Mac slept from the
+    run's start to its last session's end. shortfall is None when every session the run had work for started and
+    ended without an error, and otherwise how the first one that fell short did: NOT_STARTED, TIMED_OUT, or FAILED. A
+    run with a session that fell short counts as cut short by sleep whenever the Mac slept in that time, wherever the
+    sleep fell and whichever session it froze. confirmed is False only for a scheduled attempt in which a session's
+    summary did not confirm its work: an agent that sleep froze in the middle of its work can end without an error
+    and with the work unfinished, so such an attempt completed only if the Mac stayed awake, and was cut short by
+    sleep otherwise."""
+    if shortfall is None and (confirmed or not asleep):
         return COMPLETED
     if asleep:
         return SLEPT
-    if not agent.get("agent_started"):
-        return NOT_STARTED
-    return TIMED_OUT if agent.get("timed_out") else FAILED
+    return shortfall or COMPLETED
 
 
 def fully_awake() -> bool | None:

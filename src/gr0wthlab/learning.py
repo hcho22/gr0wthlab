@@ -15,8 +15,8 @@ stay as they were given. A launcher-owned learning ledger counts the codes for e
 never as a percentage.
 
 Until US-ME16 builds the refinement loop, no run may change workspace/instructions/ at all: the launcher keeps what
-the folder held before the agent started and puts it back afterwards, so nothing a run read, a fetched post least of
-all, can rewrite the agent's own guidance.
+the folder held before the first session started and puts it back after every session, so nothing a run read, a
+fetched post least of all, can rewrite the agent's own guidance, for the next session or the next run.
 """
 
 from __future__ import annotations
@@ -191,10 +191,20 @@ class Result:
     record: str | None = None
 
     def uncoded(self) -> list[Reason]:
-        return [reason for reason in self.reasons if not reason.code]
+        return uncoded(self.reasons)
 
     def owed(self) -> list[Reason]:
-        return [reason for reason in self.reasons if reason.code in STRATEGY and not reason.proposal]
+        return owed(self.reasons)
+
+
+def uncoded(found: Sequence[Reason]) -> list[Reason]:
+    """The reasons that still need a code."""
+    return [reason for reason in found if not reason.code]
+
+
+def owed(found: Sequence[Reason]) -> list[Reason]:
+    """The strategy reasons that still need the package-change proposal that answers them."""
+    return [reason for reason in found if reason.code in STRATEGY and not reason.proposal]
 
 
 def check_code(
@@ -321,17 +331,27 @@ def count_lines(found: Sequence[Reason]) -> list[str]:
 
 
 def gaps(result: Result | None, problem: str, agent_gap: str) -> list[str]:
-    """Why the coding of rejection reasons is incomplete this run: the reasons could not be read, or a reason the
+    """Why the coding of rejection reasons is incomplete this run: the reasons could not be read, a reason the
     brief listed ends the run with no accepted code, whether the agent left it uncoded, was stopped first, or
-    proposed a code the launcher set aside. A reason left without a code is asked for again at the next run."""
+    proposed a code the launcher set aside, or the session fell short. A session that fell short is always a gap,
+    whatever it had written by then, and with it each strategy reason that still has no proposal is named, which is
+    the session's other work; one a session that finished left without its proposal is the tally's to say. A reason
+    left without a code or a proposal is asked for again at the next run."""
     if result is None:
-        return [problem or "the rejection reasons were not read"]
-    found = list(result.problems)
-    waiting = result.uncoded()
-    if waiting:
-        found.append(f"no accepted code for {', '.join(f'`{reason.item}`' for reason in waiting)}")
-        if agent_gap:
-            found.append(agent_gap)
+        found = [problem or "the rejection reasons were not read"]
+    else:
+        found = list(result.problems)
+        waiting = result.uncoded()
+        if waiting:
+            found.append(f"no accepted code for {', '.join(f'`{reason.item}`' for reason in waiting)}")
+        unanswered = result.owed() if agent_gap else []
+        if unanswered:
+            found.append(
+                f"no package-change proposal for the strategy reason{'s' if len(unanswered) > 1 else ''}"
+                f" {', '.join(f'`{reason.item}`' for reason in unanswered)}"
+            )
+    if agent_gap:
+        found.append(agent_gap)
     return found
 
 
@@ -355,9 +375,8 @@ def tally(result: Result | None, problem: str, agent_gap: str) -> Tally:
 def brief_lines(found: Sequence[Reason], workspace: Path) -> list[str]:
     """The reasons that still need a code, and the strategy reasons that still need their proposal."""
     lines = ["## Rejection reasons", ""]
-    waiting = [reason for reason in found if not reason.code]
-    owed = [reason for reason in found if reason.code in STRATEGY and not reason.proposal]
-    if not waiting and not owed:
+    waiting, unanswered = uncoded(found), owed(found)
+    if not waiting and not unanswered:
         return lines + ["Every rejection reason has its code, and every strategy reason its proposal."]
     if waiting:
         lines += [
@@ -369,7 +388,7 @@ def brief_lines(found: Sequence[Reason], workspace: Path) -> list[str]:
             "",
         ]
         lines += [f'- `{reason.item}` ({reason.workflow}): "{reason.words}"' for reason in waiting]
-    if owed:
+    if unanswered:
         lines += [
             "",
             "These reasons carry a strategy code, so each becomes a package-change proposal, never a change to your"
@@ -378,7 +397,7 @@ def brief_lines(found: Sequence[Reason], workspace: Path) -> list[str]:
         ]
         lines += [
             f'- `{reason.item}` ({reason.code}): "{reason.words}": cite `{"/".join((*DECISIONS, reason.item))}.json`'
-            for reason in owed
+            for reason in unanswered
         ]
     return lines
 
