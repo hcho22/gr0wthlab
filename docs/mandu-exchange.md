@@ -2,12 +2,15 @@
 
 What Mandu may read from gr0wthlab (the Marketing Engineer), and the two things Mandu still does with what it reads.
 Mandu's own agent builds Mandu's read-only side from this page.
-Nobody has built that side yet, and nothing in gr0wthlab waits for it: the Founder decides on gr0wthlab's own page, with or without Mandu.
+Nobody has built that side yet: it is the next change, made in Mandu once version 7 has landed in gr0wthlab.
+Nothing in gr0wthlab waits for it: the Founder decides on gr0wthlab's own page, with or without Mandu.
 
 Since version 7 gr0wthlab writes every record on this page, and Mandu writes none of them ([ADR 0002](adr/0002-the-founder-decides-in-gr0wthlab.md)).
 The Founder's decisions, sitting records, Beta Build record, Beta Cohort reports, and outreach records, which Mandu wrote in its own repository up to version 6, are now written in gr0wthlab, by the Founder's own act on the page that `src/bin/gr0wthlab sitting` serves.
 Mandu writes nothing that gr0wthlab reads except each Product's Go-To-Market Package, which stays in Mandu and which gr0wthlab only reads.
-Later stories extend the exchange, each with a version number of its own: the TikTok export (US-ME11) and the US-ME18 confirmation.
+Two later stories add something the Founder gives, each with a version number of its own: the TikTok export (US-ME11) and the confirmation that starts Immerse Listening (US-ME18).
+By the Founder's decision of 2026-10-12 both are given on the sitting page, in gr0wthlab; Mandu receives neither, and records neither.
+What the page asks for each, and what record it keeps, is settled when its story is built.
 
 ## Where things are
 

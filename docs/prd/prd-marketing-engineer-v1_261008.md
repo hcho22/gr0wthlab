@@ -46,15 +46,15 @@ Immerse joins as Listening only, after RepToday's first 14-day window has run cl
 | --- | --- | --- |
 | Founder | Every approval, every public act (posting, sending, confirming a publishing schedule), filming, and the weekly TikTok export | - |
 | Marketing Engineer | Evidence, Drafts, Review Queue items, Weekly Read memos, run reports, and its own Instructions; its repository also serves the Founder's sitting page and keeps the Founder's decisions | Publish, send, spend, see email addresses, write to Mandu or a Product repository, write or change a decision of the Founder's, or change its own code or Guardrails |
-| Mandu | Each Product's Go-To-Market Package, applying approved package changes, handing approved Dispatch requests to firstmate, showing the Founder the Marketing Engineer's status, and receiving the TikTok export | Build the Marketing Engineer, record a decision of the Founder's, or write anything the Marketing Engineer reads but the Go-To-Market Package |
+| Mandu | Each Product's Go-To-Market Package, applying approved package changes, handing approved Dispatch requests to firstmate, and showing the Founder the Marketing Engineer's status | Build the Marketing Engineer, record a decision of the Founder's, or write anything the Marketing Engineer reads but the Go-To-Market Package |
 | firstmate | Building and changing the Marketing Engineer's code and Guardrails through reviewed pull requests, and carrying out approved Dispatches in Product repositories | Act on a Dispatch the Founder has not approved |
 | Scheduling service | Publishing approved posts at the fixed slot after the Founder confirms the schedule | - |
 
 ### The weekly cycle
 
-1. **Run.** Shortly before the Founder's weekly sitting, the Marketing Engineer reads the Go-To-Market Package from Mandu, the Founder's recorded decisions from its own repository, RepToday's repository, the anonymous Waitlist view, YouTube results, and any TikTok export the Founder has sent.
+1. **Run.** Shortly before the Founder's weekly sitting, the Marketing Engineer reads the Go-To-Market Package from Mandu, the Founder's recorded decisions from its own repository, RepToday's repository, the anonymous Waitlist view, YouTube results, and any TikTok export the Founder has given on the sitting page.
    It performs Listening, writes the Weekly Read memo on read weeks, prepares the next week's Drafts, proposals, and Dispatch requests, and writes a run report.
-2. **Sitting.** On read weeks the Founder first exports TikTok Studio's per-post numbers and comments into Mandu.
+2. **Sitting.** On read weeks the Founder first exports TikTok Studio's per-post numbers and comments and gives the export on the sitting page.
    The Founder then decides every Review Queue item on the sitting page, one at a time: approve, or reject with a one-line reason.
    What the Founder clicks is what is saved, with no AI between the answer and the record.
 3. **Publish.** Approved posts are loaded into the scheduling service as drafts at the fixed slot, and the Founder confirms the schedule there.
@@ -350,7 +350,7 @@ Day 14 joins the plan once the calendar decides its Angle, and the script card o
 
 - [ ] YouTube results are read with read-only access to the Founder's channel: per post, views, the share viewed rather than swiped away, average percentage viewed, likes, comment count, and comment text.
 - [ ] Before each read week's sitting, the Review Queue carries a notice listing exactly which TikTok Studio numbers and comments to export for which posts (views or impressions, average watch time, watched-full rate, likes, comments, shares, saves, profile visits, and comment text).
-- [ ] The Founder's export, received through Mandu as screenshots or a file, is turned into Evidence per post with the export date as its source.
+- [ ] The Founder's export, given on the sitting page as screenshots or a file and never through Mandu, is turned into Evidence per post with the export date as its source.
 - [ ] A number that was not reported is recorded as not reported, never as zero, and never estimated.
 - [ ] Follower counts and other numbers without a pre-registered use are not stored.
 
@@ -527,14 +527,14 @@ The refinement loop and the example re-run are still this story's to build, so i
 
 **Acceptance Criteria:**
 
-- [ ] The gate is met only when window 1 ran cleanly (all 14 posts went out at the fixed slot and both Weekly Reads were delivered) and the Founder confirms in Mandu; before it, nothing runs for Immerse.
+- [ ] The gate is met only when window 1 ran cleanly (all 14 posts went out at the fixed slot and both Weekly Reads were delivered) and the Founder confirms on the sitting page; before it, nothing runs for Immerse.
 - [ ] Listening covers film-photography communities and reviews of film-camera and Hipstamatic-type apps, and reads Immerse's own market research in its repository, read-only.
 - [ ] Output is Evidence only, with verbatim quotes, links, and dates; proposals for Immerse's naming decision and future Go-To-Market Package go to Mandu as package-change proposals.
 - [ ] Nothing about Immerse is drafted for public posting, and no Immerse handle, page, or Waitlist is proposed until Immerse has a name.
 
 **Validation Test:**
 
-- **Setup:** Window 1 complete; the Founder's confirmation recorded in Mandu.
+- **Setup:** Window 1 complete; the Founder's confirmation given on the sitting page.
 - **Steps:**
   1. Run before the confirmation.
   2. Run after it.
@@ -619,24 +619,22 @@ So G1 is also what keeps the Marketing Engineer from writing an approval: every 
 - **The sitting, and the Mandu exchange.** The Marketing Engineer writes Review Queue items in its own repository, and the Founder decides them on a page that `src/bin/gr0wthlab sitting` serves on the Founder's Mac.
   That page writes each decision, and each record of what the Founder did, into the same repository, in `ledger/founder/`, where the sandboxed agent can read and never write (ADR 0002).
   Mandu writes nothing the Marketing Engineer reads except the Go-To-Market Package: it reads the Review Queue, the run reports, and the Founder's records to show status and to act on an approved package change or Dispatch request (`docs/mandu-exchange.md`).
-  The TikTok export (US-ME11) and the US-ME18 confirmation are the two inputs this PRD still routes through Mandu; neither story is built, and where each goes is the Founder's to decide when it is.
+  The TikTok export (US-ME11) and the US-ME18 confirmation also come through the sitting page, by the Founder's decision of 2026-10-12, and Mandu receives neither; neither story is built, and what the page asks for each is built with its own story.
 - **Waitlist.** The deployable site source is in RepToday's repository (`gtm/03-site/`), served at `reptoday.app`, which also serves the privacy policy the app links to; storage and the anonymous view are RepToday's design under firstmate (US-ME05).
 - **Scheduling service.** Chosen in US-ME03; the integration exposes a create-draft call and nothing else.
 - **YouTube.** Read-only access to the Founder's own channel for analytics and comments.
-- **TikTok.** No credentials; results arrive only through the Founder's export via Mandu.
+- **TikTok.** No credentials; results arrive only through the Founder's export, given on the sitting page.
 - **Reuse.** The brand lint rules and the creative-log fields of the dry-run creative loop in `gtm/09-extras/marketing-agent/` are the starting point; the code is re-implemented in the Marketing Engineer's repository, and results live there as Evidence rather than in Mandu's copy of the creative log.
 - **Video editing.** Local tooling on the Founder's Mac, as the package's launch-video build already uses.
 
 ### Mandu-side requirements (owned by Mandu, outside this repository)
 
 Mandu is a reader since 2026-10-12 (ADR 0002): it records no decision, and writes nothing the Marketing Engineer reads except the Go-To-Market Package.
-Nobody has built Mandu's read-only side yet, and the Founder's sitting does not wait for it.
+Nobody has built Mandu's read-only side yet: it is the next change, made in Mandu through firstmate once the move of the Founder's decisions into gr0wthlab has landed, and the Founder's sitting does not wait for it.
 
 - Read the Marketing Engineer's Review Queue, run reports, and the Founder's records from gr0wthlab, to show the Founder status.
 - Apply package-change proposals the Founder approved to the Go-To-Market Package, reading each approval from gr0wthlab once a run has taken it in, starting with the stale trademark notes.
 - Hand approved Dispatch requests to firstmate under Mandu's existing Dispatch arrangement, reading each approval the same way.
-- Receive the Founder's weekly TikTok export and keep it where the Marketing Engineer can read it.
-- Record the US-ME18 confirmation.
 
 ### firstmate-side requirements
 

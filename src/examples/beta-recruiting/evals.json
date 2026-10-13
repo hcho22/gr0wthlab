@@ -188,7 +188,7 @@
   },
   {
    "id": 8,
-   "prompt": "Run the weekly cycle after the Founder recorded a stop in Mandu, with an invitation still open.",
+   "prompt": "Run the weekly cycle after the Founder recorded a stop on the sitting page, with an invitation still open.",
    "expected_output": "No batch is offered, and the open invitation is withdrawn.",
    "assertions": [
     {

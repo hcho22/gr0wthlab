@@ -82,7 +82,7 @@
   "sources_not_connected": [
     {"name": "Scheduling service", "story": "US-ME10", "needed_by": ["scheduler-drafts"]},
     {"name": "YouTube results", "story": "US-ME11", "needed_by": ["results", "weekly-read"]},
-    {"name": "TikTok export in Mandu", "story": "US-ME11", "needed_by": ["results", "weekly-read"]},
-    {"name": "Immerse Listening confirmation in Mandu", "story": "US-ME18", "needed_by": []}
+    {"name": "TikTok export on the sitting page", "story": "US-ME11", "needed_by": ["results", "weekly-read"]},
+    {"name": "Immerse Listening confirmation on the sitting page", "story": "US-ME18", "needed_by": []}
   ]
 }

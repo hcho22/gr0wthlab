@@ -23,15 +23,16 @@ The specification and decision records under `docs/` (the PRD, the [design decis
 | --- | --- | --- |
 | Founder | Every approval and every public act (posting, sending, confirming a publishing schedule), filming, and the weekly TikTok export | - |
 | Marketing Engineer | Evidence, Drafts, Review Queue items, Weekly Read memos, run reports, and its own Instructions; its repository also serves the Founder's sitting page and keeps the Founder's decisions | Publish, send, spend, see email addresses, write to Mandu or a Product repository, write or change a decision of the Founder's, or change its own code or Guardrails |
-| Mandu | Each Product's Go-To-Market Package, applying approved package changes, handing approved Dispatch requests to firstmate, showing the Founder the Marketing Engineer's status, and receiving the TikTok export | Build the Marketing Engineer, record a decision of the Founder's, or write anything the Marketing Engineer reads but the Go-To-Market Package |
+| Mandu | Each Product's Go-To-Market Package, applying approved package changes, handing approved Dispatch requests to firstmate, and showing the Founder the Marketing Engineer's status | Build the Marketing Engineer, record a decision of the Founder's, or write anything the Marketing Engineer reads but the Go-To-Market Package |
 | firstmate | Building and changing the Marketing Engineer's code and Guardrails through reviewed pull requests, and carrying out approved Dispatches | Act on a Dispatch the Founder has not approved |
 | Scheduling service | Publishing approved posts at the fixed slot after the Founder confirms the schedule | - |
 
 ## The weekly cycle
 
 1. **Run.** The Marketing Engineer reads the Go-To-Market Package, the Founder's decisions, and its sources; performs Listening; writes the Weekly Read memo on read weeks; prepares next week's Drafts, proposals, and Dispatch requests; and writes a run report.
-2. **Sitting.** On read weeks the Founder exports TikTok numbers into Mandu.
-   The Founder then runs `src/bin/gr0wthlab sitting`, which serves a small page on the Founder's Mac, and on it approves each Review Queue item or rejects it with a one-line reason, one item at a time; what the Founder clicks is what is saved.
+2. **Sitting.** The Founder runs `src/bin/gr0wthlab sitting`, which serves a small page on the Founder's Mac.
+   On read weeks the Founder first gives the week's TikTok export on that page.
+   The Founder then approves each Review Queue item or rejects it with a one-line reason, one item at a time; what the Founder clicks is what is saved.
 3. **Publish.** Approved posts become scheduling-service drafts at the fixed slot and the Founder confirms them; the Founder sends approved messages.
 4. **Learn.** The next run reads the decisions, keeps every rejection reason as Evidence, refines Instructions for execution reasons, and proposes package changes for strategy reasons.
 

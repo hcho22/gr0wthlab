@@ -97,7 +97,7 @@ Each scenario below is bound to commit `c68a375`, the lab above, and the times i
 
 ### What round 1 did not exercise
 
-- Mandu's side reading the queue and the records: nobody has built it, and this change does not touch Mandu.
+- Mandu's side reading the queue and the records: nobody has built it, and this change does not touch Mandu; it is the next change, made in Mandu after this one lands.
   It stands on the contract in [`docs/mandu-exchange.md`](../mandu-exchange.md) alone.
 - A scheduled run: the weekly schedule was not installed, so every run was on demand.
   The owed-run check with the Founder's records in place stands on `src/tests/test_attempts.py`.

@@ -173,7 +173,9 @@ What "as a conversation" means on that page:
 - **B: a chat with an AI that works out what the Founder meant and saves it on a yes.**
   Rejected by the Founder.
 
-## Not decided here
+## The two inputs that still went through Mandu
 
-Two stories that are not built yet say their input goes into Mandu: the Founder's TikTok export (US-ME11) and the Founder's confirmation that starts Immerse Listening (US-ME18).
-Their sentences are left as they were, for the Founder to decide when those stories are built.
+Two stories that are not built yet said their input goes into Mandu: the Founder's TikTok export (US-ME11) and the Founder's confirmation that starts Immerse Listening (US-ME18).
+Asked on 2026-10-12 whether both should come through the sitting page instead, the Founder answered yes to both.
+So each is given on the page, under every rule of this decision, and Mandu receives neither.
+Neither is built here: what the page asks for the export, and what it keeps of it, is built with US-ME11, and the confirmation with US-ME18.
