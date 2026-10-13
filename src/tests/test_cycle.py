@@ -70,6 +70,20 @@ class CycleTestCase(unittest.TestCase):
         code = runner.run(trigger, once, ["run"], **kwargs)
         return code, out.getvalue()
 
+    def limit_session(self, key, seconds):
+        """Give one workflow's session, in every later run of this test, a time limit of its own. No setting does
+        that: every session runs under `agent.time_limit_seconds`. It is the test's way to have one session stopped
+        at its limit while the sessions around it run under the configured one."""
+        planned = cycle.Cycle.plan_sessions
+
+        def plan(runner, state, config):
+            planned(runner, state, config)
+            state.session(key).limit = seconds
+
+        patched = mock.patch.object(cycle.Cycle, "plan_sessions", plan)
+        patched.start()
+        self.addCleanup(patched.stop)
+
     def workspace(self, repo=None):
         return (repo or self.repo) / "workspace"
 

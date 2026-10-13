@@ -606,7 +606,8 @@ def render_brief(
     ]
     if session.workflow.writes_items:
         lines.append(
-            "In the items you write, cite a package file by its path inside the Mandu checkout, as in the Changes list."
+            "In the items you write, cite a package file by its path inside the Mandu checkout"
+            + (", as in the Changes list." if files else ".")
         )
     lines += [
         "The Mandu checkout and every read-only location in the header are readable, even inside a folder the",
@@ -820,10 +821,8 @@ def session_lines(state: RunState, session: Session) -> list[str]:
     if session.timed_out:
         lines.append(f"- Timed out: {session.stop.describe()}.")
         lines.append(f"- Exit code: {session.exit_code}, the launcher's own for a session stopped at its limit")
-    elif session.refused:
-        lines.append(f"- Refused by the model's provider: {session.error}. Exit code: {session.exit_code}")
     elif session.exit_code != 0:
-        lines.append(f"- Ended with exit code {session.exit_code}" + (f": {session.error}" if session.error else ""))
+        lines.append(f"- Ended with {session.failure()}.")
     else:
         lines.append("- Ended by itself with exit code 0.")
     if session.seconds is not None:
@@ -932,15 +931,9 @@ def outcome_lines(state: RunState) -> list[str]:
                 f"The {session.title} session did not start; see Sessions below. Everything the launcher does alone"
                 " still ran."
             )
-        elif session.refused:
-            lines.append(
-                f"The model's provider refused the {session.title} session ({session.error}), so its work this run"
-                " is incomplete."
-            )
         else:
             lines.append(
-                f"The {session.title} session stopped with exit code {session.exit_code}; its work this run may be"
-                " incomplete."
+                f"The {session.title} session stopped with {session.failure()}; its work this run may be incomplete."
             )
     if not state.sessions:
         return lines
@@ -1207,15 +1200,14 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     told = []  # the parts that only say how a session ended, each with what follows said once, in the first
     late = []  # the timed-out sessions' parts, which lead the notice
     for session in state.short:
-        needs = ", ".join(session.incomplete) or "nothing"
+        needs = ", ".join(session.incomplete)
         said = "" if told or late else follows
         if session.timed_out:
             limit = (
                 ""
                 if slept
-                else " The next run does this work again; if this session keeps timing out, its limit is"
-                " `agent.time_limit_seconds`, or the one `agent.session_time_limit_seconds` gives its workflow, in"
-                " `config/run.json`."
+                else " The next run does this work again; if sessions keep timing out, a session's limit is"
+                " `agent.time_limit_seconds` in `config/run.json`."
             )
             late.append(
                 (
@@ -1252,23 +1244,14 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                     f"The {session.title} session did not start: {error}. Incomplete this run: {needs}.{said}",
                 )
             )
-        elif session.refused:
-            told.append(
-                (
-                    1,
-                    f"the model's provider refused the {session.title} session on {day}",
-                    f"The model's provider refused the {session.title} session ({session.error}), so its agent did no"
-                    f" work. Incomplete this run: {needs}. The next run does this work again.{said}",
-                )
-            )
         else:
-            error = f" ({session.error})" if session.error else ""
             told.append(
                 (
                     1,
                     f"the {session.title} session stopped early on {day}",
-                    f"The {session.title} session stopped with exit code {session.exit_code}{error}, so its work this"
-                    f" run may be incomplete: {needs}.{said}",
+                    f"The {session.title} session stopped with {session.failure()}, so its work this run may be"
+                    f" incomplete: {needs}. What it had written was checked as always, and the run report's Sessions"
+                    f" section says what the launcher counted of it.{said}",
                 )
             )
     review = state.session(sessions.REVIEW)

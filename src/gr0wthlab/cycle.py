@@ -26,9 +26,9 @@ had one session. One run at a time per checkout holds the run lock in its ledger
 a run started meanwhile refuses to start, and the next report says so.
 
 One session's trouble stays its own workflow's: a session that does not start, is stopped at its time limit, or ends
-with an error leaves the sessions after it to run, and marks only its own workflow's outputs incomplete. Each session
-has its own time limit, and all of a run's sessions together have one bound (config/run.json), so every run ends with
-its report.
+with an error leaves the sessions after it to run, and marks only its own workflow's outputs incomplete. Every session
+has the same time limit, counted for that session alone, and all of a run's sessions together have one bound
+(config/run.json), so every run ends with its report.
 
 A weekly scheduled start comes first as a check (attempts.py): it begins a run only while the launcher's records show
 the week's run is still owed and the Mac is fully awake, and every run notes there how it ended, so a weekly run the
@@ -672,7 +672,7 @@ class Cycle:
         step fell short. A step that needed a session names that session's falling short among its gaps, and the
         outputs whose rows hold that gap are the ones the run's notice names for the session; the rows are therefore
         worked out before that notice is written, and again once the Review Queue holds it. One session's gap is
-        never put in another workflow's row."""
+        never put in another workflow's row, and a session that fell short always has its gap in its own."""
         failed = state.failed_sources()
         gap = state.agent_gap
         decisions = next((line.detail for line in state.sources if line.name == "Mandu decisions"), "")
@@ -1301,8 +1301,12 @@ class Cycle:
 
     def nothing_due(self, state: RunState, key: str) -> str:
         """Why one workflow has no work for the agent this run, or "" when it has, from what the launcher read before
-        the first session. It is the same test each workflow already uses to tell whether an agent that fell short
-        left its output incomplete."""
+        the first session. A workflow has work exactly when the launcher can name it: a package file to review, a
+        calendar day whose copy is not approved, a day ready for an edit record, a recruiting Draft, a thread or a
+        review to read, a message that is due, a rejection reason with no code, or a strategy reason with no
+        proposal. This is the one test of a session: it decides whether the session starts, and a session it starts
+        that falls short always leaves its own workflow's output incomplete, whatever it had written by then, since
+        every workflow's gap rule adds the gap of a session that was due (Session.gap)."""
         if key == sessions.REVIEW:
             read = [file for result in state.snapshot for file in result.files if file.status != package.FAILED]
             return "" if read else "no package file could be read"
@@ -1320,8 +1324,7 @@ class Cycle:
             if found is None:
                 problem = state.filming_problem
                 return f"filming was {problem}" if problem else "no active Product films"
-            ready = any(day.ready for day in found.days.values())
-            return "" if ready else "no calendar day is ready for an edit record"
+            return "" if found.ready() else "no calendar day is ready for an edit record"
         if key == beta.WORKFLOW:
             plan = state.beta
             if plan is None:
@@ -1351,11 +1354,7 @@ class Cycle:
             if plan.problem:
                 return plan.problem
             return "" if plan.due() else "no outreach message is due this run"
-        waiting = [
-            reason
-            for reason in state.reasons
-            if not reason.code or (reason.code in learning.STRATEGY and not reason.proposal)
-        ]
+        waiting = learning.uncoded(state.reasons) or learning.owed(state.reasons)
         return "" if waiting else "no rejection reason needs a code or a proposal"
 
     def plan_sessions(self, state: RunState, config: settings.Settings) -> None:
@@ -1365,7 +1364,7 @@ class Cycle:
         state.sessions = []
         for found in sessions.WORKFLOWS:
             why = self.nothing_due(state, found.key)
-            state.sessions.append(Session(found, not why, why, config.agent.limit(found.key)))
+            state.sessions.append(Session(found, not why, why, config.agent.time_limit))
 
     def waiting_items(self, areas: Areas) -> list[tuple[str, str]]:
         """Each file standing in incoming/ now, by its name, for the brief of a session that may write items: what
@@ -1383,9 +1382,7 @@ class Cycle:
         place, as the post Drafts session of this run or an earlier run left it."""
         found = state.filming
         days = []
-        for number, day in sorted(found.days.items()) if found is not None else []:
-            if not day.ready:
-                continue
+        for number in found.ready() if found is not None else []:
             draft, problem = posts.read_draft(areas, found.draft_path(number))
             name = found.draft_path(number).name
             if draft is not None:
@@ -1425,10 +1422,11 @@ class Cycle:
     ) -> dict[str, tuple[work.Standing | None, work.Standing | None]]:
         """Run one agent session for each workflow that has work due, one after another, and return what stood in
         workspace/ before and after each, for the counts. Each session is a fresh Codex process with the same
-        command, proved against the boundary before its agent starts, with its own brief, task definition, and time
-        limit. A session that does not start, is stopped at its limit, or ends with an error leaves the next to run.
+        command, proved against the boundary before its agent starts, with its own brief and task definition, under
+        the one time limit every session has. A session that does not start, is stopped at its limit, or ends with
+        an error leaves the next to run.
         A session starts only while the bound on all of the run's sessions together has time left, and gets what is
-        left of it when that is less than its own limit."""
+        left of it when that is less than a session's limit."""
         root = canonical(self.repo_root)
         log_dir = launcher.default_log_dir(self.env, self.home)
         readings: dict[str, tuple[work.Standing | None, work.Standing | None]] = {}

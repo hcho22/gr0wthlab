@@ -37,6 +37,8 @@ Each run's records step commits this folder to `main` together with `workspace/`
   The reasons an edit record's checks give can quote its `shot` and `source` values whole.
   They are kept in that run's filming Evidence (`evidence/filming/<run id>.json`), in the day's post verdict in the post Drafts Evidence (`evidence/post-drafts/<run id>.json`), and in the run report and notice.
   The run report quotes each session's own summary, up to 4,000 characters each.
+  The error Codex reported for a session is never repeated here: it is text Codex or the model's provider wrote, so a report, a notice, and every other record give the session's exit code and the launcher's own class of the error, and the error itself stays in the run's record in the log folder, outside this repository.
+  The reason a session did not start is the launcher's own, and after a Codex probe that exited with an error it ends with up to 500 characters of what that probe wrote to its error stream; those probes run with no model.
   What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, and the line that says why a rejection code fits.
   Three things are removed and leave their file name and the launcher's reasons only, with no copy made: a quote record the launcher refuses, a proposed Angle or Hook it discards from `workspace/review-queue/angles/`, and a rejection code it sets aside.
 - `evidence/listening/runs/<run id>.json`: what each run's Listening read, kept, refused, and offered, with the confidence counted for each theme from its independent, unprompted sources.

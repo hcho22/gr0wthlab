@@ -2448,7 +2448,9 @@ class EditRunTest(FilmingRunCase):
             self.brief(), r"`window-1/d01-s1.mov` for d01-s1: 14.00s, 886x1920, 60 fps, no sound \| ready \|"
         )
 
-    def test_a_ready_day_with_no_edit_record_is_a_gap_only_when_the_filming_session_did_not_finish(self):
+    def test_a_filming_session_that_falls_short_always_leaves_filming_incomplete_and_names_a_ready_day_with_no_record(
+        self,
+    ):
         self.approved_plan()
         writes = {fakes.draft_path(1): fakes.filming_draft(1)}
         none = "| 1 | d01-s1 | no edit record | it is ready for an edit record and has none |"
@@ -2476,16 +2478,32 @@ class EditRunTest(FilmingRunCase):
         self.assertIn(none, report)
         self.assertIn("| Filming plan and edits | complete | plan approved as", report)
         self.assertRegex(report, line + r"\n")
-        # The same day left without one by a Filming session that ended with an error is.
+        # A Filming session that ended with an error leaves filming incomplete, and the day it left without a
+        # record is named with it.
         report = agent_fails()
         self.assertTrue(self.filming_session_ran())
         self.assertIn(none, report)
-        self.assertIn(f"| Filming plan and edits | incomplete | {gap} |", report)
-        self.assertRegex(report, line + rf"; incomplete: {gap}\n")
-        # Once the record is there, the session's not finishing leaves nothing of filming's undone.
+        self.assertIn(f"| Filming plan and edits | incomplete | no edit record for day 1; {gap} |", report)
+        self.assertRegex(report, line + rf"; incomplete: no edit record for day 1; {gap}\n")
+        named = (
+            "The Filming session stopped with exit code 1, so its work this run may be incomplete: Filming plan and"
+            " edits."
+        )
+        self.assertIn(named, self.notice())
+        # A session that fell short is a gap whatever it had written by then: with the record there, the video is
+        # cut and filming still reads incomplete, with no day to name.
         report = agent_fails({fakes.edit_path(1): fakes.edit_record(1, DAY_1)})
         self.assertIn("| 1 | d01-s1 | finished |", report)
-        self.assertIn("| Filming plan and edits | complete | plan approved as", report)
+        self.assertIn(f"| Filming plan and edits | incomplete | {gap} |", report)
+        self.assertIn(named, self.notice())
+        # The day stays ready while its video is not approved, so the next run starts a Filming session again, to
+        # check the record in place against the Draft and the footage; one that falls short is a gap as before.
+        report = agent_fails()
+        self.assertTrue(self.filming_session_ran())
+        self.assertIn("| Filming | ended with exit code 1 |", report)
+        self.assertIn(f"| Filming plan and edits | incomplete | {gap} |", report)
+        self.assertIn(named, self.notice())
+        self.assertNotIn("incomplete: nothing", self.notice())
 
     def test_a_finished_asset_can_be_rebuilt_from_its_record_and_the_footage(self):
         queue = self.day_1()

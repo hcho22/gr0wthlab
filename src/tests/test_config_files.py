@@ -4,7 +4,7 @@ import json
 import unittest
 from pathlib import Path
 
-from gr0wthlab import boundary, sessions
+from gr0wthlab import boundary
 
 REPO = Path(__file__).resolve().parents[2]
 HOME = Path("/Users/founder")
@@ -111,12 +111,6 @@ class RunConfigTest(unittest.TestCase):
         # The weekly run's task definitions are the reviewed files the launcher puts together for each session
         # (sessions.py); configuration names none, so no setting can swap one out.
         self.assertNotIn("instruction", self.config)
-
-    def test_every_session_limit_is_inside_the_bound_on_the_whole_run(self):
-        agent = self.config["agent"]
-        self.assertLessEqual(set(agent["session_time_limit_seconds"]), set(sessions.KEYS))
-        limits = [agent["time_limit_seconds"], *agent["session_time_limit_seconds"].values()]
-        self.assertGreaterEqual(agent["run_time_limit_seconds"], max(limits))
 
 
 class RuntimeConfigTest(unittest.TestCase):

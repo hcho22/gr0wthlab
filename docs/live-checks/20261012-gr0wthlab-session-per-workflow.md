@@ -306,3 +306,81 @@ The commit that adds this record also adds one assertion to a unit test, on what
 - A stopped boundary check's files being removed before a session of a weekly run, which stands on the unit tests (`tests.test_launcher`, `tests.test_cycle`).
 - The boundary check's hole tests, which were not repeated; they stand on the rounds `main` holds and on the unit tests.
 - Listening with anything to read, and a video cut from an edit record in a run of several sessions, as the section above says.
+
+## Re-check after review
+
+The review of this change made eight findings, and this round applies what was decided on each.
+Where a sentence of the design above says otherwise, this section is what the launcher now does; the design is left as it was written.
+
+- **One time limit for every session.**
+  `agent.session_time_limit_seconds` is gone, with its validation and its wording in the notice.
+  Every session runs under `agent.time_limit_seconds`, 30 minutes, counted for that session alone, and `agent.run_time_limit_seconds`, 60 minutes, still bounds a run's sessions together, which is the Founder's decision of 2026-10-12.
+  The design's "Time limits" and "The limits set from the measurement" name the removed option.
+- **Codex's error is never repeated.**
+  The last error Codex reported for a session is text Codex or the model's provider wrote.
+  The design said the launcher quotes it; it no longer does, anywhere in `ledger/` or `workspace/`.
+  The Outputs row, the workflow's line under Run state, the Sessions section, the summary, and the notice give the exit code and the launcher's own class of the error, from one wording (`Session.failure` in `src/gr0wthlab/sessions.py`), and say that the error's own text is only in the run's local log.
+  It stays in the run's record in the log folder, as `codex_last_error`, which is read through `codex.last_error`; the second copy of that parser is removed.
+- **A recognized refusal is a class of the error and no more.**
+  The launcher still recognizes an error as the model's provider refusing or limiting the request.
+  It no longer says from that match that the agent did no work: the session's work is counted and taken in as any other session's, and the notice says so.
+  The design's fourth way to fall short, "the model's provider refuses it", is an error exit told with that class.
+- **Starting a session and marking its output are one test.**
+  A session is due exactly when its workflow owes work the launcher can name, and a session that was started and fell short always leaves its own workflow's output incomplete with the reason, whatever it had written by then.
+  The notice names that output, and no longer has a way to read `nothing`.
+  Two gap rules were narrower than the test that starts a session, and are now the same.
+  The rejection reasons' rule names each strategy reason that still has no package-change proposal when its session fell short.
+  The filming rule marks its output whenever a Filming session fell short, and names each ready day still without an edit record.
+- **A Filming session still starts for a week whose ready days all keep their edit records.**
+  The review asked whether the agent has work in such a week, and to start no session if it has none.
+  It has: an edit record in place that fails its checks against the day's post Draft and the footage is the session's to write again, as is the record of a day whose post was rejected with its video, and the launcher cannot tell before the first session whether the post Drafts session will rewrite a Draft.
+  The unit test `test_check_edits_gives_the_agent_the_launcher_s_verdict_without_opening_the_footage` in `src/tests/test_filming.py` is such a week: its second run starts with a blocked record in place for the one ready day, and the session's rewrite of it is what passes.
+  So the test that starts the session stays "a day is ready for an edit record", and the marking rule now uses the same one.
+- **The `--instruction` option stays removed.**
+  A LaunchAgent rendered before this change passes it, and `run` no longer takes it, so every start of such a LaunchAgent ends at argument parsing with no run, no report, and no notice.
+  [Operations](../operations.md#install-the-weekly-schedule) now says to remove and install the LaunchAgent again after this change, or any later change to the launcher's command line, has reached the production clone.
+  No weekly schedule was installed when this was validated.
+  On 2026-10-13 at 07:16 PDT `~/Library/LaunchAgents` held no file with `gr0wthlab` in its name, `launchctl print gui/$(id -u)/gr0wthlab.weekly-run` answered that it could not find the service, `launchctl list` named no gr0wthlab job, and `~/gr0wthlab`, the production clone's path in `config/run.json`, did not exist.
+  So a start of the weekly schedule was not exercised, with the old command line or the new.
+- **The task definition tests assert on what a session is started with.**
+  The tests that searched the instruction files for phrases are removed.
+  What stands instead: every workflow's composed definition is the common part, its shared parts, and its own part, whole and in that order, and in a week with every workflow due each session's prompt ends with exactly that definition.
+- **The Rejection reasons brief no longer points at a Changes list it does not have.**
+  It tells its session to cite a package file by its path inside the Mandu checkout, and adds "as in the Changes list" only in a brief that lists package files.
+
+The round changed `src/gr0wthlab/` (`sessions.py`, `settings.py`, `cycle.py`, `report.py`, `filming.py`, `learning.py`), `config/run.json`, the unit tests, and the documents.
+It changed no task definition, nothing in `src/gr0wthlab/launcher.py`, `codex.py`, or `probe.py`, and nothing in `config/guardrails/` or `config/products.json`.
+
+### What was run
+
+Everything ran on 2026-10-13, Mac local time (PDT), from this work's linked worktree at `9a05542eb80c756be04b6b1a42b896ba56246d21` with this round's changes not yet committed.
+`git status` listed the same 19 changed files, none of them new, before the preflight and after the boundary check.
+The trees git gives the two folders as they stood are `c296ea9a8e4a3a83b0f16c006035055bc1a99ec6` for `src/` and `ba4a9b11e1e7412df76184fcdf9e1058209490fd` for `config/`, worked out without a commit and the same before the preflight as after the check; `git rev-parse <commit>:src` and `git rev-parse <commit>:config` print them for any commit that holds the same code.
+This record was finished after the check and changes neither folder.
+
+- `ruff check src src/bin/gr0wthlab` and `ruff format --check src src/bin/gr0wthlab`, with ruff 0.15.20, passed: 87 files.
+- `/usr/bin/python3 -m unittest discover -s tests -t .`, from `src/`, under Python 3.9.6, started at 07:15 and ran 1106 tests in 1402.6 seconds, with one failure.
+  The failure was in a test this round adds, `tests.test_sessions.FullWeekTest.test_every_session_that_falls_short_leaves_its_own_output_incomplete_and_the_notice_names_it`, at an assertion of its own that looked for the filming tally in the Outputs table, where an incomplete row gives its reasons; the assertions before it, on all seven outputs and on the notice, had passed.
+  With that assertion made on the Run state lines, and one assertion added on which briefs name a Changes list, `/usr/bin/python3 -m unittest tests.test_sessions` passed whole, 34 tests in 53.5 seconds.
+  The other 41 modules were not run again after that, and nothing outside `src/tests/test_sessions.py` changed after the whole run.
+- `src/bin/gr0wthlab preflight`, started at 07:40, passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, started at 07:40 and ended at 07:42, passed at its first and only attempt, as `20261013T144027Z-on-demand-225d`, with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort: 32 steps to prove, nine of nine file-tool targets refused in a patch of their own, eleven kernel denials naming the run's sentinels or the check's listeners, twelve of twelve permitted sentinels, no sentinel escaped, no local connection, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, both a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed since the snapshot.
+  The run's record gives the probe's agent 97.3 seconds of its 30 minute limit, with exit code 0.
+
+The two live commands ran against Mandu and the Product checkouts as they are, each wrapped in `caffeinate -i -s -m`, with one override: `GR0WTHLAB_LOG_DIR` named a folder in the Mac's per-user temporary folder, so their logs went there and not to `~/Library/Logs/gr0wthlab`.
+The configuration fingerprint `show-config` prints there is `8f9d66390d749976b6da1e2975ba541e8cf63c68781c3c84765a96dd25ce3bf8`, and the probe run's record holds the same one.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the preflight and after the boundary check.
+
+### What this round did not exercise
+
+- A weekly run with the real agent on this round's code.
+  What the round changed in a run, which is the wording of a session that ended with an error, the two gap rules, and the one limit for every session, stands on the unit tests with the stand-in agent.
+- A session that ends with an error with the real agent, and one the model's provider refuses or limits.
+  The stand-in reports an error as Codex does in the recorded `429` fixture; no run of this round ended that way, and the boundary check ended with exit code 0.
+- A session that fell short after it had written its work, with the real agent.
+  The unit tests show it with the stand-in, for all seven workflows in one run.
+- A start of the weekly schedule, as said above: no weekly schedule was installed.
+  That a LaunchAgent rendered before this change ends at argument parsing stands on the unit test that the parser refuses `--instruction` (`tests.test_launcher`), not on a LaunchAgent that was loaded.
+- The boundary check's hole tests, which were not repeated; they stand on the rounds `main` holds and on the unit tests.
+- Everything the earlier rounds of this file list as not exercised, none of which this round took up.

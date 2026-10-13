@@ -13,7 +13,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from unittest import mock
 
-from gr0wthlab import cycle, exchange, process, report, sessions, settings
+from gr0wthlab import cycle, exchange, process, report, settings
 from gr0wthlab.boundary import ConfigError
 from gr0wthlab.report import RunState
 from tests import fakes
@@ -358,8 +358,12 @@ class TimedOutFilmingTest(FilmingRunCase, TimeLimitTestCase):
         text = self.report()
         gap = f"its session was stopped at its {LIMIT} s time limit"
         self.assertIn("| 1 | d01-s1 | no edit record | it is ready for an edit record and has none |", text)
-        self.assertIn(f"| Filming plan and edits | incomplete | {gap} |", text)
-        self.assertRegex(text, rf"\n- filming: checked=2 acted=0 note=plan approved as [^\n]*; incomplete: {gap}\n")
+        self.assertIn(f"| Filming plan and edits | incomplete | no edit record for day 1; {gap} |", text)
+        self.assertRegex(
+            text,
+            rf"\n- filming: checked=2 acted=0 note=plan approved as [^\n]*; incomplete: no edit record for day 1;"
+            rf" {gap}\n",
+        )
         self.assertEqual(incomplete_for(text, gap), ["Filming plan and edits"])
         self.assertIn("| Post Drafts | complete |", text)
         self.assertIn("Incomplete this run: Filming plan and edits. The next run does this work again", self.notice())
@@ -427,14 +431,13 @@ class LimitSettingTest(unittest.TestCase):
         self.assertEqual(config.agent.time_limit, 1800.0)
         # The longest single session recorded at high reasoning effort took 1,122 seconds, when one session did the
         # package review and the post Drafts together; at medium, 218.
-        for key in sessions.KEYS:
-            self.assertGreaterEqual(config.agent.limit(key), 1.5 * 1122, key)
+        self.assertGreaterEqual(config.agent.time_limit, 1.5 * 1122)
         # The bound on a whole run leaves room for more than its longest session.
         self.assertGreater(config.agent.run_time_limit, config.agent.time_limit)
 
     def test_a_limit_is_a_number_of_seconds_above_zero_and_at_most_a_day(self):
         loaded = settings.load_agent({"time_limit_seconds": 2.5, "run_time_limit_seconds": 10})
-        self.assertEqual(loaded, settings.Agent(2.5, {}, 10.0))
+        self.assertEqual(loaded, settings.Agent(2.5, 10.0))
         whole_day = {"time_limit_seconds": 86400, "run_time_limit_seconds": 86400}
         self.assertEqual(settings.load_agent(whole_day).time_limit, 86400.0)
         for bad in (None, {}, {"time_limit_seconds": None}, "1800", ["1800"]):
@@ -447,39 +450,15 @@ class LimitSettingTest(unittest.TestCase):
                     settings.load_agent(agent)
                 self.assertIn(f"config/run.json: agent.{name} must be a number of seconds", str(refused.exception))
 
-    def test_a_workflow_s_session_can_have_a_limit_of_its_own(self):
-        agent = {
-            "time_limit_seconds": 600,
-            "session_time_limit_seconds": {"package-review": 1800, "outreach": 300},
-            "run_time_limit_seconds": 3600,
-        }
-        loaded = settings.load_agent(agent)
-        self.assertEqual([loaded.limit(key) for key in ("package-review", "post-drafts", "outreach")], [1800, 600, 300])
-        self.assertEqual(loaded.run_time_limit, 3600.0)
-        for own, said in (
-            ({"weekly-read": 600}, "names weekly-read, which is no workflow with a session"),
-            ({"outreach": 0}, "agent.session_time_limit_seconds.outreach must be a number of seconds above zero"),
-            ({"outreach": "600"}, "agent.session_time_limit_seconds.outreach must be a number of seconds"),
-            ([600], "agent.session_time_limit_seconds must map a workflow to its seconds"),
-        ):
-            with self.subTest(own=own), self.assertRaises(ConfigError) as refused:
-                settings.load_agent(dict(agent, session_time_limit_seconds=own))
-            self.assertIn(said, str(refused.exception))
-
     def test_the_bound_on_a_whole_run_is_never_less_than_one_session_may_take(self):
-        for agent in (
-            {"time_limit_seconds": 1800, "run_time_limit_seconds": 900},
-            {
-                "time_limit_seconds": 600,
-                "session_time_limit_seconds": {"package-review": 1800},
-                "run_time_limit_seconds": 900,
-            },
-        ):
-            with self.subTest(agent=agent), self.assertRaises(ConfigError) as refused:
-                settings.load_agent(agent)
-            self.assertIn(
-                "agent.run_time_limit_seconds, 900, is less than one session's limit, 1800", str(refused.exception)
-            )
+        with self.assertRaises(ConfigError) as refused:
+            settings.load_agent({"time_limit_seconds": 1800, "run_time_limit_seconds": 900})
+        self.assertIn(
+            "agent.run_time_limit_seconds, 900, is less than one session's limit, 1800", str(refused.exception)
+        )
+        self.assertEqual(
+            settings.load_agent({"time_limit_seconds": 900, "run_time_limit_seconds": 900}).time_limit, 900
+        )
 
 
 class TimedOutReportTest(unittest.TestCase):
@@ -504,14 +483,18 @@ class TimedOutReportTest(unittest.TestCase):
         self.assertEqual(
             (state.timed_out, state.agent_gap("package-review")), (False, "its session ended with exit code 1")
         )
+        # What Codex reported is classed in the launcher's own words and never quoted.
         failed.error = "exceeded retry limit, last status: 429 Too Many Requests"
         self.assertEqual(
             state.agent_gap("package-review"),
-            "the model's provider refused its session (exceeded retry limit, last status: 429 Too Many Requests)",
+            "its session ended with exit code 1 and an error the launcher recognizes as the model's provider"
+            " refusing or limiting the request, whose own text is only in the run's local log",
         )
         failed.error = "the model is not supported"
         self.assertEqual(
-            state.agent_gap("package-review"), "its session ended with exit code 1 (the model is not supported)"
+            state.agent_gap("package-review"),
+            "its session ended with exit code 1 and an error Codex reported, whose own text is only in the run's"
+            " local log",
         )
         state.sessions = [
             fakes.session(closing="", agent_started=False, exit_code=3, error="the boundary preflight failed")

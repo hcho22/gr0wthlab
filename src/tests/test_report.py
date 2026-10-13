@@ -170,6 +170,7 @@ class NoticeTest(unittest.TestCase):
         late = fakes.session("outreach", closing="", limit=600.0, timed_out=True, exit_code=6)
         late.incomplete = ("Outreach Drafts",)
         failed = fakes.session("learning", closing="", exit_code=2)
+        failed.incomplete = ("Rejection reasons coded",)
         state.sessions += [refused, late, failed]
         title, body, _, _ = report.problems_notice(state, "run-reports/R.md")
         self.assertEqual(
@@ -178,17 +179,30 @@ class NoticeTest(unittest.TestCase):
         parts = body.split("\n\n")
         self.assertTrue(parts[0].startswith("The Outreach session was still running at its 10 min time limit"), body)
         self.assertIn("Incomplete this run: Outreach Drafts.", parts[0])
-        self.assertIn("`agent.session_time_limit_seconds`", parts[0])
+        self.assertTrue(
+            parts[0].endswith(
+                "if sessions keep timing out, a session's limit is `agent.time_limit_seconds` in `config/run.json`."
+            ),
+            parts[0],
+        )
+        # What Codex reported is classed in the launcher's own words, never quoted, and never read as work not done.
+        checked = (
+            " What it had written was checked as always, and the run report's Sessions section says what the launcher"
+            " counted of it."
+        )
         self.assertEqual(
             parts[1],
-            "The model's provider refused the Post Drafts session (exceeded retry limit, last status: 429 Too Many"
-            " Requests), so its agent did no work. Incomplete this run: Post Drafts. The next run does this work"
-            " again.",
+            "The Post Drafts session stopped with exit code 1 and an error the launcher recognizes as the model's"
+            " provider refusing or limiting the request, whose own text is only in the run's local log, so its work"
+            f" this run may be incomplete: Post Drafts.{checked}",
         )
         self.assertEqual(
             parts[2],
-            "The Rejection reasons session stopped with exit code 2, so its work this run may be incomplete: nothing.",
+            "The Rejection reasons session stopped with exit code 2, so its work this run may be incomplete: Rejection"
+            f" reasons coded.{checked}",
         )
+        self.assertNotIn("429", body)
+        self.assertNotIn("did no work", body)
         self.assertNotIn("Package review", body)
 
     def test_a_notice_about_several_kinds_of_problem_counts_every_problem(self):

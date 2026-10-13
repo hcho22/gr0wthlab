@@ -363,7 +363,8 @@ class OnlySleepEarnsAnotherRunTest(OwedRunTestCase):
         )
         self.assertIn(
             "The Package review session stopped with exit code 1, so its work this run may be incomplete: Package"
-            " review (contradictions). No run starts by itself after this one:",
+            " review (contradictions). What it had written was checked as always, and the run report's Sessions"
+            " section says what the launcher counted of it. No run starts by itself after this one:",
             self.notice(),
         )
         self.assertEqual(self.scheduled(minutes=5), (0, ""))
@@ -1483,11 +1484,12 @@ class ReportTest(unittest.TestCase):
         self.assertNotIn("outside its sessions' time", report.render_report(self.slept()))
 
         last = self.state(number=3, exit_code=3, agent_started=False, slept=600.0)
+        last.sessions[0].incomplete = ("Package review (contradictions)",)
         title, body, _, _ = report.problems_notice(last, "run-reports/R.md")
         self.assertEqual(title, "Notice: the Mac's sleep cut short every attempt at the run due 2026-10-11")
         self.assertIn(
-            "The Package review session did not start: see the run report. Incomplete this run: nothing. The Mac's"
-            " sleep cut this run short, and it",
+            "The Package review session did not start: see the run report. Incomplete this run: Package review"
+            " (contradictions). The Mac's sleep cut this run short, and it",
             body,
         )
 
@@ -1509,8 +1511,7 @@ class ReportTest(unittest.TestCase):
         self.assertEqual(title, "Notice: the Package review session timed out on 2026-10-11")
         self.assertTrue(
             body.split("\n\n")[0].endswith(
-                "its limit is `agent.time_limit_seconds`, or the one `agent.session_time_limit_seconds` gives its"
-                " workflow, in `config/run.json`."
+                "if sessions keep timing out, a session's limit is `agent.time_limit_seconds` in `config/run.json`."
             ),
             body,
         )
@@ -1698,6 +1699,7 @@ class SeveralSessionsTest(OwedRunTestCase):
         self.assertNotIn("notice", self.kinds())
 
     def test_one_session_that_falls_short_with_the_mac_awake_waits_for_the_founder_though_the_others_finished(self):
+        self.limit_session("outreach", 2)
         for number, (behavior, ending, said) in enumerate(
             (
                 ({"exit": 1}, attempts.FAILED, "had a session stop early with the Mac awake"),
@@ -1707,8 +1709,6 @@ class SeveralSessionsTest(OwedRunTestCase):
         ):
             with self.subTest(behavior=behavior):
                 repo = fakes.make_repo(self.root / f"clone-{number}", self.env, fakes.window_from(DUE.date()))
-                limits = {"session_time_limit_seconds": {"outreach": 2}}
-                fakes.set_run(repo, "agent", limits)
                 fakes.set_run(repo, "outreach", {"creators": fakes.creators(fakes.KIT_CREATORS[:1])})
                 fakes.behave(self.codex_dir, dict(self.behavior, sessions={"outreach": behavior}))
                 code, out = self.scheduled(repo=repo, minutes=1)

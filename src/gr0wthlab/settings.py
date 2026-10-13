@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import date, time, timedelta
 from pathlib import Path, PurePosixPath
 
-from . import schedule, sessions
+from . import schedule
 from .boundary import Boundary, ConfigError, canonical, is_within, load_json
 
 RUN_CONFIG = Path("config/run.json")
@@ -52,16 +52,11 @@ class Window:
 
 @dataclass(frozen=True)
 class Agent:
-    """How long a run waits for its agent, in seconds. time_limit is one session's limit, and the boundary check's;
-    session_limits holds the workflows that have another; run_time_limit bounds all of one run's sessions together."""
+    """How long a run waits for its agent, in seconds. time_limit is every session's limit, and the boundary check's;
+    run_time_limit bounds all of one run's sessions together."""
 
     time_limit: float
-    session_limits: Mapping[str, float]
     run_time_limit: float
-
-    def limit(self, workflow: str) -> float:
-        """One workflow's session's own time limit."""
-        return self.session_limits.get(workflow, self.time_limit)
 
 
 @dataclass(frozen=True)
@@ -140,29 +135,18 @@ def time_limit(value: object, name: str) -> float:
 
 
 def load_agent(data: object) -> Agent:
-    """config/run.json's agent: the time limit every session runs under, the workflows whose session has another, and
-    the bound on all of one run's sessions together, so that every run ends with its report."""
+    """config/run.json's agent: the time limit every session runs under, and the bound on all of one run's sessions
+    together, so that every run ends with its report."""
     if not isinstance(data, dict):
         raise ConfigError(f"{RUN_CONFIG}: agent must be an object that sets time_limit_seconds")
     limit = time_limit(data.get("time_limit_seconds"), "agent.time_limit_seconds")
-    own = data.get("session_time_limit_seconds", {})
-    if not isinstance(own, dict):
-        raise ConfigError(f"{RUN_CONFIG}: agent.session_time_limit_seconds must map a workflow to its seconds")
-    unknown = sorted(set(own) - set(sessions.KEYS))
-    if unknown:
-        raise ConfigError(
-            f"{RUN_CONFIG}: agent.session_time_limit_seconds names {', '.join(unknown)}, which is no workflow with a"
-            f" session; they are {', '.join(sessions.KEYS)}"
-        )
-    limits = {key: time_limit(value, f"agent.session_time_limit_seconds.{key}") for key, value in own.items()}
     whole = time_limit(data.get("run_time_limit_seconds"), "agent.run_time_limit_seconds")
-    longest = max([limit, *limits.values()])
-    if whole < longest:
+    if whole < limit:
         raise ConfigError(
-            f"{RUN_CONFIG}: agent.run_time_limit_seconds, {whole:g}, is less than one session's limit, {longest:g};"
-            " a run's sessions together need at least as long as its longest session may take"
+            f"{RUN_CONFIG}: agent.run_time_limit_seconds, {whole:g}, is less than one session's limit, {limit:g};"
+            " a run's sessions together need at least as long as one session may take"
         )
-    return Agent(limit, limits, whole)
+    return Agent(limit, whole)
 
 
 def load_count(schedule: object, key: str, most: int, what: str) -> int:

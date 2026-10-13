@@ -47,7 +47,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    It then decides which workflows have work for the agent this run, and for each of those, one after another, writes that session's brief and runs one agent session in the sandbox, with that workflow's task definition from `src/instructions/weekly-run/`, at the reasoning effort [`config/guardrails/runtime.json`](../config/guardrails/runtime.json) sets, which is high ([One session per workflow](#one-session-per-workflow)).
    No session has a network, and the launcher proves it before each one's agent starts: the preflight tries each listed host from inside the sandbox, and a session whose preflight reaches one is not started.
    Every session writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records, and never write there.
-   Each session has its own time limit; one still running at it is stopped, and the run goes on to the next session ([When a session times out](#when-a-session-times-out)).
+   Every session runs under the same time limit, counted for it alone; one still running at it is stopped, and the run goes on to the next session ([When a session times out](#when-a-session-times-out)).
    After each session it restores its owner's read and write access to anything under `workspace/` that session left without it, and the run report names every entry it fixed, before or after a session.
 7. Once the last session has ended, it takes in what all of them wrote, in one pass.
    It queues the items the sessions wrote to `workspace/review-queue/incoming/` that pass the format, sets the rest aside, each copied whole to `ledger/review-queue/set-aside/<run id>/`, and turns every problem into one notice.
@@ -161,9 +161,19 @@ A later session reads an earlier one's work as files in `workspace/`, never as q
 Every session has the same six areas, so a later one can change a file an earlier one wrote before the launcher has read it; the counts below are made per session, by fingerprint, so the report shows it.
 
 One workflow's trouble stays its own.
-A session that does not start, is stopped at its time limit, ends with an error, or is refused by the model's provider leaves the sessions after it to run.
-The launcher takes in whatever that session had written, by the same rules, marks only that workflow's outputs incomplete with the real reason, and names the session in the run's notice.
-A refusal by the provider is told apart from a failure of the agent's work by the last error Codex reported, which the report quotes, as in `refused by the model's provider: exceeded retry limit, last status: 429 Too Many Requests`.
+A session that does not start, is stopped at its time limit, or ends with an error leaves the sessions after it to run.
+The launcher takes in whatever that session had written, by the same rules, marks that workflow's outputs incomplete with the real reason, and only those, and names the session in the run's notice with the output it left incomplete.
+Starting a session and marking its output are one test.
+A session has work due exactly when its workflow owes work the launcher can name, which is the table above, and a session that was started and fell short always leaves its own workflow's output incomplete, whatever it had written by then: a session that wrote every file and then ended with an error still reads incomplete, since nothing shows that it finished.
+With the reason, the row names what the launcher can still name of that workflow's work: a day with no Draft, a ready day with no edit record, a missing recruiting Draft or message, a rejection reason with no accepted code, and a strategy reason with no package-change proposal.
+A Filming session is started for every week with a day ready for an edit record, also when each such day keeps the record an earlier run left: its work is then to check each record against the day's post Draft and the footage as they now stand, and to write again one that no longer passes.
+
+A session that ended with an error is told by its exit code, in the launcher's own words.
+Where Codex reported an error, the report adds the launcher's own class of it and never the error itself, which is text that Codex or the model's provider wrote and can hold account details: `ended with exit code 1 and an error the launcher recognizes as the model's provider refusing or limiting the request, whose own text is only in the run's local log`, or `an error Codex reported` where the launcher recognizes no class.
+The same words stand in the Outputs row, the workflow's line under Run state, the Sessions section, the summary, and the notice, and nothing in `ledger/` or `workspace/` repeats the error.
+It is in that run's record in the log folder, `codex_last_error` under the session in `~/Library/Logs/gr0wthlab/<run id>.json`, and in the session's own event stream beside it.
+The class says what the error is recognized as and nothing of what the agent did before it: a refusal can come after turns that wrote files, so that session's work is counted and taken in as any other session's, and its lines in the report say what the launcher counted.
+A session that did not start is told with the launcher's own reason, which after a `codex --version` or `codex sandbox` probe that exited with an error ends with up to 500 characters of what that probe wrote to its error stream; those probes run with no model.
 Where a later session could not do its work because an earlier one fell short, its own section of the report shows the work not done, such as a ready day with no edit record; its output is not marked incomplete for the other session's trouble.
 Every run still ends with its report.
 A run's exit code is 0 when every session it had work for ended without an error, and otherwise that of the first session that fell short, which is 6 for one stopped at a limit.
@@ -229,6 +239,9 @@ Once it is installed, the first start begins that week's run unless a run has co
 The schedule lives only in `config/run.json`: the LaunchAgent takes its time and its interval from there, and each run reads the same entry to tell whether it started late and when the next run is due (`next_run` in the Review Queue).
 To change the sitting day or time, how often the launcher is started, or how many attempts a week's run may take, change `schedule` in `config/run.json` through a reviewed pull request.
 After a change of day, time, or interval, once it has reached the production clone, remove the LaunchAgent as under [Stop or remove the schedule](#stop-or-remove-the-schedule) and install it again as above, since a LaunchAgent keeps what it was rendered with; the number of attempts is read at every start and needs no reinstall.
+The same holds after any change to the launcher's command line, since a LaunchAgent starts the launcher with the command it was rendered with.
+A LaunchAgent rendered before the change to one session per workflow starts `run` with `--instruction <file>`, which `run` no longer takes: remove it and install it again once that change has reached the production clone, and do the same after any later change to the options `run` takes.
+Until then every start of the schedule, at the weekly time and at each check after it, ends at argument parsing: no run, no report, and no notice.
 After a change of day or time, the launcher's records hold no run for the new weekly time that has just passed, so the next start begins one.
 A window's `first_sitting`, once set, must fall on the sitting's day, so a change of day changes it in the same pull request; a run refuses to start otherwise.
 
@@ -295,7 +308,7 @@ Which endings earn another attempt:
   Such an attempt does not block the week.
   A fresh, whole run follows by itself, within `schedule.attempts_per_week`, and that run's report names it as it names any earlier attempt.
 - An attempt that did not complete with the Mac awake throughout earns none and waits for the Founder.
-  That covers a run with a session that timed out, stopped early, was refused by the model's provider, or never started, and a run that was refused before it started or that an error stopped.
+  That covers a run with a session that timed out, stopped early, or never started, and a run that was refused before it started or that an error stopped.
   The record of the week's run keeps how the first session that fell short ended.
   Its report, where it has one, says that no run starts by itself after it.
 - An attempt that left no ending, as when the Mac was restarted in the middle of it, earns none either, whether or not the Mac slept; the next run's report names it.
@@ -548,10 +561,10 @@ It is one reading, on a busy Mac, of a week with nothing for Listening to read; 
 
 Every run ends with its report, so every session has a time limit and all of a run's sessions together have a bound, both in [`config/run.json`](../config/run.json).
 
-- A session's limit is `agent.time_limit_seconds`, 1800 seconds (30 minutes) today, unless `agent.session_time_limit_seconds` gives its workflow another, which it does for none today.
-  It applies to that session alone.
+- A session's limit is `agent.time_limit_seconds`, 1800 seconds (30 minutes) today, the same for every workflow's session.
+  It is counted for each session alone.
 - The bound on all of a run's sessions together is `agent.run_time_limit_seconds`, 3600 seconds (60 minutes) today.
-  A session starts only while the run has time left, and gets its own limit or what is left of the bound, whichever is less; the report gives the limit it ran with and, where the bound set it, says so.
+  A session starts only while the run has time left, and gets a session's limit or what is left of the bound, whichever is less; the report gives the limit it ran with and, where the bound set it, says so.
   A session the bound leaves no time for is not started, and its workflow is marked incomplete for that reason.
   The time counted against the bound is each session's own agent time, added up.
 
@@ -590,10 +603,10 @@ What the Founder sees after a run with a session that timed out:
 
 A run of the weekly schedule with a session that timed out on a Mac that slept during the run needs nothing from the Founder: a fresh, whole run starts by itself once the Mac is fully awake ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
 A run with a session that timed out with the Mac awake, scheduled or on demand, is not run again by itself, and neither is a run on demand or a one-off scheduled run that the Mac slept through: start one on demand if the sitting needs the missing work.
-If one workflow's healthy sessions come near their limit, or keep timing out though the agent was working, give that workflow a longer one in `agent.session_time_limit_seconds` through a reviewed pull request, or raise `agent.time_limit_seconds` for all of them; each session's `Agent time` line shows how long it took.
+If healthy sessions come near their limit, or keep timing out though the agent was working, raise `agent.time_limit_seconds` through a reviewed pull request; it is one limit for every session, and each session's `Agent time` line shows how long it took.
 If healthy runs come near the bound, raise `agent.run_time_limit_seconds` the same way.
 A session that timed out because the Mac slept past its limit needs no higher limit.
-Each value must be above zero and at most 86400 (a day), a workflow named in `agent.session_time_limit_seconds` must be one of the seven, and the bound must be at least the longest session limit; a run refuses to start on anything else and says why.
+Each value must be above zero and at most 86400 (a day), and the bound must be at least a session's limit; a run refuses to start on anything else and says why.
 If the report names a process that could not be stopped, end it by hand (`kill -9 <process id>`) before the next run.
 
 There is one limit on a session, on its agent's total time, and none on silence: Codex's event stream reports only whole steps, and the longest recorded run went 35 seconds without an event while it worked, so a long step and a stalled stream look the same from outside until the step ends.
