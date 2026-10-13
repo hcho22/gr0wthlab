@@ -3,8 +3,10 @@
 The launcher withdraws, closes, or supersedes an open Review Queue item only on what a record it could read says.
 Where a failed read would otherwise have taken an open item back or asked it again, the item stands under its identifier, its workflow's output reads incomplete with the real reason, and the run's notice names the item (`queue.stands`).
 Those places judge an open item: the check of an open post, message, reply, or recruiting item against its Draft and what that check reads, an open invitation or Waitlist ask while a report of the Founder's cannot be read, an open follow-up whose record of the first message cannot be read, the open filming plan while the kit cannot be read, a Dispatch request's open item whose item file cannot be read, and an item in `incoming/` that supersedes an open item whose item file cannot be read.
-Where a whole step did not run because its source could not be read, no item was judged: the run's notice names the source, the output reads incomplete with the real reason, and no item of that step is touched or listed.
+Where a whole step did not run because its source could not be read, no item was judged: the output always reads incomplete in the run report with the real reason, and no item of that step is touched or listed.
 Those are recruiting while the Waitlist view or the Beta Build record cannot be used, a Dispatch request whose reviewed text cannot be read, the post Drafts while the calendar cannot be read, outreach while the channel plan or the kit cannot be read, replies while the kit cannot be read, and the video of a day whose copy the Founder approved while its Draft cannot be read.
+The run's notice names such a source only where its read failed as a source (a package file the snapshot could not read, the Waitlist view, the Beta Build record) or was recorded as a launcher problem (a reviewed Dispatch text, a kit that could not be prepared), and in the line that says no video was cut for an approved day.
+A calendar or channel plan that was read but could not be parsed or decoded is told in the run report alone, and no notice is queued for it.
 This file holds every round of that change's live checks.
 
 ## Re-check after the change and its merge with main
@@ -225,6 +227,44 @@ Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest
 No run was started with `src/bin/gr0wthlab run` in this round, so no change of it was seen live.
 The approved day stands on one whole-run test with a stand-in agent and stand-in video tooling, and the item left standing once stands on the ledger's own test.
 The steps the four texts name as not run for want of their source were not changed in this round, and no check here ran them with their source unreadable.
+The whole unit suite was not run in this round.
+The boundary check was run once, not as a streak.
+No file was made unreadable in Mandu, in a real Product checkout, or in a real `ledger/`.
+No weekly run was made on a schedule, and Mandu's side was not shown a notice.
+
+## Re-check after the sixth review
+
+The sixth review found one sentence of the round above saying more than the launcher does.
+It said, in the opening of this file, `AGENTS.md`, `docs/operations.md`, and the docstring of `queue.stands`, that where a whole step did not run because its source could not be read, the run's notice names the source.
+That holds only where the read failed as a source or was recorded as a launcher problem, and for the video of an approved day, whose notice line says its Draft could not be read.
+A calendar or channel plan that was read but could not be parsed or decoded is told in the run report alone, and no notice is queued for it.
+Each of the four now says so; the rest of the sentence stood: the output always reads incomplete in the run report with the real reason, and no item of that step is touched or listed.
+The round changes no behavior, no notice, and no test: its one change under `src/` is that docstring in `queue.py`.
+It changes nothing in the permission profile, the Codex command, the fetch policy, the Product registry, or the exchange format, which stays version 6.
+
+Every check below ran on 2026-10-12, Mac local time (PDT), with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort.
+
+- `ruff check src src/bin/gr0wthlab` and `ruff format --check src src/bin/gr0wthlab` passed, with ruff 0.15.20.
+- No test module reads `AGENTS.md`, `docs/operations.md`, or this file, so there was none of those to run.
+  `/usr/bin/python3 -m unittest tests.test_queue`, the tests of the one file under `src/` this round touches, started once from `src/`, ran 23 tests, and all passed.
+
+### The boundary
+
+Both checks ran from the review's linked worktree, on `e2b30e0a100e76cee89ecc767ce34e664e4f92da` with this round's changes in place and not yet committed.
+Its `src/` is tree `c94c758e23e48e5b662f763e270c90adac9a9abf` and its `config/` is tree `bfa79f76f468035578efd8d2c901b92c40c3adf9`, the `config/` tree of every round above; both were the same after the boundary check as before the preflight.
+`git status` was not empty, since the round's commit comes after its checks: it listed the same four changed files, and nothing else, before the preflight and after the boundary check.
+The checks ran against Mandu and the Product checkouts as they are, and their logs went to a folder in the Mac's temporary directory, named with `GR0WTHLAB_LOG_DIR`.
+The configuration fingerprint `show-config` prints there is `1fd7a1300daef25aba4297d52d84ad86d0341312a75c395ab0192f8737bcda14`, the one of the four rounds above.
+
+- `src/bin/gr0wthlab preflight`, started at 23:56, passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, started at 23:56, passed at its first attempt, as `20261013T065654Z-on-demand-bd14`: 32 steps to prove, nine of nine file-tool targets refused in a patch of their own, eleven kernel denials naming the run's sentinels or the check's listeners, twelve of twelve permitted sentinels, no sentinel escaped, no local connection, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, both a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed since the snapshot.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the preflight and after the boundary check.
+
+### What this re-check did not exercise
+
+No run was started with `src/bin/gr0wthlab run` in this round.
+The narrowed sentence describes code this round did not change, and no check here ran a step with its source unreadable or unparsed: what it says of the notice rests on the review's reading of that code.
 The whole unit suite was not run in this round.
 The boundary check was run once, not as a streak.
 No file was made unreadable in Mandu, in a real Product checkout, or in a real `ledger/`.

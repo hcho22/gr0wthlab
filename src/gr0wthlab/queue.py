@@ -88,8 +88,10 @@ def stands(current: Mapping[str, object] | None, unread: Sequence[str]) -> Stand
     judges no item and does not come here: recruiting without a usable Waitlist view or Beta Build record, a
     Dispatch request whose reviewed text is unread, post Drafts without the calendar, outreach without the channel
     plan or the kit, replies without the kit, and the video of a day whose copy is approved and whose Draft is
-    unread. There the run's notice names the source, the output reads incomplete with the real reason, and no item
-    of the step is touched or listed.
+    unread. There the output always reads incomplete in the run report with the real reason, and no item of the
+    step is touched or listed. The run's notice names the source only where its read failed as a source or was
+    recorded as a launcher problem, and in the line that says no video was cut for an approved day; a calendar or
+    channel plan that was read but could not be parsed or decoded is told in the run report alone, with no notice.
     """
     if current is None or not unread:
         return None
