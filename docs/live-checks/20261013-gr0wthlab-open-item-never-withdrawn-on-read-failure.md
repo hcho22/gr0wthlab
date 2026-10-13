@@ -1,6 +1,10 @@
 # An open item is never taken back because something could not be read (US-ME07, US-ME08)
 
-The launcher withdraws, closes, or supersedes an open Review Queue item only on what a record it could read says: when a read fails, the item stands under its identifier, its workflow's output reads incomplete with the real reason, and the run's notice names the item (`queue.stands`).
+The launcher withdraws, closes, or supersedes an open Review Queue item only on what a record it could read says.
+Where a failed read would otherwise have taken an open item back or asked it again, the item stands under its identifier, its workflow's output reads incomplete with the real reason, and the run's notice names the item (`queue.stands`).
+Those places judge an open item: the check of an open post, message, reply, or recruiting item against its Draft and what that check reads, an open invitation or Waitlist ask while a report of the Founder's cannot be read, an open follow-up whose record of the first message cannot be read, the open filming plan while the kit cannot be read, a Dispatch request's open item whose item file cannot be read, and an item in `incoming/` that supersedes an open item whose item file cannot be read.
+Where a whole step did not run because its source could not be read, no item was judged: the run's notice names the source, the output reads incomplete with the real reason, and no item of that step is touched or listed.
+Those are recruiting while the Waitlist view or the Beta Build record cannot be used, a Dispatch request whose reviewed text cannot be read, the post Drafts while the calendar cannot be read, outreach while the channel plan or the kit cannot be read, replies while the kit cannot be read, and the video of a day whose copy the Founder approved while its Draft cannot be read.
 This file holds every round of that change's live checks.
 
 ## Re-check after the change and its merge with main
@@ -176,6 +180,51 @@ No run was started with `src/bin/gr0wthlab run` in this round, so no change of i
 The follow-up change stands on three whole-run tests with a stand-in agent, one for each read a follow-up rests on: Mandu's `outreach/` folder that cannot be read, the record of the first message that is missing, and that record not in its format.
 A fourth, which this round did not change, holds that a reply that was read still takes an open follow-up back.
 The reason's wording stands on the ledger's own test and on one whole-run test.
+The whole unit suite was not run in this round.
+The boundary check was run once, not as a streak.
+No file was made unreadable in Mandu, in a real Product checkout, or in a real `ledger/`.
+No weekly run was made on a schedule, and Mandu's side was not shown a notice.
+
+## Re-check after the fifth review
+
+The fifth review asked for three changes, and this round is the re-check of the code that holds them.
+Two items in `incoming/` that superseded the same open item, whose item file could not be read, put that open item in the run's notice twice, counted as two open items not checked again.
+`Ledger.check_incoming` now adds an open item to the ones left standing once, however many items would have replaced it.
+A day whose copy the Founder approved, with an edit record waiting and a Draft that could not be read, got no video and gave no gap: Post Drafts read complete.
+`posts.read_day` now records that Draft as unread, so Post Drafts reads incomplete with the real reason.
+The day's outcome is otherwise as before: no video is cut for it, its row and the notice say its Draft could not be read, and its open post is not touched.
+The opening of this file, `AGENTS.md`, `docs/operations.md`, and the docstring of `queue.stands` said that every workflow weighs a failed read through `queue.stands` and that the notice names each item left standing.
+That holds only where a failed read would otherwise have taken an open item back or asked it again.
+Each of the four now says so, names those places, and says what a step that did not run because its source could not be read does instead; those steps, and what the notice says of them, are as they were.
+The round changes launcher code in `queue.py` and `posts.py`.
+It changes nothing in the permission profile, the Codex command, the fetch policy, the Product registry, or the exchange format, which stays version 6.
+
+Every check below ran on 2026-10-12, Mac local time (PDT), with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort.
+
+- `ruff check src src/bin/gr0wthlab` and `ruff format --check src src/bin/gr0wthlab` passed, with ruff 0.15.20.
+- `/usr/bin/python3 -m unittest tests.test_posts tests.test_queue tests.test_filming tests.test_cycle.PostDraftsTest tests.test_cycle.TakeInTest`, started once from `src/`, ran 187 tests, and all passed.
+  The test of the approved day is in `tests.test_filming`, and no test module reads `AGENTS.md`, `docs/operations.md`, or this file.
+- The one test this round adds and the one it extends were also run on the code of `c6a5936310a2a822713a270c294cb028a3fbc14b`, the commit before the fixes, in a throwaway copy in the Mac's temporary folder with this round's test files copied over it, and both failed.
+  The test of the approved day failed where it looks for the Draft in the Post Drafts row, and the ledger's test failed where it counts the open item once.
+
+### The boundary
+
+Both checks ran from the review's linked worktree, on `c6a5936310a2a822713a270c294cb028a3fbc14b` with this round's changes in place and not yet committed.
+Its `src/` is tree `ab98ddd81f55a77836ecf0484e273cbfc4ff0c66` and its `config/` is tree `bfa79f76f468035578efd8d2c901b92c40c3adf9`, the `config/` tree of every round above; both were the same after the boundary check as before the preflight.
+`git status` was not empty, since the round's commit comes after its checks: it listed the same seven changed files, and nothing else, before the preflight and after the boundary check.
+The checks ran against Mandu and the Product checkouts as they are, and their logs went to a folder in the Mac's temporary directory, named with `GR0WTHLAB_LOG_DIR`.
+The configuration fingerprint `show-config` prints there is `1fd7a1300daef25aba4297d52d84ad86d0341312a75c395ab0192f8737bcda14`, the one of the three rounds above.
+
+- `src/bin/gr0wthlab preflight`, started at 23:38, passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, started at 23:38, passed at its first attempt, as `20261013T063836Z-on-demand-7056`: 32 steps to prove, nine of nine file-tool targets refused in a patch of their own, eleven kernel denials naming the run's sentinels or the check's listeners, twelve of twelve permitted sentinels, no sentinel escaped, no local connection, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, both a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed since the snapshot.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the preflight and after the boundary check.
+
+### What this re-check did not exercise
+
+No run was started with `src/bin/gr0wthlab run` in this round, so no change of it was seen live.
+The approved day stands on one whole-run test with a stand-in agent and stand-in video tooling, and the item left standing once stands on the ledger's own test.
+The steps the four texts name as not run for want of their source were not changed in this round, and no check here ran them with their source unreadable.
 The whole unit suite was not run in this round.
 The boundary check was run once, not as a streak.
 No file was made unreadable in Mandu, in a real Product checkout, or in a real `ledger/`.

@@ -658,6 +658,7 @@ def read_day(plan: Plan, day_plan: DayPlan, areas: Areas, video=None) -> DayResu
             APPROVED_BEFORE,
             f"the Founder approved its copy; {why}, so no video is cut for it",
             str(approved["id"]),
+            unread=[problem] if problem else [],
         )
     if draft is None:
         kept = stands(day_plan.open, [problem] if problem else [])

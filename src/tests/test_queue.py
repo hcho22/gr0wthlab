@@ -151,19 +151,23 @@ class IncomingTest(LedgerTestCase):
         self.drop("first.md", fakes.PROPOSAL)
         self.take()
         self.drop("second.md", fakes.proposal(extra="supersedes: 20261011-first\n", title="record it another way"))
+        self.drop("third.md", fakes.proposal(extra="supersedes: 20261011-first\n", title="record it a third way"))
         lost = {"20261011-first": "`review-queue/items/20261011-first.md`, its item file, could not be read"}
         published, set_aside = self.ledger.take_incoming(self.areas, self.store, PRODUCTS, "RUN2", NOW, {}, (), lost)
         self.assertEqual(published, [])
+        reason = (
+            "supersedes 20261011-first: `review-queue/items/20261011-first.md`, its item file, could not be read,"
+            " so the open item stands and nothing replaces it in this run"
+        )
         self.assertEqual(
-            set_aside[0].problems,
-            (
-                "supersedes 20261011-first: `review-queue/items/20261011-first.md`, its item file, could not be read,"
-                " so the open item stands and nothing replaces it in this run",
-            ),
+            sorted((item.name, item.problems) for item in set_aside),
+            [("second.md", (reason,)), ("third.md", (reason,))],
         )
         self.assertEqual(self.ledger.entries["20261011-first"]["status"], OPEN)
         self.assertEqual(
-            [(kept.item, kept.unread) for kept in self.ledger.stood], [("20261011-first", (lost["20261011-first"],))]
+            [(kept.item, kept.unread) for kept in self.ledger.stood],
+            [("20261011-first", (lost["20261011-first"],))],
+            "the one open item stands once, however many items would have replaced it",
         )
 
     def test_an_item_with_the_kind_and_ask_of_a_queued_one_whose_item_file_could_not_be_read_is_never_queued(self):

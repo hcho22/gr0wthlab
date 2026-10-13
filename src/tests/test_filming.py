@@ -2041,6 +2041,44 @@ class EditRunTest(FilmingRunCase):
         self.assertEqual(code, 0, said)
         self.assertIn("OK day 1: drafts/edits/window-1/day-01.json: it passes", said)
 
+    def test_an_approved_copy_s_draft_that_cannot_be_read_is_the_run_s_gap_and_its_open_video_post_is_untouched(self):
+        """No video is cut for the day, whose post is not judged: the Draft is named as the source that failed."""
+        self.approved_plan()
+        queue = self.run_ok({fakes.draft_path(1): fakes.filming_draft(1)})
+        copy = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.decide(copy["id"], "approve")
+        self.clip("d01-s1.mov")
+        queue = self.run_ok({fakes.edit_path(1): fakes.edit_record(1, DAY_1)})
+        (video_post,) = [entry for entry in queue["open"] if entry["kind"] == "post"]
+        self.assertIn("asset", video_post)
+        path = self.workspace() / fakes.draft_path(1)
+        written = path.read_bytes()
+        path.write_bytes(b"\xff\xfe not text")
+        queue = self.run_ok()
+        self.assertEqual([entry for entry in queue["open"] if entry["kind"] == "post"], [video_post])
+        self.assertEqual([entry["id"] for entry in queue["closed"] if entry.get("withdrawn")], [])
+        report = self.report()
+        self.assertIn(
+            f"| 1 | P01 / AB-1 leg A | approved earlier | `{copy['id']}`; the Founder approved its copy; its Draft"
+            " could not be read, so no video is cut for it |",
+            report,
+        )
+        unread = f"`{fakes.draft_path(1)}` could not be read ("
+        self.assertRegex(report, r"\| Post Drafts \| incomplete \| [^|\n]*" + re.escape(unread))
+        notice = self.notice()
+        self.assertRegex(
+            notice,
+            r"- Day 1's video (could not be cut again|was not cut): the Founder approved its copy as"
+            rf" `{copy['id']}`, and its Draft could not be read",
+        )
+        self.assertNotIn(
+            f"- `{video_post['id']}` (Post Drafts)", notice, "its post was not judged, so it is not listed"
+        )
+        path.write_bytes(written)
+        queue = self.run_ok()
+        self.assertEqual([entry for entry in queue["open"] if entry["kind"] == "post"], [video_post])
+        self.assertNotIn(unread, self.report())
+
     def test_a_post_rejected_with_its_video_is_asked_again_only_once_something_changes(self):
         queue = self.day_1()
         post = next(entry for entry in queue["open"] if entry["kind"] == "post")

@@ -6,7 +6,8 @@ An item is queued once, under an identifier that never changes, and is closed by
 or rejected) or by a newer item that supersedes it; a closed item never returns to the open list. A decision the
 Founder took on an item a newer one had already superseded is kept on that item, which stays superseded.
 An open item is carried over once the Founder has left it undecided at a sitting.
-A read that could not be made never closes or supersedes one: stands, below, is where every workflow weighs it.
+A read that could not be made never closes or supersedes one: stands, below, is where each place that would have
+taken an open item back, or asked it again, weighs it.
 """
 
 from __future__ import annotations
@@ -69,7 +70,8 @@ class Stands:
 
 
 def stands(current: Mapping[str, object] | None, unread: Sequence[str]) -> Stands | None:
-    """The one place a read that could not be made is weighed against an open item, for every workflow.
+    """The one place a read that could not be made is weighed against an open item, wherever that read would
+    otherwise have taken the item back or asked it again.
 
     Only what a record the launcher could read says ever withdraws, closes, or supersedes an open item. current is
     the open item a workflow is about to judge, and unread each source that judgment needs and that could not be
@@ -77,6 +79,17 @@ def stands(current: Mapping[str, object] | None, unread: Sequence[str]) -> Stand
     failed. With both, the item stands under its identifier, not checked again, whatever else the check found, and
     the workflow reports each unread source as its gap; with either missing, the workflow goes on to its own
     decision, which then rests on readable records alone.
+
+    The places that come here judge an open item: the check of an open post, message, reply, or recruiting item
+    against its Draft and what that check reads; an open invitation or Waitlist ask while a report of the Founder's
+    is unread; an open follow-up whose record of the first message is unread; the open filming plan while the kit
+    is unread; a Dispatch request's open item whose item file is unread; and an item in incoming/ that supersedes
+    an open item whose item file is unread. A step that did not run at all because its source could not be read
+    judges no item and does not come here: recruiting without a usable Waitlist view or Beta Build record, a
+    Dispatch request whose reviewed text is unread, post Drafts without the calendar, outreach without the channel
+    plan or the kit, replies without the kit, and the video of a day whose copy is approved and whose Draft is
+    unread. There the run's notice names the source, the output reads incomplete with the real reason, and no item
+    of the step is touched or listed.
     """
     if current is None or not unread:
         return None
@@ -332,7 +345,8 @@ class Ledger:
             lost = (unread or {}).get(target or "")
             stood = stands(replaced or None, [lost] if lost else [])
             if stood:
-                self.stood.append(stood)
+                if stood not in self.stood:
+                    self.stood.append(stood)
                 problems.append(
                     f"supersedes {target}: {lost}, so the open item stands and nothing replaces it in this run"
                 )
