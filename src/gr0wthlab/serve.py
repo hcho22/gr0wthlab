@@ -370,8 +370,8 @@ class Handler(BaseHTTPRequestHandler):
                 saved = state.record_beta_build(parts[2], get("approved_on"), get("build"))
                 server.say(f"saved {saved.path}: recruiting {saved.record['recruiting']}")
                 return self.see(page.url("did", saved=saved.stem, kind=saved.kind))
-            if len(parts) == 3 and parts[:2] == ["did", "recruiting"] and get("action") in ("stop", "reopen"):
-                saved = state.set_recruiting(parts[2], get("action") == "stop", get("stopped_on"))
+            if len(parts) == 3 and parts[:2] == ["did", "recruiting"] and get("recruiting") in ("stop", "reopen"):
+                saved = state.set_recruiting(parts[2], get("recruiting") == "stop", get("stopped_on"))
                 server.say(f"saved {saved.path}: recruiting {saved.record['recruiting']}")
                 return self.see(page.url("did", saved=saved.stem, kind=saved.kind))
             if parts == ["stop"]:

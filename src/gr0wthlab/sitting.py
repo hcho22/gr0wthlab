@@ -34,6 +34,7 @@ from pathlib import Path
 from . import exchange, founder, settings
 from .areas import UnsafeFile, read_plain
 from .boundary import FOUNDER, LEDGER, PRODUCT_REGISTRY, ConfigError, canonical, load_json
+from .messages import CREATOR
 from .queue import APPROVED, OPEN, QUEUE_FILE, REVIEW_QUEUE
 from .state import queued_item
 from .waitlist import looks_like_address
@@ -127,6 +128,13 @@ class Message:
     @property
     def id(self) -> str:
         return str(self.entry["id"])
+
+    @property
+    def followed_up(self) -> bool:
+        """Whether a follow-up can come after this message: only a creator's first message has one, so only its
+        record has a wait to set."""
+        about = self.entry.get("message")
+        return isinstance(about, Mapping) and about.get("purpose") == CREATOR
 
 
 @dataclass
@@ -412,7 +420,10 @@ class Sitting:
     def saved(self, kind: str, stem: str) -> Saved:
         """A record just written, read back from its file: what the page shows as saved."""
         path = founder.folders(self.ledger)[kind] / f"{stem}.json"
-        return Saved(kind, stem, json.loads(read_plain(path).decode("utf-8")))
+        record = json.loads(read_plain(path).decode("utf-8"))
+        if not isinstance(record, dict):
+            raise ValueError(f"{founder.shown(kind, path.name)} is not a JSON object")
+        return Saved(kind, stem, record)
 
     # Writing: each method below is one explicit act of the Founder's on the page.
 
@@ -513,9 +524,12 @@ class Sitting:
     def record_sent(self, item: str, sent_on: str, replied_on: str, wait_days: str, note: str) -> Saved:
         """An approved message as the Founder sent it: the day it went, the day a reply came, if one has, and the wait
         before the one follow-up, if the Founder wants another than the item stated."""
-        if not any(message.id == item for message in self.look().messages):
+        found = next((message for message in self.look().messages if message.id == item), None)
+        if found is None:
             raise Refused(["this is not a message you approved, so nothing was saved"])
         reasons: list[str] = []
+        if wait_days.strip() and not found.followed_up:
+            reasons.append("no follow-up comes after this message, so it has no wait to set")
         today = self.today()
         sent = a_day(sent_on, "The day it was sent", today, True, reasons)
         replied = a_day(replied_on, "The day a reply came", today, False, reasons)

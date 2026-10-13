@@ -310,6 +310,11 @@ p {
   white-space: pre-wrap;
 }
 
+.summary .tally {
+  color: var(--soft);
+  font: 12.5px/1.7 var(--mono);
+}
+
 /* An item's own text, laid out by its lines and shown as text. */
 
 .doc > :last-child {
@@ -622,7 +627,7 @@ details[open] summary {
 
 .record div {
   display: grid;
-  grid-template-columns: 136px minmax(0, 1fr);
+  grid-template-columns: 160px minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -764,5 +769,10 @@ details[open] summary {
 
   .video video {
     height: min(60vh, 520px);
+  }
+
+  /* A table of many columns keeps them wide enough to read and scrolls inside its own frame, never the page. */
+  .doc-table.wide table {
+    min-width: 600px;
   }
 }

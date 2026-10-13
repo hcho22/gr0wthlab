@@ -385,6 +385,7 @@ The page writes it when the Founder says the message was sent, and again, whole,
 - `sent_on` is the date the Founder sent or posted it.
 - `replied_on` is the date the person replied, in any form the Founder counts as a reply, or `null` while none has; it cannot come before `sent_on`.
 - `follow_up_wait_days` is the waiting period the Founder wants before the one follow-up, a whole number of days from 1 to 90, or `null` for the period the item stated.
+  The page asks for it only on a creator's first message, the one message a follow-up can come after, and writes `null` on any other.
 - `note` is one optional line of at most 300 characters.
 
 What gr0wthlab does with it:

@@ -736,6 +736,35 @@ class OutreachTest(SittingTestCase):
             },
         )
 
+    def test_a_wait_is_set_only_on_the_message_a_follow_up_can_come_after(self):
+        fakes.add_dispatches(self.repo, self.env)
+        fakes.set_run(
+            self.repo,
+            "outreach",
+            {"network_ask_source": "network", "creators": fakes.creators([fakes.KIT_CREATORS[0]])},
+        )
+        writes = {
+            fakes.message_path("network-ask"): fakes.message("network-ask", "network", fakes.NETWORK_BODY),
+            fakes.message_path("creator", self.SLOW): fakes.message("creator", self.SLOW, fakes.CREATOR_BODY),
+        }
+        fakes.behave(self.codex_dir, {"write": writes})
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        ids = {entry["message"]["purpose"]: entry["id"] for entry in self.queue()["open"] if entry["kind"] == "message"}
+        state = self.sit_down()
+        for item in ids.values():
+            state.decide(item, "approve", "")
+        self.assertEqual(
+            {message.id: message.followed_up for message in state.look().messages},
+            {ids["creator"]: True, ids["network-ask"]: False},
+        )
+        self.assertEqual(
+            self.refused(state.record_sent, ids["network-ask"], DAY, "", "7", ""),
+            ["no follow-up comes after this message, so it has no wait to set"],
+        )
+        self.assertIsNone(state.record_sent(ids["network-ask"], DAY, "", "", "").record["follow_up_wait_days"])
+        self.assertEqual(state.record_sent(ids["creator"], DAY, "", "7", "").record["follow_up_wait_days"], 7)
+
     def test_every_limit_of_an_outreach_record_holds_at_entry(self):
         ids = self.first_messages()
         state = self.sit_down()

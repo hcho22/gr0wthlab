@@ -206,6 +206,7 @@ Every line the Founder types is kept in a record, so every limit holds at entry,
   The page refuses any line that holds something that looks like an email address.
 - A date is a real date written as `YYYY-MM-DD` and never one still ahead; a reply cannot come before its message was sent.
 - A count is a whole number from 0; the minutes of a sitting are 1 to 600; the wait before a follow-up is 1 to 90 days.
+  The wait is asked only on a creator's first message, the one message a follow-up can come after, and is refused on any other.
 
 ### Correcting a mis-click
 

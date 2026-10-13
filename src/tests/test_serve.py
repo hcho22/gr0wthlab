@@ -255,6 +255,14 @@ class HeadersTest(ServeTestCase):
         self.assertIn("the page hit an error it did not expect: TypeError", self.said.getvalue())
         self.assertEqual(self.get("/")[0], 200, "and the next request is answered")
 
+    def test_a_file_that_is_no_record_is_never_shown_as_saved(self):
+        self.one_proposal()
+        self.serve()
+        (self.repo / "ledger" / "founder" / "sittings" / f"{DAY}.json").write_text("[]\n", encoding="utf-8")
+        status, _, body = self.get(f"/end?saved={DAY}&kind=sittings")
+        self.assertEqual(status, 200)
+        self.assertNotIn("Saved.", Seen(body).said)
+
 
 class InertTest(ServeTestCase):
     """An item whose text carries markup, a script, a form, or a link is shown as that text, by the real server."""
@@ -407,6 +415,7 @@ class WalkTest(ServeTestCase):
         path, shown = self.follow(self.post("/end", {"minutes": "41", "note": ""}))
         self.assertEqual(path, f"/end?saved={DAY}&kind=sittings")
         self.assertIn(f"founder/sittings/{DAY}.json", shown.said)
+        self.assertIn(f"Saved. The sitting on {DAY} took 41 minutes.", shown.said)
         self.assertEqual(self.record("sittings", DAY)["minutes"], 41, "corrected by the Founder")
         said = self.said.getvalue()
         self.assertIn(f"gr0wthlab: saved founder/decisions/{ids['post']}.json: approve", said)
@@ -513,6 +522,7 @@ class WalkTest(ServeTestCase):
         self.assertEqual(path, f"/did?saved={item}&kind=outreach")
         self.assertIn(f"founder/outreach/{item}.json", shown.said)
         self.assertIn(f"Sent on {DAY}; no reply recorded.", shown.said)
+        self.assertIn(f"Saved. {item}: sent on {DAY}; no reply recorded; a follow-up waits 10 days.", shown.said)
         self.assertEqual(
             self.record("outreach", item),
             {
@@ -536,6 +546,7 @@ class WalkTest(ServeTestCase):
         )
         self.assertEqual(path, "/did?saved=RepToday&kind=beta-builds")
         self.assertIn("Beta Build approved on 2026-10-09, build 1.0 (42). Recruiting is open.", shown.said)
+        self.assertIn("Saved. RepToday: Beta Build approved on 2026-10-09; recruiting is open.", shown.said)
         self.assertEqual(self.record("beta-builds", "RepToday")["recruiting"], "open")
         walk = Seen(self.get("/counts/RepToday")[2])
         self.assertIn("A count you leave blank is recorded as not reported, never as zero.", walk.said)
@@ -547,7 +558,8 @@ class WalkTest(ServeTestCase):
         fields = {"invitations_sent": "10", "accepted": "", "sessions_booked": ""}
         path, shown = self.follow(self.post("/counts/RepToday", fields))
         self.assertEqual(path, f"/counts/RepToday?saved=RepToday-{DAY}&kind=beta-reports")
-        self.assertIn("not given", shown.said)
+        words = "invitations sent 10, accepted not reported, first sessions booked not reported"
+        self.assertIn(f"Saved. RepToday, on {DAY}: {words}.", shown.said)
         record = self.record("beta-reports", f"RepToday-{DAY}")
         self.assertEqual((record["invitations_sent"], record["accepted"], record["sessions_booked"]), (10, None, None))
         again = Seen(self.get("/counts/RepToday")[2])
@@ -555,12 +567,13 @@ class WalkTest(ServeTestCase):
             attrs["name"]: attrs["value"] for attrs in again.named("input") if attrs["name"] in exchange.BETA_COUNTS
         }
         self.assertEqual(kept, {"invitations_sent": "10", "accepted": "", "sessions_booked": ""})
-        self.follow(self.post("/did/recruiting/RepToday", {"action": "stop", "stopped_on": DAY}))
+        _, shown = self.follow(self.post("/did/recruiting/RepToday", {"recruiting": "stop", "stopped_on": DAY}))
+        self.assertIn(f"Saved. RepToday: Beta Build approved on 2026-10-09; recruiting stopped on {DAY}.", shown.said)
         self.assertEqual(self.record("beta-builds", "RepToday")["recruiting"], "stopped")
         self.assertIn(f"Recruiting has been stopped since {DAY}.", Seen(self.get("/did")[2]).said)
-        self.follow(self.post("/did/recruiting/RepToday", {"action": "reopen"}))
+        self.follow(self.post("/did/recruiting/RepToday", {"recruiting": "reopen"}))
         self.assertEqual(self.record("beta-builds", "RepToday")["stopped_on"], None)
-        self.assertEqual(self.post("/did/recruiting/RepToday", {"action": "delete"})[0], 404)
+        self.assertEqual(self.post("/did/recruiting/RepToday", {"recruiting": "delete"})[0], 404)
 
 
 class VideoTest(ServeTestCase):

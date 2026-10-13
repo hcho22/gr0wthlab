@@ -21,7 +21,7 @@ import re
 from collections.abc import Iterable, Mapping, Sequence
 from urllib.parse import quote
 
-from . import exchange, sitting
+from . import exchange, founder, sitting
 from .sitting import COUNTS, END, ITEM, START, Entry, Message, Recruiting, Saved, View
 
 VOID = ("br", "hr", "input", "link", "meta", "source")
@@ -39,6 +39,7 @@ COUNT_LABELS = {
     "accepted": "Accepted",
     "sessions_booked": "First sessions booked",
 }
+TALLY = "checked="  # how state.Tally.line, the first line of a run report's Summary, begins
 TABLE_RULE = re.compile(r"\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?")
 # A line that opens with one bold label, as the launcher writes "**Hook**, frozen in ...": the label, then the rest.
 LEAD_LABEL = re.compile(r"\*\*([^*]+)\*\*(.*)", re.DOTALL)
@@ -121,7 +122,7 @@ def document(source: str) -> H:
                         tag("thead", tag("tr", *(tag("th", cell) for cell in head))),
                         tag("tbody", *(tag("tr", *(tag("td", cell) for cell in row)) for row in rows)),
                     ),
-                    class_="doc-table",
+                    class_="doc-table wide" if len(head) > 3 else "doc-table",
                 )
             )
         elif stripped.startswith(">"):
@@ -196,6 +197,36 @@ def said(decision: exchange.Decision | Mapping[str, object], kind: str) -> str:
         word = "Acknowledged" if kind == "notice" else "Approved"
         return f"{word}, with the note: {get('note')}" if get("note") else f"{word}, with no note"
     return f"Rejected, with the reason: {get('reason')}"
+
+
+def ended(words: str) -> str:
+    """Words as a sentence: the Founder's own line already ends one when it closes with a mark of its own."""
+    return words if words.rstrip().endswith((".", "!", "?")) else words + "."
+
+
+def saved_words(saved: Saved) -> str:
+    """What a record other than a decision says, in words, from the record as it was read back."""
+    record = saved.record
+    if saved.kind == founder.SITTINGS:
+        minutes = record.get("minutes")
+        return f"The sitting on {record.get('date')} took {minutes} {'minute' if minutes == 1 else 'minutes'}."
+    if saved.kind == founder.BETA_REPORTS:
+        counts = ", ".join(
+            f"{COUNT_LABELS[key].lower()} {'not reported' if record.get(key) is None else record.get(key)}"
+            for key in exchange.BETA_COUNTS
+        )
+        return f"{record.get('product')}, on {record.get('date')}: {counts}."
+    if saved.kind == founder.BETA_BUILDS:
+        approved = f"{record.get('product')}: Beta Build approved on {record.get('approved_on')}"
+        if record.get("recruiting") == exchange.RECRUITING_OPEN:
+            return f"{approved}; recruiting is open."
+        return f"{approved}; recruiting stopped on {record.get('stopped_on')}."
+    if saved.kind == founder.OUTREACH:
+        reply = f"a reply came on {record.get('replied_on')}" if record.get("replied_on") else "no reply recorded"
+        wait = record.get("follow_up_wait_days")
+        waits = f"; a follow-up waits {wait} {'day' if wait == 1 else 'days'}" if wait is not None else ""
+        return f"{record.get('item')}: sent on {record.get('sent_on')}; {reply}{waits}."
+    return ""
 
 
 def saved_lines(saved: Saved) -> list[tuple[str, str]]:
@@ -312,7 +343,7 @@ class Page:
         rows = [tag("div", tag("dt", key), tag("dd", value)) for key, value in saved_lines(saved)]
         return tag(
             "div",
-            tag("p", tag("strong", f"{title}. "), words),
+            tag("p", tag("strong", f"{title}. "), words or saved_words(saved)),
             tag(
                 "details",
                 tag("summary", "The record, as it was read back from ", tag("code", saved.path)),
@@ -329,7 +360,9 @@ class Page:
             return []
         saved, entry = last
         return [
-            self.record(saved, "Saved", f"{entry.entry.get('ask')}: {said(saved.record, entry.kind)}.", folded=True),
+            self.record(
+                saved, "Saved", ended(f"{entry.entry.get('ask')}: {said(saved.record, entry.kind)}"), folded=True
+            ),
             tag("a", "Change that decision", href=self.url("item", entry.id), class_="quiet-link"),
         ]
 
@@ -394,7 +427,12 @@ class Page:
         kinds = ", ".join(plural(count, KIND_NAMES.get(kind, kind).lower()) for kind, count in counts.items())
         carried = sum(1 for entry in view.entries if entry.entry.get("carried_over"))
         summary = (
-            tag("ul", *(tag("li", line) for line in view.summary), class_="summary")
+            tag(
+                "ul",
+                # The report's first line is the launcher's own tally of the run; it is shown whole, as a figure.
+                *(tag("li", line, class_="tally" if line.startswith(TALLY) else None) for line in view.summary),
+                class_="summary",
+            )
             if view.summary
             else tag("p", f"The run report's summary cannot be shown: {view.summary_problem}.", class_="note warn")
         )
@@ -584,13 +622,13 @@ class Page:
             words = said(entry.decision, entry.kind) if entry.decision else "A decision"
             return [
                 tag("h2", "Decided"),
-                tag("p", f"{words}. A run has taken this decision in, so it can no longer be changed."),
+                tag("p", f"{ended(words)} A run has taken this decision in, so it can no longer be changed."),
                 tag("a", "Next", href=self.step_url(view.after(step)), class_="button primary"),
             ]
         if entry.decision is not None and not typed.get("change"):
             return [
                 tag("h2", "Saved"),
-                tag("p", said(entry.decision, entry.kind) + ".", class_="said"),
+                tag("p", ended(said(entry.decision, entry.kind)), class_="said"),
                 tag(
                     "p",
                     f"Given {moment(entry.decision.decided_at)}. You can change it or take it back until a run takes"
@@ -935,7 +973,7 @@ class Page:
             standing = "Recruiting is open."
             act = self.form(
                 self.url("did", "recruiting", product),
-                tag("input", type="hidden", name="action", value="stop"),
+                tag("input", type="hidden", name="recruiting", value="stop"),
                 self.small_field(
                     "stopped_on", "The day recruiting stopped", typed.get("stopped_on", state.day), "YYYY-MM-DD", True
                 ),
@@ -946,7 +984,7 @@ class Page:
             standing = f"Recruiting has been stopped since {build.stopped_on}."
             act = self.form(
                 self.url("did", "recruiting", product),
-                tag("input", type="hidden", name="action", value="reopen"),
+                tag("input", type="hidden", name="recruiting", value="reopen"),
                 tag("button", "Reopen recruiting", type="submit", class_="button primary"),
                 class_="choice",
             )
@@ -1002,7 +1040,9 @@ class Page:
                         "Days to wait before a follow-up",
                         values["wait_days"],
                         f"1 to {exchange.MAX_WAIT_DAYS}, or blank for the wait the message stated",
-                    ),
+                    )
+                    if message.followed_up
+                    else None,
                     class_="row",
                 ),
                 self.line_field("note", "A note, if you want one", values["note"]),
