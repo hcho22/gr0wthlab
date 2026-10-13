@@ -342,11 +342,19 @@ class PreflightTest(CodexTestCase):
         self.assertEqual((result.refused, result.listed), (((place, 41),), (one,)))
         self.assertEqual(result.failures, ("/m/p/window 2 was not probed",))
         self.assertFalse(result.ok)
+        # The record names each folder the probe left untried, beside the reason that says so.
+        self.assertEqual((result.untried, result.as_json()["untried"]), ((two,), ["/m/p/window 2"]))
         spaced = codex.evaluate_reads("REFUSED 7 /m/p/window 2\n", [two])
         self.assertEqual((spaced.refused, spaced.ok), (((two, 7),), True))
         self.assertEqual(
             spaced.as_json(),
-            {"ok": True, "refused": [{"target": "/m/p/window 2", "pid": 7}], "listed": [], "failures": []},
+            {
+                "ok": True,
+                "refused": [{"target": "/m/p/window 2", "pid": 7}],
+                "listed": [],
+                "failures": [],
+                "untried": [],
+            },
         )
 
     def test_a_run_with_no_footage_folder_to_read_starts_no_read_probe(self):
@@ -387,16 +395,19 @@ class PreflightTest(CodexTestCase):
         self.assertEqual(len({pid for _, pid in result.refused}), 2)
 
     def test_a_read_probe_that_fails_or_never_finishes_fails(self):
-        _, resolved = self.footage("window-1")
+        place, resolved = self.footage("window-1")
         self.install_fake_codex("#!/bin/sh\necho 'policy error' >&2\nexit 2\n")
         failed = codex.run_read_probe(CODEX_CONFIG, resolved, self.codex_bin, self.environment)
         self.assertFalse(failed.ok)
         self.assertEqual(len(failed.failures), 3)
         self.assertTrue(any("policy error" in failure for failure in failed.failures))
-        self.codex_bin.write_text("#!/bin/sh\nexec /bin/sleep 600\n", encoding="utf-8")
+        self.assertEqual(failed.untried, (place, place / "window-1"))
+        # One stopped at its limit after it answered for the place alone left the footage folder untried.
+        self.codex_bin.write_text(f"#!/bin/sh\necho 'REFUSED 7 {place}'\nexec /bin/sleep 600\n", encoding="utf-8")
         with mock.patch.object(process, "QUICK", 1):
             hung = codex.run_read_probe(CODEX_CONFIG, resolved, self.codex_bin, self.environment)
         self.assertIn("codex sandbox did not finish within 1 s and was stopped", hung.failures)
+        self.assertEqual((hung.refused, hung.untried), (((place, 7),), (place / "window-1",)))
 
     def test_a_codex_that_never_answers_its_version_refuses_the_run(self):
         self.install_fake_codex("#!/bin/sh\nexec /bin/sleep 600\n")
@@ -422,6 +433,9 @@ class NetworkProbeTest(unittest.TestCase):
         self.assertEqual(result.failures, ("forum.example.com:443 was not probed",))
         self.assertFalse(result.ok)
         self.assertEqual(result.as_json()["unreachable"], ["www.reddit.com:443"])
+        self.assertEqual(
+            (result.untried, result.as_json()["untried"]), (("forum.example.com:443",), ["forum.example.com:443"])
+        )
 
     def test_only_a_probe_that_tried_every_target_and_reached_none_passes(self):
         output = "".join(f"UNREACHABLE {target} {pid}\n" for pid, target in enumerate(self.TARGETS, 200))

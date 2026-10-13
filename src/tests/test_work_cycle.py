@@ -1443,6 +1443,11 @@ class SandboxNetworkTest(WorkCycleTestCase):
         for told in (out, report, notices):
             self.assertNotIn("reached the network", told)
             self.assertNotIn("was not closed", told)
+        self.assertIn(
+            "- Sandbox network: 2 listed hosts tried from inside the sandbox before 0 of 1 session, reached: none;"
+            " not tried before the Package review session: `www.reddit.com:443`, `itunes.apple.com:443`.\n",
+            report,
+        )
 
 
 class EvidenceLedgerTest(unittest.TestCase):

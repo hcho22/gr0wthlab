@@ -377,11 +377,15 @@ Three things hold it, each stricter than the one before:
    A place the sandbox can read is refused, whatever it is: this repository, a Product checkout, or a folder inside the package.
    A place may hold something the sandbox reads only inside Mandu, and there never in a footage folder; the refusal says which of the three it is.
 2. Before each session's agent starts, with no model, the preflight tries inside that session's own sandbox to list the footage place and each footage folder that exists in it.
+   When every one of them is refused, the session says `preflight refused a listing of the footage place and of <n> footage folders in it` and goes on to its network probe.
    A listing that succeeds keeps that session's agent from starting, with `the sandbox could read where raw footage is kept` and the folder: the run marks that session's workflow incomplete and goes on to the next session, whose own preflight comes first, so no session starts while a footage folder can be listed.
    A probe that listed nothing and fell short, because it did not finish in time, ended with an error, or did not try a folder, keeps that session's agent from starting the same way, with `the check that the sandbox cannot read the footage place did not finish` and the reason; it says nothing of what the sandbox could read, since no record shows a listing.
    The session's record holds the one wording, and the line the run prints, the run report's rows, and the notice repeat it.
    The network probe before each session is worded the same way: only with a listed host it reached does the run print `the sandbox reached the network` and the session's record say `the sandbox's network was not closed`, and a probe that reached none and fell short says `the check that the sandbox cannot reach the network did not finish`, with the reason.
-   Otherwise the session says `preflight refused a listing of the footage place and of <n> footage folders in it`, and the run report's `Sandbox footage` line says what was tried.
+   The run report's `Sandbox footage` line counts only what each session's own record of the listing covers.
+   It says `tried from inside the sandbox before each of <n> sessions` when every session's record holds an outcome for the place and for each footage folder that session had to try.
+   Otherwise it says `before <k> of <n> sessions` and then, for every other session, either `not tried before the <name> session` with the folders its listing left untried, or `nothing tried before the <name> session` where the listing never ran because that session's write proof had failed.
+   The `Sandbox network` line counts the listed hosts the same way; the network probe runs only once the write proof and the listing have passed, so the line says nothing was tried before a session where either had not.
 3. The boundary check below has the agent itself try each of them, and passes only on the runtime's own record of each refusal.
 
 Two things the agent can still learn, neither of them footage.

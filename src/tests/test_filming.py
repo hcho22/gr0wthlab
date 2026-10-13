@@ -358,8 +358,92 @@ class FoundersPlaceTest(FilmingRunCase):
         self.assertIn(f"its session did not start: {said}", report)
         self.assertIn(f"| did not start: {said} |", report)
         self.assertIn(f"session did not start: {said}. Incomplete this run: ", notice)
-        self.assertNotIn("Sandbox footage", report)
         self.assertNotIn("the sandbox could read", out + report + notice)
+        # No session's record shows a folder tried, and none shows the network probe run at all.
+        untried = f"`{self.footage}`, `{self.footage / 'window-1'}`"
+        self.assertEqual(len(tried), 2)
+        self.assertEqual(
+            self.agent_line("Sandbox footage"),
+            "- Sandbox footage: the footage place and 1 footage folder in it tried from inside the sandbox before 0 of"
+            f" 2 sessions, each once it existed, listed: none; not tried before the Package review session: {untried};"
+            f" not tried before the Post Drafts session: {untried}.",
+        )
+        self.assertNotIn("- Sandbox network: ", report)
+
+    def three_sessions(self):
+        """A week in which the package review, the post Drafts, and outreach have work due, with one footage folder
+        in the footage place."""
+        self.clip("d01-s1.mov")
+        fakes.set_run(self.repo, "outreach", {"creators": fakes.creators(fakes.KIT_CREATORS[:1])})
+
+    def agent_line(self, name):
+        """One line of the run report's Agent section, whole."""
+        return next(line for line in self.report().splitlines() if line.startswith(f"- {name}: "))
+
+    def test_a_listing_stopped_after_the_place_alone_is_not_told_as_having_tried_the_footage_folder(self):
+        self.three_sessions()
+        fakes.probe_next(self.codex_dir, "footage", "stalls")
+        with fakes.stopped_at_its_limit(self.codex_dir, "footage"):
+            code, out = self.run_cycle()
+        self.assertEqual(code, cycle.launcher.EXIT_BOUNDARY, out)
+        self.assertEqual(fakes.sessions_started(self.codex_dir), ["post-drafts", "outreach"])
+        first = self.run_record("package-review")["preflight"]
+        self.assertEqual([entry["target"] for entry in first["footage"]["refused"]], [str(self.footage)])
+        self.assertEqual(first["footage"]["untried"], [str(self.footage / "window-1")])
+        self.assertNotIn("network", first)
+        for later in ("post-drafts", "outreach"):
+            footage = self.run_record(later)["preflight"]["footage"]
+            self.assertEqual(
+                ([entry["target"] for entry in footage["refused"]], footage["untried"]),
+                ([str(self.footage), str(self.footage / "window-1")], []),
+            )
+        self.assertEqual(
+            self.agent_line("Sandbox footage"),
+            "- Sandbox footage: the footage place and 1 footage folder in it tried from inside the sandbox before 2 of"
+            " 3 sessions, each once it existed, listed: none; not tried before the Package review session:"
+            f" `{self.footage / 'window-1'}`.",
+        )
+        # The network probe runs only once the listing has passed, so it never ran before the first session.
+        self.assertEqual(
+            self.agent_line("Sandbox network"),
+            "- Sandbox network: 2 listed hosts tried from inside the sandbox before 2 of 3 sessions, reached: none;"
+            " nothing tried before the Package review session.",
+        )
+
+    def test_a_network_probe_stopped_after_one_host_is_not_told_as_having_tried_the_other(self):
+        self.three_sessions()
+        fakes.probe_next(self.codex_dir, "network", "stalls")
+        with fakes.stopped_at_its_limit(self.codex_dir, "network"):
+            code, out = self.run_cycle()
+        self.assertEqual(code, cycle.launcher.EXIT_BOUNDARY, out)
+        self.assertEqual(fakes.sessions_started(self.codex_dir), ["post-drafts", "outreach"])
+        network = self.run_record("package-review")["preflight"]["network"]
+        self.assertEqual((len(network["unreachable"]), len(network["untried"])), (1, 1))
+        self.assertEqual(
+            self.agent_line("Sandbox network"),
+            "- Sandbox network: 2 listed hosts tried from inside the sandbox before 2 of 3 sessions, reached: none;"
+            f" not tried before the Package review session: `{network['untried'][0]}`.",
+        )
+        self.assertIn("tried from inside the sandbox before each of 3 sessions, ", self.agent_line("Sandbox footage"))
+
+    def test_a_session_whose_write_preflight_failed_is_not_counted_as_having_tried_either_probe(self):
+        self.three_sessions()
+        fakes.behave(self.codex_dir, {"sessions": {"package-review": {"breaks_next_preflight": True}}})
+        code, out = self.run_cycle()
+        self.assertEqual(code, cycle.launcher.EXIT_BOUNDARY, out)
+        self.assertEqual(fakes.sessions_started(self.codex_dir), ["package-review", "outreach"])
+        unproved = self.run_record("post-drafts")["preflight"]
+        self.assertEqual((unproved["ok"], "footage" in unproved, "network" in unproved), (False, False, False))
+        self.assertEqual(
+            self.agent_line("Sandbox footage"),
+            "- Sandbox footage: the footage place and 1 footage folder in it tried from inside the sandbox before 2 of"
+            " 3 sessions, each once it existed, listed: none; nothing tried before the Post Drafts session.",
+        )
+        self.assertEqual(
+            self.agent_line("Sandbox network"),
+            "- Sandbox network: 2 listed hosts tried from inside the sandbox before 2 of 3 sessions, reached: none;"
+            " nothing tried before the Post Drafts session.",
+        )
 
     def test_an_edit_record_takes_footage_only_from_the_window_s_folder(self):
         self.approved_plan()

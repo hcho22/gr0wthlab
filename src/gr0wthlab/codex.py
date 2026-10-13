@@ -14,7 +14,7 @@ import re
 import shutil
 import tempfile
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from . import process
@@ -249,11 +249,12 @@ done
 @dataclass(frozen=True)
 class NetworkProbe:
     """What a network probe found: each target that could not be reached, with the process that tried, each that
-    could, and why the probe itself fell short, if it did."""
+    could, why the probe itself fell short, if it did, and each target it then left untried."""
 
     unreachable: tuple[tuple[str, int], ...]
     reached: tuple[str, ...]
     failures: tuple[str, ...]
+    untried: tuple[str, ...] = ()
 
     @property
     def ok(self) -> bool:
@@ -265,6 +266,7 @@ class NetworkProbe:
             "unreachable": [target for target, _ in self.unreachable],
             "reached": list(self.reached),
             "failures": list(self.failures),
+            "untried": list(self.untried),
         }
 
 
@@ -278,8 +280,8 @@ def evaluate_network(output: str, targets: Sequence[str]) -> NetworkProbe:
         (target, outcomes[target][1]) for target in targets if outcomes.get(target, ("",))[0] == "UNREACHABLE"
     )
     reached = tuple(target for target in targets if outcomes.get(target, ("",))[0] == "REACHED")
-    failures = tuple(f"{target} was not probed" for target in targets if target not in outcomes)
-    return NetworkProbe(unreachable, reached, failures)
+    untried = tuple(target for target in targets if target not in outcomes)
+    return NetworkProbe(unreachable, reached, tuple(f"{target} was not probed" for target in untried), untried)
 
 
 def run_network_probe(
@@ -312,7 +314,7 @@ def run_network_probe(
     elif completed.returncode != 0:
         failure = f"codex sandbox exited {completed.returncode}: {completed.stderr.strip()[-500:]}"
     if failure:
-        return NetworkProbe(result.unreachable, result.reached, result.failures + (failure,))
+        return replace(result, failures=result.failures + (failure,))
     return result
 
 
@@ -332,11 +334,12 @@ done
 @dataclass(frozen=True)
 class ReadProbe:
     """What a read probe found: each folder the sandbox could not list, with the process that tried, each it could,
-    and why the probe itself fell short, if it did."""
+    why the probe itself fell short, if it did, and each folder it then left untried."""
 
     refused: tuple[tuple[Path, int], ...]
     listed: tuple[Path, ...]
     failures: tuple[str, ...]
+    untried: tuple[Path, ...] = ()
 
     @property
     def ok(self) -> bool:
@@ -348,6 +351,7 @@ class ReadProbe:
             "refused": [{"target": str(target), "pid": pid} for target, pid in self.refused],
             "listed": [str(target) for target in self.listed],
             "failures": list(self.failures),
+            "untried": [str(target) for target in self.untried],
         }
 
 
@@ -362,8 +366,8 @@ def evaluate_reads(output: str, targets: Sequence[Path]) -> ReadProbe:
         (target, outcomes[str(target)][1]) for target in targets if outcomes.get(str(target), ("",))[0] == "REFUSED"
     )
     listed = tuple(target for target in targets if outcomes.get(str(target), ("",))[0] == "LISTED")
-    failures = tuple(f"{target} was not probed" for target in targets if str(target) not in outcomes)
-    return ReadProbe(refused, listed, failures)
+    untried = tuple(target for target in targets if str(target) not in outcomes)
+    return ReadProbe(refused, listed, tuple(f"{target} was not probed" for target in untried), untried)
 
 
 def run_read_probe(config: Mapping, boundary: Boundary, codex_bin: Path, environment: Mapping[str, str]) -> ReadProbe:
@@ -375,7 +379,8 @@ def run_read_probe(config: Mapping, boundary: Boundary, codex_bin: Path, environ
         return ReadProbe((), (), ())
     unnamed = [str(target) for target in targets if "\n" in str(target) or "\r" in str(target)]
     if unnamed:
-        return ReadProbe((), (), tuple(f"{target!r} holds a line break, so it cannot be probed" for target in unnamed))
+        failures = tuple(f"{target!r} holds a line break, so it cannot be probed" for target in unnamed)
+        return ReadProbe((), (), failures, tuple(targets))
     script = ["/bin/sh", "-c", READ_SCRIPT, "footage", LIST] + [str(target) for target in targets]
     with tempfile.TemporaryDirectory(prefix="gr0wthlab-preflight-") as empty_home:
         command = [str(codex_bin), "sandbox"] + config_overrides(config, boundary) + ["--"] + script
@@ -389,7 +394,7 @@ def run_read_probe(config: Mapping, boundary: Boundary, codex_bin: Path, environ
     elif completed.returncode != 0:
         failure = f"codex sandbox exited {completed.returncode}: {completed.stderr.strip()[-500:]}"
     if failure:
-        return ReadProbe(result.refused, result.listed, result.failures + (failure,))
+        return replace(result, failures=result.failures + (failure,))
     return result
 
 

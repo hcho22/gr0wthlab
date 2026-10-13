@@ -1,7 +1,7 @@
 # The footage place inside Mandu, with the sandbox kept out of its footage folders (US-ME09, US-ME02)
 
 The text from "The footage place inside Mandu" down to "Live checks on the real configuration" was written into [the US-ME02 spike note](../spikes/us-me02-runtime-boundary.md) on this change's branch and moved here whole in the merge with `main` at `1bfe1a4`, with no new run for the move.
-Its runs were made before that merge, when a weekly run was one agent session; the round after the merge and the round after review are the last two sections.
+Its runs were made before that merge, when a weekly run was one agent session; the round after the merge and the two rounds after review are the last three sections.
 
 ## The footage place inside Mandu
 
@@ -351,4 +351,88 @@ Mandu (`9089b31`, with no uncommitted change), RepToday (`main` at `de0355d`), a
 - A footage file that is gone when its read is tried and still gone when the run is judged: it stands on the same unit test, where the folder's next footage file then has no call that named it.
 - A weekly session with the real agent on this round's code: the reworded sentence of the brief and the two reworded sentences of the Filming task definition were delivered to no real agent, and the three weekly runs with the real agent in the round above stand for the sessions' work.
 - The Founder's real footage, and a `window-<n>/` folder in the Founder's own Mandu, since none exists yet; the folder case stands on the lab runs above.
+- The unit suite under another Python than the Mac's `/usr/bin/python3`, and on Linux, which CI runs.
+
+## Re-check after the second review: the report's probe lines count what each record covers
+
+The second review found the same fault one line further on, in the run report's `Sandbox footage` and `Sandbox network` lines.
+Each said its probe had tried everything `before each of <n> sessions`, counting every session whose preflight had started, also one whose probe was stopped before it reached a folder and one before which the probe never ran.
+A session's record of a probe now names each target the probe left untried (`untried`, beside `refused` or `unreachable`, `listed` or `reached`, and `failures`), and `probe_scope` in [`src/gr0wthlab/report.py`](../../src/gr0wthlab/report.py) counts a session as tried only where its own record leaves none.
+Where every session's record covers the place, each footage folder, and each listed host, the two lines read as they did.
+Where one does not, the line says `before <k> of <n> sessions` and then `not tried before the <name> session` with the targets its record names, or `nothing tried before the <name> session` where the probe never ran.
+Nothing about what is done changed: which sessions start, and why one does not, is as it was.
+
+**What was run, and on which code.**
+Everything ran on 2026-10-13 between 12:47 and 13:14, Mac local time (UTC-7), with Codex CLI 0.160.0 and `gpt-6-luna` at high effort; the run identifiers carry the UTC time.
+The code is commit `8c7b3fbcd87c0e1147ec91ec8392b84d14e0030c` with this round's changes not yet committed: its `src` tree is `48457ef12f6573246eee9cfeafa8273971bb6af0`, and its `config` tree is that commit's, `2496957cf4f5b3c89a2927b8c0e15f14a5fb6013`.
+No file under `src/` or `config/` changed between the start of the unit suite and the end of the last check.
+The checks on the real configuration ran from the same linked worktree as the round before, with no override but `GR0WTHLAB_LOG_DIR`; its `git status` listed this round's 10 changed files and was the same before the preflight and after the boundary check.
+The lab runs ran from throwaway clones in the Mac's temporary folder, written `<lab>` below, each beside synthetic Mandu, RepToday, and Immerse checkouts set with the three `GR0WTHLAB_*_DIR` overrides.
+
+### The unit suite and ruff
+
+`ruff check src src/bin/gr0wthlab` and `ruff format --check src src/bin/gr0wthlab` passed.
+`/usr/bin/python3 -m unittest`, run from `src/` over all 42 test modules in five parallel shards, passed: 1,155 tests, with no test skipped.
+
+### The reported cases, before and after
+
+`src/bin/gr0wthlab run` ran in two lab clones, one of commit `8c7b3fb` and one of this round's code, each with three sessions due: Package review, Post Drafts, and Outreach.
+Codex was the repository's no-model stand-in, `tests.fakes.install_codex`, behind a wrapper that made one `codex sandbox` probe fall short and passed every other call through.
+The footage place was a folder outside every checkout, `<lab>/footage`, set with `GR0WTHLAB_FOOTAGE_DIR`, which held one empty footage folder, `window-1/`.
+The table gives the two lines as each run's report has them, from `tried from inside the sandbox` on; a line left out of a cell read `before each of 3 sessions` and named no session.
+
+| What fell short | On `8c7b3fb` | On this round's code |
+| --- | --- | --- |
+| The write proof before Post Drafts: the stand-in's sandbox refused every area once | `20261013T194725Z-on-demand-7ea0`, exit 3. Both lines: `before each of 3 sessions`. | `20261013T195406Z-on-demand-ee15`, exit 3. Footage: `before 2 of 3 sessions, each once it existed, listed: none; nothing tried before the Post Drafts session`. Network: `before 2 of 3 sessions, reached: none; nothing tried before the Post Drafts session`. |
+| The listing before Package review: stopped at its 1 minute limit once it had answered for the place alone | `20261013T194734Z-on-demand-878b`, exit 3. Both lines: `before each of 3 sessions`. | `20261013T195426Z-on-demand-a2dc`, exit 3. Footage: ``before 2 of 3 sessions, each once it existed, listed: none; not tried before the Package review session: `<lab>/footage/window-1` ``. Network: `before 2 of 3 sessions, reached: none; nothing tried before the Package review session`. |
+| The network probe before Package review: stopped at its 1 minute limit once it had answered for its first host | `20261013T194837Z-on-demand-c0da`, exit 3. Network: `1 listed hosts tried from inside the sandbox before each of 3 sessions, reached: none`. | `20261013T195529Z-on-demand-2278`, exit 3. Network: ``2 listed hosts tried from inside the sandbox before 2 of 3 sessions, reached: none; not tried before the Package review session: `itunes.apple.com:443` ``. |
+| The listing before every session: exited 71 with nothing on its output | not run | `20261013T195410Z-on-demand-aed3`, exit 3. Footage: `before 0 of 3 sessions, each once it existed, listed: none`, then `not tried before` each of the three sessions with the place and `window-1/`. The report has no `Sandbox network` line. |
+| The network probe before every session: exited 0 having tried no host | not run | `20261013T195413Z-on-demand-fad8`, exit 3. Network: `before 0 of 3 sessions, reached: none`, then `not tried before` each of the three sessions with both listed hosts. |
+| Nothing | not run | `20261013T195415Z-on-demand-a0f2`, exit 0. Both lines: `before each of 3 sessions`, as on `8c7b3fb`. |
+
+In each run whose first session's probe was stopped, the line the run printed and the Sessions row of the Package review session gave the reason of the round before: `the check that the sandbox cannot read the footage place did not finish: <lab>/footage/window-1 was not probed; codex sandbox did not finish within 1 min and was stopped`, and the same for the network with `itunes.apple.com:443 was not probed`.
+
+### The real configuration
+
+From the linked worktree, against Mandu and the Product checkouts as they are, with configuration fingerprint `33de78d4b956f6174c9b60269c55f0ce130db276cf1717d4d8a78df2ac8655a2`, the fingerprint of the round before.
+The Founder's folder held no `window-<n>/` folder, so the place itself was the one forbidden read there was to try.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, was refused a listing of `~/Mandu/projects/RepToday`, and reached neither listed host; its footage record and its network record each held an empty `untried` list.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261013T201233Z-on-demand-9af9`: 33 steps, each of the nine forbidden targets refused in a patch of its own, eleven kernel Seatbelt denials naming the run's sentinels or the check's listeners, 1 of 1 forbidden reads refused, the listing of the footage place, neither local listener reached, 12 of 12 permitted sentinels written, and no change since the snapshot.
+  The probe's agent ran 70.3 seconds of its 30 minute limit.
+
+Mandu (`9089b31`, with no uncommitted change), RepToday (`main` at `774267c`), and Immerse (`main` at `5c3a217`) had the same HEAD, branch, git status, stash count, and digest, size, mode, and modification time of every file outside `.git` after the boundary check as before the preflight.
+
+### The sentences checked
+
+The second review's decision asked for every sentence the launcher's output, the run report, and the notice make about the footage listing or the network probe to be read against what a session's record holds when the probe was stopped, ended with an error, tried no target, or never ran.
+These are all of them, each with what it rests on.
+
+| Where | Sentence | What it rests on | This round |
+| --- | --- | --- | --- |
+| Launcher output | `preflight refused <n> paths and allowed <m> areas` | The write proof's own counts; printed only once that proof has passed. | Unchanged |
+| Launcher output | `boundary preflight failed; the agent was not started`, with its lines | The write proof alone. | Unchanged |
+| Launcher output and the session's record | `the sandbox could read where raw footage is kept`, with `listed <folder>` | Said only with a folder the listing's output shows listed. | Unchanged |
+| Launcher output and the session's record | `the check that the sandbox cannot read the footage place did not finish`, with its reasons | A listing that listed nothing. Its reasons are `<folder> was not probed` for each folder with no outcome on the output, `codex sandbox did not finish within <limit> and was stopped`, and `codex sandbox exited <code>` with what the probe wrote to its error stream. | Unchanged |
+| Launcher output | `preflight refused a listing of the footage place and of <n> footage folders in it` | Printed only when the listing listed nothing and fell short in nothing, so every folder it had is on its output as refused. | Unchanged |
+| Launcher output and the session's record | `the sandbox reached the network` and `the sandbox's network was not closed`, with `reached <host>` | Said only with a host the probe's output shows reached. | Unchanged |
+| Launcher output and the session's record | `the check that the sandbox cannot reach the network did not finish`, with its reasons | A probe that reached no host; its reasons are those of the listing, for hosts. | Unchanged |
+| Run report and notice | `its session did not start: ...` in Outputs, `did not start: ...` in Sessions, `Did not start: ...` in the session's own part, and the notice's `The <name> session did not start: ...` | Each repeats the reason in the session's record, one of the four above. | Unchanged |
+| Run report | `The <name> session did not start; see Sessions below.` | Names no probe. | Unchanged |
+| Run report | `Boundary preflight: passed`, or `FAILED before the <name> session`, `run before each of <n> sessions; it refused <n> paths and allowed <m> areas` | The write proof, which the launcher's own output calls the boundary preflight: the verdict is that proof's in each session's record, and the counts are that proof's before the run's first session. It says nothing of the listing or of the network probe; the two lines after it do. | Unchanged |
+| Run report | `Sandbox footage: the footage place and <n> footage folders in it tried from inside the sandbox before ...` | It counted every session whose preflight had started. It now counts a session only where that session's record of the listing leaves no folder untried, and names for every other session what its record leaves untried, or that nothing was tried. | Changed |
+| Run report | `Sandbox network: <n> listed hosts tried from inside the sandbox before ...` | The same, and its host count came from the first session's record alone; it is now every host on any session's record. | Changed |
+| `preflight` command | The three records as JSON | The records themselves. | Each probe record gained `untried` |
+| Boundary check | `FAILED: the run ended with exit code 3 before the agent was started, so the probe tested nothing` | A probe run whose preflight did not pass: the exit code and `agent_started` of its record. | Unchanged |
+| Boundary check | `sandbox network: <n> targets refused, reached: <hosts> (the control outside the sandbox reached its listener: yes or NO)` | `<n>` counts the targets the check's own no-model probe shows not reached, so one that was stopped or ended early adds none; a target with no outcome, and an attempt no kernel denial names, each has a line of its own under it and fails the check. | Unchanged |
+| Boundary check | `network boundary: not checked; --verify runs no probe` | No probe ran. | Unchanged |
+
+### What this round did not exercise
+
+- A probe that falls short in the real `codex sandbox`: in every lab run a wrapper around the stand-in made the probe fall short, and the unit tests do the same with the stand-in itself.
+- The boundary check's file-tool read of a footage file: `src/gr0wthlab/probe.py` did not change in this round, the Founder's folder holds no footage file, and the two lab checks of the round before stand for it.
+- A listing that lists one folder and leaves another untried, in a whole run: the report line then names both, and only the unit tests of the probe's own result and of each half in a whole run stand for it.
+- A footage folder that appears between two sessions, in a run where a probe also falls short: it stands on the unit test the round after the merge added, where no probe falls short.
+- A weekly session with the real agent on this round's code: no sentence an agent reads changed in this round.
+- The Founder's real footage, and a `window-<n>/` folder in the Founder's own Mandu, since none exists yet.
 - The unit suite under another Python than the Mac's `/usr/bin/python3`, and on Linux, which CI runs.

@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stderr
+from contextlib import nullcontext, redirect_stderr
 from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
@@ -20,13 +20,7 @@ from tests.test_boundary import CONFIG, FILMING_REGISTRY, REGISTRY
 REPO = Path(__file__).resolve().parents[2]
 
 
-def cut_short(probe):
-    """One no-model probe's time limit cut to a second, for a test that leaves that probe hanging; every other
-    process keeps its own limit."""
-    run = process.run
-    return mock.patch.object(
-        process, "run", lambda command, limit, **more: run(command, 1 if probe in command else limit, **more)
-    )
+STOPPED = f"codex sandbox did not finish within {process.limit_text(process.QUICK)} and was stopped"
 
 
 class PromptTest(unittest.TestCase):
@@ -248,7 +242,9 @@ class FootagePreflightTest(unittest.TestCase):
         self.place.rmdir()
         record, out = self.run_launcher()
         self.assertEqual((record["exit_code"], record["agent_started"]), (0, True))
-        self.assertEqual(record["preflight"]["footage"], {"ok": True, "refused": [], "listed": [], "failures": []})
+        self.assertEqual(
+            record["preflight"]["footage"], {"ok": True, "refused": [], "listed": [], "failures": [], "untried": []}
+        )
         self.assertNotIn("refused a listing", out)
 
     def test_a_sandbox_that_can_list_a_footage_folder_stops_the_run_before_the_agent_starts(self):
@@ -270,17 +266,19 @@ class FootagePreflightTest(unittest.TestCase):
         (self.place / "window-1").mkdir()
         untried = f"{self.place} was not probed; {self.place / 'window-1'} was not probed"
         for how, found in (
-            ("hangs", f"{untried}; codex sandbox did not finish within 1 s and was stopped"),
+            ("hangs", f"{untried}; {STOPPED}"),
             ("fails", f"{untried}; codex sandbox exited 71: the profile could not be applied"),
             ("skips", untried),
         ):
             with self.subTest(how=how):
                 fakes.behave(self.codex_dir, {"footage_probe": how})
-                with cut_short("footage"):
+                # Only the probe that never ends is stopped early; the others answer under the probe's own limit.
+                with fakes.stopped_at_its_limit(self.codex_dir, "footage") if how == "hangs" else nullcontext():
                     record, out = self.run_launcher()
                 self.assertEqual((record["exit_code"], record["agent_started"]), (launcher.EXIT_BOUNDARY, False))
                 footage = record["preflight"]["footage"]
                 self.assertEqual((footage["ok"], footage["listed"], footage["refused"]), (False, [], []))
+                self.assertEqual(footage["untried"], [str(self.place), str(self.place / "window-1")])
                 said = "the check that the sandbox cannot read the footage place did not finish"
                 self.assertEqual(record["error"], f"{said}: {found}")
                 self.assertIn(f"gr0wthlab: {said}; the agent was not started\n", out)
@@ -334,16 +332,17 @@ class NetworkPreflightTest(unittest.TestCase):
     def test_a_network_probe_that_falls_short_with_no_host_reached_stops_the_run_and_says_only_that(self):
         untried = "; ".join(f"{host} was not probed" for host in self.hosts)
         for how, found in (
-            ("hangs", f"{untried}; codex sandbox did not finish within 1 s and was stopped"),
+            ("hangs", f"{untried}; {STOPPED}"),
             ("fails", f"{untried}; codex sandbox exited 71: the profile could not be applied"),
             ("skips", untried),
         ):
             with self.subTest(how=how):
                 fakes.behave(self.codex_dir, {"network_probe": how})
-                with cut_short("network"):
+                with fakes.stopped_at_its_limit(self.codex_dir, "network") if how == "hangs" else nullcontext():
                     record, out = self.run_launcher()
                 network = record["preflight"]["network"]
                 self.assertEqual((network["ok"], network["reached"], network["unreachable"]), (False, [], []))
+                self.assertEqual(network["untried"], self.hosts)
                 said = "the check that the sandbox cannot reach the network did not finish"
                 self.assertEqual(record["error"], f"{said}: {found}")
                 self.assertIn(f"gr0wthlab: {said}; the agent was not started\n", out)

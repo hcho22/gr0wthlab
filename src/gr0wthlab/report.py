@@ -1050,6 +1050,27 @@ def render_report(state: RunState) -> str:
     return "\n".join(lines) + "\n"
 
 
+def probe_scope(tried: Sequence[Session], probe: str, every: str) -> tuple[str, str]:
+    """Before which of the sessions whose preflight ran one of its no-model probes, the listing of the footage folders
+    or the network probe, tried every target it had, as each session's own record shows, and what the probe's line
+    then says of every other session. every is the wording for all of them. A record that left a target untried
+    names it, and a session has no record of the probe where the probe never ran, since a proof before it did not
+    pass."""
+    whole, short = 0, []
+    for session in tried:
+        found = session.record["preflight"].get(probe)
+        if not found:
+            short.append(f"nothing tried before the {session.title} session")
+        elif found.get("untried"):
+            names = ", ".join(f"`{target}`" for target in found["untried"])
+            short.append(f"not tried before the {session.title} session: {names}")
+        else:
+            whole += 1
+    if not short:
+        return every, ""
+    return f"{whole} of {plural(len(tried), 'session')}", "".join(f"; {gap}" for gap in short)
+
+
 def agent_lines(state: RunState) -> list[str]:
     """What every session of the run was started with: the boundary each was proved against before its agent
     started, the configuration fingerprint, the code, and where the task definitions are."""
@@ -1073,20 +1094,27 @@ def agent_lines(state: RunState) -> list[str]:
         footage = [session.record["preflight"].get("footage") or {} for session in tried]
         refused = {str(entry["target"]) for found in footage for entry in found.get("refused", [])}
         listed = sorted({str(path) for found in footage for path in found.get("listed", [])})
-        if refused or listed:
+        folders = refused | set(listed) | {str(path) for found in footage for path in found.get("untried", [])}
+        if folders:
+            before, short = probe_scope(tried, "footage", every)
             lines.append(
-                f"- Sandbox footage: the footage place and {plural(len(refused | set(listed)) - 1, 'footage folder')}"
-                f" in it tried from inside the sandbox before {every}, each once it existed, listed:"
-                f" {', '.join(f'`{path}`' for path in listed) or 'none'}."
+                f"- Sandbox footage: the footage place and {plural(len(folders) - 1, 'footage folder')} in it tried"
+                f" from inside the sandbox before {before}, each once it existed, listed:"
+                f" {', '.join(f'`{path}`' for path in listed) or 'none'}{short}."
             )
-        network = next((s.record["preflight"]["network"] for s in tried if s.record["preflight"].get("network")), None)
-        if network:
-            reached = sorted(
-                {target for s in tried for target in (s.record["preflight"].get("network") or {}).get("reached", [])}
-            )
+        network = [session.record["preflight"].get("network") or {} for session in tried]
+        if any(network):
+            hosts = {
+                target
+                for found in network
+                for key in ("unreachable", "reached", "untried")
+                for target in found.get(key, [])
+            }
+            reached = sorted({target for found in network for target in found.get("reached", [])})
+            before, short = probe_scope(tried, "network", every)
             lines.append(
-                f"- Sandbox network: {len(network.get('unreachable', [])) + len(network.get('reached', []))} listed"
-                f" hosts tried from inside the sandbox before {every}, reached: {', '.join(reached) or 'none'}."
+                f"- Sandbox network: {len(hosts)} listed hosts tried from inside the sandbox before {before}, reached:"
+                f" {', '.join(reached) or 'none'}{short}."
             )
     prints = sorted(
         {str(session.record["fingerprint"]) for session in state.sessions if session.record.get("fingerprint")}
