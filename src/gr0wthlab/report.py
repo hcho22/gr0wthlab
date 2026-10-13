@@ -788,6 +788,14 @@ def render_report(state: RunState) -> str:
             f"- Boundary preflight: {'passed' if preflight.get('ok') else 'FAILED'}, refused "
             f"{len(preflight.get('refused', []))} paths and allowed {len(preflight.get('writable', []))} areas."
         )
+        footage = preflight.get("footage") or {}
+        tried = [entry["target"] for entry in footage.get("refused", [])] + list(footage.get("listed", []))
+        if tried:
+            listed = footage.get("listed", [])
+            lines.append(
+                f"- Sandbox footage: the footage place and {plural(len(tried) - 1, 'footage folder')} in it tried from"
+                f" inside the sandbox, listed: {', '.join(f'`{path}`' for path in listed) or 'none'}."
+            )
         network = preflight.get("network")
         if network:
             reached = network.get("reached", [])

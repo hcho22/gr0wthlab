@@ -17,7 +17,7 @@ from typing import TextIO
 
 from . import codex, fetch, process
 from .areas import clear_probe_files
-from .boundary import Boundary, ConfigError, filesystem_policy, load_boundary
+from .boundary import MANDU, Boundary, ConfigError, filesystem_policy, load_boundary
 
 TRIGGERS = ("on-demand", "scheduled")
 EXIT_CONFIG = 2
@@ -53,7 +53,12 @@ def compose_prompt(
     ]
     lines += [f"  - {key}: {path}" for key, path in boundary.areas]
     lines.append("- Read-only locations:")
-    lines += [f"  - {location.label}: {location.path}" for location in boundary.locations]
+    for location in boundary.locations:
+        if location.label != MANDU:
+            lines.append(f"  - {location.label}: {location.path}")
+            continue
+        lines.append(f"  - {location.label}: {location.path}, of which only these paths; the runtime refuses the rest:")
+        lines += [f"    - {path}" for path in boundary.package_paths]
     lines += [f"- {fact}" for fact in facts]
     lines += [f"- Instruction: {instruction_path}", "", "---", "", instruction.rstrip(), ""]
     return "\n".join(lines)
@@ -98,6 +103,12 @@ def preflight_summary(result: codex.PreflightResult) -> dict[str, object]:
         "breaches": [str(path) for path in result.breaches],
         "failures": list(result.failures),
     }
+
+
+def footage_refused(reads: codex.ReadProbe) -> str:
+    """What the read probe was refused, in a line: the footage place and how many footage folders in it."""
+    folders = len(reads.refused) - 1
+    return f"the footage place and of {folders} footage folder{'' if folders == 1 else 's'} in it"
 
 
 def run(
@@ -172,6 +183,17 @@ def run(
         f"gr0wthlab: preflight refused {len(preflight.refused)} paths and allowed {len(preflight.allowed)} areas",
         file=out,
     )
+    reads = codex.run_read_probe(resolved.config, resolved.boundary, resolved.codex_bin, resolved.environment)
+    record["preflight"]["footage"] = reads.as_json()
+    if not reads.ok:
+        record["exit_code"] = EXIT_BOUNDARY
+        write_json(record_path, record)
+        print("gr0wthlab: the sandbox could read where raw footage is kept; the agent was not started", file=out)
+        for line in [f"listed {path}" for path in reads.listed] + list(reads.failures):
+            print(f"  {line}", file=out)
+        return record
+    if reads.refused:
+        print(f"gr0wthlab: preflight refused a listing of {footage_refused(reads)}", file=out)
     network = codex.run_network_probe(
         resolved.config, resolved.boundary, resolved.codex_bin, resolved.environment, resolved.network_targets
     )

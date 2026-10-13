@@ -26,7 +26,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    An approval the Founder gave an item that a reviewed change had already replaced still counts as the request's approval, though Mandu hands no superseded item to firstmate: the replacement stays open for the Founder to decide, no reviewed change replaces it any more, nothing is filed after it, and the run report says so.
 6. It reads the 14-day kit from Mandu, works out which calendar days need post Drafts this run, now that the Founder's decisions are in, and fixes RepToday's `main` to one commit for claim checks.
    From the same kit it reads each asset's shot list and files the filming plan, one item per window, unless one is open or decided and the kit has not changed what must be filmed.
-   It lists the footage place, read-only, and measures every file there with `ffprobe`; the agent never opens the footage, and learns each file's name and measured facts from the brief.
+   It lists the window's footage folder in the footage place, read-only, and measures every file there with `ffprobe`; the agent never opens the footage, and learns each file's name and measured facts from the brief.
    It reads the Founder's Beta Build record in Mandu's exchange folder (`beta-builds/RepToday.json`), which is the only thing it takes as an approval.
    Until that record exists it does nothing more about the Beta Cohort, and the run report lists the approval as not recorded.
    Once it exists, it takes in the Founder's Beta Cohort reports (`ledger/evidence/beta-recruiting/reports/`) and fixes the run's next invitation batch: the next sign-ups that asked for a beta invitation and that no batch holds, good Fit first, then by sign-up date, at most the batch size in `config/run.json`.
@@ -42,6 +42,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    It reads the Founder's outreach records from Mandu's exchange folder and works out which messages may be offered: the personal-network ask, one message for each creator in `config/run.json` that the channel plan names, and one follow-up only for a creator who was written to, has not replied, and whose waiting period has passed.
    It writes the agent's brief and runs the agent in the sandbox with the task definition `src/instructions/weekly-run.md`, at the reasoning effort [`config/guardrails/runtime.json`](../config/guardrails/runtime.json) sets, which is high.
    The agent has no network, and every run proves it before the agent starts: the preflight tries each listed host from inside the sandbox and stops the run if one is reachable.
+   It proves the same way that the agent cannot read raw footage: the preflight tries to list the footage place and each footage folder in it from inside the sandbox and stops the run if one can be listed ([how raw footage is kept from the agent](#how-raw-footage-is-kept-from-the-agent)).
    The agent writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records, and never write there.
    The agent has a time limit; one still running at it is stopped, and the run goes on without it ([When a run times out](#when-a-run-times-out)).
 7. Once the agent finishes, it restores its owner's read and write access to anything under `workspace/` the agent left without it, and the run report names every entry it fixed, before or after the agent.
@@ -118,7 +119,7 @@ Each is removed from `workspace/` and copied nowhere.
 ```sh
 git clone https://github.com/hcho22/gr0wthlab.git ~/gr0wthlab
 cd ~/gr0wthlab
-src/bin/gr0wthlab preflight        # proves the write boundary and the closed network with no model
+src/bin/gr0wthlab preflight        # proves the write boundary, the footage folders unread, and the closed network with no model
 src/bin/gr0wthlab boundary-check   # the US-ME02 check, from this clone
 src/bin/gr0wthlab run              # the first run, on demand
 ```
@@ -239,20 +240,45 @@ Otherwise the open post stands as it is, the run report says so, and the slot re
 ## Set the footage place
 
 The footage place is the one folder where the Founder drops raw footage for gr0wthlab to cut.
-It is unset until the Founder sets it, in `filming.footage.local_path` for RepToday in [`config/products.json`](../config/products.json), through a reviewed pull request:
+The Founder named it on 2026-10-11: RepToday's own folder in Mandu, set in `filming.footage.local_path` for RepToday in [`config/products.json`](../config/products.json):
 
 ```json
-"footage": {"local_path": "~/Movies/gr0wthlab-footage", "env": "GR0WTHLAB_FOOTAGE_DIR", "access": "read-only"}
+"footage": {"local_path": "~/Mandu/projects/RepToday", "env": "GR0WTHLAB_FOOTAGE_DIR", "access": "read-only"}
 ```
 
-`~/Movies/gr0wthlab-footage` is the proposed place.
-It is outside the production clone, Mandu, and every Product checkout, it is not a folder iCloud syncs, and macOS lets the scheduled run read `~/Movies` without the consent prompt that guards the Desktop, Documents, and Downloads folders.
-The launcher refuses to start if the place overlaps this repository, Mandu, a Product checkout, or anything else the sandbox reads, since the agent could then open the footage.
-`GR0WTHLAB_FOOTAGE_DIR` overrides it on one machine, for example to try a run against test clips.
-The change touches `config/products.json`, so it needs the boundary check below.
+Raw footage goes in that folder's `window-<n>/` folders, the footage folders, beside the package in `gtm/`.
+`GR0WTHLAB_FOOTAGE_DIR` overrides the place on one machine, for example to try a run against test clips.
+The place is written from the home folder, so it does not move with `GR0WTHLAB_MANDU_DIR`: a machine or a test that points that at another Mandu sets `GR0WTHLAB_FOOTAGE_DIR` too, or its runs read the footage folders of the Mandu in the home folder.
+A change of the place is a reviewed change to `config/products.json`, so it needs the boundary check below.
 
-gr0wthlab only ever reads the footage place: it fingerprints and measures each file and cuts finished videos from them, and nothing in it writes, renames, moves, or deletes anything there.
-The sandboxed agent never opens it.
+### How raw footage is kept from the agent
+
+The sandboxed agent reads nothing in a footage folder, and the runtime enforces that, not a sentence in the task definition.
+The permission profile denies whatever it does not grant, and of Mandu it grants only the package paths the Product registry names: for RepToday, `projects/RepToday/gtm/` and the launch checklist.
+Nothing else in the Mandu checkout is granted, so the footage folders are refused to the agent's shell and to its file tool alike, with the rest of the Product's folder, every other folder in Mandu, and Mandu's `.git`.
+The run's prompt lists the paths the agent can read of Mandu.
+[The spike note](spikes/us-me02-runtime-boundary.md#the-footage-place-inside-mandu) has what was measured, and why the profile grants less of Mandu rather than denying the footage folders by name.
+
+Three things hold it, each stricter than the one before:
+
+1. The launcher refuses to start unless the profile it builds keeps the sandbox out of the footage folders (`keep_footage_unread` in [`src/gr0wthlab/boundary.py`](../src/gr0wthlab/boundary.py), the one place the rule is kept).
+   A place the sandbox can read is refused, whatever it is: this repository, a Product checkout, or a folder inside the package.
+   A place may hold something the sandbox reads only inside Mandu, and there never in a footage folder; the refusal says which of the three it is.
+2. Before every run, with no model, the preflight tries inside the run's own sandbox to list the footage place and each footage folder that exists in it.
+   A listing that succeeds stops the run before the agent starts, with `the sandbox could read where raw footage is kept` and the folder; otherwise the run says `preflight refused a listing of the footage place and of <n> footage folders in it`.
+3. The boundary check below has the agent itself try each of them, and passes only on the runtime's own record of each refusal.
+
+Two things the agent can still learn, neither of them footage.
+The brief tells it each file's name, length, size, frame rate, and whether it has sound, since it writes the edit records.
+And the system still answers a question about one file by its full name, such as its size and dates, though the sandbox can neither list a footage folder nor open a file in one.
+
+Raw video in that folder sits in Mandu's working tree, and Mandu's git does not ignore it.
+gr0wthlab never writes to Mandu, so it cannot add the ignore rule: that is the Founder's to do in Mandu, for example a `projects/RepToday/window-*/` line in Mandu's `.gitignore`.
+Until it is there, a commit made in Mandu can take raw video into Mandu's history, and the boundary check, which fingerprints every changed or untracked file in Mandu before and after it runs, reads each clip twice.
+
+gr0wthlab only ever reads the footage folders: it fingerprints and measures each file and cuts finished videos from them, and nothing in it writes, renames, moves, or deletes anything there.
+For footage it reads only the place's `window-<n>/` folders, and `rebuild-asset` takes a source from nowhere else; the rest of that folder is the package, which the launcher reads as it always has.
+The sandboxed agent never opens a footage folder.
 Keep the footage there for as long as its videos may need rebuilding.
 Leave a file as it is, under the name it has, once a video was cut from it.
 Another recording put in its place under the same name is other footage: the later leg of an A/B pair cut from it is not offered beside a video cut from the first, the notice names the file, and `rebuild-asset` refuses it.
@@ -263,7 +289,8 @@ So keep a file under its name for as long as a post or a rebuild needs it.
 Name each file for its shot in the approved filming plan, in one folder per 14-day window:
 
 ```text
-~/Movies/gr0wthlab-footage/
+~/Mandu/projects/RepToday/
+  gtm/                   the package, as before
   window-1/
     d01-s1.mov           shot d01-s1 of the plan: day 1's first shot
     d01-s1-take-2.mov    another take: anything may follow the shot's name after a hyphen, space, or underscore
@@ -468,7 +495,7 @@ To stop immediately without a pull request, remove the schedule as above.
 ## After a change to the launcher or configuration
 
 A change to `src/bin/gr0wthlab` or the launcher's package, `config/guardrails/runtime.json`, `config/guardrails/fetch.json`, or `config/products.json` needs a fresh check on the Founder's Mac, which CI cannot run.
-Setting the footage place is one such change: the place is never one of the locations the sandbox reads, so the check should show the same policy as before.
+A change of the footage place is one such change: the check then shows the place and each footage folder in it refused to the sandbox.
 
 ```sh
 cd ~/gr0wthlab && src/bin/gr0wthlab preflight && src/bin/gr0wthlab boundary-check
@@ -477,16 +504,20 @@ cd ~/gr0wthlab && src/bin/gr0wthlab preflight && src/bin/gr0wthlab boundary-chec
 The boundary check passes only when the runtime's own records show all of this, never the agent's report:
 
 - Each of the nine forbidden targets was attempted and refused once per tool, each on its own: Codex's record of the run holds a patch that names that target's sentinel alone, refused as outside the permission profile, and the kernel's log holds a refused shell write to that target's sentinel by its full path.
+- Each forbidden read was attempted and refused, each on its own: the footage place and each footage folder that exists in it when the check runs.
+  For the shell, the kernel's log holds a refused read of that folder, by its full path, by the very process that Codex's record of the run's shell call shows the launcher's script started for it; the preflight's own refusals of the same folders never count.
+  For the file tool, which reads only files, Codex's record holds a `view_image` call that names the first footage file of each footage folder that has one, refused with the system's permission error.
+  A folder that does not exist yet has nothing to read and is not tried: the check's verdict counts the reads it had to prove, and `forbidden_reads` in its evidence file names them.
 - Nothing changed in this clone, Mandu, or any Product checkout against a snapshot taken before the check, once the check has removed the run's own files from the areas.
 - The kernel refused the connection to each of the check's two local listeners, and neither received one.
 - With no model, a probe inside the same sandbox reached neither the check's own listener nor any host listed in `config/guardrails/fetch.json`, each attempt refused by the kernel, after the same probe outside the sandbox reached that listener; and the launcher's own client sent nothing but a GET to a listed host and refused an address outside the list.
   The kernel's refusals of that probe's processes never count as the agent's own connection attempts.
 - Both permitted files landed in every area.
 
-The launcher writes every step for the agent: one patch per target, and one script, placed in `workspace/instructions/` for the length of the run, that holds every shell step.
+The launcher writes every step for the agent: one patch per target, one path per file-tool read, and one script, placed in `workspace/instructions/` for the length of the run, that holds every shell step.
 Every line the check prints states what a record shows, and names no cause beyond it.
 A step that has no record after a probe run is handed over again, in at most three probe runs per check; the output then shows `NOT YET PROVEN` for the earlier run and what it asks again for.
-These end the check as failed at once, with no further run: a sentinel that landed, a connection that got through, a change against the snapshot, a network proof that falls short in any way, a run that did not exit cleanly, with the one exception below, or a record of Codex's that is not whole.
+These end the check as failed at once, with no further run: a sentinel that landed, a listing or a read of footage that landed, a connection that got through, a change against the snapshot, a network proof that falls short in any way, a run that did not exit cleanly, with the one exception below, or a record of Codex's that is not whole.
 A `FAILED` run whose agent made a tool call names each target that has no record and what the record shows for it, for example `no patch named its sentinel`.
 A check that ends after more than one probe run with steps unproven closes with those steps and with how each probe run ended: its exit code, how far the agent had got, and, for an exit that was not clean, what the run's event stream holds of Codex's own errors.
 Read how each run ended before running the check again.

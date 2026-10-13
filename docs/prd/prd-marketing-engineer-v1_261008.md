@@ -297,7 +297,7 @@ gr0wthlab's side is in place, with the request filed from `src/dispatches/reptod
 - [x] Each shot list states what to record, on which device, in real time or not, and what may not be cut, copied from the Angle's format in `angles.md`.
 - [x] The filming plan is one Review Queue item, approved before filming.
 - [ ] Raw footage the Founder drops in an agreed place is edited into 9:16 assets per the shot list, with on-screen text and captions applied, and the re-cut pair legs (days 8, 9, 10, and 13) reuse their footage with only the opening changed.
-  Waiting on the Founder's real footage: the agreed place is unset until the Founder sets it (`config/products.json`), and nothing is filmed yet, so this is proven live only on stand-in test footage for days 1 and 8.
+  Waiting on the Founder's real footage: the agreed place is the one the Founder named on 2026-10-11, RepToday's folder in Mandu (`config/products.json`), which the sandboxed agent cannot read, and nothing is filmed yet, so this is proven live only on stand-in test footage for days 1 and 8.
 - [x] Finished assets become post Drafts in US-ME08's shape.
 - [x] No asset uses an AI-generated person, voice, or scene presented as real, and nothing invents footage the Founder did not record.
 

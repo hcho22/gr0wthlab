@@ -14,6 +14,7 @@
     "default": "deny",
     "read_repository": true,
     "read_registry_locations": true,
+    "read_registry_locations_why": "Each Product checkout in config/products.json is read whole. Of Mandu the profile grants only the package paths that file names for each Product (go_to_market_package: its path, launch_checklist, and sources), so the rest of that checkout is denied with everything else the profile does not name: the footage folders the Founder keeps there, the other folders, and its .git. The grant is narrower on purpose and no deny entry does this job: Codex tells the agent what a profile denies, and an agent told so did not attempt the read, so the boundary check could not prove the refusal (docs/spikes/us-me02-runtime-boundary.md).",
     "read_system": [":minimal", "/Library/Developer/CommandLineTools"],
     "deny": [":slash_tmp", "/private/var/tmp"],
     "deny_why": "Codex's :minimal system grant also makes /tmp and /var/tmp writable; denying them keeps every write inside the writable areas."

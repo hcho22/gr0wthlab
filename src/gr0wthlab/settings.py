@@ -3,7 +3,6 @@ run starts."""
 
 from __future__ import annotations
 
-import os
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -11,7 +10,7 @@ from datetime import date, time, timedelta
 from pathlib import Path, PurePosixPath
 
 from . import schedule
-from .boundary import Boundary, ConfigError, canonical, is_within, load_json
+from .boundary import Boundary, ConfigError, canonical, is_within, load_json, resolve_home_path
 
 RUN_CONFIG = Path("config/run.json")
 INSTRUCTIONS = PurePosixPath("src/instructions")
@@ -78,21 +77,6 @@ class Settings:
     def waitlist_live(self, today: date) -> bool:
         """Whether the Waitlist is live: only once a reviewed change has set the date it went live."""
         return self.waitlist_live_since is not None and self.waitlist_live_since <= today
-
-
-def resolve_home_path(raw: object, name: str, env_name: str | None, env: Mapping[str, str], home: Path) -> Path:
-    override = env.get(env_name) if env_name else None
-    if override:
-        if not os.path.isabs(override):
-            raise ConfigError(f"{env_name} must be an absolute path")
-        return canonical(Path(override))
-    if not isinstance(raw, str) or not raw:
-        raise ConfigError(f"{name} must be a path")
-    if raw.startswith("~/"):
-        return canonical(home / raw[2:])
-    if os.path.isabs(raw):
-        return canonical(Path(raw))
-    raise ConfigError(f"{name} must start with ~/ or be absolute")
 
 
 def instruction_path(repo_root: Path, path: Path) -> Path:
@@ -287,7 +271,9 @@ def tags(value: object, name: str) -> tuple[str, ...]:
 
 
 def sandbox_readable(boundary: Boundary) -> list[Path]:
-    """Every place the run's sandbox may read besides the system files a shell needs."""
+    """Every place the run's sandbox may read besides the system files a shell needs, with the whole Mandu checkout
+    standing for the package paths the sandbox reads of it: the Waitlist view may be nowhere in that checkout. The
+    footage place has a rule of its own, boundary.keep_footage_unread."""
     system = [Path(entry) for entry in boundary.read_system if not entry.startswith(":")]
     return [boundary.repo_root, *boundary.git_dirs, *(location.path for location in boundary.locations), *system]
 

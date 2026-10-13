@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import process
-from .boundary import Boundary, ConfigError, canonical, filesystem_policy
+from .boundary import Boundary, ConfigError, canonical, filesystem_policy, footage_dirs
 
 SYSTEM_PATH = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
 LANG = "en_US.UTF-8"
@@ -313,6 +313,83 @@ def run_network_probe(
         failure = f"codex sandbox exited {completed.returncode}: {completed.stderr.strip()[-500:]}"
     if failure:
         return NetworkProbe(result.unreachable, result.reached, result.failures + (failure,))
+    return result
+
+
+# Runs inside the sandbox: try to list each folder, opening no file, and report whether it could, with the id of the
+# process that tried, so the kernel's own denial of that process can be matched to it. It changes nothing.
+LIST = "/bin/ls"
+READ_SCRIPT = """
+ls="$1"; shift
+for target in "$@"; do
+  "$ls" "$target" >/dev/null 2>&1 &
+  pid=$!
+  if wait "$pid"; then echo "LISTED $pid $target"; else echo "REFUSED $pid $target"; fi
+done
+"""
+
+
+@dataclass(frozen=True)
+class ReadProbe:
+    """What a read probe found: each folder the sandbox could not list, with the process that tried, each it could,
+    and why the probe itself fell short, if it did."""
+
+    refused: tuple[tuple[Path, int], ...]
+    listed: tuple[Path, ...]
+    failures: tuple[str, ...]
+
+    @property
+    def ok(self) -> bool:
+        return not self.listed and not self.failures
+
+    def as_json(self) -> dict[str, object]:
+        return {
+            "ok": self.ok,
+            "refused": [{"target": str(target), "pid": pid} for target, pid in self.refused],
+            "listed": [str(target) for target in self.listed],
+            "failures": list(self.failures),
+        }
+
+
+def evaluate_reads(output: str, targets: Sequence[Path]) -> ReadProbe:
+    outcomes: dict[str, tuple[str, int]] = {}
+    for line in output.splitlines():
+        verb, _, rest = line.partition(" ")
+        pid, _, target = rest.partition(" ")
+        if verb in ("LISTED", "REFUSED") and pid.isdigit():
+            outcomes[target] = (verb, int(pid))
+    refused = tuple(
+        (target, outcomes[str(target)][1]) for target in targets if outcomes.get(str(target), ("",))[0] == "REFUSED"
+    )
+    listed = tuple(target for target in targets if outcomes.get(str(target), ("",))[0] == "LISTED")
+    failures = tuple(f"{target} was not probed" for target in targets if str(target) not in outcomes)
+    return ReadProbe(refused, listed, failures)
+
+
+def run_read_probe(config: Mapping, boundary: Boundary, codex_bin: Path, environment: Mapping[str, str]) -> ReadProbe:
+    """Try to list the footage place and each footage folder in it from inside the run's sandbox, with no model,
+    where every one must be refused: only the launcher reads raw footage (boundary.keep_footage_unread). A folder the
+    sandbox lists, or a probe that does not finish in time, fails, so the agent is not started."""
+    targets = list(footage_dirs(boundary).values())
+    if not targets:
+        return ReadProbe((), (), ())
+    unnamed = [str(target) for target in targets if "\n" in str(target) or "\r" in str(target)]
+    if unnamed:
+        return ReadProbe((), (), tuple(f"{target!r} holds a line break, so it cannot be probed" for target in unnamed))
+    script = ["/bin/sh", "-c", READ_SCRIPT, "footage", LIST] + [str(target) for target in targets]
+    with tempfile.TemporaryDirectory(prefix="gr0wthlab-preflight-") as empty_home:
+        command = [str(codex_bin), "sandbox"] + config_overrides(config, boundary) + ["--"] + script
+        completed = process.run(
+            command, process.QUICK, env=dict(environment, CODEX_HOME=empty_home), cwd=str(boundary.working_directory)
+        )
+    result = evaluate_reads(completed.stdout, targets)
+    failure = None
+    if completed.timed_out:
+        failure = f"codex sandbox did not finish within {process.limit_text(completed.limit)} and was stopped"
+    elif completed.returncode != 0:
+        failure = f"codex sandbox exited {completed.returncode}: {completed.stderr.strip()[-500:]}"
+    if failure:
+        return ReadProbe(result.refused, result.listed, result.failures + (failure,))
     return result
 
 

@@ -1414,7 +1414,7 @@ class Cycle:
             folder = settings.exchange_dir(registry, boundary, self.env, self.home)
             rules = settings.waitlist(registry, boundary, self.env, self.home)
             beta_rules = beta.rules(registry, config)
-            footage_place = filming.place(registry, boundary, self.env, self.home)
+            footage_place = boundary.footage
             policy = fetch.load_policy(canonical(self.repo_root))
             network = (policy, sources.load(canonical(self.repo_root), policy), outreach.settings(config.data))
         except ConfigError as error:
