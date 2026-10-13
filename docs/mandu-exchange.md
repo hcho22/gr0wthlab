@@ -1,50 +1,64 @@
-# Mandu exchange, version 6
+# Mandu exchange, version 7
 
-How gr0wthlab (the Marketing Engineer) and Mandu pass the Review Queue, the Founder's decisions, the Founder's Beta Build approval, and the Founder's Beta Cohort counts between them.
-Mandu's own agent builds Mandu's side from this page.
-Later stories extend the exchange, each with a version bump: the TikTok export (US-ME11) and the US-ME18 confirmation.
-Version 5 added what the Founder does with an approved message (Outreach records, below), for the outreach messages of US-ME14 and the replies of US-ME13.
-Version 6 added the filming plan, which the Founder approves before filming, and the finished video a post shows, for US-ME09.
-Each side writes only its own repository and only reads the other's: gr0wthlab writes items in gr0wthlab, and Mandu writes decisions in Mandu.
+What Mandu may read from gr0wthlab (the Marketing Engineer), and the two things Mandu still does with what it reads.
+Mandu's own agent builds Mandu's read-only side from this page.
+Nobody has built that side yet, and nothing in gr0wthlab waits for it: the Founder decides on gr0wthlab's own page, with or without Mandu.
+
+Since version 7 gr0wthlab writes every record on this page, and Mandu writes none of them ([ADR 0002](adr/0002-the-founder-decides-in-gr0wthlab.md)).
+The Founder's decisions, sitting records, Beta Build record, Beta Cohort reports, and outreach records, which Mandu wrote in its own repository up to version 6, are now written in gr0wthlab, by the Founder's own act on the page that `src/bin/gr0wthlab sitting` serves.
+Mandu writes nothing that gr0wthlab reads except each Product's Go-To-Market Package, which stays in Mandu and which gr0wthlab only reads.
+Later stories extend the exchange, each with a version number of its own: the TikTok export (US-ME11) and the US-ME18 confirmation.
 
 ## Where things are
 
-| What | Written by | Path on the Founder's Mac |
-| --- | --- | --- |
-| The Review Queue | gr0wthlab | `~/gr0wthlab/ledger/review-queue/queue.json` |
-| Each item | gr0wthlab | `~/gr0wthlab/ledger/review-queue/items/<id>.md` |
-| Each run report | gr0wthlab | `~/gr0wthlab/ledger/run-reports/<run id>.md` |
-| Each finished video | gr0wthlab | `~/gr0wthlab/ledger/assets/window-<n>/day-<nn>-<recipe>.mp4` |
-| Decisions | Mandu | `~/Mandu/projects/gr0wthlab/exchange/decisions/<id>.json` |
-| Sittings | Mandu | `~/Mandu/projects/gr0wthlab/exchange/sittings/<YYYY-MM-DD>.json` |
-| The Beta Build record | Mandu | `~/Mandu/projects/gr0wthlab/exchange/beta-builds/<Product>.json` |
-| Beta Cohort reports | Mandu | `~/Mandu/projects/gr0wthlab/exchange/beta-reports/<Product>-<YYYY-MM-DD>.json` |
-| Outreach records | Mandu | `~/Mandu/projects/gr0wthlab/exchange/outreach/<id>.json` |
+Everything is in gr0wthlab's production clone, under `~/gr0wthlab/ledger/` on the Founder's Mac.
 
-`~/gr0wthlab` is gr0wthlab's production clone; each run also pushes its outputs to `main` of `github.com/hcho22/gr0wthlab`, but Mandu reads the local files.
+| What | Written by | Path under `~/gr0wthlab/ledger/` |
+| --- | --- | --- |
+| The Review Queue | A run | `review-queue/queue.json` |
+| Each item | A run | `review-queue/items/<id>.md` |
+| Each run report | A run | `run-reports/<run id>.md` |
+| Each finished video | A run | `assets/window-<n>/day-<nn>-<recipe>.mp4` |
+| Decisions | The Founder, on the sitting page | `founder/decisions/<id>.json` |
+| Sittings | The Founder, on the sitting page | `founder/sittings/<YYYY-MM-DD>.json` |
+| The Beta Build record | The Founder, on the sitting page | `founder/beta-builds/<Product>.json` |
+| Beta Cohort reports | The Founder, on the sitting page | `founder/beta-reports/<Product>-<YYYY-MM-DD>.json` |
+| Outreach records | The Founder, on the sitting page | `founder/outreach/<id>.json` |
+
+Each run also pushes `ledger/` to `main` of `github.com/hcho22/gr0wthlab`, the Founder's records with it, but Mandu reads the local files.
 A finished video is only ever a local file: it never enters git, so it is not on GitHub, and gr0wthlab can rebuild it from the Founder's footage.
-gr0wthlab finds Mandu's folder from `mandu.exchange` in gr0wthlab's `config/products.json`, and `GR0WTHLAB_EXCHANGE_DIR` overrides it on one machine.
-To move the folder, change that configuration through a gr0wthlab pull request.
+Paths inside `queue.json` are relative to `~/gr0wthlab/ledger/`.
+
+## What Mandu does
+
+Mandu never writes, moves, or deletes a file in gr0wthlab, never records a decision or anything else the Founder did, and never decides for the Founder.
+
+It may read everything in the table above to show the Founder status: what is open, what was decided and why, what the last run reported, what was sent, and where Beta Cohort recruiting stands.
+If the time in `queue.json`'s `next_run` has passed, the weekly run due then has not finished, so the queue and the report are from an earlier run.
+
+It still acts on two kinds of approval, each read from gr0wthlab:
+
+- **A package change the Founder approved.**
+  Mandu applies an approved `package-change-proposal` to the Go-To-Market Package, with the Founder's note if there is one.
+  Applying it is Mandu's own write in Mandu's own repository; gr0wthlab sees the change at its next run, in its snapshot of the package.
+- **A Dispatch request the Founder approved.**
+  Mandu hands an approved `dispatch-request`, with the Founder's note if there is one, to firstmate under Mandu's existing Dispatch arrangement.
+  A Dispatch request that is undecided, rejected, or superseded never reaches firstmate.
+
+Mandu acts on an approval only when both of these hold:
+
+- `queue.json` lists the item in `closed` with `"status": "approved"`.
+- `founder/decisions/<id>.json` holds `"decision": "approve"` for that item.
+
+The first shows that a run has taken the decision in, and from then on it never changes.
+Until then the Founder may still change the decision or take it back on the page, so a decision record alone is not yet an approval to act on.
+An item in `closed` with `"status": "superseded"` is never acted on, whatever was decided for it: the item that replaced it is the one the Founder decides.
 
 ## The sitting
 
-1. Read `queue.json`.
-   If the time in its `next_run` has passed, tell the Founder first that the weekly run due then has not finished, so the queue and report are from an earlier run.
-2. Show the summary at the top of the run report that `queue.json` names in `run_report`.
-3. Present each entry of `open`, in the listed order, by showing its item file.
-   Skip any entry that already has a decision record, unless gr0wthlab has asked Mandu to replace that record and it does not show the Founder's decision (see Decision records).
-   For an entry with `"carried_over": true`, say it was carried over from the sitting on the date in `carried_over_from`.
-4. The Founder approves an item, optionally with a one-line note, or rejects it with a one-line reason, or leaves it undecided.
-   An undecided item needs nothing written; it returns, marked carried over, at the next sitting.
-5. Write one decision record for each decided item as soon as it is decided.
-6. While a Product's Beta Cohort is being recruited, ask the Founder for the three counts and write one Beta Cohort report (see Beta Cohort reports).
-7. At the end, write one sitting record with how many minutes the sitting took.
-   Once gr0wthlab reads that record, it marks the items left undecided at the sitting as carried over.
-
-Outside the sitting, whenever the Founder sends or posts an approved message, or hears back from the person it went to, write or replace that message's outreach record (see Outreach records).
-gr0wthlab sends nothing and has no way to know either unless Mandu records it.
-
-Paths inside `queue.json` are relative to `~/gr0wthlab/ledger/`, the folder where gr0wthlab keeps its records.
+The Founder's weekly sitting is gr0wthlab's own page; [operations](operations.md#the-weekly-sitting) has the command and what the page does.
+It presents each entry of `open` in the listed order by showing its item file, and writes each record below as the Founder gives it.
+Mandu has no part in it.
 
 ## Items (gr0wthlab writes)
 
@@ -52,7 +66,7 @@ Each item is one Markdown file, named by its identifier, holding the front matte
 
 ```markdown
 ---
-exchange: 6
+exchange: 7
 id: 20261011-trademark-status-stale
 kind: package-change-proposal
 product: RepToday
@@ -87,14 +101,14 @@ The Draft or proposal itself.
   It has `slot`, its publishing time with its UTC offset, such as `2026-10-14T19:00-07:00`, once the Founder has set the window's first sitting, which its day 1 follows, and its posting slot; until then it has no slot, and its `## Draft` says so.
   A version 2 post always had a slot and no window or day.
 - A post whose video is finished also has `asset`: the video file's path under `~/gr0wthlab/ledger/`, such as `asset: assets/window-1/day-03-0a1b2c3d4e5f.mp4`.
-  Play that file for the Founder with the item, so the video and its copy are approved together.
+  The sitting page plays that file for the Founder with the item, so the video and its copy are approved together.
   A post with no `asset` has no video yet: approving it approves its copy and beat plan only.
   When the run prepared filming for the post's Product, its `## Draft` says there is none yet and why, and the video comes back for approval in a later post item for the same day; a post of a Product that does not film, or of a run that could not prepare filming, says nothing of a video.
 - `supersedes` names an earlier item this one replaces; the earlier one has left `open` and is never presented again.
 - A package-change proposal also has `new_angle`, what the proposal declares of itself: `yes` when it adds or changes an Angle or Hook, which covers any change to a Hook, signal, or kill criterion, and `no` when it does neither.
   gr0wthlab queues a `yes` proposal only when its Evidence names the record of at least one Listening quote it keeps.
   It queues a `no` proposal whatever the proposal touches or says, and never checks a declaration against the proposal's wording: the Founder is the check on a wrong declaration.
-  So when Mandu presents a package-change proposal, it says which the proposal declares, so that a wrong one is seen at the sitting and can be rejected.
+  So the sitting page says, on every package-change proposal, which the proposal declares, so that a wrong one is seen at the sitting and can be rejected.
   A proposal queued before version 5 has no `new_angle`.
 
 | `kind` | The section after the title | Options |
@@ -115,7 +129,7 @@ Beside the Beta Cohort's two (below), there are four kinds, each named in the it
 
 - A personal-network ask (`network-ask`) carries the personal-network Source link and no other link; until the Waitlist is live, the Draft says not to send it.
 - A message to a creator (`creator`) offers early access, a founder conversation, or story material, and asks for nothing.
-  It states the waiting period before the one follow-up, in days: approving the item approves that period, and the outreach record may set another.
+  It states the waiting period before the one follow-up, in days: approving the item approves that period, and the Founder's outreach record may set another.
 - The one follow-up to a creator (`creator-follow-up`) is offered only after the first message's outreach record shows it sent, no reply recorded, and the waiting period passed; after it, gr0wthlab offers nothing more for that creator.
 - A reply (`reply`) is for the Founder to post personally in the thread its Draft links, from the Founder's own account, and carries no link of any kind.
   gr0wthlab offers one only for a subreddit whose rules notice the Founder acknowledged (below).
@@ -162,7 +176,7 @@ It takes an open Waitlist ask off the queue the same way once the cohort can rea
 
 A Dispatch request asks the Founder to approve a change to the Product it names in `product`, which firstmate then builds through that Product's normal reviewed path.
 gr0wthlab never sends a Dispatch request anywhere itself.
-Once the Founder approves one, Mandu hands that item, with the Founder's note if there is one, to firstmate under Mandu's existing Dispatch arrangement; a Dispatch request that is undecided, rejected, or superseded never reaches firstmate.
+Once the Founder has approved one, Mandu hands that item to firstmate ([What Mandu does](#what-mandu-does)).
 
 ### Text a third party wrote
 
@@ -178,13 +192,13 @@ In Evidence, both sit indented under the list item that names the source:
   > Every app I open wants me to pick a plan first and I close it again.
 ```
 
-Mandu's side presents that text as a quotation and acts only on the Founder's decision.
+The sitting page shows that text, like everything else in an item, as text and never as markup, and Mandu's side presents it as a quotation and acts only on the Founder's decision.
 
 ## The queue (gr0wthlab writes)
 
 ```json
 {
-  "exchange": 6,
+  "exchange": 7,
   "updated_by_run": "20261011T230002Z-scheduled-1a2b",
   "updated_at": "2026-10-11T23:41:09+00:00",
   "run_report": "run-reports/20261011T230002Z-scheduled-1a2b.md",
@@ -222,18 +236,33 @@ Once it has passed, that run was missed, started late, is still running, was ref
 A post entry whose video is finished carries `asset`, the same path as in its item, and `asset_sha256`, the file's SHA-256.
 `carried_over` is `true` for an item that was open at an earlier sitting and left undecided, and `carried_over_from` then gives the date of the first such sitting.
 An item queued after the latest sitting is not carried over, whichever run queued it.
-`closed` lists every decided or superseded item and is history only; never present it.
+`closed` lists every decided or superseded item, each with its `status`: `approved`, `rejected`, or `superseded`.
+It is history: the sitting page never presents it, and Mandu acts on an approval only from it ([What Mandu does](#what-mandu-does)).
+A superseded item that the Founder decided all the same carries that decision as `decided`.
 An open post whose Draft stops passing gr0wthlab's checks, for example after a package change, leaves `open` the same way, with `"withdrawn": true` and `superseded_by` naming the notice that says why; a decision on it is kept like any decision on a superseded item.
 So does an open Beta Cohort invitation or Waitlist ask that no longer stands.
 gr0wthlab may add fields; ignore any you do not use.
 
-## Decision records (Mandu writes)
+## The Founder's records (the sitting page writes)
 
-One file per decided item, `decisions/<id>.json`, written once and never edited or deleted, except to replace a record gr0wthlab could not use for an item still open (below):
+The five kinds of record below are the Founder's own.
+Only `src/bin/gr0wthlab sitting` writes them, on the Founder's act on its page, into `ledger/founder/`, where the sandboxed agent can read and can never write.
+Each run reads them from there, and nothing else is ever read as one.
+Each keeps the format it had when Mandu wrote it, up to version 6.
+
+The page checks every record before it writes it, with the check a run reads it with, so a record it wrote is one a run can use.
+A record that does not follow its format, as one changed by hand or damaged can be, is not a record.
+gr0wthlab takes nothing from it, names it with the exact problem in the run report and a notice, and leaves everything as it was.
+The Founder corrects it by giving the answer again on the page, which writes the file again, whole.
+Nor is a file with more than one link, a link in a record's place, or a file there that is not named `<name>.json`.
+
+## Decision records
+
+One file per decided item, `founder/decisions/<id>.json`:
 
 ```json
 {
-  "exchange": 6,
+  "exchange": 7,
   "item": "20261011-trademark-status-stale",
   "decision": "reject",
   "reason": "Keep the legal line until counsel confirms the filing.",
@@ -244,42 +273,48 @@ One file per decided item, `decisions/<id>.json`, written once and never edited 
 ```
 
 - `item` equals the file name without `.json`.
-- `decision` is `approve` or `reject`.
+- `decision` is `approve` or `reject`; acknowledging a notice records `approve`.
 - A rejection needs `reason`: one line of at most 300 characters.
 - An approval may carry `note`, one line of at most 300 characters, and has no `reason`.
-- `decided_at` is the time of the decision with its UTC offset; `sitting` is the sitting's date and may be left out.
+- `decided_at` is the time of the decision with its UTC offset, and `sitting` is the date of the sitting it was given at.
+
+An item the Founder leaves for later has no record; it returns, marked carried over, at the next sitting.
+
+The Founder can change a decision, or take it back, on the page until a run has taken it in, and never after.
+Changing it writes the file again, whole; taking it back removes the file, and the item is undecided again.
+A run takes a decision in when it closes the item in `queue.json` and writes the decision's Evidence, `evidence/decisions/<id>.json`; the page offers no change from then on.
 
 gr0wthlab matches each record to its item by `item`, keeps every reason and note as Evidence, and never asks about that item again.
 A decision on an item that a newer item superseded before gr0wthlab read the decision, for example while a late run was still running during the sitting, is kept the same way.
 Its Evidence also names the newer item, which stays open, and the Marketing Engineer sees the decision, with its reason or note, beside that newer item.
 
 A decision record for an item still open that does not follow this format is not a decision, and gr0wthlab does not take it in.
-gr0wthlab names it, with the exact problem, in the run report and in a notice at every run while the item stays open.
-Mandu replaces it with a valid record in this format of the Founder's decision; if the record does not show that decision, Mandu presents the item again at the next sitting and writes the new decision in its place.
-This is the only case where a record is rewritten.
+gr0wthlab names it, with the exact problem, in the run report and in a notice at every run while the item stays open, and the sitting page shows the item as undecided and says its record cannot be used.
+Deciding the item again on the page replaces the record.
 
 gr0wthlab also cannot use a decision that names no queued item, a decision that differs from the one already taken for its item, or any other record that does not follow its format, such as a decision on an item no longer open or a sitting record.
 It reports each such record to the Founder once, in one notice, and again only if the file changes.
-Such a record changes nothing: a decision already taken stands, and Mandu does not need to rewrite or remove it.
+Such a record changes nothing: a decision already taken stands.
 
-## Sitting records (Mandu writes)
+## Sitting records
 
-One file per sitting, `sittings/<YYYY-MM-DD>.json`, with the minutes the Founder spent, measured by Mandu or reported by the Founder:
+One file per sitting, `founder/sittings/<YYYY-MM-DD>.json`, with the minutes the Founder spent, which the page measured and the Founder can correct:
 
 ```json
-{"exchange": 6, "date": "2026-10-11", "minutes": 48, "note": null}
+{"exchange": 7, "date": "2026-10-11", "minutes": 48, "note": null}
 ```
 
 `minutes` is a whole number from 1 to 600, and `date` equals the file name.
-Write it when the sitting ends: gr0wthlab counts an item as left undecided at the sitting when the item is still open, was queued on or before the sitting's date, and was queued before gr0wthlab first read this record.
+The page writes it when the Founder ends the sitting: gr0wthlab counts an item as left undecided at the sitting when the item is still open, was queued on or before the sitting's date, and was queued before gr0wthlab first read this record.
+A second sitting on the same date writes the same file again, whole, with the minutes of both.
 
-## Beta Build records (Mandu writes)
+## Beta Build records
 
-One file per Product, `beta-builds/<Product>.json`, written only on the Founder's word that a Beta Build of that Product passed Apple's review for external testing:
+One file per Product, `founder/beta-builds/<Product>.json`, written only when the Founder says on the page that a Beta Build of that Product passed Apple's review for external testing:
 
 ```json
 {
-  "exchange": 6,
+  "exchange": 7,
   "product": "RepToday",
   "approved_on": "2026-11-02",
   "build": "1.0 (42)",
@@ -293,23 +328,22 @@ One file per Product, `beta-builds/<Product>.json`, written only on the Founder'
 - `approved_on` is the date Apple approved the build, as the Founder reports it, and is not after the day in `recorded_at`.
 - `build` is an optional one-line label of at most 300 characters, such as the version and build number.
 - `recruiting` is `open` or `stopped`.
-  When the Founder stops recruiting, write the file again, whole, with `"recruiting": "stopped"` and `stopped_on`, the date of the stop; to reopen, write it again with `"recruiting": "open"` and no `stopped_on`.
-  `approved_on` stays as it was.
+  When the Founder stops recruiting, the page writes the file again, whole, with `"recruiting": "stopped"` and `stopped_on`, the date of the stop; when the Founder reopens it, again with `"recruiting": "open"` and no `stopped_on`.
+  `approved_on` and `build` stay as they were.
 - `recorded_at` is when the Founder said so, with its UTC offset.
 
-This record is the gate, and gr0wthlab reads nothing else as an approval.
-Never write it from anything but the Founder's own statement: not from TestFlight, App Store Connect, a calendar, or a note.
+This record is the gate, and gr0wthlab reads nothing else as an approval: not TestFlight, App Store Connect, a calendar, or a note.
 Before it exists, gr0wthlab does nothing about the Beta Cohort: it chooses no one, prepares no invitation, and keeps no Evidence, and each run report lists the approval as not recorded.
 A record that does not follow this format is not an approval; gr0wthlab names it, with the exact problem, in every run report and in a notice until it is valid.
 While `recruiting` is `stopped`, gr0wthlab offers no further invitation and withdraws an open one.
 
-## Beta Cohort reports (Mandu writes)
+## Beta Cohort reports
 
-One file per Product and date, `beta-reports/<Product>-<YYYY-MM-DD>.json`, with the counts the Founder reports once invitations have gone out:
+One file per Product and date, `founder/beta-reports/<Product>-<YYYY-MM-DD>.json`, with the counts the Founder gives on the page once invitations have gone out:
 
 ```json
 {
-  "exchange": 6,
+  "exchange": 7,
   "product": "RepToday",
   "date": "2026-11-08",
   "invitations_sent": 10,
@@ -322,23 +356,23 @@ One file per Product and date, `beta-reports/<Product>-<YYYY-MM-DD>.json`, with 
 - The file name is `product`, a hyphen, and `date`.
 - Each count is a total to date, not the week's change: `invitations_sent` is how many invitations the Founder has sent, `accepted` is how many people have joined the Beta Cohort, and `sessions_booked` is how many first sessions are booked.
 - A count is a whole number from 0.
-  When the Founder did not give one, write `null` or leave it out, never `0`: gr0wthlab records it as not reported, and never as zero.
+  A count the Founder left blank on the page is `null`, never `0`: gr0wthlab records it as not reported, and never as zero.
   A report gives at least one count.
 - `recorded_at` is when the Founder reported, with its UTC offset.
-- To correct a report, write the file again, whole; a later date is a new file.
+- To correct a report, the Founder gives it again on the same date, and the file is written again, whole; a later date is a new file.
 
 gr0wthlab keeps these three counts, with the report's date and source, as its only Evidence of what happened after a send, and reads nothing else in the record.
 `accepted` is the cohort's size: recruiting goes on until it reaches the cohort's maximum, 50 for RepToday in gr0wthlab's `config/products.json`, or the Founder stops it.
 Until `accepted` is reported, gr0wthlab treats the cohort as possibly as large as the number of entries the Founder approved for invitation, so it stops offering batches once that number reaches the maximum and says that the count is missing.
 
-## Outreach records (Mandu writes)
+## Outreach records
 
-One file per approved message the Founder sent or posted, `outreach/<id>.json`, named for the message item.
-Write it when the Founder sends the message, and replace it, whole, when a reply arrives; it is the only record gr0wthlab has of either.
+One file per approved message the Founder sent or posted, `founder/outreach/<id>.json`, named for the message item.
+The page writes it when the Founder says the message was sent, and again, whole, when the Founder says a reply arrived or corrects it; it is the only record gr0wthlab has of either, since gr0wthlab sends nothing.
 
 ```json
 {
-  "exchange": 6,
+  "exchange": 7,
   "item": "20261011-message-creator-gmb-fitness",
   "sent_on": "2026-10-12",
   "replied_on": null,
@@ -350,7 +384,7 @@ Write it when the Founder sends the message, and replace it, whole, when a reply
 - `item` equals the file name without `.json`, and names a message item the Founder approved.
 - `sent_on` is the date the Founder sent or posted it.
 - `replied_on` is the date the person replied, in any form the Founder counts as a reply, or `null` while none has; it cannot come before `sent_on`.
-- `follow_up_wait_days` is the waiting period the Founder wants before the one follow-up, a whole number of days from 1 to 90, or `null` or left out for the period the item stated.
+- `follow_up_wait_days` is the waiting period the Founder wants before the one follow-up, a whole number of days from 1 to 90, or `null` for the period the item stated.
 - `note` is one optional line of at most 300 characters.
 
 What gr0wthlab does with it:
@@ -359,33 +393,45 @@ What gr0wthlab does with it:
   With no record, it offers none: nothing shows the message was sent.
 - Once `replied_on` is set, it never offers a follow-up for that creator, and withdraws one still open.
 - Only a record it could read withdraws a follow-up.
-  When `outreach/` cannot be read, or a first message's record is missing after a follow-up was queued from it, cannot be read, or is not in this format, gr0wthlab offers no follow-up for that creator, leaves one still open exactly as it is, and reports the records as not read until a valid record is there again.
+  When `founder/outreach/` cannot be read, or a first message's record is missing after a follow-up was queued from it, cannot be read, or is not in this format, gr0wthlab offers no follow-up for that creator, leaves one still open exactly as it is, and reports the records as not read until a valid record is there again.
 - For any other message, the record is kept as the fact that it was sent; nothing else depends on it.
-- A record that names no message item, or a message the Founder has not approved, changes nothing; gr0wthlab names it in the run report and a notice at every run until Mandu corrects or removes its own file.
+- A record that names no message item, or a message the Founder has not approved, changes nothing; gr0wthlab names it in the run report and a notice at every run until it is corrected.
 
 ## No address in any record
 
-The Marketing Engineer must never see, store, or send an email address, and it reads the whole Mandu checkout.
-Never write an email address, a name, or anything else about a person on the Waitlist into a decision, a sitting record, a Beta Build record, a Beta Cohort report, or an outreach record, including a reason, a note, or a field of Mandu's own; a person is only ever an entry identifier.
-gr0wthlab refuses a Beta Build record or a Beta Cohort report that holds anything that looks like an email address: it reads nothing from it, keeps nothing, and reports the record without repeating what it holds.
+The Marketing Engineer must never see, store, or send an email address, and it reads every record on this page.
+No record holds an email address, a name, or anything else about a person, in a reason, a note, or any other field; a person is only ever a Waitlist entry identifier.
+The sitting page refuses, with a plain reason, any line that holds something that looks like an email address, and says the rule beside every line the Founder can type.
+gr0wthlab refuses any of the Founder's records that holds something that looks like an email address, as one changed by hand could: it reads nothing from it, keeps nothing, and reports the record without repeating what it holds.
 Resolving an entry identifier to its address, and sending, happen on the Founder's side, outside the gr0wthlab, Mandu, and RepToday checkouts.
 
-## Rules for both sides
+## Rules
 
-- Every record states the exchange version its writer follows, `"exchange": 6` today, and every item states `exchange: 6`.
-- Versions are additive: a new version only adds record types or optional fields, so every record of an earlier version stays valid as written.
-- A reader reads every record at or below its own version, by that record's version: a field added after it is simply absent.
-- A record of a newer version than the reader knows is reported as unreadable and never guessed at.
-- A change that is not additive needs a migration story of its own, not a version bump.
+- Every record states the exchange version its writer follows, `"exchange": 7` today, and every item states `exchange: 7`.
+- Mandu reads every record at or below the version it knows, by that record's version: a field added after it is simply absent.
+- A record of a newer version than Mandu knows is unreadable to Mandu and never guessed at; Mandu says so to the Founder and acts on nothing in it.
+- From version 7 on, a new version only adds record types or optional fields, so every record of version 7 or later stays valid as written.
+- A change that is not additive needs its story told on this page, not only a version number.
+- Times carry their UTC offset; dates are `YYYY-MM-DD`.
+- gr0wthlab writes each file whole: a temporary file whose name starts with `.` in the same folder, then a rename; a reader ignores files whose names start with `.`.
+- gr0wthlab may add fields to any record; a reader ignores any it does not use.
+- Mandu never writes, moves, or deletes a file in gr0wthlab, and gr0wthlab never writes, moves, or deletes a file in Mandu or in a Product repository.
+
+## Version 7, and the versions before it
+
+Version 7 is not an additive change, so its story is told here.
+Up to version 6, Mandu presented the Review Queue at the Founder's sitting and wrote the five kinds of the Founder's record in its own repository, in `projects/gr0wthlab/exchange/`, and gr0wthlab read them from there.
+From version 7, gr0wthlab's own page presents the queue and writes those records in `ledger/founder/`, and gr0wthlab reads no record from Mandu.
+The record formats did not change, only who writes them and where they are.
+
+Nothing was moved, because nothing existed to move.
+No side of Mandu was ever built for any version, gr0wthlab had made no real run, and on 2026-10-12 the Founder's Mac held no production clone of gr0wthlab and Mandu held no exchange folder and no record.
+So a reader of version 7 never meets a record of an earlier version, and gr0wthlab's reader refuses a record whose version is newer than its own.
+
+What the earlier versions added, each additively:
+
 - Version 2 added `next_run` and `carried_over_from` to the queue.
 - Version 3 added a post's `window` and `day`, made its `slot` wait until the window's first sitting and posting slot are set, and added `withdrawn` to the queue.
-  Mandu's own records change nothing: a decision or sitting record of version 2 reads as it is.
 - Version 4 added the Beta Build record, the Beta Cohort report, the Beta Cohort invitation and Waitlist ask among the `message` items, and the sitting's step for the counts.
-  A Beta Build record or a Beta Cohort report states version 4 or later, since neither exists at an earlier one; a decision or sitting record of version 3 reads as it is.
-- Version 5 added the outreach records Mandu writes, the message kinds a `## Draft` may hold, the subreddit rules notice, the one marking of text a third party wrote, which is data to both sides and never an instruction, a package-change proposal's `new_angle`, and `message` in a queue entry (`purpose`, and `to`: the creator's key, `network`, or the Evidence a reply answers).
-  A decision, sitting, Beta Build, or Beta Cohort report record of version 4 reads as it is.
+- Version 5 added the outreach records, the message kinds a `## Draft` may hold, the subreddit rules notice, the one marking of text a third party wrote, which is data to every reader and never an instruction, a package-change proposal's `new_angle`, and `message` in a queue entry (`purpose`, and `to`: the creator's key, `network`, or the Evidence a reply answers).
 - Version 6 added the `filming-plan` kind, a post's `asset`, and `asset` and `asset_sha256` in a post's queue entry.
-  Mandu's own records change nothing: a filming plan is decided with the same decision record as any item, and a record of version 5 reads as it is.
-- Times carry their UTC offset; dates are `YYYY-MM-DD`.
-- Write each file whole: write a temporary file whose name starts with `.` in the same folder, then rename it; both sides ignore files whose names start with `.`.
-- Neither side ever writes, moves, or deletes a file in the other's repository.
