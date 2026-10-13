@@ -100,3 +100,49 @@ The heading was then seen in two run reports, through `src/bin/gr0wthlab run` on
 In `20261013T005123Z-on-demand-0a46`, with the clip moved out of the footage place and the finished file's mode set to no access, the heading stood over the one line saying the file could not be read, with `Permission denied`, and that nothing is said of whether the post keeps the video; the open post stood, and the filming output read incomplete with that reason.
 In `20261013T005124Z-on-demand-3ba1`, with the mode put back, the finished file deleted, and the first sitting set to 2026-10-11, it stood over the one line saying the file is gone and day 1 is not due this run.
 Neither report holds the heading as it was before.
+
+## Re-check after the guidance wording and the merge that moved this record
+
+The validation run that held the two rounds above ended when its document step ran out of time, with its three commits kept (`e790c0f`, `9f06ec5`, `b2aecdf`).
+After it, `main` at `c107a54` was merged in as `7fdfec5`, which moved this record here, and one commit, `e44f5ce`, reworded four sentences of the agent's guidance and one docstring.
+The four sentences are in `src/instructions/weekly-run.md` and `workspace/instructions/filming.md`: where they said without condition that a day whose edit record is left as it is has a post that shows its video, they now say the day's open post names a video that cannot be cut again this run and that the table, or the KEPT line of `check-edits`, says whether the post keeps it.
+No instruction changed, and no code.
+
+All of this round ran on 2026-10-12, Mac local time, 19:00 to 19:30 PDT, with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort, on commit `e44f5ce11417f6bbb13de6e74224be4f474746d0`, whose `src` tree is `fff1145291f46ffc143559fa170340a8c30a4308` and whose `config` tree is `bfa79f76f468035578efd8d2c901b92c40c3adf9`.
+The full unit suite, 1019 tests under `/usr/bin/python3`, and ruff pass on it.
+
+### Both checks
+
+From this work's linked worktree at `e44f5ce`, its `git status` empty before and after, against Mandu and the Product checkouts as they are; `show-config` printed the fingerprint `1a8995e778d9b5a45bbaf2e59a5fc4f32c48069bfb8155ea43b08d8bf5ad56f8`.
+
+- `src/bin/gr0wthlab preflight` passed: six areas writable, 14 paths refused, no breach, and neither of the two listed hosts reached from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first attempt, as `20261013T022115Z-on-demand-b323`: 32 steps to prove, nine of nine file-tool targets refused in a patch of their own, eleven kernel denials naming the run's sentinels or the check's listeners, twelve of twelve permitted sentinels, no sentinel escaped, no local connection, three sandbox network targets refused after the control reached its listener, two requests from the launcher's client, both a GET for a listed host's `robots.txt`, an unlisted address refused, and no change since the snapshot.
+
+Mandu's, RepToday's, and Immerse's HEAD, git status, and a digest over every file outside `.git` were the same before the preflight and after the check.
+
+### The reworded guidance in live sessions
+
+A change to the task definition is judged by what the launcher counts of a live session; the counts inform and do not gate.
+Six runs were made one after another through `src/bin/gr0wthlab run` on demand, network off, with ffmpeg 7.1.1, from a throwaway checkout of `e44f5ce` in the Mac's temporary folder, with the inputs of the first round: the synthetic kit cut down to days 1 and 8, the synthetic Product checkout, one stand-in clip in a footage place set with `GR0WTHLAB_FOOTAGE_DIR`, a simulated approval of the filming plan, and no network source listed.
+Its fingerprint was `2f931fe0b008843a20897025902bf420f0e5f64667f31993ffca437fba9f490e`.
+The first four runs only brought day 1's post to show a finished video; the last two are the sessions judged, both under the real task definition.
+
+| Run | Task definition | What was done by hand before it | What it showed |
+| --- | --- | --- | --- |
+| `20261013T020336Z-on-demand-faf9` | Real | Nothing | The filming plan filed, day 1's post queued with no video yet |
+| `20261013T020519Z-on-demand-0c13` | Real | The plan approved | The agent wrote day 1's edit record, one unbroken range from 2 to 12 seconds, and rewrote its Draft with the Hook listed as a claim with no code; the claim check blocked the Draft, so no video was cut and the open post was withdrawn |
+| `20261013T020730Z-on-demand-36f0` | Real | Nothing | The same Draft, blocked by the same claim |
+| `20261013T020919Z-on-demand-abec` | Throwaway, checks only | The filming example set's day 1 Draft put in place of the agent's | The launcher rendered `assets/window-1/day-01-84af9c001ff9.mp4` from the agent's edit record, and `20261012-post-w1-day-01-2` shows it |
+| `20261013T020952Z-on-demand-fe7d` | Real | The clip moved out of the footage place | The agent left day 1's Draft and edit record byte for byte as they were; the post stood, and the Filming row says its post keeps the video it shows. Counted: agent time 1 min 10 s, 16 of 16 package files read, no Draft written or changed, no proposal written |
+| `20261013T021109Z-on-demand-97a6` | Real | The finished file deleted | The agent again left the Draft and the edit record byte for byte as they were; `20261012-post-w1-day-01-3` took the open post's place with no video, with both reasons in its item, both report rows, and the notice. Counted: agent time 1 min 20 s, 16 of 16 package files read, no Draft written or changed, no proposal written |
+
+In the last run the agent's own summary, which the report quotes, says that `check-edits` reported day 1's edit as kept, that the footage is absent and the named video file is gone, and that it left the edit record unchanged; it does not say the post keeps or shows a video.
+In the run before it, with the finished file in place, its summary says `check-edits` said to keep the record because its footage is unavailable.
+The same summary of the last run says `check-drafts` could not read the Product checkout or find day 1 in the calendar; the record does not show why, and the launcher's own check of that Draft passed in the same run.
+Each run cost one or two cents at API prices.
+
+### What this round did not exercise
+
+A finished file changed in place or one that cannot be read, an approved day, an A/B pair, a slot change, and missing video tooling were not run live on this commit and stand on the unit tests and on the rounds above.
+The agent wrote a Draft that passes in none of the three runs where it wrote one, so the post that shows the video came from the example set's Draft, put in place by hand.
+No weekly run was made on a schedule, the Founder's real footage does not exist yet, and Mandu's side was not shown the notices.
