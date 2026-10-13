@@ -45,8 +45,8 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    The first time it reads a subreddit's rules, it queues one notice that quotes and links them; no reply Draft for that subreddit is offered until the Founder acknowledges it, and the Founder's answer stands whatever the rules say later.
    It reads the Founder's outreach records from Mandu's exchange folder and works out which messages may be offered: the personal-network ask, one message for each creator in `config/run.json` that the channel plan names, and one follow-up only for a creator who was written to, has not replied, and whose waiting period has passed.
    It then decides which workflows have work for the agent this run, and for each of those, one after another, writes that session's brief and runs one agent session in the sandbox, with that workflow's task definition from `src/instructions/weekly-run/`, at the reasoning effort [`config/guardrails/runtime.json`](../config/guardrails/runtime.json) sets, which is high ([One session per workflow](#one-session-per-workflow)).
-   No session has a network, and the launcher proves it before each one's agent starts: the preflight tries each listed host from inside the sandbox, and a session whose preflight reaches one is not started.
-   It proves the same way, before each session, that no session can read raw footage: the preflight tries to list the footage place and each footage folder in it from inside the sandbox, and a session whose preflight can list one is not started ([how raw footage is kept from the agent](#how-raw-footage-is-kept-from-the-agent)).
+   No session has a network, and the launcher proves it before each one's agent starts: the preflight tries each listed host from inside the sandbox, and a session whose preflight reaches one, or does not finish, is not started.
+   It proves the same way, before each session, that no session can read raw footage: the preflight tries to list the footage place and each footage folder in it from inside the sandbox, and a session whose preflight can list one, or does not finish, is not started ([how raw footage is kept from the agent](#how-raw-footage-is-kept-from-the-agent)).
    Every session writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records, and never write there.
    Every session runs under the same time limit, counted for it alone; one still running at it is stopped, and the run goes on to the next session ([When a session times out](#when-a-session-times-out)).
    After each session it restores its owner's read and write access to anything under `workspace/` that session left without it, and the run report names every entry it fixed, before or after a session.
@@ -378,6 +378,9 @@ Three things hold it, each stricter than the one before:
    A place may hold something the sandbox reads only inside Mandu, and there never in a footage folder; the refusal says which of the three it is.
 2. Before each session's agent starts, with no model, the preflight tries inside that session's own sandbox to list the footage place and each footage folder that exists in it.
    A listing that succeeds keeps that session's agent from starting, with `the sandbox could read where raw footage is kept` and the folder: the run marks that session's workflow incomplete and goes on to the next session, whose own preflight comes first, so no session starts while a footage folder can be listed.
+   A probe that listed nothing and fell short, because it did not finish in time, ended with an error, or did not try a folder, keeps that session's agent from starting the same way, with `the check that the sandbox cannot read the footage place did not finish` and the reason; it says nothing of what the sandbox could read, since no record shows a listing.
+   The session's record holds the one wording, and the line the run prints, the run report's rows, and the notice repeat it.
+   The network probe before each session is worded the same way: only with a listed host it reached does the run print `the sandbox reached the network` and the session's record say `the sandbox's network was not closed`, and a probe that reached none and fell short says `the check that the sandbox cannot reach the network did not finish`, with the reason.
    Otherwise the session says `preflight refused a listing of the footage place and of <n> footage folders in it`, and the run report's `Sandbox footage` line says what was tried.
 3. The boundary check below has the agent itself try each of them, and passes only on the runtime's own record of each refusal.
 
@@ -651,7 +654,8 @@ Every other process the launcher starts (git, Codex's version and sandbox probes
 
 The Founder approves the Waitlist Dispatch request in Mandu, and firstmate builds it in RepToday; until then every run reports the Waitlist view as skipped.
 Once the build writes its anonymous view, a reviewed gr0wthlab pull request sets `waitlist.view.local_path` for RepToday in [`config/products.json`](../config/products.json) to the file's path, and the next run reads it.
-The path must lie outside this clone, Mandu, and every Product checkout, all of which the sandbox reads; the launcher refuses to start otherwise, so the agent can never open the view.
+The path must lie outside this clone, Mandu, and every Product checkout; the launcher refuses to start otherwise, so the agent can never open the view.
+The sandbox reads this clone, every Product checkout, and of Mandu only the package paths, and the view may be nowhere in the Mandu checkout all the same.
 `GR0WTHLAB_WAITLIST_VIEW` overrides the path on one machine, for example to try the run against a test copy of the view.
 The change touches `config/products.json`, so it needs the boundary check below.
 
@@ -680,6 +684,7 @@ The boundary check passes only when the runtime's own records show all of this, 
 - Each forbidden read was attempted and refused, each on its own: the footage place and each footage folder that exists in it when the check runs.
   For the shell, the kernel's log holds a refused read of that folder, by its full path, by the very process that Codex's record of the run's shell call shows the launcher's script started for it; the preflight's own refusals of the same folders never count.
   For the file tool, which reads only files, Codex's record holds a `view_image` call that names the first footage file of each footage folder that has one, refused with the system's permission error.
+  A call on that file whose record shows neither that refusal nor a read, such as one that found the file no longer there, proves nothing either way: the read is handed over again like any step with no record, and its line says the call was not refused with the system's permission error and that its record shows no read.
   A folder that does not exist yet has nothing to read and is not tried: the check's verdict counts the reads it had to prove, and `forbidden_reads` in its evidence file names them.
 - Nothing changed in this clone, Mandu, or any Product checkout against a snapshot taken before the check, once the check has removed the run's own files from the areas.
 - The kernel refused the connection to each of the check's two local listeners, and neither received one.

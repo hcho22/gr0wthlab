@@ -1,7 +1,7 @@
 # The footage place inside Mandu, with the sandbox kept out of its footage folders (US-ME09, US-ME02)
 
 The text from "The footage place inside Mandu" down to "Live checks on the real configuration" was written into [the US-ME02 spike note](../spikes/us-me02-runtime-boundary.md) on this change's branch and moved here whole in the merge with `main` at `1bfe1a4`, with no new run for the move.
-Its runs were made before that merge, when a weekly run was one agent session; the round after the merge is the last section.
+Its runs were made before that merge, when a weekly run was one agent session; the round after the merge and the round after review are the last two sections.
 
 ## The footage place inside Mandu
 
@@ -102,7 +102,8 @@ Two proofs stand on it, both from the runtime.
   For the shell the launcher's script lists each folder in a process of its own and prints that process's number; the check takes the number from Codex's record of the shell call and needs the kernel's refusal of a read of that folder by that very process.
   A refusal that names the folder alone proves nothing, since the preflight's own probe is refused the same folders in every run.
   For the file tool the check needs Codex's record of a `view_image` call that names the first footage file of a footage folder, refused with the system's permission error; a folder with no footage file has no file-tool read to prove.
-  A listing the script reports as landed, or a `view_image` call on the file that Codex did not refuse so, ends the check as failed at once.
+  A listing the script reports as landed, or a `view_image` call on the file whose record shows the file read, ends the check as failed at once.
+  Until the round after review, at the end of this file, any `view_image` call on the file that Codex did not refuse so ended the check that way.
 
 Codex keeps only the start of a call's output in its record, about 2 KiB.
 In the first lab check the script printed the reads' lines after its nine refused writes, past that point, so that run proved the file-tool reads and left the three shell reads unproven; the check handed those three over again and the second run proved them, as runs `20261012T235048Z-on-demand-382b` and `20261012T235155Z-on-demand-d9d7`.
@@ -265,3 +266,89 @@ Mandu (`9089b31`, with no uncommitted change) and RepToday (`main` at `de0355d`)
 - The exit code of three of the four refused footage places was not read.
 - A footage folder that appears between two sessions of one run stands on a unit test alone, which the commit that holds this record adds; it passed under both interpreters.
 - The unit suite on Linux, which CI runs.
+
+## Re-check after review: a probe that falls short says only that
+
+The review of this change found that a footage read probe which listed nothing and fell short was told as a breach: the session's record, the line the run printed, the run report, and the notice all said `the sandbox could read where raw footage is kept`.
+This round changes what is said and nothing about what is done: a session whose probe does not show every footage folder refused is still not started.
+`footage_reason` in [`src/gr0wthlab/launcher.py`](../../src/gr0wthlab/launcher.py) makes the reason once, for the session's record and the printed line, and the run report and the notice repeat the record: `the sandbox could read where raw footage is kept` only with a folder the probe listed, and otherwise `the check that the sandbox cannot read the footage place did not finish`, with what the probe left.
+`network_reason` beside it gives the network probe, which is older than this change, the same two wordings.
+In the boundary check, a `view_image` call on a footage file ends the check as failed at once only when its record shows the file read; a call whose record shows neither the system's refusal nor a read is handed over again like a step with no record.
+The round also corrected sentences that still said the sandbox reads the whole Mandu checkout or cannot read the footage place, one of them in the Filming task definition and one in every session's brief.
+
+**What was run, and on which code.**
+Everything ran on 2026-10-13 between 11:55 and 12:30, Mac local time (UTC-7), with Codex CLI 0.160.0 and `gpt-6-luna` at high effort; the run identifiers carry the UTC time.
+The code is commit `8fbe132146ad68d2194b18823ff9c92e853ae567` with this round's changes not yet committed: its `src` tree is `adb47759b7bc0db9fe56f4dd6da5ab58f442c40c`, and its `config` tree is that commit's, `2496957cf4f5b3c89a2927b8c0e15f14a5fb6013`.
+No file under `src/` or `config/` changed between the start of the unit suite and the end of the last check.
+The checks on the real configuration ran from a linked worktree of the repository with no override but `GR0WTHLAB_LOG_DIR`; its `git status` listed this round's 17 changed files and was the same before the preflight and after the boundary check.
+The lab runs ran from throwaway clones in the Mac's temporary folder, written `<lab>` below, each beside synthetic Mandu, RepToday, and Immerse checkouts set with the three `GR0WTHLAB_*_DIR` overrides, with the footage place set with `GR0WTHLAB_FOOTAGE_DIR`.
+
+### The unit suite and ruff
+
+`ruff check src src/bin/gr0wthlab` and `ruff format --check src src/bin/gr0wthlab` passed.
+`/usr/bin/python3 -m unittest`, run from `src/` over all 42 test modules in five parallel shards, passed: 1,152 tests, with no test skipped.
+
+### The reported case, before and after
+
+`src/bin/gr0wthlab run` ran in two lab clones, one of commit `8fbe132` and one of this round's code, each with three sessions due: Package review, Post Drafts, and Outreach.
+Codex was the repository's no-model stand-in, `tests.fakes.install_codex`, behind a wrapper that made one `codex sandbox` probe fall short and passed every other call through.
+The footage place was an empty folder outside every checkout, `<lab>/footage`.
+In every run below none of the three sessions was started and the command exited 3.
+The table gives the reason as the Sessions table of the run report has it for the Package review session; the Outputs table of the same report and the run's notice carried the same words.
+The error text after `exited 71` is the wrapper's own.
+
+| What the probe did | On `8fbe132` | On this round's code |
+| --- | --- | --- |
+| The footage probe exited 71 with nothing listed | `20261013T185511Z-on-demand-69c0`: `the sandbox could read where raw footage is kept: <lab>/footage was not probed; codex sandbox exited 71: error: the sandbox profile could not be applied` | `20261013T190503Z-on-demand-0a33`: `the check that the sandbox cannot read the footage place did not finish: <lab>/footage was not probed; codex sandbox exited 71: error: the sandbox profile could not be applied` |
+| The footage probe exited 0 having tried no folder | `20261013T185521Z-on-demand-2c44`: `the sandbox could read where raw footage is kept: <lab>/footage was not probed` | `20261013T190505Z-on-demand-195c`: `the check that the sandbox cannot read the footage place did not finish: <lab>/footage was not probed` |
+| The footage probe never finished | not run | `20261013T190529Z-on-demand-21e4`: `the check that the sandbox cannot read the footage place did not finish: <lab>/footage was not probed; codex sandbox did not finish within 1 min and was stopped` |
+| The footage probe listed the place | not run | `20261013T190519Z-on-demand-a75d`: `the sandbox could read where raw footage is kept: listed <lab>/footage` |
+| The network probe exited 71 with no host reached | `20261013T185523Z-on-demand-29c9`: `the sandbox's network was not closed: www.reddit.com:443 was not probed; itunes.apple.com:443 was not probed; codex sandbox exited 71: error: the sandbox profile could not be applied` | `20261013T190507Z-on-demand-1452`: `the check that the sandbox cannot reach the network did not finish: www.reddit.com:443 was not probed; itunes.apple.com:443 was not probed; codex sandbox exited 71: error: the sandbox profile could not be applied` |
+| The network probe exited 0 having tried no host | `20261013T185525Z-on-demand-faf5`: `the sandbox's network was not closed: www.reddit.com:443 was not probed; itunes.apple.com:443 was not probed` | `20261013T190509Z-on-demand-4d1f`: `the check that the sandbox cannot reach the network did not finish: www.reddit.com:443 was not probed; itunes.apple.com:443 was not probed` |
+| The network probe reached both listed hosts | not run | `20261013T190521Z-on-demand-940c`: `the sandbox's network was not closed: reached www.reddit.com:443; reached itunes.apple.com:443` |
+
+On `8fbe132` the line each run printed before those reasons was `the sandbox could read where raw footage is kept; the agent was not started` in the first two runs and `the sandbox reached the network; the agent was not started` in the other two.
+On this round's code it was `the check that the sandbox cannot read the footage place did not finish; the agent was not started` and `the check that the sandbox cannot reach the network did not finish; the agent was not started` in the five runs whose probe fell short, and the two lines of `8fbe132` in the two runs whose probe listed the place or reached the hosts.
+After the first four runs on this round's code, and before the other three, no file under the clone's `ledger/` or in its log folder held `the sandbox could read`, `reached the network`, or `network was not closed`.
+
+### The boundary check with a read that landed, and with a footage file gone mid-check
+
+Both ran with the real agent, each from its own lab clone of this round's code, with the footage place at `<lab>/Mandu/projects/RepToday`, which held `gtm/`, `window-1/`, and `window-2/`, each window folder with a stand-in clip, a small text file named `d01-s1.mov`, committed in the synthetic Mandu.
+
+The first clone carried the three scratch changes of the third hole test above: `window-1/` granted, the rule in `keep_footage_unread` switched off, and the preflight's verdict on reads ignored.
+Its check failed at once, as run `20261013T192401Z-on-demand-8661`, configuration fingerprint `6d9d865ee08c4301e09e05ffcb62fbe4c2678e2040f68df2cd01f59af2f74166`: 37 steps, each of the nine forbidden targets refused in a patch of its own, eleven kernel Seatbelt denials naming the run's sentinels or the check's listeners, and 3 of 5 forbidden reads refused.
+Its two lines for the reads were `footage-window-1:shell: the script listed <lab>/Mandu/projects/RepToday/window-1 (process 18285)` and `footage-window-1:file-tool: Codex did not refuse the read of <lab>/Mandu/projects/RepToday/window-1/d01-s1.mov; Codex said: unable to process image: invalid or unsupported image data`.
+The command exited 1 after that one probe run.
+
+The second clone was unchanged, configuration fingerprint `49d61f1bdb668c69738090898bdf1559c5f8e6f8ca72f7e2e690f98abc62fb51`.
+A script beside the check moved `window-1/d01-s1.mov` out of the synthetic Mandu at 12:25:44, once the check had written its first probe run's instruction, and put it back at 12:26:24, once Codex's log of that run held a `view_image` call.
+
+| Run | Verdict | What the records showed |
+| --- | --- | --- |
+| `20261013T192544Z-on-demand-7bdd` | `NOT YET PROVEN` | 37 steps, each of the nine forbidden targets refused in a patch of its own, eleven kernel Seatbelt denials naming the run's sentinels or the check's listeners, 12 of 12 permitted sentinels written, and 4 of 5 forbidden reads refused. Codex's log holds two `view_image` calls: the one on `window-2/d01-s1.mov` failed with ``unable to read image at `<path>`: Operation not permitted (os error 1)``, and the one on `window-1/d01-s1.mov` with ``unable to locate image at `<path>`: No such file or directory (os error 2)``. The check's line for it was ``footage-window-1:file-tool: the `view_image` call that named <lab>/Mandu/projects/RepToday/window-1/d01-s1.mov was not refused with the system's permission error, and its record shows no read; Codex said:``, followed by those words of Codex's, cut at 200 characters. It asked again for `footage-window-1:file-tool` and no other step, and said `changes since the snapshot from before the check: none`. |
+| `20261013T192741Z-on-demand-ca24` | `PASSED` | 1 step, 1 of 1 forbidden reads refused: Codex's log holds one `view_image` call, on `window-1/d01-s1.mov`, failed with ``unable to read image at `<path>`: Operation not permitted (os error 1)``. No change since the snapshot. |
+
+The check closed with `boundary check: PASSED after 2 probe runs`, and the command exited 0.
+
+### The real configuration
+
+From the linked worktree, against Mandu and the Product checkouts as they are, with configuration fingerprint `33de78d4b956f6174c9b60269c55f0ce130db276cf1717d4d8a78df2ac8655a2`.
+It is not the fingerprint of the rounds above: this round ran from another linked worktree, and the command the fingerprint is taken of holds the repository's path.
+The Founder's folder held no `window-<n>/` folder, so the place itself was the one forbidden read there was to try.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, was refused a listing of `~/Mandu/projects/RepToday`, and reached neither listed host.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261013T192138Z-on-demand-c44c`: 33 steps, each of the nine forbidden targets refused in a patch of its own, eleven kernel Seatbelt denials naming the run's sentinels or the check's listeners, 1 of 1 forbidden reads refused, the listing of the footage place, neither local listener reached, 12 of 12 permitted sentinels written, and no change since the snapshot.
+  The probe's agent ran 47.5 seconds of its 30 minute limit.
+
+Mandu (`9089b31`, with no uncommitted change), RepToday (`main` at `de0355d`), and Immerse (`main` at `5c3a217`) had the same HEAD, branch, git status, stash count, and digest, size, mode, and modification time of every file outside `.git` after the boundary check as before the preflight.
+
+### What this round did not exercise
+
+- A probe that falls short in the real `codex sandbox`: in every run of "The reported case" a wrapper around the stand-in made the probe fall short, and the unit tests do the same with the stand-in itself.
+- A network probe that never finishes, in a whole run: it stands on a unit test of the launcher, `NetworkPreflightTest`.
+- A probe that lists one folder and falls short on another: no run made one, and no unit test reads the launcher's reason for one; `footage_reason` and `network_reason` look only at whether the probe listed or reached anything.
+- A file-tool read that is never settled in the check's three probe runs: it stands on a unit test, which judges one such run and reads the check's closing line for three of them, `still unproven: footage-window-1:file-tool`.
+- A footage file that is gone when its read is tried and still gone when the run is judged: it stands on the same unit test, where the folder's next footage file then has no call that named it.
+- A weekly session with the real agent on this round's code: the reworded sentence of the brief and the two reworded sentences of the Filming task definition were delivered to no real agent, and the three weekly runs with the real agent in the round above stand for the sessions' work.
+- The Founder's real footage, and a `window-<n>/` folder in the Founder's own Mandu, since none exists yet; the folder case stands on the lab runs above.
+- The unit suite under another Python than the Mac's `/usr/bin/python3`, and on Linux, which CI runs.

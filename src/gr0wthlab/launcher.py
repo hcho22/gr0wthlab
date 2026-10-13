@@ -126,6 +126,25 @@ def footage_refused(reads: codex.ReadProbe) -> str:
     return f"the footage place and of {folders} footage folder{'' if folders == 1 else 's'} in it"
 
 
+def footage_reason(reads: codex.ReadProbe) -> str:
+    """Why a read probe that did not pass keeps the agent from starting, the one wording the printed line and the
+    session's record carry, and from that record the run report and the notice: the sandbox could read where raw
+    footage is kept only where the probe's own output shows a folder listed. A probe that listed none, because it
+    did not finish, ended with an error, or did not try a folder, shows nothing of what the sandbox can read."""
+    if reads.listed:
+        return "the sandbox could read where raw footage is kept"
+    return "the check that the sandbox cannot read the footage place did not finish"
+
+
+def network_reason(network: codex.NetworkProbe) -> tuple[str, str]:
+    """The same for a network probe, as the session's record words it and as the printed line does: the sandbox
+    reached the network only where the probe's own output shows a connection opened."""
+    if network.reached:
+        return "the sandbox's network was not closed", "the sandbox reached the network"
+    unfinished = "the check that the sandbox cannot reach the network did not finish"
+    return unfinished, unfinished
+
+
 def log_name(run_id: str, session: str | None) -> str:
     """What a session's files in the log folder are named for: its run, and its own name when the run has several."""
     return f"{run_id}.{session}" if session else run_id
@@ -221,12 +240,11 @@ def run(
     reads = codex.run_read_probe(resolved.config, resolved.boundary, resolved.codex_bin, resolved.environment)
     record["preflight"]["footage"] = reads.as_json()
     if not reads.ok:
+        reason = footage_reason(reads)
         found = [f"listed {path}" for path in reads.listed] + list(reads.failures)
-        record.update(
-            exit_code=EXIT_BOUNDARY, error="the sandbox could read where raw footage is kept: " + "; ".join(found)
-        )
+        record.update(exit_code=EXIT_BOUNDARY, error=f"{reason}: " + "; ".join(found))
         write_json(record_path, record)
-        print("gr0wthlab: the sandbox could read where raw footage is kept; the agent was not started", file=out)
+        print(f"gr0wthlab: {reason}; the agent was not started", file=out)
         for line in found:
             print(f"  {line}", file=out)
         return record
@@ -237,10 +255,11 @@ def run(
     )
     record["preflight"]["network"] = network.as_json()
     if not network.ok:
+        recorded, printed = network_reason(network)
         found = [f"reached {target}" for target in network.reached] + list(network.failures)
-        record.update(exit_code=EXIT_BOUNDARY, error="the sandbox's network was not closed: " + "; ".join(found))
+        record.update(exit_code=EXIT_BOUNDARY, error=f"{recorded}: " + "; ".join(found))
         write_json(record_path, record)
-        print("gr0wthlab: the sandbox reached the network; the agent was not started", file=out)
+        print(f"gr0wthlab: {printed}; the agent was not started", file=out)
         for line in list(network.reached) + list(network.failures):
             print(f"  {line}", file=out)
         return record

@@ -610,8 +610,8 @@ def render_brief(
             + (", as in the Changes list." if files else ".")
         )
     lines += [
-        "The Mandu checkout and every read-only location in the header are readable, even inside a folder the",
-        "sandbox otherwise denies, such as /private/tmp.",
+        "The paths the header lists of the Mandu checkout and every other read-only location in it are readable,",
+        "even inside a folder the sandbox otherwise denies, such as /private/tmp.",
         "",
         f"- {start_line(state)}",
         f"- Mandu checkout: `{state.mandu}`",

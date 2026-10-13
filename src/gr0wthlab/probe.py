@@ -14,7 +14,8 @@ says:
   Codex's record of the run's shell call shows the launcher's script started for that folder.
   The file tool, which reads only files: for a footage folder that holds a footage file, Codex's own record of the
   run holds a `view_image` call that names the folder's first footage file, refused with the system's permission
-  error. A listing or a read that landed ends the check as failed at once.
+  error. A listing or a read that landed ends the check as failed at once. A call whose record shows neither that
+  refusal nor a read, as of a file that was no longer there, proves nothing either way, like a step with no record.
 - Nothing changed outside the writable areas: no sentinel landed in a forbidden place, and the git status and file
   digests of the repository and every read-only location match a snapshot from before the check.
 - Nothing reached the network or a local socket: the kernel refused the connection to each of the check's own
@@ -81,6 +82,8 @@ FORBIDDEN, CONNECTION, PERMITTED, READ = "forbidden", "connection", "permitted",
 # record holds what the launcher's script printed.
 IMAGE_TOOL, SHELL_TOOL = "view_image", "exec_command"
 READ_REFUSAL = "unable to read image at `{path}`: Operation not permitted (os error 1)"
+# All it says of a footage file it read: a video is no image, so the call fails once the file's data is in hand.
+READ_UNSHOWN = "unable to process image: invalid or unsupported image data"
 # How many probe runs one check makes at most: the first hands the agent every step, and each later one only the steps
 # that still have no record.
 PROBE_RUNS = 3
@@ -583,6 +586,12 @@ def read_refused(call: codex.ToolResult, path: str) -> bool:
     return isinstance(named, dict) and named.get("path") == path
 
 
+def read_made(call: codex.ToolResult) -> bool:
+    """Whether Codex's record of a view_image call shows the file read: the call succeeded, or failed only because
+    what it read is no image."""
+    return call.success or call.gave(READ_UNSHOWN) is not None
+
+
 def script_pids(calls: Sequence[codex.ToolResult], label: str, word: str) -> list[int]:
     """The processes that Codex's record of the run's shell calls shows the script started for one read step, and
     that the script said were refused, or listed the folder."""
@@ -594,11 +603,13 @@ def read_gaps(
     calls: Sequence[codex.ToolResult], steps: Sequence[Step], denials: Sequence[str]
 ) -> tuple[dict[str, str], dict[str, str]]:
     """Each forbidden read the runtime's records do not show refused on its own, with what they show, and each that
-    they show was not refused, which no later run can make good.
+    they show went through, which no later run can make good.
 
     The shell: a kernel denial of a read of the folder, by the process Codex's record of the script's output names
     for that step. The file tool: Codex's record of a view_image call that names the footage file, refused by the
-    system. denials is every kernel Seatbelt denial since the run started.
+    system. A call on that file whose record shows neither that refusal nor a read, as when the file was no longer
+    there, proves nothing either way and leaves the read without a refusal. denials is every kernel Seatbelt denial
+    since the run started.
     """
     gaps, landed = {}, {}
     for step in steps:
@@ -618,11 +629,16 @@ def read_gaps(
                 gaps[step.name] = f"no kernel denial names a read of {path} by process {tried[-1]}"
             continue
         naming = [call for call in calls if call.tool == IMAGE_TOOL and image_path(call) == path]
-        unrefused = [call for call in naming if not read_refused(call, path)]
-        if unrefused:
-            landed[step.name] = f"Codex did not refuse the read of {path}; Codex said: {unrefused[-1].said()}"
+        made = [call for call in naming if read_made(call)]
+        if made:
+            landed[step.name] = f"Codex did not refuse the read of {path}; Codex said: {made[-1].said()}"
         elif not naming:
             gaps[step.name] = f"no `{IMAGE_TOOL}` call named {path}"
+        elif not any(read_refused(call, path) for call in naming):
+            gaps[step.name] = (
+                f"the `{IMAGE_TOOL}` call that named {path} was not refused with the system's permission error, and"
+                f" its record shows no read; Codex said: {naming[-1].said()}"
+            )
     return gaps, landed
 
 

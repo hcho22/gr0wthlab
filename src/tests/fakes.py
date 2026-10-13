@@ -25,7 +25,8 @@ BETA_EXAMPLES = REPO / "src" / "examples" / "beta-recruiting"
 QUIET_WINDOW = {"number": 1, "first_sitting": "2099-01-04", "slot": "19:00"}
 
 # Stands in for codex. `codex sandbox` answers the preflight as an enforcing sandbox would, without running anything,
-# unless behavior.json says the sandbox reaches the network or reads where raw footage is kept;
+# unless behavior.json says the sandbox reaches the network or reads where raw footage is kept, or that the probe of
+# either falls short ("network_probe", "footage_probe"): it "hangs", "fails" with an error, or "skips" every target;
 # `codex exec` plays the agent of one session from behavior.json beside it, writing straight into the workspace. An
 # agent told to hang does its writing, starts its children, the first in a session of its own as Codex starts a shell
 # command, notes every process id in pids.txt, and then never exits and never reports its summary or its token counts.
@@ -60,13 +61,25 @@ args = sys.argv[1:]
 if args[:1] == ["--version"]:
     print("codex-cli 0.0.0-fake")
     sys.exit(0)
+def fall_short(how):
+    if how == "hangs":
+        time.sleep(600)
+    if how == "fails":
+        sys.stderr.write("the profile could not be applied\\n")
+        sys.exit(71)
+    if how == "skips":
+        sys.exit(0)
 if args[:1] == ["sandbox"] and args[args.index("--") + 4] == "network":
-    open_network = json.loads((here / "behavior.json").read_text()).get("sandbox_reaches_network")
+    probe = json.loads((here / "behavior.json").read_text())
+    fall_short(probe.get("network_probe"))
+    open_network = probe.get("sandbox_reaches_network")
     for target in args[args.index("--") + 6:]:
         print(("REACHED " if open_network else "UNREACHABLE ") + target + " 4242")
     sys.exit(0)
 if args[:1] == ["sandbox"] and args[args.index("--") + 4] == "footage":
-    reads_footage = json.loads((here / "behavior.json").read_text()).get("sandbox_reads_footage")
+    probe = json.loads((here / "behavior.json").read_text())
+    fall_short(probe.get("footage_probe"))
+    reads_footage = probe.get("sandbox_reads_footage")
     for target in args[args.index("--") + 6:]:
         print(("LISTED 4242 " if reads_footage else "REFUSED 4242 ") + target)
     sys.exit(0)

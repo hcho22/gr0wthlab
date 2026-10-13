@@ -13,11 +13,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest import mock
 
-from gr0wthlab import boundary, cli, launcher
+from gr0wthlab import boundary, cli, launcher, process
 from tests import fakes
 from tests.test_boundary import CONFIG, FILMING_REGISTRY, REGISTRY
 
 REPO = Path(__file__).resolve().parents[2]
+
+
+def cut_short(probe):
+    """One no-model probe's time limit cut to a second, for a test that leaves that probe hanging; every other
+    process keeps its own limit."""
+    run = process.run
+    return mock.patch.object(
+        process, "run", lambda command, limit, **more: run(command, 1 if probe in command else limit, **more)
+    )
 
 
 class PromptTest(unittest.TestCase):
@@ -256,6 +265,92 @@ class FootagePreflightTest(unittest.TestCase):
         self.assertIn(f"  listed {self.place / 'window-1'}\n", out)
         self.assertFalse((self.codex_dir / "prompt.txt").exists(), "the agent was never handed its prompt")
         self.assertNotIn("network", record["preflight"])
+
+    def test_a_read_probe_that_falls_short_with_nothing_listed_stops_the_run_and_says_only_that(self):
+        (self.place / "window-1").mkdir()
+        untried = f"{self.place} was not probed; {self.place / 'window-1'} was not probed"
+        for how, found in (
+            ("hangs", f"{untried}; codex sandbox did not finish within 1 s and was stopped"),
+            ("fails", f"{untried}; codex sandbox exited 71: the profile could not be applied"),
+            ("skips", untried),
+        ):
+            with self.subTest(how=how):
+                fakes.behave(self.codex_dir, {"footage_probe": how})
+                with cut_short("footage"):
+                    record, out = self.run_launcher()
+                self.assertEqual((record["exit_code"], record["agent_started"]), (launcher.EXIT_BOUNDARY, False))
+                footage = record["preflight"]["footage"]
+                self.assertEqual((footage["ok"], footage["listed"], footage["refused"]), (False, [], []))
+                said = "the check that the sandbox cannot read the footage place did not finish"
+                self.assertEqual(record["error"], f"{said}: {found}")
+                self.assertIn(f"gr0wthlab: {said}; the agent was not started\n", out)
+                for line in found.split("; "):
+                    self.assertIn(f"  {line}\n", out)
+                self.assertNotIn("the sandbox could read", record["error"] + out)
+                self.assertFalse((self.codex_dir / "prompt.txt").exists(), "the agent was never handed its prompt")
+                self.assertNotIn("network", record["preflight"])
+
+
+class NetworkPreflightTest(unittest.TestCase):
+    """Before every run, with no model, the sandbox is shown unable to reach each listed host; a probe that falls
+    short stops the run before the agent starts, and says the sandbox reached the network only when it did."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name).resolve()
+        self.home = root / "home"
+        self.repo = fakes.make_repo(self.home / "gr0wthlab", fakes.git_env(root))
+        self.codex_dir = root / "bin"
+        self.env = {
+            "GR0WTHLAB_LOG_DIR": str(root / "logs"),
+            "GR0WTHLAB_CODEX_BIN": str(fakes.install_codex(self.codex_dir)),
+        }
+        for name in ("Mandu", "RepToday", "Immerse"):
+            (self.home / name).mkdir()
+            self.env[f"GR0WTHLAB_{name.upper()}_DIR"] = str(self.home / name)
+        self.hosts = launcher.Resolved(self.repo, self.env, self.home).network_targets
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def run_launcher(self):
+        task = self.repo / "src/instructions/weekly-run/common.md"
+        facts = [f"Run brief, read it first: {self.repo / 'ledger/run-reports/brief.md'}"]
+        out = io.StringIO()
+        record = launcher.run(self.repo, task, "on-demand", self.env, self.home, out, None, facts, time_limit=60)
+        self.assertEqual((record["exit_code"], record["agent_started"]), (launcher.EXIT_BOUNDARY, False))
+        self.assertFalse((self.codex_dir / "prompt.txt").exists(), "the agent was never handed its prompt")
+        return record, out.getvalue()
+
+    def test_a_sandbox_that_reaches_a_listed_host_stops_the_run_and_names_the_host(self):
+        self.assertTrue(self.hosts)
+        fakes.behave(self.codex_dir, {"sandbox_reaches_network": True})
+        record, out = self.run_launcher()
+        self.assertEqual(record["preflight"]["network"]["reached"], self.hosts)
+        reached = "; ".join(f"reached {host}" for host in self.hosts)
+        self.assertEqual(record["error"], f"the sandbox's network was not closed: {reached}")
+        self.assertIn("gr0wthlab: the sandbox reached the network; the agent was not started\n", out)
+
+    def test_a_network_probe_that_falls_short_with_no_host_reached_stops_the_run_and_says_only_that(self):
+        untried = "; ".join(f"{host} was not probed" for host in self.hosts)
+        for how, found in (
+            ("hangs", f"{untried}; codex sandbox did not finish within 1 s and was stopped"),
+            ("fails", f"{untried}; codex sandbox exited 71: the profile could not be applied"),
+            ("skips", untried),
+        ):
+            with self.subTest(how=how):
+                fakes.behave(self.codex_dir, {"network_probe": how})
+                with cut_short("network"):
+                    record, out = self.run_launcher()
+                network = record["preflight"]["network"]
+                self.assertEqual((network["ok"], network["reached"], network["unreachable"]), (False, [], []))
+                said = "the check that the sandbox cannot reach the network did not finish"
+                self.assertEqual(record["error"], f"{said}: {found}")
+                self.assertIn(f"gr0wthlab: {said}; the agent was not started\n", out)
+                for line in found.split("; "):
+                    self.assertIn(f"  {line}\n", out)
+                self.assertNotIn("reached the network", out)
+                self.assertNotIn("was not closed", record["error"])
 
 
 class CliTest(unittest.TestCase):

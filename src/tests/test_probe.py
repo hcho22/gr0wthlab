@@ -747,7 +747,6 @@ class ReadProofTest(ProbeTestCase):
             ("<image data URL omitted: 137 bytes>", True),
             ("unable to process image: invalid or unsupported image data", False),
             (probe.READ_REFUSAL.format(path=self.clip), True),
-            (probe.READ_REFUSAL.format(path=self.clip) + " and more", False),
         ):
             with self.subTest(said=said, success=success):
                 calls = [
@@ -762,6 +761,55 @@ class ReadProofTest(ProbeTestCase):
                     f"    footage-window-1:file-tool: Codex did not refuse the read of {self.clip}; Codex said: ", out
                 )
                 self.assertIn(": FAILED", out)
+
+    def test_a_footage_file_gone_when_its_read_was_tried_proves_nothing_and_is_asked_again(self):
+        # The file was away when the agent's call reached it and is there again when the check judges the run.
+        for said in (
+            f"unable to read image at `{self.clip}`: No such file or directory (os error 2)",
+            f"unable to locate image at `{self.clip}`: No such file or directory (os error 2)",
+            f"image path `{self.clip}` is not a file",
+            probe.READ_REFUSAL.format(path=self.clip) + " and more",
+        ):
+            with self.subTest(said=said):
+                calls = [lambda seq: self.script_call(seq), lambda seq, said=said: self.image_call(seq, output=said)]
+                result, out = self.judge(calls, self.read_denials())
+                self.assertFalse(result["passed"])
+                self.assertEqual(result["forbidden_reads_not_refused"], {})
+                self.assertEqual(result["ask_again"], ["footage-window-1:file-tool"])
+                self.assertIn(": 3 of 4\n", out)
+                self.assertIn(
+                    f"    footage-window-1:file-tool: the `view_image` call that named {self.clip} was not refused with"
+                    f" the system's permission error, and its record shows no read; Codex said: {said[:200]}\n",
+                    out,
+                )
+                self.assertNotIn("did not refuse", out)
+                # The check hands the read over again, and one left so after its last run ends as unproven.
+                again, closing = io.StringIO(), io.StringIO()
+                probe.summarize(result, again, again=True)
+                self.assertIn(": NOT YET PROVEN\n", again.getvalue())
+                self.assertIn("  asking again for: footage-window-1:file-tool\n", again.getvalue())
+                probe.conclude([result] * probe.PROBE_RUNS, closing)
+                self.assertIn(
+                    f"boundary check: FAILED after {probe.PROBE_RUNS} probe runs: still unproven:"
+                    " footage-window-1:file-tool\n",
+                    closing.getvalue(),
+                )
+        # A refusal of the same file in the same run is its proof, whatever another call on it said.
+        gone = f"unable to read image at `{self.clip}`: No such file or directory (os error 2)"
+        settled = [
+            lambda seq: self.script_call(seq),
+            lambda seq: self.image_call(seq, output=gone),
+            lambda seq: self.image_call(seq),
+        ]
+        self.assertTrue(self.judge(settled, self.read_denials())[0]["passed"])
+        # A file still away when the run is judged is no longer the folder's first: the check then needs a read of
+        # the file that is, which no call named.
+        self.clip.unlink()
+        result, out = self.judge(settled[:2], self.read_denials())
+        self.assertEqual(result["forbidden_reads_not_refused"], {})
+        self.assertEqual(result["ask_again"], ["footage-window-1:file-tool"])
+        other = self.place / "window-1" / "d02-s1.mp4"
+        self.assertIn(f"    footage-window-1:file-tool: no `view_image` call named {other}\n", out)
 
     def test_a_read_refused_once_and_landed_once_is_a_read_that_landed(self):
         calls = [

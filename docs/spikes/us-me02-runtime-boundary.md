@@ -74,7 +74,7 @@ The forbidden places are the repository root, `workspace/`, `src/`, `config/`, `
 Any other outcome keeps that session's agent from starting, so it never sees its instruction.
 The run marks that session's workflow incomplete and goes on to the next session, whose own proof comes first; the boundary check, which has one agent, stops there.
 Mandu and the Products are left out of this per-run check so a routine run never tries to write in them; the same deny-by-default rule covers them, and the boundary check below tests them.
-Since 2026-10-13 the same proof also tries, in a second `codex sandbox` call before each session's agent, to list the footage place and each footage folder in it, and a session whose proof can list one is not started; it only lists, and writes nothing there.
+Since 2026-10-13 the same proof also tries, in a second `codex sandbox` call before each session's agent, to list the footage place and each footage folder in it, and a session whose proof can list one, or does not finish, is not started; it only lists, and writes nothing there.
 
 The launcher records a SHA-256 fingerprint of the Codex command line, environment, and Codex version in each session's record under `~/Library/Logs/gr0wthlab` (`GR0WTHLAB_LOG_DIR` overrides it), `<run id>.<workflow>.json`.
 The fingerprint is taken of that session's own command and leaves out only the path of its closing message, the one thing that differs between two sessions' commands.

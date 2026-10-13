@@ -330,6 +330,37 @@ class FoundersPlaceTest(FilmingRunCase):
         self.assertIn("its session did not start: the sandbox could read where raw footage is kept: listed", report)
         self.assertEqual(fakes.tree_digest(self.mandu), before)
 
+    def test_a_read_probe_that_ends_with_an_error_starts_no_session_and_nothing_says_the_sandbox_could_read(self):
+        self.clip("d01-s1.mov")
+        fakes.behave(self.codex_dir, {"footage_probe": "fails"})
+        code, out = self.run_cycle()
+        self.assertNotEqual(code, 0, out)
+        said = (
+            "the check that the sandbox cannot read the footage place did not finish:"
+            f" {self.footage} was not probed; {self.footage / 'window-1'} was not probed;"
+            " codex sandbox exited 71: the profile could not be applied"
+        )
+        self.assertIn(
+            "gr0wthlab: the check that the sandbox cannot read the footage place did not finish; the agent was not"
+            " started\n",
+            out,
+        )
+        self.assertFalse((self.codex_dir / "sessions.txt").exists())
+        tried = sorted(self.logs.glob("2*Z-on-demand-*.*.json"))
+        self.assertGreater(len(tried), 1)
+        for path in tried:
+            record = json.loads(path.read_text(encoding="utf-8"))
+            with self.subTest(session=record["session"]):
+                self.assertEqual((record["exit_code"], record["agent_started"]), (cycle.launcher.EXIT_BOUNDARY, False))
+                self.assertEqual(record["error"], said)
+        # The session's record is the one wording: the report's outputs and Sessions table and the notice repeat it.
+        report, notice = self.report(), self.notice()
+        self.assertIn(f"its session did not start: {said}", report)
+        self.assertIn(f"| did not start: {said} |", report)
+        self.assertIn(f"session did not start: {said}. Incomplete this run: ", notice)
+        self.assertNotIn("Sandbox footage", report)
+        self.assertNotIn("the sandbox could read", out + report + notice)
+
     def test_an_edit_record_takes_footage_only_from_the_window_s_folder(self):
         self.approved_plan()
         self.clip("d01-s1.mov")
@@ -749,8 +780,19 @@ class FootagePlaceTest(FilmingRunCase):
             (block["local_path"], block["access"], block["env"]),
             ("~/Mandu/projects/RepToday", "read-only", "GR0WTHLAB_FOOTAGE_DIR"),
         )
-        # The registry is public: it names the place from the home folder, never with an account's name.
-        self.assertNotRegex(json.dumps(registry), r"/Users/|/home/")
+
+        # The registry is public: it names every place on the Mac from the home folder, never with an account's name.
+        def places(node):
+            for key, value in node.items() if isinstance(node, dict) else enumerate(node):
+                if key in ("local_checkout", "local_path"):
+                    yield value
+                elif isinstance(value, (dict, list)):
+                    yield from places(value)
+
+        named = list(places(registry))
+        self.assertIn(block["local_path"], named)
+        for value in named:
+            self.assertTrue(value is None or value.startswith("~/"), value)
         self.assertEqual(self.place(None).path, self.home / "Mandu" / "projects" / "RepToday")
         # A machine whose home folder has no such Mandu yet runs all the same, with nothing to cut from.
         del self.env["GR0WTHLAB_FOOTAGE_DIR"]
