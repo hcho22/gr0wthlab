@@ -26,6 +26,7 @@ from . import (
     posts,
     probe,
     schedule,
+    serve,
     settings,
     sources,
 )
@@ -41,7 +42,9 @@ LEDGER_DIR = REPO_ROOT / LEDGER
 
 
 def parser() -> argparse.ArgumentParser:
-    root = argparse.ArgumentParser(prog="gr0wthlab", description="Start and check Marketing Engineer runs.")
+    root = argparse.ArgumentParser(
+        prog="gr0wthlab", description="Start and check Marketing Engineer runs, and hold the Founder's sitting."
+    )
     commands = root.add_subparsers(dest="command", required=True)
 
     run = commands.add_parser(
@@ -55,6 +58,15 @@ def parser() -> argparse.ArgumentParser:
         "--once",
         metavar="YYYY-MM-DDTHH:MM",
         help="the one-off time a scheduled run was due at; such a run always runs, as a run on demand does",
+    )
+
+    sitting = commands.add_parser(
+        "sitting",
+        help="the Founder's sitting: serve a small page on this Mac that shows the Review Queue one item at a time and"
+        " saves each decision the Founder clicks; it prints the page's address",
+    )
+    sitting.add_argument(
+        "--port", type=int, default=0, metavar="PORT", help="the port on 127.0.0.1 to serve on (default: any free one)"
     )
 
     commands.add_parser("show-config", help="print the resolved run configuration and its fingerprint")
@@ -527,6 +539,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "run":
             return cycle.main(REPO_ROOT, args.instruction, args.trigger, env, home, args.once, arguments)
+        if args.command == "sitting":
+            return serve.serve(REPO_ROOT, env, args.port)
         if args.command == "show-config":
             resolved = launcher.Resolved(REPO_ROOT, env, home, Path("<run>.last-message.md"))
             print(json.dumps(resolved.describe(), indent=2, sort_keys=True))
