@@ -38,6 +38,7 @@ FILE_LINE = re.compile(r"`([^`]+)` line (\d+)")
 MIN_QUOTE_WORDS = 4
 MAX_QUOTE = 300
 MAX_MESSAGE = 2500
+UNREAD = "could not be read"  # how a cited line's problem starts when its file is there and the read failed
 # A web address: a scheme, www., or a dotted name ending in letters, such as testflight.apple.com or reptoday.app.
 LINK = re.compile(
     r"\b[a-z][a-z0-9+.-]*://\S+|\bwww\.\S+|(?<![\w.@-])(?:[a-z0-9-]+\.)+[a-z]{2,}(?![\w-])", re.IGNORECASE
@@ -217,7 +218,7 @@ def cited_line(context: Context, citation: Citation) -> tuple[str | None, str]:
             return None, "is not a file in Mandu"
         lines = path.read_text(encoding="utf-8").splitlines()
     except (OSError, UnicodeDecodeError) as error:
-        return None, f"could not be read ({getattr(error, 'strerror', None) or type(error).__name__})"
+        return None, f"{UNREAD} ({getattr(error, 'strerror', None) or type(error).__name__})"
     if not 1 <= citation.line <= len(lines):
         return None, f"has no line {citation.line}"
     return lines[citation.line - 1], ""
@@ -237,7 +238,9 @@ def check_citations(draft: MessageDraft, context: Context, verdict: Verdict) -> 
             continue
         line, problem = cited_line(context, citation)
         if line is None:
-            verdict.block("source-quote", f"{where} {problem}")
+            # A package file that is there and could not be read says nothing of the quote.
+            lost = f"{where} in Mandu {problem}" if problem.startswith(UNREAD) else ""
+            verdict.block("source-quote", f"{where} {problem}", unread=lost)
         elif norm(citation.quote) not in norm(line):
             verdict.block("source-quote", f"{where} does not hold the quote {snippet(citation.quote, 80)!r}")
         else:
@@ -272,7 +275,8 @@ def evaluate(draft: MessageDraft, context: Context, purpose: str) -> Verdict:
         verdict.block("no-address", HOLDS_ADDRESS)
         return verdict
     if context.rules is None:
-        verdict.block("brand-rules.json", f"could not be used: {context.rules_problem}")
+        lost = "brand-rules.json could not be used"
+        verdict.block("brand-rules.json", f"could not be used: {context.rules_problem}", unread=lost)
     if draft.problems:
         for problem in draft.problems:
             verdict.block("format", problem)

@@ -255,8 +255,9 @@ def keep_footage_unread(place: FootagePlace, mandu: Path, grants: Sequence[Path]
       folder in Mandu that also holds a Product's package, as the Founder's is; no other place may hold anything the
       sandbox reads.
 
-    The rule is about the profile the launcher builds. Each run's preflight then shows it true of the real sandbox
-    before the agent starts, and the boundary check has the agent try (codex.run_read_probe, probe.read_steps).
+    The rule is about the profile the launcher builds, which every session of a run is started with. The preflight
+    then shows it true of the real sandbox before each session's agent starts, and the boundary check has the agent
+    try (codex.run_read_probe, probe.read_steps).
     """
     if place.path is None:
         return

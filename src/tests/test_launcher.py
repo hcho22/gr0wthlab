@@ -122,7 +122,7 @@ class LeftoverTest(unittest.TestCase):
             self.repo / "workspace/instructions/gr0wthlab-boundary-probe-20261009T000000Z-on-demand-abcd-shell-steps.sh"
         )
         mine.write_text("#!/bin/sh\n", encoding="utf-8")
-        task = self.repo / "src/instructions/weekly-run.md"
+        task = self.repo / "src/instructions/weekly-run/common.md"
         facts = [f"Run brief, read it first: {self.repo / 'ledger/run-reports/brief.md'}"]
         out = io.StringIO()
         record = launcher.run(
@@ -145,7 +145,7 @@ class LeftoverTest(unittest.TestCase):
         self.assertTrue(mine.is_file(), "the run in progress keeps its own files")
 
     def test_a_run_with_nothing_left_behind_says_nothing_of_it(self):
-        task = self.repo / "src/instructions/weekly-run.md"
+        task = self.repo / "src/instructions/weekly-run/common.md"
         facts = [f"Run brief, read it first: {self.repo / 'ledger/run-reports/brief.md'}"]
         out = io.StringIO()
         record = launcher.run(self.repo, task, "on-demand", self.env, self.home, out, None, facts, time_limit=60)
@@ -180,7 +180,7 @@ class FootagePreflightTest(unittest.TestCase):
         self.tmp.cleanup()
 
     def run_launcher(self):
-        task = self.repo / "src/instructions/weekly-run.md"
+        task = self.repo / "src/instructions/weekly-run/common.md"
         facts = [f"Run brief, read it first: {self.repo / 'ledger/run-reports/brief.md'}"]
         out = io.StringIO()
         record = launcher.run(self.repo, task, "on-demand", self.env, self.home, out, None, facts, time_limit=60)
@@ -222,6 +222,10 @@ class FootagePreflightTest(unittest.TestCase):
         record, out = self.run_launcher()
         self.assertEqual((record["exit_code"], record["agent_started"]), (launcher.EXIT_BOUNDARY, False))
         self.assertEqual(record["preflight"]["footage"]["listed"], [str(self.place), str(self.place / "window-1")])
+        self.assertEqual(
+            record["error"],
+            f"the sandbox could read where raw footage is kept: listed {self.place}; listed {self.place / 'window-1'}",
+        )
         self.assertIn("gr0wthlab: the sandbox could read where raw footage is kept; the agent was not started\n", out)
         self.assertIn(f"  listed {self.place / 'window-1'}\n", out)
         self.assertFalse((self.codex_dir / "prompt.txt").exists(), "the agent was never handed its prompt")
@@ -231,18 +235,23 @@ class FootagePreflightTest(unittest.TestCase):
 class CliTest(unittest.TestCase):
     def test_commands_parse(self):
         parser = cli.parser()
-        args = parser.parse_args(["run", "--instruction", "i.md", "--trigger", "scheduled"])
+        args = parser.parse_args(["run", "--trigger", "scheduled"])
         self.assertEqual((args.command, args.trigger), ("run", "scheduled"))
-        self.assertEqual(parser.parse_args(["run", "--instruction", "i.md"]).trigger, "on-demand")
-        args = parser.parse_args(["launch-agent", "--instruction", "i.md", "--once", "2026-10-11T16:00"])
+        self.assertEqual(parser.parse_args(["run"]).trigger, "on-demand")
+        args = parser.parse_args(["launch-agent", "--once", "2026-10-11T16:00"])
         self.assertEqual(args.once, "2026-10-11T16:00")
         self.assertEqual(parser.parse_args(["boundary-check", "--verify", "R"]).verify, "R")
         self.assertEqual(parser.parse_args(["boundary-check", "--trigger", "scheduled"]).trigger, "scheduled")
         args = parser.parse_args(["run", "--trigger", "scheduled"])
-        self.assertEqual((args.instruction, args.once), (None, None))
+        self.assertIsNone(args.once)
+        # A run's task definitions are the reviewed files the launcher puts together; no command names another.
         for command in (["run"], ["launch-agent"]):
-            with self.subTest(command=command), self.assertRaises(SystemExit), redirect_stderr(io.StringIO()):
-                parser.parse_args([*command, "--weekly", "sunday", "16:00"])
+            for option in (["--weekly", "sunday", "16:00"], ["--instruction", "src/instructions/weekly-run/common.md"]):
+                with self.subTest(command=command, option=option), self.assertRaises(SystemExit):
+                    with redirect_stderr(io.StringIO()):
+                        parser.parse_args([*command, *option])
+        self.assertEqual(parser.parse_args(["check-work", "--run", "R", "--part", "outreach"]).part, "outreach")
+        self.assertIsNone(parser.parse_args(["check-work", "--run", "R"]).part)
         self.assertTrue(
             parser.parse_args(["launch-agent", "--boundary-check", "--once", "2026-10-11T16:00"]).boundary_check
         )
@@ -259,10 +268,7 @@ class CliTest(unittest.TestCase):
                 self.assertEqual(cli.main(["launch-agent"]), 0)
         agent = plistlib.loads(out.buffer.getvalue())
         self.assertEqual(agent["StartCalendarInterval"], {"Weekday": 0, "Hour": 16, "Minute": 0})
-        self.assertEqual(agent["ProgramArguments"][1:4], ["run", "--trigger", "scheduled"])
-        self.assertEqual(
-            agent["ProgramArguments"][-2:], ["--instruction", str(cli.REPO_ROOT / "src/instructions/weekly-run.md")]
-        )
+        self.assertEqual(agent["ProgramArguments"], [str(cli.ENTRY), "run", "--trigger", "scheduled"])
         self.assertNotIn("GR0WTHLAB_PRE_RUN", agent["EnvironmentVariables"])
 
     def test_entry_point_starts_through_its_shebang(self):

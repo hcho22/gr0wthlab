@@ -2,8 +2,8 @@
 
 The launcher resolves the branch to one commit before the agent starts and checks every claim at that commit, so a
 claim is checked against the code the agent was told to read, whatever the checkout's working tree holds. Only git's
-object reads are used (rev-parse and cat-file), with optional locks off, so the checkout's index, refs, and working
-tree are never written.
+object reads are used (rev-parse, cat-file, and ls-tree), with optional locks off, so the checkout's index, refs, and
+working tree are never written.
 """
 
 from __future__ import annotations
@@ -60,7 +60,8 @@ class Code:
         return completed
 
     def lines(self, path: str) -> list[str] | str:
-        """A file's lines at the commit, or why it cannot be read there."""
+        """A file's lines at the commit, or why it cannot be read there. A file that is not there is told from a
+        read git could not make: the first is what the commit says, and the second says nothing of the file."""
         if path not in self.files:
             pure = PurePosixPath(path)
             if pure.is_absolute() or ".." in pure.parts or not pure.parts:
@@ -68,17 +69,27 @@ class Code:
             else:
                 try:
                     completed = self.git("cat-file", "blob", f"{self.commit}:{pure}")
+                    lost = "" if completed.returncode == 0 else self.unlisted(pure, completed)
                 except (OSError, ValueError) as error:
-                    completed = None
-                    self.files[path] = f"git could not read it ({error})"
+                    completed, lost = None, str(error)
+                if lost:
+                    self.files[path] = f"git could not read it ({lost})"
                     self.failed.add(path)
-                if completed is not None:
-                    self.files[path] = (
-                        completed.stdout.splitlines()
-                        if completed.returncode == 0
-                        else f"there is no file {path} at {self.short}"
-                    )
+                elif completed.returncode == 0:
+                    self.files[path] = completed.stdout.splitlines()
+                else:
+                    self.files[path] = f"there is no file {path} at {self.short}"
         return self.files[path]
+
+    def unlisted(self, path: PurePosixPath, refused: process.Completed) -> str:
+        """Why git's refusal to read a file at the commit is a read it could not make, or "" when the commit's own
+        tree, which git could read, holds no file at that path."""
+        listed = self.git("ls-tree", "--full-tree", "-z", str(self.commit), "--", str(path))
+        entry = listed.stdout.split("\t", 1)[0].split()
+        if listed.returncode == 0 and entry[1:2] != ["blob"]:
+            return ""
+        said = refused if listed.returncode == 0 else listed
+        return squash(said.stderr or "") or f"git exited with {said.returncode}"
 
     def verify(self, location: str, excerpt: str) -> str | None:
         """Why a claim's code location does not show its excerpt at the commit, or None when it does."""

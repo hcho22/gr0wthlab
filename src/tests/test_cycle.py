@@ -67,8 +67,22 @@ class CycleTestCase(unittest.TestCase):
         reader = lambda policy: fakes.client(self.web, policy)  # noqa: E731
         runner = cycle.Cycle(repo or self.repo, self.env, self.home, out, self.clock, reader, clocks)
         kwargs = {"execve": execve} if execve else {}
-        code = runner.run(None, trigger, once, ["run"], **kwargs)
+        code = runner.run(trigger, once, ["run"], **kwargs)
         return code, out.getvalue()
+
+    def limit_session(self, key, seconds):
+        """Give one workflow's session, in every later run of this test, a time limit of its own. No setting does
+        that: every session runs under `agent.time_limit_seconds`. It is the test's way to have one session stopped
+        at its limit while the sessions around it run under the configured one."""
+        planned = cycle.Cycle.plan_sessions
+
+        def plan(runner, state, config):
+            planned(runner, state, config)
+            state.session(key).limit = seconds
+
+        patched = mock.patch.object(cycle.Cycle, "plan_sessions", plan)
+        patched.start()
+        self.addCleanup(patched.stop)
 
     def workspace(self, repo=None):
         return (repo or self.repo) / "workspace"
@@ -84,8 +98,25 @@ class CycleTestCase(unittest.TestCase):
         reports = [path for path in reports if not path.name.endswith(".brief.md")]
         return reports[-1].read_text(encoding="utf-8")
 
-    def brief(self, repo=None):
-        return sorted((self.ledger(repo) / "run-reports").glob("*.brief.md"))[-1].read_text(encoding="utf-8")
+    def brief(self, repo=None, session=None):
+        """The brief the last run wrote for one workflow's session, or, with no session named, every brief of that
+        run one after another in the order of its sessions, so a test can say what the run's agents were told and
+        what none of them was."""
+        from gr0wthlab import sessions
+
+        folder = self.ledger(repo) / "run-reports"
+        run = sorted(folder.glob("*.brief.md"))[-1].name.split(".")[0]
+        keys = sessions.KEYS if session is None else (session,)
+        found = [folder / f"{run}.{key}.brief.md" for key in keys]
+        return "\n".join(path.read_text(encoding="utf-8") for path in found if path.is_file())
+
+    def run_record(self, session=None):
+        """The last run's record in the log folder, or what it holds of one of its sessions."""
+        runs = sorted(path for path in self.logs.glob("2*Z-*.json") if path.name.count(".") == 1)
+        run = json.loads(runs[-1].read_text(encoding="utf-8"))
+        if session is None:
+            return run
+        return next(found for found in run["sessions"] if found["workflow"] == session)
 
     def decide(self, item, decision, reason=None, note=None):
         folder = self.exchange / "decisions"
@@ -110,6 +141,49 @@ class CycleTestCase(unittest.TestCase):
             json.dumps({"exchange": exchange.EXCHANGE_VERSION, "date": day, "minutes": 41}), encoding="utf-8"
         )
         return day
+
+    # An open item is taken back only on what a record the launcher could read says (queue.stands). Each place a
+    # run withdraws, closes, or supersedes one has a test of a read that fails, which ends in these two assertions.
+
+    def entry(self, identifier):
+        queue = self.queue()
+        return next(entry for entry in queue["open"] + queue["closed"] if entry["id"] == identifier)
+
+    def notices(self):
+        """The text of every notice open for the Founder."""
+        return "\n".join(
+            (self.ledger() / entry["file"]).read_text(encoding="utf-8")
+            for entry in self.queue()["open"]
+            if entry["kind"] == "notice"
+        )
+
+    def assert_stands(self, before, output, reason):
+        """What a run whose read failed leaves of an open item: the item exactly as it was, under its identifier,
+        with nothing taken off the queue; its output incomplete for the real reason; and a notice that names the
+        item and the read."""
+        queue = self.queue()
+        self.assertIn(before["id"], [entry["id"] for entry in queue["open"]])
+        self.assertEqual(self.entry(before["id"]), before, "the open item is exactly as it was")
+        closed = [entry["id"] for entry in queue["closed"] if entry.get("closed_by_run") == queue["updated_by_run"]]
+        self.assertEqual(closed, [], "the run took nothing off the queue")
+        row = next(line for line in self.report().splitlines() if line.startswith(f"| {output} | "))
+        self.assertIn(f"| {output} | incomplete | ", row)
+        self.assertIn(reason, row)
+        notices = self.notices()
+        self.assertIn("so each was left exactly as it is: nothing was withdrawn or replaced on that account", notices)
+        named = [line for line in notices.splitlines() if line.startswith(f"- `{before['id']}` ({output}): ")]
+        self.assertTrue(named and reason in named[-1], notices)
+
+    def assert_never_asked_again(self, before):
+        """What the first run with the read restored leaves: the item as it was before the failed run, and nothing
+        queued in its place under another identifier."""
+        queue = self.queue()
+        self.assertEqual(self.entry(before["id"]), before, "as if the failed run had not happened")
+        ever = [entry for entry in queue["open"] + queue["closed"] if entry["id"].startswith(before["id"])]
+        self.assertEqual([entry["id"] for entry in ever], [before["id"]], "it was never queued again")
+        self.assertEqual(
+            [entry["id"] for entry in queue["open"] + queue["closed"] if entry.get("supersedes") == before["id"]], []
+        )
 
 
 class FirstRunTest(CycleTestCase):
@@ -196,6 +270,86 @@ class FirstRunTest(CycleTestCase):
         self.assertIn("a Product's own repository holds its code, never its package", text)
         self.assertIn("check-incoming", text)
         self.assertIn("written with your file-editing tool (apply_patch)", text)
+
+
+class TakeInTest(CycleTestCase):
+    def test_an_item_that_supersedes_an_open_one_whose_file_cannot_be_read_is_set_aside_and_the_open_one_stands(self):
+        """The open item's file could not be read, so it stands and nothing replaces it in that run."""
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        (first,) = [entry for entry in self.queue()["open"] if entry["kind"] == "package-change-proposal"]
+        file = self.ledger() / first["file"]
+        text = file.read_text(encoding="utf-8")
+        file.write_text("no item\n", encoding="utf-8")
+        (self.ledger() / "run-reports/state/review-queue.json").unlink()
+        again = fakes.proposal(extra=f"supersedes: {first['id']}\n")
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-again.md": again}})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(code, 0, out)
+        unread = f"`{first['file']}`, its item file, could not be read"
+        self.assert_stands(first, "Review Queue", unread)
+        self.assertIn(
+            f"`name-status-again.md`: supersedes {first['id']}: {unread}, so the open item stands and nothing replaces"
+            " it in this run",
+            self.report(),
+        )
+        file.write_text(text, encoding="utf-8")
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-again.md": again}})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
+        self.assertEqual(code, 0, out)
+        self.assert_never_asked_again(first)
+        self.assertIn(f"`name-status-again.md`: asks the same as {first['id']}, which is open", self.report())
+
+    def test_an_item_with_the_kind_and_ask_of_a_decided_one_whose_file_cannot_be_read_is_not_queued(self):
+        """Nothing then shows it is not the ask the Founder decided, which is never asked again."""
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        (first,) = [entry for entry in self.queue()["open"] if entry["kind"] == "package-change-proposal"]
+        self.decide(first["id"], "reject", reason="The caveat stays.")
+        fakes.behave(self.codex_dir, {})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        rejected = self.entry(first["id"])
+        self.assertEqual(rejected["status"], "rejected")
+        file = self.ledger() / first["file"]
+        text = file.read_text(encoding="utf-8")
+        file.write_text("no item\n", encoding="utf-8")
+        (self.ledger() / "run-reports/state/review-queue.json").unlink()
+        written = {
+            "review-queue/incoming/name-status-again.md": fakes.PROPOSAL,
+            "review-queue/incoming/name-status-other.md": fakes.proposal(title="record the name as searched"),
+        }
+        fakes.behave(self.codex_dir, {"write": written})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
+        self.assertEqual(code, 0, out)
+        unread = f"`{first['file']}`, its item file, could not be read"
+        report = self.report()
+        self.assertIn(
+            f"`name-status-again.md`: has the kind and ask of {first['id']}, which is rejected: {unread}, so nothing"
+            " shows this item asks anything else",
+            report,
+        )
+        self.assertRegex(report, rf"\| Review Queue \| incomplete \| [^|\n]*{re.escape(unread)}")
+        self.assertIn(f"`name-status-again.md`: has the kind and ask of {first['id']}", self.notices())
+        self.assertEqual(self.entry(first["id"]), rejected)
+        (other,) = [entry for entry in self.queue()["open"] if entry["kind"] == "package-change-proposal"]
+        self.assertEqual(other["ask"], "Approve package change: record the name as searched")
+        file.write_text(text, encoding="utf-8")
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-again.md": fakes.PROPOSAL}})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=21))
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"`name-status-again.md`: asks the same as {first['id']}, which is rejected", self.report())
+
+    def test_an_item_that_supersedes_an_open_one_the_launcher_could_read_still_takes_its_place(self):
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        (first,) = [entry for entry in self.queue()["open"] if entry["kind"] == "package-change-proposal"]
+        newer = fakes.proposal(extra=f"supersedes: {first['id']}\n", title="record the name as searched and reserved")
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-newer.md": newer}})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(code, 0, out)
+        (second,) = [entry for entry in self.queue()["open"] if entry["kind"] == "package-change-proposal"]
+        old = self.entry(first["id"])
+        self.assertEqual((old["status"], old["superseded_by"]), ("superseded", second["id"]))
 
 
 class DecisionRoundTripTest(CycleTestCase):
@@ -727,7 +881,11 @@ class FailuresTest(CycleTestCase):
             self.assertIn(f"- `{entry}` {restored}", problems)
         self.assertEqual((self.workspace() / "drafts/sub/draft.md").read_text(encoding="utf-8"), "a draft\n")
         self.assertEqual((self.workspace() / "instructions/README.md").read_text(encoding="utf-8"), "# instructions\n")
-        self.assertIn("- `instructions/README.md` was changed during the run and put back as it was;", problems)
+        self.assertIn(
+            "- after the Package review session: `instructions/README.md` was changed during the run and put back as"
+            " it was; no run may change its own Instructions yet\n",
+            problems,
+        )
         queue = self.queue()
         self.assertEqual([entry["kind"] for entry in queue["open"]], ["package-change-proposal", "notice"])
         notice = (self.ledger() / queue["open"][1]["file"]).read_text(encoding="utf-8")
@@ -751,13 +909,16 @@ class FailuresTest(CycleTestCase):
         self.assertEqual(code, 1)
         kinds = [entry["kind"] for entry in self.queue()["open"]]
         self.assertEqual(kinds, ["package-change-proposal", "notice"])
-        self.assertIn("The agent stopped with exit code 1", self.report())
+        report = self.report()
+        self.assertIn("- The Package review session stopped with exit code 1; its work this run may be", report)
+        self.assertIn("| Package review | ended with exit code 1 |", report)
+        self.assertIn("| Package review (contradictions) | incomplete | its session ended with exit code 1 |", report)
 
     def test_a_review_the_agent_did_not_finish_is_incomplete_and_never_a_quiet_week(self):
         summary = "I could not complete this run's review, and I queued nothing."
         accounts = {
             "says it did not finish": (
-                f"{summary}\n\nReview: incomplete: the rules pass is unfinished.\n",
+                f"{summary}\n\nSession: incomplete: the rules pass is unfinished.\n",
                 "the agent did not finish its review: the rules pass is unfinished",
                 "did not finish reviewing the Go-To-Market Package (the rules pass is unfinished), so",
             ),
@@ -787,7 +948,7 @@ class FailuresTest(CycleTestCase):
                 self.assertIn(told, text)
 
     def test_a_finished_review_is_complete_however_long_the_summary(self):
-        summary = "Traced every recorded outcome.\n\n" + "x" * cycle.SUMMARY_LIMIT + "\n\nReview: complete\n"
+        summary = "Traced every recorded outcome.\n\n" + "x" * cycle.SUMMARY_LIMIT + "\n\nSession: complete\n"
         fakes.behave(self.codex_dir, {"summary": summary})
         code, out = self.run_cycle()
         self.assertEqual(code, 0, out)
@@ -830,12 +991,16 @@ class FailuresTest(CycleTestCase):
         next_run = datetime.fromisoformat(self.queue()["next_run"])
         self.assertEqual(next_run, datetime(2026, 10, 21, 9, 30).astimezone())
 
-    def test_the_run_refuses_a_task_definition_outside_src_instructions(self):
-        out = io.StringIO()
-        runner = cycle.Cycle(self.repo, self.env, self.home, out, self.clock)
-        code = runner.run(self.repo / "workspace/instructions/x.md", "on-demand", None, [])
-        self.assertEqual(code, 2)
-        self.assertIn("src/instructions", out.getvalue())
+    def test_the_run_refuses_to_start_when_a_part_of_a_task_definition_is_missing(self):
+        # Every session's definition is put together before anything else is done, so a run never starts some
+        # sessions and then finds another's definition gone.
+        (self.repo / "src/instructions/weekly-run/outreach.md").unlink()
+        code, out = self.run_cycle()
+        self.assertEqual(code, cycle.launcher.EXIT_CONFIG)
+        self.assertIn("refusing to start: the task definition part", out)
+        self.assertIn("src/instructions/weekly-run/outreach.md could not be read", out)
+        self.assertEqual(fakes.sessions_started(self.codex_dir), [])
+        self.assertFalse((self.ledger() / "run-reports").exists())
 
 
 class NotesTest(CycleTestCase):
@@ -867,11 +1032,12 @@ class NotesTest(CycleTestCase):
             code, out = self.run_cycle(trigger="scheduled")
         self.assertEqual(code, cycle.EXIT_STOPPED)
         self.assertIn("the run stopped: [Errno 1] Operation not permitted", out)
-        [record] = self.logs.glob("2*Z-*.json")
+        [record] = self.logs.glob("2*Z-*.package-review.json")
         started = datetime.fromisoformat(json.loads(record.read_text(encoding="utf-8"))["started_at"])
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=30))
+        run = record.name.split(".")[0]
         self.assertIn(
-            f"Run {record.stem} (scheduled), started {cycle.report.wall_clock(started):%A %Y-%m-%d %H:%M}, stopped"
+            f"Run {run} (scheduled), started {cycle.report.wall_clock(started):%A %Y-%m-%d %H:%M}, stopped"
             " before it finished: [Errno 1] Operation not permitted.",
             self.report(),
         )
@@ -1064,6 +1230,107 @@ class DispatchRunTest(CycleTestCase):
         ids = [entry["id"] for entry in self.queue()["open"] + self.queue()["closed"] if "waitlist" in entry["id"]]
         self.assertEqual(ids, [identifier])
 
+    def test_the_open_request_stands_under_its_id_while_its_item_file_cannot_be_read(self):
+        """A request is compared with its open item by that item's file; unread, it shows no reviewed change."""
+        self.run_cycle()
+        (request,) = self.queue()["open"]
+        file = self.ledger() / request["file"]
+        text = file.read_text(encoding="utf-8")
+        fakes.behave(self.codex_dir, {})
+        damages = (("not in its format", lambda: file.write_text("no item\n")), ("missing", file.unlink))
+        for week, (name, damage) in enumerate(damages):
+            with self.subTest(name):
+                damage()
+                code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14 * week + 7))
+                self.assertEqual(code, 0, out)
+                unread = f"`{request['file']}`, the item file of `{request['id']}`, could not be read ("
+                self.assert_stands(request, "Review Queue", unread)
+                self.assertIn(
+                    f"note=reptoday-waitlist open as `{request['id']}`, left as it is, since {unread}", self.report()
+                )
+                self.assertRegex(self.report(), r"- dispatch-requests: checked=1 acted=0 note=.*; incomplete: `review")
+                file.write_text(text, encoding="utf-8")
+                code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14 * week + 14))
+                self.assertEqual(code, 0, out)
+                self.assert_never_asked_again(request)
+                self.assertIn(f"note=reptoday-waitlist open as `{request['id']}`\n", self.report())
+
+    def test_the_open_request_stands_while_its_reviewed_text_cannot_be_read(self):
+        self.run_cycle()
+        (request,) = self.queue()["open"]
+        reviewed = self.repo / "src/dispatches/reptoday-waitlist.md"
+        reviewed.chmod(0)
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.entry(request["id"]), request)
+        unread = "`src/dispatches/reptoday-waitlist.md` could not be read ("
+        self.assertRegex(self.report(), rf"\| Review Queue \| incomplete \| [^|\n]*{re.escape(unread)}")
+        self.assertIn(f"- {unread}", self.notices())
+        reviewed.chmod(0o644)
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
+        self.assertEqual(code, 0, out)
+        self.assert_never_asked_again(request)
+        self.assertIn(f"note=reptoday-waitlist open as `{request['id']}`\n", self.report())
+
+    def test_a_rejected_request_is_never_filed_again_while_its_item_file_cannot_be_read(self):
+        """The fingerprint the run state holds of the rejected item settles it; with neither, the request is held."""
+        self.run_cycle()
+        (request,) = self.queue()["open"]
+        self.decide(request["id"], "reject", reason="Not before the build.")
+        fakes.behave(self.codex_dir, {})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        rejected = self.entry(request["id"])
+        self.assertEqual(rejected["status"], "rejected")
+        file = self.ledger() / request["file"]
+        text = file.read_text(encoding="utf-8")
+        file.write_text("no item\n", encoding="utf-8")
+
+        def requests():
+            queue = self.queue()
+            return [entry for entry in queue["open"] + queue["closed"] if entry["kind"] == "dispatch-request"]
+
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(requests(), [rejected], "the run state shows this text is the one the Founder rejected")
+        self.assertIn(f"note=reptoday-waitlist rejected as `{request['id']}`; not asked again unless", self.report())
+
+        (self.ledger() / "run-reports/state/review-queue.json").unlink()
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=21))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(requests(), [rejected], "nothing filed and nothing withdrawn")
+        unread = f"`{request['file']}`, the item file of `{request['id']}`, could not be read ("
+        report = self.report()
+        self.assertRegex(report, rf"\| Review Queue \| incomplete \| [^|\n]*{re.escape(unread)}")
+        self.assertRegex(
+            report,
+            rf"- dispatch-requests: checked=1 acted=0 note=reptoday-waitlist not filed, since {re.escape(unread)}",
+        )
+        self.assertRegex(
+            self.notices(),
+            rf"- reptoday-waitlist not filed, since {re.escape(unread)}[^\n]*\), so nothing shows whether the Founder"
+            " rejected this text; the next run compares them again",
+        )
+        self.assertNotIn("left exactly as it is", self.notices())
+
+        file.write_text(text, encoding="utf-8")
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=28))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(requests(), [rejected])
+        self.assertIn(f"note=reptoday-waitlist rejected as `{request['id']}`; not asked again unless", self.report())
+
+    def test_a_reviewed_change_to_the_request_s_text_still_replaces_its_open_item(self):
+        self.run_cycle()
+        (request,) = self.queue()["open"]
+        reviewed = self.repo / "src/dispatches/reptoday-waitlist.md"
+        text = reviewed.read_text(encoding="utf-8")
+        reviewed.write_text(text.replace("## Touches", "One more reviewed line.\n\n## Touches", 1), encoding="utf-8")
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(code, 0, out)
+        (replaced,) = [entry for entry in self.queue()["open"] if entry["kind"] == "dispatch-request"]
+        self.assertEqual(replaced["supersedes"], request["id"])
+        old = self.entry(request["id"])
+        self.assertEqual((old["status"], old["superseded_by"]), ("superseded", replaced["id"]))
+
     def test_an_item_the_agent_writes_never_withdraws_the_request(self):
         self.run_cycle()
         (entry,) = self.queue()["open"]
@@ -1080,6 +1347,24 @@ class DispatchRunTest(CycleTestCase):
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
         self.assertEqual([e["id"] for e in self.queue()["open"] if e["kind"] == "dispatch-request"], [identifier])
         self.assertIn(f"note=reptoday-waitlist open as `{identifier}`", self.report())
+
+    def test_an_item_with_the_kind_and_ask_of_a_request_filed_in_the_same_run_is_queued_as_always(self):
+        """The request's item file was written this run and no read of it failed, so it is no unread item."""
+        reviewed = (fakes.REPO / "src/dispatches/reptoday-waitlist.md").read_text(encoding="utf-8")
+        another = reviewed.replace("\n## Touches\n", "\nBuild it another way.\n\n## Touches\n", 1)
+        self.assertNotEqual(another, reviewed)
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/waitlist-another-way.md": another}})
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        day = f"{fakes.SUNDAY_RUN.astimezone():%Y%m%d}"
+        filed, written = f"{day}-reptoday-waitlist", f"{day}-waitlist-another-way"
+        queue = self.queue()
+        self.assertEqual(sorted(entry["id"] for entry in queue["open"]), sorted([filed, written]), "no notice either")
+        self.assertEqual(self.entry(filed)["ask"], self.entry(written)["ask"])
+        report = self.report()
+        self.assertIn("| Review Queue | complete | 2 open items |", report)
+        self.assertNotIn("Set aside, not queued", report)
+        self.assertNotIn(f"`{self.entry(filed)['file']}`, its item file, could not be read", report)
 
 
 class ProductionCloneTest(CycleTestCase):
@@ -1145,7 +1430,7 @@ class ProductionCloneTest(CycleTestCase):
         self.assertEqual(list(self.committed_probe_files()), [])
         quoted = ", ".join(f"`{path.relative_to(self.clone)}`" for path in left)
         self.assertIn(
-            "## Agent\n\n- Removed boundary probe files left in the areas, before the agent started: "
+            "## Agent\n\n- Removed boundary probe files left in the areas, before any agent could find them: "
             f"{quoted}\n- Boundary preflight: passed",
             self.report(self.clone),
         )
@@ -1166,7 +1451,7 @@ class ProductionCloneTest(CycleTestCase):
         self.assertEqual(code, 0, out)
         self.assertNotIn("removed boundary probe files", out)
         self.assertIn(
-            "- Removed boundary probe files left in the areas, before the agent started: `workspace/drafts/",
+            "- Removed boundary probe files left in the areas, before any agent could find them: `workspace/drafts/",
             self.report(self.clone),
         )
         self.assertEqual(list(self.committed_probe_files()), [])
@@ -1186,7 +1471,7 @@ class ProductionCloneTest(CycleTestCase):
         self.assertIn("records: pushed", out)
         self.assertEqual(list(self.committed_probe_files()), [])
         self.assertIn(
-            "- Removed boundary probe files left in the areas, before the agent started: `workspace/drafts/",
+            "- Removed boundary probe files left in the areas, before any agent could find them: `workspace/drafts/",
             self.report(self.clone),
         )
 
@@ -1243,7 +1528,7 @@ class ProductionCloneTest(CycleTestCase):
         self.assertIn(f"`workspace/instructions` {restored}", (self.ledger(self.clone) / notice["file"]).read_text())
 
     def test_a_clone_off_main_or_with_code_changes_refuses_to_start(self):
-        with (self.clone / "src/instructions/weekly-run.md").open("a") as handle:
+        with (self.clone / "src/instructions/weekly-run/common.md").open("a") as handle:
             handle.write("Unreviewed line.\n")
         code, out = self.run_cycle(repo=self.clone)
         self.assertEqual(code, cycle.EXIT_RECORDS)
@@ -1265,16 +1550,17 @@ class PostDraftsTest(CycleTestCase):
             return cli.check_drafts(run_id, out), out.getvalue()
 
     def run_with_check_drafts(self, at=None, meanwhile=None):
-        """Run a cycle whose agent, once it has written its files, runs check-drafts for its run while the run is
-        still in progress, as the brief tells it to; returns check-drafts's exit code and its output. meanwhile is
-        what happens outside the run while the agent works, before it runs check-drafts."""
+        """Run a cycle whose post Drafts session, once it has written its files, runs check-drafts for its run while
+        the run is still in progress, as its brief tells it to; returns check-drafts's exit code and its output.
+        meanwhile is what happens outside the run while that agent works, before it runs check-drafts."""
         launch, seen = cycle.launcher.run, []
 
         def agent(*args, **kwargs):
             result = launch(*args, **kwargs)
-            if meanwhile:
-                meanwhile()
-            seen.append(self.check_drafts(kwargs["run_id"]))
+            if kwargs["session"] == "post-drafts":
+                if meanwhile:
+                    meanwhile()
+                seen.append(self.check_drafts(kwargs["run_id"]))
             return result
 
         with mock.patch.object(cycle.launcher, "run", agent):
@@ -1366,6 +1652,88 @@ class PostDraftsTest(CycleTestCase):
         report = self.report()
         self.assertIn("| 3 | P03 / AB-2 leg A | blocked |", report)
         self.assertIn("| 1 | P01 / AB-1 leg A | kept |", report)
+
+    def lose_the_claim_file(self):
+        """Make git's read of the one file every claim cites fail, as a damaged object does, while the branch still
+        resolves to its commit; returns what puts the object back."""
+        blob = fakes.git(self.code, "rev-parse", "main:Engine/ConsistencyScore.swift", env=self.env).strip()
+        loose, away = self.code / ".git/objects" / blob[:2] / blob[2:], self.root / "object-set-aside"
+        shutil.move(str(loose), str(away))
+        return lambda: shutil.move(str(away), str(loose))
+
+    def test_an_open_post_stands_under_its_id_while_git_cannot_read_the_file_its_claim_cites(self):
+        """The defect as the Founder met it: a single-file git read that failed took every open post back as
+        "there is no file", with the Post Drafts reading complete, and the next run asked each again under a new
+        identifier."""
+        first = self.first_batch()
+        open_posts = [entry for entry in first["open"] if entry["kind"] == "post"]
+        self.assertEqual(len(open_posts), 6)
+        restore = self.lose_the_claim_file()
+        fakes.behave(self.codex_dir, {})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))
+        self.assertEqual(code, 0, out)
+        unread = "git could not read `Engine/ConsistencyScore.swift` in RepToday's code"
+        for post in open_posts:
+            self.assert_stands(post, "Post Drafts", unread)
+        report = self.report()
+        day_3 = open_posts[2]["id"]
+        self.assertIn(
+            f"| 3 | P03 / AB-2 leg A | kept | `{day_3}`; not checked again, since {unread}; the open item stands |",
+            report,
+        )
+        self.assertIn("| RepToday repository | read |", report)
+        self.assertIn("- post-drafts: checked=7 acted=0 note=7 days: 6 kept, 1 blocked; incomplete: git could", report)
+        self.assertNotIn("there is no file", report + self.notices())
+        self.assertNotIn("was withdrawn", report)
+        self.assertNotIn("is withdrawn", self.notices())
+        # Day 5 has no open post, so its Draft is blocked, and the block names the read, never a missing file.
+        self.assertRegex(report, r"- claim-location: .*: git could not read it \(fatal: .*ConsistencyScore\.swift")
+        restore()
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=2))
+        self.assertEqual(code, 0, out)
+        for post in open_posts:
+            self.assert_never_asked_again(post)
+        report = self.report()
+        self.assertIn(f"| 3 | P03 / AB-2 leg A | kept | `{day_3}`; its Draft is unchanged and passes |", report)
+        self.assertIn("| Post Drafts | complete | 7 days: 6 kept, 1 blocked |", report)
+
+    def test_an_open_post_is_still_withdrawn_once_the_file_its_claim_cites_is_gone_from_the_code(self):
+        first = self.first_batch()
+        day_3 = next(entry["id"] for entry in first["open"] if entry.get("day") == 3)
+        fakes.git(self.code, "rm", "--quiet", "Engine/ConsistencyScore.swift", env=self.env)
+        fakes.git(self.code, "commit", "--quiet", "-m", "the score moved", env=self.env)
+        fakes.behave(self.codex_dir, {})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))
+        self.assertEqual(code, 0, out)
+        withdrawn = self.entry(day_3)
+        self.assertEqual((withdrawn["status"], withdrawn["withdrawn"]), ("superseded", True))
+        report = self.report()
+        self.assertRegex(
+            report, r"- claim-location: .*: there is no file Engine/ConsistencyScore\.swift at [0-9a-f]{7}"
+        )
+        self.assertIn(f"| 3 | P03 / AB-2 leg A | blocked | 1 failing check, listed below; the open `{day_3}`", report)
+        self.assertIn("| Post Drafts | complete | 7 days: 7 blocked; 6 withdrawn |", report)
+        self.assertIn(
+            f"- The open post `{day_3}` for day 3 is withdrawn, since its Draft no longer passes.", self.notices()
+        )
+        self.assertNotIn("not checked again", report + self.notices())
+
+    def test_an_open_post_stands_under_its_id_while_its_draft_cannot_be_read(self):
+        first = self.first_batch()
+        post = next(entry for entry in first["open"] if entry.get("day") == 3)
+        path = self.workspace() / fakes.draft_path(3)
+        written = path.read_bytes()
+        path.write_bytes(b"\xff\xfe not text")
+        fakes.behave(self.codex_dir, {})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))
+        self.assertEqual(code, 0, out)
+        self.assert_stands(post, "Post Drafts", "`drafts/posts/window-1/day-03.md` could not be read (")
+        self.assertNotIn("was withdrawn", self.report())
+        path.write_bytes(written)
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=2))
+        self.assertEqual(code, 0, out)
+        self.assert_never_asked_again(post)
+        self.assertIn("| Post Drafts | complete | 7 days: 6 kept, 1 blocked |", self.report())
 
     def test_no_item_the_agent_writes_takes_a_post_off_the_queue(self):
         first = self.first_batch()

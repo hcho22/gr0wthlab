@@ -29,7 +29,7 @@ Do every pass below before you write any item; finding a contradiction does not 
 
 Then write one proposal for each stale fact you found, and in your summary list each recorded outcome you traced with what you found for it.
 Every stale fact you found becomes a proposal, even when the replacement wording needs the Founder's judgment (for example a legal line or a claim the record states only in part): propose the narrowest wording the record supports, and say in the proposal what the Founder must confirm or choose.
-It also becomes a proposal when you end the run before every pass is done; say in your summary which passes you did not finish and why.
+It also becomes a proposal when you end the session before every pass is done; say in your summary which passes you did not finish and why.
 A contradiction you name only in your summary is one the Founder never decides.
 
 ## Deciding which side is current
