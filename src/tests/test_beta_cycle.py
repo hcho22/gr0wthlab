@@ -4,6 +4,7 @@ week, on the seeded anonymous view and a throwaway Mandu."""
 import io
 import json
 import os
+import re
 from datetime import timedelta
 from unittest import mock
 
@@ -889,6 +890,62 @@ class WeekByWeekTest(BetaCycleTestCase):
         for item in (invitation, ask):
             self.assertTrue(self.entry(item["id"])["withdrawn"])
             self.assertIn(f"- The open `{item['id']}` is withdrawn: {why}.", self.notices())
+
+    def test_an_open_batch_that_lost_a_sign_up_is_still_taken_back_while_a_report_cannot_be_read(self):
+        """The view was read, so it takes the batch back; the count a later report may correct makes no other."""
+        self.next_week()
+        invitation, (ask,) = self.invitation(), self.asks()
+        self.report_counts("2026-10-24", invitations_sent=60, accepted=50, sessions_booked=30)
+        later = self.exchange / beta.REPORTS / "RepToday-2026-10-25.json"
+        later.write_text("{not json", encoding="utf-8")
+        fakes.write_view(
+            self.view, fakes.waitlist_view(entries=[e for e in fakes.WAITLIST_ENTRIES if e[0] != "Ka0zMn2p"])
+        )
+        self.next_week()
+        unread = (
+            "`beta-reports/RepToday-2026-10-25.json` in Mandu's exchange folder could not be read as the Founder's"
+            " report"
+        )
+        why = (
+            f"1 of the 2 entries in `{invitation['id']}` left the Waitlist or its beta opt-in, or were invited another"
+            " way, and no batch is made in its place: the Beta Cohort reached 50 people: 50 accepted, as the Founder"
+            f" reported on 2026-10-24; {unread}, so recruiting is not ended on that count this run"
+        )
+        self.assertTrue(self.entry(invitation["id"])["withdrawn"])
+        self.assertEqual(self.messages(), [ask], "no batch in its place, and the ask stands as it was")
+        notices = self.notices()
+        self.assertIn(f"- The open `{invitation['id']}` is withdrawn: {why}. Its entries were not invited.", notices)
+        report = self.report()
+        self.assertIn(f"| Beta invitation | not due | {why}; the open `{invitation['id']}` was withdrawn |", report)
+        self.assertRegex(report, r"\| Beta Cohort recruiting \| incomplete \| [^|\n]*" + re.escape(unread))
+        self.assertIn(f"- `{ask['id']}` (Beta Cohort recruiting): {unread}", notices)
+        self.assertEqual(self.recruiting_state()["entries"], {})
+        # With every report read and the cohort not full, the batch is made again without the sign-up who left.
+        fakes.write_record(later.parent, later.name, fakes.beta_report("2026-10-25", accepted=3))
+        self.next_week()
+        again = self.invitation()
+        self.assertEqual((again["batch"], again["candidates"]), (1, ["Qm7tLx2a", "Xf9mKa3i"]))
+        self.assertNotIn("supersedes", again)
+
+    def test_a_due_draft_that_holds_an_address_is_removed_while_a_report_cannot_be_read(self):
+        """The open ask stands on the report that could not be read, and its Draft is read and checked all the same."""
+        self.next_week()
+        (ask,) = self.asks()
+        path = self.workspace() / fakes.WAITLIST_ASK
+        fakes.write_record(self.exchange / beta.REPORTS, "RepToday-2026-10-25.json", "{not json")
+        self.write(ask=fakes.beta_draft("waitlist-ask-clean") + f"\nOr write to {fakes.ADDRESS}.\n")
+        self.next_week()
+        self.assertFalse(path.exists(), "the records step has no file to save")
+        unread = "`beta-reports/RepToday-2026-10-25.json` in Mandu's exchange folder could not be read as the Founder's"
+        self.assert_stands(ask, "Beta Cohort recruiting", unread)
+        self.assertRegex(
+            self.report(),
+            rf"\| Waitlist ask \| kept \| `{ask['id']}`; not checked again, since [^|\n]*; the open item stands; the"
+            r" Draft file was removed, since it held what looks like an email address \|",
+        )
+        (kept,) = [draft for draft in self.evidence()["drafts"] if draft["purpose"] == "waitlist-ask"]
+        self.assertEqual((kept["status"], kept["removed"]), ("kept", True))
+        self.assert_no_address_anywhere()
 
     def test_brand_rules_that_cannot_be_read_block_a_new_draft_and_keep_an_open_one(self):
         rules = self.mandu / "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json"

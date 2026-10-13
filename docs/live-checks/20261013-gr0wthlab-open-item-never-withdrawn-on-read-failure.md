@@ -51,3 +51,46 @@ Where this rule meets the video-file check, a post whose finished file is gone w
 No real withdrawal was made live; each stands on a unit test.
 The failed read was made in a synthetic Product checkout, never in Mandu or a real Product checkout, which no check here may change.
 No weekly run was made on a schedule, and Mandu's side was not shown the notice.
+
+## Re-check after review
+
+The review of this change asked for three fixes, and this round is the re-check of the code that holds them.
+`beta.take_draft` reads a recruiting Draft the brief asked for, and removes one that holds what looks like an email address, before it weighs a report of the Founder's that could not be read.
+`beta.decide` judges an open batch by the Waitlist's view before it holds a full count back for a report that could not be read: a batch the view shows has lost a sign-up is withdrawn with that reason, and no batch is made in its place on that count.
+`dispatch.file` does not file a request again while the file of an item of it the Founder rejected cannot be read: the fingerprint the run state holds of that item settles it, and with neither record the request is held and the run reports the file.
+`Ledger.check_incoming` sets aside an item in `incoming/` that has the kind and ask of a queued item whose file cannot be read and whose fingerprint no run state holds.
+None of the four changes anything in a run where every file can be read.
+The same repeat check for a proposed Angle (`listening.take_proposals`) and for a reviewed proposal (`proposals.file`) was left as it is, for the Founder to decide; `AGENTS.md` names it as a known gap.
+The round changes launcher code in `beta.py`, `dispatch.py`, `queue.py`, `cycle.py`, and `report.py`.
+It changes nothing in the permission profile, the Codex command, the fetch policy, the Product registry, or the exchange format, which stays version 6.
+
+Every check below ran on 2026-10-12, Mac local time (PDT), with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort.
+
+- `ruff check src src/bin/gr0wthlab` and `ruff format --check src src/bin/gr0wthlab` passed, with ruff 0.15.20.
+- `/usr/bin/python3 -m unittest tests.test_dispatch tests.test_queue tests.test_beta tests.test_beta_cycle tests.test_cycle.DispatchRunTest tests.test_cycle.TakeInTest`, started once from `src/`, ran 127 tests, and all passed.
+- The six tests this round adds were also run on the code of `156dfcf0ad4ec337870fd1ee0281b1f3969313f5`, the commit before the fixes, in a throwaway copy in the Mac's temporary folder with this round's test files copied over it, and none passed.
+  Five failed on an assertion: the Draft that held an address was still in `workspace/`, the batch read as not stale, the rejected request was in the queue a second time, and the repeated item was queued, in a whole run and in the ledger's own test.
+  The sixth ended in `KeyError: 'withdrawn'` where it reads the open batch's queue entry.
+
+### The boundary
+
+Both checks ran from the review's linked worktree, on `156dfcf0ad4ec337870fd1ee0281b1f3969313f5` with this round's changes in place and not yet committed.
+Its `src/` is tree `db268f4a17f19433945f5f4f13e24e555f33dd39` and its `config/` is tree `bfa79f76f468035578efd8d2c901b92c40c3adf9`, the `config/` tree of the round above; both were the same after the boundary check as before the preflight.
+`git status` was not empty, since the round's commit comes after its checks: it listed the same twelve changed files, and nothing else, before the preflight and after the boundary check.
+The checks ran against Mandu and the Product checkouts as they are, and their logs went to a folder in the Mac's temporary directory, named with `GR0WTHLAB_LOG_DIR`.
+The configuration fingerprint `show-config` prints there is `1fd7a1300daef25aba4297d52d84ad86d0341312a75c395ab0192f8737bcda14`.
+It differs from the one above because the worktree does: the fingerprint covers the Codex command, which holds the checkout's own path.
+
+- `src/bin/gr0wthlab preflight`, started at 22:20, passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, started at 22:20, passed at its first attempt, as `20261013T052016Z-on-demand-5024`: 32 steps to prove, nine of nine file-tool targets refused in a patch of their own, eleven kernel denials naming the run's sentinels or the check's listeners, twelve of twelve permitted sentinels, no sentinel escaped, no local connection, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, both a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed since the snapshot.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the preflight and after the boundary check.
+
+### What this re-check did not exercise
+
+No run was started with `src/bin/gr0wthlab run` in this round, so none of the four changes was seen live.
+Each stands on the unit tests named above, which are whole runs with a stand-in agent beside the tests of `beta.decide`, `dispatch.file`, and `Ledger.take_incoming`: a report that cannot be read with a Draft that holds an address, with a batch that lost a sign-up, with a batch that lost none, with a view that cannot be used, and with no open batch; a rejected request whose item file cannot be read with and without the run state's fingerprint, and with a fingerprint of another text; and an item in `incoming/` with the kind and ask of a rejected item whose file and fingerprint are both lost, beside one with another ask.
+The whole unit suite was not run in this round.
+The boundary check was run once, not as a streak.
+No file was made unreadable in Mandu, in a real Product checkout, or in a real `ledger/`.
+No weekly run was made on a schedule, and Mandu's side was not shown a notice.

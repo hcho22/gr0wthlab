@@ -24,7 +24,8 @@ it is replaced when the gap changes and withdrawn once the gap closes.
 
 Only what the launcher could read takes an open recruiting item back (queue.stands). While a report of the Founder's
 cannot be read, no count ends recruiting and the open ask stands, since its gap rests on those counts; a Draft or a
-package line it cites that cannot be read leaves its open item as it is, not checked again.
+package line it cites that cannot be read leaves its open item as it is, not checked again. The view is a record
+that was read, so an open batch is still judged by it then, and a Draft is still read and checked for an address.
 
 Three of these follow the recruiting patterns of the marketingskills library, considered for this story: batches
 that are throttled, a selection rule that is written down and neutral, and no invented scarcity. Its survey benchmark
@@ -411,6 +412,26 @@ class Batch:
         return sum(candidate.good_fit for candidate in self.candidates)
 
 
+def batch_entries(
+    current: Mapping[str, object], reading: waitlist.Reading, held: Mapping[str, Mapping[str, str]]
+) -> tuple[list[str], list[str], str]:
+    """The entries an open batch holds, those of them it may still offer (the view holds each, and no other item
+    took it), and, when some may not be offered, how many and why."""
+    mine = [str(identifier) for identifier in current.get("candidates") or ()]
+    on_view = {candidate.entry for candidate in reading.candidates}
+    still = [
+        identifier
+        for identifier in mine
+        if identifier in on_view and held.get(identifier, {}).get("item") == current["id"]
+    ]
+    gone = len(mine) - len(still)
+    why = (
+        f"{gone} of the {len(mine)} entries in `{current['id']}` left the Waitlist or its beta opt-in, or were"
+        " invited another way"
+    )
+    return mine, still, why if gone else ""
+
+
 def decide(
     rules: Rules,
     gate: Gate,
@@ -428,19 +449,26 @@ def decide(
     batch size and the room left in the cohort allow. While the Founder has not reported how many accepted, the
     cohort cannot be larger than the entries invited, so that number stands in for it, never zero. unread says why
     a report of the Founder's could not be read, when one could not: a later report may correct a count, so no count
-    ends recruiting then, and nothing open is taken back on one."""
+    ends recruiting then, and nothing open is taken back on one. The view is a record that was read, so an open
+    batch that holds an entry who may no longer be invited is still taken back then, and no batch is made in its
+    place on a count a later report may correct."""
     current = next((entry for entry in entries if entry["status"] == OPEN), None)
     accepted = counts.accepted
     if gate.stopped:
         return Batch(NONE, f"the Founder stopped recruiting on {gate.record.stopped_on}", open=current, ended=True)
+    viewed = reading is not None and reading.status == package.READ
     if accepted is not None and accepted >= rules.maximum:
         day = counts.stated["accepted"][1]
         why = f"the Beta Cohort reached {rules.maximum} people: {accepted} accepted, as the Founder reported on {day}"
-        if unread:
-            why += f"; {unread}, so recruiting is not ended on that count this run"
-            return Batch(NONE, why, open=current, unread=unread)
-        return Batch(NONE, why, open=current, ended=True)
-    if reading is None or reading.status != package.READ:
+        if not unread:
+            return Batch(NONE, why, open=current, ended=True)
+        why += f"; {unread}, so recruiting is not ended on that count this run"
+        gone = batch_entries(current, reading, held)[2] if current is not None and viewed else ""
+        if gone:
+            why = f"{gone}, and no batch is made in its place: {why}"
+            return Batch(NONE, why, int(current.get("batch") or 1), open=current, unread=unread, stale=True)
+        return Batch(NONE, why, open=current, unread=unread)
+    if not viewed:
         return Batch(
             NONE, "the Waitlist's anonymous view could not be used this run, so no entry was chosen", open=current
         )
@@ -449,22 +477,13 @@ def decide(
     room = rules.maximum - (accepted if accepted is not None else len(invited(held)))
     if current is not None:
         number = int(current.get("batch") or 1)
-        mine = [str(identifier) for identifier in current.get("candidates") or ()]
-        still = [
-            identifier
-            for identifier in mine
-            if identifier in order and held.get(identifier, {}).get("item") == current["id"]
-        ]
-        if len(still) == len(mine):
+        mine, still, gone = batch_entries(current, reading, held)
+        if not gone:
             kept = tuple(order[identifier] for identifier in mine)
             return Batch(KEEP, f"batch {number} is open as `{current['id']}`", number, kept, current)
         chosen = set(still) | {candidate.entry for candidate in free[: max(0, min(len(mine), room) - len(still))]}
         again = tuple(candidate for candidate in reading.candidates if candidate.entry in chosen)
-        gone = len(mine) - len(still)
-        why = (
-            f"{gone} of the {len(mine)} entries in `{current['id']}` left the Waitlist or its beta opt-in, or were"
-            " invited another way, so the batch was made again without them"
-        )
+        why = f"{gone}, so the batch was made again without them"
         if not again:
             return Batch(NONE, why + "; no entry is left to offer", number, open=current, stale=True)
         return Batch(REBUILD, why, number, again, current)
@@ -818,13 +837,15 @@ def take(
         return outcome
     if batch.action == NONE:
         current = str(batch.open["id"]) if batch.open else None
-        kept = stands(batch.open, [batch.unread] if batch.unread else [])
+        unread = [batch.unread] if batch.unread else []
+        kept = None if batch.stale else stands(batch.open, unread)
         if kept:
             outcome.results.append(DraftResult(INVITATION, KEPT, kept.detail, kept.item, unread=list(kept.unread)))
         elif current and not batch.stale:
             outcome.results.append(DraftResult(INVITATION, KEPT, batch.why, current))
         else:
-            outcome.results.append(DraftResult(INVITATION, NOT_DUE, batch.why, withdrawn=current))
+            lost = unread if current else []
+            outcome.results.append(DraftResult(INVITATION, NOT_DUE, batch.why, withdrawn=current, unread=lost))
     for due in plan.drafts:
         outcome.results.append(take_draft(plan, due, areas, store, ledger, run_id, now, products, outcome))
     if plan.gap == 0:
@@ -854,10 +875,14 @@ def take_draft(
     current = str(due.open["id"]) if due.open else None
     # An open item that can stand is taken back only by a Draft the launcher could read and check.
     standing = None if stale else due.open
+    draft, problem = read_draft(areas, due.path)
+    removed = draft is not None and draft.holds_address
+    if removed:
+        # FR-11: the file leaves the workspace before the records step can save it, and nothing in it is quoted.
+        areas.remove(due.path)
     kept = stands(standing, [plan.reports_unread] if purpose == WAITLIST_ASK and plan.reports_unread else [])
     if kept:
-        return DraftResult(purpose, KEPT, kept.detail, kept.item, unread=list(kept.unread))
-    draft, problem = read_draft(areas, due.path)
+        return DraftResult(purpose, KEPT, kept.detail, kept.item, unread=list(kept.unread), removed=removed)
     if draft is None:
         kept = stands(standing, [problem] if problem else [])
         if kept:
@@ -872,11 +897,7 @@ def take_draft(
             return DraftResult(purpose, APPROVED_BEFORE, why, earlier, withdrawn=current)
         where = f"no Draft at `{areas.relative(due.path)}`"
         return DraftResult(purpose, MISSING, where, withdrawn=current)
-    result = DraftResult(purpose, BLOCKED, "", None, draft.path, draft.sha256)
-    if draft.holds_address:
-        # FR-11: the file leaves the workspace before the records step can save it, and nothing in it is quoted.
-        areas.remove(due.path)
-        result.removed = True
+    result = DraftResult(purpose, BLOCKED, "", None, draft.path, draft.sha256, removed=removed)
     result.verdict, item = check_draft(plan, due, draft, products)
     result.unread = list(result.verdict.unread)
     kept = stands(standing, result.unread)

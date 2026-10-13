@@ -83,6 +83,14 @@ def stands(current: Mapping[str, object] | None, unread: Sequence[str]) -> Stand
     return Stands(str(current["id"]), tuple(dict.fromkeys(unread)))
 
 
+def may_repeat(item: exchange.Item, entry: Mapping[str, object]) -> bool:
+    """Whether an item may ask the same as a queued one whose item file could not be read. The ledger still holds
+    that one's kind and ask, so only its Draft or proposal is unknown: the two share a fingerprint if it is this
+    item's, and cannot share one otherwise."""
+    alike = exchange.Item({"kind": str(entry["kind"])}, str(entry["ask"]), item.body, "", "")
+    return exchange.item_hash(alike) == exchange.item_hash(item)
+
+
 def declaration_problem(item: exchange.Item, kept: Collection[str]) -> str | None:
     """Why a package-change proposal's declaration keeps it off the queue, if it does. One that declares it adds or
     changes an Angle or Hook needs sourced pain: an Evidence line that names, exactly, the record of a Listening
@@ -107,6 +115,7 @@ class Ledger:
     def __init__(self, entries: Sequence[Mapping[str, object]] = ()):
         self.entries: dict[str, dict[str, object]] = {str(entry["id"]): dict(entry) for entry in entries}
         self.stood: list[Stands] = []  # each open item the take-in left as it was on a read that could not be made
+        self.unsettled: list[str] = []  # each item file, unread, that an item set aside from incoming/ may repeat
 
     @classmethod
     def load(cls, path: Path) -> Ledger:
@@ -229,7 +238,8 @@ class Ledger:
         seen maps each queued item's fingerprint to its identifier; an item that asks the same thing as one already
         open or decided is set aside, so nothing decided is ever asked again under another name. kept holds the
         record of each Listening quote the launcher keeps, as a path in ledger/. unread holds each queued item whose
-        fingerprint is not in seen, since its item file could not be read, with the reason.
+        fingerprint is not in seen, since its item file could not be read, with the reason; unsettled comes to hold
+        the reason for each of those an item here was set aside as a possible repeat of.
         """
         seen = {} if seen is None else seen
         incoming = areas.path("review_queue", INCOMING)
@@ -277,7 +287,9 @@ class Ledger:
         name is the file's path inside incoming/; seen maps each queued item's fingerprint to its identifier, and
         kept holds the record of each Listening quote the launcher keeps. unread holds each queued item whose item
         file could not be read, so that seen lacks its fingerprint: nothing then shows an item that supersedes it is
-        not that same ask over again, so the open item stands. The item comes back only when there is no problem.
+        not that same ask over again, so the open item stands, and nothing shows an item with its kind and ask is
+        not a repeat of it, open or decided, so that item is not queued. The item comes back only when there is no
+        problem.
         """
         problems: list[str] = []
         slug = slug_of(name)
@@ -329,6 +341,16 @@ class Ledger:
             earlier = self.entries.get(seen[fingerprint])
             status = earlier["status"] if earlier else "also in incoming/"
             problems.append(f"asks the same as {seen[fingerprint]}, which is {status}")
+        else:
+            for identifier, lost in (unread or {}).items():
+                earlier = self.entries[identifier]
+                # The item this one supersedes is weighed above, on its own.
+                if identifier != target and may_repeat(item, earlier):
+                    self.unsettled.append(lost)
+                    problems.append(
+                        f"has the kind and ask of {identifier}, which is {earlier['status']}: {lost}, so nothing shows"
+                        " this item asks anything else"
+                    )
         return (None if problems else item), problems
 
     def set_aside(

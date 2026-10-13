@@ -109,6 +109,7 @@ class RunState:
     breach_notice: str | None = None
     dispatches: list = field(default_factory=list)  # dispatch.Filing, one per reviewed Dispatch request
     dispatch_unread: list[str] = field(default_factory=list)  # each file a request's filing rests on that was unread
+    queue_unread: list[str] = field(default_factory=list)  # each item file an item in incoming/ may repeat, unread
     # Each open item left as it was on a read that could not be made: (its output's title, queue.Stands).
     stood: list = field(default_factory=list)
     queue_title: str = ""  # the Review Queue output's title, which a Dispatch request's item counts under

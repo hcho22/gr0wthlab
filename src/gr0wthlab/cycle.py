@@ -393,11 +393,19 @@ class Cycle:
             self.store.write_json(path, waitlist.evidence(reading, state.run_id, self.now()))
             state.waitlist_file = self.store.relative(path)
 
-    def file_dispatches(self, state: RunState, ledger: Ledger, products: Sequence[str], seen: dict[str, str]) -> None:
+    def file_dispatches(
+        self,
+        state: RunState,
+        ledger: Ledger,
+        products: Sequence[str],
+        seen: dict[str, str],
+        hashes: Mapping[str, str],
+    ) -> None:
         """File each reviewed Dispatch request that needs filing, before the agent starts, so its brief lists it."""
         requests, problems = dispatch.load(self.repo_root, products)
         state.problems += problems
-        state.dispatches = dispatch.file(ledger, self.store, requests, products, seen, state.run_id, self.now())
+        state.dispatches = dispatch.file(ledger, self.store, requests, products, seen, state.run_id, self.now(), hashes)
+        state.problems += [filing.account() for filing in state.dispatches if filing.status == dispatch.HELD]
         state.dispatch_unread = dispatch.unread(problems, state.dispatches)
         state.published += [str(filing.identifier) for filing in state.dispatches if filing.acted]
 
@@ -615,10 +623,10 @@ class Cycle:
 
     def queue_gaps(self, state: RunState) -> list[str]:
         """Why the Review Queue is incomplete this run though the ledger was read: an item file could not be, so a
-        reviewed Dispatch request, or an item the agent wrote to take an open item's place, could not be compared
-        with the item it would replace, which therefore stands."""
+        reviewed Dispatch request, or an item the agent wrote, could not be compared with the item it would replace,
+        which therefore stands, or with one it may ask again, so it was not queued."""
         review_queue = [reason for title, kept in state.stood if title == state.queue_title for reason in kept.unread]
-        return list(dict.fromkeys(state.dispatch_unread + review_queue))
+        return list(dict.fromkeys(state.dispatch_unread + state.queue_unread + review_queue))
 
     def left_standing(self, state: RunState, config: settings.Settings, ledger: Ledger) -> None:
         """Gather each open item this run left exactly as it was because a read its standing rests on could not be
@@ -640,7 +648,7 @@ class Cycle:
         found += [
             (state.queue_title, Stands(str(filing.identifier), (filing.unread,)))
             for filing in state.dispatches
-            if filing.unread
+            if filing.status == dispatch.UNREAD
         ]
         found += [(state.queue_title, kept) for kept in ledger.stood]
         state.stood = found
@@ -1490,7 +1498,7 @@ class Cycle:
             )
         self.read_waitlist(state, config, rules)
         if ledger_ok:
-            self.file_dispatches(state, ledger, products, seen)
+            self.file_dispatches(state, ledger, products, seen, hashes)
         self.prepare_posts(state, config, registry, boundary, ledger)
         self.prepare_filming(state, config, footage_place, areas, ledger, ledger_ok, products, seen)
         state.queue_before = ledger.ordered()
@@ -1567,6 +1575,7 @@ class Cycle:
             published, state.set_aside = ledger.take_incoming(
                 areas, self.store, products, run_id, now, seen, kept, lost
             )
+            state.queue_unread = ledger.unsettled
             state.published += published
         incoming = len(published) + len(state.set_aside)
         if ledger_ok:
