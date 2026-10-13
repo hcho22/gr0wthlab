@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import os
 import stat
-from collections.abc import Collection, Mapping
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -27,6 +27,7 @@ READ = "read"
 NOT_SET = "not set"
 EMPTY = "nothing there yet"
 FAILED = "failed"
+UNREAD = "could not be read"  # how an ignored entry's reason starts when the file is there and the read failed
 CHUNK = 1 << 20
 
 
@@ -64,6 +65,18 @@ class Inventory:
     def unmeasured(self) -> list[Clip]:
         """The clips named for a shot that could not be measured, so nothing is cut from them."""
         return [clip for clip in self.clips.values() if clip.shot is not None and clip.problem]
+
+    def lost(self, names: Sequence[str]) -> list[str]:
+        """Of the files named, each the footage place holds that this run could not read or measure, with the
+        reason: nothing an edit record says of such a file can be checked, so the record is not judged by it."""
+        ignored, found = dict(self.ignored), []
+        for name in dict.fromkeys(names):
+            clip = self.clips.get(name)
+            if clip is None and ignored.get(name, "").startswith(UNREAD):
+                found.append(f"the footage file `{name}` {ignored[name]}")
+            elif clip is not None and clip.shot is not None and clip.problem:
+                found.append(f"the footage file `{name}` could not be measured ({clip.problem})")
+        return found
 
 
 def fingerprint(path: Path) -> tuple[str, int]:
@@ -121,7 +134,7 @@ def read(
             else:
                 found.clips[name] = clip(Path(entry.path), name, known, tooling, env)
         except OSError as error:
-            found.ignored.append((name, f"could not be read ({error.strerror or error})"))
+            found.ignored.append((name, f"{UNREAD} ({error.strerror or error})"))
     found.detail = f"{len(found.clips)} footage file{'' if len(found.clips) == 1 else 's'} in `{target}`"
     return found
 

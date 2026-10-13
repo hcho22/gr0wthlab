@@ -97,16 +97,18 @@ class RecordsTest(unittest.TestCase):
         self.assertNotIn("jane", gate.detail)
         report = dict(fakes.beta_report("2026-10-18", accepted=3), note=f"ask {fakes.ADDRESS}")
         raw = [("RepToday-2026-10-18.json", Path("/m/r.json"), json.dumps(report).encode("utf-8"))]
-        usable, problems = beta.read_reports("RepToday", raw)
+        usable, problems, unread = beta.read_reports("RepToday", raw)
         self.assertEqual(usable, [])
         self.assertEqual(len(problems), 1)
         self.assertNotIn("jane", problems[0])
+        self.assertEqual(unread, ["`beta-reports/RepToday-2026-10-18.json`"], "what it counts is unknown")
 
     def test_a_report_whose_file_name_looks_like_an_address_is_refused_whole_and_its_name_never_repeated(self):
         name = f"RepToday-{fakes.ADDRESS}.json"
         data = json.dumps(fakes.beta_report("2026-10-18", accepted=3)).encode("utf-8")
-        usable, problems = beta.read_reports("RepToday", [(name, Path("/m") / name, data)])
+        usable, problems, unread = beta.read_reports("RepToday", [(name, Path("/m") / name, data)])
         self.assertEqual(usable, [])
+        self.assertEqual(unread, ["a file in `beta-reports/` whose name is not repeated here"])
         self.assertEqual(
             problems,
             [
@@ -115,7 +117,7 @@ class RecordsTest(unittest.TestCase):
             ],
         )
         misnamed = "RepToday-2026-10-17.json"
-        _, problems = beta.read_reports("RepToday", [(misnamed, Path("/m") / misnamed, data)])
+        _, problems, _ = beta.read_reports("RepToday", [(misnamed, Path("/m") / misnamed, data)])
         self.assertIn("`beta-reports/RepToday-2026-10-17.json`: the file name 'RepToday-2026-10-17'", problems[0])
 
     def test_only_a_valid_record_named_for_the_product_opens_the_gate(self):
@@ -504,6 +506,41 @@ class DecideTest(TempCase):
         plan, _, _ = self.plan(reports=within)
         self.assertEqual((plan.batch.action, plan.gap), (beta.NEW, 0))
         self.assertIn("which is within it. Recruiting goes on until it reaches 50", beta.cohort_line(plan))
+
+    def test_a_report_that_cannot_be_read_holds_back_the_end_of_recruiting_and_never_what_the_view_shows(self):
+        full = [fakes.beta_report("2026-10-04", accepted=50), fakes.beta_report("2026-10-05", accepted=-1)]
+        unread = (
+            "`beta-reports/RepToday-2026-10-05.json` in Mandu's exchange folder could not be read as the Founder's"
+            " report"
+        )
+        count = (
+            "the Beta Cohort reached 50 people: 50 accepted, as the Founder reported on 2026-10-04;"
+            f" {unread}, so recruiting is not ended on that count this run"
+        )
+
+        def decided(plan):
+            made = plan.batch
+            return made.action, made.stale, made.ended, made.unread, made.entries, made.why
+
+        whole = batch(1, "open", ["Qm7tLx2a", "Ka0zMn2p"])
+        plan, _, _ = self.plan(batch_size=2, batches=[whole], reports=full)
+        self.assertEqual(decided(plan), (beta.NONE, False, False, unread, [], count), "the batch stands")
+        self.assertEqual(plan.batch.open["id"], whole["id"])
+        gone = batch(1, "open", ["Qm7tLx2a", "Gone0000"])
+        plan, _, _ = self.plan(batch_size=2, batches=[gone], reports=full)
+        left = (
+            f"1 of the 2 entries in `{gone['id']}` left the Waitlist or its beta opt-in, or were invited another way,"
+            f" and no batch is made in its place: {count}"
+        )
+        self.assertEqual(decided(plan), (beta.NONE, True, False, unread, [], left), "taken back, and none made")
+        self.assertEqual((plan.batch.open["id"], plan.drafts), (gone["id"], []))
+        plan, _, _ = self.plan(fakes.address_variant(), batch_size=2, batches=[gone], reports=full)
+        self.assertEqual(decided(plan), (beta.NONE, False, False, unread, [], count), "no view shows who left")
+        plan, _, _ = self.plan(batch_size=2, reports=full)
+        self.assertEqual(decided(plan), (beta.NONE, False, False, unread, [], count), "no batch on that count")
+        self.assertIsNone(plan.batch.open)
+        plan, _, _ = self.plan(batch_size=2, batches=[gone], reports=full[:1])
+        self.assertEqual((plan.batch.ended, plan.batch.stale, plan.batch.unread), (True, False, ""))
 
     def test_the_room_left_in_the_cohort_caps_the_batch(self):
         many = [(f"Entry{n:03d}", "tiktok", "lost-the-routine", True, "2026-10-05") for n in range(70)]

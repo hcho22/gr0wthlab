@@ -39,7 +39,7 @@ from . import edits, exchange, footage, posts, shots, video
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import Boundary, ConfigError, is_within, load_json
 from .lint import Finding
-from .queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger
+from .queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger, Stands, stands
 from .settings import resolve_home_path, sandbox_readable
 from .state import Tally
 
@@ -296,6 +296,9 @@ class Asset:
     checks: list[str] = field(default_factory=list)
     parsed: edits.Edit | None = None
     opening: list[list[float]] = field(default_factory=list)  # where its Draft puts a re-cut leg's opening
+    # Each source this run could not read that the record's standing rests on: the record itself, a footage file it
+    # names, or the ledger's record of the video cut from it before. An open post is never taken back on one.
+    unread: list[str] = field(default_factory=list)
     dropped: bool = False  # its day's open post gives way to one with no video, as the video's finished file is lost
 
     @property
@@ -375,6 +378,7 @@ class Asset:
             "asset_record": self.record,
             "reused": self.reused,
             "checks": self.checks,
+            "unread": self.unread,
         }
 
 
@@ -407,6 +411,7 @@ class Filming:
     record: str | None = None
     env: Mapping[str, str] = field(default_factory=dict)  # what the video tooling runs with
     apart: list[str] = field(default_factory=list)  # each pair whose two videos differ, as the Founder is told
+    stood: Stands | None = None  # the open plan, left as it is while the kit it is compared with could not be read
     videos: dict[int, Shown] = field(default_factory=dict)  # each day whose open post names a video, as last looked at
     dropped: dict[int, str] = field(default_factory=dict)  # each day whose open post lost its video: that post
     replaced: list[str] = field(default_factory=list)  # each such post that left the queue, as the Founder is told
@@ -445,7 +450,8 @@ class Filming:
         if edit is None and not problem:
             return Asset(number, NO_EDIT, day.why if not day.ready else "it is ready for an edit record and has none")
         if edit is None:
-            return Asset(number, BLOCKED, problem, relative, blocks=[Finding("edit-format", "", problem)])
+            blocks = [Finding("edit-format", "", problem)]
+            return Asset(number, BLOCKED, problem, relative, blocks=blocks, unread=[problem])
         asset = Asset(number, BLOCKED, "", edit.path, edit.sha256, parsed=edit)
         if not day.ready:
             asset.status, asset.detail = HELD, day.why
@@ -459,6 +465,7 @@ class Filming:
                 )
                 return asset
         asset.blocks = edits.check(edit, day.spec, self.inventory.clips, draft, self.canvas)
+        asset.unread = self.inventory.lost([segment.source for segment in edit.segments]) if asset.blocks else []
         asset.checks = [
             f"{shot.id}, which may not be cut, is one unbroken source range" for shot in day.spec.shots if shot.uncut
         ]
@@ -767,6 +774,10 @@ class Filming:
         target = store.path(ASSETS, f"window-{self.window}", f"{stem}.mp4")
         record = store.path("evidence", EVIDENCE, ASSETS, f"window-{self.window}-{stem}.json")
         known = read_json(record)
+        if not known and (record.exists() or record.is_symlink()):
+            # Cut again, a video could come out as another file and replace the one an open post shows.
+            asset.unread.append(f"`{store.relative(record)}`, the record of the video cut from it, could not be read")
+            raise video.VideoError(f"{asset.unread[-1]}, so nothing was cut again")
         asset.reused = bool(known) and target.is_file() and footage.fingerprint(target)[0] == known.get("sha256")
         if asset.reused:
             facts, problems = video.probe(self.tooling, target, env), []
@@ -1290,6 +1301,8 @@ def prepare(
     if unread:
         filming.problem = f"the kit could not be read: {', '.join(unread)}"
         filming.standing = Standing(NOT_FILED, None, filming.problem)
+        mine = (entry for entry in ledger.entries.values() if entry.get("origin") == origin(where.product, window))
+        filming.stood = stands(next((entry for entry in mine if entry["status"] == OPEN), None), [filming.problem])
         return filming
     found = filming.requirements = shots.requirements(parsed, plan.context.paths["calendar"])
     filming.unplanned = dict(found.unplanned)
@@ -1436,7 +1449,8 @@ def report_lines(filming: Filming | None, skipped: str = "") -> list[str]:
         return lines + [skipped or "No active Product films, so there is no filming plan and no edit."]
     found, inventory = filming.requirements, filming.inventory
     if filming.problem and not found.jobs:
-        return lines + [f"Nothing could be planned this run: {filming.problem}."]
+        stood = f" The open plan `{filming.stood.item}` stands as it is." if filming.stood else ""
+        return lines + [f"Nothing could be planned this run: {filming.problem}.{stood}"]
     groups = filming.sittings()
     lines += [
         f"- Filming plan: {filming.standing.account()}.",
@@ -1581,10 +1595,11 @@ def tally(filming: Filming | None, agent_gap: str) -> Tally:
 
 def gaps(filming: Filming, agent_gap: str) -> list[str]:
     """Why the filming output is incomplete this run: the kit or the canvas could not be read, the plan could not be
-    filed, the footage place could not be listed, the finished file of a video an open post names could not be read, or
-    the agent did not finish and left a day that was ready for an edit record without one. An edit that waits on
-    footage, approval, or tooling is not a gap: the report names it as not cut. Neither is a ready day that an agent
-    which finished left without an edit record, nor a finished file that is gone or changed, which the notice names."""
+    filed, the footage place could not be listed, an edit record, a footage file it names, or the record of its video
+    could not be read, the finished file of a video an open post names could not be read, or the agent did not finish
+    and left a day that was ready for an edit record without one. An edit that waits on footage, approval, or tooling
+    is not a gap: the report names it as not cut. Neither is a ready day that an agent which finished left without an
+    edit record, nor a finished file that is gone or changed, which the notice names."""
     found = []
     if filming.problem:
         found.append(filming.problem)
@@ -1592,6 +1607,7 @@ def gaps(filming: Filming, agent_gap: str) -> list[str]:
         found.append(f"the filming plan was not filed ({filming.standing.detail})")
     if filming.inventory.status == footage.FAILED:
         found.append(filming.inventory.detail)
+    found += dict.fromkeys(reason for asset in filming.results.values() for reason in asset.unread)
     for number, shown in sorted(filming.videos.items()):
         if shown.file.unknown:
             found.append(shown.file.told(f" of the video day {number}'s post names"))

@@ -397,21 +397,64 @@ class TakeTest(TakeTestCase):
             ],
         )
 
+    def test_a_leg_s_open_post_stands_while_the_draft_of_the_leg_it_must_match_cannot_be_read(self):
+        self.write(1, fakes.draft(1))
+        self.write(8, fakes.draft(8))
+        first = {result.day: result for result in self.take(1, 8).results}
+        self.assertEqual([result.status for result in first.values()], [posts.QUEUED, posts.QUEUED])
+        self.write(8, fakes.draft(8) + "\n")  # the same words in another file, so the leg is compared again
+        path = self.repo / "workspace" / fakes.draft_path(1)
+        path.write_bytes(b"\xff\xfe not text")
+        outcome = self.take(1, 8, run="RUN2")
+        unread = "`drafts/posts/window-1/day-01.md` could not be read ("
+        for result in outcome.results:
+            self.assertEqual((result.status, result.item, result.withdrawn), (posts.KEPT, first[result.day].item, None))
+            self.assertTrue(result.detail.startswith(f"not checked again, since {unread}"), result.detail)
+        [leg_b] = [result for result in outcome.results if result.day == 8]
+        self.assertEqual(
+            [line.partition(" (")[0] for line in posts.grouped(leg_b.verdict.blocks)],
+            [f"pair-legs: day 1's Draft, the one this leg must match beyond the Hook: {unread.rstrip(' (')}"],
+        )
+        self.assertEqual(len(outcome.unread), 1)
+        self.assertEqual([entry["id"] for entry in self.ledger.ordered()], [first[1].item, first[8].item])
+        self.write(1, fakes.draft(1))
+        again = {result.day: result for result in self.take(1, 8, run="RUN3").results}
+        self.assertEqual((again[1].status, again[1].item), (posts.KEPT, first[1].item))
+        self.assertEqual((again[8].status, again[8].unread), (posts.QUEUED, []), "its own Draft did change")
+
     def test_a_draft_must_be_for_the_day_its_file_names(self):
         self.write(3, fakes.draft(4))
         [result] = self.take(3).results
         self.assertEqual(result.status, posts.BLOCKED)
         self.assertIn("calendar: the Draft in the file for day 3 says day 4", posts.grouped(result.verdict.blocks))
 
-    def test_an_unreadable_draft_withdraws_its_day_s_open_post(self):
+    def test_a_draft_that_cannot_be_read_says_nothing_of_its_day_s_open_post_which_stands(self):
         self.write(3, fakes.draft(3))
         [first] = self.take(3).results
         path = self.repo / "workspace" / fakes.draft_path(3)
         path.unlink()
         (self.repo.parent / "outside.md").write_text(fakes.draft(3))
         path.symlink_to(self.repo.parent / "outside.md")
-        [result] = self.take(3, run="RUN2").results
-        self.assertEqual((result.status, result.withdrawn), (posts.BLOCKED, first.item))
+        outcome = self.take(3, run="RUN2")
+        [result] = outcome.results
+        self.assertEqual((result.status, result.item, result.withdrawn), (posts.KEPT, first.item, None))
+        unread = "`drafts/posts/window-1/day-03.md` could not be read (cannot open without following links: "
+        self.assertTrue(result.detail.startswith(f"not checked again, since {unread}"), result.detail)
+        self.assertTrue(result.detail.endswith("; the open item stands"), result.detail)
+        self.assertTrue(result.stood)
+        self.assertEqual(outcome.unread, result.unread)
+        self.assertEqual(self.ledger.entries[first.item]["status"], "open")
+
+    def test_a_draft_that_cannot_be_read_and_has_no_open_post_is_blocked_and_named_as_unread(self):
+        path = self.repo / "workspace" / fakes.draft_path(3)
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"\xff\xfe not text")
+        outcome = self.take(3)
+        [result] = outcome.results
+        self.assertEqual((result.status, result.item, result.withdrawn), (posts.BLOCKED, None, None))
+        self.assertIn("`drafts/posts/window-1/day-03.md` could not be read (", result.detail)
+        self.assertEqual(outcome.unread, [result.detail])
+        self.assertFalse(result.stood)
 
     def test_a_draft_that_is_a_link_is_never_read(self):
         target = self.repo.parent / "outside.md"

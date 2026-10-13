@@ -139,12 +139,14 @@ The shell's refusal came from the kernel.
 zsh reported `operation not permitted`, and the unified log recorded each denial, for example from run `b9a3`:
 
 ```text
-Sandbox: zsh(89528) deny(1) file-write-create /Users/hcho/Mandu/gr0wthlab-boundary-probe-20261009T013216Z-on-demand-b9a3-mandu-shell.txt
-Sandbox: zsh(89530) deny(1) file-write-create /Users/hcho/Developer/FM_Private/firstmate-private/projects/RepToday/gr0wthlab-boundary-probe-20261009T013216Z-on-demand-b9a3-reptoday-shell.txt
+Sandbox: zsh(89528) deny(1) file-write-create ~/Mandu/gr0wthlab-boundary-probe-20261009T013216Z-on-demand-b9a3-mandu-shell.txt
+Sandbox: zsh(89530) deny(1) file-write-create ~/Developer/FM_Private/firstmate-private/projects/RepToday/gr0wthlab-boundary-probe-20261009T013216Z-on-demand-b9a3-reptoday-shell.txt
 Sandbox: zsh(89536) deny(1) file-write-create <repo>/src/gr0wthlab-boundary-probe-20261009T013216Z-on-demand-b9a3-src-shell.txt
 Sandbox: zsh(89540) deny(1) file-write-create <repo>/config/guardrails/gr0wthlab-boundary-probe-20261009T013216Z-on-demand-b9a3-guardrails-shell.txt
-Sandbox: zsh(89547) deny(1) file-write-create /Users/hcho/Developer/FM_Private/firstmate-private/projects/gr0wthlab/.git/worktrees/gr0wthlab/gr0wthlab-boundary-probe-20261009T013216Z-on-demand-b9a3-git-shell.txt
+Sandbox: zsh(89547) deny(1) file-write-create ~/Developer/FM_Private/firstmate-private/projects/gr0wthlab/.git/worktrees/gr0wthlab/gr0wthlab-boundary-probe-20261009T013216Z-on-demand-b9a3-git-shell.txt
 ```
+
+In the first, second, and last of these lines the home folder's full path was replaced with `~`.
 
 Each run had all eight denials; the other three name the repository root, `workspace/`, and `config/`.
 The spike ran in a linked worktree, so the git directory was the worktree's directory inside the primary clone's `.git`; the preflight also refused the primary clone's `.git` itself.
@@ -175,7 +177,7 @@ They ran from a linked worktree of this branch whose git directories live in a s
 | Repository root, `workspace/`, `src/`, `config/`, `config/guardrails/` | refused |
 | `/private/tmp`, `/private/var/tmp` | refused |
 | The worktree's git directory and the shared git directory | refused |
-| `HOME` (`/Users/hcho`) | refused |
+| `HOME` (`~`; the home folder's full path was replaced with `~` here) | refused |
 | `TMPDIR` (`/private/var/folders/…/T`) | refused |
 | `CODEX_HOME` (`~/.codex`) | refused |
 | The preflight's own empty Codex home | refused |
