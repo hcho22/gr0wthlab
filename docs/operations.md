@@ -320,8 +320,9 @@ When it cannot, for example while the footage or `ffmpeg` is away, the open post
   The new item says there is no video yet and why, approving it approves the copy and the beat plan only, and the video comes back for approval in a later item once it is cut again.
   The run report and the notice name both posts and the file.
 - It leaves the queue when the run checks that Draft the same way and nothing may be asked in the post's place.
-  The rules are the two that keep a decision from being asked again: a day's copy the Founder approved is never asked again, and a Draft the Founder rejected is not asked again until it changes.
-  The run report and the notice name the post and the file and say that nothing is asked in its place.
+  Two of the rules keep a decision from being asked again: a day's copy the Founder approved is never asked again, and a Draft the Founder rejected is not asked again until it changes.
+  The third is the item format: the post without a video is checked against it once more as it is queued, and one that does not follow it blocks the day as any failing check does, so nothing is queued.
+  The run report and the notice name the post and the file and say that nothing is asked in its place, and why: under the first two rules that the Founder already decided the day's copy, and under the third that its Draft no longer passes.
 - It stands as it is, and every run's report and notice name it and its file, when the run does not check the post's own Draft.
   The rules are these: a run prepares, checks, and cuts only the days due in it, so nothing is cut for a day that is not due; an open post stands while its Draft is gone; an open post is not checked again, and so not withdrawn, while a kit file, the brand rules, or the Product's code cannot be read; and a day whose copy the Founder approved is checked again only while its Draft is still that copy and it has an edit record.
   It also stands, named the same way, when the run cut a video for the day and the pair check did not let it through, since nothing a run changed for a pair whose two videos differ is offered.
