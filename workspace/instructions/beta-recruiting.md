@@ -6,7 +6,7 @@ The Draft's format is in the task definition, and the launcher's checks decide w
 
 ## What is yours and what is not
 
-- The gate is the Founder's record in Mandu, which the launcher reads.
+- The gate is the Founder's own Beta Build record, which the launcher reads from `ledger/founder/`; you can never write it.
   You write a recruiting Draft only when the brief has a Beta Cohort recruiting section, and never because a build looks ready.
 - The launcher chooses who is invited, by entry identifier, from the view you cannot read, and attaches them to the item.
   You write one message, the same words for everyone, so it never depends on who a person is, where they came from, or what they answered.

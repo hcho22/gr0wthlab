@@ -2,7 +2,8 @@
 
 **Status:** In progress (2026-10-08); each story's acceptance-criteria checkboxes record what has landed.
 Written from the Founder's design session in firstmate on 2026-10-08; every decision it rests on is listed, in order, in `design-decisions-2026-10-08.md` beside this file.
-The Marketing Engineer's repository is gr0wthlab (private, `hcho22/gr0wthlab`), and this PRD lives in it at `docs/prd/`.
+The Marketing Engineer's repository is gr0wthlab (`hcho22/gr0wthlab`, public since 2026-10-12), and this PRD lives in it at `docs/prd/`.
+On 2026-10-12 the Founder moved where the Founder decides, from Mandu to a page gr0wthlab serves; `docs/adr/0002-the-founder-decides-in-gr0wthlab.md` records it, and this PRD says what is true since.
 This PRD, the glossary (`CONTEXT.md`, at the repository root), and the first decision record (`docs/adr/0001-evidence-and-drafts-only.md`) moved into it with its first change.
 **Story prefix:** `US-ME##`.
 **Vocabulary:** capitalized terms (Founder, Product, Marketing Engineer, Mandu, Dispatch, Draft, Evidence, Go-To-Market Package, Review Queue, Weekly Read, Instructions, Guardrail, Waitlist, Fit, Source, Angle, Hook, Listening, Beta Build, Beta Cohort) are defined in `CONTEXT.md` and are used only in those senses.
@@ -32,7 +33,7 @@ The Founder's goal is income by the end of 2026, with RepToday as the primary be
 The bottleneck is not ideas; it is the steady weekly execution that a solo founder building the product cannot sustain alongside development.
 
 The Marketing Engineer is a standalone agent with its own repository that runs once a week on the Founder's Mac.
-It turns the Go-To-Market Package into the week's Drafts, gathers Evidence, reads results against the pre-registered rules, and puts everything that needs a decision into one Review Queue the Founder clears through Mandu in about an hour.
+It turns the Go-To-Market Package into the week's Drafts, gathers Evidence, reads results against the pre-registered rules, and puts everything that needs a decision into one Review Queue the Founder clears in about an hour, at a weekly sitting on a page gr0wthlab serves on the Founder's Mac.
 It never publishes, sends, or spends; every public act is the Founder's.
 It never changes the Go-To-Market Package, Mandu, or any Product repository; it proposes, and the owner of each applies what the Founder approves.
 
@@ -44,24 +45,25 @@ Immerse joins as Listening only, after RepToday's first 14-day window has run cl
 | Actor | Owns | Never does |
 | --- | --- | --- |
 | Founder | Every approval, every public act (posting, sending, confirming a publishing schedule), filming, and the weekly TikTok export | - |
-| Marketing Engineer | Evidence, Drafts, Review Queue items, Weekly Read memos, run reports, and its own Instructions | Publish, send, spend, see email addresses, write to Mandu or a Product repository, or change its own code or Guardrails |
-| Mandu | Each Product's Go-To-Market Package, presenting the Review Queue, recording the Founder's decisions, applying approved package changes, receiving the TikTok export, and recording Beta Build approval | Build the Marketing Engineer |
+| Marketing Engineer | Evidence, Drafts, Review Queue items, Weekly Read memos, run reports, and its own Instructions; its repository also serves the Founder's sitting page and keeps the Founder's decisions | Publish, send, spend, see email addresses, write to Mandu or a Product repository, write or change a decision of the Founder's, or change its own code or Guardrails |
+| Mandu | Each Product's Go-To-Market Package, applying approved package changes, handing approved Dispatch requests to firstmate, showing the Founder the Marketing Engineer's status, and receiving the TikTok export | Build the Marketing Engineer, record a decision of the Founder's, or write anything the Marketing Engineer reads but the Go-To-Market Package |
 | firstmate | Building and changing the Marketing Engineer's code and Guardrails through reviewed pull requests, and carrying out approved Dispatches in Product repositories | Act on a Dispatch the Founder has not approved |
 | Scheduling service | Publishing approved posts at the fixed slot after the Founder confirms the schedule | - |
 
 ### The weekly cycle
 
-1. **Run.** Shortly before the Founder's weekly Mandu sitting, the Marketing Engineer reads the Go-To-Market Package and the Founder's recorded decisions from Mandu, RepToday's repository, the anonymous Waitlist view, YouTube results, and any TikTok export the Founder has sent.
+1. **Run.** Shortly before the Founder's weekly sitting, the Marketing Engineer reads the Go-To-Market Package from Mandu, the Founder's recorded decisions from its own repository, RepToday's repository, the anonymous Waitlist view, YouTube results, and any TikTok export the Founder has sent.
    It performs Listening, writes the Weekly Read memo on read weeks, prepares the next week's Drafts, proposals, and Dispatch requests, and writes a run report.
 2. **Sitting.** On read weeks the Founder first exports TikTok Studio's per-post numbers and comments into Mandu.
-   The Founder then decides every Review Queue item in Mandu: approve, or reject with a one-line reason.
+   The Founder then decides every Review Queue item on the sitting page, one at a time: approve, or reject with a one-line reason.
+   What the Founder clicks is what is saved, with no AI between the answer and the record.
 3. **Publish.** Approved posts are loaded into the scheduling service as drafts at the fixed slot, and the Founder confirms the schedule there.
    Approved messages are sent by the Founder, who fills in recipients.
 4. **Learn.** The next run reads the decisions, records every rejection reason as Evidence, refines Instructions where the reason is about execution, and proposes package changes where the reason is about strategy.
 
 ### v1 timeline
 
-- **Setup week:** repository and spikes (US-ME01 to US-ME03), the Mandu exchange (US-ME04, US-ME07), the Waitlist Dispatch (US-ME05, US-ME06), the first batch and filming plan (US-ME08, US-ME09), and the scheduler connection (US-ME10).
+- **Setup week:** repository and spikes (US-ME01 to US-ME03), the package snapshot, the Review Queue, and the sitting (US-ME04, US-ME07), the Waitlist Dispatch (US-ME05, US-ME06), the first batch and filming plan (US-ME08, US-ME09), and the scheduler connection (US-ME10).
 - **Window 1 (days 1 to 14):** the 14-day kit runs; Weekly Reads on day 7 and day 14 (US-ME11, US-ME12); Listening and outreach weekly (US-ME13, US-ME14).
 - **After window 1:** the Immerse Listening gate (US-ME18) and the window-2 plan from the day-14 read.
 - **Whenever a Beta Build is approved:** Beta Cohort recruiting (US-ME15).
@@ -72,7 +74,7 @@ Immerse joins as Listening only, after RepToday's first 14-day window has run cl
 
 - Put RepToday's Waitlist live and run the 14-day test kit exactly as specified: one asset a day to both TikTok and YouTube Shorts at one fixed evening slot, with nothing public that the Founder has not confirmed.
 - Build a Waitlist pool of about 50 or more good-Fit sign-ups who opted in to a Beta Build invitation by about day 30, enough to fill a 20 to 50 person Beta Cohort.
-- Keep the Founder's weekly marketing time around one hour: one Mandu sitting plus the TikTok export, with filming days counted separately.
+- Keep the Founder's weekly marketing time around one hour: one sitting plus the TikTok export, with filming days counted separately.
 - Make every Draft traceable to its Angle and that Angle's sourced pain, and make every result reading honest: floors respected, "insufficient data" stated as its own result, never a zero.
 - Learn every week: every rejection reason is kept, Instructions improve, and a per-workflow example set catches regressions.
 - Recruit the Beta Cohort from the Waitlist as soon as a Beta Build passes Apple's review for external testing.
@@ -160,7 +162,7 @@ Immerse joins as Listening only, after RepToday's first 14-day window has run cl
 
 ---
 
-### US-ME04: Read the Go-To-Market Package and the Founder's decisions from Mandu
+### US-ME04: Read the Go-To-Market Package from Mandu and the Founder's decisions from gr0wthlab
 
 **Description:** As the Marketing Engineer, I want a read-only, dated snapshot of RepToday's Go-To-Market Package and the Founder's recorded decisions at the start of every run, so that every Draft rests on the current approved package and I can show what changed since the last run.
 
@@ -171,7 +173,7 @@ Immerse joins as Listening only, after RepToday's first 14-day window has run cl
 - [x] The run lists what changed in the package since the previous run.
 - [x] Contradictions inside the package are surfaced as package-change proposals that cite both sides.
   The first expected proposal: about a dozen files still say trademark clearance for "Rep Today" is unverified, while the launch checklist records it cleared and reserved on 2026-08-07.
-- [ ] The run reads every Founder decision Mandu has recorded since the previous run and matches each to its Review Queue item.
+- [x] The run reads every decision the Founder has recorded on the sitting page since the previous run, from `ledger/founder/` in its own repository, and matches each to its Review Queue item.
 
 **Validation Test:**
 
@@ -236,25 +238,27 @@ gr0wthlab's side is in place, with the request filed from `src/dispatches/reptod
 
 ---
 
-### US-ME07: Publish Review Queue items to Mandu and take back decisions
+### US-ME07: Queue Review Queue items and take the Founder's decisions on the sitting page
 
-**Description:** As the Founder, I want every item that needs me to arrive in Mandu in one consistent shape I can decide in under a minute, and my decisions and reasons to flow back to the Marketing Engineer, so that one weekly sitting runs the whole machine.
+**Description:** As the Founder, I want every item that needs me to arrive on one page in one consistent shape I can decide in under a minute, and my decisions and reasons to be kept where the Marketing Engineer reads them and can never write them, so that one weekly sitting runs the whole machine.
 
 **Acceptance Criteria:**
 
 - [x] Every item has a stable identifier, a kind, a one-line ask, the Draft or proposal itself, what it affects, the Evidence behind it with sources, and the decision options.
 - [x] Item kinds are: post, message, package-change proposal, Dispatch request, Weekly Read decision, and notice (informational, such as an Instructions refinement or a failed source).
 - [x] A rejection requires a one-line reason; an approval may carry an optional note.
-- [ ] The Marketing Engineer writes items only in its own repository, and Mandu reads them from there; Mandu records the Founder's decisions in its own records, and the Marketing Engineer reads them from there.
+- [x] The Marketing Engineer writes items only in its own repository.
+  The Founder decides each on a page that `src/bin/gr0wthlab sitting` serves on the Founder's Mac, which asks one thing at a time and saves exactly what the Founder clicks, with no AI between the answer and the record.
+  The decisions are kept in the same repository, in `ledger/founder/`, where the sandboxed agent can read and never write, and Mandu only reads.
 - [x] An item is never re-asked once decided; an undecided item carries over to the next sitting and is marked as carried over.
 - [x] A week's items are ordered so posts with the nearest slot come first.
 
 **Validation Test:**
 
-- **Setup:** Mandu able to present items and record decisions (see Mandu-side requirements).
+- **Setup:** The sitting page, served by `src/bin/gr0wthlab sitting`.
 - **Steps:**
   1. Produce one item of each kind.
-  2. The Founder approves two, rejects two with reasons, and leaves two undecided.
+  2. On the page, the Founder approves two, rejects two with reasons, and leaves two undecided.
   3. Run again.
 - **Expected Result:** Each decision is matched to its item, reasons are kept as Evidence, the undecided items carry over marked as such, and no decided item reappears.
 - **Failure Indicator:** A decision is lost or mismatched, a rejection has no reason, or a decided item is asked again.
@@ -301,7 +305,7 @@ gr0wthlab's side is in place, with the request filed from `src/dispatches/reptod
 - [x] Finished assets become post Drafts in US-ME08's shape.
 - [x] No asset uses an AI-generated person, voice, or scene presented as real, and nothing invents footage the Founder did not record.
 
-The plan is the Review Queue's `filming-plan` kind, new in version 6 of the Mandu exchange, so Mandu's side must read that version before the Founder can approve the real one; nothing is cut from a shot's footage until a plan that holds the shot is approved.
+The plan is the Review Queue's `filming-plan` kind, which the Founder approves on the sitting page like any item; nothing is cut from a shot's footage until a plan that holds the shot is approved.
 Day 14 joins the plan once the calendar decides its Angle, and the script card of each day is the Video table of its post item.
 
 **Validation Test:**
@@ -321,7 +325,7 @@ Day 14 joins the plan once the calendar decides its Angle, and the script card o
 
 **Acceptance Criteria:**
 
-- [ ] After the Founder approves a post in Mandu, the next run creates its drafts in the scheduling service for both platforms, set to the window's fixed slot on the calendar day.
+- [ ] After the Founder approves a post, the next run creates its drafts in the scheduling service for both platforms, set to the window's fixed slot on the calendar day.
 - [ ] The Marketing Engineer never schedules, confirms, or publishes; the Founder confirms the schedule in the service.
 - [ ] The run reads the service back and reports any confirmed post whose time differs from the fixed slot, and any calendar day with no confirmed post by the day before it.
 - [ ] A rejected or undecided post never reaches the service.
@@ -401,7 +405,7 @@ Day 14 joins the plan once the calendar decides its Angle, and the script card o
 - [ ] Where RepToday genuinely answers a thread, the Marketing Engineer may draft a reply as a message Draft with no link of any kind, for the Founder to post personally.
   Waiting on a readable source: the reply Draft and its no-link check are in place, and no thread can be read yet.
 - [ ] Each subreddit's self-promotion rules are summarized for the Founder the first time it is used, and the Founder confirms before any reply Draft for that subreddit is offered.
-  Waiting on a readable source, and on Mandu's side: the rules notice and the confirmation gate are in place, and no rule list can be read yet.
+  Waiting on a readable source: the rules notice and the confirmation gate are in place, and no rule list can be read yet.
 
 The launcher reads the sources itself, outside the sandbox, through one credential-free read-only client whose host list is reviewed configuration; the agent has no network (`config/guardrails/fetch.json`, `src/gr0wthlab/fetch.py`).
 
@@ -429,7 +433,7 @@ The launcher reads the sources itself, outside the sandbox, through one credenti
 - [x] Each creator gets at most one follow-up Draft, offered only after a waiting period the Founder approves, and then no further contact.
 - [x] Every message passes the brand lint and is sent by the Founder.
 
-What was sent and who replied reaches gr0wthlab only as the Founder's outreach record in Mandu (`docs/mandu-exchange.md`); until Mandu writes one, no follow-up is offered.
+What was sent and who replied reaches gr0wthlab only as the Founder's outreach record, made on the sitting page (`docs/mandu-exchange.md`); until the Founder records a message as sent, no follow-up is offered.
 
 **Validation Test:**
 
@@ -448,17 +452,19 @@ What was sent and who replied reaches gr0wthlab only as the Founder's outreach r
 
 **Acceptance Criteria:**
 
-- [ ] The gate is a Beta Build approval the Founder records in Mandu; before it, this story does nothing.
+- [ ] The gate is a Beta Build approval the Founder records on the sitting page; before it, this story does nothing.
 - [x] Candidates are chosen by entry identifier from the anonymous Waitlist view, opted-in good-Fit entries first.
 - [x] Invitation Drafts are identity-framed, explain the recorded 30-minute first session the thesis's K8 rubric needs, and contain no address; the Founder resolves addresses and sends.
 - [ ] Only counts of invitations sent, accepted, and sessions booked are kept as Evidence, from what the Founder reports.
 - [ ] Recruiting continues weekly until the Beta Cohort reaches 20 to 50 people or the Founder stops it, and a pool too small to reach 20 is reported with the recruiting Drafts needed to close the gap.
 
-gr0wthlab's side of all five is in place and passed this story's Validation Test on a simulated record; the three open boxes wait for Mandu's side to record the Founder's approval, counts, and stop in the formats of version 4 of `docs/mandu-exchange.md`.
+gr0wthlab's side of all five is in place and passed this story's Validation Test on a simulated record.
+Since 2026-10-12 the Founder records the approval, the counts, and a stop on the sitting page, in gr0wthlab's own `ledger/founder/` (ADR 0002), so no box waits on Mandu any more.
+The three open boxes wait for this story's Validation Test to pass through that page.
 
 **Validation Test:**
 
-- **Setup:** The seeded anonymous view from US-ME06; a simulated Beta Build approval in Mandu.
+- **Setup:** The seeded anonymous view from US-ME06; a Beta Build approval recorded on the sitting page.
 - **Steps:**
   1. Run before the approval.
   2. Record the approval and run again.
@@ -498,7 +504,7 @@ The refinement loop and the example re-run are still this story's to build, so i
 
 **Acceptance Criteria:**
 
-- [ ] The weekly run is scheduled shortly before the Founder's Mandu sitting, and an on-demand run is available.
+- [ ] The weekly run is scheduled shortly before the Founder's sitting, and an on-demand run is available.
 - [x] A run that starts late, for example because the Mac was asleep, says so.
 - [x] The run report lists every source with its result: read, changed, failed with the reason, or skipped with the reason; there are no silent skips.
 - [x] A failed source becomes a notice in the Review Queue, and every output that depended on it is marked incomplete.
@@ -552,7 +558,7 @@ The refinement loop and the example re-run are still this story's to build, so i
 - **FR-12:** Every Evidence record must carry its source (a link, or the Founder export and its date) and the date it was gathered.
 - **FR-13:** Every run must report every source it checked and every failure; no source may be skipped silently.
 - **FR-14:** Instructions changes must re-run the workflow's example set and be shown to the Founder at the next sitting.
-- **FR-15:** Beta Cohort recruiting must not start until the Founder records an approved Beta Build in Mandu.
+- **FR-15:** Beta Cohort recruiting must not start until the Founder records an approved Beta Build on the sitting page.
 - **FR-16:** Immerse work must not start until the US-ME18 gate is met, and must publish nothing.
 
 ---
@@ -571,6 +577,9 @@ Each Guardrail is enforced by the tools the Marketing Engineer works through, no
 | G6 | No email address is ever readable | The anonymous Waitlist view (US-ME05), plus the breach check (US-ME06) |
 | G7 | No spend is possible | No advertising account or payment credential is provisioned |
 | G8 | Code and Guardrail configuration change only through firstmate's reviewed pull requests | The runtime's write restrictions (US-ME02) |
+
+The Founder's decisions and the records of what the Founder did are in `ledger/founder/`, outside every area G1 names.
+So G1 is also what keeps the Marketing Engineer from writing an approval: every run's preflight tries each folder of those records, and the boundary check proves each one refused on its own (ADR 0002).
 
 ---
 
@@ -596,7 +605,8 @@ Each Guardrail is enforced by the tools the Marketing Engineer works through, no
 - **Review Queue item shape.** A title line naming the ask ("Approve day 3 post: missed-day score record"), the Draft itself, a "touches" line (which posts, messages, or package files change), the Evidence lines with links, and the options; nothing else.
 - **Weekly Read memo shape.** One short section per readable Angle, then unread Angles in one line, then the Waitlist and time lines; every line ends in keep, kill, change, or test.
 - **Voice.** Every Draft follows `brand-guidelines.md`; the memo and notices use plain outcome language for the Founder.
-- **Founder time.** Mandu records how long each sitting took, or the Founder reports it in one field; the TikTok export notice states which posts to capture so the export takes minutes.
+- **Founder time.** The sitting page measures how long each sitting took, and the Founder can correct it in one field; the TikTok export notice states which posts to capture so the export takes minutes.
+- **The sitting page.** One thing in front of the Founder at a time, in the Review Queue's order, with the answer beside it: approve, reject with a reason, or leave for later; everything an item says is shown as text.
 
 ---
 
@@ -605,7 +615,10 @@ Each Guardrail is enforced by the tools the Marketing Engineer works through, no
 - **Runtime.** A local scheduled automation on the Founder's Mac, in Codex or Claude Code, chosen in US-ME02 by which enforces G1, G2, and G8 most cleanly; Mandu's own weekday review already runs as a Codex automation, `mandu-weekday-project-review`.
 - **Reading Mandu.** Read-only from the local Mandu checkout; the content fingerprint per file in US-ME04 is what lets a run state exactly what changed.
 - **Reading RepToday.** Read-only from a local RepToday checkout at the default branch, for claim checks and screenshots.
-- **Mandu exchange.** Each side writes only its own repository: the Marketing Engineer writes Review Queue items in its own repository, Mandu reads them, Mandu records decisions and the TikTok export in its own records, and the Marketing Engineer reads them.
+- **The sitting, and the Mandu exchange.** The Marketing Engineer writes Review Queue items in its own repository, and the Founder decides them on a page that `src/bin/gr0wthlab sitting` serves on the Founder's Mac.
+  That page writes each decision, and each record of what the Founder did, into the same repository, in `ledger/founder/`, where the sandboxed agent can read and never write (ADR 0002).
+  Mandu writes nothing the Marketing Engineer reads except the Go-To-Market Package: it reads the Review Queue, the run reports, and the Founder's records to show status and to act on an approved package change or Dispatch request (`docs/mandu-exchange.md`).
+  The TikTok export (US-ME11) and the US-ME18 confirmation are the two inputs this PRD still routes through Mandu; neither story is built, and where each goes is the Founder's to decide when it is.
 - **Waitlist.** The deployable site source is in RepToday's repository (`gtm/03-site/`), served at `reptoday.app`, which also serves the privacy policy the app links to; storage and the anonymous view are RepToday's design under firstmate (US-ME05).
 - **Scheduling service.** Chosen in US-ME03; the integration exposes a create-draft call and nothing else.
 - **YouTube.** Read-only access to the Founder's own channel for analytics and comments.
@@ -615,11 +628,14 @@ Each Guardrail is enforced by the tools the Marketing Engineer works through, no
 
 ### Mandu-side requirements (owned by Mandu, outside this repository)
 
-- Present the Marketing Engineer's Review Queue to the Founder and record each decision, with the reason for every rejection.
-- Apply package-change proposals the Founder approves to the Go-To-Market Package, starting with the stale trademark notes.
+Mandu is a reader since 2026-10-12 (ADR 0002): it records no decision, and writes nothing the Marketing Engineer reads except the Go-To-Market Package.
+Nobody has built Mandu's read-only side yet, and the Founder's sitting does not wait for it.
+
+- Read the Marketing Engineer's Review Queue, run reports, and the Founder's records from gr0wthlab, to show the Founder status.
+- Apply package-change proposals the Founder approved to the Go-To-Market Package, reading each approval from gr0wthlab once a run has taken it in, starting with the stale trademark notes.
+- Hand approved Dispatch requests to firstmate under Mandu's existing Dispatch arrangement, reading each approval the same way.
 - Receive the Founder's weekly TikTok export and keep it where the Marketing Engineer can read it.
-- Record the Founder's Beta Build approval and the US-ME18 confirmation.
-- Hand approved Dispatch requests to firstmate under Mandu's existing Dispatch arrangement.
+- Record the US-ME18 confirmation.
 
 ### firstmate-side requirements
 
@@ -635,7 +651,7 @@ Judged at about day 30, against the Founder's bar (decision 16).
 
 - **Pool:** about 50 or more good-Fit Waitlist sign-ups who opted in to a Beta Build invitation, enough to fill a 20 to 50 person Beta Cohort.
   Missing it means changing channels or Angles, not producing more of the same.
-- **Founder time:** about one hour a week of marketing time (one Mandu sitting plus the TikTok export), with filming days counted separately.
+- **Founder time:** about one hour a week of marketing time (one sitting plus the TikTok export), with filming days counted separately.
   Missing it means the machine costs more than it saves.
 - **Execution (supporting, not the bar):** the Waitlist live before the first post, all 14 window-1 posts out at the fixed slot, both Weekly Reads delivered, and zero Guardrail breaches.
 
@@ -653,8 +669,8 @@ Judged at about day 30, against the Founder's bar (decision 16).
 - **Clickable link on TikTok.** The package's research notes that TikTok may not offer a new account a clickable profile link; until it does, TikTok viewers can reach the Waitlist only by typing the address, so a short, speakable Source path (for example one per Source on `reptoday.app`) may be needed, and the kit's "no URL on slides" rule may need a package change now that the domain is decided.
 - **Waitlist details on RepToday's side.** Storage, whether sign-ups confirm their email, retention period, and how the Founder resolves addresses from entry identifiers at send time.
 - **Beta invitations.** Whether the Founder invites by TestFlight public link or by individual email invitation, and therefore what the Founder's send step needs.
-- **Sitting day and window start.** Which weekday the Founder's Mandu sitting falls on, which sets the run time and day 1 of window 1.
+- **Sitting day and window start.** Which weekday the Founder's sitting falls on, which sets the run time and day 1 of window 1.
 - **TikTok export form.** Whether TikTok Studio offers a file export at this account size or screenshots are the only route.
-- **Founder time measurement.** Whether Mandu can time a sitting or the Founder reports minutes.
+- **Founder time measurement.** Answered 2026-10-12: the sitting page times each sitting, and the Founder can correct the minutes before they are recorded.
 - **Owner slots outside this PRD.** The thesis still needs a named non-founder to code K8 first runs and an outside person to hold the walk-away call; the Beta Cohort's value depends on both, and neither is the Marketing Engineer's to fill.
 - **Window 2.** Whether a second 14-day window runs with the queued pairs and Angles, decided from the day-14 Weekly Read.

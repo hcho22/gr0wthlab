@@ -1,8 +1,9 @@
 # Operating the weekly run
 
-How the Marketing Engineer runs on the Founder's Mac: the production clone, the first run, the weekly schedule, and how to stop it.
+How the Marketing Engineer runs on the Founder's Mac: the production clone, the first run, the weekly schedule, the Founder's weekly sitting, and how to stop it.
 Why the launcher works the way it does: [the US-ME02 spike note](spikes/us-me02-runtime-boundary.md).
-What Mandu reads and writes: [the Mandu exchange](mandu-exchange.md).
+Why the Founder decides here, on a local page: [ADR 0002](adr/0002-the-founder-decides-in-gr0wthlab.md).
+The format of every record, and what Mandu may read: [the Mandu exchange](mandu-exchange.md).
 
 ## What one run does
 
@@ -14,7 +15,9 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    It refuses to start if the clone is not on `main`, has changes outside `workspace/` and `ledger/`, or has local commits outside them.
    If the fetch fails, for example offline, it runs the current code and says so in the run report.
 2. It snapshots RepToday's Go-To-Market Package in Mandu (`ledger/evidence/package-snapshots/`).
-3. It takes in the Founder's decisions from Mandu's exchange folder and keeps each one as Evidence (`ledger/evidence/decisions/`).
+3. It takes in the Founder's decisions from `ledger/founder/decisions/`, which only the sitting page writes, and keeps each one as Evidence (`ledger/evidence/decisions/`).
+   From then on a decision can no longer be changed on the page ([The weekly sitting](#the-weekly-sitting)).
+   It reads every other record of the Founder's from `ledger/founder/` too, and nothing in a run ever writes there.
 4. It reads RepToday's anonymous Waitlist view, once its build has made one, and keeps the counts by Source, Fit answer, and opt-in, per week and cumulative, with the entry identifiers, as Evidence (`ledger/evidence/waitlist/`).
    It checks every value for anything that looks like an email address first; on a hit it discards the whole read, keeps nothing from it, and queues a Guardrail breach notice.
    A week runs Monday to Sunday, and the run report leads with the week the run is in on the Mac's clock, the one that ends at the Sunday sitting; it also says how old the view was when the run started.
@@ -27,7 +30,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
 6. It reads the 14-day kit from Mandu, works out which calendar days need post Drafts this run, now that the Founder's decisions are in, and fixes RepToday's `main` to one commit for claim checks.
    From the same kit it reads each asset's shot list and files the filming plan, one item per window, unless one is open or decided and the kit has not changed what must be filmed.
    It lists the footage place, read-only, and measures every file there with `ffprobe`; the agent never opens the footage, and learns each file's name and measured facts from the brief.
-   It reads the Founder's Beta Build record in Mandu's exchange folder (`beta-builds/RepToday.json`), which is the only thing it takes as an approval.
+   It reads the Founder's Beta Build record (`ledger/founder/beta-builds/RepToday.json`), which is the only thing it takes as an approval.
    Until that record exists it does nothing more about the Beta Cohort, and the run report lists the approval as not recorded.
    Once it exists, it takes in the Founder's Beta Cohort reports (`ledger/evidence/beta-recruiting/reports/`) and fixes the run's next invitation batch: the next sign-ups that asked for a beta invitation and that no batch holds, good Fit first, then by sign-up date, at most the batch size in `config/run.json`.
    It offers at most one batch at a time, and the next only after the Founder has decided the last.
@@ -39,10 +42,11 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    What it read goes into one snapshot (`ledger/working/`), which is working data for that run alone (see "What is kept of what a run fetches" below), and every request it was asked to make, sent or not, into the run's request log (`ledger/run-reports/<run id>.requests.json`).
    A source that is disallowed, refused, or failing is reported with its reason, queued in a notice, and marks its workflow incomplete; the run goes on.
    The first time it reads a subreddit's rules, it queues one notice that quotes and links them; no reply Draft for that subreddit is offered until the Founder acknowledges it, and the Founder's answer stands whatever the rules say later.
-   It reads the Founder's outreach records from Mandu's exchange folder and works out which messages may be offered: the personal-network ask, one message for each creator in `config/run.json` that the channel plan names, and one follow-up only for a creator who was written to, has not replied, and whose waiting period has passed.
+   It reads the Founder's outreach records from `ledger/founder/outreach/` and works out which messages may be offered: the personal-network ask, one message for each creator in `config/run.json` that the channel plan names, and one follow-up only for a creator who was written to, has not replied, and whose waiting period has passed.
    It writes the agent's brief and runs the agent in the sandbox with the task definition `src/instructions/weekly-run.md`, at the reasoning effort [`config/guardrails/runtime.json`](../config/guardrails/runtime.json) sets, which is high.
    The agent has no network, and every run proves it before the agent starts: the preflight tries each listed host from inside the sandbox and stops the run if one is reachable.
-   The agent writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records, and never write there.
+   The agent writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records and the Founder's are, and never write there.
+   Every run proves that for the Founder's records before the agent starts: the preflight tries each of their five folders from inside the sandbox, and stops the run if one takes a file.
    The agent has a time limit; one still running at it is stopped, and the run goes on without it ([When a run times out](#when-a-run-times-out)).
 7. Once the agent finishes, it restores its owner's read and write access to anything under `workspace/` the agent left without it, and the run report names every entry it fixed, before or after the agent.
    It queues the items the agent wrote to `workspace/review-queue/incoming/` that pass the format, sets the rest aside, each copied whole to `ledger/review-queue/set-aside/<run id>/`, and turns every problem into one notice.
@@ -72,7 +76,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    Once the agent's work is taken in and the run ends, it removes the snapshot.
    It queues a proposed Angle or Hook only when every source it cites is a kept quote, with the confidence it counts itself, and discards an unsourced one with a note: the discarded file is removed, and only its name and the reasons are kept.
    It checks each message Draft in `workspace/drafts/messages/` and queues a message only for one that passes; an open message that may no longer be offered, such as a follow-up to a creator who has since replied, is withdrawn.
-   Only a record that was read withdraws a follow-up: when Mandu's `outreach/` folder cannot be read, or the record of a creator's first message is missing after a follow-up was queued from it, cannot be read, or is not valid, that follow-up is neither offered nor withdrawn, an open one stays as it is, and the run report names Mandu's outreach records as failed and the Outreach output as incomplete, with the reason.
+   Only a record that was read withdraws a follow-up: when `ledger/founder/outreach/` cannot be read, or the record of a creator's first message is missing after a follow-up was queued from it, cannot be read, or is not valid, that follow-up is neither offered nor withdrawn, an open one stays as it is, and the run report names the outreach records as failed and the Outreach output as incomplete, with the reason.
    For a message Draft, a source it is checked against that cannot be read withdraws nothing either: an open message or reply stands, not checked again, and the Outreach or Listening output is incomplete and names the source.
    Those sources are the Angle bank, the checklist, and the brand rules; the Product's code, or git's read of one file a claim names when that read times out or cannot start; and the kept quote record a reply answers (`ledger/evidence/listening/quotes/`).
    A claim that names a file that is not there, and a reply whose quote record is absent altogether, are checks the launcher could make: the Draft is blocked and an open item withdrawn.
@@ -82,6 +86,8 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
 8. It writes `ledger/review-queue/queue.json`, each workflow's run state (`ledger/run-reports/state/`), and the run report (`ledger/run-reports/<run id>.md`), whose first line is `checked=N acted=N note=...` even when nothing happened.
    It notes how the run ended in the record of the week's run (`ledger/run-reports/attempts/`), which the next start of the weekly schedule reads.
 9. In the production clone only, it commits the changed `workspace/` and `ledger/` paths and pushes them to `main`, never anything else and never by force; a change to a README in either is put back, since only a reviewed pull request changes documentation.
+   The records the Founder made at a sitting are in `ledger/founder/`, so they are saved here too: those made before the run by its first records step, and those made while it ran by this one.
+   A record of the Founder's that holds what looks like an email address, as only one changed by hand can, is never committed.
    If `origin/main` moved meanwhile, it replays the records commit on top and retries once; a commit that cannot be pushed stays local and goes with the next run, and the run log says why the replay failed.
 
 The schedule, how often a start of the weekly schedule checks whether the week's run is owed, how many attempts it may take, the agent's time limit, the production clone's path, and the records step are in [`config/run.json`](../config/run.json).
@@ -124,6 +130,7 @@ src/bin/gr0wthlab run              # the first run, on demand
 ```
 
 The first run should end with `records: pushed`; check that `main` on GitHub gained one `chore(records): outputs of run …` commit touching only `workspace/` and `ledger/`.
+Then hold the first sitting: `src/bin/gr0wthlab sitting` ([The weekly sitting](#the-weekly-sitting)).
 The push uses the Mac's git credentials for `https://github.com` (the `gh auth git-credential` helper); if it fails, the commit stays local and the next run pushes it.
 
 ## Install the weekly schedule
@@ -145,6 +152,100 @@ To change the sitting day or time, how often the launcher is started, or how man
 After a change of day, time, or interval, once it has reached the production clone, remove the LaunchAgent as under [Stop or remove the schedule](#stop-or-remove-the-schedule) and install it again as above, since a LaunchAgent keeps what it was rendered with; the number of attempts is read at every start and needs no reinstall.
 After a change of day or time, the launcher's records hold no run for the new weekly time that has just passed, so the next start begins one.
 A window's `first_sitting`, once set, must fall on the sitting's day, so a change of day changes it in the same pull request; a run refuses to start otherwise.
+
+## The weekly sitting
+
+The Founder decides the Review Queue on a small page that gr0wthlab serves on the Founder's own Mac.
+It is the only way a decision, or any other record of what the Founder did, is ever written ([ADR 0002](adr/0002-the-founder-decides-in-gr0wthlab.md)).
+
+```sh
+~/gr0wthlab/src/bin/gr0wthlab sitting
+```
+
+The command prints the page's address and serves it until it is stopped.
+Open the address in a browser on the same Mac.
+The address holds a secret that is new each time the command starts, so an old address never works, and the page answers on `127.0.0.1` only: nothing off the Mac can reach it.
+There is no AI, no model call, and no network use anywhere in a sitting.
+
+What the page walks through, one thing at a time:
+
+1. What the last run reports: the summary at the top of its run report.
+   If the weekly run due has not finished, the page says so first, and the queue and the report it shows are the earlier run's.
+2. Each open item, in the Review Queue's order, shown whole with what it touches and its Evidence.
+   The Founder approves it, with a one-line note if wanted, rejects it, with a one-line reason, or leaves it for later.
+   Leaving it writes nothing: the item comes back at the next sitting, marked carried over.
+   A carried-over item says so, and from which sitting.
+   A post that shows a video plays that file on the page, so the video and its copy are approved together; when the file is missing, or is not the file the run measured, the page says so and offers no approval.
+   A package-change proposal says what it declares about Angles and Hooks, since the Founder is the only check on that.
+3. While a Product's Beta Cohort is being recruited, the three counts: invitations sent, accepted, and first sessions booked, each a total to date.
+   A count left blank is recorded as not reported, never as zero.
+4. The end: how long the sitting took, which the page measured and the Founder can correct, and a button that stops the page.
+
+After each answer the page shows the next thing, with what was just saved above it, read back from its file.
+`Queue` in the bar lists every open item with its state, and jumps to any of them.
+
+`What I did` in the bar is the plain place for everything that is not a decision on an item:
+
+- A Beta Build that passed Apple's review for external testing, which is the gate Beta Cohort recruiting waits for; and, later, stopping recruiting or reopening it.
+- An approved message sent, a reply received, and the wait before the one follow-up when the Founder wants another than the message stated.
+
+gr0wthlab sends nothing and sees no inbox, so these records are the only way it learns either.
+
+### What is saved, and where
+
+What the Founder clicks is what is saved.
+Each record is one file under `ledger/founder/`, in the format of [the Mandu exchange](mandu-exchange.md), written whole.
+The page checks every record with the very check the weekly run reads it with before it writes it, so it never writes one a run cannot use.
+The next run takes the records in, and its records step commits them with the launcher's own and pushes them to `main`.
+The terminal the command runs in says each record as it is saved, by its path.
+
+Every line the Founder types is kept in a record, so every limit holds at entry, and the page says why when it refuses:
+
+- A note or a reason is one line of at most 300 characters, and a rejection needs its reason.
+- No record holds an email address, a name, or anything else about a person: a person is only ever a Waitlist entry identifier.
+  The page refuses any line that holds something that looks like an email address.
+- A date is a real date written as `YYYY-MM-DD` and never one still ahead; a reply cannot come before its message was sent.
+- A count is a whole number from 0; the minutes of a sitting are 1 to 600; the wait before a follow-up is 1 to 90 days.
+
+### Correcting a mis-click
+
+- A decision can be changed, or taken back so the item is undecided again, until a run has taken it in, and never after.
+  Open the item again, from `Queue` or from the line that says what was saved, and choose `Change it` or `Take it back`.
+  Once a run has taken the decision in, the item is closed and never asked again.
+- A sitting record, the Beta Cohort counts of a date, and an outreach record are corrected by giving them again.
+- The Beta Build record cannot be removed; a Beta Build recorded by mistake is undone by stopping recruiting.
+- A message recorded as sent by mistake cannot be marked as not sent; the one thing that follows from it is a follow-up Draft after the waiting period, which the Founder can reject.
+
+Never edit a file under `ledger/founder/` by hand.
+A record that does not follow its format is not a record: the next run names it with the exact problem, takes nothing from it, and leaves everything as it was, and the page shows the item as undecided and says its record cannot be used.
+Give the answer again on the page, and the record is replaced.
+
+### A sitting while a run is going
+
+A run and a sitting may overlap, as when the Mac was asleep at the weekly time and the run starts as the Founder sits down.
+
+- The page reads the Review Queue every time it shows something.
+  Until the run ends it shows the earlier run's queue, under the line that says the run due has not finished.
+  When the run ends, the page says that the queue changed and shows the new one; waiting for that line is the simplest way to decide on this week's items.
+- A run reads the Founder's records once, before its agent starts.
+  A decision given during the run is kept, and the next run takes it in.
+- A decision on an item that the run then replaced with a newer one is kept on the replaced item, and the newer item stays open with that decision shown beside it.
+- A decision the run has already taken in can no longer be changed, and the page says so.
+- Only one sitting page is served per checkout at a time; a second `sitting` command says so and ends.
+
+### Stopping it
+
+Stop the page from its last view, `Stop the page`, or with Ctrl-C in its terminal.
+Nothing is lost either way: every record was written when it was given.
+
+### What keeps the page the Founder's own
+
+- A request to an address without the page's secret gets nothing.
+- Only a POST from the page's own form, to the page's own host, writes anything; every other request that would is refused, and the page's views never write.
+- Everything an item, a run report, or a record says is shown as text.
+  The page lays an item out by its lines and makes no link, image, style, script, form, or tag from anything in it.
+- The page loads its own style sheet, script, and icon, and nothing else; its content security policy forbids every script, style, image, video, and request it did not ship.
+- The sandboxed agent cannot write `ledger/founder/`: every run's preflight proves it, and so does [the boundary check](#after-a-change-to-the-launcher-or-configuration).
 
 ## A run happens when the Mac is awake
 
@@ -189,7 +290,7 @@ Everything else queues the notice as in any run: a failed source, an item or Dra
 That notice also says that the attempt was cut short and that a fresh run follows.
 The attempt's run report lists everything, as any run's does.
 No run closes or withdraws an earlier run's notice.
-While a fresh run is owed, `next_run` in the Review Queue stays at the time the week's run was due, so Mandu says at a sitting that the week's run has not finished.
+While a fresh run is owed, `next_run` in the Review Queue stays at the time the week's run was due, so the sitting page says that the week's run has not finished.
 After the last attempt a week's run may take, a notice asks the Founder to start a run on demand while the Mac stays awake, and no further run starts by itself until the next weekly time.
 That notice leaves nothing out: it lists the work the agent did not reach as any run's notice does.
 
@@ -285,7 +386,7 @@ Name each file for its shot in the approved filming plan, in one folder per 14-d
   HDR footage is converted when the installed `ffmpeg` has the `zscale` and `tonemap` filters; with a build that lacks them, a day cut from HDR footage has no video, and the run's notice says why.
 - Sound is decided by rule, not in the edit: a cut that plays at the speed it was recorded at keeps its recording's sound, and a cut that plays at another speed, such as a timelapse, is silent.
   A video none of whose cuts carries sound has no sound stream.
-- Nothing is cut from a shot's footage until a plan that holds the shot, as the package has it now, is approved in Mandu.
+- Nothing is cut from a shot's footage until the Founder has approved, at a sitting, a plan that holds the shot as the package has it now.
 
 ## Video tooling and finished videos
 
@@ -449,7 +550,7 @@ Every other process the launcher starts (git, Codex's version and sandbox probes
 
 ## When RepToday's Waitlist build lands
 
-The Founder approves the Waitlist Dispatch request in Mandu, and firstmate builds it in RepToday; until then every run reports the Waitlist view as skipped.
+The Founder approves the Waitlist Dispatch request at a sitting, Mandu hands it to firstmate, and firstmate builds it in RepToday; until then every run reports the Waitlist view as skipped.
 Once the build writes its anonymous view, a reviewed gr0wthlab pull request sets `waitlist.view.local_path` for RepToday in [`config/products.json`](../config/products.json) to the file's path, and the next run reads it.
 The path must lie outside this clone, Mandu, and every Product checkout, all of which the sandbox reads; the launcher refuses to start otherwise, so the agent can never open the view.
 `GR0WTHLAB_WAITLIST_VIEW` overrides the path on one machine, for example to try the run against a test copy of the view.
@@ -476,7 +577,9 @@ cd ~/gr0wthlab && src/bin/gr0wthlab preflight && src/bin/gr0wthlab boundary-chec
 
 The boundary check passes only when the runtime's own records show all of this, never the agent's report:
 
-- Each of the nine forbidden targets was attempted and refused once per tool, each on its own: Codex's record of the run holds a patch that names that target's sentinel alone, refused as outside the permission profile, and the kernel's log holds a refused shell write to that target's sentinel by its full path.
+- Each of the fourteen forbidden targets was attempted and refused once per tool, each on its own: Codex's record of the run holds a patch that names that target's sentinel alone, refused as outside the permission profile, and the kernel's log holds a refused shell write to that target's sentinel by its full path.
+  Five of the fourteen are the folders of the Founder's records, `ledger/founder/decisions/`, `sittings/`, `beta-builds/`, `beta-reports/`, and `outreach/`, so the check shows for each that the agent cannot write an approval or any other record of the Founder's.
+  The other nine are Mandu, the RepToday checkout, the repository root, `workspace/` outside the areas, `ledger/`, `src/`, `config/`, `config/guardrails/`, and the git directory.
 - Nothing changed in this clone, Mandu, or any Product checkout against a snapshot taken before the check, once the check has removed the run's own files from the areas.
 - The kernel refused the connection to each of the check's two local listeners, and neither received one.
 - With no model, a probe inside the same sandbox reached neither the check's own listener nor any host listed in `config/guardrails/fetch.json`, each attempt refused by the kernel, after the same probe outside the sandbox reached that listener; and the launcher's own client sent nothing but a GET to a listed host and refused an address outside the list.
