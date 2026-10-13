@@ -58,6 +58,7 @@ gr0wthlab is the Marketing Engineer's repository; [`README.md`](README.md) gives
   Tests that need the real ffmpeg skip with a reason where it is absent; the fake tooling in `src/tests/fakes.py` covers whole runs everywhere.
 - Each workflow ships an example set in `src/examples/<workflow>/evals.json` built on synthetic fixtures, never a Product's package; its deterministic assertions run in the unit tests, and adapted third-party text is listed in [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md).
 - Code runs under the Mac's `/usr/bin/python3` (3.9), standard library only; [the CI workflow](.github/workflows/ci.yml) defines the tests and lint every change must pass.
+- A change records its live checks (the re-check after it, timed runs, what was not exercised) in a new file of its own, named and written as [`docs/live-checks/README.md`](docs/live-checks/README.md) says, and never adds them to a document another change edits; the US-ME02 spike note keeps the history up to 2026-10-12.
 - No reference copy of any Go-To-Market Package lives in this repository: configuration, the Product registry ([`config/products.json`](config/products.json)), and Instructions point to Mandu instead of restating package content.
   A record (Draft, proposal, Evidence, memo) may quote only the specific package text it uses or proposes, citing its Mandu source.
   The specification and decision records under `docs/` (including `docs/prd/design-decisions-2026-10-08.md`) and `CONTEXT.md` are committed as written.
