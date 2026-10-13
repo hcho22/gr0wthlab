@@ -662,11 +662,19 @@ def settle_day(
     item yet, and queue_day gives it one.
 
     An open post never loses the video it shows because that video could not be cut again this run, while its Draft
-    is the one it was queued from and the day's edit record is in place. When only its slot changed and its edit
+    is the one it was queued from, the day's edit record is in place, and the video's finished file is the file its
+    record and the post name, by the one check the filming workflow keeps. When only its slot changed and its edit
     record is still the one the video was cut from, the post that replaces it shows the same video, carried over
-    from its own record, as long as the finished file is still the file that record names; otherwise the open post
-    stands as it is, and a new slot reaches it once the video is cut again. A day whose edit record is gone has no
-    video to offer, so the brief and check-edits tell the agent to leave such a day's record as it is."""
+    from its own record; with another edit record the open post stands as it is, and a new slot reaches it once the
+    video is cut again.
+
+    A finished file that is gone or changed is a video the post no longer has (the Founder's decision of 2026-10-12):
+    the same post is queued in its place without a video, saying there is none yet and why, as a Draft that changed
+    while its footage was away is, and the video comes back for approval once it is cut again. Where nothing may be
+    asked in its place, since the Founder approved the day's copy or rejected this Draft, the open post leaves the
+    queue. A file that could not be read is not a file that is gone: the open post stands, and the row says so.
+    A day whose edit record is gone has no video to offer, so the brief and check-edits tell the agent to leave such
+    a day's record as it is."""
     number = day_plan.day.day
     approved = day_plan.approved
     asset = None
@@ -689,6 +697,7 @@ def settle_day(
         return result
     shown = asset.sha256 if asset is not None and asset.finished else None
     posted = day_plan.open or {}
+    gone = None  # the open post that leaves the queue when nothing may be asked in its place
     queued_from = posted.get("draft") == draft.path and posted.get("draft_sha256") == draft.sha256
     moved = posted.get("slot") != day_plan.slot
     if queued_from and not moved and posted.get("asset_sha256") == shown:
@@ -698,18 +707,25 @@ def settle_day(
     if queued_from and posted.get("asset_sha256") and asset is not None and asset.held:
         # Its video could not be cut again this run for a reason outside the edit record, so the one it shows stands.
         same_record = asset.edit_sha256 == posted.get("edit_sha256")
-        carried = video.carry(asset, store) if moved and same_record else None
-        if carried is None:
+        file = video.file(number, store)
+        lost = file is not None and not file.intact and not file.unknown
+        carried = video.carry(asset, store) if moved and same_record and not lost else None
+        if carried is None and not lost:
             result.status, result.item = KEPT, str(posted["id"])
             result.detail = f"its video was not cut again ({asset.detail})"
-            if moved and same_record:
-                result.detail += ", and its finished file is gone or is no longer the file its record names"
+            if file is not None and not file.intact:
+                result.detail += f", and {file.told(' of the video it names')}"
             result.detail += "; the open item stands"
             if moved:
                 result.detail += ", and its new slot reaches it once the video is cut again"
             return result
-        asset = result.asset = carried
-        shown = carried.sha256
+        if lost:
+            # The post no longer has the video it names, so it gives way to one that shows none.
+            video.drop(asset, file)
+            gone = str(posted["id"])
+        else:
+            asset = result.asset = carried
+            shown = carried.sha256
     if approved and shown is None:
         why = asset.detail if asset is not None and asset.detail else "its video is not finished"
         return DayResult(
@@ -720,11 +736,12 @@ def settle_day(
             draft.path,
             draft.sha256,
             verdict,
+            withdrawn=gone,
             asset=asset,
         )
     rejected = rejected_as(day_plan, draft, shown)
     if rejected:
-        result.status, result.item = REPEATED, str(rejected["id"])
+        result.status, result.item, result.withdrawn = REPEATED, str(rejected["id"]), gone
         result.detail = "the Founder rejected this Draft, so it is not asked again until it changes"
         return result
     result.status = QUEUED
@@ -779,7 +796,9 @@ def queue_day(
     outcome.published.append(identifier)
     result.item = identifier
     notes = [f"replaces `{day_plan.open['id']}`"] if day_plan.open else []
-    if shown and asset.detail:
+    if asset is not None and asset.dropped:
+        notes.append(f"without the video that one named, which was not cut again this run ({asset.detail})")
+    elif shown and asset.detail:
         notes.append(f"with the video that one showed, which was not cut again this run ({asset.detail})")
     elif shown:
         notes.append("with its finished video")

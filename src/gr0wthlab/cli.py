@@ -262,7 +262,8 @@ def check_edits(run_id: str, out=sys.stdout) -> int:
     if the day's post Draft passes too, and then measures the result. The two legs of an A/B pair are compared as
     the videos a run that ended now would leave: the one a new record that passes would be cut into, otherwise the
     one the leg's post shows. A record that cannot be cut this run, for a day whose open post shows a video, is no
-    problem to fix: the record stays as it is, and so does the post's video while its Draft is unchanged.
+    problem to fix: the record stays as it is, and so does the post's video while its Draft is unchanged and its
+    finished file is the file its record names; otherwise the line says where that file stands.
     """
     registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
     # As in check_drafts: reading the areas needs no git directories.
@@ -318,11 +319,12 @@ def check_edits(run_id: str, out=sys.stdout) -> int:
             current, unread = posts.read_draft(areas, found.draft_path(number))
             queued_from = found.posted[number].get("draft_sha256")
             keeps = (current is None and not unread) or (current is not None and current.sha256 == queued_from)
-            then = (
-                "the day's post keeps the video it shows"
-                if keeps
-                else "the day's video is cut from it again once it can be"
-            )
+            if not keeps:
+                then = "the day's video is cut from it again once it can be"
+            elif found.intact(number):
+                then = "the day's post keeps the video it shows"
+            else:
+                then = found.kept(number)
             print(
                 f"KEPT day {number}: {asset.edit}: it cannot be cut this run ({asset.detail}), so leave it as it is:"
                 f" {then}",

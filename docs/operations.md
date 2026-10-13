@@ -56,8 +56,9 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    For a Draft that passes, it checks the day's edit record in `workspace/drafts/edits/`, if the agent wrote one, against the shot list and the footage, renders it with `ffmpeg` into `ledger/assets/` with the Draft's text drawn over it, and measures the result; the day's post then shows the finished video.
    An edit record that fails a check renders nothing and blocks the day's post, naming the rule; missing video tooling is reported as a skipped edit, never as a failed run; every check is kept in `ledger/evidence/filming/`.
    A cut that fails for a reason outside the edit record (a tooling error, footage that changed while the run worked, a record that could not be written) holds the video as missing tooling does: nothing is blocked, an open post stands, and the run's notice names the failure.
-   Where the day's post shows a video when the run ends, the notice and the run report say that the video could not be cut again and that the post keeps the video it shows; they say a day has no video only when its post shows none.
-   The brief and `check-edits` tell the agent the same beforehand: the edit record of a day whose open post shows a video stays as it is while the video cannot be cut again, and is never reported as a problem to fix.
+   Where the day's post names a video when the run ends, the notice and the run report say that the video could not be cut again; they say a day has no video only when its post names none.
+   They say that the post keeps the video it shows only when the finished file is on disk and is the file the video's record and the post's queue entry name, which the launcher checks by fingerprint every time before it says so ("Video tooling and finished videos" below has what it says otherwise).
+   The brief and `check-edits` tell the agent the same beforehand: the edit record of a day whose open post names a video stays as it is while the video cannot be cut again, and is never reported as a problem to fix.
    Before it queues any post, it compares the two videos each A/B pair's posts are about to show, reading each from its own record in `ledger/evidence/filming/assets/`, which knows every footage file by its fingerprint and not by its name: when they show different footage outside their openings, nothing the run changed for the pair is offered, the posts that stood stay, and the run report and the notice name the pair.
    A day whose copy the Founder approved before its video existed gets its video only while its Draft is still that copy; otherwise no video is cut and the notice says so.
    It files each reviewed proposal in `src/proposals/` once, and never again whatever the Founder decides: the brand lint's word lists, and, in a run with outreach messages to offer, the loss-framing and sponsorship-ask lists.
@@ -234,7 +235,8 @@ Until `first_sitting` is set, every run prepares calendar days 1 to 7 as the fir
 Once it is set, each run prepares the calendar days from the next day through the end of the week after the coming sitting (on the sitting's own day, exactly that week), skipping any day already approved, and each post's slot is its date at `slot`.
 A changed slot reaches an open post at the next run, which replaces the post with one that carries it.
 A post that shows a video keeps it through that change even when the video cannot be cut again in that run, for example while its footage is away or `ffmpeg` is missing: the post that replaces it shows the same finished file, as long as its Draft and its edit record are the ones it was made from and the file is still the one its record names.
-Otherwise the open post stands as it is, the run report says so, and the slot reaches it once the video is cut again.
+With another edit record, or a finished file that could not be read, the open post stands as it is, the run report says so, and the slot reaches it once the video is cut again.
+With a finished file that is gone or changed, the post that carries the slot shows no video ("Video tooling and finished videos" below).
 
 ## Set the footage place
 
@@ -305,6 +307,30 @@ Its record, `ledger/evidence/filming/assets/window-<n>-day-<nn>-<recipe>.json`, 
 The command renders the video again beside where its record says it was, measures it, and puts it in place only if it came out byte for byte the file its record names.
 Anything else, such as a render by other tooling, which can encode the same frames differently, is reported and discarded, and whatever is at that path stays as it was.
 A video no open or approved post names can simply be deleted.
+
+A finished file is the only copy of its video, since it never enters git, so every run checks the file of each video an open post names: it must be on disk, and its fingerprint must be the SHA-256 the video's record and the post's queue entry hold.
+The launcher says a post shows or keeps a video only when that check passes.
+A post the Founder approved is never asked again, so its file is not checked and nothing about its file is reported.
+When an open post's file is gone, or is no longer the file its record names, nothing is substituted, and whatever is at that path is left as it is.
+When the run can cut the video again, it does, and the post stands or is replaced as for any video.
+When it cannot, for example while the footage or `ffmpeg` is away, the open post no longer has the video it names, and one of three things becomes of it, each decided by a rule that stood before this check:
+
+- It is replaced by the same post without a video (the Founder's decision of 2026-10-12) when the run checks the post's own Draft and may ask for it again: the day is due in that run, the Draft the post was queued from is in place and passes, and the day's edit record is in place.
+  The rule is the one for any due day whose Draft passes while no video can be cut for it: its post is queued without one.
+  The new item says there is no video yet and why, approving it approves the copy and the beat plan only, and the video comes back for approval in a later item once it is cut again.
+  The run report and the notice name both posts and the file.
+- It leaves the queue when the run checks that Draft the same way and nothing may be asked in the post's place.
+  Two of the rules keep a decision from being asked again: a day's copy the Founder approved is never asked again, and a Draft the Founder rejected is not asked again until it changes.
+  The third is the item format: the post without a video is checked against it once more as it is queued, and one that does not follow it blocks the day as any failing check does, so nothing is queued.
+  The run report and the notice name the post and the file and say that nothing is asked in its place, and why: under the first two rules that the Founder already decided the day's copy, and under the third that its Draft no longer passes.
+- It stands as it is, and every run's report and notice name it and its file, when the run does not check the post's own Draft.
+  The rules are these: a run prepares, checks, and cuts only the days due in it, so nothing is cut for a day that is not due; an open post stands while its Draft is gone; an open post is not checked again, and so not withdrawn, while a kit file, the brand rules, or the Product's code cannot be read; and a day whose copy the Founder approved is checked again only while its Draft is still that copy and it has an edit record.
+  It also stands, named the same way, when the run cut a video for the day and the pair check did not let it through, since nothing a run changed for a pair whose two videos differ is offered.
+
+Whatever else changed for the day, such as a Draft that was rewritten or fails a check, or an edit record that is gone, is settled as for any open post.
+The pair rule holds across the replacement: a leg whose post now shows no video has nothing to compare, and its video is compared with the other leg's again when it is cut again.
+A file that cannot be read is not a file that is gone: the report and the notice give the reason the read failed, nothing is said of whether the post keeps its video, the open post stands, and the report marks the filming output incomplete.
+The same holds when the video's own record under `ledger/evidence/filming/assets/` cannot be read or does not name the file the post names.
 
 ## Mark the Waitlist live
 
