@@ -184,9 +184,14 @@ def git(repo: Path, *args: str, env=None) -> str:
 
 
 def git_env(root: Path) -> dict[str, str]:
-    """An environment whose git has an identity and none of the developer's own configuration."""
+    """An environment whose git has an identity, none of the developer's own configuration, and no maintenance of
+    its own: git starts that detached after a commit, a fetch, a merge, a rebase, or a push it receives, so it would
+    still be writing in a repository while the test that made the repository removes it."""
     config = root / "gitconfig"
-    config.write_text("[user]\n\tname = Test\n\temail = test@example.com\n[init]\n\tdefaultBranch = main\n")
+    config.write_text(
+        "[user]\n\tname = Test\n\temail = test@example.com\n[init]\n\tdefaultBranch = main\n"
+        "[maintenance]\n\tauto = false\n"
+    )
     return dict(os.environ, GIT_CONFIG_GLOBAL=str(config), GIT_CONFIG_NOSYSTEM="1")
 
 
