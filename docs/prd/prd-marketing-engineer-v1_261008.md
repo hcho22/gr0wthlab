@@ -452,15 +452,16 @@ What was sent and who replied reaches gr0wthlab only as the Founder's outreach r
 
 **Acceptance Criteria:**
 
-- [ ] The gate is a Beta Build approval the Founder records on the sitting page; before it, this story does nothing.
+- [x] The gate is a Beta Build approval the Founder records on the sitting page; before it, this story does nothing.
 - [x] Candidates are chosen by entry identifier from the anonymous Waitlist view, opted-in good-Fit entries first.
 - [x] Invitation Drafts are identity-framed, explain the recorded 30-minute first session the thesis's K8 rubric needs, and contain no address; the Founder resolves addresses and sends.
-- [ ] Only counts of invitations sent, accepted, and sessions booked are kept as Evidence, from what the Founder reports.
-- [ ] Recruiting continues weekly until the Beta Cohort reaches 20 to 50 people or the Founder stops it, and a pool too small to reach 20 is reported with the recruiting Drafts needed to close the gap.
+- [x] Only counts of invitations sent, accepted, and sessions booked are kept as Evidence, from what the Founder reports.
+- [x] Recruiting continues weekly until the Beta Cohort reaches 20 to 50 people or the Founder stops it, and a pool too small to reach 20 is reported with the recruiting Drafts needed to close the gap.
 
-gr0wthlab's side of all five is in place and passed this story's Validation Test on a simulated record.
-Since 2026-10-12 the Founder records the approval, the counts, and a stop on the sitting page, in gr0wthlab's own `ledger/founder/` (ADR 0002), so no box waits on Mandu any more.
-The three open boxes wait for this story's Validation Test to pass through that page.
+Since 2026-10-12 the Founder records the approval, the counts, and a stop on the sitting page, in gr0wthlab's own `ledger/founder/` (ADR 0002), so no box waits on Mandu.
+This story's Validation Test passed through that page on 2026-10-12, with the real agent in a throwaway lab on a synthetic package and a seeded view: nothing was queued before the approval, and the run after it queued one batch of eight entry identifiers with an invitation Draft that holds no address.
+The counts given on the page were kept as Evidence with the two left blank as not reported, the too-small pool was reported with a Waitlist ask, and a stop on the page withdrew the open recruiting item ([the record](../live-checks/20261013-gr0wthlab-decisions-in-gr0wthlab.md)).
+A cohort that reaches 20 to 50 was not reached there; that end of recruiting stands on `src/tests/test_beta_cycle.py`.
 
 **Validation Test:**
 

@@ -66,7 +66,7 @@ Codex keeps `.git`, `.codex`, `.agents`, and `.aws` read-only at the top of each
 Before the agent starts, every run proves the profile with no model.
 The launcher runs `codex sandbox` with the same `-c` overrides and an empty Codex home, so no user configuration can change the policy it sees.
 It tries to create an empty, uniquely named file in each area, which must succeed and is deleted, and in each forbidden place, which must fail.
-The forbidden places are the repository root, `workspace/`, `src/`, `config/`, `config/guardrails/`, `/private/tmp`, `/private/var/tmp`, both git directories, the `HOME`, `TMPDIR`, and `CODEX_HOME` directories the launcher gives the agent, and the empty Codex home the probe itself runs with.
+The forbidden places are the repository root, `workspace/`, `ledger/`, each of the five folders of the Founder's records under `ledger/founder/`, `src/`, `config/`, `config/guardrails/`, `/private/tmp`, `/private/var/tmp`, both git directories, the `HOME`, `TMPDIR`, and `CODEX_HOME` directories the launcher gives the agent, and the empty Codex home the probe itself runs with.
 Any other outcome stops the run before the agent sees its instruction.
 Mandu and the Products are left out of this per-run check so a routine run never tries to write in them; the same deny-by-default rule covers them, and the boundary check below tests them.
 
@@ -107,6 +107,9 @@ The verdict needs all of the following, as the check stands since 2026-10-11; [t
   `--verify` runs no such probe and reports this criterion as not checked.
 - The git status and file digests of Mandu, every Product checkout, and the repository match a snapshot taken before the run.
   `--verify` judges a run it did not start, so it has no snapshot and reports that criterion as not checked.
+
+Since [ADR 0002](../adr/0002-the-founder-decides-in-gr0wthlab.md) the Founder's decisions and records are in `ledger/founder/`, which a run reads and must never write.
+Each of its five folders is a forbidden target of its own, with a file-tool step and a shell step, so the check proves fourteen targets where it proved nine.
 
 The fingerprint covers the command line, whose paths name the checkout, so each checkout of one configuration has its own.
 In the spike's checkout the configuration had fingerprint `e8dfb712e8b253720f9b2d382a8246fe3f543dbbf61d64599d70e7484b2e419d`.
@@ -2063,6 +2066,8 @@ Records commits never touch code or Guardrail configuration, so G8 holds, and ea
 - A separate macOS user with no credentials would be a stronger boundary than unreadable credential files; nothing in v1 needs it.
 - Inside an area, the sandbox refuses a hard link to a file the run cannot read but allows a symbolic link to one.
   The launcher reads and commits files from `workspace/` outside the sandbox, so it never follows a link there: it opens agent-written files without following links, refuses any file with more than one link, and never commits a link.
+- The Founder's records are written outside the sandbox, by `src/bin/gr0wthlab sitting`, so nothing in the sandbox bounds that command: its own checks (the loopback address, the secret in its address, the origin of every request that changes anything, and text shown only as text) and their tests in `src/tests/test_serve.py` are its boundary.
+  The lock a run's take-in and a change on the page share, `ledger/founder.lock`, is a file a run can read and cannot write; a process the agent left behind that held it would make the next take-in or page change wait and say so, and could write no record.
 - Each probe run used 140,000 to 190,000 input tokens, mostly cached, and about 2,800 output tokens.
 - The stop at a time limit finds what the agent started from the process table: its descendants, and every session one of them leads.
   A process that had already lost its parent when the limit passed, in a session the launcher never saw a member of, is not found; Codex ends a shell command's process group when the command ends, so reaching that takes a command that detaches itself on purpose.
