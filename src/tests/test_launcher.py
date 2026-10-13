@@ -203,6 +203,32 @@ class FootagePreflightTest(unittest.TestCase):
         self.assertIn(line, out)
         self.assertLess(out.index("paths and allowed"), out.index(line))
 
+    def test_a_footage_folder_that_appears_between_two_sessions_is_shown_refused_before_the_next(self):
+        # A run resolves its configuration once for all its sessions; what is on disk is looked at before each.
+        resolved = launcher.Resolved(self.repo, self.env, self.home)
+        task = self.repo / "src/instructions/weekly-run/common.md"
+        facts = [f"Run brief, read it first: {self.repo / 'ledger/run-reports/brief.md'}"]
+        tried = []
+        for session in ("package-review", "filming"):
+            record = launcher.run(
+                self.repo,
+                task,
+                "on-demand",
+                self.env,
+                self.home,
+                io.StringIO(),
+                None,
+                facts,
+                "20261009T000000Z-on-demand-abcd",
+                time_limit=60,
+                session=session,
+                resolved=resolved,
+            )
+            self.assertEqual((record["exit_code"], record["agent_started"]), (0, True))
+            tried.append([entry["target"] for entry in record["preflight"]["footage"]["refused"]])
+            (self.place / "window-1").mkdir(exist_ok=True)
+        self.assertEqual(tried, [[str(self.place)], [str(self.place), str(self.place / "window-1")]])
+
     def test_a_place_with_no_footage_folder_yet_is_shown_refused_itself(self):
         record, out = self.run_launcher()
         self.assertEqual([entry["target"] for entry in record["preflight"]["footage"]["refused"]], [str(self.place)])
