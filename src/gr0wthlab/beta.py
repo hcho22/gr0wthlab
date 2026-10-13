@@ -1369,10 +1369,13 @@ def gaps(plan: Plan | None, outcome: Outcome | None, problem: str, agent_gap: st
     return found
 
 
-def notice_section(outcome: Outcome | None, day_text: str) -> tuple[int, str, str] | None:
-    """The blocked and missing Drafts, and every open item withdrawn, for the run's notice; None if there is none."""
+def notice_section(outcome: Outcome | None, day_text: str, again: bool = False) -> tuple[int, str, str] | None:
+    """The blocked and missing Drafts, and every open item withdrawn, for the run's notice; None if there is none.
+    again says a fresh, whole run follows this one by itself, which writes a missing Draft or reports on it itself,
+    so a missing Draft is left out; an item this run withdrew is still named."""
     if outcome is None:
         return None
+    missing = () if again else (MISSING,)
     lines = []
     for result in outcome.results:
         label = LABELS[result.purpose]
@@ -1382,7 +1385,7 @@ def notice_section(outcome: Outcome | None, day_text: str) -> tuple[int, str, st
             lines.append(f"- The {label} Draft{where} was not offered: {failing}")
             if result.removed:
                 lines.append("- The launcher removed that Draft file, so nothing it held is kept or repeated here.")
-        elif result.status == MISSING:
+        elif result.status in missing:
             lines.append(f"- The {label} has no Draft, so it was not offered this run.")
         if result.withdrawn:
             why = f": {result.detail}" if result.status == NOT_DUE and result.detail else ", since it no longer stands"
@@ -1390,6 +1393,6 @@ def notice_section(outcome: Outcome | None, day_text: str) -> tuple[int, str, st
             lines.append(f"- The open `{result.withdrawn}` is withdrawn{why}.{freed}")
     if not lines:
         return None
-    count = sum(1 for result in outcome.results if result.status in (BLOCKED, MISSING) or result.withdrawn)
+    count = sum(1 for result in outcome.results if result.status in (BLOCKED, *missing) or result.withdrawn)
     title = f"{plural(count, 'Beta Cohort recruiting item')} not offered or withdrawn on {day_text}"
     return count, title, "\n".join(lines)

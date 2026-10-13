@@ -44,10 +44,18 @@ def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(prog="gr0wthlab", description="Start and check Marketing Engineer runs.")
     commands = root.add_subparsers(dest="command", required=True)
 
-    run = commands.add_parser("run", help="start one run: sync, snapshot, agent, Review Queue, report, records")
+    run = commands.add_parser(
+        "run",
+        help="start one run: sync, snapshot, agent, Review Queue, report, records; a weekly scheduled start runs only"
+        " while the week's run is still owed and the Mac is fully awake",
+    )
     run.add_argument("--instruction", type=Path, help="a task definition under src/instructions/ (default: run.json's)")
     run.add_argument("--trigger", choices=launcher.TRIGGERS, default="on-demand")
-    run.add_argument("--once", metavar="YYYY-MM-DDTHH:MM", help="the one-off time a scheduled run was due at")
+    run.add_argument(
+        "--once",
+        metavar="YYYY-MM-DDTHH:MM",
+        help="the one-off time a scheduled run was due at; such a run always runs, as a run on demand does",
+    )
 
     commands.add_parser("show-config", help="print the resolved run configuration and its fingerprint")
     commands.add_parser(
@@ -254,7 +262,8 @@ def check_edits(run_id: str, out=sys.stdout) -> int:
     if the day's post Draft passes too, and then measures the result. The two legs of an A/B pair are compared as
     the videos a run that ended now would leave: the one a new record that passes would be cut into, otherwise the
     one the leg's post shows. A record that cannot be cut this run, for a day whose open post shows a video, is no
-    problem to fix: the record stays as it is, and so does the post's video while its Draft is unchanged.
+    problem to fix: the record stays as it is, and so does the post's video while its Draft is unchanged and its
+    finished file is the file its record names; otherwise the line says where that file stands.
     """
     registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
     # As in check_drafts: reading the areas needs no git directories.
@@ -310,11 +319,12 @@ def check_edits(run_id: str, out=sys.stdout) -> int:
             current, unread = posts.read_draft(areas, found.draft_path(number))
             queued_from = found.posted[number].get("draft_sha256")
             keeps = (current is None and not unread) or (current is not None and current.sha256 == queued_from)
-            then = (
-                "the day's post keeps the video it shows"
-                if keeps
-                else "the day's video is cut from it again once it can be"
-            )
+            if not keeps:
+                then = "the day's video is cut from it again once it can be"
+            elif found.intact(number):
+                then = "the day's post keeps the video it shows"
+            else:
+                then = found.kept(number)
             print(
                 f"KEPT day {number}: {asset.edit}: it cannot be cut this run ({asset.detail}), so leave it as it is:"
                 f" {then}",
@@ -557,9 +567,17 @@ def main(argv: list[str] | None = None) -> int:
                 key: value for key, value in env.items() if key.startswith("GR0WTHLAB_") and key != cycle.PRE_RUN_ENV
             }
             overrides["GR0WTHLAB_CODEX_BIN"] = str(codex.resolve_codex_binary(env))
+            # Only the weekly run is checked again at an interval; a one-off job starts once, at its time.
+            weekly = not args.once and not args.boundary_check
             sys.stdout.buffer.write(
                 schedule.launch_agent(
-                    args.label, program, REPO_ROOT, calendar, overrides, launcher.default_log_dir(env, home)
+                    args.label,
+                    program,
+                    REPO_ROOT,
+                    calendar,
+                    overrides,
+                    launcher.default_log_dir(env, home),
+                    config.check_every_minutes * 60 if weekly else None,
                 )
             )
             return 0

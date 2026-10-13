@@ -15,8 +15,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
-from gr0wthlab import cli, cycle, exchange, launcher, lint, package
-from gr0wthlab.areas import Store
+from gr0wthlab import attempts, cli, cycle, exchange, launcher, lint, package, process
+from gr0wthlab.areas import PROBE_PREFIX, Store
 from gr0wthlab.report import next_due
 from tests import fakes
 
@@ -45,6 +45,11 @@ class CycleTestCase(unittest.TestCase):
             GR0WTHLAB_PRODUCTION_CLONE=str(self.root / "production"),
         )
         self.clock = fakes.Clock(fakes.SUNDAY_RUN)
+        # A scheduled start asks the Mac whether it is fully awake; the tests answer for it.
+        self.ask_the_mac = attempts.fully_awake
+        asked = mock.patch.object(attempts, "fully_awake", return_value=True)
+        self.awake = asked.start()
+        self.addCleanup(asked.stop)
         self.web = fakes.Web()  # the web a run reads; no test opens the real one
 
     def tearDown(self):
@@ -55,14 +60,14 @@ class CycleTestCase(unittest.TestCase):
                     os.chmod(path, 0o755)
         self.tmp.cleanup()
 
-    def run_cycle(self, repo=None, trigger="on-demand", execve=None, at=None):
+    def run_cycle(self, repo=None, trigger="on-demand", execve=None, at=None, once=None, clocks=process.CLOCK):
         if at is not None:
             self.clock.set(at)
         out = io.StringIO()
         reader = lambda policy: fakes.client(self.web, policy)  # noqa: E731
-        runner = cycle.Cycle(repo or self.repo, self.env, self.home, out, self.clock, reader)
+        runner = cycle.Cycle(repo or self.repo, self.env, self.home, out, self.clock, reader, clocks)
         kwargs = {"execve": execve} if execve else {}
-        code = runner.run(None, trigger, None, ["run"], **kwargs)
+        code = runner.run(None, trigger, once, ["run"], **kwargs)
         return code, out.getvalue()
 
     def workspace(self, repo=None):
@@ -649,15 +654,16 @@ class RunLockTest(CycleTestCase):
     def test_each_checkout_has_its_own_lock_and_refused_runs(self):
         other = fakes.make_repo(self.root / "worktree", self.env)
         with self.hold_lock(other):
-            code, out = self.run_cycle(trigger="scheduled")
+            code, out = self.run_cycle()
             self.assertEqual(code, 0, out)
             self.assertEqual(self.run_cycle(repo=other, at=fakes.SUNDAY_RUN + timedelta(minutes=5))[0], cycle.EXIT_BUSY)
+        # The run due a week later is still owed in this checkout, so its scheduled start reaches the lock.
         with self.hold_lock(self.repo):
-            refused, _ = self.run_cycle(trigger="scheduled", at=fakes.SUNDAY_RUN + timedelta(minutes=10))
+            refused, _ = self.run_cycle(trigger="scheduled", at=fakes.SUNDAY_RUN + timedelta(days=7, minutes=10))
             self.assertEqual(refused, cycle.EXIT_BUSY)
-        self.run_cycle(repo=other, at=fakes.SUNDAY_RUN + timedelta(minutes=15))
+        self.run_cycle(repo=other, at=fakes.SUNDAY_RUN + timedelta(days=7, minutes=15))
         self.assertEqual(re.findall(r"\(([a-z-]+)\) was refused", self.report(other)), ["on-demand"])
-        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=20))
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7, minutes=20))
         self.assertEqual(re.findall(r"\(([a-z-]+)\) was refused", self.report()), ["scheduled"])
 
 
@@ -870,7 +876,7 @@ class FailuresTest(CycleTestCase):
         code, out = self.run_cycle()
         self.assertEqual(code, 0, out)
         report = self.report()
-        self.assertIn("| Package review (contradictions) | complete | the agent finished its review |", report)
+        self.assertIn(f"| Package review (contradictions) | complete | {cycle.REVIEW_SAID_COMPLETE} |", report)
         self.assertIn("- checked=16 acted=0 note=nothing new needed action\n", report)
         self.assertEqual(self.queue()["open"], [])
 
@@ -878,9 +884,10 @@ class FailuresTest(CycleTestCase):
         due = datetime(2026, 10, 11, 16, 0).astimezone()
         self.run_cycle(trigger="scheduled", at=(due + timedelta(minutes=1)).astimezone(timezone.utc))
         self.assertIn("started on time", self.report())
-        self.run_cycle(trigger="scheduled", at=(due + timedelta(hours=3)).astimezone(timezone.utc))
-        self.assertIn("Started late:", self.report())
-        self.assertIn("3 h 0 min after its time", self.report())
+        week_later = datetime(2026, 10, 18, 19, 0).astimezone()
+        self.run_cycle(trigger="scheduled", at=week_later.astimezone(timezone.utc))
+        self.assertIn("Started late: due Sunday 2026-10-18 16:00,", self.report())
+        self.assertIn("3 h 0 min after its time. The Mac was probably asleep or off when it was due.", self.report())
 
     def test_the_launch_agent_lateness_and_next_run_all_follow_run_json(self):
         path = self.repo / "config/run.json"
@@ -1245,6 +1252,82 @@ class ProductionCloneTest(CycleTestCase):
         self.assertNotIn("ledger/run.lock", changed)
         self.assertEqual((self.clone / "workspace/drafts/README.md").read_text(encoding="utf-8"), "# drafts\n")
         self.assertEqual(fakes.git(self.clone, "status", "--porcelain", env=self.env), "")
+
+    def leave_probe_files(self, repo):
+        """What a boundary check killed mid-run leaves at the top of the areas: its script and a sentinel."""
+        left = [
+            repo / "workspace/drafts" / f"{PROBE_PREFIX}20261001T000000Z-on-demand-0001-permitted-shell.txt",
+            repo / "workspace/instructions" / f"{PROBE_PREFIX}20261001T000000Z-on-demand-0001-shell-steps.sh",
+        ]
+        for path in left:
+            path.write_text("left behind\n", encoding="utf-8")
+        return left, ", ".join(str(path.relative_to(repo)) for path in left)
+
+    def committed_probe_files(self):
+        """Every path any commit holds, in the clone or on the remote, that a boundary check names its files by."""
+        for repo in (self.clone, self.remote):
+            history = fakes.git(repo, "log", "--all", "--name-only", "--format=", env=self.env).split("\n")
+            yield from (path for path in history if PROBE_PREFIX in path)
+
+    def test_what_a_stopped_boundary_check_left_is_removed_before_a_records_step_can_commit_it(self):
+        left, names = self.leave_probe_files(self.clone)
+        fakes.behave(self.codex_dir, {"write": {"drafts/day-3.md": "a Draft\n"}})
+        code, out = self.run_cycle(repo=self.clone)
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"pre-run: removed boundary probe files left in the areas: {names}\n", out)
+        self.assertLess(out.index("pre-run: removed boundary probe files"), out.index("pre-run: current"))
+        self.assertEqual(out.count("removed boundary probe files"), 1, "nothing was left for the run's own clearing")
+        self.assertEqual([path for path in left if path.exists()], [])
+        self.assertIn("records: pushed: pushed 1 records commit", out)
+        changed = fakes.git(self.remote, "diff", "--name-only", "HEAD~1", "HEAD", env=self.env).split()
+        self.assertIn("workspace/drafts/day-3.md", changed)
+        self.assertEqual(list(self.committed_probe_files()), [])
+        quoted = ", ".join(f"`{path.relative_to(self.clone)}`" for path in left)
+        self.assertIn(
+            "## Agent\n\n- Removed boundary probe files left in the areas, before the agent started: "
+            f"{quoted}\n- Boundary preflight: passed",
+            self.report(self.clone),
+        )
+
+    def test_a_run_restarted_on_new_code_reports_what_was_removed_before_the_sync(self):
+        (self.repo / "config" / "note.txt").write_text("reviewed change\n")
+        fakes.git(self.repo, "add", "--all", env=self.env)
+        fakes.git(self.repo, "commit", "--quiet", "-m", "reviewed", env=self.env)
+        fakes.git(self.repo, "push", "--quiet", "origin", "main", env=self.env)
+        left, names = self.leave_probe_files(self.clone)
+        calls = []
+        code, out = self.run_cycle(repo=self.clone, execve=lambda *args: calls.append(args))
+        self.assertEqual(len(calls), 1, out)
+        self.assertIn(f"pre-run: removed boundary probe files left in the areas: {names}\n", out)
+        self.assertEqual([path for path in left if path.exists()], [])
+        self.env[cycle.PRE_RUN_ENV] = calls[0][2][cycle.PRE_RUN_ENV]
+        code, out = self.run_cycle(repo=self.clone)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("removed boundary probe files", out)
+        self.assertIn(
+            "- Removed boundary probe files left in the areas, before the agent started: `workspace/drafts/",
+            self.report(self.clone),
+        )
+        self.assertEqual(list(self.committed_probe_files()), [])
+
+    def test_with_the_sync_off_the_run_itself_removes_it_before_the_agent_and_the_save(self):
+        fakes.set_run(self.repo, "records", {"sync_before_run": False})
+        fakes.git(self.repo, "commit", "--quiet", "-am", "reviewed", env=self.env)
+        fakes.git(self.repo, "push", "--quiet", "origin", "main", env=self.env)
+        fakes.git(self.clone, "pull", "--quiet", env=self.env)
+        left, names = self.leave_probe_files(self.clone)
+        fakes.behave(self.codex_dir, {"write": {"drafts/day-3.md": "a Draft\n"}})
+        code, out = self.run_cycle(repo=self.clone)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("pre-run:", out)
+        self.assertIn(f"gr0wthlab: removed boundary probe files left in the areas: {names}\n", out)
+        self.assertLess(out.index("removed boundary probe files"), out.index("preflight refused"))
+        self.assertIn("records: pushed", out)
+        self.assertEqual(list(self.committed_probe_files()), [])
+        self.assertIn(
+            "- Removed boundary probe files left in the areas, before the agent started: `workspace/drafts/",
+            self.report(self.clone),
+        )
 
     def test_new_reviewed_code_is_fast_forwarded_and_the_run_restarts_on_it(self):
         (self.repo / "config" / "note.txt").write_text("reviewed change\n")

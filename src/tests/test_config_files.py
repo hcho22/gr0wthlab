@@ -135,6 +135,9 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(policy[str(resolved.repo_root)], "read")
         self.assertEqual(policy[str(HOME / "Mandu")], "read")
 
+    def test_the_agent_runs_at_high_reasoning_effort(self):
+        self.assertEqual(boundary.load_runtime_config(REPO)["codex"]["reasoning_effort"], "high")
+
     def test_features_that_act_outside_the_sandbox_are_disabled(self):
         disabled = set(self.config["codex"]["disabled_features"])
         for feature in ("apps", "plugins", "hooks", "browser_use", "computer_use", "multi_agent", "multi_agent_v2"):

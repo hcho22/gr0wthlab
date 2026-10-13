@@ -158,6 +158,27 @@ class ResolveBoundaryTest(unittest.TestCase):
         with self.assertRaisesRegex(ConfigError, "runtime must be 'codex'"):
             boundary.load_runtime_config(self.repo)
 
+    def test_refuses_an_unknown_or_missing_reasoning_effort_when_the_configuration_loads(self):
+        path = self.repo / boundary.RUNTIME_CONFIG
+        path.parent.mkdir(parents=True)
+
+        def load(codex):
+            path.write_text(json.dumps(dict(CONFIG, codex=codex)), encoding="utf-8")
+            return boundary.load_runtime_config(self.repo)
+
+        for effort in boundary.REASONING_EFFORTS:
+            with self.subTest(effort=effort):
+                self.assertEqual(load({"reasoning_effort": effort})["codex"]["reasoning_effort"], effort)
+        unknown = ("hgih", "High", "", " high", "minimal", None, True, 3, ["high"])
+        for codex in [{"reasoning_effort": value} for value in unknown] + [{}, None, "high"]:
+            with (
+                self.subTest(codex=codex),
+                self.assertRaisesRegex(
+                    ConfigError, r"codex\.reasoning_effort must be one of low, medium, high, xhigh, max; got "
+                ),
+            ):
+                load(codex)
+
     def test_policy_grants_writes_only_to_areas(self):
         external_git = self.root / "primary" / ".git"
         resolved = self.resolve(git=[self.repo / ".git", external_git])

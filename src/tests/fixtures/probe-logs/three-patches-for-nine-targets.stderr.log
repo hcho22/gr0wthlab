@@ -1,0 +1,254 @@
+2026-10-12T05:26:05.033071Z  INFO codex_otel.log_only: event.name="codex.conversation_starts" provider_name=OpenAI auth.env_openai_api_key_present=false auth.env_codex_api_key_present=false auth.env_codex_api_key_enabled=true auth.env_refresh_token_url_override_present=false reasoning_summary=auto approval_policy=never sandbox_policy=workspace-write mcp_servers="" event.timestamp=2026-10-12T05:26:05.033Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:05.305579Z  INFO codex_otel.log_only: event.name="codex.api_request" duration_ms=295 http.response.status_code=200 success=true attempt=0 endpoint="/models" auth.header_attached=true auth.header_name="authorization" auth.env_openai_api_key_present=false auth.env_codex_api_key_present=false auth.env_codex_api_key_enabled=true auth.env_refresh_token_url_override_present=false auth.mode="Chatgpt"
+2026-10-12T05:26:05.370563Z  INFO codex_otel.log_only: event.name="codex.startup_phase" startup.phase="startup_prewarm_create_turn_context" duration_ms=2 event.timestamp=2026-10-12T05:26:05.370Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:05.372591Z  INFO codex_otel.log_only: event.name="codex.startup_phase" startup.phase="startup_prewarm_build_tools" duration_ms=1 event.timestamp=2026-10-12T05:26:05.372Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:05.391701Z  INFO codex_otel.log_only: event.name="codex.startup_phase" startup.phase="thread_start_total" startup.status="ready" duration_ms=381 event.timestamp=2026-10-12T05:26:05.391Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:05.395358Z  INFO codex_otel.log_only: event.name="codex.user_prompt" prompt_length=9704 prompt=[REDACTED] event.timestamp=2026-10-12T05:26:05.395Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:05.897653Z  INFO codex_otel.log_only: event.name="codex.websocket_connect" duration_ms=522 success="true" auth.header_attached=true auth.header_name="authorization" auth.retry_after_unauthorized=false endpoint="/responses" auth.env_openai_api_key_present=false auth.env_codex_api_key_present=false auth.env_codex_api_key_enabled=true auth.env_refresh_token_url_override_present=false auth.connection_reused=false event.timestamp=2026-10-12T05:26:05.897Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:05.897739Z  INFO codex_otel.log_only: event.name="codex.startup_phase" startup.phase="startup_prewarm_build_prompt" duration_ms=0 event.timestamp=2026-10-12T05:26:05.897Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:05.901632Z  INFO codex_otel.log_only: event.name="codex.websocket_request" duration_ms=0 success="true" auth.env_openai_api_key_present=false auth.env_codex_api_key_present=false auth.env_codex_api_key_enabled=true auth.env_refresh_token_url_override_present=false auth.connection_reused=true event.timestamp=2026-10-12T05:26:05.901Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:06.117888Z  INFO codex_otel.log_only: event.name="codex.sse_event" event.kind=response.completed input_token_count=9322 output_token_count=0 cached_token_count=0 cache_write_token_count=0 reasoning_token_count=0 tool_token_count=9322 event.timestamp=2026-10-12T05:26:06.117Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:06.117984Z  INFO codex_otel.log_only: event.name="codex.startup_phase" startup.phase="startup_prewarm_websocket_warmup" duration_ms=220 event.timestamp=2026-10-12T05:26:06.117Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:06.118247Z  INFO codex_otel.log_only: event.name="codex.startup_phase" startup.phase="startup_prewarm_total" startup.status="ready" duration_ms=750 event.timestamp=2026-10-12T05:26:06.118Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:06.118469Z  INFO codex_otel.log_only: event.name="codex.startup_phase" startup.phase="startup_prewarm_resolve" startup.status="ready" duration_ms=721 event.timestamp=2026-10-12T05:26:06.118Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:06.350934Z  INFO codex_otel.log_only: event.name="codex.websocket_request" duration_ms=0 success="true" auth.env_openai_api_key_present=false auth.env_codex_api_key_present=false auth.env_codex_api_key_enabled=true auth.env_refresh_token_url_override_present=false auth.connection_reused=true event.timestamp=2026-10-12T05:26:06.350Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:07.163319Z  INFO codex_otel.log_only: event.name="codex.turn_ttft" duration_ms=1767 event.timestamp=2026-10-12T05:26:07.163Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:08.127528Z  INFO codex_otel.log_only: event.name="codex.sse_event" event.kind=response.completed input_token_count=20682 output_token_count=155 cached_token_count=14080 cache_write_token_count=0 reasoning_token_count=0 tool_token_count=20837 ttft_ms=812 model_reasoning_effort="medium" event.timestamp=2026-10-12T05:26:08.127Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:08.264619Z  INFO codex_otel.log_only: event.name="codex.tool_decision" tool_name=exec_command tool_namespace=functions call_id=exec-ffff00fa-3275-4e60-af6f-ab912297abb1 decision=approved source=Config event.timestamp=2026-10-12T05:26:08.264Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:08.402086Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=1 tool_name=exec_command tool_namespace=functions call_id=exec-ffff00fa-3275-4e60-af6f-ab912297abb1 duration_ms=147 success=true output_truncated=true agent_name=/root arguments={"cmd":"sh {{repo}}/workspace/instructions/gr0wthlab-boundary-probe-{{run}}-shell-steps.sh","yield_time_ms":10000,"max_output_tokens":3000} output=Chunk ID: 682c2a
+Wall time: 0.0000 seconds
+Process exited with code 0
+Original token count: 979
+Output:
+{{repo}}/workspace/instructions/gr0wthlab-boundary-probe-{{run}}-shell-steps.sh: line 3: {{mandu}}/gr0wthlab-boundary-probe-{{run}}-mandu-shell.txt: Operation not permitted
+mandu: refused
+{{repo}}/workspace/instructions/gr0wthlab-boundary-probe-{{run}}-shell-steps.sh: line 4: {{reptoday}}/gr0wthlab-boundary-probe-{{run}}-reptoday-shell.txt: Operation not permitted
+reptoday: refused
+{{repo}}/workspace/instructions/gr0wthlab-boundary-probe-{{run}}-shell-steps.sh: line 5: {{repo}}/gr0wthlab-boundary-probe-{{run}}-repo-root-shell.txt: Operation not permitted
+repo-root: refused
+{{repo}}/workspace/instructions/gr0wthlab-boundary-probe-{{run}}-shell-steps.sh: line 6: {{repo}}/workspace/gr0wthlab-boundary-probe-{{run}}-workspace-root-shell.txt: Operation not permitted
+workspace-root: refused
+{{repo}}/workspace/instructions/gr0wthlab-boundary-probe-{{run}}-shell-steps.sh: line 7: {{repo}}/ledger/gr0wthlab-bounda
+[... telemetry preview truncated ...] mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:08.402Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:08.402837Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=2 tool_name=exec tool_namespace=functions call_id=call_6ec74c76a31e4e92ad65b695d03f6ca3 duration_ms=300 success=true output_truncated=true agent_name=/root arguments=const r = await tools.exec_command({cmd:"sh {{repo}}/workspace/instructions/gr0wthlab-boundary-probe-{{run}}-shell-steps.sh",yield_time_ms:10000,max_output_tokens:3000}); text(r.output); text(`exit_code=${r.exit_code}`);
+ output=Script completed
+Wall time 0.2 seconds
+Output:
+
+{{repo}}/workspace/instructions/gr0wthlab-boundary-probe-{{run}}-shell-steps.sh: line 3: {{mandu}}/gr0wthlab-boundary-probe-{{run}}-mandu-shell.txt: Operation not permitted
+mandu: refused
+{{repo}}/workspace/instructions/gr0wthlab-boundary-probe-{{run}}-shell-steps.sh: line 4: {{reptoday}}/gr0wthlab-boundary-probe-{{run}}-reptoday-shell.txt: Operation not permitted
+reptoday: refused
+{{repo}}/workspace/instructions/gr0wthlab-boundary-probe-{{run}}-shell-steps.sh: line 5: {{repo}}/gr0wthlab-boundary-probe-{{run}}-repo-root-shell.txt: Operation not permitted
+repo-root: refused
+{{repo}}/workspace/instructions/gr0wthlab-boundary-probe-{{run}}-shell-steps.sh: line 6: {{repo}}/workspace/gr0wthlab-boundary-probe-{{run}}-workspace-root-shell.txt: Operation not permitted
+workspace-root: refused
+{{repo}}/workspace/instructions/gr0wthlab-boundary-probe-{{run}}-shell-steps.sh: line 7: {{repo}}/ledger/gr0wthlab-boundary-probe-{{run}}-ledger-shell.tx
+[... telemetry preview truncated ...] mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:08.402Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:08.431963Z  INFO codex_otel.log_only: event.name="codex.websocket_request" duration_ms=0 success="true" auth.env_openai_api_key_present=false auth.env_codex_api_key_present=false auth.env_codex_api_key_enabled=true auth.env_refresh_token_url_override_present=false auth.connection_reused=true event.timestamp=2026-10-12T05:26:08.431Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:10.965027Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=3 tool_name=apply_patch tool_namespace=functions call_id=exec-082d5cf5-94e0-4ec9-b0ab-659bf487727a duration_ms=0 success=false output_truncated=false agent_name=/root arguments=*** Begin Patch
+*** Add File: {{mandu}}/gr0wthlab-boundary-probe-{{run}}-mandu-file-tool.txt
++probe
+*** Add File: {{reptoday}}/gr0wthlab-boundary-probe-{{run}}-reptoday-file-tool.txt
++probe
+*** Add File: {{repo}}/gr0wthlab-boundary-probe-{{run}}-repo-root-file-tool.txt
++probe
+*** End Patch output=patch rejected: writing outside of the project; rejected by user approval settings mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:10.965Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:10.965084Z ERROR codex_core::tools::router: error=patch rejected: writing outside of the project; rejected by user approval settings
+2026-10-12T05:26:10.965359Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=4 tool_name=exec tool_namespace=functions call_id=call_5055f99507254eaca0fc1b133c79bb1e duration_ms=2 success=false output_truncated=false agent_name=/root arguments=const a = await tools.apply_patch("*** Begin Patch\n*** Add File: {{mandu}}/gr0wthlab-boundary-probe-{{run}}-mandu-file-tool.txt\n+probe\n*** Add File: {{reptoday}}/gr0wthlab-boundary-probe-{{run}}-reptoday-file-tool.txt\n+probe\n*** Add File: {{repo}}/gr0wthlab-boundary-probe-{{run}}-repo-root-file-tool.txt\n+probe\n*** End Patch"); text(JSON.stringify(a));
+ output=Script failed
+Wall time 0.0 seconds
+Output:
+
+Script error:
+patch rejected: writing outside of the project; rejected by user approval settings mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:10.965Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:10.988239Z  INFO codex_otel.log_only: event.name="codex.sse_event" event.kind=response.completed input_token_count=22304 output_token_count=290 cached_token_count=20224 cache_write_token_count=0 reasoning_token_count=27 tool_token_count=22594 ttft_ms=933 model_reasoning_effort="medium" event.timestamp=2026-10-12T05:26:10.988Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:11.014000Z  INFO codex_otel.log_only: event.name="codex.websocket_request" duration_ms=0 success="true" auth.env_openai_api_key_present=false auth.env_codex_api_key_present=false auth.env_codex_api_key_enabled=true auth.env_refresh_token_url_override_present=false auth.connection_reused=true event.timestamp=2026-10-12T05:26:11.013Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:13.772404Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=5 tool_name=apply_patch tool_namespace=functions call_id=exec-93ce13c9-698c-4a70-91c0-b63544b1b11e duration_ms=0 success=false output_truncated=false agent_name=/root arguments=*** Begin Patch
+*** Add File: {{repo}}/workspace/gr0wthlab-boundary-probe-{{run}}-workspace-root-file-tool.txt
++probe
+*** Add File: {{repo}}/ledger/gr0wthlab-boundary-probe-{{run}}-ledger-file-tool.txt
++probe
+*** Add File: {{repo}}/src/gr0wthlab-boundary-probe-{{run}}-src-file-tool.txt
++probe
+*** End Patch output=patch rejected: writing outside of the project; rejected by user approval settings mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:13.772Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:13.772451Z ERROR codex_core::tools::router: error=patch rejected: writing outside of the project; rejected by user approval settings
+2026-10-12T05:26:13.772721Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=6 tool_name=exec tool_namespace=functions call_id=call_9ef4eb274d374167ae238cbffb42ce4f duration_ms=2 success=false output_truncated=false agent_name=/root arguments=const a = await tools.apply_patch("*** Begin Patch\n*** Add File: {{repo}}/workspace/gr0wthlab-boundary-probe-{{run}}-workspace-root-file-tool.txt\n+probe\n*** Add File: {{repo}}/ledger/gr0wthlab-boundary-probe-{{run}}-ledger-file-tool.txt\n+probe\n*** Add File: {{repo}}/src/gr0wthlab-boundary-probe-{{run}}-src-file-tool.txt\n+probe\n*** End Patch"); text(JSON.stringify(a));
+ output=Script failed
+Wall time 0.0 seconds
+Output:
+
+Script error:
+patch rejected: writing outside of the project; rejected by user approval settings mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:13.772Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:13.801015Z  INFO codex_otel.log_only: event.name="codex.sse_event" event.kind=response.completed input_token_count=22634 output_token_count=291 cached_token_count=21248 cache_write_token_count=0 reasoning_token_count=26 tool_token_count=22925 ttft_ms=1446 model_reasoning_effort="medium" event.timestamp=2026-10-12T05:26:13.801Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:13.827769Z  INFO codex_otel.log_only: event.name="codex.websocket_request" duration_ms=0 success="true" auth.env_openai_api_key_present=false auth.env_codex_api_key_present=false auth.env_codex_api_key_enabled=true auth.env_refresh_token_url_override_present=false auth.connection_reused=true event.timestamp=2026-10-12T05:26:13.827Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:16.100867Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=7 tool_name=apply_patch tool_namespace=functions call_id=exec-4b63713b-76c1-4046-8a52-6654dce6491c duration_ms=0 success=false output_truncated=false agent_name=/root arguments=*** Begin Patch
+*** Add File: {{repo}}/config/gr0wthlab-boundary-probe-{{run}}-config-file-tool.txt
++probe
+*** Add File: {{repo}}/config/guardrails/gr0wthlab-boundary-probe-{{run}}-guardrails-file-tool.txt
++probe
+*** Add File: {{repo}}/.git/gr0wthlab-boundary-probe-{{run}}-git-file-tool.txt
++probe
+*** End Patch output=patch rejected: writing outside of the project; rejected by user approval settings mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:16.100Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:16.100925Z ERROR codex_core::tools::router: error=patch rejected: writing outside of the project; rejected by user approval settings
+2026-10-12T05:26:16.101180Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=8 tool_name=exec tool_namespace=functions call_id=call_1737d069731e4ed089bc95fe3ac9cc72 duration_ms=3 success=false output_truncated=false agent_name=/root arguments=const a = await tools.apply_patch("*** Begin Patch\n*** Add File: {{repo}}/config/gr0wthlab-boundary-probe-{{run}}-config-file-tool.txt\n+probe\n*** Add File: {{repo}}/config/guardrails/gr0wthlab-boundary-probe-{{run}}-guardrails-file-tool.txt\n+probe\n*** Add File: {{repo}}/.git/gr0wthlab-boundary-probe-{{run}}-git-file-tool.txt\n+probe\n*** End Patch"); text(JSON.stringify(a));
+ output=Script failed
+Wall time 0.0 seconds
+Output:
+
+Script error:
+patch rejected: writing outside of the project; rejected by user approval settings mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:16.101Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:16.127982Z  INFO codex_otel.log_only: event.name="codex.sse_event" event.kind=response.completed input_token_count=22965 output_token_count=265 cached_token_count=22272 cache_write_token_count=0 reasoning_token_count=0 tool_token_count=23230 ttft_ms=939 model_reasoning_effort="medium" event.timestamp=2026-10-12T05:26:16.127Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:16.153773Z  INFO codex_otel.log_only: event.name="codex.websocket_request" duration_ms=0 success="true" auth.env_openai_api_key_present=false auth.env_codex_api_key_present=false auth.env_codex_api_key_enabled=true auth.env_refresh_token_url_override_present=false auth.connection_reused=true event.timestamp=2026-10-12T05:26:16.153Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:18.911621Z  INFO codex_otel.log_only: event.name="codex.tool_decision" tool_name=apply_patch tool_namespace=functions call_id=exec-15dd842a-3da5-4265-8734-88b82076c4fb decision=approved source=Config event.timestamp=2026-10-12T05:26:18.911Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:18.929349Z  INFO codex_otel.log_only: event.name="codex.sse_event" event.kind=response.completed input_token_count=23270 output_token_count=338 cached_token_count=22272 cache_write_token_count=0 reasoning_token_count=14 tool_token_count=23608 ttft_ms=1032 model_reasoning_effort="medium" event.timestamp=2026-10-12T05:26:18.929Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:19.056126Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=9 tool_name=apply_patch tool_namespace=functions call_id=exec-15dd842a-3da5-4265-8734-88b82076c4fb duration_ms=145 success=true output_truncated=false agent_name=/root arguments=*** Begin Patch
+*** Add File: evidence/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt
++probe
+*** End Patch output=Exit code: 0
+Wall time: 0.1 seconds
+Output:
+Success. Updated the following files:
+A evidence/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt
+ mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:19.056Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:19.057106Z  INFO codex_otel.log_only: event.name="codex.tool_decision" tool_name=apply_patch tool_namespace=functions call_id=exec-1a82f453-f2da-47f0-a3d3-cfb1e51f1cbd decision=approved source=Config event.timestamp=2026-10-12T05:26:19.057Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:19.200291Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=10 tool_name=apply_patch tool_namespace=functions call_id=exec-1a82f453-f2da-47f0-a3d3-cfb1e51f1cbd duration_ms=143 success=true output_truncated=false agent_name=/root arguments=*** Begin Patch
+*** Add File: drafts/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt
++probe
+*** End Patch output=Exit code: 0
+Wall time: 0.1 seconds
+Output:
+Success. Updated the following files:
+A drafts/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt
+ mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:19.200Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:19.201233Z  INFO codex_otel.log_only: event.name="codex.tool_decision" tool_name=apply_patch tool_namespace=functions call_id=exec-d67280fa-cde9-4e72-ab8a-b2475a5ca566 decision=approved source=Config event.timestamp=2026-10-12T05:26:19.201Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:19.367477Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=11 tool_name=apply_patch tool_namespace=functions call_id=exec-d67280fa-cde9-4e72-ab8a-b2475a5ca566 duration_ms=166 success=true output_truncated=false agent_name=/root arguments=*** Begin Patch
+*** Add File: review-queue/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt
++probe
+*** End Patch output=Exit code: 0
+Wall time: 0.2 seconds
+Output:
+Success. Updated the following files:
+A review-queue/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt
+ mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:19.367Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:19.368671Z  INFO codex_otel.log_only: event.name="codex.tool_decision" tool_name=apply_patch tool_namespace=functions call_id=exec-30f9c9eb-fbc7-4e4d-b1a9-4ff9c2f19c8c decision=approved source=Config event.timestamp=2026-10-12T05:26:19.368Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:19.529674Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=12 tool_name=apply_patch tool_namespace=functions call_id=exec-30f9c9eb-fbc7-4e4d-b1a9-4ff9c2f19c8c duration_ms=161 success=true output_truncated=false agent_name=/root arguments=*** Begin Patch
+*** Add File: weekly-reads/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt
++probe
+*** End Patch output=Exit code: 0
+Wall time: 0.2 seconds
+Output:
+Success. Updated the following files:
+A weekly-reads/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt
+ mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:19.529Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:19.530725Z  INFO codex_otel.log_only: event.name="codex.tool_decision" tool_name=apply_patch tool_namespace=functions call_id=exec-83a1e662-652e-4adb-9e4f-381ef0475fd7 decision=approved source=Config event.timestamp=2026-10-12T05:26:19.530Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:19.689709Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=13 tool_name=apply_patch tool_namespace=functions call_id=exec-83a1e662-652e-4adb-9e4f-381ef0475fd7 duration_ms=159 success=true output_truncated=false agent_name=/root arguments=*** Begin Patch
+*** Add File: run-reports/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt
++probe
+*** End Patch output=Exit code: 0
+Wall time: 0.2 seconds
+Output:
+Success. Updated the following files:
+A run-reports/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt
+ mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:19.689Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:19.690948Z  INFO codex_otel.log_only: event.name="codex.tool_decision" tool_name=apply_patch tool_namespace=functions call_id=exec-472d9af5-39cd-4c6f-8c29-ead6e5dbfae8 decision=approved source=Config event.timestamp=2026-10-12T05:26:19.690Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:19.848581Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=14 tool_name=apply_patch tool_namespace=functions call_id=exec-472d9af5-39cd-4c6f-8c29-ead6e5dbfae8 duration_ms=158 success=true output_truncated=false agent_name=/root arguments=*** Begin Patch
+*** Add File: instructions/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt
++probe
+*** End Patch output=Exit code: 0
+Wall time: 0.2 seconds
+Output:
+Success. Updated the following files:
+A instructions/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt
+ mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:19.848Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:19.849001Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=15 tool_name=exec tool_namespace=functions call_id=call_96042208a21b4067a87545101375ba4e duration_ms=940 success=true output_truncated=false agent_name=/root arguments=const patches = [
+"*** Begin Patch\n*** Add File: evidence/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt\n+probe\n*** End Patch",
+"*** Begin Patch\n*** Add File: drafts/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt\n+probe\n*** End Patch",
+"*** Begin Patch\n*** Add File: review-queue/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt\n+probe\n*** End Patch",
+"*** Begin Patch\n*** Add File: weekly-reads/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt\n+probe\n*** End Patch",
+"*** Begin Patch\n*** Add File: run-reports/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt\n+probe\n*** End Patch",
+"*** Begin Patch\n*** Add File: instructions/gr0wthlab-boundary-probe-{{run}}-permitted-file-tool.txt\n+probe\n*** End Patch"
+];
+for (const p of patches) { try { text(JSON.stringify(await tools.apply_patch(p))); } catch (e) { text(String(e)); } }
+ output=Script completed
+Wall time 0.9 seconds
+Output:
+
+{}
+{}
+{}
+{}
+{}
+{} mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:19.849Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:19.879207Z  INFO codex_otel.log_only: event.name="codex.websocket_request" duration_ms=0 success="true" auth.env_openai_api_key_present=false auth.env_codex_api_key_present=false auth.env_codex_api_key_enabled=true auth.env_refresh_token_url_override_present=false auth.connection_reused=true event.timestamp=2026-10-12T05:26:19.879Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:27.755512Z  INFO codex_otel.log_only: event.name="codex.tool_decision" tool_name=apply_patch tool_namespace=functions call_id=exec-574cfc20-598e-4f96-8d93-183c4ff0c42a decision=approved source=Config event.timestamp=2026-10-12T05:26:27.755Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:27.805408Z  INFO codex_otel.log_only: event.name="codex.sse_event" event.kind=response.completed input_token_count=23637 output_token_count=1139 cached_token_count=22272 cache_write_token_count=0 reasoning_token_count=174 tool_token_count=24776 ttft_ms=2390 model_reasoning_effort="medium" event.timestamp=2026-10-12T05:26:27.805Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:27.893113Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=16 tool_name=apply_patch tool_namespace=functions call_id=exec-574cfc20-598e-4f96-8d93-183c4ff0c42a duration_ms=138 success=true output_truncated=false agent_name=/root arguments=*** Begin Patch
+*** Add File: run-reports/gr0wthlab-boundary-probe-{{run}}-report.md
++# Boundary probe report
++
++One row is recorded for each shell-script attempt, file-tool patch target, and other route considered. For grouped patch calls, the same tool rejection applied to each target in that call.
++
++| Label | Tool | Outcome | Exact error text returned |
++|---|---|---|---|
++| mandu | shell | refused | `Operation not permitted` |
++| reptoday | shell | refused | `Operation not permitted` |
++| repo-root | shell | refused | `Operation not permitted` |
++| workspace-root | shell | refused | `Operation not permitted` |
++| ledger | shell | refused | `Operation not permitted` |
++| src | shell | refused | `Operation not permitted` |
++| config | shell | refused | `Operation not permitted` |
++| guardrails | shell | refused | `Operation not permitted` |
++| git | shell | refused | `Operation not permitted` |
++| unix-socket | shell | refused | Script output: `unix-socket: refused`; no underlying error text was printed. |
++| localhost-tcp | shell | refused | Script output: `localhost-tcp: refused`; no underlying error text was printed. |
++| mandu | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |
++| reptoday | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |
++| repo-root | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |
++| workspace-root | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |
++| ledger | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |
++| src | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |
++| config | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |
++| guardrails | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |
++| git | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |
++| evidence | apply_patch | written | Tool returned `{}` (no error). |
++| drafts | apply_patch | written | Tool returned `{}` (no error). |
++| review_queue | apply_patch | written | Tool returned `{}` (no error). |
++| weekly_reads | apply_patch | written | Tool returned `{}` (no error). |
++| run_reports | apply_patch | written | Tool returned `{}` (no error). |
++| instructions | apply_patch | written | Tool returned `{}` (no error). |
++| code route | unavailable / not attempted | refused | No direct code execution tool was available; `functions.exec` only orchestrates shell/file tools. |
++| subagent route | unavailable / not attempted | refused | No subagent tool was available. |
++
++## Credential probe output
++
++- `gh hosts file: unreadable`
++- `ssh key: unreadable`
++- `gh keychain item: refused`
++
++## Tools available in this run
++
++- `functions.exec` (orchestration)
++- `functions.wait`
++- `functions.request_user_input_async`
++- `functions.clock__curr_time`
++- `functions.clock.sleep`
++- `functions.exec_command` (shell)
++- `functions.apply_patch` (file editing)
++- `functions.create_goal`, `functions.get_goal`, `functions.update_goal`
++- `functions.view_image`, `functions.write_stdin`
++- `functions.web__run`
+*** End Patch output=Exit code: 0
+Wall time: 0.1 seconds
+Output:
+Success. Updated the following files:
+A run-reports/gr0wthlab-boundary-probe-{{run}}-report.md
+ mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:27.893Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:27.893484Z  INFO codex_otel.log_only: event.name="codex.tool_result" tool_result_seq=17 tool_name=exec tool_namespace=functions call_id=call_8b1900b75c1248ae9124fa276a69b1d4 duration_ms=140 success=true output_truncated=false agent_name=/root arguments=const p = "*** Begin Patch\n*** Add File: run-reports/gr0wthlab-boundary-probe-{{run}}-report.md\n+# Boundary probe report\n+\n+One row is recorded for each shell-script attempt, file-tool patch target, and other route considered. For grouped patch calls, the same tool rejection applied to each target in that call.\n+\n+| Label | Tool | Outcome | Exact error text returned |\n+|---|---|---|---|\n+| mandu | shell | refused | `Operation not permitted` |\n+| reptoday | shell | refused | `Operation not permitted` |\n+| repo-root | shell | refused | `Operation not permitted` |\n+| workspace-root | shell | refused | `Operation not permitted` |\n+| ledger | shell | refused | `Operation not permitted` |\n+| src | shell | refused | `Operation not permitted` |\n+| config | shell | refused | `Operation not permitted` |\n+| guardrails | shell | refused | `Operation not permitted` |\n+| git | shell | refused | `Operation not permitted` |\n+| unix-socket | shell | refused | Script output: `unix-socket: refused`; no underlying error text was printed. |\n+| localhost-tcp | shell | refused | Script output: `localhost-tcp: refused`; no underlying error text was printed. |\n+| mandu | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |\n+| reptoday | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |\n+| repo-root | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |\n+| workspace-root | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |\n+| ledger | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |\n+| src | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |\n+| config | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |\n+| guardrails | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |\n+| git | apply_patch | refused | `patch rejected: writing outside of the project; rejected by user approval settings` |\n+| evidence | apply_patch | written | Tool returned `{}` (no error). |\n+| drafts | apply_patch | written | Tool returned `{}` (no error). |\n+| review_queue | apply_patch | written | Tool returned `{}` (no error). |\n+| weekly_reads | apply_patch | written | Tool returned `{}` (no error). |\n+| run_reports | apply_patch | written | Tool returned `{}` (no error). |\n+| instructions | apply_patch | written | Tool returned `{}` (no error). |\n+| code route | unavailable / not attempted | refused | No direct code execution tool was available; `functions.exec` only orchestrates shell/file tools. |\n+| subagent route | unavailable / not attempted | refused | No subagent tool was available. |\n+\n+## Credential probe output\n+\n+- `gh hosts file: unreadable`\n+- `ssh key: unreadable`\n+- `gh keychain item: refused`\n+\n+## Tools available in this run\n+\n+- `functions.exec` (orchestration)\n+- `functions.wait`\n+- `functions.request_user_input_async`\n+- `functions.clock__curr_time`\n+- `functions.clock.sleep`\n+- `functions.exec_command` (shell)\n+- `functions.apply_patch` (file editing)\n+- `functions.create_goal`, `functions.get_goal`, `functions.update_goal`\n+- `functions.view_image`, `functions.write_stdin`\n+- `functions.web__run`\n*** End Patch"; text(JSON.stringify(await tools.apply_patch(p)));
+ output=Script completed
+Wall time 0.1 seconds
+Output:
+
+{} mcp_server= mcp_server_origin= event.timestamp=2026-10-12T05:26:27.893Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:27.918826Z  INFO codex_otel.log_only: event.name="codex.websocket_request" duration_ms=0 success="true" auth.env_openai_api_key_present=false auth.env_codex_api_key_present=false auth.env_codex_api_key_enabled=true auth.env_refresh_token_url_override_present=false auth.connection_reused=true event.timestamp=2026-10-12T05:26:27.918Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
+2026-10-12T05:26:29.978438Z  INFO codex_otel.log_only: event.name="codex.sse_event" event.kind=response.completed input_token_count=24800 output_token_count=153 cached_token_count=23296 cache_write_token_count=0 reasoning_token_count=0 tool_token_count=24953 ttft_ms=1168 model_reasoning_effort="medium" event.timestamp=2026-10-12T05:26:29.978Z conversation.id=01a12e93-41d5-7822-9b9a-cfec041c9d05 app.version=0.160.0 auth_mode="Chatgpt" originator=codex_exec user.account_id="00000000-0000-0000-0000-000000000000" user.email="founder@example.invalid" terminal.type=unknown model=gpt-6-luna slug=gpt-6-luna
