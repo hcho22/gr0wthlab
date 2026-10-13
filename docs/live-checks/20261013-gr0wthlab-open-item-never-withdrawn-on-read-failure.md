@@ -1,0 +1,53 @@
+# An open item is never taken back because something could not be read (US-ME07, US-ME08)
+
+The launcher withdraws, closes, or supersedes an open Review Queue item only on what a record it could read says: when a read fails, the item stands under its identifier, its workflow's output reads incomplete with the real reason, and the run's notice names the item (`queue.stands`).
+This file holds every round of that change's live checks.
+
+## Re-check after the change and its merge with main
+
+This work changes launcher code in every workflow that takes an open item back: `queue.py`, `posts.py`, `drafts.py`, `codebase.py`, `filming.py`, `footage.py`, `messages.py`, `beta.py`, `beta_drafts.py`, `dispatch.py`, `cycle.py`, and `report.py`.
+It changes nothing in the permission profile, the Codex command, the fetch policy, the Product registry, or the exchange format, which stays version 6.
+The branch was brought up to `main` at `eb1bbbd` with one merge commit, `dca38dc`, whose two conflicts, in `filming.py` and `report.py`, were resolved by keeping both sides.
+One more commit, `e25eb75`, changes four lines of the US-ME02 spike note and no code.
+On `e25eb7521b8576e376a73e4c3a54482e363bbd32` the full unit suite passed under `/usr/bin/python3`, 1045 tests, as did ruff 0.15.20.
+
+Every check below ran on 2026-10-12, Mac local time (PDT), with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort.
+A run identifier carries its time in UTC, so each begins `20261013`.
+
+### The boundary
+
+Both checks ran from this work's linked worktree at `e25eb7521b8576e376a73e4c3a54482e363bbd32`, whose `src/` is tree `777368390cb275610d4dcb2a683ef7d43ae25c1d` and whose `config/` is tree `bfa79f76f468035578efd8d2c901b92c40c3adf9`, with `git status` empty before the preflight and after the check, against Mandu and the Product checkouts as they are.
+The configuration fingerprint `show-config` prints there is `32d7295b6d2f3613c44353b79ec3940bd15d2ed461ed26d29314a20584d8ed43`.
+Their logs went to a folder in the Mac's temporary directory, named with `GR0WTHLAB_LOG_DIR`.
+
+- `src/bin/gr0wthlab preflight`, started at 21:38, passed: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, started at 21:38, passed at its first attempt, as `20261013T043825Z-on-demand-3c24`: 32 steps to prove, nine of nine file-tool targets refused in a patch of their own, eleven kernel denials naming the run's sentinels or the check's listeners, twelve of twelve permitted sentinels, no sentinel escaped, no local connection, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, both a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed since the snapshot.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the first on-demand run below and after the boundary check; the on-demand runs read none of them.
+
+### The change itself, through the launcher on demand
+
+Before those two checks, from 21:20 to 21:26, the change was seen live in three runs one after another, each started with `src/bin/gr0wthlab run` from a throwaway clone of `e25eb7521b8576e376a73e4c3a54482e363bbd32` in the Mac's temporary folder, network off for the agent as always.
+Its inputs were throwaway ones, set with the `GR0WTHLAB_MANDU_DIR`, `GR0WTHLAB_REPTODAY_DIR`, `GR0WTHLAB_IMMERSE_DIR`, `GR0WTHLAB_EXCHANGE_DIR`, and `GR0WTHLAB_LOG_DIR` overrides: the post-Draft example set's synthetic package as Mandu, its synthetic Product code as a git checkout, an empty folder for the other Product, and an empty exchange folder.
+In the clone's configuration no network source was listed, no outreach message was due, and no Product filmed; nothing else differed from the commit.
+Its configuration fingerprint, `31649dfb29419ac84dfb653693efedb6efe278d65f73ca0bbb02452c725fe0ef`, differs from the one above because its locations do.
+The first run used the real task definition.
+The other two used a throwaway task definition that only re-runs the checks, so the agent changed no file; what changed between runs was changed by hand.
+
+| Run | What was done by hand before it | What it showed |
+| --- | --- | --- |
+| `20261013T042050Z-on-demand-b6f1` | Nothing | The real task definition: the agent wrote the seven post Drafts in 2 min 57 s; three passed and were queued, `20261012-post-w1-day-01`, `-day-03`, and `-day-04`, and four were blocked; Post Drafts read complete |
+| `20261013T042401Z-on-demand-f829` | In the synthetic Product checkout, the git object of `Engine/ConsistencyScore.swift`, the one file day 3's claim cites, moved out of `.git/objects`, so that `git cat-file` on it exits non-zero while the branch still resolves to its commit | Day 3's row read `kept`, with "not checked again, since git could not read `Engine/ConsistencyScore.swift` in RepToday's code; the open item stands"; the three posts' queue entries were the same as after the first run, and no item was closed; Post Drafts read incomplete with that reason; the run's notice, `20261012-notice-run-problems-2`, listed `20261012-post-w1-day-03` among the open items left exactly as they are, with the same reason; days 1 and 4, whose claims cite other files, read "its Draft is unchanged and passes"; the Product's repository still read as read |
+| `20261013T042454Z-on-demand-29e1` | The object put back | All three rows read "its Draft is unchanged and passes"; the three posts' queue entries were still the same as after the first run, nothing was closed, and no post was queued under a new identifier; Post Drafts read complete |
+
+On `main` the second run's state withdraws the open post as "there is no file" with Post Drafts complete, and the third queues it again under a new identifier; a unit test holds that shape (`test_an_open_post_stands_under_its_id_while_git_cannot_read_the_file_its_claim_cites`).
+The three runs' reports give their cost as about $0.026, $0.005, and $0.004 at API prices.
+
+### What this re-check did not exercise
+
+Only one of the fixed sites was run live: git's read of one file a post's claim cites.
+The others stand on the unit tests, each a whole run with a stand-in agent: a Draft that cannot be read (a post, a message, a reply, a recruiting Draft), the Draft of an A/B pair's other leg, an edit record, a footage file an edit record names, the ledger's record of a video, a package file a recruiting Draft cites, the Founder's Beta Cohort reports, a Dispatch request's item file, an item that supersedes an open one whose file cannot be read, and the filming plan while the kit cannot be read.
+Where this rule meets the video-file check, a post whose finished file is gone while its Draft cannot be read, was not run live and stands on a unit test.
+No real withdrawal was made live; each stands on a unit test.
+The failed read was made in a synthetic Product checkout, never in Mandu or a real Product checkout, which no check here may change.
+No weekly run was made on a schedule, and Mandu's side was not shown the notice.
