@@ -146,3 +146,69 @@ Each run cost one or two cents at API prices.
 A finished file changed in place or one that cannot be read, an approved day, an A/B pair, a slot change, and missing video tooling were not run live on this commit and stand on the unit tests and on the rounds above.
 The agent's first Draft of day 1 passed and its rewrite in the second run did not, so the post that shows the video came from the example set's Draft, put in place by hand.
 No weekly run was made on a schedule, the Founder's real footage does not exist yet, and Mandu's side was not shown the notices.
+
+## Re-check after the line for a post that left the queue with nothing queued in its place
+
+A review of the change found one line of the run report and the notice that said more than a record shows, and one fix in `filming.py` corrects it (`Filming.settle`).
+
+- An open post whose video's finished file is lost is settled to give way to the same post without a video, and that post is checked against the item format once more as it is queued, with the reason it gives for having no video.
+  When it fails there, the open post is withdrawn and nothing is queued for the day.
+  The line that names such a post under `Posts that lost the video they named:`, and in the notice, ended by saying that nothing is asked in its place since the Founder already decided this day's copy, which no record shows.
+  It now ends `Nothing is asked in its place, since its Draft no longer passes.`, the reason the post section's own line gives.
+- The line names a decision of the Founder's only for the two results that come from one: a day's copy the Founder approved, and a Draft the Founder rejected.
+  Those two lines read word for word as before.
+- Nothing about when a post is replaced, stands, or leaves the queue changed, and `codex.py`, `boundary.py`, `launcher.py`, the probe, `runtime.json`, `fetch.json`, and `config/products.json` are unchanged.
+
+On these files ruff 0.15.20 passed, and so did the `tests.test_filming` module under `/usr/bin/python3`, 95 tests with none skipped; the full unit suite was not run again.
+The module holds one new test of that case, which failed on `filming.py` as it is at `045b1a1` and passes on it as it now is.
+
+All of this round ran on 2026-10-12, Mac local time, 19:39 to 19:49 PDT, with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort, on the files of the linked worktree this review ran in, before the commit that records them here was made.
+That worktree's HEAD was `045b1a1b2e75303ff57dc29da20459e5eab0b07d`, with `src/` at tree `d60c7d6a50d99f77cc6f04a3e1d8d760f314cebc` and `config/` at tree `bfa79f76f468035578efd8d2c901b92c40c3adf9`, the tree `config/` has at `045b1a1`.
+
+### Both checks
+
+From that worktree, against Mandu and the Product checkouts as they are, each started under `caffeinate -i -s -m`, with their logs sent to a folder in the Mac's temporary directory, named with `GR0WTHLAB_LOG_DIR`.
+The worktree's `git status` listed the same two changed files, `src/gr0wthlab/filming.py` and `src/tests/test_filming.py`, before the preflight and after the check, `src/` was at the same tree after it, and this section was written after both.
+`show-config` printed the fingerprint `b6d21e615aa50e7efec9686364db55291ae821b6aab1548c8dbd5d5cc0f3f3f9`, which differs from the ones above: the fingerprint covers the sandbox policy, and that policy names the path of the worktree a check runs from.
+
+- `src/bin/gr0wthlab preflight` passed: six areas writable, 14 paths refused, no breach, and neither of the two listed hosts reached from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check` passed at its first attempt, as `20261013T024040Z-on-demand-9da9`, whose identifier carries the time in UTC: 32 steps to prove, nine of nine file-tool targets refused in a patch of their own, eleven kernel denials naming the run's sentinels or the check's listeners, twelve of twelve permitted sentinels, no sentinel escaped, no local connection, three sandbox network targets refused after the control reached its listener, two requests from the launcher's client, both a GET, to the two listed hosts, whose `robots.txt` it read, an unlisted address refused, and no change since the snapshot.
+  It replaces `20261013T022115Z-on-demand-b323` above, which passed on the launcher as it then was.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the preflight and after the check.
+The `tests.test_filming` module and the runs below were going on the same Mac while the boundary check ran, the module from the same worktree.
+
+### The line before and after the fix
+
+The line was reproduced and then seen live through `src/bin/gr0wthlab run` on demand, network off, with ffmpeg 7.1.1 and the repository's no-model stand-in for the agent, which wrote the filming example set's Draft and edit record for day 1.
+Each checkout was a throwaway one in the Mac's temporary folder, with the inputs of the rounds above: the synthetic kit cut down to days 1 and 8, the synthetic Product checkout, one stand-in clip of ffmpeg's test pattern in a footage place set with `GR0WTHLAB_FOOTAGE_DIR`, a simulated approval of the filming plan, and no network source listed.
+No checkout held a decision on any post.
+
+- Checkout A held `045b1a1`, the code before this fix, with `src/` at tree `fff1145291f46ffc143559fa170340a8c30a4308`; its fingerprint was `e192599823c2c4408d19a945e9d3006f10917995bfdcf66785d7e49824cface4`.
+- Checkout B held this round's two changed files over `045b1a1`, and also eight files the boundary check had written under the worktree's `workspace/` by then, copied from there while that check was running; its fingerprint was `881f5a2f371b365dd938ffbd618fa58ce35827e31191b2a8f69b287782c0087d`.
+  It was not what this round's files are, so it was made again as checkout C.
+- Checkout C held this round's two changed files over `045b1a1` and nothing else, with `src/` at the tree the checks above ran on; its fingerprint was `c4bbb0300ab8e7e79513efbb0723459458bed49a6f356278a4c1dcc5fafcc976`.
+
+The same five runs were made in each, every one ending with exit code 0.
+
+| What was done by hand before the run | Run in A | Run in B | Run in C | What it showed in all three |
+| --- | --- | --- | --- | --- |
+| Nothing | `20261013T024123Z-on-demand-9544` | `20261013T024124Z-on-demand-6ee0` | `20261013T024236Z-on-demand-6064` | The filming plan filed |
+| The plan approved | `20261013T024126Z-on-demand-fa8a` | `20261013T024126Z-on-demand-91a3` | `20261013T024239Z-on-demand-646c` | The launcher rendered `assets/window-1/day-01-84af9c001ff9.mp4`, and `20261012-post-w1-day-01` shows it |
+| The clip moved out of the footage place, and the finished file deleted | `20261013T024134Z-on-demand-1d1a` | `20261013T024134Z-on-demand-8536` | `20261013T024244Z-on-demand-a0ee` | `20261012-post-w1-day-01-2` took the open post's place with no video; its item is 3949 characters as the item format counts them |
+| The clip put back | `20261013T024136Z-on-demand-c040` | `20261013T024136Z-on-demand-1f01` | `20261013T024246Z-on-demand-6444` | The video was cut again to the same path, and `20261012-post-w1-day-01-3` shows it |
+| 61 lines, 8059 characters in the item, added to the checklist of the throwaway Mandu's synthetic calendar, which every post item lists; the clip moved out, and the finished file deleted | `20261013T024142Z-on-demand-0f04` | `20261013T024142Z-on-demand-5a2a` | `20261013T024250Z-on-demand-5410` | Day 1's row of the post table read blocked, with one failing check, `the item is 12010 characters; keep it under 12000`, and `20261012-post-w1-day-01-3` withdrawn; no post was open for day 1 |
+
+What the last run of each said of the withdrawn post, in one line of its report and one line of its notice, the same line in both:
+
+- In A, the line ended `Nothing is asked in its place, since the Founder already decided this day's copy, and the video comes back for approval once it is cut again.`
+- In B and in C, the line read `Day 1's post 20261012-post-w1-day-01-3 left the queue: no footage yet for shot d01-s1, and the finished file assets/window-1/day-01-84af9c001ff9.mp4 of the video 20261012-post-w1-day-01-3 named is gone. Nothing is asked in its place, since its Draft no longer passes.`, with the launcher's backticks around the post and the file left out here, and neither the report nor the notice held the words `already decided this day's copy`.
+- In all three, the notice's line from the post section read that the open post `20261012-post-w1-day-01-3` for day 1 is withdrawn, since its Draft no longer passes.
+
+### What this round did not exercise
+
+The stand-in wrote every file of the fifteen runs, so no model was called outside the boundary check.
+The two lines that name a decision, for a copy the Founder approved and for a Draft the Founder rejected, were not run live on these files and stand on the two unit tests of them, which are unchanged.
+The item grew past the limit through lines added by hand to a synthetic calendar; no Product's package was read.
+A finished file changed in place or one that cannot be read, an A/B pair, a slot change, and missing video tooling were not run live on these files and stand on the unit tests and on the rounds above.
+The full unit suite was not run in this round, no weekly run was made on a schedule, the Founder's real footage does not exist yet, and Mandu's side was not shown the notices.

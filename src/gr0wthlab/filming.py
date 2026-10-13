@@ -712,9 +712,12 @@ class Filming:
                     f" Approving it approves the copy alone, and {later}."
                 )
             elif result.withdrawn == post:
+                if result.status in (posts.APPROVED_BEFORE, posts.REPEATED):
+                    since = f"the Founder already decided this day's copy, and {later}"
+                else:
+                    since = "its Draft no longer passes"
                 self.replaced.append(
-                    f"Day {number}'s post `{post}` left the queue: {why}. Nothing is asked in its place, since the"
-                    f" Founder already decided this day's copy, and {later}."
+                    f"Day {number}'s post `{post}` left the queue: {why}. Nothing is asked in its place, since {since}."
                 )
         for number, day in self.days.items():
             result = taken.get(number)

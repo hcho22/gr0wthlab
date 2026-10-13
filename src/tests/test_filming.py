@@ -2645,6 +2645,68 @@ class LostVideoTest(FilmingRunCase):
             f"| 1 | P01 / AB-1 leg A | not queued again | `{first['id']}`; the Founder rejected", self.report()
         )
 
+    def checklist_grown(self, by):
+        """Add lines to the calendar's own checklist, which every post item lists, so that each post item is that
+        many characters longer."""
+        calendar = self.mandu / CALENDAR
+        lines = calendar.read_text(encoding="utf-8").splitlines()
+        self.assertTrue(lines[-1].startswith("- "), lines[-1])
+        while by:
+            lead = len(f"  Line {len(lines) + 1}: \n")
+            length = by - lead if by <= lead + 240 else 120
+            self.assertLess(0, length)
+            lines.append("- " + ("steady " * length)[: length - 1] + "y")
+            by -= lead + length
+        calendar.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def test_a_post_that_loses_its_video_and_is_blocked_without_it_leaves_the_queue_and_no_decision_is_claimed(self):
+        first = self.day_1()
+        clip, asset = self.footage / "window-1" / "d01-s1.mov", self.ledger() / first["asset"]
+        held, limit = clip.read_bytes(), exchange.MAX_ITEM_CHARS
+        # The item that says where the lost file stands is measured as a run queues it, and the video is cut again.
+        clip.unlink()
+        asset.unlink()
+        self.run_ok()
+        bare = self.posts_open()[1]
+        item = exchange.check_item(self.item(bare), ["RepToday", "Immerse"], published=True).item
+        size = len(exchange.render_content("post", item.ask, item.body, item.touches, item.evidence))
+        clip.write_bytes(held)
+        self.run_ok()
+        post = self.posts_open()[1]
+        self.assertEqual((post["supersedes"], post["asset"]), (bare["id"], first["asset"]))
+        # The kit's own checklist then grows until that item, naming this post, is ten characters over the limit,
+        # while the item that says only why the video was not cut still fits: the Draft passes until the post is
+        # settled to give way, and the post that would take its place is blocked as it is queued.
+        lost = f"{self.AWAY}, and the finished file `{post['asset']}` of the video `{post['id']}` named is gone"
+        self.assertLess(10, len(lost) - len(self.AWAY))
+        self.checklist_grown(limit + 10 - size - len(post["id"]) + len(first["id"]))
+        clip.unlink()
+        asset.unlink()
+        queue = self.run_ok()
+        self.assertEqual(self.posts_open(), {})
+        closed = next(entry for entry in queue["closed"] if entry["id"] == post["id"])
+        self.assertEqual((closed["status"], closed["withdrawn"]), ("superseded", True))
+        self.assertEqual(closed["superseded_by"], max(e["id"] for e in queue["open"] if e["kind"] == "notice"))
+        report, notice = self.report(), self.notice()
+        self.assertIn(
+            f"| 1 | P01 / AB-1 leg A | blocked | 1 failing check, listed below; the open `{post['id']}` was"
+            " withdrawn |",
+            report,
+        )
+        self.assertIn(f"- item: the item is {limit + 10} characters; keep it under {limit}", report)
+        self.assertIn(
+            f"- The open post `{post['id']}` for day 1 is withdrawn, since its Draft no longer passes.", notice
+        )
+        # The line that names the lost video gives that reason and no other: no record shows a decision.
+        told = (
+            f"- Day 1's post `{post['id']}` left the queue: {lost}. Nothing is asked in its place, since its Draft no"
+            " longer passes."
+        )
+        self.assertIn("Posts that lost the video they named:\n\n" + told, report)
+        for text in (report, notice):
+            self.assertEqual([line for line in text.splitlines() if "left the queue" in line], [told])
+            self.assertNotIn("keeps the video it shows", text)
+
     def test_one_leg_that_loses_its_video_shows_none_and_is_compared_with_the_other_leg_once_it_is_cut_again(self):
         drafts = self.one_week_pair()
         self.run_ok({**drafts, **self.both(DAY_1)})
