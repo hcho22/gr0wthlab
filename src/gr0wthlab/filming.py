@@ -4,8 +4,9 @@ from the footage the Founder then drops in the footage place.
 Before the agent starts, the launcher reads the shot lists from the kit (shots.py), groups them into the fewest
 sittings, and files the filming plan as one Review Queue item under an identifier that never changes. The plan is
 never asked again once the Founder decided it, and a new one replaces it only when the kit changes what must be
-filmed. The launcher then lists the footage place, read-only, and measures each file, since the agent cannot watch
-video: the agent learns each file's name and measured facts from the brief, never the file.
+filmed. The launcher then lists the window's footage folder in the footage place, read-only, and measures each file,
+since the agent cannot watch video: the agent learns each file's name and measured facts from the brief, never the
+file.
 
 The agent's part is an edit record per calendar day (edits.py): which source ranges of which files make up the day's
 video. Once the agent has finished, the launcher checks each record against the shot list, renders it with the text

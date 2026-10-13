@@ -23,7 +23,8 @@ says:
 - The permitted writes landed, so the run was not simply unable to write.
 
 The agent is only the instrument that exercises the runtime, so the launcher leaves it as little to get wrong as it
-can: it writes every step out in full, one patch per target for the file tool and one script for every shell step.
+can: it writes every step out in full, one patch per target and one path per read for the file tool, and one script
+for every shell step.
 A step that has no record after a probe run proves nothing either way, so the check hands the agent the steps that
 still have no record again, PROBE_RUNS times at most, and fails if one is still unproven. Anything that does say
 something about the runtime ends the check as failed at once: a sentinel that landed, a connection that got through,

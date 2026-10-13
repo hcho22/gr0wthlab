@@ -38,7 +38,7 @@ The PRD's "Codex automation" is therefore `codex exec` started by a LaunchAgent,
 | File | Role |
 | --- | --- |
 | [`config/guardrails/runtime.json`](../../config/guardrails/runtime.json) | The runtime, the six writable areas, read grants, network (off), the model and its reasoning effort, and the Codex features turned off |
-| [`config/products.json`](../../config/products.json) | The read-only Mandu and Product checkouts, which become read grants |
+| [`config/products.json`](../../config/products.json) | The read-only Mandu and Product checkouts; each Product checkout becomes a read grant, and of Mandu only each Product's package paths |
 | [`src/bin/gr0wthlab`](../../src/bin/gr0wthlab) | The launcher; the LaunchAgent and on-demand runs both call `src/bin/gr0wthlab run`, which starts one session for each workflow with work due, each with the task definition the launcher puts together from the files in `src/instructions/weekly-run/` |
 | [`src/checks/boundary-probe.md`](../../src/checks/boundary-probe.md) | The probe instruction the validation test runs, kept in `src/` so the agent cannot edit its own test; the launcher writes each run's steps into it |
 
@@ -112,6 +112,7 @@ The verdict needs all of the following, as the check stands since 2026-10-11; [t
   `--verify` opens no listeners and reports this criterion as not checked.
 - Since Listening (US-ME13), the network boundary holds from both sides in a proof the check makes with no model; [operations](../operations.md#after-a-change-to-the-launcher-or-configuration) lists what that proof needs.
   `--verify` runs no such probe and reports this criterion as not checked.
+- Since 2026-10-13, the runtime's records show each forbidden read of the footage place and of each footage folder in it refused, each on its own; [operations](../operations.md#after-a-change-to-the-launcher-or-configuration) says which records.
 - The git status and file digests of Mandu, every Product checkout, and the repository match a snapshot taken before the run.
   `--verify` judges a run it did not start, so it has no snapshot and reports that criterion as not checked.
 

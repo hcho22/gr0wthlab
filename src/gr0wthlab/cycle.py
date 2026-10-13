@@ -3,7 +3,7 @@
 Order: bring the production clone up to origin's main; snapshot the Go-To-Market Package; take in the Founder's
 decisions from Mandu; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests
 that need filing; plan the post Drafts from the 14-day kit (posts.prepare); file the filming plan and list and measure
-the footage place (filming.prepare); read the Founder's Beta Build record and, only once it exists, plan the Beta
+the footage (filming.prepare); read the Founder's Beta Build record and, only once it exists, plan the Beta
 Cohort's next invitation batch (beta.prepare); read the fixed list of network sources into one snapshot (fetch.Client,
 the launcher's only way onto the network), which is working data removed when the run ends, and plan Listening from it
 and outreach from the Founder's records; decide which workflows have work for the agent, and for each of those, one
