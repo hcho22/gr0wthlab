@@ -36,12 +36,12 @@ The PRD's "Codex automation" is therefore `codex exec` started by a LaunchAgent,
 | --- | --- |
 | [`config/guardrails/runtime.json`](../../config/guardrails/runtime.json) | The runtime, the six writable areas, read grants, network (off), the model and its reasoning effort, and the Codex features turned off |
 | [`config/products.json`](../../config/products.json) | The read-only Mandu and Product checkouts, which become read grants |
-| [`src/bin/gr0wthlab`](../../src/bin/gr0wthlab) | The launcher; the LaunchAgent and on-demand runs both call `src/bin/gr0wthlab run`, whose task definition is a file under `src/instructions/` |
+| [`src/bin/gr0wthlab`](../../src/bin/gr0wthlab) | The launcher; the LaunchAgent and on-demand runs both call `src/bin/gr0wthlab run`, which starts one session for each workflow with work due, each with the task definition the launcher puts together from the files in `src/instructions/weekly-run/` |
 | [`src/checks/boundary-probe.md`](../../src/checks/boundary-probe.md) | The throwaway instruction the validation test runs, kept in `src/` so the agent cannot edit its own test |
 
 The launcher fails closed.
 It refuses to start if `runtime.json` names anything other than the six areas under `workspace/` or turns network on, if a registry location overlaps the repository, or if Codex is missing.
-For each run it starts `codex exec` with:
+For each session of a run, and for the boundary check's probe, it starts `codex exec` with:
 
 - `--cd <repository>/workspace`, `--ignore-user-config`, `--ignore-rules`, `--ephemeral`, `--json`, and the model from `runtime.json` (`gpt-6-luna`) with its reasoning effort (`-c model_reasoning_effort="high"`, since 2026-10-11).
 - `-c default_permissions="gr0wthlab"`, the profile below, built by `filesystem_policy` in [`src/gr0wthlab/boundary.py`](../../src/gr0wthlab/boundary.py), and `-c permissions.gr0wthlab.network.enabled=false`.
@@ -62,15 +62,17 @@ For each run it starts `codex exec` with:
 
 Codex keeps `.git`, `.codex`, `.agents`, and `.aws` read-only at the top of each writable area, so the agent cannot plant a Codex config or a git hook there.
 
-Before the agent starts, every run proves the profile with no model.
+Before each session's agent starts, a run proves the profile with no model.
 The launcher runs `codex sandbox` with the same `-c` overrides and an empty Codex home, so no user configuration can change the policy it sees.
 It tries to create an empty, uniquely named file in each area, which must succeed and is deleted, and in each forbidden place, which must fail.
 The forbidden places are the repository root, `workspace/`, `src/`, `config/`, `config/guardrails/`, `/private/tmp`, `/private/var/tmp`, both git directories, the `HOME`, `TMPDIR`, and `CODEX_HOME` directories the launcher gives the agent, and the empty Codex home the probe itself runs with.
-Any other outcome stops the run before the agent sees its instruction.
+Any other outcome keeps that session's agent from starting, so it never sees its instruction.
+The run marks that session's workflow incomplete and goes on to the next session, whose own proof comes first; the boundary check, which has one agent, stops there.
 Mandu and the Products are left out of this per-run check so a routine run never tries to write in them; the same deny-by-default rule covers them, and the boundary check below tests them.
 
-The launcher records a SHA-256 fingerprint of the Codex command line, environment, and Codex version in each run record under `~/Library/Logs/gr0wthlab` (`GR0WTHLAB_LOG_DIR` overrides it).
-Two runs with the same fingerprint started the agent with the same configuration.
+The launcher records a SHA-256 fingerprint of the Codex command line, environment, and Codex version in each session's record under `~/Library/Logs/gr0wthlab` (`GR0WTHLAB_LOG_DIR` overrides it), `<run id>.<workflow>.json`.
+The fingerprint is taken of that session's own command and leaves out only the path of its closing message, the one thing that differs between two sessions' commands.
+Two sessions with the same fingerprint, in one run or in two, started the agent with the same configuration, and the run report says whether every session of a run had the same one.
 
 ## Reads without wider writes, and no network
 
@@ -1606,7 +1608,7 @@ Without it the longest a run can take would grow by one session limit with every
 A session starts only while the run has time left, and gets its own limit or what is left of the run's, whichever is less; a session the bound leaves no time for is not started, and its workflow is marked incomplete for that reason.
 The time counted is each session's own, as its limit counts it, the Mac's sleep included.
 
-The numbers are set from the measurement below, not from this design.
+The numbers are set from [the measurement below](#the-limits-set-from-the-measurement), not from this design.
 
 ### A run happens when the Mac is awake, across several sessions
 
@@ -1639,6 +1641,131 @@ The permission profile, the six writable areas, what the sandbox reads, and the 
 Every check of an item, a Draft, an edit record, a quote, a message, and a code.
 How Founder records are read.
 The Mandu exchange, version 6.
+
+### The weekly run timed with one session per workflow
+
+One whole weekly run was made with the real agent at high effort on the launcher this change leaves, on 2026-10-12, the Mac's local date, with Codex CLI 0.160.0 and `gpt-6-luna`.
+It was made once.
+
+It ran in a throwaway production clone of this branch, with a throwaway remote of its own, on the Mac's real clocks and its own answer about its power state, with the real ffmpeg and the launcher's own client on the real network.
+The clone's configuration was the committed one with nothing changed, the run bound at the 5400 seconds it stood at before this measurement set it.
+The checkouts, the exchange folder, the Waitlist view, the footage place, and the log folder were the lab's own, named through the environment variables the Product registry and the launcher read.
+
+- Mandu was a copy of the real checkout's RepToday package and launch checklist as they stood, 363 files, with every file and folder made read-only.
+  So the run read the real package: 25 files in the snapshot, where the ten runs of 2026-10-11 read 24.
+- RepToday was a clone of the real checkout at `de0355d`, and Immerse an empty folder.
+- The Waitlist view held 12 made-up entries, and the footage place 13 video files, 1.3 GB in all, which the Mac's ffmpeg made from its own test pattern: at least one for every shot of days 1 to 7.
+
+The week was set up first, with no model: two runs on demand with a stand-in for Codex that writes what a test tells it to.
+
+- The first filed the filming plan and the Waitlist Dispatch request, and its stand-in wrote one package-change proposal, which was queued.
+- Simulated decision records then approved the plan and rejected that proposal with a reason, and a Beta Build record with recruiting open was put in the exchange folder.
+- The second took both decisions in, measured the footage, and counted the Waitlist; its stand-in wrote nothing, so no Draft, edit record, or message stood in `workspace/` afterwards and the rejection reason had no code.
+
+Each of the two also let the launcher's own client make its requests, a GET for the `robots.txt` of `www.reddit.com` and of `itunes.apple.com`.
+The first disallows every address for automated readers and the second every review feed, so no thread or review was asked for.
+The timed run made the same two requests and no other.
+
+The timed run was `src/bin/gr0wthlab run --trigger on-demand`, started on Monday 2026-10-12 at 16:23 local time, as run `20261012T232337Z-on-demand-7a32`.
+Its own pre-run sync fast-forwarded the clone to the commit under test and restarted the launcher on it.
+The launcher package, the task definitions, and the configuration it ran were tree for tree those of this branch at `c4d98d2`.
+The window's first sitting is not set in the committed configuration, so the run prepared days 1 to 7 as the first batch.
+
+What the launcher found due, and what it started:
+
+| Session | Due in this run |
+| --- | --- |
+| Package review | 25 package files, none changed since the run before |
+| Post Drafts | Days 1 to 7, none with a Draft in place |
+| Filming | Days 1 to 7, all seven marked ready, from the 13 footage files |
+| Beta Cohort recruiting | The invitation, for a batch of 8 entries, and the Waitlist ask |
+| Listening | No session: no thread or review could be read |
+| Outreach | The personal-network ask and a first message to each of the three creators; no follow-up was due |
+| Rejection reasons | One rejection reason with no code |
+
+How each session ended, with the launcher's own counts of that session alone:
+
+| Session | How it ended | Agent time, of its 30 min limit | Cost | Input tokens (cached), output tokens | Package files read | Other counts | Agent's own word |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Package review | by itself, exit code 0 | 3 min 36 s (216.5 s), 12 percent | $0.048 | 2,546,269 (2,402,560), 19,536 | 19 of 25 | 4 proposals it wrote to `incoming/` queued | `Session: complete` |
+| Post Drafts | by itself, exit code 0 | 3 min 6 s (185.6 s), 10 percent | $0.035 | 1,407,367 (1,295,104), 20,940 | 13 of 18 | 7 of 7 Draft claims name a code location, in the 7 of 7 due Drafts it wrote; 1 proposal queued | `Session: complete` |
+| Filming | by itself, exit code 0 | 56 s (56.1 s), 3 percent | $0.008 | 276,339 (244,736), 4,159 | none listed | nothing the launcher counts | `Session: complete` |
+| Beta Cohort recruiting | by itself, exit code 0 | 42 s (42.1 s), 2 percent | $0.009 | 297,392 (247,040), 3,309 | 7 of 7 | none | `Session: complete` |
+| Outreach | by itself, exit code 0 | 1 min 11 s (71.2 s), 4 percent | $0.015 | 661,144 (602,880), 6,731 | 5 of 7 | none | `Session: complete` |
+| Rejection reasons | by itself, exit code 0 | 1 min 22 s (82.3 s), 5 percent | $0.006 | 200,579 (168,192), 2,483 | none listed | 0 proposals queued | `Session: complete` |
+| All six | 6 ran of the 6 with work due | 10 min 54 s (653.8 s) | $0.121 | 5,389,090 (4,960,512), 57,158 | | 5 proposals queued | |
+
+The run ended with exit code 0 and no launcher problem, 664 seconds after it started, so everything the launcher did around the six sessions took about 10 seconds; the Mac was awake throughout.
+The boundary preflight passed before each of the six sessions, each time refusing 13 paths, allowing the six areas, and reaching neither listed host from inside the sandbox, and each session's record holds the same configuration fingerprint.
+
+What the launcher made of the sessions' files, in its one take-in after the last:
+
+- The five proposals were queued and nothing was set aside.
+- All seven post Drafts were blocked: each by the package's open trademark line, which blocks every post today, and four of them by a brand rule as well.
+  No video was cut, since a video is cut only from a Draft that passes, so the seven edit records the Filming session wrote were left unchecked and the real ffmpeg rendered nothing.
+- The invitation, with its batch of 8 entries, and the Waitlist ask were queued.
+- The personal-network ask and the three creator messages were queued.
+- The one rejection reason was coded, as an execution reason, so it needed no proposal.
+- One notice was queued, for the sources that could not be read and the blocked Drafts.
+
+The clone was left with a clean git status and its records pushed to its own remote.
+
+Beside the single session's measurements above:
+
+| What was measured | Sessions | Package | Work due | Agent time | Cost |
+| --- | --- | --- | --- | --- | --- |
+| Ten runs on 2026-10-11 | one | real, 24 files | the review and seven post Drafts | 283 to 1,122 s, median 646 | $0.056 to $0.158, $0.099 on average |
+| Run `3205` on 2026-10-12 | one | synthetic, 18 short files | the review, seven post Drafts, seven edit records, both recruiting Drafts, four messages | 275 s | $0.038 |
+| Run `7a32`, the review and post Drafts sessions | two | real, 25 files | the review and seven post Drafts | 402 s | $0.083 |
+| Run `7a32`, the other four sessions | four | real, 25 files | seven edit records, both recruiting Drafts, four messages, one rejection code | 252 s | $0.038 |
+| Run `7a32`, all six | six | real, 25 files | all of the above | 654 s | $0.121 |
+
+What this one run shows:
+
+- The sessions together did not take or cost materially more than the single session did, on the readings there are.
+  The two sessions that do what the ten runs did took 402 seconds, inside the ten's range and under their median, at $0.083 against their $0.099 on average.
+  The whole run, with four more workflows' work in it than those ten carried, took 654 seconds against their median of 646 and cost $0.121, inside their range and about a fifth above their average.
+  Starting six sessions did not multiply what the model was sent: the run's 5.4 million input tokens, 92 percent of them cached, are fewer than the 5.9 million of the single session of run `000d` above, which took 8 min 32 s.
+- No session came near its limit: the longest took 12 percent of it.
+- The four sessions that the review and the post Drafts no longer wait for took 42 to 82 seconds each.
+- What the launcher does around the sessions, with a preflight before each, took about 10 seconds of the run.
+
+What it does not show:
+
+- A like-for-like comparison.
+  No single session was ever timed on the real package with this whole week due, so the comparison is against runs that carried less work or read a far smaller package.
+- More than one reading.
+  It is one run, on one day, on a Mac that other work was using throughout, so each time is an upper reading and none is a rate.
+- Listening with anything to read.
+  That session did not run, and its quote records, proposed Angles and Hooks, and reply Drafts are the part of a week no measurement here has timed.
+- A video cut from an edit record, since no Draft passed.
+  Run `3205` above shows that on the real ffmpeg, for the single session.
+- That splitting the work made any session more thorough.
+  The Package review session read 19 of its 25 files and the Post Drafts session 13 of its 18, and both said `Session: complete`; the ten single sessions read 11 to 24 of 24.
+- A session that fell short, a run bound reached, the Mac asleep in a session, or a start of the weekly schedule.
+  The run was on demand, so it was no attempt at the week's run; the unit tests show each of those with the stand-in agent and a simulated Mac.
+- A follow-up message, or the window's second week with the second legs of its A/B pairs.
+
+Mandu's, RepToday's, and Immerse's HEAD, branch, git status, stash, and a digest over every file outside `.git` were the same before the lab was built as after the timed run.
+The lab sat in the Mac's per-user temporary folder and was removed from it.
+
+### The limits set from the measurement
+
+A session's limit stays at 1800 seconds, 30 minutes, for every workflow, and `agent.session_time_limit_seconds` names none with another.
+The longest of the six sessions took 217 seconds, and the longest single session ever measured on the real package, which held the review and the post Drafts together on a busy Mac, 1,122.
+Nothing measured says a session needs more than 30 minutes, and one reading of each session is no ground for giving any of them less.
+
+The bound on all of a run's sessions together, `agent.run_time_limit_seconds`, is proposed at 3600 seconds, 60 minutes.
+It is the smallest round figure that keeps one workflow's trouble its own when that trouble is a session stopped at its limit: one session can run its full 30 minutes and the others still have 30 minutes between them.
+The six sessions measured took 654 seconds together, 18 percent of the bound, and the 30 minutes left after one stopped session is more than two and a half times that.
+A bound equal to one session's limit would keep the report within the 30 minutes of agent time the documents gave the Founder until this change, but the first session stopped at its limit would then leave no time for any after it.
+Without a bound, seven sessions of 30 minutes could hold the report back three and a half hours.
+
+So the longest a run's agent sessions can take together is now 60 minutes where it was 30, and that differs from what the documents told the Founder.
+It was put to the Founder as a decision with these measurements.
+
+With the bound set and the documents changed, the full unit suite passed under `/usr/bin/python3`, 994 tests, as did ruff, and `src/bin/gr0wthlab preflight` passed from this work's worktree: it wrote and deleted a file in each of the six areas, refused 14 paths, and reached neither listed host from inside the sandbox.
+The boundary check is made on the launcher this branch and `main` leave together, and its record follows the re-checks above.
 
 ## Scheduled and on-demand runs share one configuration
 
@@ -1698,4 +1825,4 @@ src/bin/gr0wthlab boundary-check   # the US-ME02 validation test, on demand
 
 The probe only ever creates new, uniquely named files and connects only to the check's own listeners; the check deletes any file that escaped, counts that as a failure, and removes the permitted ones.
 To repeat the scheduled path, generate a one-off LaunchAgent a few minutes ahead with `src/bin/gr0wthlab launch-agent --boundary-check --once <time> --label gr0wthlab.boundary-check`, `launchctl bootstrap` it, read the check's verdict in its `.out.log` after it fires, then `launchctl bootout` it and delete the plist ([operations](../operations.md) has the commands).
-`src/bin/gr0wthlab run` no longer accepts the probe: a run's task definition must be a file under `src/instructions/`, and the probe runs only through `boundary-check`, which never commits or pushes.
+`src/bin/gr0wthlab run` takes no task definition and so cannot be handed the probe: the launcher puts each session's together from the reviewed files in `src/instructions/weekly-run/`, and the probe runs only through `boundary-check`, which never commits or pushes.

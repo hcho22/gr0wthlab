@@ -407,47 +407,58 @@ A run that cannot finish, for example because a file it must write cannot be wri
 A run with a session that was stopped at its time limit also ends with exit code 6, after it has written its own report, which says which session timed out.
 Each checkout keeps its run lock (`ledger/run.lock`, never committed) and these notes for its next report (`ledger/notes/`) in its own `ledger/`, so a run in a firstmate worktree never blocks or hides a production run.
 
-## Reading the agent's work
+## Reading each session's work
 
-A run is one agent session, and it ends when the agent writes its final message.
-The launcher checks everything the agent wrote, but whether the agent did all its work is something only the agent says, in the `Review:` line that ends its summary.
-That line has read `Review: complete` after sessions that did the least, so no run should be judged by it alone.
+A run is one agent session for each workflow that has work due, and a session ends when its agent writes its final message.
+The launcher checks everything a session wrote, but whether an agent did all its work is something only the agent says, in the `Session:` line that ends its summary.
+Such a line has read complete after sessions that did the least, so no session should be judged by it alone.
 
-Each run report therefore has an `Agent's work` section, and a line in its summary, that set two things side by side and name each for what it is:
+Each run report therefore has a `Sessions` section, and a line for each session in its summary, that set two things side by side and name each for what it is:
 
-- What the launcher counted, from Codex's record of the session, the Draft files the run left, and the Review Queue.
-  None of it comes from what the agent says of itself.
-- The agent's own word: its closing `Review:` line, quoted.
+- What the launcher counted, from Codex's record of that session, the Draft files the run left, and the Review Queue.
+  None of it comes from what an agent says of itself.
+- The agent's own word: its closing `Session:` line, quoted.
 
-The counts:
+The section opens with one row for every workflow: how its session ended, or why it had none, with its agent time, its limit, its cost, and its agent's closing line.
+Then comes each session that was tried, with its counts, the brief it was given, and the agent's own summary, and last the run's totals.
 
-- `Agent time`, against the limit, with the model and reasoning effort the agent ran at.
-- `Package files read`: how many of the package files the brief listed came back to the model.
+The counts, each of one session alone:
+
+- `Agent time`, against that session's limit, with the model and reasoning effort it ran at.
+- `Approximate cost`, from that session's own token counts.
+- `Package files read`: how many of the package files that session's brief listed came back to the model.
   Codex shows the model at most about 40,000 characters of one command's output, the first and last halves of that, and cuts the middle.
   A session that prints every package file in one command is shown the first and last few, so naming a file in a command is not reading it.
   The launcher counts a file as read when at least half of its lines of 24 characters or more are in the part of some command's output the model was shown; the figure is `work_counts` in [`config/run.json`](../config/run.json), a fact about Codex that needs measuring again after a Codex upgrade or a change of model.
   A file with no line that long is counted only when a command that names its path was shown its whole text, since short lines such as a lone brace are in any output.
   The count is a floor: a file read some other way, such as by a pattern that does not name it, is not counted.
+  A session whose brief lists no package file, as the Filming and Rejection reasons briefs do, has none to count, and its line says so.
 - `Draft claims`: how many claims the post Drafts this session wrote or changed list, how many of them name a code location, and how many name none.
-  The post Drafts stay in `workspace/` from run to run, and the agent is told to leave an open day's Draft alone when nothing in it needs changing, so a Draft on disk is often an earlier run's work.
-  The launcher therefore takes the fingerprint of each due day's Draft before the agent starts, and counts a Draft as this session's only when it is new or its fingerprint differs once the agent has ended.
+  The post Drafts stay in `workspace/` from run to run, and the Post Drafts session is told to leave an open day's Draft alone when nothing in it needs changing, so a Draft on disk is often an earlier run's work.
+  Every session can write there, so the launcher takes the fingerprint of each due day's Draft before each session starts, and counts a Draft as a session's only when it is new or its fingerprint differs once that session has ended.
   The line says how many of the Drafts due those are, and a session that wrote or changed none has no Draft claims to count.
   A claim item that does not follow the format names no code location, so the two figures add up to the claims listed.
 - `Proposals this session wrote to incoming/`: how many package-change proposals this session wrote or changed in `workspace/review-queue/incoming/` that the launcher queued.
-  An Angle or a Hook the session proposes from Listening goes through `workspace/review-queue/angles/` instead: it is accounted for in the report's Listening section and is not in this count.
-  A run queues everything standing in `incoming/`, and a run that could not read the Review Queue, or was stopped before it took its items in, leaves its session's items there for the next run.
-  The launcher tells those apart as it does the Drafts, by each file's fingerprint before the agent starts and once it has ended, and the line names them beside the session's own: `0 queued; 5 more queued in this run were left by an earlier run`.
+  An Angle or a Hook the Listening session proposes goes through `workspace/review-queue/angles/` instead: it is accounted for in the report's Listening section and is not in this count.
+  The launcher tells one session's proposals from another's as it does the Drafts, by each file's fingerprint before the session starts and once it has ended.
 
-The launcher takes one reading of the Drafts due and of `incoming/` before the agent starts, and one once it has ended.
-When either cannot be taken, for example in a folder left closed, neither the Draft claims nor the proposals are counted and the launcher problems say why; the run starts and goes on as it would have.
+The run's totals follow: how many sessions ran of the ones with work due, their agent time together against the bound on all of a run's sessions, their cost together, and the Draft claims and proposals of the run's sessions together.
+A run queues everything standing in `incoming/`, and a run that could not read the Review Queue, or was stopped before it took its items in, leaves its sessions' items there for the next run.
+The totals name those beside the run's own: `0 queued; 5 more queued in this run were left by an earlier run`.
+
+The launcher takes one reading of the Drafts due and of `incoming/` before each session starts, and one once it has ended.
+When either cannot be taken, for example in a folder left closed, that session has neither Draft claims nor proposals counted and the launcher problems say why; the session starts and the run goes on as it would have.
 
 The counts inform the Founder and gate nothing: nothing is queued, blocked, or marked incomplete because of one, and every check of an item or a Draft is what it was.
-The launcher still reads the agent's closing line itself in two places, and the counts change neither: the package review's row is complete only on the line `Review: complete`, and a weekly attempt the Mac slept during is the week's run only when the agent ended without an error and its summary ends with that line ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
-A count that cannot be made is listed as a launcher problem, and the run goes on without it; that holds for the one reading the launcher makes for a count before the agent starts as well.
+The launcher still reads an agent's closing line itself in two places, and the counts change neither: the package review's row is complete only when the Package review session's summary ends with `Session: complete`, and a weekly attempt the Mac slept during is the week's run only when every session it started ended without an error and with that line ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
+A count that cannot be made is listed as a launcher problem, and the run goes on without it.
 The run's notice lists that problem like any other launcher problem, so a run that would have queued no notice queues one for it.
-The run's log record in `~/Library/Logs/gr0wthlab/` holds the same counts under `work`, with the name of every package file not read.
+The run's log record in `~/Library/Logs/gr0wthlab/`, `<run id>.json`, holds every session's counts under that session's `work`, with the name of every package file not read.
+Each session's own record there, `<run id>.<workflow>.json`, holds what its agent was started with and how it ended.
 
-What the counts looked like when they were introduced, on 2026-10-11, against Mandu and RepToday as they were.
+### What the counts have looked like
+
+The counts were introduced on 2026-10-11, when a run was still one session, against Mandu and RepToday as they were.
 Each run was on demand in a fresh clone, so each was a first week: a package review and the first batch's seven post Drafts.
 
 | Reasoning effort | Runs | Ended with the words `Review: complete` | Package files read, of 24 | Draft claims naming code | Proposals queued | Agent time | Cost a run |
@@ -455,61 +466,86 @@ Each run was on demand in a fresh clone, so each was a first week: a package rev
 | medium, Codex's default, on `main` before the change | 3 | 0 | 6, 11, and 24 | 4 of 25 | 0 to 1 | 59 s to 2 min 38 s | $0.012 to $0.028 |
 | high | 10 | 10 | 11 to 24, all 24 in four runs | 78 of 97 | 2 to 13 | 4 min 43 s to 18 min 42 s | $0.056 to $0.158 |
 
-Read a report against these counts.
-A run that says `Review: complete` after little agent time, few package files read, or with most claims naming no code did less than the runs at high effort did, whatever its closing line says.
-High effort does not make every session thorough: two of the ten read 11 and 17 of the 24 files and still said the review was complete.
-One more run, made after the table's ten, read 10 of the 24 in 10 min 31 s and said the same.
+High effort did not make every session thorough: two of the ten read 11 and 17 of the 24 files and still said the review was complete, and one more run, made after the table's ten, read 10 of the 24 in 10 min 31 s and said the same.
 A first run and then a second run in one clone each read all 24, and the second session wrote all seven Drafts again, so its Draft claims line counted all seven.
-[The US-ME02 spike note](spikes/us-me02-runtime-boundary.md#re-check-after-the-agents-reasoning-effort-and-the-work-counts-us-me17) lists every run and says what the sample does not show.
+One run with Listening, outreach, and filming in its one session was timed on 2026-10-12 against a synthetic package of 18 short files: its agent took 4 min 35 s and cost $0.038.
+[The US-ME02 spike note](spikes/us-me02-runtime-boundary.md#re-check-after-the-agents-reasoning-effort-and-the-work-counts-us-me17) lists every one of those runs and says what the sample does not show.
 
-Every run above was made before Listening, outreach, and filming joined the session.
-One run was timed on 2026-10-12 on the launcher that has them, once: a start of the weekly schedule at high effort in a throwaway production clone, against a synthetic package of 18 short files and not the real one.
+One run with a session per workflow was timed on 2026-10-12, once, at high effort: on demand in a throwaway production clone, against a read-only copy of the real package, with the fullest week that could be set up.
+Listening had no session, since `robots.txt` on both listed hosts disallows every address it would read.
 
-| What was due | How the run ended | Agent time | Package files read | Draft claims naming code | Proposals queued | Cost |
+| Session | How it ended | Agent time, of its 30 minute limit | Cost | Package files read | Other counts | The agent's own word |
 | --- | --- | --- | --- | --- | --- | --- |
-| The package review; post Drafts for days 1 to 7; an edit record for each of those days, with footage in place; the Beta Cohort invitation and the Waitlist ask; the personal-network ask and a first message to each of three creators. Listening had nothing to read | The agent ended by itself with exit code 0 and the words `Review: complete`; the run ended with exit code 0 and no launcher problem, on a Mac that stayed awake | 4 min 35 s of the 30 minute limit | 18 of 18 | 5 of 7, in the 7 of 7 Drafts due | 1 | $0.038 |
+| Package review | by itself, exit code 0 | 3 min 36 s | $0.048 | 19 of 25 | 4 proposals queued | `Session: complete` |
+| Post Drafts, days 1 to 7 | by itself, exit code 0 | 3 min 6 s | $0.035 | 13 of 18 | 7 of 7 Draft claims name code, in the 7 of 7 Drafts due; 1 proposal queued | `Session: complete` |
+| Filming, an edit record for each of days 1 to 7 | by itself, exit code 0 | 56 s | $0.008 | none listed | none | `Session: complete` |
+| Beta Cohort recruiting, the invitation and the Waitlist ask | by itself, exit code 0 | 42 s | $0.009 | 7 of 7 | none | `Session: complete` |
+| Outreach, the personal-network ask and three first messages | by itself, exit code 0 | 1 min 11 s | $0.015 | 5 of 7 | none | `Session: complete` |
+| Rejection reasons, one reason to code | by itself, exit code 0 | 1 min 22 s | $0.006 | none listed | none | `Session: complete` |
+| All six | 6 ran of the 6 with work due | 10 min 54 s | $0.121 | | 5 proposals queued | |
 
-The launcher queued five posts with their finished video, the invitation and the Waitlist ask, and the four messages, and blocked two post Drafts whose one claim no code supports.
-Listening read nothing because `www.reddit.com`'s `robots.txt` disallows every listed address and the synthetic research cites no App Store page, so the session had no quote, proposed Angle or Hook, or reply to write.
-It is one reading, on a package far smaller than the real one: it shows that the added work takes minutes, and not how long a session on the real package takes with that work in it.
-[The spike note](spikes/us-me02-runtime-boundary.md#the-weekly-run-timed-on-the-merged-launcher) has the set-up and what the run does not show.
+The whole run took 11 min 4 s, so the launcher's own work around the six sessions, with a boundary preflight before each, took about 10 seconds.
+The launcher queued the five proposals, the invitation and the Waitlist ask, and the four messages, coded the one reason, and blocked all seven post Drafts, each on the package's open trademark line, so no video was cut.
 
-## When a run times out
+Read a report against these counts.
+The six sessions together took about as long as the single session's median, 10 min 46 s, and cost about a fifth more than its average, $0.099, while doing four more workflows' work than those ten runs carried.
+A session that says `Session: complete` after little agent time, few package files read, or with most claims naming no code did less than these did, whatever its closing line says.
+Splitting the work did not make a session read everything: the Package review session read 19 of its 25 files and the Post Drafts session 13 of its 18.
+It is one reading, on a busy Mac, of a week with nothing for Listening to read; [the spike note](spikes/us-me02-runtime-boundary.md#the-weekly-run-timed-with-one-session-per-workflow) has the set-up and what the run does not show.
 
-Every run ends with its report, so the agent has a time limit: `agent.time_limit_seconds` in [`config/run.json`](../config/run.json), 1800 seconds (30 minutes) today.
-The limit counts wall-clock time from the moment the agent starts, the Mac's sleep included.
+## When a session times out
+
+Every run ends with its report, so every session has a time limit and all of a run's sessions together have a bound, both in [`config/run.json`](../config/run.json).
+
+- A session's limit is `agent.time_limit_seconds`, 1800 seconds (30 minutes) today, unless `agent.session_time_limit_seconds` gives its workflow another, which it does for none today.
+  It applies to that session alone.
+- The bound on all of a run's sessions together is `agent.run_time_limit_seconds`, 3600 seconds (60 minutes) today.
+  A session starts only while the run has time left, and gets its own limit or what is left of the bound, whichever is less; the report gives the limit it ran with and, where the bound set it, says so.
+  A session the bound leaves no time for is not started, and its workflow is marked incomplete for that reason.
+  The time counted against the bound is each session's own agent time, added up.
+
+So the agent's part of a run takes at most about 60 minutes, where it took at most 30 while a run was one session.
+The bound is twice a session's limit so that one workflow's trouble stays its own: one session can run to its limit, and the others still have 30 minutes between them.
+
+Both counts are wall-clock time from the moment a session's agent starts, the Mac's sleep included.
 Nothing keeps the Mac awake for a run, and a sleeping Mac runs nothing, so the stop of an agent the Mac slept past its limit starts within about a second of the Mac waking, a dark wake included, not at the time of day the limit fell.
-Awake time is counted as well, and the agent is stopped at whichever count reaches the limit first, so a wall clock set back cannot extend a run; one set forward can end a run early.
-At high reasoning effort the agent took 283 to 1,122 seconds, median 646, in the ten runs measured on 2026-10-11, each a package review and one batch of post Drafts, most with four or five sessions running at once on the Mac.
-A healthy run on a Mac that stays awake therefore ends inside the limit, the longest measured at 62 percent of it; at Codex's default medium effort the 46 runs recorded before took 18 to 218 seconds.
-Those ten runs were made before Listening, outreach, and filming joined the session.
-One run at high effort that carries them was timed on 2026-10-12, with post Drafts, edit records, recruiting Drafts, and outreach messages all due beside the review: its agent took 275 seconds, 15 percent of the limit, and ended by itself ([Reading the agent's work](#reading-the-agents-work)).
-That run read a synthetic package far smaller than the real one and had no Listening document to read, and it is a single reading, so watch the report's `Agent time` line in the first weekly runs on the real package.
-An agent still running at the limit, for example because its model stream stalled, is stopped with every process the Mac's process table shows it started, which is its descendants and every process in a session one of them leads: each is asked to stop, and any still running after 10 seconds of awake time is forced.
-The launcher then reads the process table again to confirm that none of them is left, and finishes the run as it finishes any run.
-The stop does not find a process the agent detached earlier in the run: one in a session of its own whose parent has already ended, as a shell command that has finished can leave.
-Nothing in the process table ties such a process to the agent, so it is not stopped and the report does not speak for it; it outlives a run that finishes in time as well, since the launcher stops nothing then.
+Awake time is counted as well, and the agent is stopped at whichever count reaches the limit first, so a wall clock set back cannot extend a session; one set forward can end a session early.
 
-What the Founder sees after a timed-out run:
+How the limits sit against what was measured:
 
-- The run report's summary says `The run timed out`, and its Agent section says how long the agent ran by the wall clock, how many processes were asked to stop or forced, and whether any of them is still running.
-- If the Mac slept while the agent ran, in this or any other run, the summary and the Agent section say for about how long.
-  The summary of an attempt of the weekly schedule also says for about how long the Mac slept in the run outside the agent's time.
-- Each output that needed the agent, such as the package review and the post Drafts of a run with a day due, is marked incomplete with the reason; what the launcher does alone is complete as usual.
-- Whatever the agent had written is checked as always: an item or Draft that passes every check is queued, and one cut off mid-way fails its checks and is set aside or blocked, named in the report.
-- One notice in the Review Queue leads with the timeout and lists what it left incomplete; a second timed-out run the same day adds no second notice while the first is open.
-  A run of the weekly schedule that the Mac's sleep cut short queues no notice for the timeout alone while a fresh run is to follow, and its notice then leaves out the work its agent did not reach ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
-- The cost line says the cost is not available, or gives the part Codex had reported before the stop as a floor; it never says zero.
-- The run saves its records and releases the run lock, so the next run starts as usual and does the unfinished work again; the run itself ends with exit code 6.
+- In the run timed on 2026-10-12 with a session per workflow, the six sessions took 42 seconds to 3 min 36 s each, the longest 12 percent of its limit, and 10 min 54 s together, 18 percent of the bound ([Reading each session's work](#what-the-counts-have-looked-like)).
+- The longest single session measured on the real package, which did the package review and seven post Drafts in one, took 1,122 seconds, 62 percent of a session's limit, on a Mac running four or five such sessions at once; the ten runs of that kind took 283 to 1,122 seconds, median 646.
+- No session with a Listening document to read has been timed, nor a second week of the window, so watch the `Agent time` lines of the first weekly runs.
 
-A run of the weekly schedule that timed out on a Mac that slept during it needs nothing from the Founder: a fresh run starts by itself once the Mac is fully awake ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
-A run that timed out with the Mac awake, scheduled or on demand, is not run again by itself, and neither is a run on demand or a one-off scheduled run that the Mac slept through: start one on demand if the sitting needs the missing work.
-If healthy runs come near the limit, or runs keep timing out though the agent was working, raise `agent.time_limit_seconds` through a reviewed pull request; the report's `Agent time` line shows how long each run's agent took.
-A run that timed out because the Mac slept past the limit needs no higher limit.
-The value must be above zero and at most 86400 (a day); a run refuses to start on any other value and says why.
+A session still running at its limit, for example because its model stream stalled, is stopped with every process the Mac's process table shows it started, which is its descendants and every process in a session one of them leads: each is asked to stop, and any still running after 10 seconds of awake time is forced.
+The launcher then reads the process table again to confirm that none of them is left, and goes on to the next session.
+The stop does not find a process the agent detached earlier: one in a session of its own whose parent has already ended, as a shell command that has finished can leave.
+Nothing in the process table ties such a process to the agent, so it is not stopped and the report does not speak for it; it outlives a session that finishes in time as well, since the launcher stops nothing then.
+
+What the Founder sees after a run with a session that timed out:
+
+- The run report's summary says which session timed out, at what limit, and that the launcher stopped it and went on with the run.
+  The `Sessions` section says how long that session's agent ran by the wall clock, how many processes were asked to stop or forced, and whether any of them is still running.
+- A session the run's bound left no time for is named in the summary as well: it did not start, because the time that bounds all of a run's sessions together was used up before its turn.
+- If the Mac slept while a session ran, the summary and that session's lines say for about how long.
+  The summary of an attempt of the weekly schedule also says for about how long the Mac slept in the run outside its sessions' time.
+- Each output that needed that session is marked incomplete with the reason; the other sessions' outputs, and what the launcher does alone, are judged as usual.
+- Whatever the session had written is checked as always: an item or Draft that passes every check is queued, and one cut off mid-way fails its checks and is set aside or blocked, named in the report.
+- One notice in the Review Queue leads with the timeout, names every session that fell short, and lists what each left incomplete; a second run the same day whose notice would read the same adds no second notice while the first is open.
+  A run of the weekly schedule that the Mac's sleep cut short queues no notice for how its sessions ended alone while a fresh run is to follow, and its notice then leaves out the work its agents did not reach ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
+- The cost line of a stopped session says the cost is not available, or gives the part Codex had reported before the stop as a floor; it never says zero, and the run's total is then a floor too.
+- The run saves its records and releases the run lock, so the next run starts as usual and does the unfinished work again.
+  The run itself ends with exit code 6, unless an earlier session of it fell short another way, whose exit code it then ends with.
+
+A run of the weekly schedule with a session that timed out on a Mac that slept during the run needs nothing from the Founder: a fresh, whole run starts by itself once the Mac is fully awake ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
+A run with a session that timed out with the Mac awake, scheduled or on demand, is not run again by itself, and neither is a run on demand or a one-off scheduled run that the Mac slept through: start one on demand if the sitting needs the missing work.
+If one workflow's healthy sessions come near their limit, or keep timing out though the agent was working, give that workflow a longer one in `agent.session_time_limit_seconds` through a reviewed pull request, or raise `agent.time_limit_seconds` for all of them; each session's `Agent time` line shows how long it took.
+If healthy runs come near the bound, raise `agent.run_time_limit_seconds` the same way.
+A session that timed out because the Mac slept past its limit needs no higher limit.
+Each value must be above zero and at most 86400 (a day), a workflow named in `agent.session_time_limit_seconds` must be one of the seven, and the bound must be at least the longest session limit; a run refuses to start on anything else and says why.
 If the report names a process that could not be stopped, end it by hand (`kill -9 <process id>`) before the next run.
 
-There is one limit, on the agent's total time, and none on silence: Codex's event stream reports only whole steps, and the longest recorded run went 35 seconds without an event while it worked, so a long step and a stalled stream look the same from outside until the step ends.
+There is one limit on a session, on its agent's total time, and none on silence: Codex's event stream reports only whole steps, and the longest recorded run went 35 seconds without an event while it worked, so a long step and a stalled stream look the same from outside until the step ends.
 Every other process the launcher starts (git, Codex's version and sandbox probes, the boundary check's kernel-log query, and the `ffmpeg` and `ffprobe` that measure footage and cut video) has a fixed time limit of its own, counted on the same two clocks; one that passes it is stopped the same way, and the step that needed it fails with the reason or, where it can do without the answer, goes on with what it has.
 
 ## When RepToday's Waitlist build lands
