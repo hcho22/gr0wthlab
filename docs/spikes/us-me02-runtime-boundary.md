@@ -2019,7 +2019,7 @@ What this re-check did not exercise: the other hole tests were not repeated on t
 On 2026-10-11 the Founder named the footage place: RepToday's own folder in Mandu, `~/Mandu/projects/RepToday`, where the footage folders `window-<n>/` sit beside the package in `gtm/`.
 Until this change the sandbox read the whole Mandu checkout, so the launcher refused that place.
 This section is what was measured before anything was designed, what was built on it, and how it was proven.
-Everything in it ran on 2026-10-12, Mac local time, with Codex CLI 0.160.0 and `gpt-6-luna` at high effort.
+Everything in it ran on 2026-10-12, Mac local time, the run identifiers carrying the UTC date, with Codex CLI 0.160.0 and `gpt-6-luna` at high effort.
 Except for the re-check at the end, it ran from throwaway clones in the Mac's temporary folder, written `<lab>` below, beside a synthetic Mandu laid out like the Founder's: `projects/RepToday/` holding `gtm/`, the launch checklist, a README, and `window-1/` and `window-2/`, each with a stand-in clip, a small text file named `d01-s1.mov`.
 The synthetic Mandu was a git checkout with those files committed, as the Founder's raw video would be if Mandu committed it.
 No real repository and no real footage was a target.
@@ -2124,17 +2124,47 @@ The snapshot the check takes of Mandu before and after now fingerprints a file a
 
 #### Hole tests
 
-Each hole was made in a scratch copy of the lab's checkout only, never in the committed profile, with the footage place at `<lab>/mandu/projects/RepToday`, which held `window-1/` and `window-2/`, each with its stand-in clip.
+Each hole was made in a scratch copy only, a clone of the committed code, `d31d19a`, never in the committed profile, with the footage place at `<lab>/mandu/projects/RepToday`, which held `window-1/` and `window-2/`, each with its stand-in clip.
 The first three grant one footage folder, by a package source `projects/RepToday/window-1/` added to the scratch copy's registry; each of them switches off one more of the three things that hold the rule, to show the next one catches it.
 
 | Scratch change | Verdict |
 | --- | --- |
 | `window-1/` granted, nothing switched off | The launcher refused to start, exit 2: `RepToday's footage place <lab>/mandu/projects/RepToday is refused: the sandboxed agent can read <lab>/mandu/projects/RepToday/window-1, which is in its footage folder window-1/, so the agent could open the raw footage` |
-| `window-1/` granted, the rule in `keep_footage_unread` switched off | Failed at once, `20261012T235909Z-on-demand-2882`: the preflight said `the sandbox could read where raw footage is kept; the agent was not started` and `listed <lab>/mandu/projects/RepToday/window-1`, and the run ended with exit code 3 before the agent was started |
-| `window-1/` granted, the rule switched off, and the preflight's verdict on reads ignored | Failed at once, `20261012T235921Z-on-demand-143b`: 3 of 5 forbidden reads refused; `footage-window-1:shell`, the script listed the folder, and `footage-window-1:file-tool`, Codex did not refuse the read of the clip and said `unable to process image: invalid or unsupported image data`; the place and `window-2/` were still refused |
-| `main`'s grant of the whole Mandu checkout, with the same two switched off | Failed at once, `20261012T235921Z-on-demand-f864`: 0 of 5 forbidden reads refused; the script listed the place and both footage folders, and Codex did not refuse the read of either clip |
+| `window-1/` granted, the rule in `keep_footage_unread` switched off | Failed at once, `20261013T002321Z-on-demand-ce38`: the preflight said `the sandbox could read where raw footage is kept; the agent was not started` and `listed <lab>/mandu/projects/RepToday/window-1`, and the run ended with exit code 3 before the agent was started |
+| `window-1/` granted, the rule switched off, and the preflight's verdict on reads ignored | Failed at once, `20261013T002321Z-on-demand-b5a9`: 3 of 5 forbidden reads refused; `footage-window-1:shell`, the script listed the folder, and `footage-window-1:file-tool`, Codex did not refuse the read of the clip and said `unable to process image: invalid or unsupported image data`; the place and `window-2/` were still refused |
+| `main`'s grant of the whole Mandu checkout, with the same two switched off | Failed at once, `20261013T002321Z-on-demand-2149`: 0 of 5 forbidden reads refused; the script listed the place and both footage folders, and Codex did not refuse the read of either clip |
 
+The same four had given the same verdicts a little earlier on this work's files before they were committed, the last three as runs `20261012T235909Z-on-demand-2882`, `20261012T235921Z-on-demand-143b`, and `20261012T235921Z-on-demand-f864`.
 In the last two the nine forbidden writes were still refused, Mandu's among them, each in a patch of its own and by the kernel: what the sandbox may read of Mandu is a boundary of its own, and the check now has a proof of its own for it.
+
+#### The exercise, as the Founder will use it
+
+The exercise ran on the committed code, `d31d19a`, from a clean clone in the Mac's temporary folder, beside a synthetic Mandu laid out like the Founder's and committed as a git checkout.
+Its package was the filming example set's synthetic kit under `projects/RepToday/gtm/`, its calendar cut down to days 1 and 8, with a README and one more file beside `gtm/`; the Product's code was the post-Draft example set's synthetic checkout.
+The footage place was that Mandu's `projects/RepToday`, set with `GR0WTHLAB_FOOTAGE_DIR`, since the registry's own place is written from the home folder and the lab's Mandu is not there; the unit tests cover the registry's place with no override.
+Two things were done by hand, and nothing else: the approval of the filming plan, written as Mandu's decision record, and the clip dropped in `window-1/`, 14 seconds of ffmpeg's `testsrc2` test pattern at 886x1920 and 60 frames a second, made with the tests' own `make_test_clip`.
+Every run used the real task definition and the real agent, and its configuration fingerprint was `bfad7bbce92216c8adb6ec8e8f76b7e372fa68426aceeebbe726fc7344c1013e`.
+
+| Run | What it showed |
+| --- | --- |
+| `20261013T001553Z-on-demand-01f8` | Before any footage: the preflight was refused a listing of the footage place, which held no footage folder; the launcher filed the filming plan `20261012-filming-plan-w1`, one asset in one sitting; the report says `window-1` does not exist yet. The agent read 16 of the 16 package files the brief listed, and none of its 30 commands was refused a read in Mandu. |
+| `20261013T001907Z-on-demand-0a6f` | With the plan approved and the clip in `window-1/`: the preflight was refused a listing of the place and of `window-1/`; the launcher measured the clip, the agent wrote day 1's edit record, one unbroken range from 2 to 12 seconds, and the launcher cut `assets/window-1/day-01-791d5f47aca2.mp4` and queued day 1's post with it. None of the session's 32 commands named the footage folder. |
+| `20261013T002105Z-on-demand-c223` | The boundary check in the same checkout, with the clip in place, passed at its first run: 35 steps, the nine forbidden writes each refused per tool, and 3 of 3 forbidden reads refused, each on its own: the shell's listing of the place and of `window-1/`, and the file tool's read of `window-1/d01-s1.mov`. |
+
+The video measures 1080x1920, H.264, 30 frames a second, 300 frames, 10.00 seconds, and its SHA-256 starts `69c98b5681a0758a`; it has the name the proofs of filming gave the same cut of the same test pattern.
+Every entry of the synthetic Mandu had the SHA-256, size, mode, and modification time after the first run that it had before it, and after the second run and after the check the ones it had once the clip was dropped; its git status after the drop was one line, the clip, untracked, as raw video in the Founder's folder will be until Mandu ignores it.
+The only refusals in the two sessions' own commands were the cache-write denials `xcrun` logs for `/usr/bin/python3`, which the limits below already name.
+
+#### Live checks on the real configuration
+
+Both checks ran on `d31d19a` from this work's linked worktree, its `git status` empty, against Mandu and the Product checkouts as they are, with configuration fingerprint `3b9e5826d373eb0e34ccb4977e008cc27eceece333267299f2cce1972890d179`.
+The Founder's folder held no `window-<n>/` folder, so the place itself was the one forbidden read there was to try.
+
+- `src/bin/gr0wthlab preflight` passed: it wrote and deleted a file in each of the six areas, refused 14 paths, was refused a listing of `~/Mandu/projects/RepToday`, and reached neither listed host.
+- `src/bin/gr0wthlab boundary-check` passed at its first and only attempt, as run `20261013T001624Z-on-demand-301c`: 33 steps, each of the nine forbidden targets refused in a patch of its own and by the kernel, eleven kernel Seatbelt denials naming the run or the check's listeners, 1 of 1 forbidden reads refused, the listing of the footage place, neither local listener reached, the permitted files in all six areas, and no change since the snapshot.
+
+Mandu (`3f836c1` with its uncommitted changes) and RepToday (`main` at `de0355d`) had the same HEAD, git status, and digest, size, mode, and modification time of every file outside `.git` after the boundary check as before the preflight.
+What these checks did not exercise: a footage folder in the Founder's own Mandu, since none exists yet, and his real footage, since there is none; the folder case stands on the lab runs above, and the first run after he drops footage is refused a listing of the new folder before its agent starts, or does not start.
 
 ## Scheduled and on-demand runs share one configuration
 
@@ -2185,6 +2215,12 @@ Records commits never touch code or Guardrail configuration, so G8 holds, and ea
 - A Codex upgrade can change profile semantics; the per-run preflight fails closed, and the boundary check should be re-run after every upgrade.
 - The launcher's own network reads run outside the sandbox, as the launcher's other reads of Mandu and the Waitlist view do, so nothing in the sandbox bounds them: `fetch.py`, its contract tests, and the reviewed host list are the boundary, and the request log is the record.
 - A separate macOS user with no credentials would be a stronger boundary than unreadable credential files; nothing in v1 needs it.
+- The sandbox reads no file and lists no folder outside its grants, but the system still answers a question about one file by its full name, such as `stat`: its size and dates.
+  That holds for a footage file too, whose name and measured facts the brief gives the agent anyway.
+- A footage folder that does not exist yet has no record of a refusal to be had, so neither the preflight nor the boundary check tries it; both try it from the first run after it exists.
+  The file-tool read needs a footage file in the folder, and the reads' lines must fit in the start of the shell call's output that Codex keeps, which holds some fifty footage folders.
+- Raw video the Founder keeps in Mandu's working tree is not ignored by Mandu's git, and gr0wthlab never writes to Mandu, so the ignore rule is the Founder's to add there.
+  A copy that Mandu's own commits take into its `.git` is outside the sandbox's grants as well.
 - Inside an area, the sandbox refuses a hard link to a file the run cannot read but allows a symbolic link to one.
   The launcher reads and commits files from `workspace/` outside the sandbox, so it never follows a link there: it opens agent-written files without following links, refuses any file with more than one link, and never commits a link.
 - Each probe run used 140,000 to 190,000 input tokens, mostly cached, and about 2,800 output tokens.
