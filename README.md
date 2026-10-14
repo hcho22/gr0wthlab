@@ -34,7 +34,7 @@ The specification and decision records under `docs/` (the PRD, the [design decis
    On read weeks the Founder first gives the week's TikTok export on that page.
    The Founder then approves each Review Queue item or rejects it with a one-line reason, one item at a time; what the Founder clicks is what is saved.
 3. **Publish.** Approved posts become scheduling-service drafts at the fixed slot and the Founder confirms them; the Founder sends approved messages.
-4. **Learn.** The next run reads the decisions, keeps every rejection reason as Evidence, refines Instructions for execution reasons, and proposes package changes for strategy reasons.
+4. **Learn.** The next run reads the decisions, keeps every rejection reason as Evidence, refines Instructions for execution reasons only through each workflow's example set, and proposes package changes for strategy reasons; every kept Instructions change is a notice at the next sitting.
 
 ## Guardrails
 
@@ -61,8 +61,9 @@ The PRD's Guardrails section says what enforces each one.
 | [`workspace/review-queue/`](workspace/review-queue/) | Review Queue items the agent proposes, before the launcher checks them | Yes |
 | [`workspace/weekly-reads/`](workspace/weekly-reads/) | Weekly Read memos | Yes |
 | [`workspace/run-reports/`](workspace/run-reports/) | Notes the agent writes during a run | Yes |
-| [`workspace/instructions/`](workspace/instructions/) | The Marketing Engineer's Instructions | Yes |
+| [`workspace/instructions/`](workspace/instructions/) | A change to the Instructions the agent proposes, before the launcher re-runs its example set | Yes |
 | [`ledger/`](ledger/) | The launcher's records: the published Review Queue, the launcher's own Evidence, run reports, and run state; and, outside git, the finished videos it renders | No |
+| [`ledger/instructions/`](ledger/instructions/) | The Marketing Engineer's Instructions in force, changed only by a change its workflow's example set passed, or by a reviewed pull request ([ADR 0003](docs/adr/0003-instructions-change-only-through-their-example-set.md)) | No |
 | [`ledger/founder/`](ledger/founder/) | The Founder's own records: each decision, each sitting, the Beta Build record, the Beta Cohort counts, and what was sent; only the sitting page writes them | No |
 | [`src/`](src/) | Code | No |
 | [`config/`](config/) | Guardrail configuration, the Product registry, the run's settings, platform facts, and the network sources | No |

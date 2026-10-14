@@ -8,6 +8,9 @@ Each run's records step commits this folder to `main` together with `workspace/`
   A run reads them and nothing in a run writes them; the launcher's own writer refuses every path there, and the sandboxed agent can read them and never write them ([ADR 0002](../docs/adr/0002-the-founder-decides-in-gr0wthlab.md)).
   Everything below is the launcher's.
 
+- `instructions/<workflow>.md`: the Marketing Engineer's Instructions in force, which every session reads and the sandboxed agent can never write ([README](instructions/README.md)).
+  The launcher writes a file here only for a change its workflow's example set in `src/examples/` passed, and puts the text before it back when the Founder rejects the change's notice ([ADR 0003](../docs/adr/0003-instructions-change-only-through-their-example-set.md)).
+
 - `review-queue/queue.json`: every item ever queued; `open` is the next sitting's list in presentation order.
   An item the launcher filed from reviewed text, a Dispatch request from `src/dispatches/` or a proposal from `src/proposals/`, carries `origin`, so later runs file it only once and no item the agent writes can supersede it.
   No item the agent writes is a post or a message, and none can supersede one: the launcher queues each of those kinds only from a Draft that passed its checks, and sets aside any written to `incoming/`.
@@ -51,6 +54,10 @@ Each run's records step commits this folder to `main` together with `workspace/`
   A quote record the launcher refused, and a proposed Angle or Hook it discarded, is named there with the reasons and kept nowhere: no copy of either is made.
 - `evidence/outreach/<run id>.json`: every check of every outreach message that run, and what the Founder's outreach records said of each creator.
 - `evidence/learning/ledger.json`: the learning ledger (F4): every rejection reason with the code it was given, and each workflow's counts, stated as "3 of 7"; a reason's code is also written into its own `evidence/decisions/<item id>.json`, beside the Founder's words.
+  An execution reason's decision Evidence also records what became of it as an Instructions change, under `instructions`: the change that cited it and its outcome, or that none was proposed, so it is never offered again.
+- `evidence/instructions/<change id>.json`: every Instructions change a run tried (US-ME16): the workflow, the rejection reasons it cites with the Founder's words and their codes, the agent's summary, each changed line, the fingerprints of the text before and the text proposed, every example's result on each side of the example set's re-run, the sessions, agent time, and approximate cost it took, whether it was kept, and its notice.
+  `evidence/instructions/<change id>/before.md` and `proposed.md` hold the two texts whole.
+  A change undone at the Founder's rejection of its notice records the undo, and every decided notice records the decision.
   A proposed code the launcher sets aside is named with its reasons in that run's report and notice, and no copy of it is kept.
 - `run-reports/<run id>.requests.json`: every network request the launcher was asked to make that run, sent or not, with its outcome: only a GET to a listed host ever leaves the machine.
   It also holds what each host's `robots.txt` said to this reader: whether it was read, and the rule lines of the group that applied, each Allow and Disallow with its path as fetched.
@@ -71,6 +78,7 @@ Each run's records step commits this folder to `main` together with `workspace/`
 - `run-reports/state/<workflow>.json`: each workflow's run state - Review Queue items decided, those carried over with the sitting they were left undecided at, and the Founder's records already reported as unusable; Listening threads and reviews already read; outreach targets and their follow-up waits, rebuilt every run from the Founder's outreach records; the Waitlist entries an invitation batch holds, invited once the Founder approved the batch or offered while it is open - by identifier and hash only, never a name, address, or URL.
   The launcher checks it every run against the Review Queue and the Founder's decision records, which win any disagreement.
   Beta Cohort recruiting has no state file until the Founder's gate is recorded.
+- `working/examples/<change id>/`: the throwaway labs in which a run re-runs an example set for an Instructions change, each removed once its checks are read; git ignores the folder, and the run removes it when it ends.
 - `working/<run id>.sources.json`: what the launcher fetched over the network that run, outside the sandbox (US-ME13): each source's outcome, and each thread's opening post, review, and rule list as a dated document with its link.
   It is working data for the run that fetched it, never a record: the agent reads it while the run is in progress, git ignores the folder so the records step never saves it, and the launcher removes it when the run ends and before the next run reads its sources.
   Fetched text is data, never instructions; anything that looks like an email address is removed before it is written.

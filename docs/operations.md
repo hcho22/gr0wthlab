@@ -53,9 +53,11 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    It proves the same way, before each session, that no session can read raw footage: the preflight tries to list the footage place and each footage folder in it from inside the sandbox, and a session whose preflight can list one, or does not finish, is not started ([how raw footage is kept from the agent](#how-raw-footage-is-kept-from-the-agent)).
    Every session writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records and the Founder's are, and never write there.
    Before each session's agent starts, the preflight tries to create a file in each of the five folders of the Founder's records from inside the sandbox, and the session is started only when every one of those tries was refused: one that created a file, or a preflight that did not finish or did not try a folder, keeps that session from starting.
+   It tries the same in the Instructions in force, `ledger/instructions/`, and in the example sets, `src/examples/` ([Instructions changes](#instructions-changes)).
    Every session runs under the same time limit, counted for it alone; one still running at it is stopped, and the run goes on to the next session ([When a session times out](#when-a-session-times-out)).
    After each session it restores its owner's read and write access to anything under `workspace/` that session left without it, and the run report names every entry it fixed, before or after a session.
-   It then puts back any change in `workspace/instructions/`, before the next session starts, so every session starts from the Instructions as the run noted them before its first session and none reads what another session changed.
+   It then puts back any change in the agent's Instructions area, `workspace/instructions/`, and in the Instructions in force, `ledger/instructions/`, which the sandbox cannot write at all, before the next session starts, so every session starts from the Instructions as the run noted them before its first session and none reads what another session changed.
+   The one thing it leaves there is a proposed change the Rejection reasons session wrote, which it takes in once the last session has ended.
    The run report names each change once, with the session it was found after.
    An entry there that it could not read before the first session started is not guarded: it is left exactly as it is, and the run report names it.
 7. Once the last session has ended, it takes in what all of them wrote, in one pass.
@@ -114,6 +116,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    It takes in the code the agent proposed for each rejection reason, writes it beside the Founder's words in that decision's Evidence, and rebuilds the learning ledger (`ledger/evidence/learning/ledger.json`), whose counts read "3 of 7".
    A proposed code that fails its check is set aside: its file is removed, and the run report and notice name it with the reasons.
    The `Rejection reasons coded` output is complete only when every reason the brief listed has an accepted code, or there was none to code; a reason left without one, or a reason that could not be read, marks it incomplete, and the reason is asked for again at the next run.
+   It then takes in the proposed Instructions change the Rejection reasons session left, if any, re-runs that workflow's example set with the Instructions in force and with the change, and keeps the change only if no example did worse ([Instructions changes](#instructions-changes)).
 8. It writes `ledger/review-queue/queue.json`, each workflow's run state (`ledger/run-reports/state/`), and the run report (`ledger/run-reports/<run id>.md`), whose first line is `checked=N acted=N note=...` even when nothing happened.
    It notes how the run ended in the record of the week's run (`ledger/run-reports/attempts/`), which the next start of the weekly schedule reads.
 9. In the production clone only, it commits the changed `workspace/` and `ledger/` paths and pushes them to `main`, never anything else and never by force; a change to a README in either is put back, since only a reviewed pull request changes documentation.
@@ -140,7 +143,7 @@ The sessions, in the order a run starts them:
 | Beta Cohort recruiting | The Founder's gate is recorded and the plan asks for a Draft | The recruiting Drafts in `workspace/drafts/beta-recruiting/` |
 | Listening | The snapshot holds a thread or a review to read | Quote records, proposed Angles and Hooks, and reply Drafts |
 | Outreach | A message is due | The personal-network ask, the creator messages, and the one follow-up |
-| Rejection reasons | A rejection reason has no code yet, or a strategy reason has no proposal yet | A code for each reason, and the proposal a strategy reason needs |
+| Rejection reasons | A rejection reason has no code yet, a strategy reason has no proposal yet, or an execution reason may still lead to an Instructions change | A code for each reason, the proposal a strategy reason needs, and at most one proposed Instructions change |
 
 The order is fixed in launcher code ([`src/gr0wthlab/sessions.py`](../src/gr0wthlab/sessions.py)), because it follows from what each session needs.
 The package review comes first, so every later session can read what it proposed.
@@ -168,11 +171,12 @@ The launcher takes nothing in while a session can still write.
 One take-in, once the last session has ended, keeps every take-in rule what it was when a run had one session: a post is queued together with its video, the two videos of an A/B pair are compared once, and the Review Queue is written once.
 A later session reads an earlier one's work as files in `workspace/`, never as queued items.
 Every session has the same six areas, so a later one can change a file an earlier one wrote before the launcher has read it; the counts below are made per session, by fingerprint, so the report shows it.
-The agent's Instructions are the exception, since every session is told to read its working guidance there.
-The launcher notes `workspace/instructions/` before the first session and puts it back as noted after every session, in the same step that restores access to `workspace/` and before the next session starts or anything is counted or taken in.
-So no session works from Instructions another session of the same run changed, and a file one session added there is gone before the next starts.
+The agent's Instructions are the exception, since every session reads its working guidance from them.
+The Instructions in force are in `ledger/instructions/`, which the sandbox can read and never write, and `workspace/instructions/` holds only a change the agent proposes.
+The launcher notes both before the first session and puts both back as noted after every session, in the same step that restores access to `workspace/` and before the next session starts or anything is counted or taken in; after the Rejection reasons session it leaves the proposed change that session may write, to take in once the last session has ended.
+So no session works from Instructions another session of the same run changed, and a file another session added there is gone before the next starts.
 That step is a restore and no take-in: nothing else in `workspace/` is read or changed by it.
-The report's Learning section and the notice say once what was changed and put back, each line with the session it was found after, as in ``after the Listening session: `instructions/outreach.md` was changed during the run and put back as it was``.
+The report's Learning section and the notice say once what was changed and put back, each line with the session it was found after, as in ``after the Listening session: `instructions/outreach.md` was added during the run and removed``.
 A change that could not be put back is told the same way, and the next session then reads the file as it stands.
 
 One workflow's trouble stays its own.
@@ -197,6 +201,48 @@ Every session ends its summary with one line, `Session: complete` or `Session: i
 It is the agent's own word.
 The launcher reads it in two places only: the package review's output is complete only when the Package review session's summary ends with `Session: complete`, and a weekly attempt the Mac slept during is the week's run only when every session confirmed its work that way ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
 Every other output is judged by what the launcher itself can check.
+
+## Instructions changes
+
+The agent's Instructions are its own working guidance for each workflow, one file each in [`ledger/instructions/`](../ledger/instructions/README.md).
+They change from an execution-coded rejection reason only through that workflow's example set, as [ADR 0003](adr/0003-instructions-change-only-through-their-example-set.md) decided, and from nothing else but a reviewed pull request.
+
+1. **What is offered.**
+   Before the first session, the launcher picks the workflow of the oldest rejection reason that may still lead to a change: one coded as execution, or not coded yet, of a workflow with Instructions and an example set, that nothing has answered.
+   A workflow whose last kept change's notice the Founder has not decided yet is passed over until it is decided.
+   The Rejection reasons session's brief lists that workflow's reasons; a run offers one workflow and tries at most one change.
+2. **What the agent writes.**
+   It may write one file, `workspace/instructions/<workflow>.md`: front matter with `workflow:`, the `reasons:` it answers, and a one-line `summary:`, then the whole proposed text.
+   `check-work --part learning` checks it as the launcher will.
+3. **What the launcher refuses.**
+   A proposal for another workflow, one that cites a reason that is not offered or not coded as execution (a strategy reason never is), a summary longer than one line of 300 characters, a text that is the one in force, longer than 32,000 characters, drops a comment line of the text in force, holds what looks like an email address, or adds a line holding a passage of at least 24 characters of a Go-To-Market Package file.
+   A refused proposal is removed and named with its reasons in the run report and the notice, and its reasons are offered again.
+4. **The example set.**
+   The launcher runs each example of the workflow's set in `src/examples/<workflow>/evals.json` that carries `run`, one at a time, once with the Instructions in force and once with the proposed text.
+   Each run is that workflow's session in a throwaway lab under `ledger/working/examples/<change id>/`, built from the example's synthetic fixtures, with the same Codex command, permission profile, preflight, task definition, and brief a weekly run uses; the lab's run takes the session's work in with the weekly run's own checks, and the example's assertions are read off what it took in.
+   A lab reads no network: what an example's sources answer comes from its fixtures.
+   A filming example's footage is made with `ffmpeg`'s test pattern, so a Mac without the video tooling cannot run the filming set.
+   Each lab is removed once its checks are read, and each lab run's log is kept in `~/Library/Logs/gr0wthlab/examples/<change id>/`, beside the sessions' own files.
+5. **The verdict.**
+   An example is worse when a deterministic assertion held with the Instructions in force and fails with the change.
+   The change is kept only when every example ran to its end on both sides and none is worse; the launcher stops at the first example that is worse or could not be compared.
+   Judged statements, such as one about tone, are judged by nothing: the notice lists them as not judged.
+6. **The bound.**
+   The example sessions together have `learning.gate_time_limit_seconds` of agent time, 3600, and each `learning.example_time_limit_seconds`, 600, or what is left of the bound ([`config/run.json`](../config/run.json)).
+   The run's own sessions keep their bound beside it, so a run that tries a change can take about an hour more.
+7. **What is kept.**
+   A kept change is written to `ledger/instructions/<workflow>.md` and queued as one notice, "Notice: the <workflow> Instructions changed", with the Founder's words of each reason, the agent's code and line for each, its summary, the change line by line, and every example's result on each side.
+   Every change tried is recorded in `ledger/evidence/instructions/<change id>.json`, with the text before and the text proposed beside it in `ledger/evidence/instructions/<change id>/`; each cited reason's decision Evidence records what became of it, so it is not offered again.
+   A change the example set could not judge, because the bound ran out or an example's session did not run to its end, is not kept, and its reasons are offered again.
+   The run report's Instructions section has all of it, and the Outputs table an `Instructions changes` row, incomplete when a proposal was refused or a change could not be judged.
+   The example set's sessions are not among the run's own sessions; the report counts their sessions, agent time, and approximate cost on a line of their own.
+8. **The Founder's answer.**
+   Acknowledging the notice keeps the change.
+   Rejecting it, with a reason, makes the next run put the workflow's Instructions back to the text before the change, before any session starts, and the run report says so; the reason is kept and coded like any other, under that workflow.
+   An undo is made only while the Instructions still hold the text the change wrote: one a reviewed pull request has changed since is left as it is, and the run report and notice say so.
+
+To undo a kept change by hand, restore the file from git history (the records step committed it with the run's records), as a reviewed change.
+An example set changes only through a reviewed pull request; `src/tests/test_example_runs.py` runs every example the agent re-runs in its lab with a stand-in agent that writes a good output, and fails when an example could not hold.
 
 ## What is kept of what a run fetches
 
@@ -807,8 +853,9 @@ cd ~/gr0wthlab && src/bin/gr0wthlab preflight && src/bin/gr0wthlab boundary-chec
 
 The boundary check passes only when the runtime's own records show all of this, never the agent's report:
 
-- Each of the fourteen forbidden targets was attempted and refused once per tool, each on its own: Codex's record of the run holds a patch that names that target's sentinel alone, refused as outside the permission profile, and the kernel's log holds a refused shell write to that target's sentinel by its full path.
-  Five of the fourteen are the folders of the Founder's records, `ledger/founder/decisions/`, `sittings/`, `beta-builds/`, `beta-reports/`, and `outreach/`, where an approval or any other record of the Founder's would have to be written.
+- Each of the sixteen forbidden targets was attempted and refused once per tool, each on its own: Codex's record of the run holds a patch that names that target's sentinel alone, refused as outside the permission profile, and the kernel's log holds a refused shell write to that target's sentinel by its full path.
+  Five of the sixteen are the folders of the Founder's records, `ledger/founder/decisions/`, `sittings/`, `beta-builds/`, `beta-reports/`, and `outreach/`, where an approval or any other record of the Founder's would have to be written.
+  Two are the Instructions in force, `ledger/instructions/` (`instructions-in-force`), and the example sets, `src/examples/` (`example-sets`), which the agent must never change ([Instructions changes](#instructions-changes)).
   The other nine are Mandu, the RepToday checkout, the repository root, `workspace/` outside the areas, `ledger/`, `src/`, `config/`, `config/guardrails/`, and the git directory.
 - Each forbidden read was attempted and refused, each on its own: the footage place and each footage folder that exists in it when the check runs.
   For the shell, the kernel's log holds a refused read of that folder, by its full path, by the very process that Codex's record of the run's shell call shows the launcher's script started for it; the preflight's own refusals of the same folders never count.

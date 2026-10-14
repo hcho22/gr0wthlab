@@ -114,7 +114,7 @@ A change the bound cuts short, or whose examples could not be run, is not kept, 
 
 A kept change becomes one notice in the Review Queue, decided at the next sitting like any item.
 It holds the Founder's own words of each reason that prompted the change, the code the agent gave each and its line on why, the agent's one-line summary, the change itself line by line, and every example's result with the Instructions in force and with the change.
-A change that was not kept puts nothing in front of the Founder but the run report, whose Learning section says what was tried, from which reasons, and which example got worse and how.
+A change that was not kept puts nothing in front of the Founder but the run report, whose summary names it and whose Instructions section says what was tried, from which reasons, and which example got worse and how.
 
 The Founder acknowledges the notice, which keeps the change, or rejects it with a one-line reason, which undoes it.
 The next run takes the rejection in, puts that workflow's Instructions back to the text they had before the change, says so in the run report, and keeps the reason as Evidence and codes it like any other rejection.
