@@ -17,6 +17,8 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
+from gr0wthlab import visibility
+
 REPO = Path(__file__).resolve().parents[2]
 AREAS = ("evidence", "drafts", "review-queue", "weekly-reads", "run-reports", "instructions")
 EXAMPLES = REPO / "src" / "examples" / "post-drafts"
@@ -1051,6 +1053,24 @@ def make_test_clip(
 
 
 # The web the launcher's client reads, without a network.
+
+
+class GitHub:
+    """A stand-in for GitHub's answer to whether the repository a production clone pushes to is private: the answers,
+    private, public, or unconfirmed, given one per question, the last one repeating; asked lists every question."""
+
+    NAME = "example/gr0wthlab"
+
+    def __init__(self, *answers: str):
+        self.answers = list(answers) or [visibility.PRIVATE]
+        self.asked: list[tuple[Path, str]] = []
+
+    def __call__(self, repo: Path, remote: str, env) -> visibility.Answer:
+        self.asked.append((Path(repo), remote))
+        status = self.answers[min(len(self.asked), len(self.answers)) - 1]
+        if status == visibility.UNCONFIRMED:
+            return visibility.Answer(status, "gh api exited with 1: error connecting to api.github.com")
+        return visibility.read(self.NAME, json.dumps({"private": status == visibility.PRIVATE, "visibility": status}))
 
 
 class Web:

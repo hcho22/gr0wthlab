@@ -10,8 +10,10 @@ The format of every record, and what Mandu may read: [the Mandu exchange](mandu-
 `src/bin/gr0wthlab run` does the whole run, scheduled or on demand.
 A run on demand always does it, and so does a one-off scheduled start (`--once`); a start of the weekly schedule does it only while the week's run is still owed and the Mac is fully awake, and otherwise ends at once ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
 
-1. In the production clone only, it fetches `origin` and fast-forwards `main`, then restarts itself on the new code.
-   Before that, it restores its owner's read and write access to anything under `workspace/` left without it.
+1. In the production clone only, while `records.save_after_run` is on, it first asks GitHub whether the repository `origin` pushes to is private, and refuses to start while GitHub says plainly that it is public ([The repository must be private](#the-repository-must-be-private)).
+   Any other answer lets the run go ahead, and its records stay local unless GitHub says plainly, when asked again at step 8 and just before each push at step 9, that the repository is private.
+   Then it fetches `origin` and fast-forwards `main`, and restarts itself on the new code, which asks GitHub again by its own configuration before it does anything else.
+   Before the fetch, it restores its owner's read and write access to anything under `workspace/` left without it.
    It refuses to start if the clone is not on `main`, has changes outside `workspace/` and `ledger/`, or has local commits outside them.
    If the fetch fails, for example offline, it runs the current code and says so in the run report.
 2. It snapshots RepToday's Go-To-Market Package in Mandu (`ledger/evidence/package-snapshots/`).
@@ -115,9 +117,10 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    It takes in the code the agent proposed for each rejection reason, writes it beside the Founder's words in that decision's Evidence, and rebuilds the learning ledger (`ledger/evidence/learning/ledger.json`), whose counts read "3 of 7".
    A proposed code that fails its check is set aside: its file is removed, and the run report and notice name it with the reasons.
    The `Rejection reasons coded` output is complete only when every reason the brief listed has an accepted code, or there was none to code; a reason left without one, or a reason that could not be read, marks it incomplete, and the reason is asked for again at the next run.
-8. It writes `ledger/review-queue/queue.json`, each workflow's run state (`ledger/run-reports/state/`), and the run report (`ledger/run-reports/<run id>.md`), whose first line is `checked=N acted=N note=...` even when nothing happened.
+8. In the production clone only, while `records.save_after_run` is on, it asks GitHub again whether the repository is private; on any answer but a plain private, the run report and the run's notice say that this run's records were kept local, with the reason.
+   It writes `ledger/review-queue/queue.json`, each workflow's run state (`ledger/run-reports/state/`), and the run report (`ledger/run-reports/<run id>.md`), whose first line is `checked=N acted=N note=...` even when nothing happened.
    It notes how the run ended in the record of the week's run (`ledger/run-reports/attempts/`), which the next start of the weekly schedule reads.
-9. In the production clone only, it commits the changed `workspace/` and `ledger/` paths and pushes them to `main`, never anything else and never by force; a change to a README in either is put back, since only a reviewed pull request changes documentation.
+9. In the production clone only, it commits the changed `workspace/` and `ledger/` paths and, only if GitHub said at step 8 that the repository is private and says so again just before each push, pushes them to `main`, never anything else and never by force; a change to a README in either is put back, since only a reviewed pull request changes documentation.
    The records the Founder made at a sitting are in `ledger/founder/`, so they are saved here too: those made before the run by its first records step, and those made while it ran by this one.
    A record of the Founder's that holds what looks like an email address, as only one changed by hand can, is never committed.
    If `origin/main` moved meanwhile, it replays the records commit on top and retries once; a commit that cannot be pushed stays local and goes with the next run, and the run log says why the replay failed.
@@ -244,6 +247,8 @@ These also keep the agent's words, and none of them is a refusal:
 
 ## Set up the production clone (once, after merge)
 
+Make the GitHub repository private first: from the first real run on, every run pushes the Drafts, the Evidence, the Review Queue, the run reports, and every line the Founder types on the sitting page to it, and a changed or withdrawn decision keeps its first wording in the history.
+
 ```sh
 git clone https://github.com/hcho22/gr0wthlab.git ~/gr0wthlab
 cd ~/gr0wthlab
@@ -255,6 +260,22 @@ src/bin/gr0wthlab run              # the first run, on demand
 The first run should end with `records: pushed`; check that `main` on GitHub gained one `chore(records): outputs of run …` commit touching only `workspace/` and `ledger/`.
 Then hold the first sitting: `src/bin/gr0wthlab sitting` ([The weekly sitting](#the-weekly-sitting)).
 The push uses the Mac's git credentials for `https://github.com` (the `gh auth git-credential` helper); if it fails, the commit stays local and the next run pushes it.
+A first run that ends with `records: withheld` did not hear from GitHub that the repository is private, and its run report and notice, or the next run's report, give the reason ([The repository must be private](#the-repository-must-be-private)).
+
+### The repository must be private
+
+A run in the production clone that saves its records (`records.save_after_run`) asks GitHub whether the repository `origin` pushes to is private before it does anything else, asks again once its sessions' work is taken in, before it writes its notice and run report, and asks again just before each push.
+A run that restarts itself on new code after its sync asks again, by the new code's configuration, before it does anything else, so a reviewed change that turns `records.save_after_run` on while the repository is public stops the restarted run before any session.
+A run with `records.save_after_run` off pushes nothing and asks GitHub nothing, whatever the repository is.
+The question is one `gh api repos/<owner>/<name>` read, outside the sandbox, with the same GitHub login the push uses, and GitHub has 60 seconds to answer.
+While GitHub says the repository is public, the run refuses to start with exit code 4 and says so: nothing is fetched, snapshotted, started, or saved.
+A weekly start refused this way is an attempt that did not complete, as any refused start is: with the Mac awake throughout, the week's run then waits for the Founder ([Which endings earn another attempt](#a-run-happens-when-the-mac-is-awake)).
+When the first answer only falls short of confirming that the repository is private, because GitHub cannot be reached, `gh` is missing or has no login, `origin` does not push to a repository on github.com, or the answer does not say plainly that the repository is private or public, the run goes ahead, so a passing network failure does not cost the week's run.
+Nothing is ever taken as private but GitHub's own answer that it is, so the records are pushed only when the second answer, and the answer just before each push, say plainly that the repository is private.
+On any other second answer, a repository made public during the run included, the records step does not push: the run ends with `records: withheld`, its commit stays local as after a failed push, and the run report's Launcher problems and the run's notice say that this run's records were kept local, with the reason.
+On any other answer just before a push, the first or the one retried after `origin/main` moved, the push does not happen either: the run ends with `records: withheld`, and since its report is already written, the next run's report says why.
+The first run that finds the repository private again pushes the commits kept that way.
+Every other checkout, such as a firstmate worktree or a lab, asks GitHub nothing.
 
 ## Install the weekly schedule
 
@@ -812,6 +833,8 @@ rm ~/Library/LaunchAgents/gr0wthlab.weekly-run.plist
 ```
 
 To keep running but stop saving records to GitHub, set `records.save_after_run` (or `records.sync_before_run`) to `false` in `config/run.json` through a reviewed pull request; the next run picks it up when it fast-forwards.
+With `records.save_after_run` off, a run pushes nothing and does not ask GitHub whether the repository is private, so it starts whether the repository is public or not ([The repository must be private](#the-repository-must-be-private)).
+While the repository is public, a run that still saves refuses before its sync can bring that change in, so bring it in by hand first: `git -C ~/gr0wthlab pull --ff-only`.
 To stop immediately without a pull request, remove the schedule as above.
 
 ## After a change to the launcher or configuration

@@ -412,6 +412,31 @@ class OnlySleepEarnsAnotherRunTest(OwedRunTestCase):
         self.assertEqual((refused["attempt"], refused["ending"], refused["run"]), (1, attempts.REFUSED, None))
         self.assertEqual(self.run_cycle(repo=clone, trigger="scheduled", at=at(minutes=3)), (0, ""))
 
+    def test_a_production_clone_whose_repository_is_public_refuses_once_and_waits_for_the_founder(self):
+        _, clone = self.production()
+        self.github = fakes.GitHub("public")
+        code, out = self.run_cycle(repo=clone, trigger="scheduled", at=at(minutes=1))
+        self.assertEqual(code, cycle.EXIT_RECORDS)
+        self.assertIn("refusing to start: the GitHub repository `example/gr0wthlab` is public", out)
+        [refused] = self.record(clone)["runs"]
+        self.assertEqual((refused["attempt"], refused["ending"], refused["run"]), (1, attempts.REFUSED, None))
+        self.assertEqual(self.run_cycle(repo=clone, trigger="scheduled", at=at(minutes=3)), (0, ""))
+        self.assertEqual(len(self.github.asked), 1, "GitHub is not asked again every few minutes")
+
+    def test_a_weekly_start_that_cannot_confirm_the_repository_private_still_makes_the_week_s_run(self):
+        """A passing network failure at the weekly start costs no week: the run goes ahead, completes, and keeps its
+        records local."""
+        remote, clone = self.production()
+        head = fakes.git(remote, "rev-parse", "HEAD", env=self.env)
+        self.github = fakes.GitHub("unconfirmed")
+        code, out = self.run_cycle(repo=clone, trigger="scheduled", at=at(minutes=1))
+        self.assertEqual(code, 0, out)
+        self.assertIn("records: withheld: not pushed: could not confirm that the GitHub repository is private", out)
+        self.assertEqual(fakes.git(remote, "rev-parse", "HEAD", env=self.env), head, "nothing was pushed")
+        [made] = self.record(clone)["runs"]
+        self.assertEqual((made["attempt"], made["ending"]), (1, attempts.COMPLETED))
+        self.assertEqual(self.run_cycle(repo=clone, trigger="scheduled", at=at(minutes=3)), (0, ""))
+
     def test_an_attempt_that_left_no_ending_is_not_started_again_and_the_next_report_says_so(self):
         """What a run leaves that was stopped before its report, as by a restart of the Mac."""
         store = Store(self.ledger())
