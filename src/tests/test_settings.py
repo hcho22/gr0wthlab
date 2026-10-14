@@ -1,4 +1,4 @@
-"""config/run.json, the exchange folder, the run's task definition, and the launcher's confined writes."""
+"""config/run.json, the Waitlist view, the launcher's confined writes, and `check-incoming`."""
 
 import copy
 import io
