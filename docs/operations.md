@@ -284,7 +284,8 @@ What the page walks through, one thing at a time:
    Leaving it writes nothing: the item stays open and comes back at the next sitting.
    The next run marks it carried over when it knows this sitting took place, which it knows from the sitting record or from a decision given at it, and from nothing else ([Ending it](#ending-it)).
    A carried-over item says so, and from which sitting.
-   A post that shows a video plays that file on the page, so the video and its copy are approved together; when the file is missing, or is not the file the run measured, the page says so and offers no approval.
+   A post that shows a video plays that file on the page, so the video and its copy are approved together.
+   The page asks the launcher's own check of a finished file: when the file is missing or changed, or the video's record is missing or does not name that file, the page says so in the words a run report would use and offers no approval.
    A package-change proposal says what it declares about Angles and Hooks, since the Founder is the only check on that.
 3. While a Product's Beta Cohort is being recruited, the three counts: invitations sent, accepted, and first sessions booked, each a total to date.
    A count left blank is recorded as not reported, never as zero.
@@ -340,7 +341,8 @@ A run and a sitting may overlap, as when the Mac was asleep at the weekly time a
   When the run ends, the page says that the queue changed and shows the new one; waiting for that line is the simplest way to decide on this week's items.
 - A run reads the Founder's records once, before its agent starts.
   A decision given during the run is kept, and the next run takes it in.
-- A decision on an item that the run then replaced with a newer one is kept on the replaced item, and the newer item stays open with that decision shown beside it.
+- A decision on an item that the run then replaced with a newer one is kept on the replaced item, and the newer item stays open.
+  Where the page shows the newer item, beside the line that says which item it replaces, it shows the decision recorded for that item: approved or rejected, when, and the reason or note in the Founder's own words.
 - A decision the run has already taken in can no longer be changed, and the page says so.
 - Only one sitting page is served per checkout at a time; a second `sitting` command says so and ends.
 

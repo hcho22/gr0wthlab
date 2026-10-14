@@ -58,7 +58,7 @@ gr0wthlab reads no record from Mandu any more.
 - It walks the sitting in the Review Queue's order, one thing in front of the Founder at a time: the run report's summary, a warning when the weekly run due has not finished, then each open item whole, with what it touches and its Evidence.
 - For each item the Founder approves, with an optional one-line note, rejects, with a one-line reason, or leaves it for later, which writes nothing.
   A carried-over item says so and from which sitting.
-  A post that shows a video plays that file, checked against the fingerprint the Review Queue holds for it, so the video and its copy are approved together; a post whose video cannot be shown offers no approval.
+  A post that shows a video plays that file only when the launcher's own check of a finished file finds it intact and named by both the video's record and the post's entry, so the video and its copy are approved together; a post whose video cannot be shown says why and offers no approval.
   The filming plan is decided like any item.
 - While a Product's Beta Cohort is being recruited, it asks for the three counts.
   A count left blank is recorded as not reported, never as zero.

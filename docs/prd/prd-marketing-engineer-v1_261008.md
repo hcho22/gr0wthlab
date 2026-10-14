@@ -2,7 +2,7 @@
 
 **Status:** In progress (2026-10-08); each story's acceptance-criteria checkboxes record what has landed.
 Written from the Founder's design session in firstmate on 2026-10-08; every decision it rests on is listed, in order, in `design-decisions-2026-10-08.md` beside this file.
-The Marketing Engineer's repository is gr0wthlab (`hcho22/gr0wthlab`, public since 2026-10-12), and this PRD lives in it at `docs/prd/`.
+The Marketing Engineer's repository is gr0wthlab (private, `hcho22/gr0wthlab`), and this PRD lives in it at `docs/prd/`.
 On 2026-10-12 the Founder moved where the Founder decides, from Mandu to a page gr0wthlab serves; `docs/adr/0002-the-founder-decides-in-gr0wthlab.md` records it, and this PRD says what is true since.
 This PRD, the glossary (`CONTEXT.md`, at the repository root), and the first decision record (`docs/adr/0001-evidence-and-drafts-only.md`) moved into it with its first change.
 **Story prefix:** `US-ME##`.

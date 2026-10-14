@@ -11,9 +11,11 @@ import shutil
 from datetime import datetime, timedelta, timezone
 
 from gr0wthlab import exchange, founder, sitting
+from gr0wthlab.page import Page
 from gr0wthlab.sitting import COUNTS, END, ITEM, START, Refused
 from tests import fakes
 from tests.test_cycle import CycleTestCase
+from tests.test_page import Seen
 
 WEEK = timedelta(days=7)
 # The evening of the first run's Sunday, when the Founder sits down: Sunday 2026-10-11 19:42 on the Mac's clock.
@@ -345,7 +347,8 @@ class DecideTest(SittingTestCase):
 
     def test_a_decision_given_while_a_run_replaced_its_item_is_kept_under_the_rule_that_stood(self):
         """The page read the queue before a late run replaced the item, and the Founder decided what was shown. The
-        record is kept on the replaced item, and the newer item stays open with the decision beside it."""
+        record is kept on the replaced item, and the newer item stays open; where the page shows the newer item, it
+        shows the decision recorded for the one it replaces, with its date and the Founder's own reason."""
         old, new = self.one_proposal(), "20261011-name-status-cleared"
         state = self.sit_down()
         state.look()
@@ -368,6 +371,12 @@ class DecideTest(SittingTestCase):
         view = state.look()
         self.assertTrue(view.changed)
         self.assertEqual([entry.id for entry in view.entries], [new], "the page now shows the item that replaced it")
+        said = Seen(Page("/s").item(view, view.entries[0], state)).said
+        self.assertIn(
+            f"It replaces {old}. Your decision on it, given Sunday 2026-10-11 16:20: Rejected, with the reason: Wait"
+            " for counsel.",
+            said,
+        )
         self.assertEqual(
             self.refused(state.decide, old, "approve", ""),
             ["this item is not open in the Review Queue any more, so nothing was saved"],
@@ -906,23 +915,42 @@ class FilmingTest(SittingTestCase):
         self.assertEqual(saved.record["decision"], "approve")
         state.take_back(post["id"])
 
-        # The file the Founder would watch must be the file the run measured: anything else cannot be approved.
+        # The file the Founder would watch must be the file the run made and measured, as the launcher's own check
+        # of a finished file finds it (filming.posted_file): anything else cannot be approved.
         video = self.ledger() / post["asset"]
         kept = video.read_bytes()
         video.write_bytes(kept + b"another cut")
         (shown,) = [entry for entry in state.look().entries if entry.kind == "post"]
-        self.assertEqual(shown.video.problem, f"`{post['asset']}` is not the file this post was queued with")
+        changed = f"the finished file `{post['asset']}` is no longer the file its record names"
+        self.assertEqual(shown.video.problem, changed)
         reasons = self.refused(state.decide, post["id"], "approve", "")
         self.assertIn("so the video and its copy cannot be approved", reasons[0])
         self.assertEqual(state.decide(post["id"], "reject", "The cut is wrong.").record["decision"], "reject")
         state.take_back(post["id"])
         video.unlink()
         (shown,) = [entry for entry in state.look().entries if entry.kind == "post"]
-        self.assertIn("could not be read: No such file or directory", shown.video.problem)
+        self.assertEqual(shown.video.problem, f"the finished file `{post['asset']}` is gone")
         self.refused(state.decide, post["id"], "approve", "")
         video.write_bytes(kept)
         (shown,) = [entry for entry in state.look().entries if entry.kind == "post"]
         self.assertEqual(shown.video.problem, "")
+
+        # An intact file is still no video to approve when the video's record is missing or names another digest.
+        record = self.ledger() / post["asset_record"]
+        made = record.read_text(encoding="utf-8")
+        unrecorded = f"the record `{post['asset_record']}` cannot be read or does not name that video"
+        for what, change in (
+            ("missing", record.unlink),
+            ("naming another digest", lambda: record.write_text(json.dumps(dict(json.loads(made), sha256="0" * 64)))),
+        ):
+            with self.subTest(record=what):
+                change()
+                (shown,) = [entry for entry in state.look().entries if entry.kind == "post"]
+                self.assertEqual((shown.video.path, shown.video.problem), (None, unrecorded))
+                self.assertIn(unrecorded, self.refused(state.decide, post["id"], "approve", "")[0])
+                record.write_text(made, encoding="utf-8")
+                (shown,) = [entry for entry in state.look().entries if entry.kind == "post"]
+                self.assertEqual((shown.video.path, shown.video.problem), (video, ""))
 
     def test_a_video_is_only_ever_a_plain_file_of_the_ledger_s_own_assets(self):
         state = self.sit_down()

@@ -298,6 +298,10 @@ p {
   margin-bottom: 4px;
 }
 
+main > .refused {
+  margin: 0 0 14px;
+}
+
 .summary {
   margin: 14px 0 16px;
   padding: 0;

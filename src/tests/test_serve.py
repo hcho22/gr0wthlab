@@ -527,9 +527,23 @@ class WalkTest(ServeTestCase):
         self.assertIn("2 items carried over from an earlier sitting.", after)
         carried = Seen(self.get(f"/item/{ids['dispatch-request']}")[2]).said
         self.assertIn(f"Carried over from the sitting on {DAY}.", carried)
-        self.assertEqual(self.get(f"/item/{ids['post']}")[0], 404, "a decided item is never shown again")
-        status, _, body = self.post(f"/item/{ids['post']}/decide", {"decision": "reject", "line": "Too late."})
-        self.assertEqual(status, 409)
+        status, _, body = self.get(f"/item/{ids['post']}")
+        self.assertEqual(status, 404, "a decided item is never shown again")
+        self.assertIn(
+            f"The item {ids['post']} is not open in the Review Queue, so there is nothing to decide on it.",
+            Seen(body).said,
+        )
+        # The tab that still shows the item from before the run: a change or a take-back saves nothing, and says so.
+        for path, fields in (
+            (f"/item/{ids['post']}/decide", {"decision": "reject", "line": "Too late."}),
+            (f"/item/{ids['post']}/take-back", {}),
+        ):
+            with self.subTest(path=path):
+                status, _, body = self.post(path, fields)
+                self.assertEqual(status, 409)
+                said = Seen(body).said
+                self.assertIn("Nothing was saved.", said)
+                self.assertIn("This item is not open in the Review Queue any more, so nothing was saved.", said)
         self.assertEqual(self.record("decisions", ids["post"])["decision"], "approve")
 
     def test_a_run_that_finishes_during_the_sitting_is_said_and_its_queue_is_the_one_shown(self):
@@ -729,13 +743,16 @@ class VideoTest(ServeTestCase):
         self.assertEqual(self.ask("GET", f"/video/{item}")[0], 404, "never without the secret")
 
     def with_video(self, view, state, video):
+        """Each open item as a post that shows the video, with the record of that video the launcher keeps."""
         import hashlib
 
+        relative = str(video.relative_to(self.ledger()))
+        digest = hashlib.sha256(video.read_bytes()).hexdigest()
+        record = "evidence/filming/assets/day-01-0a1b2c3d4e5f.json"
+        (self.ledger() / record).parent.mkdir(parents=True, exist_ok=True)
+        (self.ledger() / record).write_text(json.dumps({"asset": relative, "sha256": digest}), encoding="utf-8")
         for entry in view.entries:
-            relative = str(video.relative_to(self.ledger()))
-            entry.entry = dict(
-                entry.entry, kind="post", asset=relative, asset_sha256=hashlib.sha256(video.read_bytes()).hexdigest()
-            )
+            entry.entry = dict(entry.entry, kind="post", asset=relative, asset_sha256=digest, asset_record=record)
             entry.video = state.video(entry.entry)
         return view
 
@@ -758,7 +775,10 @@ class VideoTest(ServeTestCase):
         self.serve(state)
         shown = Seen(self.get(f"/item/{item}")[2])
         self.assertEqual(shown.named("video"), [])
-        self.assertIn("is not the file this post was queued with", shown.said)
+        self.assertIn(
+            "the record `evidence/filming/assets/day-01-0a1b2c3d4e5f.json` cannot be read or does not name that video",
+            shown.said,
+        )
         self.assertIn("this post cannot be approved until its video can be shown", shown.said)
         forms = [Seen(self.get(f"/item/{item}")[2]).named("input")]
         self.assertEqual([attrs["value"] for attrs in forms[0] if attrs.get("type") == "hidden"], ["reject"])

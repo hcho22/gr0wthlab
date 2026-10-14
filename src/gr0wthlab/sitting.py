@@ -22,7 +22,6 @@ is text to show.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import os
@@ -32,8 +31,8 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 
-from . import exchange, founder
-from .areas import UnsafeFile, read_plain
+from . import exchange, filming, founder
+from .areas import Store, UnsafeFile, read_plain
 from .boundary import FOUNDER, LEDGER, PRODUCT_REGISTRY, ConfigError, canonical, load_json
 from .messages import CREATOR
 from .queue import APPROVED, OPEN, QUEUE_FILE, REVIEW_QUEUE
@@ -42,7 +41,6 @@ from .waitlist import looks_like_address
 
 # The lock one sitting page holds while it serves, beside the run lock in ledger/; never committed.
 SERVING_LOCK = "sitting.lock"
-ASSETS = "assets"
 ONE_LINE = "One line, and nothing about a person."
 NO_PERSON = (
     "Every line you type is kept in a record: one line of at most 300 characters, with no email address, no name, and"
@@ -99,6 +97,7 @@ class Entry:
     item: exchange.Item | None = None
     problem: str = ""  # why its item file cannot be shown, when it cannot
     decision: exchange.Decision | None = None  # the Founder's record of a decision, when it can be used
+    replaced: exchange.Decision | None = None  # the Founder's record of a decision on the item this one replaces
     record_problem: str = ""  # why the record in its place cannot be used, when one cannot
     taken_in: bool = False  # a run has taken the decision in, so it can no longer be changed
     video: Video | None = None
@@ -275,7 +274,8 @@ class Sitting:
         self.earlier = 0  # the minutes the date's sitting record held then, from an earlier sitting of the same date
         self.day = self.now().date().isoformat()  # the sitting's date
         self.first_run: str | None = None  # the run whose Review Queue the sitting began with
-        self.hashes: dict[tuple[str, int, int], str] = {}
+        self.store = Store(self.ledger)  # only to find the launcher's records of finished videos; nothing writes
+        self.intact: set[tuple] = set()  # each finished file the launcher's check found intact, by what it saw on disk
 
     def now(self) -> datetime:
         return self.clock().astimezone().replace(microsecond=0)
@@ -314,8 +314,10 @@ class Sitting:
         return records
 
     def video(self, entry: Mapping[str, object]) -> Video | None:
-        """The finished video a post shows, checked against the fingerprint the Review Queue holds for it, so the
-        file the Founder watches is the file the run measured."""
+        """The finished video a post shows, as the launcher's one check of a finished file finds it
+        (filming.posted_file): only the file both the video's record and the post's entry name can be played and
+        approved, so the file the Founder watches is the file the run made and measured. The page serves only a plain
+        file among the finished videos, reached through no link."""
         asset = entry.get("asset")
         if entry.get("kind") != "post" or not asset:
             return None
@@ -323,22 +325,34 @@ class Sitting:
         if not exchange.ASSET_PATTERN.fullmatch(relative):
             return Video(None, "the Review Queue names no file of the finished videos for it")
         path = self.ledger / relative
-        try:
-            if os.path.realpath(str(path)) != str(path):
-                return Video(None, "its file is not a plain file in the finished videos")
-            info = os.lstat(str(path))
-            key = (relative, info.st_size, info.st_mtime_ns)
-            if key not in self.hashes:
-                digest = hashlib.sha256()
-                with path.open("rb") as handle:
-                    for block in iter(lambda: handle.read(1 << 20), b""):
-                        digest.update(block)
-                self.hashes[key] = digest.hexdigest()
-        except OSError as error:
-            return Video(None, f"`{relative}` could not be read: {error.strerror or error}")
-        if self.hashes[key] != entry.get("asset_sha256"):
-            return Video(None, f"`{relative}` is not the file this post was queued with")
+        if os.path.realpath(str(path)) != str(path):
+            return Video(None, "its file is not a plain file in the finished videos")
+        found = self.finished_file(entry)
+        if found is None:
+            return Video(None, "the Review Queue holds no fingerprint of its finished file")
+        if not found.intact:
+            return Video(None, found.told(""))
         return Video(path)
+
+    def finished_file(self, entry: Mapping[str, object]) -> filming.OnDisk | None:
+        """filming.posted_file for a post's entry. A file it found intact is not read again while neither the file
+        nor the video's record changes on disk, since the page reads every view afresh and a finished video is large;
+        any other answer is asked again each time."""
+        try:
+            seen = tuple(
+                (name, info.st_size, info.st_mtime_ns, info.st_ctime_ns, info.st_ino)
+                for name in (str(entry["asset"]), str(entry["asset_record"]))
+                for info in (os.lstat(str(self.store.path(name))),)
+            )
+        except (KeyError, OSError, ConfigError):
+            return filming.posted_file(entry, self.store)
+        key = (str(entry.get("asset_sha256")), seen)
+        if key in self.intact:
+            return filming.OnDisk(filming.INTACT, str(entry["asset"]))
+        found = filming.posted_file(entry, self.store)
+        if found is not None and found.intact:
+            self.intact.add(key)
+        return found
 
     def look(self) -> View:
         """Read everything a page is drawn from: the Review Queue, each open item, and the Founder's records."""
@@ -382,6 +396,8 @@ class Sitting:
 
         for entry in opened:
             shown = Entry(entry, taken_in=founder.taken_in(self.ledger, str(entry["id"])), video=self.video(entry))
+            if entry.get("supersedes"):
+                shown.replaced = decisions.get(str(entry["supersedes"]), (None, ""))[0]
             try:
                 shown.item = queued_item(self.ledger, entry, self.products)
             except (OSError, ValueError, UnsafeFile) as error:

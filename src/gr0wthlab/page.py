@@ -387,7 +387,20 @@ class Page:
 
     # The walk.
 
-    def start(self, view: View, state: sitting.Sitting) -> str:
+    def start(self, view: View, state: sitting.Sitting, reasons: Sequence[str] = (), gone: str = "") -> str:
+        """The first view. reasons say why an act on an item that is no longer open saved nothing, and gone names an
+        item asked for that is not open, so the start view is never shown in its place without saying why."""
+        why = [self.refusal(reasons)]
+        if gone:
+            why.append(
+                tag(
+                    "p",
+                    "The item ",
+                    tag("code", gone),
+                    " is not open in the Review Queue, so there is nothing to decide on it.",
+                    class_="note warn",
+                )
+            )
         if view.queue_problem:
             sheet = tag(
                 "section",
@@ -409,7 +422,7 @@ class Page:
                 class_="answer",
             )
             return self.frame(
-                "The sitting", view, state, START, self.stray(view), tag("div", sheet, answer, class_="walk")
+                "The sitting", view, state, START, *why, self.stray(view), tag("div", sheet, answer, class_="walk")
             )
         undecided = [entry for entry in view.entries if not entry.decided]
         counts: dict[str, int] = {}
@@ -462,6 +475,7 @@ class Page:
             view,
             state,
             START,
+            *why,
             self.notes(view),
             self.stray(view),
             tag("div", sheet, answer, class_="walk"),
@@ -509,7 +523,11 @@ class Page:
         if data.get("carried_over"):
             flags.append(tag("p", f"Carried over from the sitting on {data.get('carried_over_from')}.", class_="flag"))
         if data.get("supersedes"):
-            flags.append(tag("p", "It replaces ", tag("code", str(data["supersedes"])), ".", class_="flag"))
+            replaced = [tag("code", str(data["supersedes"])), "."]
+            if entry.replaced is not None:
+                given = f" Your decision on it, given {moment(entry.replaced.decided_at)}: "
+                replaced += [given, ended(said(entry.replaced, entry.kind))]
+            flags.append(tag("p", "It replaces ", *replaced, class_="flag"))
         if entry.kind == "package-change-proposal":
             declared = data.get("new_angle")
             words = {

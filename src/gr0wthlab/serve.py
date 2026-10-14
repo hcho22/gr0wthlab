@@ -227,7 +227,7 @@ class Handler(BaseHTTPRequestHandler):
             if len(parts) == 2 and parts[0] == "item":
                 entry = view.find(parts[1])
                 if entry is None:
-                    return self.html(page.start(view, state), HTTPStatus.NOT_FOUND)
+                    return self.html(page.start(view, state, gone=parts[1]), HTTPStatus.NOT_FOUND)
                 typed = {"change": "1"} if query.get("change") else None
                 return self.html(page.item(view, entry, state, typed=typed, last=last))
             if len(parts) == 2 and parts[0] == "counts":
@@ -388,7 +388,7 @@ class Handler(BaseHTTPRequestHandler):
         if parts[0] == "item":
             entry = view.find(parts[1])
             if entry is None:
-                return self.html(page.start(view, state), HTTPStatus.CONFLICT)
+                return self.html(page.start(view, state, reasons), HTTPStatus.CONFLICT)
             key = "reason" if fields.get("decision") == exchange.REJECT else "note"
             typed = {key: fields.get("line", ""), "change": "1"}
             return self.html(page.item(view, entry, state, reasons, typed), status)

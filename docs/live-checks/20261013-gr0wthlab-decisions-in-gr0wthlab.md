@@ -11,7 +11,7 @@ How to read the paths:
 - `<lab>` is the throwaway lab under `<tmp>` described below.
 - Where a quoted line held the home folder's or the temporary folder's full path, that prefix was replaced with `~` or `<tmp>`.
 
-All times are Mac local time (PDT, UTC-7): rounds 1 and 2 on 2026-10-12, rounds 3 to 6 on 2026-10-13.
+All times are Mac local time (PDT, UTC-7): rounds 1 and 2 on 2026-10-12, rounds 3 to 7 on 2026-10-13.
 A run identifier carries the UTC date, which was already the next day each time.
 Codex CLI 0.160.0 with `gpt-6-luna` at `high` reasoning effort throughout.
 
@@ -439,6 +439,46 @@ No run followed that sitting: round 5's lab and `src/tests/test_serve.py` hold w
 
 - `/usr/bin/python3 -m unittest discover -s src/tests -t src`, under Python 3.9.6, run in the background on this round's tree: 1289 tests in 1839 s, and none failed.
   Nothing under `src/` or `config/` changed after that run began.
+- `ruff check` and `ruff format --check` on `src` and `src/bin/gr0wthlab`, ruff 0.15.20: clean.
+- The latest-Python job of CI, which runs on Linux, was not run here.
+
+## Round 7: what the page says of a closed item, a replaced one, and a post's video
+
+Review found three places where the page said less, or other, than the records show, and this round changed each:
+
+- An act on an item that a run closed meanwhile, as `Take it back` or `Reject` in a tab opened before the run ended, saves nothing, and the page now says so: the start view it answers with opens with "Nothing was saved." and the reason.
+  Asking for such an item by its address says that the item is not open in the Review Queue.
+- An item that replaces an earlier one shows, beside "It replaces" and the earlier item, the decision the Founder recorded for that item: approved or rejected, when, and the reason or note in the Founder's own words.
+- Whether a post's video can be played and approved is now the launcher's own answer (`filming.posted_file`): a post whose finished file is intact but whose video record is missing or names another digest is not offered for approval with its video, and the page says why in the words a run report would use.
+
+The PRD's line about the repository says again what `main` says, that the repository is private.
+This round changed only the page (`src/gr0wthlab/sitting.py`, `page.py`, `serve.py`, and `src/sitting/page.css`), its tests, and documents, so no preflight and no boundary check was owed, and neither was run.
+It ran on 2026-10-13 from about 21:21 to 21:55, on the tree this record lands with: `src` tree `1410a7452dcec392f9ce254d8ea38515507eb437`, `config` tree unchanged, `b43d0624383aada9155906ee4b54515c3ecb3a5d`.
+
+### The page in a browser
+
+One throwaway lab under `<tmp>`, built from the worktree as earlier rounds' were, with the no-model Codex stand-in, so no model was called; the sitting was driven in headless Chrome through `chrome-devtools-axi`.
+
+| Step | Run | What the records showed |
+| --- | --- | --- |
+| `src/bin/gr0wthlab run`, the stand-in writing two proposals | `20261014T042233Z-on-demand-b627` | 3 items open: the two proposals and the reviewed Dispatch request |
+| `src/bin/gr0wthlab sitting`: one proposal approved by a click, and its view opened again, which offered `Take it back` | none | the decision record holds `approve` |
+| `src/bin/gr0wthlab run`, with that view still open | `20261014T042250Z-on-demand-dea3` | the approval taken in: the item closed as approved |
+| `Take it back` clicked in the open view | none | the page answered with the start view, which opened with "Nothing was saved." and "This item is not open in the Review Queue any more, so nothing was saved.", above "A run finished since you began."; the decision record still holds `approve` |
+| the item's address opened | none | the start view says "The item 20261013-one is not open in the Review Queue, so there is nothing to decide on it." |
+
+That first look showed the "Nothing was saved." block touching the note under it at the top of the start view, so the style sheet gives it the space a note has; the same post, sent again from that browser, showed the two apart.
+
+### What round 7 did not exercise
+
+- The decision on a replaced item, on the page in a browser: a run must replace an item while a decision on it is given, which the lab cannot time by hand; `src/tests/test_sitting.py` holds it on the page's own view, and `src/tests/test_page.py` holds that the Founder's words in it are shown as text.
+- A post's video in a browser: the lab had no filming; `src/tests/test_sitting.py` holds, on a whole filming run's records, that a changed, missing, or unrecorded file is not offered for approval and what the page says of each.
+- The preflight, the boundary check, the hole tests, and a weekly run with the real agent: this round changed no launcher code and no part of the permission profile.
+
+### Unit tests and lint on this round's tree
+
+- `/usr/bin/python3 -m unittest discover -s src/tests -t src`, under Python 3.9.6, run in the background on this round's tree: 1289 tests in 1641 s, and none failed.
+  Only `src/sitting/page.css` changed after that run began, and `src/tests/test_serve.py`, which serves it, passed again afterwards: 32 tests.
 - `ruff check` and `ruff format --check` on `src` and `src/bin/gr0wthlab`, ruff 0.15.20: clean.
 - The latest-Python job of CI, which runs on Linux, was not run here.
 

@@ -241,7 +241,8 @@ class ViewTest(unittest.TestCase):
             "carried_over_from": "<u>2026-10-04</u>",
             "published_at": "2026-10-11T23:00:00+00:00",
         }
-        self.entry = sitting.Entry(entry, item)
+        replaced = exchange.Decision("20261011-older", "reject", self.hostile, None, "2026-10-11T19:42:00-07:00", None)
+        self.entry = sitting.Entry(entry, item, replaced=replaced)
         self.other = sitting.Entry(dict(entry, id="20261011-other", kind="notice"), None, problem=self.hostile)
         self.view = sitting.View(
             run="<b>run</b>",
@@ -271,6 +272,7 @@ class ViewTest(unittest.TestCase):
         )
         return {
             "start": page_.start(view, state),
+            "start, after an act on an item that is not open": page_.start(view, state, [self.hostile], self.hostile),
             "no queue": page_.start(sitting.View(queue_problem=self.hostile, stray=view.stray), state),
             "item": page_.item(view, entry, state, [self.hostile], typed, last),
             "item that cannot be shown": page_.item(view, self.other, state),
