@@ -34,6 +34,7 @@ from pathlib import Path
 
 from . import exchange, founder
 from .areas import UnsafeFile, read_plain
+from .beta import COUNT_LABELS
 from .boundary import FOUNDER, LEDGER, PRODUCT_REGISTRY, ConfigError, canonical, load_json
 from .messages import CREATOR
 from .queue import APPROVED, OPEN, QUEUE_FILE, REVIEW_QUEUE
@@ -43,7 +44,6 @@ from .waitlist import looks_like_address
 # The lock one sitting page holds while it serves, beside the run lock in ledger/; never committed.
 SERVING_LOCK = "sitting.lock"
 ASSETS = "assets"
-MAX_MINUTES = 600
 ONE_LINE = "One line, and nothing about a person."
 NO_PERSON = (
     "Every line you type is kept in a record: one line of at most 300 characters, with no email address, no name, and"
@@ -196,6 +196,12 @@ class View:
         return steps[max(index - 1, 0)]
 
 
+def count_label(key: str) -> str:
+    """One of the three Beta Cohort counts as the page names it: on its field, and in the reason a value typed there
+    is refused."""
+    return COUNT_LABELS[key][:1].upper() + COUNT_LABELS[key][1:]
+
+
 def one_line(value: str, name: str, required: bool, reasons: list[str]) -> str | None:
     """A line the Founder typed, without the spaces around it, or None when it was left blank."""
     text = value.strip()
@@ -290,7 +296,7 @@ class Sitting:
         """How long the sitting has taken so far, in whole minutes, as the page measured it."""
         if self.began is None:
             return 1
-        return max(1, min(MAX_MINUTES, math.ceil((self.elapsed() - self.began) / 60)))
+        return max(1, min(exchange.MAX_MINUTES, math.ceil((self.elapsed() - self.began) / 60)))
 
     # Reading.
 
@@ -491,8 +497,9 @@ class Sitting:
         if found is None or found.build is None:
             raise Refused([f"no Beta Build is recorded for {product}, so there is no Beta Cohort to count"])
         reasons: list[str] = []
-        labels = {"invitations_sent": "Invitations sent", "accepted": "Accepted", "sessions_booked": "Sessions booked"}
-        counts = {key: whole_number(given.get(key, ""), labels[key], 0, None, reasons) for key in exchange.BETA_COUNTS}
+        counts = {
+            key: whole_number(given.get(key, ""), count_label(key), 0, None, reasons) for key in exchange.BETA_COUNTS
+        }
         if not reasons and all(value is None for value in counts.values()):
             reasons.append("give at least one count; a count you leave blank is recorded as not reported, never zero")
         record = {
@@ -508,9 +515,9 @@ class Sitting:
         """How long the sitting took, in minutes, with an optional one-line note: the record that ends a sitting.
         A later sitting of the same date writes it again, whole, with the minutes of both."""
         reasons: list[str] = []
-        number = whole_number(minutes, "The minutes", 1, MAX_MINUTES, reasons)
+        number = whole_number(minutes, "The minutes", 1, exchange.MAX_MINUTES, reasons)
         if number is None and not reasons:
-            reasons.append(f"the minutes are needed, as a whole number from 1 to {MAX_MINUTES}")
+            reasons.append(f"the minutes are needed, as a whole number from 1 to {exchange.MAX_MINUTES}")
         record = {
             "exchange": exchange.EXCHANGE_VERSION,
             "date": self.day,

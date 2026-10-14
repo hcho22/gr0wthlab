@@ -35,7 +35,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from . import exchange, founder, sitting
 from .areas import UnsafeFile
 from .boundary import ConfigError
-from .page import Page, plural
+from .page import Page
 from .sitting import ITEM, Entry, Refused, Saved, Sitting, View
 
 HOST = "127.0.0.1"
@@ -360,7 +360,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.see(page.url("counts", parts[1], saved=saved.stem, kind=saved.kind))
             if parts == ["end"]:
                 saved = state.record_sitting(get("minutes"), get("note"))
-                server.say(f"saved {saved.path}: {plural(saved.record['minutes'], 'minute')}")
+                server.say(f"saved {saved.path}: {exchange.plural(saved.record['minutes'], 'minute')}")
                 self.html(page.finished(saved))
                 server.say("the sitting has ended, from the page")
                 return server.stop_soon()

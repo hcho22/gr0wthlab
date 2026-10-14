@@ -64,8 +64,9 @@ gr0wthlab reads no record from Mandu any more.
   A count left blank is recorded as not reported, never as zero.
 - At the end it records how long the sitting took, which the page measured and the Founder can correct.
   That is the one way to finish from the page: one click saves the sitting record, shows what was saved, and stops the page.
-  An item left undecided is carried over from a sitting the run knows took place, from that record or from the sitting's date on a decision given at it, so a page that ended any other way loses no carry-over once a decision was given.
-  The time of a sitting that ended without its record is reported as not recorded, never as zero.
+  A run knows a sitting took place from that record or from a decision given at it, and marks what the sitting left undecided as carried over; nothing else is read as the sign of a sitting.
+  Where a decision was given at a sitting that ended without its record, the sitting's time is reported as not recorded, never as zero.
+  A sitting that ended without its record, by the terminal, a crash, or a closed laptop, and at which no decision was given, leaves no mark: its undecided items stay open and come back at the next sitting without the carried-over mark, its time is not recorded, and nothing the Founder saved is lost.
 - Beside the walk it has one plain place for what the Founder did: a message sent, a reply received, the wait before a follow-up, a Beta Build approved, recruiting stopped or reopened.
 
 What the Founder clicks is what is saved, and the page then shows the record as it reads it back from the file.

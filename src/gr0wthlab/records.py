@@ -305,6 +305,12 @@ def unsafe(repo: Path, mode: str, path: str, max_bytes: int) -> str | None:
     return None
 
 
+def left_out(path: str, reason: str) -> str:
+    """A path the commit leaves out, with why, as the records step's result lists it. A file name can be typed by
+    hand, so a path that looks like an address is never repeated."""
+    return f"{path if founder.nameable(path) else founder.UNNAMED} ({reason})"
+
+
 def save_commit(git: Git, message: str, max_bytes: int, excluded: list[str] | None = None) -> str | None:
     """Stage workspace/ and ledger/ only, drop anything unsafe, put back any README, and commit; returns the new
     commit or None."""
@@ -314,7 +320,7 @@ def save_commit(git: Git, message: str, max_bytes: int, excluded: list[str] | No
     if added.returncode and excluded is not None:
         unread = git.fields("ls-files", "-z", "--others", "--exclude-standard", "--", *RECORD_DIRS)
         unread += git.fields("diff", "-z", "--name-only", "--", *RECORD_DIRS)
-        excluded += [f"{path} (could not be read)" for path in unread if path]
+        excluded += [left_out(path, "could not be read") for path in unread if path]
     entries = staged(git)
     stray = outside([path for _, path in entries])
     if stray:
@@ -328,7 +334,7 @@ def save_commit(git: Git, message: str, max_bytes: int, excluded: list[str] | No
             if Path(path).name == DOCUMENTATION:
                 git.run("checkout", "--quiet", "HEAD", "--", path, check=False)
             if excluded is not None:
-                excluded.append(f"{path if founder.nameable(path) else founder.UNNAMED} ({reason})")
+                excluded.append(left_out(path, reason))
     if not staged(git):
         return None
     git.run("commit", "--quiet", "-m", message)

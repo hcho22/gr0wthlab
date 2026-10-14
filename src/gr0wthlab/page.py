@@ -22,6 +22,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from urllib.parse import quote
 
 from . import exchange, founder, sitting
+from .beta import COUNT_LABELS
+from .exchange import plural
 from .sitting import COUNTS, END, ITEM, START, Entry, Message, Recruiting, Saved, View
 
 VOID = ("br", "hr", "input", "link", "meta", "source")
@@ -33,11 +35,6 @@ KIND_NAMES = {
     "dispatch-request": "Dispatch request",
     "package-change-proposal": "Package-change proposal",
     "notice": "Notice",
-}
-COUNT_LABELS = {
-    "invitations_sent": "Invitations sent",
-    "accepted": "Accepted",
-    "sessions_booked": "First sessions booked",
 }
 TALLY = "checked="  # how state.Tally.line, the first line of a run report's Summary, begins
 TABLE_RULE = re.compile(r"\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?")
@@ -208,11 +205,10 @@ def saved_words(saved: Saved) -> str:
     """What a record other than a decision says, in words, from the record as it was read back."""
     record = saved.record
     if saved.kind == founder.SITTINGS:
-        minutes = record.get("minutes")
-        return f"The sitting on {record.get('date')} took {minutes} {'minute' if minutes == 1 else 'minutes'}."
+        return f"The sitting on {record.get('date')} took {plural(record.get('minutes'), 'minute')}."
     if saved.kind == founder.BETA_REPORTS:
         counts = ", ".join(
-            f"{COUNT_LABELS[key].lower()} {'not reported' if record.get(key) is None else record.get(key)}"
+            f"{COUNT_LABELS[key]} {'not reported' if record.get(key) is None else record.get(key)}"
             for key in exchange.BETA_COUNTS
         )
         return f"{record.get('product')}, on {record.get('date')}: {counts}."
@@ -224,7 +220,7 @@ def saved_words(saved: Saved) -> str:
     if saved.kind == founder.OUTREACH:
         reply = f"a reply came on {record.get('replied_on')}" if record.get("replied_on") else "no reply recorded"
         wait = record.get("follow_up_wait_days")
-        waits = f"; a follow-up waits {wait} {'day' if wait == 1 else 'days'}" if wait is not None else ""
+        waits = f"; a follow-up waits {plural(wait, 'day')}" if wait is not None else ""
         return f"{record.get('item')}: sent on {record.get('sent_on')}; {reply}{waits}."
     return ""
 
@@ -232,10 +228,6 @@ def saved_words(saved: Saved) -> str:
 def saved_lines(saved: Saved) -> list[tuple[str, str]]:
     """Every field of a record as it was read back from its file, so the Founder sees exactly what was saved."""
     return [(key, "not given" if value is None else str(value)) for key, value in saved.record.items()]
-
-
-def plural(count: int, noun: str, many: str | None = None) -> str:
-    return f"{count} {noun if count == 1 else many or noun + 's'}"
 
 
 class Page:
@@ -703,7 +695,7 @@ class Page:
                 "p",
                 f"Last given on {latest.day}: "
                 + ", ".join(
-                    f"{COUNT_LABELS[key].lower()} "
+                    f"{COUNT_LABELS[key]} "
                     + ("not reported" if latest.counts.get(key) is None else str(latest.counts[key]))
                     for key in exchange.BETA_COUNTS
                 )
@@ -726,7 +718,7 @@ class Page:
             class_="sheet",
         )
         fields = [
-            self.small_field(key, COUNT_LABELS[key], typed.get(key, ""), "A whole number, or leave it blank")
+            self.small_field(key, sitting.count_label(key), typed.get(key, ""), "A whole number, or leave it blank")
             for key in exchange.BETA_COUNTS
         ]
         answer = tag(
@@ -805,7 +797,7 @@ class Page:
         if typed is not None:
             minutes, note = typed.get("minutes", ""), typed.get("note", "")
         else:
-            minutes = str(min(sitting.MAX_MINUTES, earlier + measured))
+            minutes = str(min(exchange.MAX_MINUTES, earlier + measured))
             note = (view.sitting.note or "") if view.sitting else ""
         how = f"The page measured {plural(measured, 'minute')} for this sitting."
         if earlier:
@@ -822,7 +814,7 @@ class Page:
             self.form(
                 self.url("end"),
                 self.small_field(
-                    "minutes", "Minutes", minutes, f"A whole number from 1 to {sitting.MAX_MINUTES}", True
+                    "minutes", "Minutes", minutes, f"A whole number from 1 to {exchange.MAX_MINUTES}", True
                 ),
                 self.line_field("note", "A note, if you want one", note),
                 tag("button", "Record the sitting and stop the page", type="submit", class_="button primary"),
@@ -837,9 +829,10 @@ class Page:
             tag(
                 "p",
                 "Ctrl-C in the page's terminal stops it without this record, and keeps every record you gave. The"
-                " next run then knows of this sitting only from a decision given at it: with one, it marks what you"
-                " left as carried over and reports the sitting's time as not recorded; with none, nothing is carried"
-                " over from it.",
+                " next run then knows this sitting took place only from a decision given at it. With one, it marks"
+                " what you left as carried over and reports the sitting's time as not recorded. With none, the"
+                " sitting leaves no mark: what you left comes back without the carried-over mark, and its time is"
+                " not recorded.",
                 class_="hint",
             ),
             class_="answer",

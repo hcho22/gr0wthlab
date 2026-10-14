@@ -360,7 +360,8 @@ class Cycle:
                 self.store.write_json(target, dict(record, taken_in_by_run=first))
                 state.sittings.append(sitting)
         # A sitting that ended without its record still took place: each decision given at it carries its date. Its
-        # time is not known, and is kept as null, never as zero.
+        # time is not known, and is kept as null, never as zero. A decision is the only other sign of a sitting a
+        # run reads: one that left neither leaves no mark.
         given: dict[str, list[str]] = {}
         for outcome in state.decisions:
             if outcome.status == "taken" and outcome.decision.sitting:
@@ -912,7 +913,7 @@ class Cycle:
                 reports, others, reports_failure = founder.read(root, beta.REPORTS)
                 reports = self.relative_records(reports)
                 for name, why in others:
-                    state.problems.append(f"{beta.record_file(beta.REPORTS, name)} could not be used ({why})")
+                    state.problems.append(f"{founder.shown(beta.REPORTS, name)} could not be used ({why})")
                 unreadable = [name for name, why in others if why != founder.STRAY]
             try:
                 state.beta = beta.prepare(

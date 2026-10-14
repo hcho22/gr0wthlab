@@ -53,6 +53,7 @@ RECRUITING_STOPPED = "stopped"
 # The three counts the Founder reports once invitations go out, each a total to date.
 BETA_COUNTS = ("invitations_sent", "accepted", "sessions_booked")
 MAX_WAIT_DAYS = 90
+MAX_MINUTES = 600  # the most a sitting record holds
 # An Evidence line names its source as a URL or as a path in backticks.
 SOURCE_PATTERN = re.compile(r"https?://\S+|`[^`\s]*[/.][^`]*`")
 # A path an Evidence line names in backticks.
@@ -396,8 +397,8 @@ def parse_sitting(stem: str, data: object) -> tuple[Sitting | None, list[str]]:
     if day != stem or not valid_date(stem):
         problems.append(f"date must be a YYYY-MM-DD date equal to the file name {stem!r}")
     minutes = data.get("minutes")
-    if isinstance(minutes, bool) or not isinstance(minutes, int) or not 0 < minutes <= 600:
-        problems.append("minutes must be a whole number from 1 to 600")
+    if isinstance(minutes, bool) or not isinstance(minutes, int) or not 0 < minutes <= MAX_MINUTES:
+        problems.append(f"minutes must be a whole number from 1 to {MAX_MINUTES}")
     note = one_line(data.get("note"), "note", problems, required=False)
     if problems:
         return None, problems

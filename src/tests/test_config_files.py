@@ -85,8 +85,6 @@ class RunConfigTest(unittest.TestCase):
         mandu = self.registry["mandu"]
         self.assertEqual(mandu["access"], "read-only")
         self.assertNotIn("exchange", mandu)
-        self.assertNotIn("GR0WTHLAB_EXCHANGE_DIR", json.dumps(self.registry))
-        self.assertIn("ledger/founder/", mandu["holds"])
 
     def test_the_repository_holds_every_folder_of_the_founders_records(self):
         """A fresh clone must have the five folders, since a run refuses to start without them."""

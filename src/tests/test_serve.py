@@ -656,10 +656,19 @@ class WalkTest(ServeTestCase):
         status, _, body = self.post("/counts/RepToday", {"invitations_sent": "", "accepted": "", "sessions_booked": ""})
         self.assertEqual(status, 422)
         self.assertIn("Give at least one count", Seen(body).said)
+        fields = {"invitations_sent": "ten", "accepted": "-1", "sessions_booked": "2.5"}
+        status, _, body = self.post("/counts/RepToday", fields)
+        self.assertEqual(status, 422)
+        refused = Seen(body)
+        named = [text.strip() for text in refused.text]
+        for label in ("Invitations sent", "Accepted", "Sessions booked"):
+            with self.subTest(label=label):
+                self.assertIn(label, named, "the field's own name")
+                self.assertIn(f"{label} must be a whole number, written in digits.", refused.said)
         fields = {"invitations_sent": "10", "accepted": "", "sessions_booked": ""}
         path, shown = self.follow(self.post("/counts/RepToday", fields))
         self.assertEqual(path, f"/counts/RepToday?saved=RepToday-{DAY}&kind=beta-reports")
-        words = "invitations sent 10, accepted not reported, first sessions booked not reported"
+        words = "invitations sent 10, accepted not reported, sessions booked not reported"
         self.assertIn(f"Saved. RepToday, on {DAY}: {words}.", shown.said)
         record = self.record("beta-reports", f"RepToday-{DAY}")
         self.assertEqual((record["invitations_sent"], record["accepted"], record["sessions_booked"]), (10, None, None))
@@ -762,7 +771,8 @@ class VideoTest(ServeTestCase):
 
 class EndTest(ServeTestCase):
     """The end of a sitting. The page has one way to finish: one click records the sitting, shows what was saved, and
-    stops the page. However a sitting ends, what it left undecided carries over once anything was decided at it."""
+    stops the page. A run knows a sitting took place from that record or from a decision given at it, and from
+    nothing else: a sitting that left neither leaves no mark."""
 
     def approve_three_and_leave_two(self):
         items = self.five_items()
@@ -852,6 +862,47 @@ class EndTest(ServeTestCase):
         queue = self.next_run()
         self.assertEqual([entry["carried_over"] for entry in queue["open"]], [False] * 5)
         self.assertNotIn("- Sitting ", self.report())
+
+    def test_a_sitting_that_left_no_sitting_record_and_no_decision_leaves_no_mark_whatever_else_it_saved(self):
+        """The decided corner: five items left for later, a Beta Cohort report saved, and the page's process ended.
+        The report is taken in as any report is, and it is no sign of a sitting: the five stay open without the
+        carried-over mark, and the run knows of no sitting, so no time is recorded for one."""
+        fakes.beta_mandu(self.mandu)
+        view = self.root / "RepToday-exports" / "waitlist-view.json"
+        self.env["GR0WTHLAB_WAITLIST_VIEW"] = str(view)
+        fakes.write_view(view, fakes.waitlist_view())
+        items = self.five_items()
+        self.serve()
+        for item in items:
+            self.assertEqual(self.get(f"/item/{item}")[0], 200, "shown, and left for later")
+        self.follow(self.post("/did/beta-build/RepToday", {"approved_on": "2026-10-09", "build": ""}))
+        counts = {"invitations_sent": "3", "accepted": "1", "sessions_booked": ""}
+        self.follow(self.post("/counts/RepToday", counts))
+        self.end_the_process()
+        self.assertEqual((self.records("decisions"), self.records("sittings")), ([], []))
+        saved = fakes.tree_digest(self.exchange)
+
+        at = fakes.SUNDAY_RUN + timedelta(days=7)
+        fakes.write_view(view, dict(fakes.waitlist_view(), generated_at=(at - timedelta(hours=1)).isoformat()))
+        queue = self.next_run()
+        self.assertEqual(fakes.tree_digest(self.exchange), saved, "nothing the Founder saved is lost")
+        left = [entry for entry in queue["open"] if entry["id"] in items]
+        self.assertEqual(sorted(entry["id"] for entry in left), sorted(items), "the five stay open")
+        self.assertEqual(
+            [(entry["carried_over"], entry.get("carried_over_from")) for entry in queue["open"]],
+            [(False, None)] * len(queue["open"]),
+            "and nothing is marked carried over",
+        )
+        kept = json.loads(
+            (self.ledger() / f"evidence/beta-recruiting/reports/RepToday-{DAY}.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual((kept["invitations_sent"], kept["accepted"], kept["sessions_booked"]), (3, 1, None))
+        self.assertEqual(kept["taken_in_by_run"], queue["updated_by_run"])
+        report = self.report()
+        self.assertIn("| Beta Cohort reports | changed | 1 record, 1 new |", report)
+        self.assertIn("| Sittings | read | 0 records, 0 new |", report)
+        self.assertNotIn("- Sitting ", report)
+        self.assertFalse((self.ledger() / "evidence/sittings").exists())
 
     def test_the_minutes_shown_are_this_sitting_s_added_to_an_earlier_sitting_s_and_never_to_its_own(self):
         self.one_proposal()

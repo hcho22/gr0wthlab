@@ -281,7 +281,7 @@ One file per decided item, `founder/decisions/<id>.json`:
 - An approval may carry `note`, one line of at most 300 characters, and has no `reason`.
 - `decided_at` is the time of the decision with its UTC offset, and `sitting` is the date of the sitting it was given at.
 
-An item the Founder leaves for later has no record; it returns at the next sitting, marked carried over once a run has read a record of the sitting it was left at ([Sitting records](#sitting-records)).
+An item the Founder leaves for later has no record; it returns at the next sitting, marked carried over once a run knows the sitting it was left at took place ([Sitting records](#sitting-records)).
 
 The Founder can change a decision, or take it back, on the page until a run has taken it in, and never after.
 Changing it writes the file again, whole; taking it back removes the file, and the item is undecided again.
@@ -311,11 +311,12 @@ One file per date of a sitting, `founder/sittings/<YYYY-MM-DD>.json`, with the m
 The page writes it when the Founder ends the sitting on the page's last view, which is the one way to finish from the page: one click saves this record, shows what was saved, and stops the page.
 A second sitting on the same date writes the same file again, whole, with the minutes of both: the minutes the record held when the second sitting began, and the minutes of the second.
 
-gr0wthlab knows that a sitting took place on a date from this record, or from a decision record whose `sitting` is that date.
-So a page that ended any other way, stopped from its terminal, by a crash, or by a closed laptop, loses no carry-over once a decision was given at that sitting.
-gr0wthlab counts an item as left undecided at the sitting when the item is still open, was queued on or before the sitting's date, and was queued before gr0wthlab first read a record of that sitting.
-Where a sitting ended without this record, its time is not known: the run report says the sitting's time was not recorded, and it is never counted as zero.
-A sitting at which no decision was given, and which ended without this record, leaves nothing that says it took place, so nothing is carried over from it.
+A run knows a sitting took place on a date from this record, which the page writes when the Founder ends the sitting on the page, or from a decision given at it: a decision record whose `sitting` is that date.
+Nothing else is read as the sign of a sitting: not a Beta Build record, a Beta Cohort report, or an outreach record.
+gr0wthlab counts an item as left undecided at the sitting when the item is still open, was queued on or before the sitting's date, and was queued before a run first took in that sitting's record or a decision given at it.
+Where a sitting ended without this record and a decision was given at it, its time is not known: the run report says the sitting's time was not recorded, and it is never counted as zero.
+A sitting that ended without this record, by the terminal, a crash, or a closed laptop, and at which no decision was given, leaves no mark.
+Its undecided items stay open and come back at the next sitting without the carried-over mark, its time is not recorded, and nothing the Founder saved is lost.
 
 ## Beta Build records
 

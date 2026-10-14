@@ -262,6 +262,22 @@ class SaveTest(RecordsTestCase):
         self.assertEqual(result.excluded, [])
         self.assertEqual(self.git(self.clone, "status", "--porcelain"), "")
 
+    @unittest.skipIf(os.geteuid() == 0, "root can read any file")
+    def test_an_unreadable_file_among_the_founders_records_named_like_an_address_is_left_out_unnamed(self):
+        self.write(f"ledger/founder/sittings/{fakes.ADDRESS}.json", "{}\n").chmod(0)
+        self.write("ledger/founder/decisions/locked.json", "{}\n").chmod(0)
+        self.write("workspace/drafts/ok.md")
+        result = self.save()
+        self.assertEqual(result.status, records.PUSHED, result.detail)
+        self.assertEqual(self.remote_files(), ["workspace/drafts/ok.md"])
+        self.assertEqual(
+            sorted(result.excluded),
+            [
+                "a file whose name is not repeated here (could not be read)",
+                "ledger/founder/decisions/locked.json (could not be read)",
+            ],
+        )
+
     def commit_upstream_and_update(self, relative, text):
         self.land_upstream(relative, text)
         result = self.prepare()

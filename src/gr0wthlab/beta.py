@@ -146,12 +146,6 @@ def rules(registry: Mapping, config: Settings) -> Rules | None:
 # The Founder's records.
 
 
-def record_file(folder: str, name: str) -> str:
-    """One of the Founder's record files, as a report names it, by its path under ledger/. A file name can be typed
-    by hand, so one that looks like an address is never repeated."""
-    return founder.shown(folder, name)
-
-
 @dataclass(frozen=True)
 class Gate:
     """What the Founder's Beta Build record says this run; recruiting exists only while it is recorded."""
@@ -266,10 +260,10 @@ def read_reports(
     for name, path, data in found:
         record, issues = founder.parse(name, data, exchange.parse_beta_report)
         if record is None:
-            problems.append(f"{record_file(REPORTS, name)}: {'; '.join(issues)}")
-            unread.append(record_file(REPORTS, name))
+            problems.append(f"{founder.shown(REPORTS, name)}: {'; '.join(issues)}")
+            unread.append(founder.shown(REPORTS, name))
         elif record.product != product:
-            where = record_file(REPORTS, name)
+            where = founder.shown(REPORTS, name)
             problems.append(f"{where}: it names a Product whose Beta Cohort is not being recruited")
         else:
             usable.append((record, path, hashlib.sha256(data).hexdigest()))
@@ -621,7 +615,8 @@ def prepare(
     plan.changed = gate.sha256 != previous.build
     usable, plan.report_problems, unread = read_reports(rules.product, reports or ())
     plan.reports, plan.reports_failure = len(reports or ()), reports_failure
-    plan.reports_unread = reports_unread(reports_failure, [record_file(REPORTS, name) for name in unreadable] + unread)
+    shown = [founder.shown(REPORTS, name) for name in unreadable]
+    plan.reports_unread = reports_unread(reports_failure, shown + unread)
     plan.new_reports = keep_reports(store, usable, run_id, now)
     plan.counts = standing([report for report, _, _ in usable])
     plan.held, plan.notes = held_entries(previous, ledger.entries, rules.product)

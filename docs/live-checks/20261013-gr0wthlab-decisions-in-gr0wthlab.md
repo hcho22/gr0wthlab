@@ -11,7 +11,7 @@ How to read the paths:
 - `<lab>` is the throwaway lab under `<tmp>` described below.
 - Where a quoted line held the home folder's or the temporary folder's full path, that prefix was replaced with `~` or `<tmp>`.
 
-All times are Mac local time (PDT, UTC-7): rounds 1 and 2 on 2026-10-12, rounds 3 and 4 on 2026-10-13.
+All times are Mac local time (PDT, UTC-7): rounds 1 and 2 on 2026-10-12, rounds 3, 4, and 5 on 2026-10-13.
 A run identifier carries the UTC date, which was already the next day each time.
 Codex CLI 0.160.0 with `gpt-6-luna` at `high` reasoning effort throughout.
 
@@ -341,11 +341,73 @@ Both labs' second runs and the second lab's terminal said `1 minutes`; the run r
 - The page's own script is now run in `src/tests/test_serve.py` under node, v20.19.5 here, against a stand-in page; the test is skipped where node is absent.
 - The latest-Python job of CI, which runs on Linux, was not run here.
 
+## Round 5: after the review of the carry-over rule
+
+Review asked whether a sitting should be known from more than a decision, and the rule was decided as it stood: a run knows a sitting took place from its sitting record, which the page writes when the Founder ends the sitting on the page, or from a decision given at it, and nothing else is read as the sign of a sitting.
+A sitting that ended without its record, by the terminal, a crash, or a closed laptop, and at which no decision was given, leaves no mark: its undecided items stay open and come back at the next sitting without the carried-over mark, its time is not recorded, and nothing the Founder saved is lost.
+This round changed no part of that rule in code; it states the rule and that corner the same way wherever either is described, and holds the corner with a unit test.
+
+It also changed launcher code in four small ways, which is why the boundary was checked again:
+
+- The three Beta Cohort counts have one set of names, `beta.COUNT_LABELS`, which the run report, the page's fields, and the reason a typed count is refused all use; the page's third field is now `Sessions booked`, where it said `First sessions booked`.
+- `exchange.plural` and `exchange.MAX_MINUTES` replace the page's own copies of each.
+- `beta.record_file`, which had become another name for `founder.shown`, is gone.
+- The records step no longer repeats the name of a file under `workspace/` or `ledger/` that looks like an email address when the file could not be read, as it already did not when the file was left out for another reason.
+
+This round ran on 2026-10-13 from about 19:31 to 20:07, with Codex CLI 0.160.0, on the tree this record lands with: `src` tree `1fdba66cdfdd17a2c9ed3390d882733b7cd5101c`, `config` tree unchanged, `b43d0624383aada9155906ee4b54515c3ecb3a5d`.
+`git status` in the worktree was not empty, since the round's changes were not committed yet; its listing was the same before the preflight and after the boundary check.
+
+### The boundary, from the worktree, on the real configuration
+
+Run from the linked worktree, with `GR0WTHLAB_LOG_DIR` set to a folder under `<tmp>` and no other override, from 20:05, after the unit suite below had ended.
+
+| Command | Run | What the records showed |
+| --- | --- | --- |
+| `src/bin/gr0wthlab show-config` | none (no model) | fingerprint `0a94ab4c7904c115f5a884f73c180172754eb8e9cd3e4e402837076ce3a54090`, the one round 4 printed |
+| `src/bin/gr0wthlab preflight` | none (no model) | 6 areas written; 19 paths refused, each of the five folders of the Founder's records among them by its own path; no breach and no failure; the listing of the footage place refused, none listed, none untried; both listed hosts unreachable, none reached, none untried |
+| `src/bin/gr0wthlab boundary-check` | `20261014T030533Z-on-demand-4643` | PASSED at its first probe run; the same fingerprint; 43 steps to prove; 14 of 14 file-tool targets refused, each in a patch of its own; 16 kernel Seatbelt denials, one `file-write-create` for each of the five folders among them; 1 of 1 forbidden read refused; 12 of 12 permitted sentinels written; no sentinel escaped; no local connection got through; nothing changed since the snapshot; agent time 70.7 s |
+
+Before the preflight and after the boundary check, the `HEAD`, branch, `git status` listing, and stash count of the real Mandu, RepToday, and Immerse checkouts were read; the two readings are identical for all three.
+A content hash of each checkout was not taken this round.
+`~/Library/LaunchAgents` holds no gr0wthlab LaunchAgent.
+
+### The corner, and the renamed field, in a lab
+
+One throwaway lab under `<tmp>`, built from the worktree as round 4's were, with what Beta Cohort recruiting starts from beside it (the example set's Mandu overlay and a made-up Waitlist view) and the no-model Codex stand-in, so no model was called.
+The sitting was driven in headless Chrome through `chrome-devtools-axi`.
+
+| Step | Run | What the records showed |
+| --- | --- | --- |
+| `src/bin/gr0wthlab run`, the stand-in writing five proposals | `20261014T023234Z-on-demand-8d59` | 6 items open: the five proposals and the reviewed Dispatch request |
+| `src/bin/gr0wthlab sitting`: a Beta Build recorded on `What I did` by a click; on the counts view, `2.5` typed in the third field and the form sent | none | the field reads `Sessions booked` and the page answered "Nothing was saved." and "Sessions booked must be a whole number, written in digits." |
+| the same view: 3 invitations sent and 1 accepted typed, the third field left blank, and the form sent | none | the page showed "Saved. RepToday, on 2026-10-13: invitations sent 3, accepted 1, sessions booked not reported."; the terminal said `saved founder/beta-reports/RepToday-2026-10-13.json` |
+| the last view opened, no item decided, then the page's process killed (`kill -KILL`) | none | no file in `ledger/founder/decisions/` and none in `ledger/founder/sittings/` |
+| `src/bin/gr0wthlab run` | `20261014T023346Z-on-demand-ea9a` | all six items still open, each with `carried_over` false and no `carried_over_from`; the report's summary says `0 carried over`; its Sittings source reads `0 records, 0 new` and its Beta Cohort reports source `1 record, 1 new`; the report has no line of a sitting; no `ledger/evidence/sittings/`; the Evidence of the Beta Cohort report holds 3, 1, and not reported, taken in by this run |
+
+That second run also queued one notice of its own problems, new and not carried over: the stand-in wrote no recruiting Draft.
+The last view's closing lines read, in that browser, as the page now has them: with a decision given, the next run marks what was left as carried over and reports the sitting's time as not recorded, and with none the sitting leaves no mark.
+
+### What round 5 did not exercise
+
+- The unreadable file named like an email address among the Founder's records: `src/tests/test_records.py` holds it against a real git repository, and no lab run made one.
+- The real agent in a weekly run, the hole tests, every route into the records, and a sitting ended on the page: this round changed none of them, so rounds 3 and 4 stand.
+- The page's other views: unchanged this round but for the two wordings above.
+- A scheduled run, the real production clone, Mandu's side, and a browser other than Chrome, as in round 1.
+
+### Unit tests and lint on this round's tree
+
+- `/usr/bin/python3 -m unittest discover -s src/tests -t src`, under Python 3.9.6, run in the background on this round's tree and ended before the live checks began: 1289 tests in 1963 s, and none failed.
+  Nothing under `src/` or `config/` changed after that run began.
+- `ruff check` and `ruff format --check` on `src` and `src/bin/gr0wthlab`, ruff 0.15.20: clean.
+- The latest-Python job of CI, which runs on Linux, was not run here.
+
 ## Screenshots
 
 Taken in round 2, on the page code as it was then, from the synthetic checkout; every name, message, and figure in them is fixture text.
 The merge in round 3 changed none of the page's own files.
 Round 4 changed the last view, so its screenshot, the end of the sitting, was taken again in round 4, from the second lab above.
+Round 5 renamed the third count's field, so the screenshot of the counts was taken again in round 5, from that round's lab.
+Round 5 also reworded the closing lines of the last view's side panel, and the end of the sitting was not taken again: its screenshot shows those lines as round 4 had them.
 
 | Screen | Laptop, 1280 wide | Narrow, 390 wide |
 | --- | --- | --- |

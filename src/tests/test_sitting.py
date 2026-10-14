@@ -177,7 +177,7 @@ class WalkTest(SittingTestCase):
         state.begin()
         self.assertEqual(state.minutes(), 48)
         self.elapsed = 100.0 + 20 * 3600
-        self.assertEqual(state.minutes(), sitting.MAX_MINUTES)
+        self.assertEqual(state.minutes(), exchange.MAX_MINUTES)
         self.assertEqual(state.day, DAY, "the sitting's date is the Mac's local date when it began")
 
 
