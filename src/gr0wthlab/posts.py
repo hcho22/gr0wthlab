@@ -335,7 +335,7 @@ def context_plan(
     mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
     parsed, files, rules_data, rules_problem = read_kit(mandu, roles)
     rules = None
-    if rules_data is not None:
+    if not rules_problem:
         try:
             rules = lint.Rules(rules_data)
         except lint.RulesError as error:

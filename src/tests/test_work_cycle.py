@@ -369,7 +369,10 @@ class ListeningCycleTest(WorkCycleTestCase):
         self.assertEqual([entry["id"] for entry in self.items("message")], [reply], "it is not withdrawn")
         stands = "not checked again, since brand-rules.json could not be used; the open item stands"
         self.assertIn(f"- Reply Draft for `{POST}` (r/fitness30plus): kept: `{reply}`; {stands}", report)
-        self.assertRegex(report, r"\| Listening Evidence \| incomplete \| [^|]*brand-rules\.json could not be used")
+        name = f"RepToday package: `{rules.relative_to(self.mandu)}`"
+        self.assertIn(f"| Listening Evidence | incomplete | {name} could not be used |", report)
+        (line,) = [line for line in self.notices().splitlines() if line.startswith(f"- {name}: ")]
+        self.assertTrue(line.endswith(" Incomplete: Post Drafts, Listening Evidence."), line)
         rules.write_text(valid, encoding="utf-8")
         self.agent()
         self.go(weeks=3)
@@ -830,11 +833,14 @@ class OutreachCycleTest(WorkCycleTestCase):
             f"| Slow Strength | first message | kept | `20261011-message-creator-slow-strength`; {stands} |", report
         )
         self.assertIn(f"| your personal network | ask | kept | `20261011-message-network-ask`; {stands} |", report)
-        self.assertRegex(report, r"\| Outreach Drafts \| incomplete \| [^|]*brand-rules\.json could not be used")
         name = "RepToday package: `projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json`"
+        for title in ("Post Drafts", "Outreach Drafts"):
+            row = next(line for line in report.splitlines() if line.startswith(f"| {title} | "))
+            self.assertTrue(row.startswith(f"| {title} | incomplete | {name} could not be used"), row)
+            self.assertEqual(row.count("brand-rules.json"), 1, "the row names the file once")
         self.assertRegex(report, rf"\| {name} \| unusable \| [^|]*; read, but could not be used: not JSON: ")
-        self.assertEqual(self.notices().count(f"- {name}: "), 1, "one line for the file, in the one notice")
-        self.assertIn(" Incomplete: Post Drafts.\n", self.notices())
+        (line,) = [line for line in self.notices().splitlines() if line.startswith(f"- {name}: ")]
+        self.assertTrue(line.endswith(" Incomplete: Post Drafts, Outreach Drafts."), line)
         rules.write_text(valid, encoding="utf-8")
         self.agent()
         report = self.go(weeks=2)
@@ -972,6 +978,7 @@ class UnusableSourceTest(WorkCycleTestCase):
 
     CALENDAR = "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md"
     CHANNEL_PLAN = "projects/RepToday/gtm/06-channels/channel-plan.md"
+    ANGLES = "projects/RepToday/gtm/05-social-pmf/angles.md"
 
     def setUp(self):
         super().setUp()
@@ -1036,6 +1043,43 @@ class UnusableSourceTest(WorkCycleTestCase):
         self.assertIn(f"- {name}: ", parts[0])
         self.assertIn("read, but could not be used: it is not UTF-8 text. Incomplete: Outreach Drafts.", parts[0])
         self.assertEqual(len([entry for entry in self.queue()["open"] if entry["kind"] == "notice"]), 1)
+
+    def test_brand_rules_that_hold_null_are_a_failed_source_with_their_reason(self):
+        rules = "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json"
+        (self.mandu / rules).write_text("null\n", encoding="utf-8")
+        report = self.go()
+        name = f"RepToday package: `{rules}`"
+        self.assertRegex(
+            report, rf"\| {name} \| unusable \| [^|]*read, but could not be used: [^|]* must hold a JSON object\. \|"
+        )
+        self.assertIn(f"| Post Drafts | incomplete | {name} could not be used", report)
+        (line,) = [line for line in self.notices().splitlines() if line.startswith(f"- {name}: ")]
+        self.assertTrue(line.endswith(" must hold a JSON object. Incomplete: Post Drafts."), line)
+
+    def test_an_angle_bank_without_its_table_names_every_output_it_leaves_incomplete(self):
+        fakes.set_sources(self.repo, fakes.sources_with(["fitness30plus", "getdisciplined"]))
+        self.web = fakes.listening_web()
+        messages = {fakes.message_path("network-ask"): fakes.message("network-ask", "network", fakes.NETWORK_BODY)}
+        messages.update(
+            (fakes.message_path("creator", key), fakes.message("creator", key, fakes.CREATOR_BODY))
+            for key, _ in fakes.KIT_CREATORS
+        )
+        self.agent(dict(quote_file(intent="asking"), **reply_file(), **messages))
+        self.go()
+        self.decide(RULES_FIT, "approve")
+        self.agent()
+        self.go(weeks=1)
+        self.assertIn(f"20261018-message-reply-{POST}", [entry["id"] for entry in self.items("message")])
+        (self.mandu / self.ANGLES).write_text("# Angle bank\n\nNo table here.\n", encoding="utf-8")
+        self.agent()
+        report = self.go(weeks=2)
+        name = f"RepToday package: `{self.ANGLES}`"
+        for title in ("Post Drafts", "Listening Evidence", "Outreach Drafts"):
+            row = next(line for line in report.splitlines() if line.startswith(f"| {title} | "))
+            self.assertTrue(row.startswith(f"| {title} | incomplete | {name} could not be used"), row)
+            self.assertEqual(row.count(self.ANGLES), 1, "the row names the file once")
+        (line,) = [line for line in self.notices().splitlines() if line.startswith(f"- {name}: ")]
+        self.assertTrue(line.endswith(" Incomplete: Post Drafts, Listening Evidence, Outreach Drafts."), line)
 
     def test_a_research_file_that_is_not_valid_text_makes_its_folder_one_failed_source(self):
         folder = "projects/RepToday/gtm/01-research/"

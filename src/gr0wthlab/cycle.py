@@ -651,27 +651,37 @@ class Cycle:
             gaps.append(gap)
         return gaps
 
-    def told(self, state: RunState) -> dict[str, set[str]]:
-        """Each output's own gaps that say no more than that a package file could not be used, where that file's
-        failed source, read and not usable, leads the output's row and says so already: the row says it once. The
-        tally, and with it the run's own line, keeps every gap."""
+    def unusable_files(self, state: RunState) -> dict[str, tuple[set[str], set[str]]]:
+        """Each package file the run read and could not use, by its source line's name: what in a gap names it, its
+        path or, for the brand rules, what every step says of them; and each gap that says no more than that it could
+        not be used, which a row its failed source leads leaves out, since the source says so already. The tally, and
+        with it the run's own line, keeps every gap."""
         unusable = {line.name for line in state.sources if line.status == package.UNUSABLE}
-        told: dict[str, set[str]] = {}
+        rules_lost = "brand-rules.json could not be used"
+        found: dict[str, tuple[set[str], set[str]]] = {}
+
+        def add(product: str, path: str, rules: bool = False) -> None:
+            name = f"{product} package: `{path}`"
+            if name in unusable:
+                names, said = found.setdefault(name, (set(), set()))
+                names.update([f"`{path}`", *[rules_lost] * rules])
+                said.update([f"`{path}` could not be used", *[rules_lost] * rules])
+
         plan = state.posts
         if plan is not None:
-            paths = plan.context.paths
-            named = {role for role, path in paths.items() if f"{plan.product} package: `{path}`" in unusable}
-            told["post-drafts"] = {f"`{paths[role]}` could not be used" for role in named}
-            if "brand_rules" in named:
-                told["post-drafts"].add("brand-rules.json could not be used")
-            failed = [role for role in filming.ROLES if role in plan.context.kit.problems]
-            if state.filming is not None and failed and named.issuperset(failed):
-                told["filming-plan"] = {state.filming.problem}
-        recruiting = state.beta
-        if recruiting is not None and recruiting.active and recruiting.context is not None:
-            if f"{recruiting.rules.product} package: `{recruiting.rules.brand_rules}`" in unusable:
-                told[beta.WORKFLOW] = {"brand-rules.json could not be used"}
-        return told
+            for role, path in plan.context.paths.items():
+                add(plan.product, path, role == "brand_rules")
+        if state.beta is not None and state.beta.active:
+            add(state.beta.rules.product, state.beta.rules.brand_rules, True)
+        if state.outreach is not None:
+            add(state.outreach.product, state.outreach.plan_path)
+        if plan is not None and state.filming is not None:
+            paths, problems = plan.context.paths, plan.context.kit.problems
+            kit = [f"{plan.product} package: `{paths[role]}`" for role in filming.ROLES if role in problems]
+            if kit and all(name in found for name in kit):
+                for name in kit:
+                    found[name][1].add(state.filming.problem)
+        return found
 
     def queue_gaps(self, state: RunState) -> list[str]:
         """Why the Review Queue is incomplete this run though the ledger was read: an item file could not be, so a
@@ -709,10 +719,12 @@ class Cycle:
 
     def outputs(self, state: RunState, config: settings.Settings, ledger_ok: bool) -> None:
         """Each output's status: a built output is incomplete when a failed source it needs names it, or when its own
-        step fell short; a gap of its own that says no more than such a source is left out of its row. A step that
-        needed a session names that session's falling short among its gaps, and the outputs whose rows hold that gap
-        are the ones the run's notice names for the session; the rows are therefore worked out before that notice is
-        written, and again once the Review Queue holds it. One session's gap is never put in another workflow's row,
+        step fell short; a gap of its own that says no more than such a source is left out of its row. A package file
+        the run read and could not use is needed by exactly the outputs whose own gaps name it, never the package
+        snapshot or review, so the notice's line for it names the rows the report shows incomplete for it. A step
+        that needed a session names that session's falling short among its gaps, and the outputs whose rows hold that
+        gap are the ones the run's notice names for the session; the rows are therefore worked out before that notice
+        is written, and again once the Review Queue holds it. One session's gap is never put in another workflow's row,
         and a session that fell short always has its gap in its own."""
         failed = state.failed_sources()
         gap = state.agent_gap
@@ -765,9 +777,19 @@ class Cycle:
                 learning.tally(state.learning, state.learning_problem, gap(learning.WORKFLOW)).note,
             ),
         }
+        shown = {
+            key: own.get(key, ([], ""))[0]
+            for key, output in config.outputs.items()
+            if output.get("built") and key not in skipped and key not in ("package-snapshot", "package-review")
+        }
+        files = self.unusable_files(state)
+        for line in failed:
+            if line.name in files:
+                names = files[line.name][0]
+                named = [key for key, gaps in shown.items() if any(part in gap for gap in gaps for part in names)]
+                line.needed_by = output_titles(config, tuple(named))
         rows = []
         held: dict[str, list[str]] = {session.key: [] for session in state.sessions}
-        told = self.told(state)
         for key, output in config.outputs.items():
             title = str(output.get("title", key))
             if not output.get("built"):
@@ -780,9 +802,9 @@ class Cycle:
             for session in state.sessions:
                 if session.workflow.output == key and session.gap() and session.gap() in gaps:
                     held[session.key].append(title)
-            gaps = [f"{line.name} {line.failure}" for line in failed if title in line.needed_by] + [
-                reason for reason in gaps if reason not in told.get(key, ())
-            ]
+            leading = [line for line in failed if title in line.needed_by]
+            told = {said for line in leading if line.name in files for said in files[line.name][1]}
+            gaps = [f"{line.name} {line.failure}" for line in leading] + [gap for gap in gaps if gap not in told]
             rows.append([title, INCOMPLETE if gaps else COMPLETE, "; ".join(gaps) or done])
         state.outputs = rows
         for session in state.sessions:
@@ -815,10 +837,11 @@ class Cycle:
 
     def unusable_sources(self, state: RunState, config: settings.Settings) -> None:
         """Mark each package file the snapshot read that launcher code then could not use, as it could not be parsed
-        or decoded, as a failed source, with the real reason and the outputs whose own gap already names it: a kit
-        file for the post Drafts and, of the files the filming plan reads, for filming; the brand rules for
-        recruiting; and the channel plan for outreach. A file whose read failed is a failed source already, and one
-        file is one line however many steps could not use it."""
+        or decoded, as a failed source, with the real reason and, for the sessions' briefs, the outputs whose own step
+        cannot go on without it: a kit file for the post Drafts and, of the files the filming plan reads, for filming;
+        the brand rules for recruiting; and the channel plan for outreach. Once the run's rows are worked out,
+        Cycle.outputs names in their place every output whose row names the file. A file whose read failed is a
+        failed source already, and one file is one line however many steps could not use it."""
         found: dict[tuple[str, str], tuple[dict[str, None], dict[str, None]]] = {}  # file: (reasons, output keys)
 
         def add(product: str, path: str, reason: str, *keys: str) -> None:

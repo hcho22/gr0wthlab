@@ -28,7 +28,7 @@ Not a source in this sense, and left as it was:
 
 - A Draft, an edit record, an item file, a run state file, and a reviewed Dispatch text: each is told where the item or step that reads it is told.
 - A package line a recruiting Draft cites (`beta_drafts.cited_line`): it blocks that Draft and is told on it.
-- The Angle bank, the checklist, and the brand rules where a message or reply is checked against them (`messages.check`): those items are told where they are, and an open one stands, as before; the notice's line for the file names only the outputs whose own step cannot go on without it.
+- The Angle bank, the checklist, and the brand rules where a message or reply is checked against them (`messages.check`): those items are told where they are, and an open one stands, as before; since the review fixes below, the notice's line for the file also names outreach and Listening whenever such an item leaves their rows naming the file.
 - The platform facts in `config/platforms.json`: configuration in this repository, not a source.
 - The positioning file Listening reads for Fit: the agent reads it, and launcher code does not parse it.
 - A file a folder source no longer holds, such as a channel plan that was removed: the snapshot lists it as removed since the previous snapshot, as before.
@@ -91,3 +91,44 @@ Their logs went to a folder in the Mac's temporary directory, named with `GR0WTH
 
 The two on-demand lab runs of the first round were not made again on the merged head; the merge brought no change to the code this change adds, and its reasons now stand on the unit tests (`test_a_research_file_that_is_not_valid_text_makes_its_folder_one_failed_source`, `test_why_a_calendar_does_not_parse_never_repeats_a_cell`).
 Everything the first round did not exercise is still not exercised.
+
+## Re-check after the review fixes
+
+Two review rounds changed launcher code after `a3a86af`.
+The first, `143db89`, keeps every reason in the post Drafts' tally and in the run's own line, and leaves out of an Outputs row only a gap that the failed source leading the row already says.
+It also words the filming plan's reason "the kit could not be used" for a kit file that was read, keeping "could not be read" for one that was not; gives recruiting the post Drafts' "not JSON" reason for brand rules that are not JSON; and says in the post Drafts' tally that no day was prepared, rather than none due, when the calendar could not be used.
+The second names on the line of a package file read and not usable exactly the outputs whose rows carry a gap naming the file, never the package snapshot or review, so the notice's line and the Outputs table agree, and leaves the file's repeat out of every such row, outreach and Listening included.
+It also reads brand rules that hold `null` as rules, so they give "must hold a JSON object", as recruiting does.
+The checks below ran on the second round's working tree before its commit, whose `src/` is tree `2bb96c84310d07be038d660c282b39499df1ea42` and whose `config/` is tree `b43d0624383aada9155906ee4b54515c3ecb3a5d`, recorded from a throwaway index.
+On that tree the unit modules the two rounds touch passed under `/usr/bin/python3` (`test_cycle`, 98 tests; `test_work_cycle`, 61; `test_beta_cycle`, 35; `test_posts`, `test_report`, and `test_kit`, 72), as did ruff 0.15.20 on the changed files.
+`test_filming` had run 84 of its tests with none failing when this was written, and had not finished; it and the full suite were left to the pipeline's test step.
+Every check ran on 2026-10-14, Mac local time (PDT), with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort, and no other session's `codex exec` agent was running when each started.
+
+### The boundary
+
+Both checks ran from this review's worktree, with `git status` showing the same uncommitted changes of the round before the preflight and after the check, against Mandu and the Product checkouts as they are.
+The configuration fingerprint `show-config` prints there is `71014ac92cfde57ba9b28fa410e16dc64e54a835a950792113aa9492e96a2122`, not the earlier rounds' `65c0362d7e73a1bc164001414c11a4aa2d3153d5c3658a53128ae58b4f09bb45`: `config/` is the same tree, and the command the fingerprint covers names the checkout's own path, which here is this review's worktree.
+Their logs went to a folder in the Mac's temporary directory, named with `GR0WTHLAB_LOG_DIR`.
+
+- `src/bin/gr0wthlab preflight`, started at 14:11 and run twice in a row, passed each time: it wrote and deleted a file in each of the six areas, refused 19 paths, refused a listing of the footage place, and reached neither listed host from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, started at 14:11, passed at its first attempt in 49 s, as `20261014T211145Z-on-demand-8c53`: 43 steps to prove, 14 of 14 file-tool targets refused in a patch of their own, 16 kernel denials naming the run's sentinels or the check's listeners, 1 of 1 forbidden read of the footage place refused, 12 of 12 permitted sentinels, no sentinel escaped, no local connection, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, both a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed since the snapshot.
+
+### The change itself, through the launcher on demand
+
+Three runs one after another, each started with `src/bin/gr0wthlab run` from a throwaway clone of that tree in the Mac's temporary folder, whose `src/` is the same tree, set up as in the first round.
+Its inputs were the example sets' synthetic package as Mandu, their synthetic Product code as a git checkout, and an empty folder for the other Product, set with the same overrides, with `GR0WTHLAB_FOOTAGE_DIR` naming the throwaway Mandu's RepToday folder.
+In the clone's configuration no network source was listed and outreach named the synthetic kit's network ask and three creators; nothing else differed from the tree.
+Its configuration fingerprint is `12eb79fb8acf6e415702c9b492279749a7ee7b89d0c154de80927f63bef1d346`.
+
+| Run | What was done by hand before it | What it showed |
+| --- | --- | --- |
+| `20261014T211256Z-on-demand-7211` | The calendar's text replaced with a heading and a sentence, no table; the channel plan replaced with bytes that are not UTF-8 | Sources: `2 failed`, both `unusable`, with the first round's reasons; the Post Drafts row and the Filming plan and edits row each read only that the calendar's line could not be used; the Outreach Drafts row read the channel plan's line, that the channel plan is not UTF-8 text so no outreach message was prepared, and that the Drafts were not taken in; the Run state line for post-drafts read "0 days: none prepared, as the calendar could not be used", incomplete with the calendar, and the run's own line named post-drafts; the filming plan's reason read "the kit could not be used"; only the package review session ran, and its agent closed with "Session: incomplete", naming the channel plan; one notice, `20261014-notice-run-problems`, whose part about sources had one line for each file, the calendar's ending "Incomplete: Post Drafts, Filming plan and edits." and the channel plan's "Incomplete: Outreach Drafts.", and whose other part was the unfinished review; about $0.013 at API prices |
+| `20261014T211506Z-on-demand-179f` | Both files put back as they were | Sources: `0 failed`, the two files `changed`; every built row complete; three sessions ran (package review, post Drafts, outreach); two post items, four outreach messages, and the filming plan `20261014-filming-plan-w1` queued; its notice, `20261014-notice-run-problems-2`, was only about five blocked post Drafts and had no part about sources; about $0.039 at API prices |
+| `20261014T212300Z-on-demand-9ed7` | The Angle bank's text replaced with a heading and a sentence, no table, with the items of the run before open | Sources: `1 failed`, the Angle bank `unusable`, "read, but could not be used: no table with the columns ID, Angle, pain, Hook, Format, Platform, signal, Kill."; the Post Drafts, Filming plan and edits, and Outreach Drafts rows each read only that the Angle bank's line could not be used, and Listening Evidence was complete; three sessions ran (package review, post Drafts, outreach); the notice `20261014-notice-run-problems-3` gave the file one line, ending "Incomplete: Post Drafts, Filming plan and edits, Outreach Drafts.", listed seven open items left exactly as they were, the two post items and the four messages on the Angle bank that could not be used and the filming plan on "the kit could not be used", and named five blocked post Drafts; about $0.025 at API prices |
+
+### What this round did not exercise
+
+- Brand rules that hold `null`, and recruiting's read of brand rules that are not JSON, were not run live; they stand on unit tests (`test_brand_rules_that_hold_null_are_a_failed_source_with_their_reason`, `test_brand_rules_that_cannot_be_read_block_a_new_draft_and_keep_an_open_one`).
+- No network source was listed in the lab, so a Listening reply that stands on an unusable kit file was not run live; it stands on `test_an_angle_bank_without_its_table_names_every_output_it_leaves_incomplete`.
+- A kit file that could not be read at all was not run live; the filming plan's wording for it stands on `test_a_kit_file_that_cannot_be_read_plans_nothing_and_says_so`.
+- Everything the first round did not exercise is still not exercised.
