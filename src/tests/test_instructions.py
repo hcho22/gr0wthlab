@@ -75,13 +75,17 @@ class CheckTest(WorkCycleTestCase):
         self.found.append(reason("20261011-post-w1-day-04", "Too wordy.", ""))
         offer = instructions.Offer("post-drafts", (DAY_1, "20261011-post-w1-day-04"))
         proposal, _ = self.proposal(reasons="20261011-post-w1-day-04, 20261011-unknown")
+        # An item no rejection reason belongs to is counted, never repeated: a refused file's text stays out of
+        # every reason (docs/operations.md, where the agent's own words are kept).
         self.assertEqual(
             self.problems(proposal, chosen=offer),
             [
+                "`reasons:` names 1 item that no rejection reason belongs to",
                 "`20261011-post-w1-day-04` has no accepted execution code",
-                "`20261011-unknown` is no rejection reason this run offers for a change",
             ],
         )
+        proposal, _ = self.proposal(reasons=DAY_3)
+        self.assertEqual(self.problems(proposal), [f"`{DAY_3}` is no rejection reason this run offers for a change"])
 
     def test_only_the_offered_workflow_may_change_and_only_when_one_is_offered(self):
         proposal, _ = self.proposal(text="# Outreach\n", workflow="outreach")
@@ -99,7 +103,9 @@ class CheckTest(WorkCycleTestCase):
         first = self.in_force.splitlines()[0]
         self.assertTrue(first.startswith("<!--"), "the post-Draft Instructions open with their attribution")
         stripped, _ = self.proposal(text=self.in_force.replace(first + "\n", "") + ADDED + "\n")
-        self.assertIn("keep every comment line of the text in force as it is", self.problems(stripped)[0])
+        self.assertEqual(
+            self.problems(stripped), ["keep every comment line of the text in force as it is, line 1 of it among them"]
+        )
         long, _ = self.proposal(text=self.in_force + "x" * instructions.MAX_TEXT)
         self.assertIn("characters; at most 32000", self.problems(long)[0])
         address, _ = self.proposal(text=self.in_force + "- Write to jane.doe@example.com first.\n")
@@ -112,12 +118,11 @@ class CheckTest(WorkCycleTestCase):
         package = instructions.package_lines(fakes.EXAMPLES / "files/mandu", [angles])
         self.assertEqual(package["airplane mode proves on-device building"], angles, "a table cell is a passage")
         copied, _ = self.proposal(text=self.in_force + "- Remember: airplane mode proves on-device building.\n")
+        added = len(self.in_force.splitlines()) + 1
         self.assertEqual(
             self.problems(copied, package),
-            [
-                f"a line it adds holds text of the Go-To-Market Package file `{angles}`:"
-                " '- Remember: airplane mode proves on-device building.'"
-            ],
+            [f"line {added} of the proposed text holds text of the Go-To-Market Package file `{angles}`"],
+            "the reason names the line and never repeats it",
         )
         own, _ = self.proposal()
         self.assertEqual(self.problems(own, package), [], "a line of the agent's own passes")
@@ -237,6 +242,12 @@ class LoopTest(WorkCycleTestCase):
     def change_records(self):
         return sorted((self.ledger() / "evidence/instructions").glob("*.json"))
 
+    def records_text(self):
+        """Every file the run left in ledger/ and workspace/, as one text."""
+        folders = (self.ledger(), self.workspace())
+        files = sorted(path for folder in folders for path in folder.rglob("*") if path.is_file())
+        return "\n".join(path.read_text(encoding="utf-8", errors="replace") for path in files)
+
     def test_an_execution_reason_changes_the_instructions_through_a_passing_example_set_with_a_notice(self):
         proposed = self.in_force + ADDED + "\n"
         report = self.learn(proposed)
@@ -346,6 +357,14 @@ class LoopTest(WorkCycleTestCase):
         self.assertEqual(change["gate"]["not_run"], [2], "the gate stops at the first example that is worse")
         self.assertEqual(change["gate"]["sessions"], 3, "example 1 on both sides, and in force again")
         self.assertEqual(change["gate"]["examples"][0]["in_force_again"]["side"], "in force")
+        # A change not kept is refused: its record keeps no text of the agent's, only the changed line's number and
+        # the two texts' fingerprints (docs/operations.md, where the agent's own words are kept).
+        self.assertIsNone(change["summary"])
+        self.assertEqual((change["before"]["path"], change["proposed"]["path"]), (None, None))
+        self.assertEqual(change["proposed"]["sha256"], instructions.sha256(self.in_force + WORSE + "\n"))
+        self.assertEqual(change["changed_lines"], [{"change": "added", "line": len(self.in_force.splitlines()) + 1}])
+        self.assertFalse((self.ledger() / "evidence/instructions/20261018-post-drafts").exists())
+        self.assertNotIn(WORSE, self.records_text(), "the refused text is copied nowhere")
         self.assertIsNone(change["notice"])
         self.assertEqual([entry for entry in self.items("notice") if entry.get("instructions")], [])
         not_again = "The Instructions are as they were; the reasons it cites are not offered again."
@@ -364,6 +383,7 @@ class LoopTest(WorkCycleTestCase):
             self.section("Instructions"),
         )
         self.assertFalse((self.workspace() / "instructions/post-drafts.md").exists(), "removed once read")
+        self.assertNotIn(ADDED, self.records_text(), "a refused proposal leaves its name and reasons, never a copy")
         self.assertIn("| Instructions changes | incomplete | the proposed change `post-drafts.md` was refused", report)
         self.assertIn("The proposed change `post-drafts.md` was refused", self.notices())
         self.assertNotIn("instructions", self.read(f"evidence/decisions/{DAY_1}.json"), "offered again")

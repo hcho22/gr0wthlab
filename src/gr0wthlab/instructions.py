@@ -257,7 +257,9 @@ def check(
     in_force: str | None,
     package: Mapping[str, str],
 ) -> list[str]:
-    """Why a proposed change is refused, or nothing when it may go to its workflow's example set (ADR 0003)."""
+    """Why a proposed change is refused, or nothing when it may go to its workflow's example set (ADR 0003). A reason
+    names a line by its number and never repeats what the proposal says (docs/operations.md, where the agent's own
+    words are kept)."""
     problems: list[str] = []
     workflow = proposal.workflow
     if workflow not in WORKFLOWS:
@@ -269,9 +271,14 @@ def check(
     if workflow != chosen.workflow:
         return problems + [f"this run offers a change to the {title(chosen.workflow)} Instructions only"]
     by_item = {reason.item: reason for reason in found}
+    unknown = [item for item in proposal.reasons if item not in by_item]
+    if unknown:
+        problems.append(f"`reasons:` names {plural(len(unknown), 'item')} that no rejection reason belongs to")
     for item in proposal.reasons:
         reason = by_item.get(item)
-        if reason is None or item not in chosen.reasons:
+        if reason is None:
+            continue
+        if item not in chosen.reasons:
             problems.append(f"`{item}` is no rejection reason this run offers for a change")
         elif reason.code in learning.STRATEGY:
             problems.append(f"`{item}` is coded `{reason.code}`, a strategy code, which never changes Instructions")
@@ -292,19 +299,21 @@ def check(
     if same(text, in_force):
         problems.append("the proposed text is the text in force")
     kept = set(text.splitlines())
-    for line in in_force.splitlines():
+    for number, line in enumerate(in_force.splitlines(), 1):
         if line.strip().startswith("<!--") and line not in kept:
-            problems.append(f"keep every comment line of the text in force as it is, such as: {line[:80]!r}")
+            problems.append(f"keep every comment line of the text in force as it is, line {number} of it among them")
             break
     before = {normalized(line) for line in in_force.splitlines()}
-    for line in text.splitlines():
+    for number, line in enumerate(text.splitlines(), 1):
         words = normalized(line)
         if not words or words in before:
             continue
         folded = words.casefold()
         source = next((path for passage, path in package.items() if passage in folded), None)
         if source:
-            problems.append(f"a line it adds holds text of the Go-To-Market Package file `{source}`: {words[:80]!r}")
+            problems.append(
+                f"line {number} of the proposed text holds text of the Go-To-Market Package file `{source}`"
+            )
             break
     return problems
 
@@ -412,10 +421,16 @@ def changed_lines(before: str, after: str) -> list[tuple[str, int, str]]:
 
 
 def record(store: Store, change: Change, run_id: str, now: datetime) -> str:
-    """Write the change's record, with the text in force before it and the text proposed beside it."""
+    """Write the change's record. A kept change keeps the text in force before it and the text proposed beside it, and
+    the agent's summary; a change not kept is refused, so it leaves none of the agent's text, only each changed line by
+    its number, the two texts' fingerprints, and the launcher's reasons (docs/operations.md, where the agent's own words
+    are kept)."""
+    kept = change.outcome == KEPT
     folder = (*RECORDS, change.id)
-    store.write_text(store.path(*folder, "before.md"), change.before)
-    store.write_text(store.path(*folder, "proposed.md"), change.proposal.text)
+    texts = {"before": change.before, "proposed": change.proposal.text}
+    if kept:
+        for name, text in texts.items():
+            store.write_text(store.path(*folder, f"{name}.md"), text)
     path = store.path(*RECORDS, f"{change.id}.json")
     data = {
         "id": change.id,
@@ -423,7 +438,7 @@ def record(store: Store, change: Change, run_id: str, now: datetime) -> str:
         "instructions": relative(change.workflow),
         "proposed_by_run": run_id,
         "proposed_at": now.isoformat(),
-        "summary": change.proposal.summary,
+        "summary": change.proposal.summary if kept else None,
         "reasons": [
             {
                 "item": reason.item,
@@ -435,13 +450,12 @@ def record(store: Store, change: Change, run_id: str, now: datetime) -> str:
             }
             for reason in change.reasons
         ],
-        "before": {"path": store.relative(store.path(*folder, "before.md")), "sha256": sha256(change.before)},
-        "proposed": {
-            "path": store.relative(store.path(*folder, "proposed.md")),
-            "sha256": sha256(change.proposal.text),
+        **{
+            name: {"path": store.relative(store.path(*folder, f"{name}.md")) if kept else None, "sha256": sha256(text)}
+            for name, text in texts.items()
         },
         "changed_lines": [
-            {"change": what, "line": number, "text": text}
+            {"change": what, "line": number, **({"text": text} if kept else {})}
             for what, number, text in changed_lines(change.before, change.proposal.text)
         ],
         "outcome": change.outcome,

@@ -243,7 +243,8 @@ They change from an execution-coded rejection reason only through that workflow'
    The run's own sessions keep their bound beside it, so a run that tries a change can take about an hour more.
 7. **What is kept.**
    A kept change is written to `ledger/instructions/<workflow>.md` and queued as one notice, "Notice: the <workflow> Instructions changed", with the Founder's words of each reason, the agent's code and line for each, its summary, the change line by line, and every example's result on each side.
-   Every change tried is recorded in `ledger/evidence/instructions/<change id>.json`, with the text before and the text proposed beside it in `ledger/evidence/instructions/<change id>/`; each cited reason's decision Evidence records what became of it, so it is not offered again.
+   Every change tried is recorded in `ledger/evidence/instructions/<change id>.json`; each cited reason's decision Evidence records what became of it, so it is not offered again.
+   A kept change keeps the text before it and the text it wrote beside its record, in `ledger/evidence/instructions/<change id>/`; one not kept keeps none of the agent's text ([where the agent's own words are kept](#where-the-agents-own-words-are-kept)).
    A change the example set could not judge, because the bound ran out or an example's session did not run to its end, is not kept, and its reasons are offered again.
    The run report's Instructions section has all of it, and the Outputs table an `Instructions changes` row, incomplete when a proposal was refused or a change could not be judged.
    The example set's sessions are not among the run's own sessions; the report counts their sessions, agent time, and approximate cost on a line of their own.
@@ -281,16 +282,19 @@ Everything else the launcher refuses is removed from `workspace/`, copied nowher
 - A file set aside from `workspace/review-queue/incoming/`, of any kind, a post, a message, or a filming plan written there included.
   The run's set-aside record, `ledger/review-queue/set-aside/<run id>.json`, keeps its name and the reasons, under the run's identifier; the run report and notice name it with the reasons.
 - A quote record the launcher refuses, a proposed Angle or Hook it discards from `workspace/review-queue/angles/`, and a rejection code it sets aside.
+- A proposed Instructions change the launcher refuses from `workspace/instructions/`, and one whose example set did not keep it.
+  The record of one not kept, `ledger/evidence/instructions/<change id>.json`, keeps each line it changed by its number and the fingerprints of the two texts, beside the example set's results.
 
 The reasons given for any of these say which line or field breaks which rule, in the launcher's own words, and never repeat what the file says.
 A front matter line is named by its number, an Evidence line by its place in the list, and an unexpected section by count.
 A reason may still name what the rule itself sets, such as a queued item's identifier.
 That no reason repeats the refused file is firstmate's reading of the Founder's choice of 2026-10-13 for what the launcher refuses from the agent's outbox, `workspace/review-queue/incoming/`, and not a separate decision of the Founder's.
-They are kept in the set-aside record, in each run's Listening Evidence (`ledger/evidence/listening/runs/<run id>.json`), and in the run report and notice.
+They are kept in the set-aside record, in each run's Listening Evidence (`ledger/evidence/listening/runs/<run id>.json`), in the record of an Instructions change not kept, and in the run report and notice.
 
 These also keep the agent's words, and none of them is a refusal:
 
 - What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, and the line that says why a rejection code fits.
+  So does a kept Instructions change: its text is the Instructions in force (`ledger/instructions/<workflow>.md`), its record keeps that text, the text before it, and the agent's summary, and its notice shows the summary and each changed line.
 - Any other file the agent leaves in `workspace/` that the launcher neither takes in nor puts back is committed as written.
   An edit record waiting for a fix is one: its `shot` and `source` values can hold any text, and it stays committed as written.
   The reasons its checks give can quote those two values whole, and are kept in the run's filming Evidence (`ledger/evidence/filming/<run id>.json`), in the day's post verdict in the post Drafts Evidence, and in the run report and notice.

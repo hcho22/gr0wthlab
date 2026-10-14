@@ -19,7 +19,7 @@ Nothing the agent writes is ever its Instructions until then, and nothing it can
 | The Instructions in force | `ledger/instructions/<workflow>.md` | The launcher, only for a change its example set passed; and firstmate's reviewed pull requests |
 | A proposed change | `workspace/instructions/<workflow>.md` | The agent, in the session that codes the rejection reasons |
 | The example sets | `src/examples/<workflow>/evals.json`, with their synthetic files | Only firstmate's reviewed pull requests (G8) |
-| What each change was, and how its examples did | `ledger/evidence/instructions/<change id>.json`, with the text before and the text proposed beside it | The launcher |
+| What each change was, and how its examples did | `ledger/evidence/instructions/<change id>.json`, with the text before and the text proposed beside it for a kept change | The launcher |
 
 Until this decision the Instructions were in `workspace/instructions/`, one of the six areas the agent can write, and the launcher put back any change a session made there.
 They move to `ledger/`, which the sandbox reads and never writes, so the boundary itself keeps them, not a put-back after the fact.
@@ -69,7 +69,8 @@ The launcher, in the same weekly run, after it has taken in everything the sessi
 3. It keeps the change only if no example is worse and every example was compared: it writes the proposed text to `ledger/instructions/<workflow>.md` and queues the notice.
 4. Otherwise the Instructions stay byte for byte as they were, and the run report says which example got worse, and how, or why it could not be compared.
 
-Either way the record in `ledger/evidence/instructions/` keeps the reasons, the text before, the text proposed, every example's result on each side, and how many sessions and how much agent time and cost the gate took.
+Either way the record in `ledger/evidence/instructions/` keeps the reasons, every example's result on each side, and how many sessions and how much agent time and cost the gate took.
+A kept change's record also keeps the text before and the text proposed; one not kept is refused, so, by the rule for everything the launcher refuses from the agent, it keeps none of the agent's text, only each changed line's number and the two texts' fingerprints ([operations](../operations.md#where-the-agents-own-words-are-kept)).
 The records step commits it with the run's other records, so `git log` shows every change and restoring a file from history undoes one.
 
 ## How an example is run
