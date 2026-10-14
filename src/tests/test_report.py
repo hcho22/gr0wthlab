@@ -216,7 +216,7 @@ class NoticeTest(unittest.TestCase):
     def test_a_notice_stays_a_valid_item_however_many_problems_it_lists(self):
         state = self.state()
         state.problems = [f"problem {number}: " + "x" * 100 for number in range(500)]
-        state.set_aside = [SetAside("odd\n# name.md", "", ("name it <slug>.md",))]
+        state.set_aside = [SetAside("odd\n# name.md", ("name it <slug>.md",))]
         title, body, touches, evidence = report.problems_notice(state, "run-reports/R.md")
         self.assertIn("- And more: the run report lists every problem.", body)
         self.assertIn("- `odd # name.md`: name it <slug>.md", body)
