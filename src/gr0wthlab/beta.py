@@ -1,10 +1,10 @@
 """Beta Cohort recruiting (US-ME15): the Founder's gate, who is invited next, the counts the Founder reports, and
 what a run offers the Founder.
 
-The gate is launcher code. It is the Beta Build record the Founder makes in Mandu (docs/mandu-exchange.md), read
-here and never inferred from anything else. Until that record exists this workflow does nothing: no candidate, no
-Draft, no Evidence, and no word of recruiting in the agent's brief; the run report lists the approval as not
-recorded.
+The gate is launcher code. It is the Beta Build record the Founder makes on the sitting page, in ledger/founder/
+(founder.py, docs/mandu-exchange.md), read here and never inferred from anything else. Until that record exists this
+workflow does nothing: no candidate, no Draft, no Evidence, and no word of recruiting in the agent's brief; the run
+report lists the approval as not recorded.
 
 Once it exists, each run offers at most one invitation batch, and the next only after the Founder has decided the
 last, so the Founder's sends and the first sessions stay manageable. The launcher chooses the batch by entry
@@ -16,7 +16,7 @@ An entry in a batch the Founder approved is invited and is never offered again; 
 waits; a rejected or withdrawn batch frees its entries. The Review Queue is the record of that, and the run state a
 copy checked against it every run.
 
-Recruiting goes on until the Founder reports that the cohort reached its maximum, or records a stop in Mandu. The
+Recruiting goes on until the Founder reports that the cohort reached its maximum, or records a stop. The
 only Evidence kept of what happened after a send is the three counts the Founder reports, and a count the Founder
 left out is recorded as not reported, never as zero. A pool too small to reach the cohort's minimum is reported with
 the size of the gap, and the agent is asked for the Waitlist ask that helps close it. An open ask states that gap, so
@@ -42,23 +42,23 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from . import exchange, lint, package, waitlist
+from . import exchange, founder, lint, package, waitlist
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .beta_drafts import INVITATION, WAITLIST_ASK, Context, MessageDraft, evaluate, parse
-from .boundary import Boundary, ConfigError
+from .boundary import FOUNDER, Boundary, ConfigError
 from .drafts import Verdict
 from .queue import APPROVED, OPEN, REJECTED, Ledger, stands
 from .settings import Settings
 from .state import INVITED, OFFERED, BetaRecruitingState
 
 WORKFLOW = "beta-recruiting"
-BUILDS = "beta-builds"
-REPORTS = "beta-reports"
+BUILDS = founder.BETA_BUILDS
+REPORTS = founder.BETA_REPORTS
 EVIDENCE = "beta-recruiting"
 DRAFTS = "beta-recruiting"
 EVIDENCE_FORMAT = 1
-GATE_SOURCE = "Beta Build approval in Mandu"
-REPORT_SOURCE = "Beta Cohort reports in Mandu"
+GATE_SOURCE = "Beta Build approval"
+REPORT_SOURCE = "Beta Cohort reports"
 # The launcher's own sources: the agent never works from either, so its brief never names them.
 LAUNCHER_SOURCES = (GATE_SOURCE, REPORT_SOURCE)
 SKIPPED = "skipped"  # as report.SKIPPED
@@ -69,7 +69,6 @@ UNUSABLE = "unusable"
 DRAFT_FILES = {INVITATION: "invitation.md", WAITLIST_ASK: "waitlist-ask.md"}
 LABELS = {INVITATION: "Beta invitation", WAITLIST_ASK: "Waitlist ask"}
 COUNT_LABELS = {"invitations_sent": "invitations sent", "accepted": "accepted", "sessions_booked": "sessions booked"}
-HOLDS_ADDRESS = "it holds something that looks like an email address, so nothing in it was read or kept"
 
 # What a run does about the invitation batch.
 NEW = "new"
@@ -87,7 +86,7 @@ APPROVED_BEFORE = "approved earlier"
 NOT_DUE = "not due"
 STATUSES = (QUEUED, KEPT, BLOCKED, MISSING, REPEATED, APPROVED_BEFORE, NOT_DUE)
 
-Raw = tuple[str, Path, bytes]  # a record file in Mandu's exchange folder: its name, its path, and its bytes
+Raw = founder.Raw  # a record file in ledger/founder/: its name, its path under ledger/, and its bytes
 
 
 # Configuration.
@@ -144,29 +143,7 @@ def rules(registry: Mapping, config: Settings) -> Rules | None:
     return Rules(name, k8, brand_rules, citable, sizes[0], sizes[1], config.beta_batch_size)
 
 
-# Mandu's records.
-
-
-def mandu_file(folder: str, name: str) -> str:
-    """One of Mandu's files, as a record names it. A file name is Mandu's free text, so one that looks like an
-    address is never repeated."""
-    if waitlist.looks_like_address(name):
-        return f"a file in `{folder}/` whose name is not repeated here"
-    return f"`{folder}/{name}`"
-
-
-def read_record(data: bytes, parser, stem: str) -> tuple[object | None, list[str]]:
-    """One of Mandu's records, parsed. The address check runs over the file's name and the whole file first, and a
-    record that fails it is refused whole, so nothing it holds is ever repeated."""
-    if waitlist.looks_like_address(stem) or waitlist.looks_like_address(data.decode("utf-8", errors="replace")):
-        return None, [HOLDS_ADDRESS]
-    try:
-        value = json.loads(data.decode("utf-8"))
-    except UnicodeDecodeError:
-        return None, ["it is not UTF-8 text"]
-    except ValueError as error:
-        return None, [f"it is not JSON (line {getattr(error, 'lineno', '?')})"]
-    return parser(stem, value)
+# The Founder's records.
 
 
 @dataclass(frozen=True)
@@ -197,31 +174,33 @@ def read_gate(product: str, found: Sequence[Raw], unusable: Sequence[tuple[str, 
     name = f"{product}.json"
     not_started = "so nothing shows an approval and recruiting has not started"
     if failure:
-        return Gate(UNUSABLE, f"`{BUILDS}/` in Mandu's exchange folder could not be read ({failure}), {not_started}.")
+        return Gate(UNUSABLE, f"`{FOUNDER}/{BUILDS}/` could not be read ({failure}), {not_started}.")
     mine = next((why for other, why in unusable if other == name), None)
     if mine is not None:
-        return Gate(UNUSABLE, f"`{BUILDS}/{name}` could not be used ({mine}), {not_started}.")
+        return Gate(UNUSABLE, f"`{FOUNDER}/{BUILDS}/{name}` could not be used ({mine}), {not_started}.")
     match = next((raw for raw in found if raw[0] == name), None)
     if match is None:
         others = [other for other, _, _ in found] + [other for other, _ in unusable]
-        # A file name is Mandu's free text, so one that looks like an address is counted, never repeated.
-        named = [f"`{other}`" for other in sorted(others) if not waitlist.looks_like_address(other)]
+        # A file name can be typed by hand, so one that looks like an address is counted, never repeated.
+        named = [f"`{other}`" for other in sorted(others) if founder.nameable(other)]
         strays = ""
         if others:
             hidden = len(others) - len(named)
             shown = ", ".join(named + [f"{hidden} whose name is not repeated here"] * bool(hidden))
-            strays = f"; `{BUILDS}/` holds {shown}, and only `{name}` is {product}'s record"
+            strays = f"; `{FOUNDER}/{BUILDS}/` holds {shown}, and only `{name}` is {product}'s record"
         return Gate(
             NOT_RECORDED,
-            f"not recorded: the Founder has recorded no approved Beta Build for {product} in Mandu, so Beta Cohort"
+            f"not recorded: the Founder has recorded no approved Beta Build for {product}, so Beta Cohort"
             f" recruiting has not started{strays}",
         )
     _, path, data = match
     digest = hashlib.sha256(data).hexdigest()
-    record, problems = read_record(data, exchange.parse_beta_build, product)
+    record, problems = founder.parse(name, data, exchange.parse_beta_build)
     if record is None:
         why = "; ".join(problems)
-        return Gate(UNUSABLE, f"`{BUILDS}/{name}` could not be used ({why}), {not_started}.", None, path, digest)
+        return Gate(
+            UNUSABLE, f"`{FOUNDER}/{BUILDS}/{name}` could not be used ({why}), {not_started}.", None, path, digest
+        )
     build = f", build {record.build}" if record.build else ""
     standing = (
         f"the Founder stopped recruiting on {record.stopped_on}"
@@ -279,12 +258,13 @@ def read_reports(
     of those, each file that could not be read as a report at all, so what it counts is unknown."""
     usable, problems, unread = [], [], []
     for name, path, data in found:
-        record, issues = read_record(data, exchange.parse_beta_report, name[: -len(".json")])
+        record, issues = founder.parse(name, data, exchange.parse_beta_report)
         if record is None:
-            problems.append(f"{mandu_file(REPORTS, name)}: {'; '.join(issues)}")
-            unread.append(mandu_file(REPORTS, name))
+            problems.append(f"{founder.shown(REPORTS, name)}: {'; '.join(issues)}")
+            unread.append(founder.shown(REPORTS, name))
         elif record.product != product:
-            problems.append(f"{mandu_file(REPORTS, name)}: it names a Product whose Beta Cohort is not being recruited")
+            where = founder.shown(REPORTS, name)
+            problems.append(f"{where}: it names a Product whose Beta Cohort is not being recruited")
         else:
             usable.append((record, path, hashlib.sha256(data).hexdigest()))
     return sorted(usable, key=lambda found: found[0].day), problems, unread
@@ -294,9 +274,9 @@ def reports_unread(failure: str | None, unread: Sequence[str]) -> str:
     """Why the Founder's counts may not be whole this run, or "" when every report was read: the folder could not
     be listed, or a file in it could not be read as a report."""
     if failure:
-        return f"`{REPORTS}/` in Mandu's exchange folder could not be read ({failure})"
+        return f"`{FOUNDER}/{REPORTS}/` could not be read ({failure})"
     if unread:
-        return f"{', '.join(unread)} in Mandu's exchange folder could not be read as the Founder's report"
+        return f"{', '.join(unread)} could not be read as the Founder's report"
     return ""
 
 
@@ -635,7 +615,8 @@ def prepare(
     plan.changed = gate.sha256 != previous.build
     usable, plan.report_problems, unread = read_reports(rules.product, reports or ())
     plan.reports, plan.reports_failure = len(reports or ()), reports_failure
-    plan.reports_unread = reports_unread(reports_failure, [mandu_file(REPORTS, name) for name in unreadable] + unread)
+    shown = [founder.shown(REPORTS, name) for name in unreadable]
+    plan.reports_unread = reports_unread(reports_failure, shown + unread)
     plan.new_reports = keep_reports(store, usable, run_id, now)
     plan.counts = standing([report for report, _, _ in usable])
     plan.held, plan.notes = held_entries(previous, ledger.entries, rules.product)
@@ -671,7 +652,7 @@ def source_lines(plan: Plan) -> list[tuple[str, str, str]]:
     if plan.batch is None:
         return rows + [(REPORT_SOURCE, SKIPPED, "not taken in: Beta Cohort recruiting was not prepared this run")]
     if plan.reports_failure:
-        detail = f"`{REPORTS}/` in Mandu's exchange folder could not be read: {plan.reports_failure}."
+        detail = f"`{FOUNDER}/{REPORTS}/` could not be read: {plan.reports_failure}."
         return rows + [(REPORT_SOURCE, package.FAILED, detail)]
     detail = f"{plan.reports} record{'' if plan.reports == 1 else 's'}, {len(plan.new_reports)} new"
     if plan.report_problems:
@@ -779,7 +760,7 @@ class Outcome:
 
 def read_draft(areas: Areas, path: Path) -> tuple[MessageDraft | None, str]:
     """A Draft file the agent wrote, read without following links; None with the reason when there is none. As with
-    Mandu's records, the address check runs over the whole file first, whatever its bytes."""
+    the Founder's records, the address check runs over the whole file first, whatever its bytes."""
     if not path.exists() and not path.is_symlink():
         return None, ""
     folder = areas.check(path.parent)
@@ -996,7 +977,7 @@ def cohort_line(plan: Plan) -> str:
     if accepted < rules.maximum:
         return (
             f"The Beta Cohort is {size}: {accepted} accepted, as reported on {day}, which is within it. Recruiting"
-            f" goes on until it reaches {rules.maximum} or the Founder records a stop in Mandu."
+            f" goes on until it reaches {rules.maximum} or the Founder stops it."
         )
     return f"The Beta Cohort is {size}: {accepted} accepted, as reported on {day}, so it is full."
 
@@ -1042,9 +1023,7 @@ def render(plan: Plan, due: DraftPlan, draft: MessageDraft, verdict: Verdict) ->
     product, batch, rules = plan.product, plan.batch, plan.rules
     message = ["**Subject**", "", f"> {draft.subject}", "", "**Message**", "", *quoted(draft.message)]
     evidence = [f'- "{citation.quote}": `{citation.path}` line {citation.line}' for citation in draft.citations]
-    evidence.append(
-        f"- The Beta Build approval the Founder recorded: `{BUILDS}/{product}.json` in Mandu's exchange folder"
-    )
+    evidence.append(f"- The Beta Build approval the Founder recorded: `{FOUNDER}/{BUILDS}/{product}.json`")
     evidence.append(
         "- Where recruiting stood when this item was queued, with the rule and every check:"
         f" `evidence/{EVIDENCE}/{plan.run}.json`"
@@ -1094,7 +1073,7 @@ def render(plan: Plan, due: DraftPlan, draft: MessageDraft, verdict: Verdict) ->
         "",
         f"**Where recruiting stood when run `{plan.run}` queued this item**",
         "",
-        f"- Beta Build approved on {plan.gate.record.approved_on}, as the Founder recorded in Mandu.",
+        f"- Beta Build approved on {plan.gate.record.approved_on}, as the Founder recorded.",
         f"- Approved for invitation before this batch: {plural(len(invited(plan.held)), 'entry', 'entries')}.",
         f"- The Founder's counts, {plan.counts.line()}.",
         f"- {cohort_line(plan)}",
@@ -1107,9 +1086,9 @@ def render(plan: Plan, due: DraftPlan, draft: MessageDraft, verdict: Verdict) ->
         "",
         *check_lines(plan, due.purpose, verdict),
         "",
-        "After you send, report in Mandu how many invitations you sent, how many people accepted, and how many first"
-        " sessions are booked, each as a total to date. A count you leave out is recorded as not reported, never as"
-        " zero.",
+        "After you send, give the counts at your next sitting: how many invitations you sent, how many people"
+        " accepted, and how many first sessions are booked, each as a total to date. A count you leave out is recorded"
+        " as not reported, never as zero.",
     ]
     ask = f"Approve Beta Cohort invitation, batch {batch.number}: {plural(count, 'Waitlist entry', 'Waitlist entries')}"
     touches.insert(
@@ -1245,7 +1224,7 @@ def brief_lines(plan: Plan, repo_root: Path) -> list[str]:
     lines = [
         "## Beta Cohort recruiting",
         "",
-        f"The Founder recorded in Mandu that a {plan.product} Beta Build passed Apple's review (approved"
+        f"The Founder recorded that a {plan.product} Beta Build passed Apple's review (approved"
         f" {plan.gate.record.approved_on}), so its Beta Cohort is being recruited from the Waitlist.",
         "The launcher chooses who is invited, from the view you cannot read, and attaches them to the item. You write"
         ' only the message, the same words for everyone, as the task definition\'s "Writing a recruiting Draft" and'

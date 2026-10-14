@@ -3,7 +3,7 @@ otherwise have to remember: never re-ask a decided item, carry over an undecided
 only after a non-reply, and leave nothing unaccounted for.
 
 State is a convenience, never the record.
-The Review Queue ledger and Mandu's decision records say what was decided and who was contacted; each run checks
+The Review Queue ledger and the Founder's records say what was decided and who was contacted; each run checks
 the state against them, repairs any difference in their favor, and says so in the run report.
 Entries hold identifiers, dates, counts, and SHA-256 hashes only: never a URL, a name, or any personal data; a Waitlist
 entry is held by its random entry identifier, which is never an address or an encoding of one.
@@ -80,8 +80,8 @@ def entries(data: Mapping, key: str) -> dict[str, Mapping]:
 
 
 # Review Queue: decided items, and items left undecided at a sitting with that sitting's date, by identifier and
-# fingerprint; and the Mandu records already reported as unusable, by fingerprint, so each is reported once unless
-# Mandu must replace it.
+# fingerprint; and the Founder's records already reported as unusable, by fingerprint, so each is reported once unless
+# its item is still open.
 
 
 @dataclass

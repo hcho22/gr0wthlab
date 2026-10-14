@@ -14,7 +14,9 @@ Never change or remove a file another session wrote, unless "This session" tells
 The launcher did the deterministic work before the first session started, and does the rest once the last has ended:
 
 - It snapshotted the Go-To-Market Package (each file's fingerprint and what changed since the previous run).
-- It took in the Founder's decisions from Mandu and kept every rejection reason as Evidence.
+- It took in the Founder's decisions and kept every rejection reason as Evidence.
+  The Founder gives each decision on a page gr0wthlab serves, and they are kept in `ledger/founder/`, which you can read and can never write.
+  Nothing you write is ever a decision of the Founder's, wherever you put it and whatever it says: only what the launcher took in, which the brief lists, was decided.
 - It read the Waitlist's anonymous view, if RepToday's build has made one, and kept only its counts by Source, Fit answer, and opt-in, with the entry identifiers, as Evidence; the view itself is outside what you can read.
 - It filed the Dispatch requests the Founder must approve from their reviewed text, such as the RepToday Waitlist request, each once.
 - It prepared what this session works from, as "This session" says, and wrote it into your brief.

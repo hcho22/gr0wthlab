@@ -241,7 +241,7 @@ class OrderTest(SessionsCase):
         )
         for title, why in (
             ("Filming", "no active Product films"),
-            ("Beta Cohort recruiting", "the Founder has recorded no approved Beta Build in Mandu"),
+            ("Beta Cohort recruiting", "the Founder has recorded no approved Beta Build"),
             ("Listening", "no Listening source is configured"),
             ("Rejection reasons", "no rejection reason needs a code or a proposal"),
         ):

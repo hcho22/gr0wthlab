@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import TextIO
 
-from . import codex, fetch, process
+from . import codex, fetch, founder, process
 from .areas import clear_probe_files
 from .boundary import MANDU, Boundary, ConfigError, filesystem_policy, load_boundary
 
@@ -75,6 +75,8 @@ class Resolved:
 
     def __init__(self, repo_root: Path, env: Mapping[str, str], home: Path, last_message: Path = ANY_RUN):
         self.config, self.boundary = load_boundary(repo_root, env, home)
+        # A folder of the Founder's records that is missing, or is a link, could not be proven refused: stop here.
+        founder.check(self.boundary.ledger)
         # The hosts the launcher itself may read (config/guardrails/fetch.json); the sandbox must reach none of them.
         self.network_targets = [f"{host}:{fetch.PORT}" for host in fetch.load_policy(repo_root).hosts]
         self.codex_bin = codex.resolve_codex_binary(env)
@@ -207,6 +209,10 @@ def run(
         if instruction is None:
             instruction = instruction_path.read_text(encoding="utf-8")
         resolved = resolved or Resolved(repo_root, env, home)
+        # A run resolves its configuration once for all its sessions, and the preflight below tries only folders that
+        # exist: so each session checks again that every folder of the Founder's records is still a real folder, and
+        # one that is not keeps this session from starting, never leaves its preflight one target short.
+        founder.check(resolved.boundary.ledger)
     except (OSError, ConfigError) as error:
         record.update(exit_code=EXIT_CONFIG, error=str(error))
         write_json(record_path, record)

@@ -1,4 +1,4 @@
-"""The Mandu exchange formats: items gr0wthlab writes, decision and sitting records Mandu writes."""
+"""The Mandu exchange formats: items gr0wthlab writes, and the decision and sitting records its sitting page writes."""
 
 import unittest
 from unittest import mock

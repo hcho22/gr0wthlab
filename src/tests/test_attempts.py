@@ -152,7 +152,6 @@ class SleptThroughTest(OwedRunTestCase):
         """The reproduction, kept. Before the launcher could tell from its records that the run was still owed, a
         run the Mac slept through ended as timed out, with a notice, and nothing followed: the Founder ran it again
         by hand."""
-        self.exchange.mkdir()
         code, out = self.slept_through(minutes=1)
         self.assertEqual(code, cycle.EXIT_STOPPED, out)
         self.assertTrue(fakes.all_gone(fakes.agent_pids(self.codex_dir)))
@@ -227,7 +226,6 @@ class SleptThroughTest(OwedRunTestCase):
 
     def test_an_agent_that_ends_unconfirmed_and_without_an_error_after_the_mac_slept_was_cut_short_by_sleep_too(self):
         """What an agent can leave that the Mac's sleep froze in the middle of its work and a later wake let end."""
-        self.exchange.mkdir()
         fakes.behave(self.codex_dir, UNCONFIRMED)
         with self.mac.asleep_in("exec", 600):
             code, out = self.scheduled(minutes=1)
@@ -480,7 +478,6 @@ class SleepAnywhereTest(OwedRunTestCase):
         self.fresh_run_follows()
 
     def test_an_attempt_the_mac_sleeps_through_before_its_agent_starts_is_run_again_and_its_report_says_so(self):
-        self.exchange.mkdir()
         other = fakes.make_repo(self.root / "other", self.env)
         for word, repo, code, why in (
             ("--version", self.repo, cycle.launcher.EXIT_CONFIG, "--version did not finish within 1 min"),
@@ -657,7 +654,6 @@ class AcrossAttemptsTest(OwedRunTestCase):
         super().setUp()
         fakes.set_window(self.repo, {"first_sitting": None, "slot": None})
         fakes.keep_days(self.mandu, 2)
-        self.exchange.mkdir()
         self.behavior = {"write": {ITEM: fakes.PROPOSAL, fakes.draft_path(2): fakes.draft(2)}}
 
     def test_a_fresh_run_queues_nothing_the_cut_short_attempt_queued_and_asks_nothing_the_founder_decided(self):
@@ -717,7 +713,6 @@ class UnreachedWorkTest(OwedRunTestCase):
 
     def setUp(self):
         super().setUp()
-        self.exchange.mkdir()
 
     def first_batch(self):
         """The week of the window's first sitting, when days 1 to 7 are due, with the kit's one blocking checklist
@@ -856,7 +851,9 @@ class UnreachedFilmingTest(FilmingRunCase, OwedRunTestCase):
         [plan] = [entry["id"] for entry in self.queue()["open"] if entry["kind"] == "filming-plan"]
         self.decide(plan, "approve")
         self.clip("d01-s1.mov")
-        before = self.notices()
+        # The notice that stood at the sitting the plan was approved at was left undecided there, so the run that
+        # takes the approval in marks it carried over: the notices are compared by which are open.
+        before = [entry["id"] for entry in self.notices()]
 
         code, out = self.slept_through(minutes=1)
         self.assertEqual(code, cycle.EXIT_STOPPED, out)
@@ -864,7 +861,7 @@ class UnreachedFilmingTest(FilmingRunCase, OwedRunTestCase):
         self.assertIn("| 1 | d01-s1 | no edit record | it is ready for an edit record and has none |", cut_short)
         self.assertIn("- Post Drafts: 1 no Draft.\n", cut_short)
         self.assertIn(f"- {FOLLOWS}\n", cut_short)
-        self.assertEqual(self.notices(), before)
+        self.assertEqual([entry["id"] for entry in self.notices()], before)
 
         cut = ("d01-s1", "d01-s1.mov", 2, 12)
         self.behavior = {
@@ -876,7 +873,7 @@ class UnreachedFilmingTest(FilmingRunCase, OwedRunTestCase):
         self.assertEqual(self.endings(), [("scheduled", attempts.SLEPT), ("scheduled", attempts.COMPLETED)])
         [post] = [entry for entry in self.queue()["open"] if entry["kind"] == "post"]
         self.assertEqual((post["day"], bool(post.get("asset"))), (1, True))
-        self.assertEqual(self.notices(), before)
+        self.assertEqual([entry["id"] for entry in self.notices()], before)
 
 
 class OnDemandTest(OwedRunTestCase):
@@ -1002,7 +999,6 @@ class OneOffTest(OwedRunTestCase):
         self.assertEqual(records, ["20261011T1600.json"])
 
     def test_a_one_off_run_the_mac_sleeps_through_reports_as_a_run_on_demand_does_and_claims_no_attempt(self):
-        self.exchange.mkdir()
         code, out = self.slept_through(once=ONCE, days=1, hours=17, minutes=6)
         self.assertEqual(code, cycle.EXIT_STOPPED, out)
         text = self.report()
@@ -1661,7 +1657,6 @@ class SeveralSessionsTest(OwedRunTestCase):
 
     def setUp(self):
         super().setUp()
-        self.exchange.mkdir()
         fakes.set_window(self.repo, fakes.window_from(DUE.date()))
         fakes.keep_days(self.mandu, 2)
         creator = fakes.KIT_CREATORS[0][0]

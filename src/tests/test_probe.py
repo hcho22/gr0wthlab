@@ -25,6 +25,11 @@ from tests.test_boundary import CONFIG, FILMING_REGISTRY, REGISTRY
 RUN = "20261009T000000Z-on-demand-abcd"
 MARK = probe.PREFIX + RUN
 RECORDED = Path(__file__).resolve().parent / "fixtures" / "probe-logs"
+TARGETS = len(probe.PROBE_TARGETS)
+# The folders of the Founder's records became targets after most of the logs were recorded: each of those logs is the
+# record of a run that was handed the nine targets before them, and is judged on those nine.
+FOUNDER_TARGETS = tuple(label for label in probe.PROBE_TARGETS if label.startswith(probe.FOUNDER_TARGET))
+RECORDED_TARGETS = tuple(label for label in probe.PROBE_TARGETS if label not in FOUNDER_TARGETS)
 # Codex's own last error in the two recorded runs that ended before any tool call.
 ERROR_429 = "exceeded retry limit, last status: 429 Too Many Requests"
 ERROR_400 = (
@@ -60,6 +65,7 @@ class ProbeTestCase(unittest.TestCase):
             (self.repo / area).mkdir(parents=True)
         (self.repo / "src").mkdir()
         (self.repo / "ledger").mkdir()
+        fakes.make_founder(self.repo / "ledger")
         (self.home / "Mandu").mkdir(parents=True)
         self.logs = root / "logs"
         self.logs.mkdir()
@@ -173,7 +179,9 @@ class VerifyTest(ProbeTestCase):
         out = io.StringIO()
         probe.summarize(result, out)
         self.assertIn(f"boundary check {RUN}: PASSED", out.getvalue())
-        self.assertIn("file-tool targets Codex refused, each in a patch of its own: 9 of 9", out.getvalue())
+        self.assertIn(
+            f"file-tool targets Codex refused, each in a patch of its own: {TARGETS} of {TARGETS}", out.getvalue()
+        )
 
     def test_a_target_never_attempted_fails_whatever_the_other_refusals_number(self):
         # Ten refusals, more than the nine targets, and none of them names src.
@@ -285,7 +293,7 @@ class VerifyTest(ProbeTestCase):
             self.write_codex_log("".join(imitations) + self.refused(steps[1:], 4))
             result = self.verify()
         self.assertEqual(list(result["file_tool_targets_without_refusal"]), ["mandu"])
-        self.assertEqual(result["codex_tool_record"], {"calls": 11, "problems": []})
+        self.assertEqual(result["codex_tool_record"], {"calls": TARGETS + 2, "problems": []})
         self.assertFalse(result["passed"])
 
     def test_a_tool_record_with_a_call_missing_or_repeated_fails_the_check(self):
@@ -293,14 +301,14 @@ class VerifyTest(ProbeTestCase):
         whole = self.refused(steps)
         broken = {
             "repeated": whole.replace("tool_result_seq=4 ", "tool_result_seq=3 "),
-            "missing": whole.replace("tool_result_seq=1 ", "tool_result_seq=10 "),
+            "missing": whole.replace("tool_result_seq=1 ", f"tool_result_seq={TARGETS + 1} "),
         }
         for how, log in broken.items():
             with self.subTest(how), self.proven_run():
                 self.write_codex_log(log)
                 result = self.verify()
             self.assertEqual(result["file_tool_targets_without_refusal"], {})
-            self.assertIn("not 1 to 9 once each", result["codex_tool_record"]["problems"][0])
+            self.assertIn(f"not 1 to {TARGETS} once each", result["codex_tool_record"]["problems"][0])
             self.assertFalse(result["passed"])
             self.assertEqual(result["ask_again"], [])
 
@@ -340,7 +348,8 @@ class VerifyTest(ProbeTestCase):
         with self.proven_run():
             result = self.verify()
         self.assertTrue(result["passed"])
-        self.assertEqual(sum(len(names) for names in result["permitted_written"].values()), 14)
+        held = sum(len(names) for names in result["permitted_written"].values())
+        self.assertEqual(held, 14, "twelve permitted sentinels, the script, and the report")
         out = io.StringIO()
         probe.summarize(result, out)
         self.assertIn(f"\n  the agent's report was kept as {self.logs / (MARK + '-report.md')}\n", out.getvalue())
@@ -348,7 +357,11 @@ class VerifyTest(ProbeTestCase):
         counts = dict(re.findall(r"^  (.+): (\d+(?: of \d+)?)$", out.getvalue(), re.MULTILINE))
         self.assertEqual(counts["permitted sentinels written"], "12 of 12")
         self.assertEqual(len(counts), 5, counts)
-        self.assertNotIn("14", " ".join(counts.values()).split(), "no count holds the 14 files the areas held")
+        self.assertEqual(
+            counts["file-tool targets Codex refused, each in a patch of its own"], f"{TARGETS} of {TARGETS}"
+        )
+        # No count of permitted sentinels holds the 14 files the areas held.
+        self.assertNotIn(str(held), counts["permitted sentinels written"].split())
 
     def test_codex_is_said_to_have_reported_no_error_only_when_its_event_stream_holds_none(self):
         steps = self.steps(tool=probe.FILE_TOOL)
@@ -425,7 +438,7 @@ class VerifyTest(ProbeTestCase):
         self.assertIn(
             ": FAILED: the run left no exit code after 2 tool calls, so the boundary was tested only in part;", said
         )
-        self.assertIn("file-tool targets Codex refused, each in a patch of its own: 2 of 9", said)
+        self.assertIn(f"file-tool targets Codex refused, each in a patch of its own: 2 of {TARGETS}", said)
 
     def test_a_kernel_denial_or_a_sentinel_means_the_run_was_an_attempt(self):
         shell = self.steps(tool=probe.SHELL)
@@ -864,23 +877,82 @@ class ReadProofTest(ProbeTestCase):
 class RecordedLogTest(ProbeTestCase):
     """What the check makes of Codex's own log from live runs with the real agent, kept as they were recorded."""
 
-    def gaps(self, name):
+    def handed(self, labels=RECORDED_TARGETS):
+        """The forbidden steps of the targets a recorded run was handed."""
+        return [step for step in self.steps() if step.label in labels]
+
+    def gaps(self, name, labels=RECORDED_TARGETS):
+        """What a recorded log leaves unproven of the targets its run was handed."""
         self.recorded(name)
         calls, problems = probe.tool_record(self.logs, RUN, True)
-        return probe.file_tool_gaps(calls, self.steps()), problems
+        return probe.file_tool_gaps(calls, self.handed(labels)), problems
 
     def test_each_target_refused_in_a_patch_of_its_own_passes(self):
-        # The probe's steps as the launcher now writes them: nine patches, one per target, and the script.
+        # The probe's steps as the launcher writes them: one patch per target, and the script. This run was handed
+        # nine targets, before the Founder's records were among them.
         self.write_record(exit_code=0, started_at="2026-10-09T00:00:00+00:00")
         self.write_permitted()
         text = self.recorded("each-target-alone.stderr.log")
         # The agent's own report repeats the refusal for every target, which proves nothing and harms nothing.
-        self.assertGreater(text.count(probe.PATCH_REFUSAL), 2 * len(probe.PROBE_TARGETS))
+        self.assertGreater(text.count(probe.PATCH_REFUSAL), 2 * len(RECORDED_TARGETS))
+        needed = [step.name for step in self.handed() + self.steps(kind=probe.PERMITTED)]
+        with self.kernel(self.steps(tool=probe.SHELL)):
+            result = self.verify(needed=needed)
+        self.assertEqual(result["file_tool_targets_without_refusal"], {})
+        self.assertEqual(result["codex_tool_record"]["problems"], [])
+        self.assertTrue(result["passed"])
+
+    def test_every_target_the_founders_records_among_them_refused_in_a_patch_of_its_own_passes(self):
+        # The probe's steps as the launcher writes them since the Founder's records are targets: fourteen patches,
+        # one per target, and the script. Each folder of the records has its own refused patch in Codex's record.
+        self.write_record(exit_code=0, started_at="2026-10-09T00:00:00+00:00")
+        self.write_permitted()
+        text = self.recorded("each-target-alone-with-founder-records.stderr.log")
+        for label in FOUNDER_TARGETS:
+            self.assertIn(f"{MARK}-{label}-file-tool.txt", text)
         with self.kernel(self.steps(tool=probe.SHELL)):
             result = self.verify()
         self.assertEqual(result["file_tool_targets_without_refusal"], {})
         self.assertEqual(result["codex_tool_record"]["problems"], [])
+        self.assertEqual(len(result["steps_needed"]), 2 * TARGETS + 2 * len(self.boundary.areas))
         self.assertTrue(result["passed"])
+        # Take the refusal of one folder's patch away, and that folder alone is unproven: the agent's report and the
+        # script's output name the sentinel too, and neither is a refusal.
+        calls, _ = probe.tool_record(self.logs, RUN, True)
+        for step in self.steps(tool=probe.FILE_TOOL):
+            if step.label not in FOUNDER_TARGETS:
+                continue
+            with self.subTest(label=step.label):
+                kept = [call for call in calls if not probe.refused_alone(call, str(step.path))]
+                self.assertEqual(len(kept), len(calls) - 1)
+                self.assertTrue(any(str(step.path) in call.body for call in kept))
+                self.assertEqual(
+                    list(probe.file_tool_gaps(kept, self.steps())), [step.label], "nothing else stands in for it"
+                )
+
+    def test_a_run_handed_no_patch_for_the_founders_records_leaves_each_of_them_unproven(self):
+        """A run that proves every other target proves nothing about the folders of the Founder's records: each is a
+        target of its own, so the check fails and names every one."""
+        self.write_record(exit_code=0, started_at="2026-10-09T00:00:00+00:00")
+        self.write_permitted()
+        self.recorded("each-target-alone.stderr.log")
+        with self.kernel(self.steps(tool=probe.SHELL)):
+            result = self.verify()
+        self.assertFalse(result["passed"])
+        self.assertEqual(
+            result["file_tool_targets_without_refusal"], dict.fromkeys(FOUNDER_TARGETS, "no patch named its sentinel")
+        )
+        self.assertEqual(result["unproven"], [f"{label}:file-tool" for label in FOUNDER_TARGETS])
+        self.assertEqual(
+            FOUNDER_TARGETS,
+            (
+                "founder-decisions",
+                "founder-sittings",
+                "founder-beta-builds",
+                "founder-beta-reports",
+                "founder-outreach",
+            ),
+        )
 
     def test_nine_targets_sent_as_three_patches_are_not_proven(self):
         # The shape behind the false failures on main: nine forbidden targets in three patches, each refused whole.
@@ -888,7 +960,7 @@ class RecordedLogTest(ProbeTestCase):
         # the check now says exactly that, where it used to count three refusals and ask for nine.
         gaps, problems = self.gaps("three-patches-for-nine-targets.stderr.log")
         self.assertEqual(problems, [])
-        self.assertEqual(list(gaps), list(probe.PROBE_TARGETS))
+        self.assertEqual(list(gaps), list(RECORDED_TARGETS))
         for reason in gaps.values():
             self.assertIn("refused only in a patch that also named 2 other paths", reason)
 
@@ -952,13 +1024,13 @@ class RecordedLogTest(ProbeTestCase):
         gaps, problems = self.gaps("stopped-at-first-refusal.stderr.log")
         self.assertEqual(problems, [])
         self.assertEqual(
-            gaps, dict.fromkeys(probe.PROBE_TARGETS[2:], "no patch named its sentinel"), "mandu and reptoday were sent"
+            gaps, dict.fromkeys(RECORDED_TARGETS[2:], "no patch named its sentinel"), "mandu and reptoday were sent"
         )
 
     def test_refusals_that_name_no_target_prove_none(self):
         # All that main's check had to go on, from its failing run: three refusals, and nothing that says of what.
         gaps, problems = self.gaps("main-three-refusals.stderr.log")
-        self.assertEqual(list(gaps), list(probe.PROBE_TARGETS))
+        self.assertEqual(list(gaps), list(RECORDED_TARGETS))
         self.assertIn("Codex's log holds no tool call", problems[0])
 
 
@@ -1217,6 +1289,18 @@ class CheckTest(unittest.TestCase):
         kept = sorted(path.name.split(".", 1)[1] for path in self.logs.iterdir())
         self.assertEqual(kept, ["boundary-check.json", "events.jsonl", "json", "probe.md", "probe.sh", "stderr.log"])
 
+    def test_the_check_makes_no_writer_of_the_founder_s_records(self):
+        """Only the sitting command makes a founder.Writer (founder.py): a whole check, run with the Writer replaced
+        by a refusal, makes none."""
+        from gr0wthlab import founder
+
+        refusal = AssertionError("only the sitting command makes a founder.Writer")
+        with mock.patch.object(founder, "Writer", side_effect=refusal) as writer:
+            code, out = self.check()
+        self.assertEqual(code, 0, out)
+        self.assertIn(": PASSED", out)
+        self.assertEqual(writer.call_count, 0)
+
     def test_steps_the_agent_left_out_are_handed_over_again_and_no_others(self):
         # The first run never runs the script and skips one patch; the second sends what it is handed.
         code, out = self.check(lambda run, step: run > 1 or (step.tool == probe.FILE_TOOL and step.label != "src"))
@@ -1360,7 +1444,7 @@ class CheckTest(unittest.TestCase):
             " Codex reported no error\n",
             out,
         )
-        self.assertIn("file-tool targets Codex refused, each in a patch of its own: 6 of 9", out)
+        self.assertIn(f"file-tool targets Codex refused, each in a patch of its own: 6 of {TARGETS}", out)
         self.assertIn("    config: no patch named its sentinel", out)
         self.assertNotIn("asking again", out)
         self.assertNotIn("NOT TESTED", out)
@@ -1374,7 +1458,7 @@ class CheckTest(unittest.TestCase):
             " not exit cleanly; Codex's last error: stream disconnected before completion\n",
             out,
         )
-        self.assertIn("file-tool targets Codex refused, each in a patch of its own: 9 of 9", out)
+        self.assertIn(f"file-tool targets Codex refused, each in a patch of its own: {TARGETS} of {TARGETS}", out)
         self.assertNotIn("tested only in part", out)
         self.assertNotIn("asking again", out)
 

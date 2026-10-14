@@ -1,8 +1,9 @@
-"""The Mandu exchange formats in docs/mandu-exchange.md: the Review Queue items gr0wthlab writes, and the decision,
-sitting, Beta Build, Beta Cohort report, and outreach records Mandu writes for gr0wthlab to read.
+"""The formats in docs/mandu-exchange.md: the Review Queue items a run writes, and the Founder's decision, sitting,
+Beta Build, Beta Cohort report, and outreach records, which the sitting page writes and a run reads (founder.py).
 
 Everything here is pure parsing and rendering, so the agent's own check (check-incoming) and the launcher's
-post-run validation apply exactly the same rules.
+post-run validation apply exactly the same rules, and so the sitting page checks a record with the very parser a run
+reads it with before it writes it.
 """
 
 from __future__ import annotations
@@ -13,7 +14,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
-EXCHANGE_VERSION = 6
+# Version 7 moved the Founder's records from Mandu into gr0wthlab's own ledger/founder/ and changed no format.
+EXCHANGE_VERSION = 7
 # The version that added the Beta Build record and the Beta Cohort report; neither exists at an earlier one.
 BETA_SINCE = 4
 
@@ -51,6 +53,7 @@ RECRUITING_STOPPED = "stopped"
 # The three counts the Founder reports once invitations go out, each a total to date.
 BETA_COUNTS = ("invitations_sent", "accepted", "sessions_booked")
 MAX_WAIT_DAYS = 90
+MAX_MINUTES = 600  # the most a sitting record holds
 # An Evidence line names its source as a URL or as a path in backticks.
 SOURCE_PATTERN = re.compile(r"https?://\S+|`[^`\s]*[/.][^`]*`")
 # A path an Evidence line names in backticks.
@@ -288,7 +291,7 @@ def render_item(fields: Mapping[str, str], ask: str, body: str, touches: str, ev
     return "\n".join(front) + "\n" + render_content(fields["kind"], ask, body, touches, evidence)
 
 
-# Records Mandu writes.
+# The Founder's records, which the sitting page writes.
 
 
 @dataclass(frozen=True)
@@ -351,7 +354,7 @@ def check_version(data: Mapping, problems: list[str]) -> None:
 
 
 def parse_decision(stem: str, data: object) -> tuple[Decision | None, list[str]]:
-    """A decision record from decisions/<item id>.json; other fields are Mandu's own and are ignored."""
+    """A decision record from decisions/<item id>.json; any other field is ignored."""
     problems: list[str] = []
     if not isinstance(data, dict):
         return None, ["the record must be a JSON object"]
@@ -394,8 +397,8 @@ def parse_sitting(stem: str, data: object) -> tuple[Sitting | None, list[str]]:
     if day != stem or not valid_date(stem):
         problems.append(f"date must be a YYYY-MM-DD date equal to the file name {stem!r}")
     minutes = data.get("minutes")
-    if isinstance(minutes, bool) or not isinstance(minutes, int) or not 0 < minutes <= 600:
-        problems.append("minutes must be a whole number from 1 to 600")
+    if isinstance(minutes, bool) or not isinstance(minutes, int) or not 0 < minutes <= MAX_MINUTES:
+        problems.append(f"minutes must be a whole number from 1 to {MAX_MINUTES}")
     note = one_line(data.get("note"), "note", problems, required=False)
     if problems:
         return None, problems
@@ -432,7 +435,7 @@ def check_beta_version(data: Mapping, problems: list[str]) -> None:
 
 
 def parse_beta_build(stem: str, data: object) -> tuple[BetaBuild | None, list[str]]:
-    """A Beta Build record from beta-builds/<Product>.json; other fields are Mandu's own and are ignored."""
+    """A Beta Build record from beta-builds/<Product>.json; any other field is ignored."""
     problems: list[str] = []
     if not isinstance(data, dict):
         return None, ["the record must be a JSON object"]
@@ -467,8 +470,8 @@ def parse_beta_build(stem: str, data: object) -> tuple[BetaBuild | None, list[st
 
 
 def parse_beta_report(stem: str, data: object) -> tuple[BetaReport | None, list[str]]:
-    """A Beta Cohort report from beta-reports/<Product>-<YYYY-MM-DD>.json. Only its counts are read: every other
-    field is Mandu's own, and nothing else in the record is ever kept."""
+    """A Beta Cohort report from beta-reports/<Product>-<YYYY-MM-DD>.json. Only its counts are read, and nothing
+    else in the record is ever kept."""
     problems: list[str] = []
     if not isinstance(data, dict):
         return None, ["the record must be a JSON object"]
@@ -493,8 +496,8 @@ def parse_beta_report(stem: str, data: object) -> tuple[BetaReport | None, list[
 
 
 def parse_outreach(stem: str, data: object) -> tuple[Outreach | None, list[str]]:
-    """An outreach record from outreach/<item id>.json: Mandu writes it when the Founder sends an approved message,
-    and writes it again, whole, when a reply arrives."""
+    """An outreach record from outreach/<item id>.json: the page writes it when the Founder says an approved message
+    was sent, and writes it again, whole, when a reply arrives."""
     problems: list[str] = []
     if not isinstance(data, dict):
         return None, ["the record must be a JSON object"]

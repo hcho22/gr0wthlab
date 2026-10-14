@@ -1,5 +1,4 @@
-"""config/run.json, and the Mandu exchange folder and the Waitlist view from config/products.json, validated before a
-run starts."""
+"""config/run.json, and the Waitlist view from config/products.json, validated before a run starts."""
 
 from __future__ import annotations
 
@@ -7,10 +6,10 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, time, timedelta
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from . import schedule
-from .boundary import Boundary, ConfigError, canonical, is_within, load_json, resolve_home_path
+from .boundary import Boundary, ConfigError, is_within, load_json, resolve_home_path
 
 RUN_CONFIG = Path("config/run.json")
 TAG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
@@ -229,27 +228,6 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
         tries,
         shown_output,
     )
-
-
-def exchange_dir(registry: Mapping, boundary: Boundary, env: Mapping[str, str], home: Path) -> Path:
-    """Mandu's exchange folder: inside the Mandu checkout unless overridden, and never inside this repository,
-    where the agent could write a decision the Founder never made."""
-    mandu = registry.get("mandu") or {}
-    exchange = mandu.get("exchange")
-    if not isinstance(exchange, dict) or exchange.get("access") != "read-only":
-        raise ConfigError("the Product registry must name Mandu's exchange folder as read-only")
-    override = env.get(exchange.get("env") or "")
-    if override:
-        path = resolve_home_path(None, "exchange", exchange.get("env"), env, home)
-    else:
-        relative = PurePosixPath(str(exchange.get("path", "")))
-        if not relative.parts or relative.is_absolute() or ".." in relative.parts:
-            raise ConfigError("mandu.exchange.path must be relative to the Mandu checkout")
-        mandu_path = next(location.path for location in boundary.locations if location.label == "Mandu")
-        path = canonical(mandu_path / relative)
-    if is_within(path, boundary.repo_root) or is_within(boundary.repo_root, path):
-        raise ConfigError(f"the exchange folder {path} overlaps the repository; the agent could write in it")
-    return path
 
 
 @dataclass(frozen=True)

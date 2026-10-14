@@ -124,7 +124,6 @@ class EntryPointTest(TimeLimitTestCase):
     def test_an_agent_that_goes_silent_mid_work_leaves_nothing_half_written_queued_and_the_next_run_is_clean(self):
         fakes.set_window(self.repo, {"first_sitting": None, "slot": None})
         fakes.keep_days(self.mandu, 1, 2)
-        self.exchange.mkdir()
         writes = {
             HALF_ITEM: fakes.PROPOSAL[: len(fakes.PROPOSAL) // 2],
             WHOLE_ITEM: fakes.PROPOSAL,
@@ -267,7 +266,6 @@ class TimedOutRunTest(TimeLimitTestCase):
 
     def test_a_second_timed_out_run_the_same_day_does_not_queue_the_notice_twice(self):
         fakes.behave(self.codex_dir, {"hang": True})
-        self.exchange.mkdir()
         self.assertEqual(self.run_cycle()[0], cycle.EXIT_STOPPED)
         first = self.notices()
         self.assertEqual(self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=30))[0], cycle.EXIT_STOPPED)

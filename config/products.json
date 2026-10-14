@@ -6,12 +6,7 @@
     "local_checkout": "~/Mandu",
     "env": "GR0WTHLAB_MANDU_DIR",
     "access": "read-only",
-    "exchange": {
-      "path": "projects/gr0wthlab/exchange/",
-      "env": "GR0WTHLAB_EXCHANGE_DIR",
-      "access": "read-only",
-      "spec": "docs/mandu-exchange.md"
-    }
+    "holds": "Each Product's Go-To-Market Package and nothing else gr0wthlab reads: the Founder's decisions and records are in this repository's ledger/founder/, written by `src/bin/gr0wthlab sitting` (docs/adr/0002-the-founder-decides-in-gr0wthlab.md). What Mandu may read from gr0wthlab: docs/mandu-exchange.md."
   },
   "products": [
     {
@@ -180,7 +175,7 @@
         "k8": "projects/RepToday/gtm/07-thesis/",
         "brand_rules": "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json",
         "cohort": {"minimum": 20, "maximum": 50},
-        "note": "Beta Cohort recruiting (US-ME15), which does nothing until the Founder records an approved Beta Build in Mandu (docs/mandu-exchange.md). k8 is the folder of the thesis and its K8 rubric, which every invitation cites; brand_rules is the brand lint's one rule source. A recruiting Draft may cite a line of any package source above that beta-recruiting needs, and of no other file. cohort is the Beta Cohort's size, 20 to 50 people: recruiting goes on until the Founder reports that it reached the maximum or records a stop, and a pool that cannot reach the minimum is reported with its gap. The size of a batch is the Founder's call in config/run.json."
+        "note": "Beta Cohort recruiting (US-ME15), which does nothing until the Founder records an approved Beta Build on the sitting page (ledger/founder/beta-builds/, docs/mandu-exchange.md). k8 is the folder of the thesis and its K8 rubric, which every invitation cites; brand_rules is the brand lint's one rule source. A recruiting Draft may cite a line of any package source above that beta-recruiting needs, and of no other file. cohort is the Beta Cohort's size, 20 to 50 people: recruiting goes on until the Founder reports that it reached the maximum or records a stop, and a pool that cannot reach the minimum is reported with its gap. The size of a batch is the Founder's call in config/run.json."
       }
     },
     {

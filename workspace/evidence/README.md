@@ -9,4 +9,4 @@ Formats: US-ME11, US-ME13, US-ME16.
   What it fetched is working data in `ledger/working/`, removed when the run ends: a quote in a kept record is all the launcher keeps of it as Evidence.
 - `learning/<item id>.md`: the code the agent proposes for one rejection reason; the launcher checks it against its fixed code list and writes it into that decision's Evidence.
 
-The launcher's own Evidence (each run's package snapshot, the Founder's decisions, the sittings taken in from Mandu, the Waitlist counts, the Listening quotes it kept, and, once a Beta Build is approved, the invitation batches by entry identifier and the counts the Founder reports) is in [`ledger/evidence/`](../../ledger/README.md), which the agent can read and never write.
+The launcher's own Evidence (each run's package snapshot, the Founder's decisions and sittings as it took them in, the Waitlist counts, the Listening quotes it kept, and, once a Beta Build is approved, the invitation batches by entry identifier and the counts the Founder reports) is in [`ledger/evidence/`](../../ledger/README.md), which the agent can read and never write.

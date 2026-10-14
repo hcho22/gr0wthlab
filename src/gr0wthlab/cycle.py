@@ -1,7 +1,8 @@
 """One Marketing Engineer run, scheduled or on demand, from the pre-run sync to the saved records.
 
 Order: bring the production clone up to origin's main; snapshot the Go-To-Market Package; take in the Founder's
-decisions from Mandu; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests
+decisions from ledger/founder/, which only `gr0wthlab sitting` writes (founder.py) and from which every Founder record
+below is read; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests
 that need filing; plan the post Drafts from the 14-day kit (posts.prepare); file the filming plan and list and measure
 the footage (filming.prepare); read the Founder's Beta Build record and, only once it exists, plan the Beta
 Cohort's next invitation batch (beta.prepare); read the fixed list of network sources into one snapshot (fetch.Client,
@@ -46,7 +47,6 @@ import json
 import os
 import shlex
 import shutil
-import stat
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import replace
@@ -63,6 +63,7 @@ from . import (
     fetch,
     filming,
     footage,
+    founder,
     launcher,
     learning,
     listening,
@@ -82,7 +83,7 @@ from . import (
 )
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, clear_probe_files, read_plain
-from .boundary import LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
+from .boundary import FOUNDER, LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
 from .queue import INCOMING, OPEN, QUEUE_FILE, REVIEW_QUEUE, SET_ASIDE, SUPERSEDED, Ledger, QueueError, Stands
 from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLine, Unusable
 from .sessions import Session
@@ -99,7 +100,6 @@ SUMMARY_LIMIT = 4000
 WAITLIST_NEEDS = ("waitlist-counts", "weekly-read", "beta-recruiting")
 WORKING = "working"
 FILMING = "filming"
-STRAY = "only <name>.json record files belong here"  # a file that is no record, which is not a read that failed
 # The folders, each inside one of the agent's areas, that the launcher takes the agent's work in from.
 INTAKE = (
     ("evidence", listening.QUOTES_IN),
@@ -133,7 +133,7 @@ def output_titles(config: settings.Settings, keys: Sequence[str]) -> tuple[str, 
     return tuple(str(config.outputs.get(key, {}).get("title", key)) for key in keys)
 
 
-# Mandu's exchange folder, read only.
+# The Founder's records, read only: a run never writes one (founder.py).
 
 
 def unusable(name: str, problems: Sequence[str], content: bytes | None = None) -> Unusable:
@@ -143,39 +143,20 @@ def unusable(name: str, problems: Sequence[str], content: bytes | None = None) -
     return Unusable(name, tuple(problems), run_state.digest(f"{name}\n{hashlib.sha256(data).hexdigest()}"))
 
 
-def read_records(directory: Path) -> tuple[list[tuple[str, Path, bytes]], list[Unusable], str | None]:
-    """(name, path, bytes) for every record file in one exchange subfolder, the records that could not be read, and
-    why the folder itself could not be listed, if it could not; hidden files are Mandu's temporaries."""
-    found, problems = [], []
-    try:
-        names = sorted(os.listdir(str(directory))) if package.file_type(directory) == stat.S_IFDIR else []
-    except OSError as error:
-        return found, problems, error.strerror or str(error)
-    for name in names:
-        path = directory / name
-        if name.startswith("."):
-            continue
-        try:
-            if not name.endswith(".json") or package.file_type(path) != stat.S_IFREG:
-                problems.append(unusable(f"{directory.name}/{name}", [STRAY]))
-                continue
-            found.append((name, path, path.read_bytes()))
-        except OSError as error:
-            problems.append(unusable(f"{directory.name}/{name}", [error.strerror or str(error)]))
-    return found, problems, None
+def read_records(ledger: Path, kind: str) -> tuple[list[founder.Raw], list[Unusable], str | None]:
+    """(name, path, bytes) for every record file of one kind in ledger/founder/, the files there that are no record,
+    and why the folder itself could not be read, if it could not."""
+    found, others, failure = founder.read(ledger, kind)
+    return found, [unusable(founder.named(kind, name), [why]) for name, why in others], failure
 
 
-def parse_records(found, parser) -> tuple[list[tuple[object, Path, str]], list[Unusable]]:
+def parse_records(kind: str, found, parser) -> tuple[list[tuple[object, Path, str]], list[Unusable]]:
+    """Each record a parser could use, with its path and fingerprint, and each it could not (founder.parse)."""
     parsed, problems = [], []
     for name, path, data in found:
-        try:
-            value = json.loads(data.decode("utf-8"))
-        except (UnicodeDecodeError, ValueError) as error:
-            problems.append(unusable(f"{path.parent.name}/{name}", [f"not JSON: {error}"], data))
-            continue
-        record, issues = parser(name[: -len(".json")], value)
+        record, issues = founder.parse(name, data, parser)
         if issues:
-            problems.append(unusable(f"{path.parent.name}/{name}", issues, data))
+            problems.append(unusable(founder.named(kind, name), issues, data))
         else:
             parsed.append((record, path, hashlib.sha256(data).hexdigest()))
     return parsed, problems
@@ -268,51 +249,57 @@ class Cycle:
         self,
         state: RunState,
         config: settings.Settings,
-        folder: Path,
         ledger: Ledger,
         ledger_ok: bool,
         review_state: run_state.ReviewQueueState,
     ) -> None:
-        """Take in Mandu's decision and sitting records; when the ledger could not be read, no decision is matched and
-        only sittings are taken in. A decision record for an item still open that cannot be used is reported at every
-        run until Mandu replaces it; any other record that cannot be used is reported by the first run to find it as
-        it is, and the Review Queue state remembers it by its fingerprint while it stays so."""
+        """Take in the Founder's decision and sitting records from ledger/founder/; when the ledger could not be read,
+        no decision is matched and only sittings are taken in. A sitting that left no sitting record is still kept
+        as one that took place, from the date each decision given at it carries, so what it left undecided carries
+        over; its time is then not recorded. A decision record for an item still open that cannot
+        be used is reported at every run until the Founder decides the item again on the page; any other record that
+        cannot be used is reported by the first run to find it as it is, and the Review Queue state remembers it by
+        its fingerprint while it stays so.
+
+        The page may change a decision until a run has taken it in, so the reading and the taking in happen under the
+        lock the page holds for a change (founder.locked). A lock that stays held takes in nothing this run.
+        """
         needs = output_titles(config, ("decisions", "review-queue"))
         sitting_needs = output_titles(config, ("review-queue",))
         state.reported_before = set(review_state.reported)
+        try:
+            with founder.locked(self.store.root):
+                self.take_records(state, ledger, ledger_ok, review_state, needs, sitting_needs)
+        except founder.Busy as error:
+            detail = f"{error}, so no decision and no sitting was taken in this run; the next run takes them in."
+            state.sources.append(SourceLine("Founder decisions", package.FAILED, detail, needs))
+            state.sources.append(SourceLine("Sittings", package.FAILED, detail, sitting_needs))
+
+    def take_records(
+        self,
+        state: RunState,
+        ledger: Ledger,
+        ledger_ok: bool,
+        review_state: run_state.ReviewQueueState,
+        needs: tuple[str, ...],
+        sitting_needs: tuple[str, ...],
+    ) -> None:
+        root = self.store.root
         unmatched = (
             None
             if ledger_ok
             else SourceLine(
-                "Mandu decisions",
+                "Founder decisions",
                 SKIPPED,
                 "the Review Queue could not be read, so no decision could be matched to its item",
                 needs,
             )
         )
-        try:
-            present = package.file_type(folder) == stat.S_IFDIR
-        except OSError as error:
-            detail = f"Mandu's exchange folder `{folder}` could not be read: {error.strerror or error}."
-            state.sources.append(unmatched or SourceLine("Mandu decisions", package.FAILED, detail, needs))
-            state.sources.append(SourceLine("Mandu sittings", package.FAILED, detail, sitting_needs))
-            return
-        if not present:
-            if unmatched:
-                state.sources.append(unmatched)
-            elif ledger.open_entries():
-                detail = f"Mandu's exchange folder `{folder}` does not exist, so no decision can reach gr0wthlab."
-                state.sources.append(SourceLine("Mandu decisions", package.FAILED, detail, needs))
-            else:
-                detail = "no Review Queue item is waiting for a decision yet"
-                state.sources.append(SourceLine("Mandu decisions", SKIPPED, detail, needs))
-            state.sources.append(SourceLine("Mandu sittings", SKIPPED, "Mandu's exchange folder does not exist yet"))
-            return
-        found, problems, failure = ([], [], None) if unmatched else read_records(folder / "decisions")
-        decisions, more = parse_records(found, exchange.parse_decision)
+        found, problems, failure = ([], [], None) if unmatched else read_records(root, founder.DECISIONS)
+        decisions, more = parse_records(founder.DECISIONS, found, exchange.parse_decision)
         problems += more
-        sittings_found, sitting_problems, sitting_failure = read_records(folder / "sittings")
-        sittings, more = parse_records(sittings_found, exchange.parse_sitting)
+        sittings_found, sitting_problems, sitting_failure = read_records(root, founder.SITTINGS)
+        sittings, more = parse_records(founder.SITTINGS, sittings_found, exchange.parse_sitting)
         sitting_problems += more
         now = self.now()
         outcomes = ledger.take_decisions([d for d, _, _ in decisions], state.run_id, now)
@@ -321,19 +308,20 @@ class Cycle:
         for outcome in outcomes:
             if outcome.status in ("unknown-item", "conflict"):
                 name = f"{outcome.decision.item}.json"
-                problems.append(unusable(f"decisions/{name}", [report.outcome_text(outcome.status)], contents[name]))
+                why = [report.outcome_text(outcome.status)]
+                problems.append(unusable(founder.named(founder.DECISIONS, name), why, contents[name]))
         problems = [named_item(record) for record in problems]
         state.unusable = problems + sitting_problems
         reported = {record.fingerprint for record in state.unusable}
         review_state.reported = sorted(reported | state.reported_before if failure or sitting_failure else reported)
-        digests = {d.item: (str(path), digest) for d, path, digest in decisions}
+        digests = {d.item: (self.store.relative(path), digest) for d, path, digest in decisions}
         for outcome in state.decisions:
             if outcome.status != "taken":
                 continue
             decision, entry = outcome.decision, outcome.entry
             source, digest = digests[decision.item]
             self.store.write_json(
-                self.store.path("evidence", "decisions", f"{decision.item}.json"),
+                self.store.path(*founder.TAKEN_IN, f"{decision.item}.json"),
                 {
                     "item": decision.item,
                     "kind": entry["kind"],
@@ -360,7 +348,7 @@ class Cycle:
                 "date": sitting.day,
                 "minutes": sitting.minutes,
                 "note": sitting.note,
-                "source": {"path": str(path), "sha256": digest},
+                "source": {"path": self.store.relative(path), "sha256": digest},
             }
             try:
                 existing = json.loads(read_plain(target).decode("utf-8"))
@@ -371,29 +359,49 @@ class Cycle:
                 first = (existing or {}).get("taken_in_by_run", state.run_id)
                 self.store.write_json(target, dict(record, taken_in_by_run=first))
                 state.sittings.append(sitting)
+        # A sitting that ended without its record still took place: each decision given at it carries its date. Its
+        # time is not known, and is kept as null, never as zero. A decision is the only other sign of a sitting a
+        # run reads: one that left neither leaves no mark.
+        given: dict[str, list[str]] = {}
+        for outcome in state.decisions:
+            if outcome.status == "taken" and outcome.decision.sitting:
+                given.setdefault(outcome.decision.sitting, []).append(digests[outcome.decision.item][0])
+        recorded = {sitting.day for sitting, _, _ in sittings}
+        unusable_records = {record.name for record in sitting_problems}
+        for day in sorted(set(given) - recorded):
+            target = self.store.path("evidence", "sittings", f"{day}.json")
+            try:
+                known = isinstance(json.loads(read_plain(target).decode("utf-8")), dict)
+            except (UnsafeFile, ValueError):
+                known = False
+            if known:
+                continue
+            record = {"date": day, "minutes": None, "note": None, "source": None, "shown_by": sorted(given[day])}
+            self.store.write_json(target, dict(record, taken_in_by_run=state.run_id))
+            # Only a folder that was read, and that holds no file for the date, shows that no time was recorded.
+            if not sitting_failure and founder.named(founder.SITTINGS, f"{day}.json") not in unusable_records:
+                state.untimed.append(day)
         taken = sum(1 for outcome in state.decisions if outcome.status == "taken")
         if unmatched:
             state.sources.append(unmatched)
         elif failure:
-            detail = f"`{folder / 'decisions'}` could not be read: {failure}."
-            state.sources.append(SourceLine("Mandu decisions", package.FAILED, detail, needs))
+            detail = f"`{FOUNDER}/{founder.DECISIONS}/` could not be read: {failure}."
+            state.sources.append(SourceLine("Founder decisions", package.FAILED, detail, needs))
         else:
             detail = f"{report.plural(len(found), 'record')}, {taken} new since the previous run" + (
                 f", {len(problems)} could not be used" if problems else ""
             )
             state.sources.append(
-                SourceLine("Mandu decisions", package.CHANGED if taken else package.READ, detail, needs)
+                SourceLine("Founder decisions", package.CHANGED if taken else package.READ, detail, needs)
             )
         if sitting_failure:
-            detail = f"`{folder / 'sittings'}` could not be read: {sitting_failure}."
-            state.sources.append(SourceLine("Mandu sittings", package.FAILED, detail, sitting_needs))
+            detail = f"`{FOUNDER}/{founder.SITTINGS}/` could not be read: {sitting_failure}."
+            state.sources.append(SourceLine("Sittings", package.FAILED, detail, sitting_needs))
         else:
             detail = f"{report.plural(len(sittings_found), 'record')}, {len(state.sittings)} new" + (
                 f", {len(sitting_problems)} could not be used" if sitting_problems else ""
             )
-            state.sources.append(
-                SourceLine("Mandu sittings", package.CHANGED if state.sittings else package.READ, detail)
-            )
+            state.sources.append(SourceLine("Sittings", package.CHANGED if state.sittings else package.READ, detail))
 
     def read_waitlist(self, state: RunState, config: settings.Settings, rules: settings.Waitlist | None) -> None:
         """Read the Waitlist's anonymous view before the agent starts and keep its counts as Evidence when it is usable;
@@ -451,7 +459,8 @@ class Cycle:
         return identifier
 
     def sitting_runs(self, state: RunState) -> dict[str, str]:
-        """Each sitting taken in so far, by date, with the run that first took in its record."""
+        """Each sitting known so far, by date, with the run that first took in a record of it: its sitting record,
+        or a decision given at it."""
         runs = {}
         folder = self.store.path("evidence", "sittings")
         for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
@@ -598,9 +607,9 @@ class Cycle:
             return run_state.Tally(beta.WORKFLOW, 0, 0, "no Product recruits a Beta Cohort")
         if not plan.active:
             why = (
-                "no Beta Build approval is recorded in Mandu"
+                "no Beta Build approval is recorded"
                 if plan.gate.status == beta.NOT_RECORDED
-                else "the Beta Build record in Mandu could not be used"
+                else "the Beta Build record could not be used"
             )
             return run_state.Tally(beta.WORKFLOW, 0, 0, f"not started: {why}")
         reading = plan.reading
@@ -677,7 +686,7 @@ class Cycle:
         never put in another workflow's row, and a session that fell short always has its gap in its own."""
         failed = state.failed_sources()
         gap = state.agent_gap
-        decisions = next((line.detail for line in state.sources if line.name == "Mandu decisions"), "")
+        decisions = next((line.detail for line in state.sources if line.name == "Founder decisions"), "")
         queued = report.plural(len(state.queue_after), "open item") + (
             f"; {len(state.set_aside)} set aside" if state.set_aside else ""
         )
@@ -688,7 +697,7 @@ class Cycle:
         skipped = {"waitlist-counts": reading.detail} if reading and reading.status == SKIPPED else {}
         if state.beta is None or state.beta.gate.status == beta.NOT_RECORDED:
             skipped[beta.WORKFLOW] = (
-                "the Founder has recorded no approved Beta Build in Mandu" if state.beta else "no Product recruits one"
+                "the Founder has recorded no approved Beta Build" if state.beta else "no Product recruits one"
             )
         if state.filming is None and not state.filming_problem:
             skipped["filming-plan"] = "no active Product films"
@@ -878,7 +887,6 @@ class Cycle:
         state: RunState,
         config: settings.Settings,
         rules: beta.Rules | None,
-        folder: Path,
         registry,
         boundary: Boundary,
         ledger: Ledger,
@@ -893,20 +901,20 @@ class Cycle:
         if rules is None:
             return
         needs = output_titles(config, (beta.WORKFLOW,))
-        found, problems, failure = read_records(folder / beta.BUILDS)
-        unusable = [(Path(record.name).name, "; ".join(record.problems)) for record in problems]
-        gate = beta.read_gate(rules.product, found, unusable, failure)
+        root = self.store.root
+        found, others, failure = founder.read(root, beta.BUILDS)
+        gate = beta.read_gate(rules.product, self.relative_records(found), others, failure)
         if gate.recorded and not ledger_ok:
             state.beta = beta.Plan(rules, gate, state.run_id)
             state.beta_problem = "not prepared: the Review Queue could not be read"
         else:
             reports, reports_failure, unreadable = None, None, []
             if gate.recorded:
-                reports, problems, reports_failure = read_records(folder / beta.REPORTS)
-                for record in problems:
-                    name = beta.mandu_file(beta.REPORTS, Path(record.name).name)
-                    state.problems.append(f"{name} could not be used ({'; '.join(record.problems)})")
-                unreadable = [Path(record.name).name for record in problems if record.problems != (STRAY,)]
+                reports, others, reports_failure = founder.read(root, beta.REPORTS)
+                reports = self.relative_records(reports)
+                for name, why in others:
+                    state.problems.append(f"{founder.shown(beta.REPORTS, name)} could not be used ({why})")
+                unreadable = [name for name, why in others if why != founder.STRAY]
             try:
                 state.beta = beta.prepare(
                     rules,
@@ -933,6 +941,10 @@ class Cycle:
                 state.problems.append(f"Beta Cohort recruiting could not be prepared ({error})")
         for name, status, detail in beta.source_lines(state.beta):
             state.sources.append(SourceLine(name, status, detail, needs))
+
+    def relative_records(self, found: Sequence[founder.Raw]) -> list[founder.Raw]:
+        """Record files with each path given from ledger/, the form a record that is kept names its source in."""
+        return [(name, Path(self.store.relative(path)), data) for name, path, data in found]
 
     def take_beta(
         self,
@@ -1055,11 +1067,10 @@ class Cycle:
         areas: Areas,
         ledger: Ledger | None,
         states: run_state.States,
-        folder: Path,
         network: tuple[fetch.Policy, sources.Config, outreach.Settings],
     ) -> None:
         """Before the first session: read the network sources, plan Listening from them and outreach from the
-        Founder's records in Mandu, and record both plans for each session's own check. Each step fails on its own;
+        Founder's outreach records, and record both plans for each session's own check. Each step fails on its own;
         with no ledger, as when the Review Queue could not be read, nothing is filed or matched."""
         policy, source_config, outreach_settings = network
         mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
@@ -1097,12 +1108,13 @@ class Cycle:
             state.problems.append(f"Listening could not be prepared ({error})")
         try:
             records, counted = outreach.Records(), ""
-            if ledger is not None and package.file_type(folder / "outreach") == stat.S_IFDIR:
-                found, problems, failure = read_records(folder / "outreach")
-                parsed, more = parse_records(found, exchange.parse_outreach)
+            if ledger is not None:
+                found, problems, failure = read_records(self.store.root, founder.OUTREACH)
+                parsed, more = parse_records(founder.OUTREACH, found, exchange.parse_outreach)
                 bad = {Path(record.name).name: "; ".join(record.problems) for record in problems + more}
                 records = outreach.Records(tuple(record for record, _, _ in parsed), bad, failure or "")
-                counted = report.plural(len(found), "record") + (f", {len(bad)} could not be used" if bad else "")
+                if found or bad or failure:
+                    counted = report.plural(len(found), "record") + (f", {len(bad)} could not be used" if bad else "")
             try:
                 if ledger is not None:
                     state.outreach, states.outreach = outreach.prepare(
@@ -1124,15 +1136,15 @@ class Cycle:
                 unread = state.outreach.unread if state.outreach is not None else []
                 needs = output_titles(config, ("outreach-drafts",))
                 if records.failure:
-                    detail = f"`{folder / 'outreach'}` could not be read: {records.failure}."
-                    line = SourceLine("Mandu outreach records", package.FAILED, detail, needs)
+                    detail = f"`{FOUNDER}/{founder.OUTREACH}/` could not be read: {records.failure}."
+                    line = SourceLine("Outreach records", package.FAILED, detail, needs)
                 elif unread:
                     detail = "; ".join(f"{who}: {why}" for who, why in unread) + "."
-                    line = SourceLine("Mandu outreach records", package.FAILED, detail, needs)
+                    line = SourceLine("Outreach records", package.FAILED, detail, needs)
                 elif counted:
-                    line = SourceLine("Mandu outreach records", package.READ, counted, needs)
+                    line = SourceLine("Outreach records", package.READ, counted, needs)
                 else:
-                    line = SourceLine("Mandu outreach records", SKIPPED, "no message has been recorded as sent yet")
+                    line = SourceLine("Outreach records", SKIPPED, "no message has been recorded as sent yet")
                 state.sources.append(line)
         except (OSError, ConfigError, run_state.StateError) as error:
             state.outreach_problem = f"not prepared: {error}"
@@ -1332,9 +1344,9 @@ class Cycle:
                 return f"recruiting was {state.beta_problem}"
             if not plan.active:
                 return (
-                    "the Founder has recorded no approved Beta Build in Mandu"
+                    "the Founder has recorded no approved Beta Build"
                     if plan.gate.status == beta.NOT_RECORDED
-                    else "the Beta Build record in Mandu could not be used"
+                    else "the Beta Build record could not be used"
                 )
             return "" if plan.drafts else "no recruiting Draft is due this run"
         if key == listening.WORKFLOW:
@@ -1665,6 +1677,9 @@ class Cycle:
             definitions = sessions.definitions(canonical(self.repo_root))
             if trigger not in launcher.TRIGGERS:
                 raise ConfigError(f"trigger must be one of {', '.join(launcher.TRIGGERS)}")
+            # Before the pre-run records step, which would commit a missing folder's removal and leave git nothing
+            # to restore it from. That step changes no file, and a sync that moves main starts this process again.
+            founder.check(self.store.root)
         except ConfigError as error:
             self.say(f"refusing to start: {error}")
             return launcher.EXIT_CONFIG
@@ -1716,7 +1731,6 @@ class Cycle:
         try:
             _, boundary = load_boundary(self.repo_root, self.env, self.home)
             registry = load_json(self.repo_root / "config" / "products.json")
-            folder = settings.exchange_dir(registry, boundary, self.env, self.home)
             rules = settings.waitlist(registry, boundary, self.env, self.home)
             beta_rules = beta.rules(registry, config)
             footage_place = boundary.footage
@@ -1738,7 +1752,7 @@ class Cycle:
             ledger, ledger_ok = Ledger(), False
             state.problems.append(f"{error}; the Review Queue was left untouched this run")
         states = self.load_state(state, run_id)
-        self.take_decisions(state, config, folder, ledger, ledger_ok, states.review_queue)
+        self.take_decisions(state, config, ledger, ledger_ok, states.review_queue)
         sittings = self.sitting_runs(state)
         hashes, unreadable = run_state.item_hashes(self.store.root, ledger.entries, products, states.review_queue)
         state.problems += unreadable
@@ -1772,12 +1786,10 @@ class Cycle:
             if entry["kind"] == "package-change-proposal" and entry["status"] != OPEN
         ]
         self.prepare_beta(
-            state, config, beta_rules, folder, registry, boundary, ledger, ledger_ok, areas, states.beta_recruiting
+            state, config, beta_rules, registry, boundary, ledger, ledger_ok, areas, states.beta_recruiting
         )
         areas.ensure_folder(areas.path("review_queue", INCOMING))
-        self.prepare_work(
-            state, config, registry, boundary, areas, ledger if ledger_ok else None, states, folder, network
-        )
+        self.prepare_work(state, config, registry, boundary, areas, ledger if ledger_ok else None, states, network)
         # A stopped boundary check's script sits among the agent's Instructions, so every run removes what such a check
         # left before it remembers them: the guard would put back after the agent whatever it had remembered.
         state.probe_files_removed = clear_probe_files(boundary)
@@ -1852,7 +1864,9 @@ class Cycle:
                     ledger_path, ledger.as_json(run_id, now, self.store.relative(report_path), next_run)
                 )
             except OSError as error:
-                state.problems.append(f"the Review Queue could not be written, so Mandu sees the last one ({error})")
+                state.problems.append(
+                    f"the Review Queue could not be written, so the sitting page shows the last one ({error})"
+                )
             state.queue_after = ledger.ordered()
             try:
                 self.save_state(state, ledger, states, products, now)

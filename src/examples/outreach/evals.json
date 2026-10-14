@@ -1,7 +1,7 @@
 {
   "adapted_from": "the evals.json shape of github.com/coreyhaines31/marketingskills skills/*/evals/evals.json at commit 1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff (MIT; see THIRD_PARTY_NOTICES.md)",
   "skill_name": "outreach",
-  "description": "The outreach workflow's example set (US-ME14, F5), in the marketingskills evals.json shape. A deterministic assertion is checked by the unit tests (src/tests/test_example_sets.py) against the synthetic kit, whose channel plan names three synthetic creators; a judged assertion waits for US-ME16. An example's first file is its candidate Draft; a second file is the Founder's record of what was sent and answered, as Mandu would hold it, with the day the run happens.",
+  "description": "The outreach workflow's example set (US-ME14, F5), in the marketingskills evals.json shape. A deterministic assertion is checked by the unit tests (src/tests/test_example_sets.py) against the synthetic kit, whose channel plan names three synthetic creators; a judged assertion waits for US-ME16. An example's first file is its candidate Draft; a second file is the Founder's record of what was sent and answered, as the sitting page would write it in ledger/founder/outreach/, with the day the run happens.",
   "kit": "../post-drafts/files/mandu",
   "code": "../post-drafts/files/code",
   "assertion_kinds": {
@@ -277,7 +277,7 @@
         {
           "kind": "deterministic",
           "check": "not_offered",
-          "reason": "is not recorded as sent in Mandu yet"
+          "reason": "is not recorded as sent yet"
         }
       ],
       "files": [

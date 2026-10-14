@@ -1,7 +1,7 @@
 ## This session: Beta Cohort recruiting
 
 Your working guidance is `workspace/instructions/beta-recruiting.md`.
-Before this session the launcher read the Founder's Beta Build record in Mandu, which is the Founder's word that a Beta Build passed Apple's review.
+Before this session the launcher read the Founder's Beta Build record, which is the Founder's word that a Beta Build passed Apple's review.
 Only once that record exists does it choose who the next Beta Cohort invitations go to, from the view you cannot read; the brief's `## Beta Cohort recruiting` section never names anyone.
 Once the last session has ended, the launcher checks every recruiting Draft and attaches the people it chose to the invitation.
 

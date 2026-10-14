@@ -57,11 +57,14 @@ The Marketing Engineer cannot change its own Guardrails.
 
 ### Mandu
 
-The Founder's personal agent, through which the Founder reviews and decides on the Marketing Engineer's work.
+The Founder's personal agent and repository, which keeps each Product's Go-To-Market Package and applies the changes to it that the Founder approves.
+It reads the Marketing Engineer's work to show the Founder status, and never decides for the Founder or records a decision.
+_Avoid_: saying the Founder decides in Mandu, or through it.
 
 ### Review Queue
 
-The items the Marketing Engineer has prepared that await the Founder's decision through Mandu.
+The items the Marketing Engineer has prepared that await the Founder's decision.
+The Founder gives each decision at a weekly sitting, on a page the Marketing Engineer's repository serves on the Founder's Mac, and nothing but the Founder's own act on that page is ever a decision.
 Each item is approved, or rejected with a reason that the Marketing Engineer keeps so later work improves.
 
 ### Waitlist

@@ -413,7 +413,9 @@ class PreflightResult:
 def preflight_targets(boundary: Boundary, *environments: Mapping[str, str]) -> tuple[list[Path], list[Path]]:
     """Paths every run must be able to write, and paths every run must be refused.
 
-    The refused paths include the directories each given environment names.
+    The refused paths include the directories each given environment names, and each folder of the Founder's records:
+    before a session's agent starts, a file has been tried in each of those folders from inside the sandbox, and the
+    session is started only when every one of those tries was refused.
     Registry locations (Mandu, Products) are left to the agent-driven boundary check, so a routine run never
     attempts a write inside the Founder's other repositories; they are refused by the same default-deny rule.
     """
@@ -421,6 +423,7 @@ def preflight_targets(boundary: Boundary, *environments: Mapping[str, str]) -> t
         boundary.repo_root,
         boundary.repo_root / "workspace",
         boundary.ledger,
+        *(path for _, path in boundary.founder_dirs),
         boundary.repo_root / "src",
         boundary.repo_root / "config",
         boundary.repo_root / "config" / "guardrails",

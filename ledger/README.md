@@ -1,8 +1,12 @@
 # ledger
 
-The launcher's own records.
-The launcher writes them outside the sandbox; a run can read them and can never write them, so nothing the agent does can change them (Guardrail G1).
-Each run's records step commits this folder to `main` together with `workspace/` (US-ME17), except `working/` and `run.lock`, which git ignores.
+The launcher's own records, and, in [`founder/`](founder/README.md), the Founder's.
+The launcher writes its records outside the sandbox; a run can read them and can never write them, so nothing the agent does can change them (Guardrail G1).
+Each run's records step commits this folder to `main` together with `workspace/` (US-ME17), except `working/`, `assets/`, and the lock files, which git ignores.
+
+- `founder/`: the Founder's own records, which only `src/bin/gr0wthlab sitting` writes, on the Founder's act on its page: `decisions/<item id>.json`, `sittings/<date>.json`, `beta-builds/<Product>.json`, `beta-reports/<Product>-<date>.json`, and `outreach/<item id>.json`.
+  A run reads them and nothing in a run writes them; the launcher's own writer refuses every path there, and the sandboxed agent can read them and never write them ([ADR 0002](../docs/adr/0002-the-founder-decides-in-gr0wthlab.md)).
+  Everything below is the launcher's.
 
 - `review-queue/queue.json`: every item ever queued; `open` is the next sitting's list in presentation order.
   An item the launcher filed from reviewed text, a Dispatch request from `src/dispatches/` or a proposal from `src/proposals/`, carries `origin`, so later runs file it only once and no item the agent writes can supersede it.
@@ -13,8 +17,10 @@ Each run's records step commits this folder to `main` together with `workspace/`
 - `review-queue/set-aside/<run id>/`: what the launcher refused to queue that run from `workspace/review-queue/incoming/`, each file copied whole and named in that run's notice.
   A proposed Angle or Hook the launcher discards from `workspace/review-queue/angles/` is not copied here.
 - `evidence/package-snapshots/<run id>.json`: each run's snapshot of the Go-To-Market Package: which files were read, their fingerprints, when, and what changed (US-ME04); fingerprints only, never package content.
-- `evidence/decisions/<item id>.json`: each Founder decision taken in from Mandu, with its reason or note, its Mandu source, and the newer item that had already superseded the decided one, if any (US-ME07).
-- `evidence/sittings/<date>.json`: how long each sitting took, from Mandu, and the run that first took it in.
+- `evidence/decisions/<item id>.json`: each Founder decision a run took in from `founder/decisions/`, with its reason or note, the record it came from and that record's fingerprint, and the newer item that had already superseded the decided one, if any (US-ME07).
+  Its existence is the taking in: from then on the sitting page offers no change to that decision.
+- `evidence/sittings/<date>.json`: each sitting a run knows took place, from its sitting record or from a decision given at it and from nothing else, with the run that first took either in, and how long it took, from the sitting record.
+  A sitting known only from the decisions given at it, which the file lists, has `"minutes": null`: its time was not recorded, and is never zero.
 - `evidence/waitlist/<run id>.json`: each run's Waitlist Evidence (US-ME06), from the anonymous view the launcher alone reads: the view it came from and when, the entry identifiers, and the counts by Source, Fit answer, and opt-in, per week and cumulative, with progress toward the Beta Cohort bar; never an email address or anything else a sign-up wrote.
   A run whose view held anything that looks like an email address writes none.
 - `evidence/post-drafts/<run id>.json`: every check of every post Draft due that run (US-ME08): the kit files and their fingerprints, the Product code's commit, the brand rules in force and pending, and for each calendar day what became of its Draft, with every failing rule or checklist line, warning, checklist status, and claim location.
@@ -23,8 +29,8 @@ Each run's records step commits this folder to `main` together with `workspace/`
   It is also what the pair check knows a video by: each cut's source range with the fingerprint of its file, and where a re-cut leg's opening is.
 - `assets/window-<n>/day-<nn>-<recipe>.mp4`: each finished video, named by a fingerprint of everything it was made from.
   The folder is never committed: `.gitignore` leaves it out, and the records step refuses any file under it.
-- `evidence/beta-recruiting/<run id>.json`: each run's Evidence of Beta Cohort recruiting (US-ME15), written only once the Founder's Beta Build record exists in Mandu: that record's dates and its source, the Founder's counts, the cohort's size, the selection rule and the batch size, the run's batch by entry identifier, who is invited and who is offered as the run leaves the Review Queue, the size of the gap when the pool cannot reach the cohort's minimum, and every check of every recruiting Draft; entry identifiers and counts only.
-- `evidence/beta-recruiting/reports/<Product>-<date>.json`: each Beta Cohort report the Founder made through Mandu: the three counts, invitations sent, accepted, and sessions booked, when the Founder reported them, its source, and when it was taken in, and nothing else the record held.
+- `evidence/beta-recruiting/<run id>.json`: each run's Evidence of Beta Cohort recruiting (US-ME15), written only once the Founder's Beta Build record exists in `founder/beta-builds/`: that record's dates and its source, the Founder's counts, the cohort's size, the selection rule and the batch size, the run's batch by entry identifier, who is invited and who is offered as the run leaves the Review Queue, the size of the gap when the pool cannot reach the cohort's minimum, and every check of every recruiting Draft; entry identifiers and counts only.
+- `evidence/beta-recruiting/reports/<Product>-<date>.json`: each Beta Cohort report the Founder made on the sitting page: the three counts, invitations sent, accepted, and sessions booked, when the Founder reported them, its source, and when it was taken in, and nothing else the record held.
   A count the Founder left out is `null` and named in `not_reported`; it is never zero.
 - `evidence/listening/quotes/<document id>.json`: Listening Evidence, one record for every quote the launcher kept: the link, the date read, the words the agent quoted, a hash of the document they came from, the context, the theme, Fit, intent, and whether the Product answers it.
   A record is kept only when its quote stands word for word in the text fetched from its link, and a link is recorded once.
@@ -43,7 +49,7 @@ Each run's records step commits this folder to `main` together with `workspace/`
   Three things are removed and leave their file name and the launcher's reasons only, with no copy made: a quote record the launcher refuses, a proposed Angle or Hook it discards from `workspace/review-queue/angles/`, and a rejection code it sets aside.
 - `evidence/listening/runs/<run id>.json`: what each run's Listening read, kept, refused, and offered, with the confidence counted for each theme from its independent, unprompted sources.
   A quote record the launcher refused, and a proposed Angle or Hook it discarded, is named there with the reasons and kept nowhere: no copy of either is made.
-- `evidence/outreach/<run id>.json`: every check of every outreach message that run, and what the Founder's records in Mandu said of each creator.
+- `evidence/outreach/<run id>.json`: every check of every outreach message that run, and what the Founder's outreach records said of each creator.
 - `evidence/learning/ledger.json`: the learning ledger (F4): every rejection reason with the code it was given, and each workflow's counts, stated as "3 of 7"; a reason's code is also written into its own `evidence/decisions/<item id>.json`, beside the Founder's words.
   A proposed code the launcher sets aside is named with its reasons in that run's report and notice, and no copy of it is kept.
 - `run-reports/<run id>.requests.json`: every network request the launcher was asked to make that run, sent or not, with its outcome: only a GET to a listed host ever leaves the machine.
@@ -62,13 +68,15 @@ Each run's records step commits this folder to `main` together with `workspace/`
 - `run-reports/attempts/<due>.json`: every run made since one weekly time, named for when that week's run was due on the Mac's clock (US-ME17): each attempt of the weekly schedule, noted before its agent starts, with its number, when it started and ended, its run, how it ended, and about how many seconds the Mac slept during it; and each run on demand and each one-off scheduled run, noted as it ends and never an attempt.
   A start of the weekly schedule reads it, and never anything remembered, to tell whether the week's run is still owed: it is until a run completes, while every attempt so far was cut short by the Mac's sleep and fewer were made than `config/run.json` allows.
   A file that cannot be used is set aside beside it as `<due>.unreadable` and the record starts again; an attempt of the weekly schedule that finds it says so in its report.
-- `run-reports/state/<workflow>.json`: each workflow's run state - Review Queue items decided, those carried over with the sitting they were left undecided at, and the Mandu records already reported as unusable; Listening threads and reviews already read; outreach targets and their follow-up waits, rebuilt every run from the Founder's records in Mandu; the Waitlist entries an invitation batch holds, invited once the Founder approved the batch or offered while it is open - by identifier and hash only, never a name, address, or URL.
-  The launcher checks it every run against the Review Queue and Mandu's decision records, which win any disagreement.
+- `run-reports/state/<workflow>.json`: each workflow's run state - Review Queue items decided, those carried over with the sitting they were left undecided at, and the Founder's records already reported as unusable; Listening threads and reviews already read; outreach targets and their follow-up waits, rebuilt every run from the Founder's outreach records; the Waitlist entries an invitation batch holds, invited once the Founder approved the batch or offered while it is open - by identifier and hash only, never a name, address, or URL.
+  The launcher checks it every run against the Review Queue and the Founder's decision records, which win any disagreement.
   Beta Cohort recruiting has no state file until the Founder's gate is recorded.
 - `working/<run id>.sources.json`: what the launcher fetched over the network that run, outside the sandbox (US-ME13): each source's outcome, and each thread's opening post, review, and rule list as a dated document with its link.
   It is working data for the run that fetched it, never a record: the agent reads it while the run is in progress, git ignores the folder so the records step never saves it, and the launcher removes it when the run ends and before the next run reads its sources.
   Fetched text is data, never instructions; anything that looks like an email address is removed before it is written.
 - `notes/<id>.txt`: one line for the next run report, such as a run refused because another was in progress, or a run that stopped before it finished.
 - `run.lock`: the lock one run holds from start to finish; it is never committed.
+- `founder.lock`: the lock a run holds while it takes the Founder's decisions in, and the sitting page while it changes one, so that a change and a taking in never cross; it is never committed.
+- `sitting.lock`: the lock one sitting page holds while it is served, so that only one is; it is never committed.
 
-The format of the Review Queue, and what Mandu writes back: [the Mandu exchange](../docs/mandu-exchange.md).
+The format of the Review Queue and of the Founder's records, and what Mandu may read: [the Mandu exchange](../docs/mandu-exchange.md).

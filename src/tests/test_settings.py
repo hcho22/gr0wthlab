@@ -1,4 +1,4 @@
-"""config/run.json, the exchange folder, the run's task definition, and the launcher's confined writes."""
+"""config/run.json, the Waitlist view, the launcher's confined writes, and `check-incoming`."""
 
 import copy
 import io
@@ -76,34 +76,6 @@ class RunSettingsTest(unittest.TestCase):
         for bad in ({"live_since": "yes"}, {"live_since": True}, {"live_since": "2026-13-01"}, "2026-10-20"):
             with self.subTest(waitlist=bad), self.assertRaises(ConfigError):
                 settings.load_live_since(bad)
-
-
-class ExchangeFolderTest(unittest.TestCase):
-    def setUp(self):
-        self.registry = json.loads((REPO / "config/products.json").read_text(encoding="utf-8"))
-        self.boundary = boundary.resolve_boundary(
-            Path("/srv/home/gr0wthlab"), CONFIG, self.registry, {}, Path("/srv/home"), git=[]
-        )
-
-    def test_inside_mandu_unless_overridden(self):
-        folder = settings.exchange_dir(self.registry, self.boundary, {}, Path("/srv/home"))
-        self.assertEqual(folder, Path("/srv/home/Mandu/projects/gr0wthlab/exchange"))
-        env = {"GR0WTHLAB_EXCHANGE_DIR": "/srv/tmp/exchange"}
-        self.assertEqual(
-            settings.exchange_dir(self.registry, self.boundary, env, Path("/srv/home")),
-            Path(env["GR0WTHLAB_EXCHANGE_DIR"]),
-        )
-
-    def test_never_inside_the_repository_where_the_agent_writes(self):
-        for override in ("/srv/home/gr0wthlab/workspace/evidence", "/srv/home"):
-            with self.subTest(override=override), self.assertRaises(ConfigError):
-                settings.exchange_dir(
-                    self.registry, self.boundary, {"GR0WTHLAB_EXCHANGE_DIR": override}, Path("/srv/home")
-                )
-        registry = copy.deepcopy(self.registry)
-        registry["mandu"]["exchange"]["path"] = "../escape"
-        with self.assertRaises(ConfigError):
-            settings.exchange_dir(registry, self.boundary, {}, Path("/srv/home"))
 
 
 class WaitlistSettingsTest(unittest.TestCase):

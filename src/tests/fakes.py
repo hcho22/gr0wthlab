@@ -252,6 +252,7 @@ def make_repo(path: Path, env: dict[str, str], window: dict | None = None, films
     shutil.copy(str(REPO / ".gitignore"), str(path / ".gitignore"))
     (path / "ledger").mkdir()
     (path / "ledger" / "README.md").write_text("# ledger\n")
+    make_founder(path / "ledger")
     for area in AREAS:
         (path / "workspace" / area).mkdir(parents=True)
         (path / "workspace" / area / "README.md").write_text(f"# {area}\n")
@@ -259,6 +260,16 @@ def make_repo(path: Path, env: dict[str, str], window: dict | None = None, films
     git(path, "add", "--all", env=env)
     git(path, "commit", "--quiet", "-m", "initial", env=env)
     return path
+
+
+def make_founder(ledger: Path) -> Path:
+    """The Founder's records area as the repository holds it: its five folders, each kept by a .gitkeep."""
+    from gr0wthlab import founder
+
+    for folder in founder.folders(ledger).values():
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / ".gitkeep").write_text("")
+    return founder.root(ledger)
 
 
 def make_mandu(path: Path, kit: bool = True) -> Path:
@@ -753,7 +764,7 @@ def beta_report(day: str, **counts) -> dict:
 
 
 def write_record(folder: Path, name: str, record) -> Path:
-    """One of Mandu's records in its exchange folder; a string is written as it is."""
+    """One of the Founder's records in its folder of ledger/founder/; a string is written as it is."""
     folder.mkdir(parents=True, exist_ok=True)
     path = folder / name
     path.write_text(record if isinstance(record, str) else json.dumps(record), encoding="utf-8")
@@ -807,7 +818,7 @@ def beta_plan(root: Path, scenario: dict, view: dict | None):
             block["beta_cohort_bar"],
         )
         reading = waitlist.read(counted, started)
-    exchange_dir = root / "exchange"
+    exchange_dir = Path("founder")  # a record's path is given from ledger/
     build = scenario.get("beta_build")
     name = f"{rules.product}.json"
     found = [(name, exchange_dir / beta.BUILDS / name, json.dumps(build).encode("utf-8"))] if build else []

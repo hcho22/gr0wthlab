@@ -125,7 +125,7 @@ class PrepareTest(RecordsTestCase):
         self.assertIn("with 1 unpushed records commit on top", result.detail)
         self.assertTrue((self.clone / "src/new.py").is_file())
         log = self.git(self.clone, "log", "--format=%s", "-2").splitlines()
-        self.assertEqual(log[0], "chore(records): outputs left by a run before 20261011T230000Z")
+        self.assertEqual(log[0], "chore(records): records left before the run of 20261011T230000Z")
         self.assertEqual(self.git(self.clone, "rev-parse", "HEAD~1"), self.git(self.remote, "rev-parse", "main"))
 
     def test_conflicting_records_leave_main_alone(self):
@@ -218,6 +218,35 @@ class SaveTest(RecordsTestCase):
         self.assertEqual(self.remote_files(), ["ledger/run-reports/later.md"])
         self.assertEqual(result.excluded, [f"{asset} (a finished asset, which never enters git)"])
 
+    def test_the_founders_records_are_saved_with_the_launchers_and_one_holding_an_address_never_is(self):
+        """What the Founder recorded at a sitting is committed by the next records step, before the run or after it.
+        A record changed by hand to hold an address stays out of git, and its name is not repeated if it is one."""
+        decision = '{"exchange": 7, "item": "20261011-x", "decision": "approve"}\n'
+        self.write("ledger/founder/decisions/20261011-x.json", decision)
+        self.write("ledger/founder/outreach/20261011-y.json", f'{{"note": "write to {fakes.ADDRESS}"}}\n')
+        self.write(f"ledger/founder/sittings/{fakes.ADDRESS}.json", "{}\n")
+        result = self.prepare()
+        self.assertEqual(result.status, records.CURRENT, result.detail)
+        self.assertIn(
+            "records left before this run, an earlier run's or a sitting's, were committed first", result.detail
+        )
+        self.assertEqual(
+            self.git(self.clone, "show", "--name-only", "--format=").split(),
+            ["ledger/founder/decisions/20261011-x.json"],
+        )
+        held = "one of the Founder's records that holds what looks like an email address, which never enters git"
+        self.assertEqual(
+            sorted(result.excluded),
+            [f"a file whose name is not repeated here ({held})", f"ledger/founder/outreach/20261011-y.json ({held})"],
+        )
+        saved = self.save()
+        self.assertEqual(saved.status, records.PUSHED, saved.detail)
+        self.assertEqual(sorted(saved.excluded), sorted(result.excluded))
+        self.assertEqual(self.remote_files(), ["ledger/founder/decisions/20261011-x.json"])
+        history = self.git(self.remote, "log", "--all", "-p", "--format=%s")
+        self.assertNotIn(fakes.ADDRESS, history)
+        self.assertNotIn("example.com", history)
+
     @unittest.skipIf(os.geteuid() == 0, "root can read any file")
     def test_an_unreadable_record_is_left_out_then_restored_before_the_next_run(self):
         self.write("workspace/drafts/locked.md").chmod(0)
@@ -232,6 +261,22 @@ class SaveTest(RecordsTestCase):
         self.assertEqual(result.repaired, [f"`workspace/drafts/locked.md` {restored}"])
         self.assertEqual(result.excluded, [])
         self.assertEqual(self.git(self.clone, "status", "--porcelain"), "")
+
+    @unittest.skipIf(os.geteuid() == 0, "root can read any file")
+    def test_an_unreadable_file_among_the_founders_records_named_like_an_address_is_left_out_unnamed(self):
+        self.write(f"ledger/founder/sittings/{fakes.ADDRESS}.json", "{}\n").chmod(0)
+        self.write("ledger/founder/decisions/locked.json", "{}\n").chmod(0)
+        self.write("workspace/drafts/ok.md")
+        result = self.save()
+        self.assertEqual(result.status, records.PUSHED, result.detail)
+        self.assertEqual(self.remote_files(), ["workspace/drafts/ok.md"])
+        self.assertEqual(
+            sorted(result.excluded),
+            [
+                "a file whose name is not repeated here (could not be read)",
+                "ledger/founder/decisions/locked.json (could not be read)",
+            ],
+        )
 
     def commit_upstream_and_update(self, relative, text):
         self.land_upstream(relative, text)
