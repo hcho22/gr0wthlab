@@ -745,7 +745,7 @@ def kit_context(code_checkout: Path, env: dict[str, str], mandu: Path | None = N
     registry = json.loads((REPO / "config" / "products.json").read_text(encoding="utf-8"))
     product, roles = posts.kit_config(registry)
     parsed, _, data, problem = posts.read_kit(mandu or EXAMPLES / "files" / "mandu", roles)
-    rules = lint.Rules(data) if data is not None else None
+    rules = None if problem else lint.Rules(data)
     platforms = lint.load_platforms(json.loads((REPO / "config" / "platforms.json").read_text(encoding="utf-8")))
     code = codebase.open_code(product, code_checkout, "main", env)
     return drafts.Context(product, 1, parsed, rules, problem, platforms, code, dict(roles))

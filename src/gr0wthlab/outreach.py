@@ -137,6 +137,7 @@ class Plan:
     unread: list[tuple[str, str]] = field(default_factory=list)  # whose follow-up no record could settle, and why
     stood: list[Stands] = field(default_factory=list)  # each open follow-up among them, left as it is
     problem: str = ""  # why nothing could be prepared at all
+    unusable: str = ""  # why the channel plan, read, could not be used, when it could not
 
     def due(self) -> list[messages.Slot]:
         return [slot for slot in self.slots if slot.required and not slot.approved]
@@ -195,10 +196,14 @@ def prepare(
     if config.network_source is None and not config.creators:
         return plan, state  # nothing to prepare, so the plan in Mandu need not be read
     try:
-        plan_text = (mandu / plan_path).read_text(encoding="utf-8")
-    except (OSError, UnicodeDecodeError) as error:
-        why = getattr(error, "strerror", None) or str(error)
+        plan_text = (mandu / plan_path).read_bytes().decode("utf-8")
+    except OSError as error:
+        why = error.strerror or str(error)
         plan.problem = f"the channel plan `{plan_path}` could not be read ({why}), so no outreach message was prepared"
+        return plan, saved
+    except UnicodeDecodeError:
+        plan.unusable = "it is not UTF-8 text"
+        plan.problem = f"the channel plan `{plan_path}` is not UTF-8 text, so no outreach message was prepared"
         return plan, saved
 
     if config.network_source is not None:
