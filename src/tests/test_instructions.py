@@ -503,6 +503,13 @@ class RepeatTest(unittest.TestCase):
             " example is not worse.",
             lines,
         )
+        # The table shows the repeat beside the first round, so a row never reads worse than the example was.
+        self.assertIn(
+            "| 1: Example 1. | 1 of 1 check held; run again, 1 of 1 check held"
+            " | 0 of 1 check held; run again, 1 of 1 check held |",
+            lines,
+        )
+        self.assertIn("| 2: Example 2. | 1 of 1 check held | 1 of 1 check held |", lines)
         self.assertEqual(found.sessions, 6)
 
     def test_a_flip_that_repeats_keeps_the_change_out_and_stops_the_gate(self):

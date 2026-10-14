@@ -353,8 +353,8 @@ def result_lines(gate: Gate) -> list[str]:
         "| --- | --- | --- |",
     ]
     for pair in gate.pairs:
-        before = pair.before.summary() if pair.before else "not run"
-        after = pair.after.summary() if pair.after else "not run"
+        before = result(pair.before, pair.again.before if pair.again else None, pair.again is not None)
+        after = result(pair.after, pair.again.after if pair.again else None, pair.again is not None)
         lines.append(f"| {pair.example.id}: {cell(pair.example.prompt)} | {cell(before)} | {cell(after)} |")
     for example in gate.not_run:
         lines.append(f"| {example.id}: {cell(example.prompt)} | not run | not run |")
@@ -372,6 +372,14 @@ def result_lines(gate: Gate) -> list[str]:
         lines += [f"- Example {number}: {text}" for number, text in judged]
     lines += ["", gate.cost_line()]
     return lines
+
+
+def result(run: Run | None, again: Run | None, repeated: bool) -> str:
+    """One side of an example in the notice's table, its repeat beside it when it was run again."""
+    text = run.summary() if run else "not run"
+    if repeated:
+        text += f"; run again, {again.summary() if again else 'not run'}"
+    return text
 
 
 def cell(text: str) -> str:
