@@ -79,7 +79,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    The run report's Sources table shows it as `unusable`, with what the snapshot found and why the file could not be used, the summary counts it among the failed sources, and the run's notice names it once, with the outputs it leaves incomplete.
    Those are exactly the outputs whose rows in the same run carry a gap that names the file, so the notice and the run report's Outputs table agree: the post Drafts for a kit file, the brand rules among them, and the filming plan as well for the calendar, the Angle bank, and the A/B pairs; Beta Cohort recruiting for the brand rules once it has started; outreach for the channel plan; and outreach and Listening for the Angle bank, the checklist, or the brand rules whenever a message or reply could not be checked against it that run.
    The package snapshot and the package review are never among them, as the snapshot read the file.
-   Each of those rows names the file once, at its start.
+   Each of those rows starts with the file's line and leaves out only a gap of its own that says no more than that the file could not be used; a gap that says more, such as that no outreach message was prepared, stays.
    A message or reply that such a file leaves unchecked is told where its item is, as before.
    While the window's filming plan is open, a kit file that fails this way, the calendar among them, is also why that plan stands, so the notice's list of open items not checked again names the plan with that file as its reason.
    Every package-change proposal there declares whether it adds or changes an Angle or Hook (`new_angle`), and the Founder sees the declaration on the item.
