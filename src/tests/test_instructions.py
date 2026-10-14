@@ -540,6 +540,21 @@ class RepeatTest(unittest.TestCase):
             )
         return found, calls
 
+    def test_an_assertion_is_named_in_plain_words(self):
+        """The notice names an assertion to the Founder, so it reads as words and never as a list's code."""
+        queued = {"kind": "deterministic", "check": "queued", "item": "package-change-proposal", "count": 1}
+        self.assertEqual(
+            examples.describe({**queued, "cites": ["a.md", "b.md"], "at_least": True}),
+            "queued: at least 1 package-change-proposal citing a.md and b.md",
+        )
+        self.assertEqual(examples.describe(queued), "queued: 1 package-change-proposal")
+        self.assertEqual(
+            examples.describe({"kind": "deterministic", "check": "cites_angle", "angle": "P06", "day": 6}),
+            "cites angle: angle P06, day 6",
+        )
+        nothing = {"kind": "deterministic", "check": "nothing_set_aside"}
+        self.assertEqual(examples.describe(nothing), "nothing set aside")
+
 
 class KeptOutOfReachTest(unittest.TestCase):
     """The Instructions in force and the example sets: the sandbox reads both and writes neither, and each is a

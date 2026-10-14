@@ -130,10 +130,25 @@ class Check:
 
 
 def describe(assertion: Mapping[str, object]) -> str:
-    """An assertion in a few words, as the report and the notice name it."""
-    words = [str(assertion.get("check"))]
-    words += [f"{key} {value}" for key, value in sorted(assertion.items()) if key not in ("kind", "check")]
-    return " ".join(str(word) for word in words)
+    """An assertion in a few words, as the report and the notice name it.
+
+    `queued: 1 package-change-proposal citing a.md`: plain words, never a list's code, since the Founder reads it.
+    """
+    rest = {key: value for key, value in assertion.items() if key not in ("kind", "check")}
+    phrases = []
+    if "item" in rest:
+        at_least = "at least" if rest.pop("at_least", False) else ""
+        words = [str(word) for word in (at_least, rest.pop("count", ""), rest.pop("item")) if word != ""]
+        if rest.get("cites"):
+            words.append("citing " + " and ".join(str(name) for name in listed(rest.pop("cites"))))
+        phrases.append(" ".join(words))
+    phrases += [f"{key} {' and '.join(str(value) for value in listed(value))}" for key, value in rest.items()]
+    name = str(assertion.get("check")).replace("_", " ")
+    return f"{name}: {', '.join(phrases)}" if phrases else name
+
+
+def listed(value: object) -> list[object]:
+    return list(value) if isinstance(value, (list, tuple)) else [value]
 
 
 @dataclass
