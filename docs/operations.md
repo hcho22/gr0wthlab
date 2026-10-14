@@ -31,7 +31,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    Where the run state holds no fingerprint either, nothing shows whether the Founder rejected this text, so the request is held: nothing is filed and nothing is withdrawn, the Review Queue output is incomplete, the run report and the run's notice name the file with the reason, and the next run compares them again.
    Two exceptions arise only after a reviewed change to the request's text while an item of it is open, which is firstmate's own reviewed act.
    A reviewed change that brings back a text the Founder rejected, while another text is open, files the rejected text again in that open item's place.
-   An approval the Founder gave an item that a reviewed change had already replaced still counts as the request's approval, though Mandu hands no superseded item to firstmate: the replacement stays open for the Founder to decide, no reviewed change replaces it any more, nothing is filed after it, and the run report says so.
+   An approval the Founder gave an item that a reviewed change had already replaced still counts as the request's approval, though no superseded item is ever handed on to firstmate: the replacement stays open for the Founder to decide, no reviewed change replaces it any more, nothing is filed after it, and the run report says so.
 6. It reads the 14-day kit from Mandu, works out which calendar days need post Drafts this run, now that the Founder's decisions are in, and fixes RepToday's `main` to one commit for claim checks.
    From the same kit it reads each asset's shot list and files the filming plan, one item per window, unless one is open or decided and the kit has not changed what must be filmed.
    It lists the window's footage folder in the footage place, read-only, and measures every file there with `ffprobe`; the agent never opens the footage, and learns each file's name and measured facts from the brief.
@@ -797,7 +797,7 @@ Every other process the launcher starts (git, Codex's version and sandbox probes
 
 ## When RepToday's Waitlist build lands
 
-The Founder approves the Waitlist Dispatch request at a sitting, Mandu hands it to firstmate, and firstmate builds it in RepToday; until then every run reports the Waitlist view as skipped.
+The Founder approves the Waitlist Dispatch request at a sitting, passes it to firstmate in the message Mandu gives the Founder for it, and firstmate builds it in RepToday; until then every run reports the Waitlist view as skipped.
 Once the build writes its anonymous view, a reviewed gr0wthlab pull request sets `waitlist.view.local_path` for RepToday in [`config/products.json`](../config/products.json) to the file's path, and the next run reads it.
 The path must lie outside this clone, Mandu, and every Product checkout; the launcher refuses to start otherwise, so the agent can never open the view.
 The sandbox reads this clone, every Product checkout, and of Mandu only the package paths, and the view may be nowhere in the Mandu checkout all the same.
