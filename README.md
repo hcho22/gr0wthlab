@@ -8,6 +8,7 @@ v1 serves RepToday's pre-launch phase; Immerse joins as Listening only after Rep
 Capitalized terms are defined in [`CONTEXT.md`](CONTEXT.md).
 Why this repository holds Evidence and Drafts but no strategy: [ADR 0001](docs/adr/0001-evidence-and-drafts-only.md).
 Why the Founder decides here, on a local page, and Mandu only reads: [ADR 0002](docs/adr/0002-the-founder-decides-in-gr0wthlab.md).
+Why the Founder posts by hand, with no scheduling service: [ADR 0003](docs/adr/0003-posting-is-manual.md).
 Stories, requirements, and progress: [the v1 PRD](docs/prd/prd-marketing-engineer-v1_261008.md).
 
 ## No strategy lives here
@@ -25,7 +26,7 @@ The specification and decision records under `docs/` (the PRD, the [design decis
 | Marketing Engineer | Evidence, Drafts, Review Queue items, Weekly Read memos, run reports, and its own Instructions; its repository also serves the Founder's sitting page and keeps the Founder's decisions | Publish, send, spend, see email addresses, write to Mandu or a Product repository, write or change a decision of the Founder's, or change its own code or Guardrails |
 | Mandu | Each Product's Go-To-Market Package, applying approved package changes, handing approved Dispatch requests to firstmate, and showing the Founder the Marketing Engineer's status | Build the Marketing Engineer, record a decision of the Founder's, or write anything the Marketing Engineer reads but the Go-To-Market Package |
 | firstmate | Building and changing the Marketing Engineer's code and Guardrails through reviewed pull requests, and carrying out approved Dispatches | Act on a Dispatch the Founder has not approved |
-| Scheduling service | Publishing approved posts at the fixed slot after the Founder confirms the schedule | - |
+| Scheduling service | Not used: the Founder posts each approved post by hand, his choice of 2026-10-11 ([ADR 0003](docs/adr/0003-posting-is-manual.md)) | - |
 
 ## The weekly cycle
 
@@ -33,7 +34,7 @@ The specification and decision records under `docs/` (the PRD, the [design decis
 2. **Sitting.** The Founder runs `src/bin/gr0wthlab sitting`, which serves a small page on the Founder's Mac.
    On read weeks the Founder first gives the week's TikTok export on that page.
    The Founder then approves each Review Queue item or rejects it with a one-line reason, one item at a time; what the Founder clicks is what is saved.
-3. **Publish.** Approved posts become scheduling-service drafts at the fixed slot and the Founder confirms them; the Founder sends approved messages.
+3. **Publish.** The Founder posts each approved post by hand at the fixed slot, and sends approved messages.
 4. **Learn.** The next run reads the decisions, keeps every rejection reason as Evidence, refines Instructions for execution reasons, and proposes package changes for strategy reasons.
 
 ## Guardrails
@@ -45,7 +46,7 @@ The PRD's Guardrails section says what enforces each one.
 | --- | --- |
 | G1 | Writes are possible only in the Evidence, Drafts, Review Queue, Weekly Read, run report, and Instructions areas |
 | G2 | No writes to Mandu or any Product repository |
-| G3 | The scheduling service can receive drafts only |
+| G3 | The scheduling service can receive drafts only (no scheduling service is connected: [ADR 0003](docs/adr/0003-posting-is-manual.md)) |
 | G4 | YouTube access is read-only |
 | G5 | No TikTok, Instagram, X, Reddit, or email sending credentials exist |
 | G6 | No email address is ever readable |

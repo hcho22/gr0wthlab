@@ -36,6 +36,20 @@ class RunSettingsTest(unittest.TestCase):
         with self.assertRaises(ConfigError):
             settings.load(REPO, {"GR0WTHLAB_PRODUCTION_CLONE": "relative"}, HOME)
 
+    def test_a_source_the_founder_chose_not_to_use_says_why(self):
+        config = settings.load(REPO, {}, HOME)
+        self.assertEqual([source["name"] for source in config.not_used], ["Scheduling service"])
+        data = json.loads((REPO / "config/run.json").read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "config").mkdir()
+            for why in (None, ""):
+                bad = copy.deepcopy(data)
+                bad["sources_not_used"][0]["why"] = why
+                (root / "config/run.json").write_text(json.dumps(bad), encoding="utf-8")
+                with self.subTest(why=why), self.assertRaisesRegex(ConfigError, "Scheduling service is not used"):
+                    settings.load(root, {}, HOME)
+
     def test_how_much_output_codex_shows_is_a_whole_number_set_in_reviewed_configuration(self):
         self.assertEqual(settings.load_shown_output({"shown_output_characters": 40000}), 40000)
         for bad in (None, {}, [40000], {"shown_output_characters": None}):

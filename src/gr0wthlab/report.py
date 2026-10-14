@@ -40,6 +40,7 @@ from .state import Tally, run_tally
 COMPLETE = "complete"
 INCOMPLETE = "incomplete"
 NOT_BUILT = "not built yet"
+NOT_USED = "not used"
 USAGE_FIELDS = ("input_tokens", "cached_input_tokens", "cache_write_input_tokens", "output_tokens")
 NOTICE_BODY_LIMIT = exchange.MAX_ITEM_CHARS // 2
 __all__ = ["ASLEEP_AT_LEAST", "asleep_for"]
@@ -969,12 +970,14 @@ def summary_lines(state: RunState) -> list[str]:
         lines.append(f"- The Mac was asleep for about {span_text(elsewhere)} of this run outside its sessions' time.")
     lines.append(f"- {what_follows(state)}" if what_follows(state) else "")
     refused = sum(1 for line in state.sources if line.status == waitlist.REFUSED)
+    unused = sum(1 for line in state.sources if line.status == NOT_USED)
     lines.append(
         f"- Sources: {len(failed)} failed"
         + (f" ({', '.join(line.name for line in failed)})" if failed else "")
         + f", {sum(1 for line in state.sources if line.status == package.CHANGED)} changed,"
         + f" {sum(1 for line in state.sources if line.status == package.READ)} read,"
         + f" {sum(1 for line in state.sources if line.status == SKIPPED)} skipped"
+        + (f", {unused} not used" if unused else "")
         + (f", {refused} refused." if refused else ".")
     )
     if state.waitlist is not None:

@@ -15,6 +15,7 @@ gr0wthlab is the Marketing Engineer's repository; [`README.md`](README.md) gives
   A sitting known from a decision alone has no time: its Evidence keeps `minutes` as null, and nothing counts it as zero.
   A sitting that left neither leaves no mark: its undecided items come back without the carried-over mark, nothing records its time, the run report has no line for it, and nothing saved at it is lost.
   gr0wthlab reads nothing from Mandu but the Go-To-Market Package: `mandu.exchange` and `GR0WTHLAB_EXCHANGE_DIR` are gone and are no longer read.
+- [ADR 0003](docs/adr/0003-posting-is-manual.md): the Founder posts by hand, so the run report lists the scheduling service as not used (`sources_not_used` in `config/run.json`), never as failed.
 - [The v1 PRD](docs/prd/prd-marketing-engineer-v1_261008.md) is the story tracker: when a story lands and its Validation Test passes, flip that story's acceptance-criteria checkboxes and no others.
 - `workspace/` is the agent's only writable tree (Guardrail G1); code in `src/`, configuration in `config/` (Guardrails, the Product registry, and the run settings), and docs change only through firstmate's reviewed pull requests (G8).
   Keep that split when adding files: the Codex permission profile in [`config/guardrails/runtime.json`](config/guardrails/runtime.json) makes exactly the six `workspace/` areas writable, and the launcher's own records go in `ledger/`, which a run can read and never write; the Founder's records are in `ledger/founder/`, which the launcher never writes either.

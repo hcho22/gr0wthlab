@@ -227,6 +227,14 @@ class FirstRunTest(CycleTestCase):
         self.assertIn("| Founder decisions | read | 0 records, 0 new since the previous run |", report)
         self.assertIn("| Sittings | read | 0 records, 0 new |", report)
         self.assertIn("| YouTube results | skipped | not connected until US-ME11 |", report)
+        # Posting is manual, so the scheduling service is not used by the Founder's choice, never a source that failed.
+        self.assertIn(
+            "| Scheduling service | not used | posting is manual, the Founder's choice of 2026-10-11"
+            " (docs/adr/0003-posting-is-manual.md) |",
+            report,
+        )
+        self.assertIn("| Scheduling-service drafts | not used | posting is manual,", report)
+        self.assertRegex(report, r"- Sources: 0 failed, \d+ changed, \d+ read, \d+ skipped, 1 not used\.")
         self.assertIn("First snapshot", report)
         self.assertRegex(report, r"Approximate cost: about \$0\.00[89] at API prices, for 200,000 input tokens")
         self.assertIn("> Checked the package.", report)

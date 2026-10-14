@@ -88,7 +88,7 @@ from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, clear_probe_files, read_plain
 from .boundary import FOUNDER, LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
 from .queue import INCOMING, OPEN, QUEUE_FILE, REVIEW_QUEUE, SET_ASIDE, SUPERSEDED, Ledger, QueueError, Stands
-from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLine, Unusable
+from .report import COMPLETE, INCOMPLETE, NOT_BUILT, NOT_USED, SKIPPED, RunState, SourceLine, Unusable
 from .sessions import Session
 
 PRE_RUN_ENV = "GR0WTHLAB_PRE_RUN"
@@ -744,6 +744,9 @@ class Cycle:
         held: dict[str, list[str]] = {session.key: [] for session in state.sessions}
         for key, output in config.outputs.items():
             title = str(output.get("title", key))
+            if output.get("not_used"):
+                rows.append([title, NOT_USED, str(output["not_used"])])
+                continue
             if not output.get("built"):
                 rows.append([title, NOT_BUILT, str(output.get("story", ""))])
                 continue
@@ -1785,6 +1788,15 @@ class Cycle:
                     str(source["name"]),
                     SKIPPED,
                     f"not connected until {source.get('story')}",
+                    output_titles(config, source.get("needed_by", ())),
+                )
+            )
+        for source in config.not_used:
+            state.sources.append(
+                SourceLine(
+                    str(source["name"]),
+                    NOT_USED,
+                    str(source["why"]),
                     output_titles(config, source.get("needed_by", ())),
                 )
             )
