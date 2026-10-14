@@ -152,6 +152,17 @@ class IncomingTest(LedgerTestCase):
                 self.assertNotIn(marker, path.read_text(encoding="utf-8").casefold(), path)
         self.assertEqual(list(self.incoming.iterdir()), [])
 
+    def test_a_set_aside_record_that_cannot_be_written_is_said_in_each_file_s_reasons(self):
+        (self.repo / "ledger/review-queue").mkdir(parents=True)
+        (self.repo / "ledger/review-queue/set-aside").write_text("not a folder\n", encoding="utf-8")
+        self.drop("broken.md", fakes.PROPOSAL.replace("## Touches", "## Changes"))
+        published, set_aside = self.take()
+        self.assertEqual(published, [])
+        (item,) = set_aside
+        self.assertTrue(item.problems[0].startswith("sections must be exactly"))
+        self.assertTrue(item.problems[-1].startswith("the set-aside record could not be written ("), item.problems)
+        self.assertEqual(list(self.incoming.iterdir()), [], "the file is removed all the same, and copied nowhere")
+
     def test_links_are_never_followed(self):
         secret = self.repo.parent / "secret.md"
         secret.write_text(fakes.PROPOSAL, encoding="utf-8")
