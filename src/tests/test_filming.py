@@ -815,7 +815,17 @@ class FilmingPlanTest(FilmingRunCase):
         self.assertEqual([entry for entry in queue["open"] if entry["kind"] == "filming-plan"], [])
         report = self.report()
         self.assertIn(f"Nothing could be planned this run: the kit could not be read: `{ANGLES}` (", report)
-        self.assertIn("| Filming plan and edits | incomplete | the kit could not be read:", report)
+        name = f"RepToday package: `{ANGLES}`"
+        self.assertIn(
+            f"| Filming plan and edits | incomplete | {name} could not be used; the kit could not be read:", report
+        )
+        self.assertRegex(
+            report, rf"\| {name} \| unusable \| first snapshot of this file; read, but could not be used: "
+        )
+        notice = self.notices()
+        self.assertIn("These sources could not be used, so the work that needs them is incomplete this run:", notice)
+        self.assertIn(" Incomplete: Post Drafts, Filming plan and edits.\n", notice)
+        self.assertEqual(notice.count(f"- {name}: "), 1, notice)
 
     def test_an_open_plan_stands_under_its_id_while_the_kit_it_is_compared_with_cannot_be_read(self):
         queue = self.run_ok(days=(1, 8))
@@ -826,6 +836,10 @@ class FilmingPlanTest(FilmingRunCase):
         self.run_ok()
         self.assert_stands(plan, "Filming plan and edits", f"the kit could not be read: `{ANGLES}` (")
         self.assertIn(f"The open plan `{plan['id']}` stands as it is.", self.report())
+        unusable = (
+            f"- RepToday package: `{ANGLES}`: its fingerprint changed since the previous snapshot; read, but could"
+        )
+        self.assertIn(unusable, self.notices(), "the file is a failed source too")
         angles.write_text(text, encoding="utf-8")
         self.run_ok()
         self.assert_never_asked_again(plan)

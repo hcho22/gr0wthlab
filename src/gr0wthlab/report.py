@@ -52,6 +52,11 @@ class SourceLine:
     detail: str = ""
     needed_by: tuple[str, ...] = ()
 
+    @property
+    def failure(self) -> str:
+        """What became of a failed source, as the run report and the notice say it."""
+        return "could not be used" if self.status == package.UNUSABLE else "could not be read"
+
 
 @dataclass(frozen=True)
 class Unusable:
@@ -158,7 +163,8 @@ class RunState:
         return lateness is not None and lateness > self.late_after
 
     def failed_sources(self) -> list[SourceLine]:
-        return [line for line in self.sources if line.status == package.FAILED]
+        """Every source that could not be read, and every one that was read and could not be used."""
+        return [line for line in self.sources if line.status in (package.FAILED, package.UNUSABLE)]
 
     def session(self, key: str) -> Session | None:
         """One workflow's session, or None when this run planned none, as before its sessions are planned."""
@@ -1168,11 +1174,13 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     sections: list[tuple[int, str, str]] = []  # how many problems, the title, the text
     failed = state.failed_sources()
     if failed:
-        lines = ["These sources could not be read, so the work that needs them is incomplete this run:"]
+        said = {line.status for line in failed}
+        what = "could not be read or used" if len(said) > 1 else failed[0].failure
+        lines = [f"These sources {what}, so the work that needs them is incomplete this run:"]
         for line in failed:
             needs = ", ".join(line.needed_by) or "nothing else"
             lines.append(bullet(f"{line.name}: {line.detail} Incomplete: {needs}."))
-        sections.append((len(failed), f"{plural(len(failed), 'source')} could not be read on {day}", "\n".join(lines)))
+        sections.append((len(failed), f"{plural(len(failed), 'source')} {what} on {day}", "\n".join(lines)))
     unusable = state.unusable_to_report()
     to_replace = [record for record in unusable if state.open_item(record)]
     if to_replace:

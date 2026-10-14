@@ -149,6 +149,23 @@ class NoticeTest(unittest.TestCase):
         self.assertIn("- RepToday package: `a.md`: missing. Incomplete: Package review, Post Drafts.", body)
         self.assertIn("`run-reports/R.md`", evidence)
 
+    def test_a_source_read_and_not_usable_is_named_as_one_that_could_not_be_used(self):
+        state = self.state()
+        detail = "unchanged since the previous snapshot; read, but could not be used: the calendar has no days."
+        state.sources.append(SourceLine("RepToday package: `a.md`", package.UNUSABLE, detail, ("Post Drafts",)))
+        title, body, _, _ = report.problems_notice(state, "run-reports/R.md")
+        self.assertEqual(title, "Notice: 1 source could not be used on 2026-10-11")
+        self.assertIn("These sources could not be used, so the work that needs them is incomplete this run:", body)
+        self.assertIn(f"- RepToday package: `a.md`: {detail} Incomplete: Post Drafts.", body)
+        state.sources.append(SourceLine("RepToday package: `b.md`", package.FAILED, "missing.", ("Post Drafts",)))
+        title, body, _, _ = report.problems_notice(state, "run-reports/R.md")
+        self.assertEqual(title, "Notice: 2 sources could not be read or used on 2026-10-11")
+        self.assertIn("These sources could not be read or used, so the work that needs them is incomplete", body)
+        self.assertIn(
+            "- Sources: 2 failed (RepToday package: `a.md`, RepToday package: `b.md`), 0 changed,",
+            report.render_report(state),
+        )
+
     def test_an_agent_that_never_started_is_a_problem(self):
         state = self.state()
         state.sessions = [fakes.session(closing="", agent_started=False, exit_code=3, error=None)]

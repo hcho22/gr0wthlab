@@ -831,6 +831,10 @@ class OutreachCycleTest(WorkCycleTestCase):
         )
         self.assertIn(f"| your personal network | ask | kept | `20261011-message-network-ask`; {stands} |", report)
         self.assertRegex(report, r"\| Outreach Drafts \| incomplete \| [^|]*brand-rules\.json could not be used")
+        name = "RepToday package: `projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json`"
+        self.assertRegex(report, rf"\| {name} \| unusable \| [^|]*; read, but could not be used: not JSON: ")
+        self.assertEqual(self.notices().count(f"- {name}: "), 1, "one line for the file, in the one notice")
+        self.assertIn(" Incomplete: Post Drafts.\n", self.notices())
         rules.write_text(valid, encoding="utf-8")
         self.agent()
         report = self.go(weeks=2)
@@ -959,6 +963,89 @@ class OutreachCycleTest(WorkCycleTestCase):
         proposals = [entry["id"] for entry in self.items("package-change-proposal")]
         self.assertEqual(proposals.count(filed), 1)
         self.assertEqual(len([name for name in proposals if "outreach-word-lists" in name]), 1)
+
+
+class UnusableSourceTest(WorkCycleTestCase):
+    """A package file the snapshot read but the launcher could not use, since it could not be parsed or decoded, is a
+    failed source like one that could not be read: the run's notice names it with the real reason, and every output
+    that needed it is incomplete."""
+
+    CALENDAR = "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md"
+    CHANNEL_PLAN = "projects/RepToday/gtm/06-channels/channel-plan.md"
+
+    def setUp(self):
+        super().setUp()
+        fakes.add_dispatches(self.repo, self.env)
+        fakes.set_run(self.repo, "outreach", {"network_ask_source": "network", "creators": fakes.creators()})
+
+    def source_notices(self):
+        """Each open notice's part about the run's failed sources."""
+        return [part for part in self.notices().split("\n## ") if "These sources could not be" in part]
+
+    def test_a_calendar_without_its_table_is_a_failed_source_with_one_notice(self):
+        calendar = self.mandu / self.CALENDAR
+        calendar.write_text("# 14-day cadence\n\nThe table went missing.\n", encoding="utf-8")
+        report = self.go()
+        name = f"RepToday package: `{self.CALENDAR}`"
+        self.assertRegex(
+            report,
+            rf"\| {name} \| unusable \| first snapshot of this file; read, but could not be used: [^|]+\. \|",
+        )
+        self.assertIn(f"- Sources: 1 failed ({name}),", report)
+        self.assertIn(f"| Post Drafts | incomplete | {name} could not be used |", report)
+        notices = [entry for entry in self.queue()["open"] if entry["kind"] == "notice"]
+        self.assertEqual(len(notices), 1)
+        parts = self.source_notices()
+        self.assertEqual(len(parts), 1, self.notices())
+        self.assertIn("These sources could not be used, so the work that needs them is incomplete this run:", parts[0])
+        self.assertEqual(parts[0].count(self.CALENDAR), 1, parts[0])
+        self.assertIn(
+            f"- {name}: first snapshot of this file; read, but could not be used: no table with the columns Day, Asset,"
+            " Angle, platform. Incomplete: Post Drafts.\n",
+            parts[0],
+        )
+
+    def test_a_channel_plan_that_is_not_valid_text_is_a_failed_source_with_one_notice(self):
+        (self.mandu / self.CHANNEL_PLAN).write_bytes(b"\xff\xfe channel plan \x80\n")
+        self.agent()
+        report = self.go()
+        name = f"RepToday package: `{self.CHANNEL_PLAN}`"
+        self.assertRegex(
+            report, rf"\| {name} \| unusable \| [^|]*read, but could not be used: it is not UTF-8 text\. \|"
+        )
+        self.assertIn(f"- Sources: 1 failed ({name}),", report)
+        self.assertRegex(report, rf"\| Outreach Drafts \| incomplete \| {name} could not be used; ")
+        self.assertIn(f"the channel plan `{self.CHANNEL_PLAN}` is not UTF-8 text, so no outreach message", report)
+        parts = self.source_notices()
+        self.assertEqual(len(parts), 1, self.notices())
+        self.assertEqual(parts[0].count(self.CHANNEL_PLAN), 1, parts[0])
+        self.assertIn(f"- {name}: ", parts[0])
+        self.assertIn("read, but could not be used: it is not UTF-8 text. Incomplete: Outreach Drafts.", parts[0])
+        self.assertEqual(len([entry for entry in self.queue()["open"] if entry["kind"] == "notice"]), 1)
+
+    def test_well_formed_files_make_no_failed_source(self):
+        self.agent()
+        report = self.go()
+        self.assertIn("- Sources: 0 failed,", report)
+        self.assertNotIn("| unusable |", report)
+        self.assertEqual(self.source_notices(), [])
+
+    def test_a_missing_calendar_is_a_source_that_could_not_be_read_as_before(self):
+        (self.mandu / self.CALENDAR).unlink()
+        self.agent()
+        report = self.go()
+        name = f"RepToday package: `{self.CALENDAR}`"
+        self.assertRegex(report, rf"\| {name} \| failed \| ")
+        self.assertNotIn("| unusable |", report)
+        parts = self.source_notices()
+        self.assertEqual(len(parts), 1, self.notices())
+        self.assertIn("These sources could not be read, so the work that needs them is incomplete this run:", parts[0])
+        self.assertIn(
+            f"- {name}: missing. Incomplete: Package snapshot, Package review (contradictions), Post", parts[0]
+        )
+        self.assertIn(
+            f"| Post Drafts | incomplete | {name} could not be read; `{self.CALENDAR}` could not be used |", report
+        )
 
 
 class LearningCycleTest(WorkCycleTestCase):

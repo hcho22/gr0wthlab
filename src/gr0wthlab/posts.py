@@ -390,7 +390,7 @@ def prepare(
     plan.waitlist_live = config.waitlist_live(today)
     plan.posted = posted_days(ledger, plan.product, window.number, list(parsed.days))
     if "calendar" in parsed.problems:
-        plan.reason = f"The calendar could not be read ({parsed.problems['calendar']}), so no day can be prepared."
+        plan.reason = f"The calendar could not be used ({parsed.problems['calendar']}), so no day can be prepared."
         return plan
     numbers, plan.reason = target_days(window, list(parsed.days), today, config.weekly[0])
     for number in numbers:

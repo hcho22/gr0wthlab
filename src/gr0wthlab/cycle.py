@@ -642,7 +642,13 @@ class Cycle:
         gap = state.agent_gap(sessions.POSTS)
         if plan.days and gap:
             gaps.append(gap)
-        return gaps
+        # A kit file the run read and could not use is named by its failed source, which leads the row: once is enough.
+        unusable = {line.name for line in state.sources if line.status == package.UNUSABLE}
+        paths = plan.context.paths
+        told = {role for role, path in paths.items() if f"{plan.product} package: `{path}`" in unusable}
+        said = {f"`{paths[role]}` could not be used" for role in told}
+        said |= {"brand-rules.json could not be used"} if "brand_rules" in told else set()
+        return [reason for reason in gaps if reason not in said]
 
     def queue_gaps(self, state: RunState) -> list[str]:
         """Why the Review Queue is incomplete this run though the ledger was read: an item file could not be, so a
@@ -749,7 +755,7 @@ class Cycle:
             for session in state.sessions:
                 if session.workflow.output == key and session.gap() and session.gap() in gaps:
                     held[session.key].append(title)
-            gaps = [f"{line.name} could not be read" for line in failed if title in line.needed_by] + gaps
+            gaps = [f"{line.name} {line.failure}" for line in failed if title in line.needed_by] + gaps
             rows.append([title, INCOMPLETE if gaps else COMPLETE, "; ".join(gaps) or done])
         state.outputs = rows
         for session in state.sessions:
@@ -779,6 +785,50 @@ class Cycle:
         else:
             detail = f"`{code.branch}` at `{code.short}`, read at that commit for claim checks"
             state.sources.append(SourceLine(f"{code.name} repository", package.READ, detail, needs))
+
+    def unusable_sources(self, state: RunState, config: settings.Settings) -> None:
+        """Mark each package file the snapshot read that launcher code then could not use, as it could not be parsed
+        or decoded, as a failed source, with the real reason and the outputs whose own gap already names it: a kit
+        file for the post Drafts and, of the files the filming plan reads, for filming; the brand rules for
+        recruiting; and the channel plan for outreach. A file whose read failed is a failed source already, and one
+        file is one line however many steps could not use it."""
+        found: dict[tuple[str, str], tuple[dict[str, None], dict[str, None]]] = {}  # file: (reasons, output keys)
+
+        def add(product: str, path: str, reason: str, *keys: str) -> None:
+            reasons, outputs = found.setdefault((product, path), ({}, {}))
+            reasons[reason.rstrip(".")] = None
+            outputs.update(dict.fromkeys(keys))
+
+        plan = state.posts
+        if plan is not None:
+            paths = plan.context.paths
+            for role, problem in plan.context.kit.problems.items():
+                if role in paths:
+                    filmed = state.filming is not None and role in filming.ROLES
+                    add(plan.product, paths[role], problem, "post-drafts", *["filming-plan"] * filmed)
+            if plan.context.rules is None and plan.context.rules_problem and "brand_rules" in paths:
+                add(plan.product, paths["brand_rules"], plan.context.rules_problem, "post-drafts")
+        recruiting = state.beta
+        if recruiting is not None and recruiting.active and recruiting.context is not None:
+            if recruiting.context.rules is None and recruiting.context.rules_problem:
+                rules = recruiting.rules
+                add(rules.product, rules.brand_rules, recruiting.context.rules_problem, beta.WORKFLOW)
+        if state.outreach is not None and state.outreach.unusable:
+            add(state.outreach.product, state.outreach.plan_path, state.outreach.unusable, "outreach-drafts")
+        for (product, path), (reasons, keys) in found.items():
+            name = f"{product} package: `{path}`"
+            under = name[:-1] if path.endswith("/") else name  # a folder's files are named under it
+            covered = [line for line in state.sources if line.name.startswith(under)]
+            if not covered or any(line.status == package.FAILED for line in covered):
+                continue  # not read by the snapshot, or its read failed: either way not a file read and unusable
+            line = next((line for line in covered if line.name == name), None)
+            if line is None:  # a folder whose files were each read, and which could not be used as a whole
+                line = SourceLine(name, package.UNUSABLE, "")
+                state.sources.append(line)
+            told = f"{line.detail.rstrip('.')}; read, but" if line.detail else "Read, but"
+            line.status = package.UNUSABLE
+            line.detail = f"{told} could not be used: {'; '.join(reasons)}."
+            line.needed_by = output_titles(config, tuple(keys))
 
     def prepare_filming(
         self,
@@ -1790,6 +1840,7 @@ class Cycle:
         )
         areas.ensure_folder(areas.path("review_queue", INCOMING))
         self.prepare_work(state, config, registry, boundary, areas, ledger if ledger_ok else None, states, network)
+        self.unusable_sources(state, config)
         # A stopped boundary check's script sits among the agent's Instructions, so every run removes what such a check
         # left before it remembers them: the guard would put back after the agent whatever it had remembered.
         state.probe_files_removed = clear_probe_files(boundary)
