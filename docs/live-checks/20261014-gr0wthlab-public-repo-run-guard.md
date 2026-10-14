@@ -50,3 +50,25 @@ The same question asked of a private repository of the same account, from a scra
 - A weekly start refused this way, as the LaunchAgent would start it: `src/tests/test_attempts.py` (`test_a_production_clone_whose_repository_is_public_refuses_once_and_waits_for_the_founder`).
 - An answer from GitHub that is neither plainly private nor plainly public, and a GitHub that answers nothing within 60 seconds: `src/tests/test_visibility.py`, with a stand-in for gh.
 - The real `~/gr0wthlab` production clone, which does not exist yet.
+
+## Round 2: the re-check after the merge with `main`
+
+**What was run:** after the branch was brought up to `main` at `bdec245` (the refused-items change) with one merge commit, from the same linked worktree, on 2026-10-14 from 09:36 PDT, with Codex CLI 0.160.0, the same commands as in round 1: the real repository's refusal with no setting, then `src/bin/gr0wthlab preflight` and `src/bin/gr0wthlab boundary-check`.
+The repository on GitHub was still public.
+
+**On which commit:** the merge commit `d27a24c77eb7b77d81e8d983d601926c4b62ed1f`, with `src` tree `8a030ad0a1d14419e4cc8da70c6d62d54a678af3` and `config` tree `b43d0624383aada9155906ee4b54515c3ecb3a5d`.
+`git status` was empty before the runs and after the boundary check.
+`show-config` printed the configuration fingerprint `0daea7f4a2ca703b1e4ab2b0693837f6517a44f563953187c6c4c7f039ef5319`.
+
+**Each run's identifier:** the refused run got none; the boundary check was `20261014T163642Z-on-demand-a486`.
+
+**What the records showed:**
+
+| Command | Run identifier | What the records showed |
+| --- | --- | --- |
+| `src/bin/gr0wthlab run`, the real repository as it is | none | exit code 4; it printed only `` refusing to start: the GitHub repository `<owner>/gr0wthlab` is public: a real run would publish its Drafts, its Evidence, and the Founder's records there, so the repository must be made private first `` (the account name replaced by `<owner>`), in 0.64 seconds; the scratch log folder stayed empty; `ledger/` held only `founder/`, `README.md`, and `run.lock`; `git status` stayed empty |
+| `src/bin/gr0wthlab preflight` | none (no model) | exit code 0; 6 areas written; 19 paths refused; no breach and no failure; the listing of the footage place refused, none listed, none untried; both listed hosts unreachable, none reached, none untried |
+| `src/bin/gr0wthlab boundary-check` | `20261014T163642Z-on-demand-a486` | PASSED at its first probe run; fingerprint `0daea7f4a2ca703b1e4ab2b0693837f6517a44f563953187c6c4c7f039ef5319`; 43 steps to prove; 0 sentinels escaped; 12 of 12 permitted sentinels written; 14 of 14 file-tool targets refused, each in a patch of its own; 16 kernel Seatbelt denials naming the run's sentinels or the check's listeners; 1 of 1 forbidden read refused; no local connection got through; 3 sandbox network targets refused, none reached; nothing changed since the snapshot; agent time 61.6 s |
+
+**What was not exercised:** the three ways of falling short of an answer (GitHub out of reach, no login, no gh) and the live `private` answer were not run again; they stand on round 1, whose `src/gr0wthlab/visibility.py` the merge did not change.
+Everything round 1 lists as not exercised still stands as it says there.
