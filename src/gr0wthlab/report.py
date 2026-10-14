@@ -1,8 +1,9 @@
-"""What a run tells the agent before it starts (the brief) and the Founder after it ends (the run report).
+"""What a run tells each agent session before it starts (its brief) and the Founder after the run ends (the run
+report).
 
-Both are rendered from the launcher's own state, never from anything the agent wrote, except the agent's closing
-summary, which the report quotes as the agent's account. The report sets that account's `Review:` line beside what the
-launcher counted of the session's work (work.py), and says which is which.
+Both are rendered from the launcher's own state, never from anything an agent wrote, except each session's closing
+summary, which the report quotes as that agent's account. The report sets each session's closing line beside what the
+launcher counted of that session's work (work.py), and says which is which.
 """
 
 from __future__ import annotations
@@ -25,26 +26,23 @@ from . import (
     posts,
     process,
     schedule,
+    sessions,
     waitlist,
     work,
 )
+from .attempts import ASLEEP_AT_LEAST, asleep_for
 from .exchange import plural
 from .package import SKIPPED
+from .sessions import INCOMPLETE as SESSION_INCOMPLETE
+from .sessions import Session
 from .state import Tally, run_tally
 
 COMPLETE = "complete"
 INCOMPLETE = "incomplete"
 NOT_BUILT = "not built yet"
-# The line the agent's summary ends with: its own account of whether it finished every pass of its review.
-REVIEW_COMPLETE = "Review: complete"
-REVIEW_INCOMPLETE = "Review: incomplete"
 USAGE_FIELDS = ("input_tokens", "cached_input_tokens", "cache_write_input_tokens", "output_tokens")
 NOTICE_BODY_LIMIT = exchange.MAX_ITEM_CHARS // 2
-# Fewer seconds than this between a wall-clock time and the awake time of the same span are the two clocks' own
-# difference, not the Mac asleep.
-ASLEEP_AT_LEAST = 5
-# How much of the agent's closing line the report quotes as its word.
-REVIEW_WORD_LIMIT = 300
+__all__ = ["ASLEEP_AT_LEAST", "asleep_for"]
 
 
 @dataclass
@@ -96,12 +94,11 @@ class RunState:
     published: list[str] = field(default_factory=list)
     set_aside: list = field(default_factory=list)  # queue.SetAside
     queue_after: list[Mapping[str, object]] = field(default_factory=list)
-    agent: Mapping[str, object] = field(default_factory=dict)
-    agent_incomplete: tuple[str, ...] = ()  # the titles of the outputs the agent's not finishing leaves incomplete
-    agent_summary: str = ""
-    review: str = ""  # the last line of the agent's whole summary
-    usage: Mapping[str, int] | None = None
-    cost: float | None = None
+    sessions: list[Session] = field(default_factory=list)  # one for each workflow, in the order a run starts them
+    titles: Mapping[str, str] = field(default_factory=dict)  # each output of config/run.json: its title in the report
+    run_limit: float = 0.0  # the bound on all of this run's sessions together, in seconds
+    claims: work.Claims | None = None  # the Draft claims in the Drafts any session of this run wrote or changed
+    proposals: work.Proposals | None = None  # the proposals queued from incoming/: the run's sessions', and the rest
     outputs: list[tuple[str, str, str]] = field(default_factory=list)  # title, status, detail
     problems: list[str] = field(default_factory=list)
     notice: str | None = None
@@ -109,6 +106,11 @@ class RunState:
     waitlist_file: str = ""  # the Waitlist Evidence this run wrote, relative to ledger/
     breach_notice: str | None = None
     dispatches: list = field(default_factory=list)  # dispatch.Filing, one per reviewed Dispatch request
+    dispatch_unread: list[str] = field(default_factory=list)  # each file a request's filing rests on that was unread
+    queue_unread: list[str] = field(default_factory=list)  # each item file an item in incoming/ may repeat, unread
+    # Each open item left as it was on a read that could not be made: (its output's title, queue.Stands).
+    stood: list = field(default_factory=list)
+    queue_title: str = ""  # the Review Queue output's title, which a Dispatch request's item counts under
     tallies: list[Tally] = field(default_factory=list)
     state_notes: list[str] = field(default_factory=list)
     notes: list[str] = field(default_factory=list)
@@ -135,14 +137,13 @@ class RunState:
     learning: learning.Result | None = None
     learning_problem: str = ""  # why the rejection reasons were not read or coded, when they were not
     guidance: learning.Guidance | None = None  # the agent's Instructions as they were before it started
-    put_back: list[str] = field(default_factory=list)  # each change to them the launcher undid
+    put_back: list[str] = field(default_factory=list)  # each change to them the launcher undid, and after which session
     # what a stopped boundary check had left in the areas, removed before the Instructions were remembered
     probe_files_removed: list[str] = field(default_factory=list)
     work_published: list[str] = field(default_factory=list)  # the items Listening and outreach queued this run
     check_work: str = ""  # the command the agent checks its Listening and outreach work with
     attempt: attempts.Attempt | None = None  # a weekly scheduled run: which attempt at the run due, and those before
-    slept: float = 0.0  # about how many seconds the Mac was asleep from the run's start to its agent's end
-    work: work.Work | None = None  # what the launcher counted of the agent's session, once the agent has ended
+    slept: float = 0.0  # about how many seconds the Mac was asleep from the run's start to its last session's end
 
     @property
     def lateness(self) -> timedelta | None:
@@ -158,33 +159,58 @@ class RunState:
     def failed_sources(self) -> list[SourceLine]:
         return [line for line in self.sources if line.status == package.FAILED]
 
-    @property
-    def timed_out(self) -> bool:
-        """Whether the launcher stopped the agent at its time limit."""
-        return bool(self.agent.get("timed_out"))
+    def session(self, key: str) -> Session | None:
+        """One workflow's session, or None when this run planned none, as before its sessions are planned."""
+        return next((session for session in self.sessions if session.key == key), None)
 
     @property
-    def time_limit(self) -> str:
-        """The agent's time limit in words."""
-        return process.limit_text(float(self.agent.get("time_limit_seconds") or 0))
+    def ran(self) -> list[Session]:
+        """The sessions Codex was started for, in order."""
+        return sessions.started(self.sessions)
+
+    @property
+    def short(self) -> list[Session]:
+        """The sessions that fell short, in order: not started, stopped at a limit, or ended with an error."""
+        return sessions.short(self.sessions)
+
+    @property
+    def timed_out(self) -> bool:
+        """Whether the launcher stopped a session at its time limit, or the run's bound left one no time."""
+        return any(session.shortfall == attempts.TIMED_OUT for session in self.sessions)
+
+    @property
+    def agent_seconds(self) -> float:
+        """The time all of this run's sessions took together, as their limits count it."""
+        return sum(session.seconds or 0.0 for session in self.sessions)
 
     @property
     def asleep(self) -> float:
-        """About how many seconds of the agent's time the Mac was asleep, its wall-clock time less its awake time; 0
-        when the agent did not run or the Mac stayed awake."""
-        agent = self.agent
-        return asleep_for(float(agent.get("agent_seconds") or 0), float(agent.get("agent_awake_seconds") or 0))
+        """About how many seconds of its sessions' time the Mac was asleep; 0 when none ran or the Mac stayed awake."""
+        return sum(session.asleep for session in self.sessions)
 
     @property
-    def stop(self) -> process.Stop:
-        """What stopping a timed-out agent took, as the launcher's run record keeps it."""
-        return process.Stop.from_json(self.agent.get("stopped") or {})
+    def usage(self) -> dict[str, int] | None:
+        """Codex's token counts, summed over the sessions that reported any; None when none did."""
+        reported = [session.usage for session in self.sessions if session.usage]
+        return {key: sum(usage.get(key, 0) for usage in reported) for key in USAGE_FIELDS} if reported else None
+
+    @property
+    def cost(self) -> float | None:
+        priced = [session.cost for session in self.sessions if session.cost is not None]
+        return sum(priced) if priced else None
+
+    @property
+    def confirmed(self) -> bool:
+        """Whether every session that ran ended its summary with the closing line that confirms its work."""
+        return all(session.confirmed for session in self.ran)
 
     @property
     def ending(self) -> str:
-        """How the run ended, as the record of the run due at its time keeps it. Only a weekly scheduled attempt is
-        asked whether its agent confirmed its review."""
-        return attempts.ending(self.agent, self.slept, self.attempt is None or self.review == REVIEW_COMPLETE)
+        """How the run ended, as the record of the run due at its time keeps it: completed, or as the first session
+        that fell short did. Only a weekly scheduled attempt is asked whether its sessions confirmed their work."""
+        short = self.short
+        confirmed = self.attempt is None or self.confirmed
+        return attempts.ending(short[0].shortfall if short else None, self.slept, confirmed)
 
     @property
     def again(self) -> bool:
@@ -193,28 +219,27 @@ class RunState:
         attempt = self.attempt
         return attempt is not None and self.ending == attempts.SLEPT and attempt.number < attempt.limit
 
-    def agent_gap(self) -> str:
-        """Why every output that needs the agent is incomplete this run, or "" when the agent finished."""
-        if self.timed_out:
-            return f"the agent was stopped at its {self.time_limit} time limit"
-        return "" if self.agent.get("exit_code") == 0 else "the agent did not finish"
+    def agent_gap(self, key: str) -> str:
+        """Why every output that needs one workflow's session is incomplete this run, or "" when that session
+        finished or the workflow had nothing due. One session's trouble is never another workflow's gap."""
+        session = self.session(key)
+        return session.gap() if session is not None else ""
 
     def review_gap(self) -> str:
-        """Why the agent's package review is incomplete, or "" when it finished: it must stop with exit code 0 and end
-        its summary with the line `Review: complete`, so a summary that says otherwise, or says nothing, is not."""
-        if self.agent_gap():
-            return self.agent_gap()
-        if self.review == REVIEW_COMPLETE:
+        """Why the package review is incomplete, or "" when it finished or none was due: its session must end
+        without an error and end its summary with the line `Session: complete`, so a summary that says otherwise, or
+        says nothing, is not a finished review."""
+        review = self.session(sessions.REVIEW)
+        if review is None or not review.due:
             return ""
-        if self.review.startswith(REVIEW_INCOMPLETE):
-            why = self.review_reason()
+        if review.gap():
+            return review.gap()
+        if review.confirmed:
+            return ""
+        if review.closing.startswith(SESSION_INCOMPLETE):
+            why = review.reason()
             return "the agent did not finish its review" + (f": {why}" if why else "")
         return "the agent did not confirm that it finished every pass"
-
-    def review_reason(self) -> str:
-        """The agent's own reason after `Review: incomplete:`, without the closing punctuation that would clash with
-        the sentence it is quoted in."""
-        return self.review[len(REVIEW_INCOMPLETE) :].lstrip(":").strip().rstrip(".!;:, ")
 
     def open_item(self, record: Unusable) -> str:
         """The item a record is for when that item is still open as this run leaves the Review Queue, so the Founder
@@ -228,13 +253,6 @@ class RunState:
 
     def unusable_to_report(self) -> list[Unusable]:
         return [record for record in self.unusable if self.reports(record)]
-
-
-def asleep_for(seconds: float, awake: float) -> float:
-    """About how many of a span's seconds the Mac was asleep, its wall-clock time less its awake time; 0 when the Mac
-    stayed awake."""
-    gap = seconds - awake
-    return gap if gap >= ASLEEP_AT_LEAST else 0.0
 
 
 def wall_clock(moment: datetime) -> datetime:
@@ -360,25 +378,50 @@ def what_follows(state: RunState) -> str:
     )
 
 
-def cost_line(state: RunState) -> str:
-    """The run's approximate cost from the token counts Codex reported, or that there is none to state: Codex reports
-    them as each turn ends, so an agent stopped at its time limit leaves at most a part of them, never a zero."""
-    if not state.usage:
-        if state.timed_out:
-            return "Approximate cost: not available; the agent was stopped before it reported any token counts."
-        return "Approximate cost: unknown; the agent reported no token counts."
-    usage = state.usage
-    tokens = (
+def tokens_text(usage: Mapping[str, int]) -> str:
+    return (
         f"{usage['input_tokens']:,} input tokens ({usage['cached_input_tokens']:,} cached) "
         f"and {usage['output_tokens']:,} output tokens"
     )
-    amount = f"{state.cost:.2f}" if state.cost >= 0.1 else f"{state.cost:.3f}"
-    if state.timed_out:
+
+
+def amount(cost: float) -> str:
+    return f"${cost:.2f}" if cost >= 0.1 else f"${cost:.3f}"
+
+
+def session_cost(session: Session) -> str:
+    """One session's approximate cost in a few words, or that there is none to state: Codex reports token counts as
+    each turn ends, so a session stopped at its limit leaves at most a part of them, never a zero."""
+    if not session.started:
+        return "-"
+    if not session.usage:
+        return "not available" if session.timed_out else "unknown"
+    return f"{'at least' if session.timed_out else 'about'} {amount(session.cost)}"
+
+
+def cost_line(state: RunState) -> str:
+    """The run's approximate cost, from the token counts Codex reported for each of its sessions, or that there is
+    none to state. A session stopped at its time limit leaves at most a part of its counts, and one that reported
+    none leaves nothing to add, so the sum is then a floor, never a zero for work that was done."""
+    ran = state.ran
+    if not ran:
+        return "Approximate cost: none; no agent session was started."
+    usage = state.usage
+    stopped = [session for session in ran if session.timed_out]
+    silent = [session for session in ran if not session.usage]
+    if not usage:
+        if stopped:
+            return "Approximate cost: not available; the agent was stopped before it reported any token counts."
+        return "Approximate cost: unknown; the agent reported no token counts."
+    over = f", over its {len(ran)} sessions" if len(ran) > 1 else ""
+    if stopped or silent:
+        missing = [session.title for session in ran if session in stopped or session in silent]
         return (
-            f"Approximate cost: at least ${amount} at API prices, for the {tokens} reported before the agent was"
-            " stopped; what its unfinished turn used is not available."
+            f"Approximate cost: at least {amount(state.cost)} at API prices, for the {tokens_text(usage)} that Codex"
+            f" reported{over}; what the {' and '.join(missing)} session{'s' if len(missing) > 1 else ''} used beyond"
+            " that is not available."
         )
-    return f"Approximate cost: about ${amount} at API prices, for {tokens}."
+    return f"Approximate cost: about {amount(state.cost)} at API prices, for {tokens_text(usage)}{over}."
 
 
 def span_text(seconds: float) -> str:
@@ -391,24 +434,26 @@ def span_text(seconds: float) -> str:
 def probe_files_removed(state: RunState) -> list[str]:
     """What a stopped boundary check had left in the areas and this run removed, as paths from the repository: the
     production clone's pre-run step removes it before its records step can commit it, and every run before it
-    remembers the agent's Instructions and again before its preflight."""
+    remembers the agent's Instructions and again before each session's preflight."""
     before_records = (state.sync or {}).get("probe_files_removed") or []
-    return [*before_records, *state.probe_files_removed, *(state.agent.get("probe_files_removed") or [])]
+    by_sessions = [path for session in state.sessions for path in session.record.get("probe_files_removed") or []]
+    return [*before_records, *state.probe_files_removed, *by_sessions]
 
 
-def left_running(stop: process.Stop) -> str | None:
+def left_running(session: Session) -> str | None:
     """The launcher problem a stop leaves when it could not show that none of the processes it found is still running;
-    the process ids stay in the run report's Agent section, so the same problem reads the same at every run."""
+    the process ids stay in the run report's Sessions section, so the same problem reads the same at every run."""
+    stop = session.stop
     if stop.left:
         count = "1 process" if len(stop.left) == 1 else f"{len(stop.left)} processes"
         return (
-            f"{count} the agent started could not be stopped and may still be running; the run report's Agent section"
-            " names each"
+            f"{count} the {session.title} session started could not be stopped and may still be running; the run"
+            " report's Sessions section names each"
         )
     if not stop.proven:
         return (
-            "the process table could not be read after the agent was stopped, so nothing shows whether a process it"
-            " started is still running"
+            f"the process table could not be read after the {session.title} session was stopped, so nothing shows"
+            " whether a process it started is still running"
         )
     return None
 
@@ -424,15 +469,20 @@ def file_line(file: package.FileResult) -> str:
     }.get(str(file.change), "unchanged since the previous snapshot")
 
 
-def package_changes(state: RunState) -> list[str]:
+def package_changes(state: RunState, only: set[str] | None = None) -> list[str]:
+    """What changed in the package since the previous snapshot; with only, among those files alone, as a session's
+    brief that lists a part of the package tells it."""
     if state.previous_snapshot is None:
         return ["First snapshot; there is no earlier run to compare with."]
     lines = []
     for result in state.snapshot:
         for file in result.files:
-            if file.change in ("changed", "added"):
+            if file.change in ("changed", "added") and (only is None or file.path in only):
                 lines.append(f"- {file.change}: `{file.path}`")
-        lines += [f"- removed: `{path}`" for path in result.removed]
+        if only is None:
+            lines += [f"- removed: `{path}`" for path in result.removed]
+    if only is not None and not lines:
+        return [f"None of the files listed above changed since run {state.previous_snapshot}."]
     return lines or [f"Nothing changed since run {state.previous_snapshot}."]
 
 
@@ -495,51 +545,176 @@ def founder_words(entry: Mapping[str, object]) -> str:
     )
 
 
-def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path) -> str:
-    """The facts the agent works from, written before it starts."""
+def brief_files(state: RunState, session: Session) -> list[package.FileResult]:
+    """The package files one session's brief lists, which are also the ones the launcher counts as read or not read
+    by it: every file for the package review, the files of the sources the Product registry says its workflow's
+    output needs for most, and none where the brief itself holds everything the session works from."""
+    which = session.workflow.files
+    if which == sessions.NONE:
+        return []
+    return [
+        file
+        for result in state.snapshot
+        for file in result.files
+        if which == sessions.ALL or session.workflow.output in result.source.needed_by
+    ]
+
+
+def failed_for(state: RunState, session: Session) -> list[SourceLine]:
+    """The failed sources one session's brief names: the ones its workflow's output needs, so a session is told of
+    nothing that blocks another workflow's work alone. A source the launcher alone reads is never named."""
+    title = state.titles.get(session.workflow.output, session.workflow.output)
+    return [
+        line for line in state.failed_sources() if title in line.needed_by and line.name not in beta.LAUNCHER_SOURCES
+    ]
+
+
+def session_rows(state: RunState, current: Session) -> list[list[str]]:
+    """The sessions this run starts, as a brief tells them: this one, and each other with whether it comes before
+    or after. A workflow with nothing due is not named: a brief holds its own session's work and no word of work
+    that has not begun, such as recruiting before the Founder's gate."""
+    rows = []
+    due = sessions.due(state.sessions)
+    for session in due:
+        if session is current:
+            said = "this session"
+        else:
+            said = f"its own session, {'before' if due.index(session) < due.index(current) else 'after'} this one"
+        rows.append([session.title, said])
+    return rows
+
+
+def render_brief(
+    state: RunState,
+    session: Session,
+    repo_root: Path,
+    workspace: Path,
+    ledger: Path,
+    files: Sequence[package.FileResult] = (),
+    standing: Sequence[tuple[str, str]] = (),
+    drafts: Sequence[tuple[int, str]] = (),
+) -> str:
+    """The facts one session works from, written just before it starts: what every session of the run is told, then
+    its own workflow's section and nothing of another's. files are the package files it lists, standing is what stands
+    in incoming/ now, each file with its ask or why it has none, and drafts is each ready filming day with where its
+    post Draft stands."""
+    key = session.key
+    whole = session.workflow.files == sessions.ALL
     lines = [
-        f"# Brief for run {state.run_id}",
+        f"# Brief for run {state.run_id}: the {session.title} session",
         "",
-        "The launcher wrote this before you started.",
+        "The launcher wrote this just before you started.",
         "Every Go-To-Market Package file is in the Mandu checkout, at the absolute path listed below;",
         "a Product's own repository holds its code, never its package.",
-        "In the items you write, cite a package file by its path inside the Mandu checkout, as in the Changes list.",
-        "The Mandu checkout and every read-only location in the header are readable, even inside a folder the",
-        "sandbox otherwise denies, such as /private/tmp.",
+    ]
+    if session.workflow.writes_items:
+        lines.append(
+            "In the items you write, cite a package file by its path inside the Mandu checkout"
+            + (", as in the Changes list." if files else ".")
+        )
+    lines += [
+        "The paths the header lists of the Mandu checkout and every other read-only location in it are readable,",
+        "even inside a folder the sandbox otherwise denies, such as /private/tmp.",
         "",
         f"- {start_line(state)}",
         f"- Mandu checkout: `{state.mandu}`",
         f"- Package snapshot: `{ledger / state.snapshot_file}`"
         + (f" (previous: run {state.previous_snapshot})" if state.previous_snapshot else " (the first one)"),
         "",
-        "## Package files",
+        "## This run's sessions",
+        "",
+        "Each workflow with work due this run has a session of its own, in this order; do this session's work and no"
+        " other's.",
         "",
     ]
+    lines += table(["Workflow", "This run"], session_rows(state, session))
+    lines += ["", "## Package files", ""]
     rows = []
     mandu = Path(state.mandu)
-    for result in state.snapshot:
-        if result.reason:
-            rows.append([f"`{mandu / result.source.path}`", f"failed: {result.reason}"])
-        rows += [[f"`{mandu / file.path}`", f"{file.status}: {file_line(file)}"] for file in result.files]
-    lines += table(["File", "This run"], rows) + ["", "## Changes since the previous snapshot", ""]
-    lines += package_changes(state)
+    listed = {file.path for file in files}
+    if whole:
+        for result in state.snapshot:
+            if result.reason:
+                rows.append([f"`{mandu / result.source.path}`", f"failed: {result.reason}"])
+            rows += [[f"`{mandu / file.path}`", f"{file.status}: {file_line(file)}"] for file in result.files]
+    else:
+        rows = [[f"`{mandu / file.path}`", f"{file.status}: {file_line(file)}"] for file in files]
+    if rows:
+        if not whole:
+            lines += [
+                "The package files this session's work needs; read each one, and any other your work turns on.",
+                "",
+            ]
+        lines += table(["File", "This run"], rows)
+        lines += ["", "## Changes since the previous snapshot", ""]
+        lines += package_changes(state, None if whole else listed)
+    else:
+        lines.append("This session's own section below holds what it works from; it lists no package file to read.")
     lines += ["", "## Failed sources", ""]
-    failed = [line for line in state.failed_sources() if line.name not in beta.LAUNCHER_SOURCES]
+    failed = failed_for(state, session)
     if failed:
-        lines += [
-            "A failed source blocks only the work that needs it: never guess what it says, and do everything else.",
-            "Review every other package file as usual; only contradictions that involve a failed file go unchecked.",
-            "",
-        ]
+        lines.append(
+            "A failed source blocks only the work that needs it: never guess what it says, and do everything else."
+        )
+        if whole:
+            lines.append(
+                "Review every other package file as usual; only contradictions that involve a failed file go unchecked."
+            )
+        lines.append("")
         lines += [
             f"- {line.name}: {line.detail} Incomplete without it: {', '.join(line.needed_by) or 'nothing else'}."
             for line in failed
         ]
     else:
-        lines.append("None.")
+        lines.append("None that this session's work needs." if state.failed_sources() else "None.")
     lines += ["", "## Founder decisions taken in this run", ""]
     lines += decision_lines(state, taken_only=True) or ["None."]
-    lines += ["", "## Open Review Queue items", ""]
+    if session.workflow.writes_items:
+        lines += [""] + item_lines(state, standing)
+    if key == sessions.REVIEW:
+        lines += ["", "## Waitlist", ""]
+        if state.waitlist is not None:
+            evidence = ledger / state.waitlist_file if state.waitlist_file else None
+            lines += waitlist_brief(state.waitlist, evidence)
+    check = f"{state.check_work} --part {key}" if state.check_work else ""
+    context = state.posts.context if state.posts is not None else None
+    if key == sessions.POSTS and state.posts is not None:
+        lines += [""] + posts.brief_lines(state.posts, repo_root)[:-1] + kept_video_lines(state.filming)
+    if key == "filming" and state.filming is not None:
+        lines += [""] + filming.brief_lines(state.filming, repo_root)[:-1]
+        lines += [""] + draft_lines(state.filming, drafts)
+    if key == beta.WORKFLOW and state.beta is not None and not state.beta_problem:
+        recruiting = beta.brief_lines(state.beta, repo_root)
+        lines += [""] * bool(recruiting) + recruiting[:-1]
+    if key == listening.WORKFLOW and state.listening is not None:
+        lines += [""] + listening.brief_lines(state.listening, workspace, ledger, mandu, check)
+    if key == outreach.WORKFLOW and state.outreach is not None:
+        lines += [""] + outreach.brief_lines(state.outreach, context, mandu, check)
+    if key == learning.WORKFLOW:
+        lines += [""] + learning.brief_lines(state.reasons, workspace)
+    lines += ["", "## Where to write", ""]
+    if session.workflow.writes_items:
+        lines += [
+            f"- New items: `{workspace / 'review-queue' / 'incoming'}/<slug>.md`, written with your file-editing tool"
+            " (apply_patch): a shell here-document (`<<`) fails here, as the sandbox has no writable temporary folder.",
+            f"- Their format: `{repo_root / 'docs' / 'mandu-exchange.md'}`.",
+            f"- Check them before you finish: `/usr/bin/python3 {repo_root / 'src/bin/gr0wthlab'} check-incoming`.",
+        ]
+    else:
+        lines.append("- This session's own section above names every file it writes; it writes no item.")
+    if key == learning.WORKFLOW and check:
+        lines.append(f"- Check your rejection codes: `{check}`.")
+    lines += [
+        f"- The launcher's records, and the Founder's in `founder/`, which you can read and never write: `{ledger}`.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def item_lines(state: RunState, standing: Sequence[tuple[str, str]]) -> list[str]:
+    """What a session that may write items is told of the Review Queue: what is open, what was decided, and what
+    stands in incoming/ that the launcher has not taken in yet."""
+    lines = ["## Open Review Queue items", ""]
     if state.queue_before:
         lines += [
             "Do not queue these again; to change one, write a new item with `supersedes: <id>`.",
@@ -565,99 +740,214 @@ def render_brief(state: RunState, repo_root: Path, workspace: Path, ledger: Path
             lines.append(f"- `{entry['id']}` {status}: {entry['ask']}.{founder_words(entry)}")
     else:
         lines.append("None.")
-    lines += ["", "## Waitlist", ""]
-    if state.waitlist is not None:
-        evidence = ledger / state.waitlist_file if state.waitlist_file else None
-        lines += waitlist_brief(state.waitlist, evidence)
-    if state.posts is not None:
-        lines += [""] + posts.brief_lines(state.posts, repo_root)[:-1]
-    if state.filming is not None:
-        lines += [""] + filming.brief_lines(state.filming, repo_root)[:-1]
-    if state.beta is not None and not state.beta_problem:
-        recruiting = beta.brief_lines(state.beta, repo_root)
-        lines += [""] * bool(recruiting) + recruiting[:-1]
-    context = state.posts.context if state.posts is not None else None
-    if state.listening is not None or state.listening_problem:
-        lines += [""] + (
-            listening.brief_lines(state.listening, workspace, ledger, mandu, state.check_work)
-            if state.listening is not None
-            else ["## Listening", "", f"Listening was {state.listening_problem}; record nothing from memory."]
+    lines += ["", "## Items waiting in the incoming folder", ""]
+    if standing:
+        lines += [
+            "An earlier session of this run, or an earlier run, left these there; the launcher takes them in once the"
+            " last session has ended.",
+            "Read each one that touches a file your work uses, write nothing that asks the same, and leave these files"
+            " as they are.",
+        ]
+        lines += [f"- `{name}`: {said}" for name, said in standing]
+    else:
+        lines.append("None.")
+    return lines
+
+
+def kept_video_lines(found: filming.Filming | None) -> list[str]:
+    """What the post Drafts session is told of each day whose open post names a video that cannot be cut again this
+    run. Where the finished file is intact the post keeps that video, and only while its Draft is the one it was
+    queued from; otherwise the line says where the file stands, in the words filming.kept gives the Filming table,
+    and never that the post keeps it. The Filming table says so to the session that writes edit records, which is no
+    longer the one that writes the Drafts."""
+    if found is None:
+        return []
+    lines = []
+    for number, day in sorted(found.days.items()):
+        if not found.waits(number):
+            continue
+        said = (
+            f"{filming.KEEPS} only while its Draft stays as it is, so rewrite that Draft only when it must change."
+            if found.intact(number)
+            else f"{found.kept(number)}; rewrite that Draft only when it must change."
         )
-    if state.outreach is not None or state.outreach_problem:
-        lines += [""] + (
-            outreach.brief_lines(state.outreach, context, mandu, state.check_work)
-            if state.outreach is not None
-            else ["## Outreach", "", f"Outreach was {state.outreach_problem}; write no outreach Draft this run."]
-        )
-    lines += [""] + learning.brief_lines(state.reasons, workspace)
-    lines += [
+        lines.append(f"- Day {number}'s open post names a video that cannot be cut again this run ({day.why}): {said}")
+    return lines
+
+
+def draft_lines(found: filming.Filming, drafts: Sequence[tuple[int, str]]) -> list[str]:
+    """What the Filming session is told of the post Drafts its edit records are cut to, as the post Drafts session
+    of this run, or an earlier run, left them."""
+    lines = [
+        "## Post Drafts in place",
         "",
-        "## Where to write",
-        "",
-        f"- New items: `{workspace / 'review-queue' / 'incoming'}/<slug>.md`, written with your file-editing tool"
-        " (apply_patch): a shell here-document (`<<`) fails here, as the sandbox has no writable temporary folder.",
-        f"- The launcher's records, and the Founder's in `founder/`, which you can read and never write: `{ledger}`.",
-        f"- Their format: `{repo_root / 'docs' / 'mandu-exchange.md'}`.",
-        f"- Check them before you finish: `/usr/bin/python3 {repo_root / 'src/bin/gr0wthlab'} check-incoming`.",
-        f"- Check your quote records, Angle and Hook proposals, messages, and rejection codes: `{state.check_work}`.",
+        f"An edit record runs exactly as long as its day's post Draft, `{found.drafts}/day-NN.md`, and the launcher"
+        " cuts a video only from a Draft that passes its checks. Read a Draft for its beats and their times, and"
+        " change nothing in it.",
         "",
     ]
-    return "\n".join(lines)
+    lines += [f"- Day {number}: {said}" for number, said in drafts] or ["- No day is ready for an edit record."]
+    return lines
 
 
-def review_word(state: RunState) -> str:
-    """The agent's own closing line, quoted as its word, or that it left none. A line that is neither closing line,
-    as one wrapped in backticks is not, is quoted as it stands, since the launcher reads it as no confirmation."""
-    if not state.agent_summary.strip():
-        return "none; the agent left no summary"
-    line = " ".join(state.review.split())
-    shown = line if len(line) <= REVIEW_WORD_LIMIT else line[:REVIEW_WORD_LIMIT].rstrip() + "..."
-    if state.review == REVIEW_COMPLETE or state.review.startswith(REVIEW_INCOMPLETE):
-        return f'"{shown}"'
-    return (
-        f'its last line, "{shown}", is neither of the closing lines the launcher accepts, the plain text'
-        f" `{REVIEW_COMPLETE}` or `{REVIEW_INCOMPLETE}: ...`"
-    )
-
-
-def agent_setting(state: RunState) -> str:
-    """The model and reasoning effort the agent ran with, as the run record keeps them."""
-    model, effort = state.agent.get("model"), state.agent.get("reasoning_effort")
+def model_setting(session: Session) -> str:
+    """The model and reasoning effort a session ran with, as its record keeps them."""
+    model, effort = session.record.get("model"), session.record.get("reasoning_effort")
     return f"`{model}` at `{effort}` reasoning effort" if model and effort else ""
 
 
-def work_summary(state: RunState) -> str:
-    """One line for the top of the report: the launcher's counts, then the agent's word, each named for what it is."""
-    if state.work is None:
-        return ""
-    seconds = state.agent.get("agent_seconds")
-    took = f", in {span_text(float(seconds))} of agent time" if seconds is not None else ""
+def session_summary(session: Session) -> str:
+    """One session in one line for the top of the report: the launcher's counts, then the agent's word, each named
+    for what it is."""
+    took = f" in {span_text(session.seconds)} of agent time" if session.seconds is not None else ""
+    if session.work is None:
+        return (
+            f"The {session.title} session{took}: the launcher counted nothing of it. Its agent's own word:"
+            f" {session.word()}."
+        )
+    key = session.key
+    counted = work.summary(session.work, key == sessions.POSTS, session.workflow.writes_items)
     return (
-        f"The agent's work, as the launcher counted it: {work.summary(state.work)}{took}. The agent's own word:"
-        f" {review_word(state)}."
+        f"The {session.title} session's work, as the launcher counted it: {counted or 'nothing it counts'}"
+        f"{',' if took else ''}{took}. Its agent's own word: {session.word()}."
     )
 
 
-def work_lines(state: RunState) -> list[str]:
-    """The run report's account of the agent's work: the launcher's counts first, then the agent's own word, each
-    named for what it is."""
-    if state.work is None:
-        return ["The launcher counted nothing: the agent did not start, or its work could not be counted."]
-    lines = [
-        "Counted by the launcher from Codex's record of the session, the Draft files the run left, and the Review"
-        " Queue. None of these comes from what the agent says of itself, and none changes what is queued, blocked, or"
-        " marked incomplete:",
-        "",
-    ]
-    seconds = state.agent.get("agent_seconds")
-    if seconds is not None:
-        setting = agent_setting(state)
+def session_lines(state: RunState, session: Session) -> list[str]:
+    """One session's part of the report: how it ended, its time against its limit, its cost, what the launcher
+    counted of it, and the agent's own word, each named for what it is."""
+    lines = [f"### {session.title}", ""]
+    record = session.record
+    if not session.started:
+        lines.append(f"- Did not start: {record.get('error') or 'the run did not reach it'}.")
+        if record.get("fingerprint"):
+            lines.append(f"- Configuration fingerprint: `{record['fingerprint']}`")
+        lines.append("- The launcher counted nothing: no agent ran.")
+        return lines
+    if session.timed_out:
+        lines.append(f"- Timed out: {session.stop.describe()}.")
+        lines.append(f"- Exit code: {session.exit_code}, the launcher's own for a session stopped at its limit")
+    elif session.exit_code != 0:
+        lines.append(f"- Ended with {session.failure()}.")
+    else:
+        lines.append("- Ended by itself with exit code 0.")
+    if session.seconds is not None:
+        asleep = f", about {span_text(session.asleep)} of it with the Mac asleep" if session.asleep else ""
+        setting = model_setting(session)
         lines.append(
-            f"- Agent time: {span_text(float(seconds))} of its {state.time_limit} limit"
+            f"- Agent time: {span_text(session.seconds)} of its {session.limit_text} limit{session.cut()}{asleep}"
             + (f", with {setting}." if setting else ".")
         )
-    lines += [f"- {line}" for line in work.count_lines(state.work)]
-    lines += ["", "The agent's own word, which the launcher does not check:", "", f"- {review_word(state)}"]
+    lines.append(f"- Approximate cost: {session_cost(session)}" + (" at API prices." if session.usage else "."))
+    if session.work is None:
+        lines.append("- The launcher counted nothing: this session's work could not be counted.")
+    else:
+        lines += [f"- {line}" for line in work.count_lines(session.work)]
+    lines.append(f"- The agent's own word, which the launcher does not check: {session.word()}")
+    if session.brief:
+        lines.append(f"- Brief: `{session.brief}`")
+    if session.summary.strip():
+        lines += ["", "The agent's own summary:", ""]
+        lines += ["> " + line if line else ">" for line in session.summary.strip().splitlines()]
+    return lines
+
+
+def sessions_lines(state: RunState) -> list[str]:
+    """The run report's account of every session: one row each, then each session that was tried, then the run's
+    totals."""
+    lines = [
+        "One sandboxed agent session for each workflow that had work due, in the order the run started them. What the"
+        " launcher counted comes from Codex's record of each session, the Draft files the run left, and the Review"
+        " Queue: none of it comes from what an agent says of itself, and none changes what is queued, blocked, or"
+        " marked incomplete. The last column is each agent's own closing line, which the launcher does not check.",
+        "",
+    ]
+    rows = []
+    for session in state.sessions:
+        took = span_text(session.seconds) if session.seconds is not None else "-"
+        limit = session.limit_text if session.tried and not session.out_of_time else "-"
+        word = session.word() if session.started else "-"
+        rows.append([session.title, session.ended(), took, limit, session_cost(session), word])
+    ran, due = state.ran, sessions.due(state.sessions)
+    total = state.cost
+    rows.append(
+        [
+            "All sessions",
+            f"{len(ran)} ran of the {len(due)} with work due",
+            span_text(state.agent_seconds) if ran else "-",
+            f"{process.limit_text(state.run_limit)} for the run",
+            ("at least " if any(s.timed_out or not s.usage for s in ran) else "about ") + amount(total)
+            if total is not None
+            else "-",
+            "",
+        ]
+    )
+    lines += table(["Session", "How it ended", "Agent time", "Limit", "Cost", "The agent's own word"], rows)
+    for session in state.sessions:
+        if session.due:
+            lines += [""] + session_lines(state, session)
+    lines += ["", "### The run's totals", ""]
+    nothing = [session.title for session in state.sessions if not session.due]
+    lines.append(
+        f"- Sessions: {len(ran)} ran of the {len(due)} with work due"
+        + (f"; nothing was due for {', '.join(nothing)}." if nothing else ".")
+    )
+    lines.append(
+        f"- Agent time: {span_text(state.agent_seconds)} of the {process.limit_text(state.run_limit)} that bounds all"
+        " of a run's sessions together."
+    )
+    lines.append(f"- {cost_line(state)}")
+    if ran:
+        lines.append(f"- {work.claim_line(state.claims, whole_run=True)}.")
+        lines.append(f"- {work.proposal_line(state.proposals, whole_run=True)}.")
+    return lines
+
+
+def outcome_lines(state: RunState) -> list[str]:
+    """How the run's sessions ended, for the top of the report: that the run finished, or one line for each session
+    that fell short, whatever else went well."""
+    short = state.short
+    ran, nothing = state.ran, [session.title for session in state.sessions if not session.due]
+    lines = []
+    if not short and state.ending == attempts.COMPLETED:
+        lines.append("The run finished.")
+    elif not short:
+        silent = [session.title for session in ran if not session.confirmed]
+        lines.append(
+            "Every session ended without an error, but the Mac slept during the run and the"
+            f" {' and '.join(silent)} session{'s' if len(silent) > 1 else ''} did not confirm that"
+            f" {'they' if len(silent) > 1 else 'it'} finished, so this run's work may be incomplete."
+        )
+    for session in short:
+        if session.timed_out:
+            lines.append(
+                f"The {session.title} session timed out: its agent was still running at its {session.limit_text}"
+                f" time limit{session.cut()}, so the launcher stopped it and went on with the run. What it had written"
+                " was checked as always, and each output that needed it is incomplete; see Outputs and Sessions"
+                " below."
+            )
+        elif session.out_of_time:
+            lines.append(
+                f"The {session.title} session did not start: the {process.limit_text(state.run_limit)} that bounds all"
+                " of a run's sessions together was used up before its turn, so each output that needed it is"
+                " incomplete; see Outputs and Sessions below."
+            )
+        elif not session.started:
+            lines.append(
+                f"The {session.title} session did not start; see Sessions below. Everything the launcher does alone"
+                " still ran."
+            )
+        else:
+            lines.append(
+                f"The {session.title} session stopped with {session.failure()}; its work this run may be incomplete."
+            )
+    if not state.sessions:
+        return lines
+    if not ran and not short:
+        lines.append("Sessions: none was started, since no workflow had work for the agent this run.")
+    else:
+        started = f"{len(ran)} ran ({', '.join(session.title for session in ran)})" if ran else "none ran"
+        lines.append(f"Sessions: {started}" + (f"; nothing was due for {', '.join(nothing)}." if nothing else "."))
     return lines
 
 
@@ -665,34 +955,17 @@ def summary_lines(state: RunState) -> list[str]:
     failed = state.failed_sources()
     open_items = state.queue_after
     carried = sum(1 for entry in open_items if entry.get("carried_over"))
-    agent = state.agent.get("exit_code")
     lines = [f"- {run_tally(state.tallies).line()}", f"- {start_line(state)}"]
     lines += [f"- {line}" for line in state.notes]
-    if agent == 0 and state.ending == attempts.COMPLETED:
-        lines.append("- The run finished.")
-    elif agent == 0:
-        lines.append(
-            f"- The agent ended without an error, but the Mac slept during the run and {state.review_gap()}, so its"
-            " work this run may be incomplete."
-        )
-    elif state.timed_out:
-        lines.append(
-            f"- The run timed out: the agent was still running at its {state.time_limit} time limit, so the launcher"
-            " stopped it and finished the run without it. What the agent had written was checked as always, and each"
-            " output that needed the agent this run is incomplete; see Outputs and Agent below."
-        )
-    elif not state.agent.get("agent_started"):
-        lines.append("- The agent did not start; see Agent below. Everything the launcher does alone still ran.")
-    else:
-        lines.append(f"- The agent stopped with exit code {agent}; its work this run may be incomplete.")
+    lines += [f"- {line}" for line in outcome_lines(state)]
     if state.asleep:
         lines.append(
-            f"- The Mac was asleep for about {span_text(state.asleep)} while the agent ran, which counts toward the"
-            " agent's time limit."
+            f"- The Mac was asleep for about {span_text(state.asleep)} while a session ran, which counts toward that"
+            " session's time limit and toward the bound on all of the run's sessions together."
         )
     elsewhere = state.slept - state.asleep
     if state.attempt is not None and elsewhere >= ASLEEP_AT_LEAST:
-        lines.append(f"- The Mac was asleep for about {span_text(elsewhere)} of this run outside the agent's time.")
+        lines.append(f"- The Mac was asleep for about {span_text(elsewhere)} of this run outside its sessions' time.")
     lines.append(f"- {what_follows(state)}" if what_follows(state) else "")
     refused = sum(1 for line in state.sources if line.status == waitlist.REFUSED)
     lines.append(
@@ -717,7 +990,8 @@ def summary_lines(state: RunState) -> list[str]:
     elif state.posts_problem:
         lines.append(f"- Post Drafts: {state.posts_problem}")
     if state.filming is not None or state.filming_problem:
-        lines.append(f"- Filming: {state.filming_problem or filming.tally(state.filming, state.agent_gap()).note}.")
+        gap = state.agent_gap("filming")
+        lines.append(f"- Filming: {state.filming_problem or filming.tally(state.filming, gap).note}.")
     recruiting = beta.summary(state.beta, state.beta_outcome, state.beta_problem)
     if recruiting:
         lines.append(f"- {recruiting}")
@@ -730,9 +1004,7 @@ def summary_lines(state: RunState) -> list[str]:
             lines.append(f"- {title}: {tally.account()}.")
     if state.notice:
         lines.append(f"- Problems this run are listed in the notice `{state.notice}`.")
-    counted = work_summary(state)
-    if counted:
-        lines.append(f"- {counted}")
+    lines += [f"- {session_summary(session)}" for session in state.ran]
     lines.append(f"- {cost_line(state)}")
     return [line for line in lines if line]
 
@@ -777,48 +1049,99 @@ def render_report(state: RunState) -> str:
         lines += ["", "The run state disagreed with the Review Queue, which wins; the state was repaired:", ""]
         lines += [f"- {note}" for note in state.state_notes]
     lines += ["", "## Outputs", ""] + table(["Output", "Status", "Detail"], state.outputs)
-    lines += ["", "## Agent's work", ""] + work_lines(state)
-    lines += ["", "## Agent", ""]
-    removed = probe_files_removed(state)
-    if removed:
-        lines.append(
-            "- Removed boundary probe files left in the areas, before the agent started: "
-            + ", ".join(f"`{path}`" for path in removed)
-        )
-    preflight = state.agent.get("preflight") or {}
-    if preflight:
-        lines.append(
-            f"- Boundary preflight: {'passed' if preflight.get('ok') else 'FAILED'}, refused "
-            f"{len(preflight.get('refused', []))} paths and allowed {len(preflight.get('writable', []))} areas."
-        )
-        network = preflight.get("network")
-        if network:
-            reached = network.get("reached", [])
-            lines.append(
-                f"- Sandbox network: {len(network.get('unreachable', [])) + len(reached)} listed hosts tried from"
-                f" inside the sandbox, reached: {', '.join(reached) or 'none'}."
-            )
-    if state.agent.get("fingerprint"):
-        lines.append(f"- Configuration fingerprint: `{state.agent['fingerprint']}`")
-    if state.agent.get("error"):
-        lines.append(f"- Did not start: {state.agent['error']}")
-    if state.agent.get("agent_seconds") is not None:
-        took = span_text(float(state.agent["agent_seconds"]))
-        asleep = f", about {span_text(state.asleep)} of it with the Mac asleep" if state.asleep else ""
-        lines.append(f"- Agent time: {took}{asleep}; time limit {state.time_limit}.")
-    if state.timed_out:
-        lines.append(f"- Timed out: {state.stop.describe()}.")
-        lines.append(f"- Exit code: {state.agent.get('exit_code')}, the run's own for an agent stopped at its limit")
-    else:
-        lines.append(f"- Exit code: {state.agent.get('exit_code', 'none')}")
-    lines.append(f"- Code: {state.code}" + (f"; {state.sync['detail']}" if state.sync else ""))
-    lines.append(f"- Task definition: `{state.instruction}`")
-    if state.agent_summary.strip():
-        lines += ["", "The agent's own summary:", ""]
-        lines += ["> " + line if line else ">" for line in state.agent_summary.strip().splitlines()]
+    lines += ["", "## Sessions", ""] + sessions_lines(state)
+    lines += ["", "## Agent", ""] + agent_lines(state)
     if state.problems:
         lines += ["", "## Launcher problems", ""] + [f"- {problem}" for problem in state.problems]
     return "\n".join(lines) + "\n"
+
+
+def probe_scope(tried: Sequence[Session], probe: str, every: str) -> tuple[str, str]:
+    """Before which of the sessions whose preflight ran one of its no-model probes, the listing of the footage folders
+    or the network probe, tried every target it had, as each session's own record shows, and what the probe's line
+    then says of every other session. every is the wording for all of them. A record that left a target untried
+    names it, and a session has no record of the probe where the probe never ran, since a proof before it did not
+    pass."""
+    whole, short = 0, []
+    for session in tried:
+        found = session.record["preflight"].get(probe)
+        if not found:
+            short.append(f"nothing tried before the {session.title} session")
+        elif found.get("untried"):
+            names = ", ".join(f"`{target}`" for target in found["untried"])
+            short.append(f"not tried before the {session.title} session: {names}")
+        else:
+            whole += 1
+    if not short:
+        return every, ""
+    return f"{whole} of {plural(len(tried), 'session')}", "".join(f"; {gap}" for gap in short)
+
+
+def agent_lines(state: RunState) -> list[str]:
+    """What every session of the run was started with: the boundary each was proved against before its agent
+    started, the configuration fingerprint, the code, and where the task definitions are."""
+    lines = []
+    removed = probe_files_removed(state)
+    if removed:
+        lines.append(
+            "- Removed boundary probe files left in the areas, before any agent could find them: "
+            + ", ".join(f"`{path}`" for path in removed)
+        )
+    tried = [session for session in state.sessions if session.record.get("preflight")]
+    failed = [session.title for session in tried if not (session.record["preflight"] or {}).get("ok")]
+    if tried:
+        preflight = tried[0].record["preflight"]
+        every = "its session" if len(tried) == 1 else f"each of {len(tried)} sessions"
+        lines.append(
+            f"- Boundary preflight: {'FAILED before the ' + ', '.join(failed) + ' session' if failed else 'passed'},"
+            f" run before {every}; it refused {len(preflight.get('refused', []))} paths and allowed"
+            f" {len(preflight.get('writable', []))} areas."
+        )
+        footage = [session.record["preflight"].get("footage") or {} for session in tried]
+        refused = {str(entry["target"]) for found in footage for entry in found.get("refused", [])}
+        listed = sorted({str(path) for found in footage for path in found.get("listed", [])})
+        folders = refused | set(listed) | {str(path) for found in footage for path in found.get("untried", [])}
+        if folders:
+            before, short = probe_scope(tried, "footage", every)
+            lines.append(
+                f"- Sandbox footage: the footage place and {plural(len(folders) - 1, 'footage folder')} in it tried"
+                f" from inside the sandbox before {before}, each once it existed, listed:"
+                f" {', '.join(f'`{path}`' for path in listed) or 'none'}{short}."
+            )
+        network = [session.record["preflight"].get("network") or {} for session in tried]
+        if any(network):
+            hosts = {
+                target
+                for found in network
+                for key in ("unreachable", "reached", "untried")
+                for target in found.get(key, [])
+            }
+            reached = sorted({target for found in network for target in found.get("reached", [])})
+            before, short = probe_scope(tried, "network", every)
+            lines.append(
+                f"- Sandbox network: {len(hosts)} listed hosts tried from inside the sandbox before {before}, reached:"
+                f" {', '.join(reached) or 'none'}{short}."
+            )
+    prints = sorted(
+        {str(session.record["fingerprint"]) for session in state.sessions if session.record.get("fingerprint")}
+    )
+    if len(prints) == 1:
+        same = ", the same for every session" if len(tried) > 1 else ""
+        lines.append(f"- Configuration fingerprint: `{prints[0]}`{same}")
+    elif prints:
+        lines.append(
+            "- Configuration fingerprints, which differ between sessions: "
+            + "; ".join(
+                f"{session.title} `{session.record['fingerprint']}`"
+                for session in state.sessions
+                if session.record.get("fingerprint")
+            )
+        )
+    lines.append(f"- Code: {state.code}" + (f"; {state.sync['detail']}" if state.sync else ""))
+    lines.append(
+        f"- Task definitions: `{state.instruction}/`, the part every session shares and each session's own part"
+    )
+    return lines
 
 
 def bullet(text: str) -> str:
@@ -830,10 +1153,14 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     """One notice for the Founder per run with problems, in plain outcome language; None if there were none.
 
     A notice about one kind of problem says what it is in its title; a notice about several counts every problem.
-    A run that timed out says so first, in its title and its text, whatever else went wrong.
+    A session that timed out is named first, in the notice's title and its text, whatever else went wrong; every
+    session that fell short has its own part, so one workflow's trouble is never told as another's.
     A weekly scheduled run that the Mac's sleep cut short queues no notice for that alone while a fresh run follows
-    by itself, and its notice then leaves out the work its agent did not reach, which that run does again and reports
-    on itself; once the run due then has no attempt left, the notice lists everything and says so in its title.
+    by itself, and its notice then leaves out the work its agents did not reach, which that run does again and
+    reports on itself; once the run due then has no attempt left, the notice lists everything and says so in its
+    title. Such a run always has a part that says it was cut short and what follows: one for each session that fell
+    short, and one for each session that ended without an error and did not confirm its work, the package review's
+    being the part it has in any run.
     """
     day = wall_clock(state.started).strftime("%Y-%m-%d")
     sections: list[tuple[int, str, str]] = []  # how many problems, the title, the text
@@ -871,6 +1198,20 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 + "\n".join(bullet(f"`{record.name}`: {'; '.join(record.problems)}") for record in others),
             )
         )
+    if state.stood:
+        count = len(state.stood)
+        sections.append(
+            (
+                count,
+                f"{plural(count, 'open item')} not checked again on {day}",
+                "Something the check of these open items needs could not be read this run, so each was left exactly"
+                " as it is: nothing was withdrawn or replaced on that account, each keeps its identifier, and the next"
+                " run checks it again:\n"
+                + "\n".join(
+                    bullet(f"`{kept.item}` ({title}): {'; '.join(kept.unread)}") for title, kept in state.stood
+                ),
+            )
+        )
     blocked = posts.notice_section(state.post_outcome, day, state.again)
     if blocked:
         sections.append(blocked)
@@ -897,62 +1238,101 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 + "\n".join(bullet(f"`{item.name}`: {'; '.join(item.problems)}") for item in state.set_aside),
             )
         )
-    agent = state.agent.get("exit_code")
     follows = f" {what_follows(state)}" if what_follows(state) else ""
-    if not state.agent.get("agent_started"):
-        error = state.agent.get("error") or "see the run report"
-        sections.append((1, f"the agent did not start on {day}", f"The agent did not start: {error}.{follows}"))
-    elif state.timed_out:
-        needs = ", ".join(state.agent_incomplete) or "nothing"
-        # A weekly scheduled run the Mac's sleep cut short needs no higher limit, so its notice does not point at one.
-        slept = state.attempt is not None and state.ending == attempts.SLEPT
-        limit = (
-            ""
-            if slept
-            else " The next run does this work again; if runs keep timing out, the limit is"
-            " `agent.time_limit_seconds` in `config/run.json`."
-        )
-        sections.insert(
-            0,
-            (
-                1,
-                f"the run timed out on {day}",
-                f"The agent was still running at its {state.time_limit} time limit, so the launcher stopped it and"
-                " finished the run without it. What the agent had written by then was checked as always: anything"
-                " queued from it passed every check, and anything unfinished was set aside or blocked. Incomplete this"
-                f" run: {needs}.{limit}{follows}",
-            ),
-        )
-    elif agent != 0:
-        sections.append(
-            (
-                1,
-                f"the agent stopped early on {day}",
-                f"The agent stopped with exit code {agent}, so this run's review may be incomplete.{follows}",
+    # A weekly scheduled run the Mac's sleep cut short needs no higher limit, so its notice does not point at one.
+    slept = state.attempt is not None and state.ending == attempts.SLEPT
+    told = []  # the parts that only say how a session ended, each with what follows said once, in the first
+    late = []  # the timed-out sessions' parts, which lead the notice
+    for session in state.short:
+        needs = ", ".join(session.incomplete)
+        said = "" if told or late else follows
+        if session.timed_out:
+            limit = (
+                ""
+                if slept
+                else " The next run does this work again; if sessions keep timing out, a session's limit is"
+                " `agent.time_limit_seconds` in `config/run.json`."
             )
-        )
-    elif state.review.startswith(REVIEW_INCOMPLETE):
-        why = state.review_reason()
-        sections.append(
+            late.append(
+                (
+                    1,
+                    f"the {session.title} session timed out on {day}",
+                    f"The {session.title} session was still running at its {session.limit_text} time limit"
+                    f"{session.cut()}, so the launcher stopped it and went on with the run. What it had written by"
+                    " then was checked as always: anything queued from it passed every check, and anything unfinished"
+                    f" was set aside or blocked. Incomplete this run: {needs}.{limit}{said}",
+                )
+            )
+        elif session.out_of_time:
+            limit = (
+                ""
+                if slept
+                else " The next run does this work again; if runs keep reaching that bound, it is"
+                " `agent.run_time_limit_seconds` in `config/run.json`."
+            )
+            late.append(
+                (
+                    1,
+                    f"the {session.title} session had no time left on {day}",
+                    f"The {session.title} session did not start: the {process.limit_text(state.run_limit)} that bounds"
+                    " all of a run's sessions together was used up before its turn. Incomplete this run:"
+                    f" {needs}.{limit}{said}",
+                )
+            )
+        elif not session.started:
+            error = session.record.get("error") or "see the run report"
+            told.append(
+                (
+                    1,
+                    f"the {session.title} session did not start on {day}",
+                    f"The {session.title} session did not start: {error}. Incomplete this run: {needs}.{said}",
+                )
+            )
+        else:
+            told.append(
+                (
+                    1,
+                    f"the {session.title} session stopped early on {day}",
+                    f"The {session.title} session stopped with {session.failure()}, so its work this run may be"
+                    f" incomplete: {needs}. What it had written was checked as always, and the run report's Sessions"
+                    f" section says what the launcher counted of it.{said}",
+                )
+            )
+    review = state.session(sessions.REVIEW)
+    if review is not None and review.finished and review.closing.startswith(SESSION_INCOMPLETE):
+        why = review.reason()
+        told.append(
             (
                 1,
                 f"the package review was not finished on {day}",
                 "The Marketing Engineer did not finish reviewing the Go-To-Market Package"
                 + (f" ({why})" if why else "")
                 + ", so a contradiction it did not reach is not in the Review Queue yet; the next run reviews it"
-                f" again.{follows}",
+                f" again.{'' if told or late else follows}",
             )
         )
-    elif state.review_gap():
-        sections.append(
+    elif review is not None and review.finished and state.review_gap():
+        told.append(
             (
                 1,
                 f"the package review was not confirmed finished on {day}",
                 "The Marketing Engineer did not confirm that it finished every pass of its review of the Go-To-Market"
                 " Package, so a contradiction it did not reach may not be in the Review Queue yet; the next run reviews"
-                f" it again.{follows}",
+                f" it again.{'' if told or late else follows}",
             )
         )
+    for session in state.ran if slept else ():
+        if session.finished and not session.confirmed and session is not review:
+            told.append(
+                (
+                    1,
+                    f"the {session.title} session did not confirm that it finished on {day}",
+                    f"The {session.title} session ended without an error, but the Mac slept during the run and its"
+                    " summary did not confirm that it finished, so its work this run may be incomplete; the run"
+                    f" report's Sessions section has its own word.{'' if told or late else follows}",
+                )
+            )
+    sections = late + sections + told
     if state.problems:
         sections.append(
             (
@@ -961,17 +1341,17 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
                 "The launcher hit problems:\n" + "\n".join(bullet(problem) for problem in state.problems),
             )
         )
-    if not sections or (state.again and len(sections) == 1):
+    if not sections or (state.again and len(sections) == len(late) + len(told)):
         # A run the Mac's sleep cut short, with nothing else wrong, needs no notice while a fresh run follows by
-        # itself: its own report says what happened, and the fresh run does the work again.
+        # itself: its own report says how each session ended, and the fresh run does the work again.
         return None
     total = sum(count for count, _, _ in sections)
     if state.attempt is not None and state.ending == attempts.SLEPT and not state.again:
         title = f"Notice: the Mac's sleep cut short every attempt at the run due {state.attempt.due:%Y-%m-%d}"
     elif len(sections) == 1:
         title = f"Notice: {sections[0][1]}"
-    elif state.timed_out:
-        title = f"Notice: the run timed out on {day} and had {plural(total - 1, 'other problem')}"
+    elif late:
+        title = f"Notice: {late[0][1]}, and the run had {plural(total - 1, 'other problem')}"
     else:
         title = f"Notice: the run on {day} had {plural(total, 'problem')}"
     body = "\n\n".join(text for _, _, text in sections)

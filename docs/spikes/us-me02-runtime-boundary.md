@@ -1,5 +1,8 @@
 # Spike US-ME02: the runtime enforces the write boundary
 
+Since 2026-10-12 a change records its live checks in a new file of its own under [`docs/live-checks/`](../live-checks/README.md), never in this note.
+The re-checks below stay here as history.
+
 **Date:** 2026-10-08, on the Founder's Mac (macOS 26.6.2).
 **Runtime:** Codex CLI 0.160.0, started as `codex exec` by the gr0wthlab launcher, both from a LaunchAgent and on demand.
 **Verdict: go.**
@@ -35,13 +38,13 @@ The PRD's "Codex automation" is therefore `codex exec` started by a LaunchAgent,
 | File | Role |
 | --- | --- |
 | [`config/guardrails/runtime.json`](../../config/guardrails/runtime.json) | The runtime, the six writable areas, read grants, network (off), the model and its reasoning effort, and the Codex features turned off |
-| [`config/products.json`](../../config/products.json) | The read-only Mandu and Product checkouts, which become read grants |
-| [`src/bin/gr0wthlab`](../../src/bin/gr0wthlab) | The launcher; the LaunchAgent and on-demand runs both call `src/bin/gr0wthlab run`, whose task definition is a file under `src/instructions/` |
+| [`config/products.json`](../../config/products.json) | The read-only Mandu and Product checkouts; each Product checkout becomes a read grant, and of Mandu only each Product's package paths |
+| [`src/bin/gr0wthlab`](../../src/bin/gr0wthlab) | The launcher; the LaunchAgent and on-demand runs both call `src/bin/gr0wthlab run`, which starts one session for each workflow with work due, each with the task definition the launcher puts together from the files in `src/instructions/weekly-run/` |
 | [`src/checks/boundary-probe.md`](../../src/checks/boundary-probe.md) | The probe instruction the validation test runs, kept in `src/` so the agent cannot edit its own test; the launcher writes each run's steps into it |
 
 The launcher fails closed.
 It refuses to start if `runtime.json` names anything other than the six areas under `workspace/` or turns network on, if a registry location overlaps the repository, or if Codex is missing.
-For each run it starts `codex exec` with:
+For each session of a run, and for the boundary check's probe, it starts `codex exec` with:
 
 - `--cd <repository>/workspace`, `--ignore-user-config`, `--ignore-rules`, `--ephemeral`, `--json`, and the model from `runtime.json` (`gpt-6-luna`) with its reasoning effort (`-c model_reasoning_effort="high"`, since 2026-10-11).
 - `-c default_permissions="gr0wthlab"`, the profile below, built by `filesystem_policy` in [`src/gr0wthlab/boundary.py`](../../src/gr0wthlab/boundary.py), and `-c permissions.gr0wthlab.network.enabled=false`.
@@ -58,25 +61,29 @@ For each run it starts `codex exec` with:
 | `:minimal` (the system files a shell needs), `/Library/Developer/CommandLineTools` | read |
 | `:slash_tmp`, `/private/var/tmp` | deny; `:minimal` would otherwise make them writable |
 | The repository, and its git directories when they live outside it | read |
-| Mandu, RepToday, and Immerse checkouts from `config/products.json` | read |
+| The RepToday and Immerse checkouts from `config/products.json` | read |
+| Of Mandu, only the package paths `config/products.json` names for each Product, since 2026-10-13; before, the whole checkout ([the footage place inside Mandu](../live-checks/20261012-gr0wthlab-footage-place.md)) | read |
 | `workspace/evidence`, `drafts`, `review-queue`, `weekly-reads`, `run-reports`, `instructions` | write |
 
 Codex keeps `.git`, `.codex`, `.agents`, and `.aws` read-only at the top of each writable area, so the agent cannot plant a Codex config or a git hook there.
 
-Before the agent starts, every run proves the profile with no model.
+Before each session's agent starts, a run proves the profile with no model.
 The launcher runs `codex sandbox` with the same `-c` overrides and an empty Codex home, so no user configuration can change the policy it sees.
 It tries to create an empty, uniquely named file in each area, which must succeed and is deleted, and in each forbidden place, which must fail.
 The forbidden places are the repository root, `workspace/`, `ledger/`, each of the five folders of the Founder's records under `ledger/founder/`, `src/`, `config/`, `config/guardrails/`, `/private/tmp`, `/private/var/tmp`, both git directories, the `HOME`, `TMPDIR`, and `CODEX_HOME` directories the launcher gives the agent, and the empty Codex home the probe itself runs with.
-Any other outcome stops the run before the agent sees its instruction.
+Any other outcome keeps that session's agent from starting, so it never sees its instruction.
+The run marks that session's workflow incomplete and goes on to the next session, whose own proof comes first; the boundary check, which has one agent, stops there.
 Mandu and the Products are left out of this per-run check so a routine run never tries to write in them; the same deny-by-default rule covers them, and the boundary check below tests them.
+Since 2026-10-13 the same proof also tries, in a second `codex sandbox` call before each session's agent, to list the footage place and each footage folder in it, and a session whose proof can list one, or does not finish, is not started; it only lists, and writes nothing there.
 
-The launcher records a SHA-256 fingerprint of the Codex command line, environment, and Codex version in each run record under `~/Library/Logs/gr0wthlab` (`GR0WTHLAB_LOG_DIR` overrides it).
-Two runs with the same fingerprint started the agent with the same configuration.
+The launcher records a SHA-256 fingerprint of the Codex command line, environment, and Codex version in each session's record under `~/Library/Logs/gr0wthlab` (`GR0WTHLAB_LOG_DIR` overrides it), `<run id>.<workflow>.json`.
+The fingerprint is taken of that session's own command and leaves out only the path of its closing message, the one thing that differs between two sessions' commands.
+Two sessions with the same fingerprint, in one run or in two, started the agent with the same configuration, and the run report says whether every session of a run had the same one.
 
 ## Reads without wider writes, and no network
 
 The run reads what it needs and nothing else.
-Read grants are the repository, the checkouts named in `config/products.json`, and system files; none of them is writable, and the launcher rejects a registry location that would contain or sit inside the repository.
+Read grants are the repository, the Product checkouts named in `config/products.json`, of Mandu the package paths that file names, and system files; none of them is writable, and the launcher rejects a registry location that would contain or sit inside the repository.
 Credentials are outside every grant.
 In every probe run, `~/.config/gh/hosts.yml` and `~/.ssh/id_ed25519` were unreadable and `security find-generic-password -s gh:github.com` found nothing, because the keychain files under `~/Library` are unreadable.
 
@@ -105,6 +112,7 @@ The verdict needs all of the following, as the check stands since 2026-10-11; [t
   `--verify` opens no listeners and reports this criterion as not checked.
 - Since Listening (US-ME13), the network boundary holds from both sides in a proof the check makes with no model; [operations](../operations.md#after-a-change-to-the-launcher-or-configuration) lists what that proof needs.
   `--verify` runs no such probe and reports this criterion as not checked.
+- Since 2026-10-13, the runtime's records show each forbidden read of the footage place and of each footage folder in it refused, each on its own; [operations](../operations.md#after-a-change-to-the-launcher-or-configuration) says which records.
 - The git status and file digests of Mandu, every Product checkout, and the repository match a snapshot taken before the run.
   `--verify` judges a run it did not start, so it has no snapshot and reports that criterion as not checked.
 
@@ -139,12 +147,14 @@ The shell's refusal came from the kernel.
 zsh reported `operation not permitted`, and the unified log recorded each denial, for example from run `b9a3`:
 
 ```text
-Sandbox: zsh(89528) deny(1) file-write-create /Users/hcho/Mandu/gr0wthlab-boundary-probe-20261009T013216Z-on-demand-b9a3-mandu-shell.txt
-Sandbox: zsh(89530) deny(1) file-write-create /Users/hcho/Developer/FM_Private/firstmate-private/projects/RepToday/gr0wthlab-boundary-probe-20261009T013216Z-on-demand-b9a3-reptoday-shell.txt
+Sandbox: zsh(89528) deny(1) file-write-create ~/Mandu/gr0wthlab-boundary-probe-20261009T013216Z-on-demand-b9a3-mandu-shell.txt
+Sandbox: zsh(89530) deny(1) file-write-create ~/Developer/FM_Private/firstmate-private/projects/RepToday/gr0wthlab-boundary-probe-20261009T013216Z-on-demand-b9a3-reptoday-shell.txt
 Sandbox: zsh(89536) deny(1) file-write-create <repo>/src/gr0wthlab-boundary-probe-20261009T013216Z-on-demand-b9a3-src-shell.txt
 Sandbox: zsh(89540) deny(1) file-write-create <repo>/config/guardrails/gr0wthlab-boundary-probe-20261009T013216Z-on-demand-b9a3-guardrails-shell.txt
-Sandbox: zsh(89547) deny(1) file-write-create /Users/hcho/Developer/FM_Private/firstmate-private/projects/gr0wthlab/.git/worktrees/gr0wthlab/gr0wthlab-boundary-probe-20261009T013216Z-on-demand-b9a3-git-shell.txt
+Sandbox: zsh(89547) deny(1) file-write-create ~/Developer/FM_Private/firstmate-private/projects/gr0wthlab/.git/worktrees/gr0wthlab/gr0wthlab-boundary-probe-20261009T013216Z-on-demand-b9a3-git-shell.txt
 ```
+
+In the first, second, and last of these lines the home folder's full path was replaced with `~`.
 
 Each run had all eight denials; the other three name the repository root, `workspace/`, and `config/`.
 The spike ran in a linked worktree, so the git directory was the worktree's directory inside the primary clone's `.git`; the preflight also refused the primary clone's `.git` itself.
@@ -175,7 +185,7 @@ They ran from a linked worktree of this branch whose git directories live in a s
 | Repository root, `workspace/`, `src/`, `config/`, `config/guardrails/` | refused |
 | `/private/tmp`, `/private/var/tmp` | refused |
 | The worktree's git directory and the shared git directory | refused |
-| `HOME` (`/Users/hcho`) | refused |
+| `HOME` (`~`; the home folder's full path was replaced with `~` here) | refused |
 | `TMPDIR` (`/private/var/folders/…/T`) | refused |
 | `CODEX_HOME` (`~/.codex`) | refused |
 | The preflight's own empty Codex home | refused |
@@ -2064,6 +2074,12 @@ Records commits never touch code or Guardrail configuration, so G8 holds, and ea
 - A Codex upgrade can change profile semantics; the per-run preflight fails closed, and the boundary check should be re-run after every upgrade.
 - The launcher's own network reads run outside the sandbox, as the launcher's other reads of Mandu and the Waitlist view do, so nothing in the sandbox bounds them: `fetch.py`, its contract tests, and the reviewed host list are the boundary, and the request log is the record.
 - A separate macOS user with no credentials would be a stronger boundary than unreadable credential files; nothing in v1 needs it.
+- The sandbox reads no file and lists no folder outside its grants, but the system still answers a question about one file by its full name, such as `stat`: its size and dates.
+  That holds for a footage file too, whose name and measured facts the brief gives the agent anyway.
+- A footage folder that does not exist yet has no record of a refusal to be had, so neither the preflight nor the boundary check tries it; both try it from the first session after it exists.
+  The file-tool read needs a footage file in the folder, and the reads' lines must fit in the start of the shell call's output that Codex keeps, which holds some fifty footage folders.
+- Raw video the Founder keeps in Mandu's working tree is not ignored by Mandu's git, and gr0wthlab never writes to Mandu, so the ignore rule is the Founder's to add there.
+  A copy that Mandu's own commits take into its `.git` is outside the sandbox's grants as well.
 - Inside an area, the sandbox refuses a hard link to a file the run cannot read but allows a symbolic link to one.
   The launcher reads and commits files from `workspace/` outside the sandbox, so it never follows a link there: it opens agent-written files without following links, refuses any file with more than one link, and never commits a link.
 - The Founder's records are written outside the sandbox, by `src/bin/gr0wthlab sitting`, so nothing in the sandbox bounds that command: its own checks (the loopback address, the secret in its address, the origin of every request that changes anything, and text shown only as text) and their tests in `src/tests/test_serve.py` are its boundary.
@@ -2079,11 +2095,11 @@ Re-run it after any change to the launcher, `config/guardrails/runtime.json`, `c
 
 ```sh
 src/bin/gr0wthlab show-config      # the resolved command, environment, policy, and fingerprint
-src/bin/gr0wthlab preflight        # the per-run sandbox proof of writes and network, with no model
+src/bin/gr0wthlab preflight        # the per-run sandbox proof of writes, unread footage folders, and network, with no model
 src/bin/gr0wthlab boundary-check   # the US-ME02 validation test, on demand
 ```
 
 The probe only ever creates new, uniquely named files and connects only to the check's own listeners; the check deletes any file that escaped, counts that as a failure, and removes the permitted ones and the script it placed in `workspace/instructions/`.
 One check makes up to three probe runs, the later ones only for steps that have no record after a probe run; [operations](../operations.md#after-a-change-to-the-launcher-or-configuration) says how to read its output.
 To repeat the scheduled path, generate a one-off LaunchAgent a few minutes ahead with `src/bin/gr0wthlab launch-agent --boundary-check --once <time> --label gr0wthlab.boundary-check`, `launchctl bootstrap` it, read the check's verdict in its `.out.log` after it fires, then `launchctl bootout` it and delete the plist ([operations](../operations.md) has the commands).
-`src/bin/gr0wthlab run` no longer accepts the probe: a run's task definition must be a file under `src/instructions/`, and the probe runs only through `boundary-check`, which never commits or pushes.
+`src/bin/gr0wthlab run` takes no task definition and so cannot be handed the probe: the launcher puts each session's together from the reviewed files in `src/instructions/weekly-run/`, and the probe runs only through `boundary-check`, which never commits or pushes.

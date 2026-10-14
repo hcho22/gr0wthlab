@@ -12,7 +12,7 @@ from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from gr0wthlab import boundary, dispatch, exchange, settings, waitlist
+from gr0wthlab import boundary, dispatch, exchange, settings, state, waitlist
 from gr0wthlab.areas import Store
 from gr0wthlab.queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger
 from tests import fakes
@@ -120,14 +120,27 @@ class FilingTest(unittest.TestCase):
     def tearDown(self):
         self.tmp.cleanup()
 
-    def file(self, days=0, run="RUN1"):
+    def file(self, days=0, run="RUN1", remembered=None):
+        """File as a run does; remembered is the fingerprint the run state holds for each closed item, if any."""
         requests, problems = dispatch.load(self.repo, PRODUCTS)
         self.assertEqual(problems, [])
-        seen = {}
-        for identifier in self.ledger.entries:
-            item = exchange.check_item(self.published(identifier), PRODUCTS, published=True).item
-            seen[exchange.item_hash(item)] = identifier
-        return dispatch.file(self.ledger, self.store, requests, PRODUCTS, seen, run, NOW + timedelta(days=days))
+        previous = state.ReviewQueueState(
+            {identifier: {"outcome": REJECTED, "hash": known} for identifier, known in (remembered or {}).items()}
+        )
+        hashes, _ = state.item_hashes(self.store.root, self.ledger.entries, PRODUCTS, previous)
+        seen = {fingerprint: identifier for identifier, fingerprint in hashes.items()}
+        at = NOW + timedelta(days=days)
+        return dispatch.file(self.ledger, self.store, requests, PRODUCTS, seen, run, at, hashes)
+
+    def fingerprint(self, identifier):
+        return exchange.item_hash(exchange.check_item(self.published(identifier), PRODUCTS, published=True).item)
+
+    def lose(self, identifier):
+        """Leave a queued item's file unreadable as an item, and return what restores it."""
+        path = self.store.root / str(self.ledger.entries[identifier]["file"])
+        text = path.read_text(encoding="utf-8")
+        path.write_text("no item\n", encoding="utf-8")
+        return lambda: path.write_text(text, encoding="utf-8")
 
     def published(self, identifier):
         """A queued item as Mandu reads it, and hands it to firstmate once the Founder approves it."""
@@ -214,6 +227,44 @@ class FilingTest(unittest.TestCase):
         self.assertNotEqual(again.identifier, first.identifier)
         self.assertNotIn("supersedes", self.ledger.entries[again.identifier])
 
+    def test_a_rejected_request_whose_item_file_cannot_be_read_is_never_filed_again(self):
+        """The fingerprint the run state holds settles it as rejected; with neither record the request is held."""
+        (first,) = self.file()
+        remembered = {first.identifier: self.fingerprint(first.identifier)}
+        self.decide(first.identifier, REJECTED)
+        rejected = dict(self.ledger.entries[first.identifier])
+        restore = self.lose(first.identifier)
+        self.assertEqual(
+            [(f.status, f.identifier) for f in self.file(7, remembered=remembered)],
+            [(dispatch.DECIDED, first.identifier)],
+        )
+        (held,) = self.file(14)
+        self.assertEqual((held.status, held.identifier, held.acted), (dispatch.HELD, None, False))
+        unread = f"`{rejected['file']}`, the item file of `{first.identifier}`, could not be read ("
+        self.assertTrue(held.unread.startswith(unread), held.unread)
+        self.assertEqual(
+            held.account(),
+            f"reptoday-waitlist not filed, since {held.unread}, so nothing shows whether the Founder rejected this"
+            " text; the next run compares them again",
+        )
+        self.assertEqual(dispatch.unread([], [held]), [held.unread])
+        self.assertEqual(self.ledger.entries, {first.identifier: rejected}, "nothing filed, nothing withdrawn")
+        restore()
+        self.assertEqual([(f.status, f.identifier) for f in self.file(21)], [(dispatch.DECIDED, first.identifier)])
+        self.assertEqual(len(self.ledger.entries), 1)
+
+    def test_a_changed_request_is_held_only_while_nothing_shows_what_its_rejected_item_asked(self):
+        (first,) = self.file()
+        remembered = {first.identifier: self.fingerprint(first.identifier)}
+        self.decide(first.identifier, REJECTED)
+        self.revise()
+        self.lose(first.identifier)
+        self.assertEqual([f.status for f in self.file(7)], [dispatch.HELD])
+        self.assertEqual(len(self.ledger.entries), 1)
+        (again,) = self.file(14, remembered=remembered)
+        self.assertEqual(again.status, dispatch.FILED, "the run state shows the rejected item asked something else")
+        self.assertNotEqual(again.identifier, first.identifier)
+
     def test_a_text_replaced_before_any_decision_is_filed_again_when_it_comes_back(self):
         (first,) = self.file()
         self.revise()
@@ -239,8 +290,12 @@ class FilingTest(unittest.TestCase):
         self.revert()
         (third,) = self.file(14)
         self.assertEqual((third.status, third.replaced), (dispatch.REPLACED, second.identifier))
-        texts = [dispatch.queued_text(self.store, self.ledger.entries[f.identifier], PRODUCTS) for f in (first, third)]
+        texts = [
+            dispatch.queued_text(self.store, self.ledger.entries[filing.identifier], PRODUCTS)[0]
+            for filing in (first, third)
+        ]
         self.assertEqual(texts[0], texts[1])
+        self.assertTrue(texts[0])
 
     def test_an_approval_of_an_item_already_replaced_counts_and_leaves_the_replacement_open(self):
         (first,) = self.file()

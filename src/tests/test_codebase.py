@@ -91,6 +91,31 @@ class CodeTest(unittest.TestCase):
         self.assertRegex(unread_file, r"^git could not read it \(.* timed out after 1 seconds\)$")
         self.assertRegex(unread.problem, r"^git could not read the RepToday checkout \(.* timed out after 1 seconds\)$")
 
+    def test_a_file_git_could_not_read_is_told_from_a_file_that_is_not_there(self):
+        """Both make git's read exit non-zero; only the commit's own tree says which it is."""
+        code = codebase.open_code("RepToday", self.checkout, "main", self.env)
+        blob = fakes.git(self.checkout, "rev-parse", "main:Engine/ConsistencyScore.swift", env=self.env).strip()
+        (self.checkout / ".git/objects" / blob[:2] / blob[2:]).unlink()
+        damaged = code.verify("Engine/ConsistencyScore.swift:7", "max(floorValue")
+        self.assertRegex(damaged, r"^git could not read it \(fatal: .*Engine/ConsistencyScore\.swift")
+        self.assertEqual(
+            code.unread("Engine/ConsistencyScore.swift:7"),
+            "git could not read `Engine/ConsistencyScore.swift` in RepToday's code",
+        )
+        for absent in ("Engine/Missing.swift", "Engine", "Engine/ConsistencyScore.swift/Inside.swift"):
+            with self.subTest(absent):
+                self.assertEqual(code.verify(f"{absent}:1", "struct"), f"there is no file {absent} at {code.short}")
+                self.assertEqual(code.unread(f"{absent}:1"), "", "the commit says so, which is no failed read")
+
+    def test_a_tree_git_could_not_list_is_a_read_it_could_not_make(self):
+        code = codebase.open_code("RepToday", self.checkout, "main", self.env)
+        code.commit = "0" * 40  # as when the commit's objects are gone from the checkout
+        problem = code.verify("Engine/Missing.swift:1", "struct")
+        self.assertRegex(problem, r"^git could not read it \(")
+        self.assertEqual(
+            code.unread("Engine/Missing.swift:1"), "git could not read `Engine/Missing.swift` in RepToday's code"
+        )
+
     def test_reading_writes_nothing_in_the_checkout(self):
         before = digest_tree(self.checkout / ".git")
         status = fakes.git(self.checkout, "status", "--porcelain", env=self.env)

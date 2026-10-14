@@ -1,6 +1,6 @@
 {
   "description": "Product registry: which Products the Marketing Engineer serves, their gates, and the read-only locations of each Product's repository and Go-To-Market Package. It records where strategy lives, never the strategy itself.",
-  "path_resolution": "A local path starting with ~/ resolves against the home directory of the account running the Marketing Engineer. On a machine with a different layout, set the environment variable named in a location's env field to an absolute path; it replaces that location's default. Paths inside Mandu are relative to the resolved Mandu checkout. The sandbox reads Mandu and every Product repository; a Product's Waitlist view is read by the launcher alone.",
+  "path_resolution": "A local path starting with ~/ resolves against the home directory of the account running the Marketing Engineer. On a machine with a different layout, set the environment variable named in a location's env field to an absolute path; it replaces that location's default. Paths inside Mandu are relative to the resolved Mandu checkout. The sandbox reads every Product repository, and of Mandu only each Product's package paths (go_to_market_package: its path, launch_checklist, and sources) and nothing else in that checkout; a Product's Waitlist view and its footage folders are read by the launcher alone.",
   "mandu": {
     "repository": "github.com/hcho22/Mandu",
     "local_checkout": "~/Mandu",
@@ -150,10 +150,10 @@
       },
       "filming": {
         "footage": {
-          "local_path": null,
+          "local_path": "~/Mandu/projects/RepToday",
           "env": "GR0WTHLAB_FOOTAGE_DIR",
           "access": "read-only",
-          "note": "The agreed place where the Founder drops raw footage: a folder outside this repository holding one window-<n>/ folder per 14-day window, each file named for its shot of the filming plan (docs/operations.md has the naming). null until the Founder sets it through a reviewed change, and never inferred. The launcher only ever reads it, to fingerprint and measure each file and to cut finished assets from it; nothing in gr0wthlab writes, renames, or deletes anything there, and the sandboxed agent never opens it, so it must lie outside this repository and every location the sandbox reads; the launcher refuses to start otherwise."
+          "note": "The agreed place where the Founder drops raw footage, which the Founder named on 2026-10-11: RepToday's own folder in Mandu, holding one window-<n>/ footage folder per 14-day window beside the package in gtm/, each file named for its shot of the filming plan (docs/operations.md has the naming). It changes only through a reviewed change, and is never inferred; it is written from the home folder, so it does not move with GR0WTHLAB_MANDU_DIR, and a machine that overrides that sets the env named here too. The launcher only ever reads the footage folders, to fingerprint and measure each file and to cut finished assets from it; nothing in gr0wthlab writes, renames, or deletes anything there. The sandboxed agent reads nothing in a footage folder: of Mandu the permission profile grants only the package paths above, and the launcher refuses to start when a grant covers the footage place or lies in one of its footage folders, or when a place outside Mandu holds anything the sandbox reads (keep_footage_unread in src/gr0wthlab/boundary.py); the preflight then shows the sandbox refused a listing of each footage folder before each session's agent starts."
         },
         "note": "Filming (US-ME09). Which assets need the Founder or a real device, their shot lists, and their sittings come from the kit in Mandu every run. Finished assets go to ledger/assets/, outside git; the canvas they are finished at is in config/platforms.json."
       },

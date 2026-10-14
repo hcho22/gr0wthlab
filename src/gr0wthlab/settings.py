@@ -2,22 +2,21 @@
 
 from __future__ import annotations
 
-import os
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, time, timedelta
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from . import schedule
-from .boundary import Boundary, ConfigError, canonical, is_within, load_json
+from .boundary import Boundary, ConfigError, is_within, load_json, resolve_home_path
 
 RUN_CONFIG = Path("config/run.json")
-INSTRUCTIONS = PurePosixPath("src/instructions")
 TAG_PATTERN = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 # The Source and Fit answer of a sign-up the view cannot place; no configured tag or answer may take it.
 UNKNOWN = "unknown"
-# No agent time limit may pass a day: a longer one is no limit on a run that happens every week.
+# No time limit may pass a day, a session's or a whole run's: a longer one is no limit on a run that happens every
+# week.
 MAX_TIME_LIMIT = 24 * 60 * 60
 # The owed-run check comes at least once an hour, and a week's run takes at most this many attempts: more would be no
 # bound on a run that the Mac's sleep keeps cutting short.
@@ -51,15 +50,16 @@ class Window:
 
 @dataclass(frozen=True)
 class Agent:
-    """How long a run waits for its agent, in seconds, before it stops it and finishes as timed out."""
+    """How long a run waits for its agent, in seconds. time_limit is every session's limit, and the boundary check's;
+    run_time_limit bounds all of one run's sessions together."""
 
     time_limit: float
+    run_time_limit: float
 
 
 @dataclass(frozen=True)
 class Settings:
     data: Mapping
-    instruction: Path
     weekly: tuple[str, str]
     late_after_minutes: int
     records: Records
@@ -77,29 +77,6 @@ class Settings:
     def waitlist_live(self, today: date) -> bool:
         """Whether the Waitlist is live: only once a reviewed change has set the date it went live."""
         return self.waitlist_live_since is not None and self.waitlist_live_since <= today
-
-
-def resolve_home_path(raw: object, name: str, env_name: str | None, env: Mapping[str, str], home: Path) -> Path:
-    override = env.get(env_name) if env_name else None
-    if override:
-        if not os.path.isabs(override):
-            raise ConfigError(f"{env_name} must be an absolute path")
-        return canonical(Path(override))
-    if not isinstance(raw, str) or not raw:
-        raise ConfigError(f"{name} must be a path")
-    if raw.startswith("~/"):
-        return canonical(home / raw[2:])
-    if os.path.isabs(raw):
-        return canonical(Path(raw))
-    raise ConfigError(f"{name} must start with ~/ or be absolute")
-
-
-def instruction_path(repo_root: Path, path: Path) -> Path:
-    """The run's task definition must be a reviewed file under src/instructions/, which the agent cannot edit."""
-    resolved = canonical(path if path.is_absolute() else repo_root / path)
-    if not is_within(resolved, canonical(repo_root / INSTRUCTIONS)) or not resolved.is_file():
-        raise ConfigError(f"the instruction must be a file under {INSTRUCTIONS}/; got {path}")
-    return resolved
 
 
 def iso_date(value: object) -> date | None:
@@ -130,17 +107,29 @@ def load_batch_size(data: object) -> int:
     return size
 
 
+def time_limit(value: object, name: str) -> float:
+    """One of config/run.json's time limits: a number of seconds above zero and at most a day."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0 < value <= MAX_TIME_LIMIT:
+        raise ConfigError(
+            f"{RUN_CONFIG}: {name} must be a number of seconds above zero and at most {MAX_TIME_LIMIT}, a day;"
+            f" got {value!r}"
+        )
+    return float(value)
+
+
 def load_agent(data: object) -> Agent:
-    """config/run.json's agent: the time limit every run puts on its agent, so that every run ends with its report."""
+    """config/run.json's agent: the time limit every session runs under, and the bound on all of one run's sessions
+    together, so that every run ends with its report."""
     if not isinstance(data, dict):
         raise ConfigError(f"{RUN_CONFIG}: agent must be an object that sets time_limit_seconds")
-    limit = data.get("time_limit_seconds")
-    if isinstance(limit, bool) or not isinstance(limit, (int, float)) or not 0 < limit <= MAX_TIME_LIMIT:
+    limit = time_limit(data.get("time_limit_seconds"), "agent.time_limit_seconds")
+    whole = time_limit(data.get("run_time_limit_seconds"), "agent.run_time_limit_seconds")
+    if whole < limit:
         raise ConfigError(
-            f"{RUN_CONFIG}: agent.time_limit_seconds must be a number of seconds above zero and at most"
-            f" {MAX_TIME_LIMIT}, a day; got {limit!r}"
+            f"{RUN_CONFIG}: agent.run_time_limit_seconds, {whole:g}, is less than one session's limit, {limit:g};"
+            " a run's sessions together need at least as long as one session may take"
         )
-    return Agent(float(limit))
+    return Agent(limit, whole)
 
 
 def load_count(schedule: object, key: str, most: int, what: str) -> int:
@@ -208,7 +197,6 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
         prices = {key: float(value) for key, value in data["cost"]["usd_per_million_tokens"].items()}
         outputs = dict(data["outputs"])
         not_connected = tuple(data.get("sources_not_connected") or ())
-        instruction = instruction_path(repo_root, Path(data["instruction"]))
         window = load_window(data["window"], weekly[0])
         live_since = load_live_since(data["waitlist"])
         batch_size = load_batch_size(data["beta_recruiting"])
@@ -226,7 +214,6 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
                 raise ConfigError(f"{RUN_CONFIG}: {source.get('name')} feeds unknown output {output}")
     return Settings(
         data,
-        instruction,
         weekly,
         late,
         resolved,
@@ -283,7 +270,9 @@ def tags(value: object, name: str) -> tuple[str, ...]:
 
 
 def sandbox_readable(boundary: Boundary) -> list[Path]:
-    """Every place the run's sandbox may read besides the system files a shell needs."""
+    """Every place the run's sandbox may read besides the system files a shell needs, with the whole Mandu checkout
+    standing for the package paths the sandbox reads of it: the Waitlist view may be nowhere in that checkout. The
+    footage place has a rule of its own, boundary.keep_footage_unread."""
     system = [Path(entry) for entry in boundary.read_system if not entry.startswith(":")]
     return [boundary.repo_root, *boundary.git_dirs, *(location.path for location in boundary.locations), *system]
 

@@ -14,8 +14,9 @@ only place that enforces it:
    that is also linked from somewhere else, and a record folder that is itself a link are all refused. check() stops a
    run, a boundary check, and a sitting before they start when a folder is missing or is not a real folder.
 3. The sandboxed agent can read the records and can never write them. The area is inside ledger/, which is no writable
-   area; every run's preflight tries each folder from inside the sandbox (codex.preflight_targets), and the boundary
-   check proves each folder on its own from the runtime's records (probe.PROBE_TARGETS).
+   area; the preflight before every session's agent tries to create a file in each folder from inside the sandbox
+   (codex.preflight_targets) and the agent is started only when every try was refused, and the boundary check proves
+   each folder on its own from the runtime's records (probe.PROBE_TARGETS).
 
 The formats are the ones docs/mandu-exchange.md describes, parsed by exchange.py, which the page and the run share: the
 page checks a record with the run's own parser before it writes it. A record that parser cannot use, as one changed by
@@ -44,7 +45,7 @@ from .boundary import FOUNDER, FOUNDER_KINDS, ConfigError
 from .waitlist import looks_like_address
 
 # The five kinds of record, each in the folder of ledger/founder/ named for it. Every one of these folders is a
-# forbidden target of the run's preflight and of the boundary check.
+# forbidden target of the preflight before every session and of the boundary check.
 KINDS = FOUNDER_KINDS
 DECISIONS, SITTINGS, BETA_BUILDS, BETA_REPORTS, OUTREACH = KINDS
 # Where a run keeps the Evidence of each decision it took in, under ledger/; the file's existence is the taking in.
@@ -58,6 +59,8 @@ STEM = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,119}")
 HOLDS_ADDRESS = "it holds something that looks like an email address, so nothing in it was read or kept"
 
 Raw = tuple[str, Path, bytes]  # a record file: its name, its path, and its bytes
+# Why a file that is no record file is none: it is not a read that failed, so nothing it might hold is unknown.
+STRAY = "only <name>.json record files belong here"
 
 
 class Busy(Exception):
@@ -81,9 +84,10 @@ def check(ledger: Path) -> None:
     """
     for path in (root(ledger), *folders(ledger).values()):
         if not real_folder(path):
+            # Named from the repository's root: a session's record, and from it a run report, can carry this line.
             raise ConfigError(
-                f"the Founder's records folder {path} must be a real folder that can be read, not missing and not a"
-                " link; the repository holds it, so restore it from git"
+                f"the Founder's records folder {path.relative_to(ledger.parent)} must be a real folder that can be"
+                " read, not missing and not a link; the repository holds it, so restore it from git"
             )
 
 
@@ -125,7 +129,7 @@ def read(ledger: Path, kind: str) -> tuple[list[Raw], list[tuple[str, str]], str
         if name.startswith("."):
             continue
         if not name.endswith(".json"):
-            others.append((name, "only <name>.json record files belong here"))
+            others.append((name, STRAY))
             continue
         try:
             found.append((name, folder / name, read_plain(folder / name)))

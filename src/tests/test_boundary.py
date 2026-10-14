@@ -41,7 +41,7 @@ REGISTRY = {
 }
 
 
-class ResolveBoundaryTest(unittest.TestCase):
+class BoundaryTestCase(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name).resolve()
@@ -62,6 +62,8 @@ class ResolveBoundaryTest(unittest.TestCase):
         config["writable_areas"][key] = value
         return config
 
+
+class ResolveBoundaryTest(BoundaryTestCase):
     def test_resolves_six_areas_under_workspace(self):
         resolved = self.resolve()
         self.assertEqual([key for key, _ in resolved.areas], list(boundary.REQUIRED_AREAS))
@@ -189,10 +191,202 @@ class ResolveBoundaryTest(unittest.TestCase):
         self.assertEqual(policy[str(self.repo)], "read")
         self.assertEqual(policy[str(external_git)], "read")
         self.assertNotIn(str(self.repo / ".git"), policy)
-        self.assertEqual(policy[str(self.home / "Mandu")], "read")
         self.assertEqual(policy[str(self.home / "RepToday")], "read")
         writes = {path for path, access in policy.items() if access == "write"}
         self.assertEqual(writes, {str(path) for path in resolved.area_paths})
+
+    def test_policy_grants_of_mandu_only_the_package_paths_the_registry_names(self):
+        mandu = self.home / "Mandu"
+        self.assertNotIn(str(mandu), boundary.filesystem_policy(self.resolve()))
+        resolved = self.resolve(registry=FILMING_REGISTRY)
+        policy = boundary.filesystem_policy(resolved)
+        package = [mandu / "projects/RepToday/gtm", mandu / "projects/RepToday/02-launch-checklist.md"]
+        self.assertEqual(list(resolved.package_paths), package)
+        granted = {Path(path) for path, access in policy.items() if not path.startswith(":") and access == "read"}
+        self.assertEqual({path for path in granted if boundary.is_within(path, mandu)}, set(package))
+        for unread in (mandu, mandu / ".git", mandu / "projects", mandu / "projects/RepToday", FOOTAGE / "window-1"):
+            with self.subTest(unread=unread):
+                self.assertFalse(any(boundary.is_within(self.home / unread, path) for path in granted))
+        # The rule on raw footage is judged on that very table.
+        self.assertEqual(boundary.read_grants(resolved), [Path(path) for path in policy if not path.startswith(":")])
+
+    def test_a_package_path_must_stay_inside_the_mandu_checkout(self):
+        def named(**package):
+            registry = copy.deepcopy(FILMING_REGISTRY)
+            registry["products"][0]["go_to_market_package"].update(package)
+            return registry
+
+        for path in ("/etc", "../RepToday", "projects/../..", "", ".", 7, ["projects"]):
+            for registry in (named(path=path), named(launch_checklist=path), named(sources=[{"path": path}])):
+                with (
+                    self.subTest(path=path),
+                    self.assertRaisesRegex(ConfigError, "must be relative to the Mandu checkout"),
+                ):
+                    self.resolve(registry=registry)
+        with self.assertRaisesRegex(ConfigError, "must be relative to the Mandu checkout"):
+            self.resolve(registry=named(sources=["projects/RepToday/gtm/"]))
+        # A link in the checkout cannot take a grant out of it.
+        (self.home / "Mandu" / "projects").mkdir(parents=True)
+        (self.home / "Mandu" / "projects" / "RepToday").symlink_to(self.home)
+        with self.assertRaisesRegex(ConfigError, "is not inside the Mandu checkout"):
+            self.resolve(registry=FILMING_REGISTRY)
+
+
+FOOTAGE = Path("Mandu/projects/RepToday")
+FILMING_REGISTRY = {
+    "mandu": REGISTRY["mandu"],
+    "products": [
+        {
+            "name": "RepToday",
+            "status": "active",
+            "repository": REGISTRY["products"][0]["repository"],
+            "go_to_market_package": {
+                "path": "projects/RepToday/gtm/",
+                "launch_checklist": "projects/RepToday/02-launch-checklist.md",
+                "sources": [
+                    {"path": "projects/RepToday/gtm/05-social-pmf/angles.md"},
+                    {"path": "projects/RepToday/02-launch-checklist.md"},
+                    {"path": "projects/RepToday/gtm/06-channels/"},
+                ],
+            },
+            "filming": {"footage": {"local_path": None, "env": "GR0WTHLAB_FOOTAGE_DIR", "access": "read-only"}},
+        }
+    ],
+}
+
+
+class FootagePlaceTest(BoundaryTestCase):
+    """The one rule of where raw footage may be: the sandbox reads nothing in a footage folder."""
+
+    def place(self, path, registry=FILMING_REGISTRY, **block):
+        registry = copy.deepcopy(registry)
+        registry["products"][0]["filming"]["footage"].update(block)
+        env = {"GR0WTHLAB_FOOTAGE_DIR": str(path)} if path else {}
+        return self.resolve(registry=registry, env=env, git=[self.repo / ".git", self.root / "primary" / ".git"])
+
+    def test_the_founders_place_inside_mandu_beside_the_package_is_accepted(self):
+        resolved = self.place(None, local_path="~/Mandu/projects/RepToday")
+        self.assertEqual(
+            resolved.footage, boundary.FootagePlace("RepToday", self.home / FOOTAGE, "GR0WTHLAB_FOOTAGE_DIR")
+        )
+        policy = boundary.filesystem_policy(resolved)
+        for number in (1, 2, 14, 100):
+            folder = self.home / FOOTAGE / f"window-{number}"
+            with self.subTest(folder=folder):
+                self.assertTrue(boundary.FOOTAGE_FOLDER.fullmatch(folder.name))
+                granted = [Path(path) for path in policy if not path.startswith(":") and policy[path] != "deny"]
+                self.assertFalse(
+                    any(boundary.is_within(folder, path) or boundary.is_within(path, folder) for path in granted)
+                )
+
+    def test_a_place_outside_everything_the_run_reads_is_accepted_as_before(self):
+        for outside in (self.root / "footage", self.home / "Movies" / "gr0wthlab-footage", self.home / "Mandu-footage"):
+            with self.subTest(place=outside):
+                self.assertEqual(self.place(outside).footage.path, outside)
+        # Elsewhere in Mandu, where the sandbox reads nothing, and Mandu itself: no grant is in a footage folder.
+        for inside in (self.home / "Mandu" / "footage", self.home / "Mandu" / "projects", self.home / "Mandu"):
+            with self.subTest(place=inside):
+                self.assertEqual(self.place(inside).footage.path, inside)
+
+    def test_a_place_the_sandbox_can_read_is_refused(self):
+        mandu = self.home / "Mandu"
+        for readable in (
+            self.repo,
+            self.repo / "workspace" / "drafts" / "footage",
+            self.repo / "ledger" / "assets",
+            self.repo / ".git" / "footage",
+            self.root / "primary" / ".git",
+            self.home / "RepToday" / "footage",
+            mandu / "projects/RepToday/gtm",
+            mandu / "projects/RepToday/gtm/footage",
+            mandu / "projects/RepToday/02-launch-checklist.md",
+            # The Mac's volume takes a name in any case, so the rule does too.
+            mandu / "Projects/reptoday/GTM/footage",
+            Path(str(self.repo).upper()) / "footage",
+        ):
+            with (
+                self.subTest(place=readable),
+                self.assertRaisesRegex(
+                    ConfigError,
+                    r"RepToday's footage place \S+ is inside \S+, which the sandboxed agent can read, so the agent"
+                    " could open the raw footage",
+                ),
+            ):
+                self.place(readable)
+
+    def test_only_a_place_inside_mandu_may_hold_anything_the_run_reads(self):
+        for holding in (self.root, self.home, self.repo.parent, self.root / "primary"):
+            with (
+                self.subTest(place=holding),
+                self.assertRaisesRegex(
+                    ConfigError,
+                    r"RepToday's footage place \S+ holds \S+, which the sandboxed agent can read; only a place inside"
+                    " the Mandu checkout may hold anything the run reads",
+                ),
+            ):
+                self.place(holding)
+
+    def test_a_grant_in_a_footage_folder_is_refused(self):
+        for granted, folder in (
+            ("projects/RepToday/window-1/", "window-1"),
+            ("projects/RepToday/window-2/kit/notes.md", "window-2"),
+            ("projects/RepToday/Window-14", "window-14"),
+        ):
+            registry = copy.deepcopy(FILMING_REGISTRY)
+            registry["products"][0]["go_to_market_package"]["sources"].append({"path": granted})
+            with (
+                self.subTest(granted=granted),
+                self.assertRaisesRegex(
+                    ConfigError,
+                    rf"RepToday's footage place \S+ is refused: the sandboxed agent can read \S+, which is in its"
+                    rf" footage folder {folder}/, so the agent could open the raw footage",
+                ),
+            ):
+                self.place(self.home / FOOTAGE, registry)
+        # The same paths are no footage folder of a place elsewhere.
+        registry["products"][0]["go_to_market_package"]["sources"].append({"path": "projects/RepToday/window-1/"})
+        self.assertEqual(self.place(self.root / "footage", registry).footage.path, self.root / "footage")
+
+    def test_the_place_is_declared_read_only_with_an_override_name_and_stays_unset_until_set(self):
+        self.assertIsNone(self.resolve().footage)
+        self.assertEqual(self.place(None).footage, boundary.FootagePlace("RepToday", None, "GR0WTHLAB_FOOTAGE_DIR"))
+        self.assertEqual(
+            self.place(None, local_path="~/Movies/gr0wthlab-footage").footage.path,
+            self.home / "Movies/gr0wthlab-footage",
+        )
+        with self.assertRaisesRegex(ConfigError, "must be declared read-only"):
+            self.place(self.root / "footage", access="read-write")
+        with self.assertRaisesRegex(ConfigError, "needs an env override name"):
+            self.place(self.root / "footage", env="")
+        with self.assertRaisesRegex(ConfigError, "must start with ~/ or be absolute"):
+            self.place(None, local_path="Movies/footage")
+        with self.assertRaisesRegex(ConfigError, "GR0WTHLAB_FOOTAGE_DIR must be an absolute path"):
+            self.resolve(registry=FILMING_REGISTRY, env={"GR0WTHLAB_FOOTAGE_DIR": "footage"})
+        two = copy.deepcopy(FILMING_REGISTRY)
+        two["products"].append(dict(two["products"][0], name="Immerse"))
+        with self.assertRaisesRegex(ConfigError, "only one Product may film"):
+            self.resolve(registry=two)
+
+    def test_the_folders_no_run_may_read_are_the_place_and_each_footage_folder_in_it(self):
+        place = self.home / FOOTAGE
+        self.assertEqual(boundary.footage_dirs(self.resolve()), {})
+        self.assertEqual(boundary.footage_dirs(self.place(None)), {})
+        self.assertEqual(boundary.footage_dirs(self.place(place)), {})
+        for name in ("gtm", "window-2", "window-1", "Window-10", "window-x", "windows-3", "window-4.bak"):
+            (place / name).mkdir(parents=True)
+        (place / "window-5").write_text("a file", encoding="utf-8")
+        (place / "window-6").symlink_to(place / "gtm")
+        (place / "window-1" / "window-7").mkdir()
+        (place / "window-1" / "d01-s1.mov").write_text("stand-in", encoding="utf-8")
+        self.assertEqual(
+            boundary.footage_dirs(self.place(place)),
+            {
+                "footage-place": place,
+                "footage-Window-10": place / "Window-10",
+                "footage-window-1": place / "window-1",
+                "footage-window-2": place / "window-2",
+            },
+        )
 
 
 if __name__ == "__main__":

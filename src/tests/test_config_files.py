@@ -97,7 +97,7 @@ class RunConfigTest(unittest.TestCase):
         self.assertIn("/ledger/founder.lock", ignored)
         self.assertIn("/ledger/sitting.lock", ignored)
 
-    def test_filming_is_built_and_its_footage_place_waits_for_the_founder(self):
+    def test_filming_is_built_and_its_footage_place_is_the_folder_the_founder_named(self):
         from gr0wthlab import video
 
         self.assertEqual(
@@ -106,7 +106,7 @@ class RunConfigTest(unittest.TestCase):
         )
         reptoday = next(p for p in self.registry["products"] if p["name"] == "RepToday")
         footage = reptoday["filming"]["footage"]
-        self.assertEqual((footage["local_path"], footage["access"]), (None, "read-only"))
+        self.assertEqual((footage["local_path"], footage["access"]), ("~/Mandu/projects/RepToday", "read-only"))
         self.assertRegex(footage["env"], r"^GR0WTHLAB_[A-Z]+_DIR$")
         self.assertNotIn("filming", next(p for p in self.registry["products"] if p["name"] == "Immerse"))
         # The plan reads the calendar, the Angle bank, and the pairs: each is a snapshotted source that feeds it.
@@ -120,9 +120,10 @@ class RunConfigTest(unittest.TestCase):
         self.assertEqual((canvas.width, canvas.height, canvas.fps), (1080, 1920, 30))
         self.assertEqual(canvas.ratio.numerator * 16, canvas.ratio.denominator * 9)
 
-    def test_the_weekly_task_definition_is_reviewed_code(self):
-        self.assertTrue(self.config["instruction"].startswith("src/instructions/"))
-        self.assertTrue((REPO / self.config["instruction"]).is_file())
+    def test_no_task_definition_is_chosen_in_configuration(self):
+        # The weekly run's task definitions are the reviewed files the launcher puts together for each session
+        # (sessions.py); configuration names none, so no setting can swap one out.
+        self.assertNotIn("instruction", self.config)
 
 
 class RuntimeConfigTest(unittest.TestCase):
@@ -146,7 +147,44 @@ class RuntimeConfigTest(unittest.TestCase):
         self.assertEqual(policy[":slash_tmp"], "deny")
         self.assertEqual(policy["/private/var/tmp"], "deny")
         self.assertEqual(policy[str(resolved.repo_root)], "read")
-        self.assertEqual(policy[str(HOME / "Mandu")], "read")
+
+    def test_the_real_configuration_reads_of_mandu_only_the_package_and_keeps_out_of_the_footage_folders(self):
+        registry = load("config/products.json")
+        resolved = boundary.resolve_boundary(REPO, self.config, registry, {}, HOME, git=[REPO / ".git"])
+        mandu, place = HOME / "Mandu", HOME / "Mandu" / "projects" / "RepToday"
+        self.assertEqual(resolved.footage, boundary.FootagePlace("RepToday", place, "GR0WTHLAB_FOOTAGE_DIR"))
+        self.assertEqual(
+            list(resolved.package_paths), [place / "gtm", place / "02-marketing-launch-checklist_260807.md"]
+        )
+        policy = boundary.filesystem_policy(resolved)
+        granted = [Path(path) for path, access in policy.items() if not path.startswith(":") and access != "deny"]
+        self.assertEqual(
+            sorted(path for path in granted if boundary.is_within(path, mandu)), sorted(resolved.package_paths)
+        )
+        self.assertFalse(any(boundary.is_within(mandu, path) for path in granted))
+        for number in (1, 2, 14):
+            folder = place / f"window-{number}"
+            with self.subTest(folder=folder):
+                self.assertFalse(
+                    any(boundary.is_within(folder, path) or boundary.is_within(path, folder) for path in granted)
+                )
+        # Every path the registry points a run at inside Mandu is one the sandbox can read.
+        reptoday = next(product for product in registry["products"] if product["name"] == "RepToday")
+        package = reptoday["go_to_market_package"]
+        pointed = [source["path"] for source in package["sources"]] + [package["path"], package["launch_checklist"]]
+        pointed += [value for key, value in package["post_drafts"].items() if key != "note"]
+        pointed += [package["listening"]["fit"], package["outreach"]["channel_plan"]]
+        pointed += [reptoday["beta_recruiting"]["k8"], reptoday["beta_recruiting"]["brand_rules"]]
+        for relative in pointed:
+            with self.subTest(pointed=relative):
+                self.assertTrue(
+                    any(boundary.is_within(mandu / relative, path) for path in resolved.package_paths), relative
+                )
+        # The footage folders the cut reads are the ones the rule keeps the sandbox out of.
+        from gr0wthlab import footage
+
+        inventory = footage.read(place, 7, (), None, {})
+        self.assertTrue(boundary.FOOTAGE_FOLDER.fullmatch(inventory.folder), inventory.folder)
 
     def test_the_agent_runs_at_high_reasoning_effort(self):
         self.assertEqual(boundary.load_runtime_config(REPO)["codex"]["reasoning_effort"], "high")

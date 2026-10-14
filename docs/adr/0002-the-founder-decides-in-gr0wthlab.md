@@ -29,7 +29,7 @@ Three rules hold that, and [`src/gr0wthlab/founder.py`](../../src/gr0wthlab/foun
    Nothing under `workspace/` is ever read as one, whatever its name, location, or content: the reader opens no path outside those folders and follows no link.
    A record folder that is missing, or that is a link, stops every run, check, and sitting before it starts.
 3. The sandboxed agent can read the records and can never write them.
-   `ledger/` is no writable area, every run's preflight tries each record folder from inside the sandbox before the agent starts, and the boundary check proves each record folder on its own from the runtime's records ([the US-ME02 spike note](../spikes/us-me02-runtime-boundary.md)).
+   `ledger/` is no writable area, the preflight before every session's agent tries to create a file in each record folder from inside the sandbox and the agent is started only when every try was refused, and the boundary check proves each record folder on its own from the runtime's records ([the US-ME02 spike note](../spikes/us-me02-runtime-boundary.md)).
 
 Before this decision the third rule held because the records were in Mandu, which the run cannot write.
 It now holds by the same write boundary that keeps the agent out of `ledger/`, `src/`, and `config/`, proved per folder.

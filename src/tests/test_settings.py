@@ -26,7 +26,6 @@ class RunSettingsTest(unittest.TestCase):
     def test_the_committed_settings(self):
         config = settings.load(REPO, {}, HOME)
         self.assertEqual(config.weekly, ("sunday", "16:00"))
-        self.assertEqual(config.instruction, REPO / "src/instructions/weekly-run.md")
         self.assertEqual(config.records.production_clone, HOME / "gr0wthlab")
         self.assertEqual((config.records.remote, config.records.branch), ("origin", "main"))
         self.assertTrue(config.records.sync_before_run and config.records.save_after_run)
@@ -77,17 +76,6 @@ class RunSettingsTest(unittest.TestCase):
         for bad in ({"live_since": "yes"}, {"live_since": True}, {"live_since": "2026-13-01"}, "2026-10-20"):
             with self.subTest(waitlist=bad), self.assertRaises(ConfigError):
                 settings.load_live_since(bad)
-
-    def test_the_task_definition_must_be_reviewed_code(self):
-        self.assertEqual(
-            settings.instruction_path(REPO, Path("src/instructions/weekly-run.md")),
-            REPO / "src/instructions/weekly-run.md",
-        )
-        for path in ("workspace/instructions/package-review.md", "src/checks/boundary-probe.md", "README.md"):
-            with self.subTest(path=path), self.assertRaises(ConfigError):
-                settings.instruction_path(REPO, Path(path))
-        with self.assertRaises(ConfigError):
-            settings.instruction_path(REPO, Path("src/instructions/absent.md"))
 
 
 class NoExchangeFolderTest(unittest.TestCase):

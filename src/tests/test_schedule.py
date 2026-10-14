@@ -24,13 +24,12 @@ class CalendarTest(unittest.TestCase):
 
 class LaunchAgentTest(unittest.TestCase):
     ENTRY = Path("/srv/gr0wthlab/src/bin/gr0wthlab")
-    INSTRUCTION = Path("/srv/gr0wthlab/src/instructions/weekly-run.md")
 
     def render(self, label="gr0wthlab.weekly-run", overrides=None, arguments=None):
         return plistlib.loads(
             schedule.launch_agent(
                 label,
-                arguments or schedule.run_arguments(self.ENTRY, self.INSTRUCTION, None),
+                arguments or schedule.run_arguments(self.ENTRY, None),
                 Path("/srv/gr0wthlab"),
                 schedule.weekly("monday", "07:30"),
                 overrides or {"GR0WTHLAB_CODEX_BIN": "/opt/codex", "OPENAI_API_KEY": "secret"},
@@ -42,14 +41,7 @@ class LaunchAgentTest(unittest.TestCase):
         agent = self.render()
         self.assertEqual(
             agent["ProgramArguments"],
-            [
-                "/srv/gr0wthlab/src/bin/gr0wthlab",
-                "run",
-                "--trigger",
-                "scheduled",
-                "--instruction",
-                "/srv/gr0wthlab/src/instructions/weekly-run.md",
-            ],
+            ["/srv/gr0wthlab/src/bin/gr0wthlab", "run", "--trigger", "scheduled"],
         )
         self.assertEqual(agent["StartCalendarInterval"], {"Weekday": 1, "Hour": 7, "Minute": 30})
         self.assertEqual(agent["WorkingDirectory"], "/srv/gr0wthlab")
@@ -57,7 +49,7 @@ class LaunchAgentTest(unittest.TestCase):
         self.assertEqual(agent["StandardOutPath"], "/logs/gr0wthlab.weekly-run.out.log")
 
     def test_one_off_runs_and_boundary_checks(self):
-        once = schedule.run_arguments(self.ENTRY, self.INSTRUCTION, "2026-10-11T16:00")
+        once = schedule.run_arguments(self.ENTRY, "2026-10-11T16:00")
         self.assertEqual(once[-2:], ["--once", "2026-10-11T16:00"])
         check = self.render(arguments=schedule.boundary_check_arguments(self.ENTRY))
         self.assertEqual(

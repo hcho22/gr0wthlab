@@ -1,5 +1,6 @@
 """The production clone's git steps, against a throwaway bare remote: fast-forward before, records only after."""
 
+import json
 import os
 import tempfile
 import unittest
@@ -319,6 +320,23 @@ class SaveTest(RecordsTestCase):
         self.assertEqual(prepared.unpushed, 1)
         self.assertIn("this run pushes 1 unpushed records commit", prepared.detail)
         self.assertEqual(self.save().status, records.PUSHED)
+
+
+class BackgroundTest(RecordsTestCase):
+    def test_no_git_command_of_a_test_starts_maintenance(self):
+        """git starts its maintenance detached, so it outlives the command that started it and would still be writing
+        in a repository while tearDown removes it. git's own trace names every command that ran here: the fixture's,
+        the launcher's, and the ones the remote ran to receive a push."""
+        trace = self.root / "trace.json"
+        self.env["GIT_TRACE2_EVENT"] = str(trace)
+        self.land_upstream("src/reviewed.py", "reviewed = True\n")
+        self.assertEqual(self.prepare().status, records.UPDATED)
+        self.write("workspace/drafts/note.md")
+        self.assertEqual(self.save().status, records.PUSHED)
+        events = [json.loads(line) for line in trace.read_text(encoding="utf-8").splitlines()]
+        ran = {event["name"] for event in events if event["event"] == "cmd_name"}
+        self.assertLessEqual({"commit", "fetch", "merge", "push", "receive-pack"}, ran, "the trace saw each command")
+        self.assertEqual(ran & {"maintenance", "gc"}, set())
 
 
 class GitLimitTest(RecordsTestCase):

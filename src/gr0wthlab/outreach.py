@@ -11,7 +11,7 @@ rebuilt from that record and the Review Queue every run, and any difference is r
 After the agent finishes, each Draft is checked (messages.check) and queued only if it passes. A message whose
 follow-up is not due, or whose creator replied, is never offered, whatever a Draft says, and an item still open for
 it is taken back. Only a record that could be read takes an item back: a follow-up whose record of the first message
-is missing or could not be used is neither offered nor taken back that run.
+is missing or could not be used is neither offered nor taken back that run, and an open one stands (queue.stands).
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from .areas import Areas, Store
 from .boundary import FOUNDER, ConfigError
 from .drafts import Context
 from .exchange import plural
-from .queue import APPROVED, Ledger
+from .queue import APPROVED, Ledger, Stands, stands
 from .state import OutreachState, Tally, target_key
 
 WORKFLOW = "outreach"
@@ -135,6 +135,7 @@ class Plan:
     records_failure: str = ""  # why none of the records could be read
     record_lines: list[str] = field(default_factory=list)  # what the records say of each creator
     unread: list[tuple[str, str]] = field(default_factory=list)  # whose follow-up no record could settle, and why
+    stood: list[Stands] = field(default_factory=list)  # each open follow-up among them, left as it is
     problem: str = ""  # why nothing could be prepared at all
 
     def due(self) -> list[messages.Slot]:
@@ -244,7 +245,8 @@ def follow_up(
 ) -> messages.Slot | None:
     """The one follow-up a creator may get, and why it may not be offered now, if it may not. None when the Founder's
     record of the first message is missing or could not be used: the plan then says why, and nothing is offered or
-    taken back for it, since only a record that was read may take an open item back."""
+    taken back for it, since only a record that was read may take an open item back. An open follow-up then stands
+    (queue.stands), and the plan holds it for the run's notice."""
     key = f"creator:{creator.key}"
     sent = str(first.approved["id"]) if first.approved else ""
     record = plan.records.get(sent)
@@ -261,7 +263,10 @@ def follow_up(
         elif slot.open:
             lost = f"`{RECORDS}/{sent}.json`, the Founder's record of the first message, is missing"
         if lost and not slot.approved:
-            stays = f"the open `{slot.open['id']}` stays as it is" if slot.open else "no follow-up is offered"
+            kept = stands(slot.open, [lost])
+            if kept:
+                plan.stood.append(kept)
+            stays = f"the open `{kept.item}` stays as it is" if kept else "no follow-up is offered"
             plan.unread.append((f"{creator.name}, the one follow-up", f"{lost}, so {stays}"))
             return None
         target.reason = (

@@ -20,7 +20,7 @@ from gr0wthlab import boundary, launcher, probe, process
 from gr0wthlab.areas import clear_probe_files
 from gr0wthlab.boundary import ConfigError
 from tests import fakes
-from tests.test_boundary import CONFIG, REGISTRY
+from tests.test_boundary import CONFIG, FILMING_REGISTRY, REGISTRY
 
 RUN = "20261009T000000Z-on-demand-abcd"
 MARK = probe.PREFIX + RUN
@@ -572,6 +572,306 @@ class VerifyTest(ProbeTestCase):
         after = {"Mandu": {"a.md": " M 9", "b.md": "?? 2", "c.md": "?? 3"}}
         self.assertEqual(probe.changed(before, after), {"Mandu": ["a.md", "c.md"]})
         self.assertEqual(probe.changed(before, before), {})
+
+
+class ReadProofTest(ProbeTestCase):
+    """The forbidden reads: the footage place and each footage folder in it, each proven refused on its own from the
+    kernel's log and Codex's record of the run, never from the folder's name in a log alone."""
+
+    def setUp(self):
+        super().setUp()
+        self.place = self.home / "Mandu" / "projects" / "RepToday"
+        for name in ("gtm", "window-1", "window-2"):
+            (self.place / name).mkdir(parents=True)
+        self.clip = self.place / "window-1" / "d01-s1.mov"
+        for name in ("d01-s1.mov", "d02-s1.mp4", ".d00-hidden.mov", "a-note.txt"):
+            (self.place / "window-1" / name).write_text("stand-in, not footage", encoding="utf-8")
+        (self.place / "window-1" / "a-folder.mov").mkdir()
+        (self.place / "window-1" / "a-link.mov").symlink_to(self.clip)
+        env = {"GR0WTHLAB_FOOTAGE_DIR": str(self.place)}
+        self.boundary = boundary.resolve_boundary(
+            self.repo, CONFIG, FILMING_REGISTRY, env, self.home, git=[self.repo / ".git"]
+        )
+        self.pids = {"footage-place": 501, "footage-window-1": 502, "footage-window-2": 503}
+
+    def reads(self, tool=None):
+        return self.steps(probe.READ, tool)
+
+    def script_call(self, seq, word="refused", pids=None, tool=probe.SHELL_TOOL):
+        """Codex's record of the shell call that ran the launcher's script, with the line it printed for each read."""
+        lines = "".join(f"{label}: {word} {pid}\n" for label, pid in (pids or self.pids).items())
+        output = f"Chunk ID: 0a1b2c\nWall time: 0.4 seconds\nProcess exited with code 0\nOutput:\n{lines}"
+        return tool_result(seq, tool, True, '{"cmd":"sh /repo/workspace/instructions/steps.sh"}', output)
+
+    def image_call(self, seq, path=None, output=None, success=False):
+        path = str(path or self.clip)
+        said = probe.READ_REFUSAL.format(path=path) if output is None else output
+        return tool_result(seq, probe.IMAGE_TOOL, success, json.dumps({"path": path}), said)
+
+    def read_denials(self, pids=None, name="ls"):
+        folders = {step.label: step.path for step in self.reads(probe.SHELL)}
+        return [
+            f"Sandbox: {name}({pid}) deny(1) file-read-data {folders[label]}"
+            for label, pid in (pids or self.pids).items()
+        ]
+
+    def judge(self, calls, denials):
+        """A run whose writes are all proven, with these records of its reads."""
+        self.write_record(exit_code=0, started_at="2026-10-09T00:00:00+00:00")
+        self.write_permitted()
+        patches = self.steps(tool=probe.FILE_TOOL)
+        self.write_codex_log(self.refused(patches) + "".join(call(len(patches) + n) for n, call in enumerate(calls, 1)))
+        with self.kernel(self.steps(tool=probe.SHELL), *denials):
+            result = self.verify()
+        out = io.StringIO()
+        probe.summarize(result, out)
+        return result, out.getvalue()
+
+    def proven(self):
+        return [lambda seq: self.script_call(seq), lambda seq: self.image_call(seq)]
+
+    def test_the_forbidden_reads_are_the_place_and_each_footage_folder_and_its_first_footage_file(self):
+        self.assertEqual(
+            [(step.name, step.path) for step in self.reads()],
+            [
+                ("footage-place:shell", self.place),
+                ("footage-window-1:shell", self.place / "window-1"),
+                ("footage-window-1:file-tool", self.clip),
+                ("footage-window-2:shell", self.place / "window-2"),
+            ],
+        )
+        self.assertEqual(self.reads(probe.FILE_TOOL)[0].text, str(self.clip))
+        names = [step.name for step in probe.probe_steps(self.boundary, RUN)]
+        self.assertEqual(len(names), len(set(names)))
+        # A boundary with no footage place, and a place that does not exist yet, have none.
+        plain = boundary.resolve_boundary(self.repo, CONFIG, REGISTRY, {}, self.home, git=[self.repo / ".git"])
+        self.assertEqual([step for step in probe.probe_steps(plain, RUN) if step.kind == probe.READ], [])
+        shutil.rmtree(str(self.place))
+        self.assertEqual(self.reads(), [])
+
+    def test_the_script_tries_each_listing_on_its_own_and_names_the_process_that_tried(self):
+        steps = self.reads()
+        script = probe.script(steps)
+        for step in self.reads(probe.SHELL):
+            self.assertEqual(script.count(step.text), 1)
+        self.assertNotIn(str(self.clip), script)
+        # Codex keeps only the start of a call's output, so the reads' lines are the first the script prints.
+        whole = probe.script(probe.probe_steps(self.boundary, RUN)).splitlines()
+        self.assertTrue(all(line.startswith("( /bin/ls ") for line in whole[2:5]), whole[2:5])
+        self.assertFalse(any("/bin/ls" in line for line in whole[5:]))
+        self.assertGreater(len(whole), 20)
+        # Run for real, outside any sandbox, every listing lands and says so; a folder that is gone is not listed.
+        shutil.rmtree(str(self.place / "window-2"))
+        ran = process.run(["/bin/sh", "-c", script], process.QUICK)
+        lines = ran.stdout.splitlines()[:3]
+        self.assertRegex(lines[0], r"^footage-place: listed \d+$")
+        self.assertRegex(lines[1], r"^footage-window-1: listed \d+$")
+        self.assertRegex(lines[2], r"^footage-window-2: refused \d+$")
+        self.assertEqual(len({line.split()[-1] for line in lines}), 3)
+        handed = probe.render_steps(steps, Path("/steps.sh"))
+        self.assertIn(
+            "`footage-window-1`, a forbidden read: one `view_image` call with exactly this path.\n\n"
+            f"```text\n{self.clip}\n```",
+            handed,
+        )
+        self.assertEqual(handed.count("Step "), 2)
+
+    def test_a_footage_file_whose_name_cannot_be_handed_over_stops_the_check(self):
+        (self.place / "window-1" / "a\nb.mov").write_text("stand-in", encoding="utf-8")
+        with self.assertRaisesRegex(ConfigError, "it holds a line break"):
+            self.reads()
+
+    def test_every_read_refused_on_the_runtimes_own_record_passes(self):
+        result, out = self.judge(self.proven(), self.read_denials())
+        self.assertTrue(result["passed"], result)
+        self.assertEqual(
+            result["forbidden_reads"],
+            {
+                "footage-place:shell": str(self.place),
+                "footage-window-1:shell": str(self.place / "window-1"),
+                "footage-window-1:file-tool": str(self.clip),
+                "footage-window-2:shell": str(self.place / "window-2"),
+            },
+        )
+        self.assertEqual((result["forbidden_reads_without_refusal"], result["forbidden_reads_not_refused"]), ({}, {}))
+        self.assertLessEqual(set(result["forbidden_reads"]), set(result["steps_needed"]))
+        self.assertIn(
+            "  forbidden reads of the footage place and its footage folders the runtime refused, each on its own:"
+            " 4 of 4\n",
+            out,
+        )
+        # The kernel may report one refusal several times over.
+        repeated = [f"3 duplicate reports for {denial}" for denial in self.read_denials()]
+        self.assertTrue(self.judge(self.proven(), repeated)[0]["passed"])
+
+    def test_a_refusal_of_another_process_such_as_the_preflights_own_proves_no_read(self):
+        others = self.read_denials({label: pid + 1000 for label, pid in self.pids.items()})
+        result, out = self.judge(self.proven(), others)
+        self.assertFalse(result["passed"])
+        shell = ["footage-place:shell", "footage-window-1:shell", "footage-window-2:shell"]
+        self.assertEqual(list(result["forbidden_reads_without_refusal"]), shell)
+        self.assertEqual(result["ask_again"], shell)
+        self.assertIn(": 1 of 4\n", out)
+        self.assertIn(
+            f"    footage-window-1:shell: no kernel denial names a read of {self.place / 'window-1'} by process 502\n",
+            out,
+        )
+        # Nor does a refusal of the right process at another folder, or of a write there.
+        swapped = dict(zip(self.pids, [502, 503, 501]))
+        self.assertEqual(list(self.judge(self.proven(), self.read_denials(swapped))[0]["ask_again"]), shell)
+        writes = [denial.replace("file-read-data", "file-write-create") for denial in self.read_denials()]
+        self.assertEqual(list(self.judge(self.proven(), writes)[0]["ask_again"]), shell)
+
+    def test_a_listing_the_agent_never_ran_is_unproven_whatever_the_kernel_logged(self):
+        result, out = self.judge([lambda seq: self.image_call(seq)], self.read_denials())
+        self.assertEqual(
+            result["ask_again"], ["footage-place:shell", "footage-window-1:shell", "footage-window-2:shell"]
+        )
+        self.assertIn(
+            "    footage-place:shell: Codex's record of the run's shell calls holds no line of the script for it\n", out
+        )
+        # The script's lines inside another tool's record, or said in the agent's report, are not the shell's record.
+        quoted = [lambda seq: self.script_call(seq, tool="exec"), lambda seq: self.image_call(seq)]
+        self.assertEqual(len(self.judge(quoted, self.read_denials())[0]["ask_again"]), 3)
+        partial = [lambda seq: self.script_call(seq, pids={"footage-window-1": 502}), lambda seq: self.image_call(seq)]
+        self.assertEqual(
+            self.judge(partial, self.read_denials())[0]["ask_again"], ["footage-place:shell", "footage-window-2:shell"]
+        )
+
+    def test_a_listing_that_landed_fails_the_check_at_once(self):
+        listed = [
+            lambda seq: self.script_call(seq, pids={"footage-place": 501, "footage-window-2": 503}),
+            lambda seq: self.script_call(seq, "listed", {"footage-window-1": 502}),
+            lambda seq: self.image_call(seq),
+        ]
+        result, out = self.judge(listed, self.read_denials())
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["ask_again"], [])
+        self.assertEqual(
+            result["forbidden_reads_not_refused"],
+            {"footage-window-1:shell": f"the script listed {self.place / 'window-1'} (process 502)"},
+        )
+        self.assertIn(": FAILED", out)
+        self.assertIn(": 3 of 4\n", out)
+        self.assertIn(f"    footage-window-1:shell: the script listed {self.place / 'window-1'} (process 502)\n", out)
+
+    def test_a_file_read_the_runtime_did_not_refuse_fails_the_check_at_once(self):
+        for said, success in (
+            ("<image data URL omitted: 137 bytes>", True),
+            ("unable to process image: invalid or unsupported image data", False),
+            (probe.READ_REFUSAL.format(path=self.clip), True),
+        ):
+            with self.subTest(said=said, success=success):
+                calls = [
+                    lambda seq: self.script_call(seq),
+                    lambda seq, said=said, success=success: self.image_call(seq, output=said, success=success),
+                ]
+                result, out = self.judge(calls, self.read_denials())
+                self.assertFalse(result["passed"])
+                self.assertEqual(result["ask_again"], [])
+                self.assertEqual(list(result["forbidden_reads_not_refused"]), ["footage-window-1:file-tool"])
+                self.assertIn(
+                    f"    footage-window-1:file-tool: Codex did not refuse the read of {self.clip}; Codex said: ", out
+                )
+                self.assertIn(": FAILED", out)
+
+    def test_a_footage_file_gone_when_its_read_was_tried_proves_nothing_and_is_asked_again(self):
+        # The file was away when the agent's call reached it and is there again when the check judges the run.
+        for said in (
+            f"unable to read image at `{self.clip}`: No such file or directory (os error 2)",
+            f"unable to locate image at `{self.clip}`: No such file or directory (os error 2)",
+            f"image path `{self.clip}` is not a file",
+            probe.READ_REFUSAL.format(path=self.clip) + " and more",
+        ):
+            with self.subTest(said=said):
+                calls = [lambda seq: self.script_call(seq), lambda seq, said=said: self.image_call(seq, output=said)]
+                result, out = self.judge(calls, self.read_denials())
+                self.assertFalse(result["passed"])
+                self.assertEqual(result["forbidden_reads_not_refused"], {})
+                self.assertEqual(result["ask_again"], ["footage-window-1:file-tool"])
+                self.assertIn(": 3 of 4\n", out)
+                self.assertIn(
+                    f"    footage-window-1:file-tool: the `view_image` call that named {self.clip} was not refused with"
+                    f" the system's permission error, and its record shows no read; Codex said: {said[:200]}\n",
+                    out,
+                )
+                self.assertNotIn("did not refuse", out)
+                # The check hands the read over again, and one left so after its last run ends as unproven.
+                again, closing = io.StringIO(), io.StringIO()
+                probe.summarize(result, again, again=True)
+                self.assertIn(": NOT YET PROVEN\n", again.getvalue())
+                self.assertIn("  asking again for: footage-window-1:file-tool\n", again.getvalue())
+                probe.conclude([result] * probe.PROBE_RUNS, closing)
+                self.assertIn(
+                    f"boundary check: FAILED after {probe.PROBE_RUNS} probe runs: still unproven:"
+                    " footage-window-1:file-tool\n",
+                    closing.getvalue(),
+                )
+        # A refusal of the same file in the same run is its proof, whatever another call on it said.
+        gone = f"unable to read image at `{self.clip}`: No such file or directory (os error 2)"
+        settled = [
+            lambda seq: self.script_call(seq),
+            lambda seq: self.image_call(seq, output=gone),
+            lambda seq: self.image_call(seq),
+        ]
+        self.assertTrue(self.judge(settled, self.read_denials())[0]["passed"])
+        # A file still away when the run is judged is no longer the folder's first: the check then needs a read of
+        # the file that is, which no call named.
+        self.clip.unlink()
+        result, out = self.judge(settled[:2], self.read_denials())
+        self.assertEqual(result["forbidden_reads_not_refused"], {})
+        self.assertEqual(result["ask_again"], ["footage-window-1:file-tool"])
+        other = self.place / "window-1" / "d02-s1.mp4"
+        self.assertIn(f"    footage-window-1:file-tool: no `view_image` call named {other}\n", out)
+
+    def test_a_read_refused_once_and_landed_once_is_a_read_that_landed(self):
+        calls = [
+            lambda seq: self.script_call(seq),
+            lambda seq: self.image_call(seq),
+            lambda seq: self.image_call(seq, output="<image data URL omitted: 137 bytes>", success=True),
+            lambda seq: self.script_call(seq, "listed", {"footage-window-2": 777}),
+        ]
+        result, _ = self.judge(calls, self.read_denials())
+        self.assertFalse(result["passed"])
+        self.assertEqual(result["ask_again"], [])
+        self.assertEqual(
+            sorted(result["forbidden_reads_not_refused"]), ["footage-window-1:file-tool", "footage-window-2:shell"]
+        )
+
+    def test_a_file_read_never_sent_or_sent_for_another_file_is_unproven(self):
+        other = self.place / "window-1" / "d02-s1.mp4"
+        for calls in (
+            [lambda seq: self.script_call(seq)],
+            [lambda seq: self.script_call(seq), lambda seq: self.image_call(seq, other)],
+            [lambda seq: self.script_call(seq), lambda seq: self.image_call(seq, self.place / "window-1")],
+            [lambda seq: self.script_call(seq), lambda seq: tool_result(seq, "exec", False, "x", "y")],
+        ):
+            result, out = self.judge(calls, self.read_denials())
+            self.assertEqual(result["ask_again"], ["footage-window-1:file-tool"])
+            self.assertIn(f"    footage-window-1:file-tool: no `view_image` call named {self.clip}\n", out)
+        # A refusal the agent only wrote down, in its report, is no record of the file tool's.
+        said = probe.READ_REFUSAL.format(path=self.clip)
+        quoted = f"+{json.dumps({'path': str(self.clip)})} output={said}"
+        report = f"*** Begin Patch\n*** Add File: report.md\n{quoted}\n*** End Patch"
+        calls = [
+            lambda seq: self.script_call(seq),
+            lambda seq: tool_result(seq, "apply_patch", True, report, "Success."),
+        ]
+        self.assertEqual(self.judge(calls, self.read_denials())[0]["ask_again"], ["footage-window-1:file-tool"])
+
+    def test_a_later_run_is_handed_only_the_reads_it_is_asked_again(self):
+        asked = {"footage-window-1:file-tool", "footage-window-2:shell"}
+        steps = [step for step in probe.probe_steps(self.boundary, RUN) if step.name in asked]
+        script = probe.script(steps)
+        self.assertIn(str(self.place / "window-2"), script)
+        self.assertNotIn(f"{self.place / 'window-1'} ", script)
+        self.assertNotIn(f"{self.place} ", script)
+        self.write_record(exit_code=0, started_at="2026-10-09T00:00:00+00:00")
+        self.write_codex_log(self.script_call(1, pids={"footage-window-2": 503}) + self.image_call(2))
+        with self.kernel([], *self.read_denials({"footage-window-2": 503})):
+            result = self.verify(needed=asked)
+        self.assertTrue(result["passed"], result)
+        self.assertEqual(sorted(result["steps_needed"]), sorted(asked))
 
 
 class RecordedLogTest(ProbeTestCase):

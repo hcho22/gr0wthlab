@@ -27,6 +27,7 @@ from . import (
     probe,
     schedule,
     serve,
+    sessions,
     settings,
     sources,
 )
@@ -36,6 +37,8 @@ from .boundary import LEDGER, PRODUCT_REGISTRY, ConfigError, load_json, load_run
 from .queue import QUEUE_FILE, REVIEW_QUEUE, Ledger, QueueError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+# The parts check-work checks, each the work of one session of the weekly run, by that session's workflow.
+WORK_PARTS = (listening.WORKFLOW, outreach.WORKFLOW, learning.WORKFLOW)
 ENTRY = REPO_ROOT / "src" / "bin" / "gr0wthlab"
 INCOMING = REPO_ROOT / "workspace" / "review-queue" / "incoming"
 LEDGER_DIR = REPO_ROOT / LEDGER
@@ -52,7 +55,6 @@ def parser() -> argparse.ArgumentParser:
         help="start one run: sync, snapshot, agent, Review Queue, report, records; a weekly scheduled start runs only"
         " while the week's run is still owed and the Mac is fully awake",
     )
-    run.add_argument("--instruction", type=Path, help="a task definition under src/instructions/ (default: run.json's)")
     run.add_argument("--trigger", choices=launcher.TRIGGERS, default="on-demand")
     run.add_argument(
         "--once",
@@ -71,7 +73,8 @@ def parser() -> argparse.ArgumentParser:
 
     commands.add_parser("show-config", help="print the resolved run configuration and its fingerprint")
     commands.add_parser(
-        "preflight", help="prove the write boundary and the closed network in the sandbox, with no model"
+        "preflight",
+        help="prove the write boundary, the footage folders unread, and the closed network in the sandbox, no model",
     )
     commands.add_parser("check-incoming", help="check the Review Queue items waiting in review-queue/incoming/")
     drafts = commands.add_parser("check-drafts", help="check a run's post Drafts in drafts/posts/ as the launcher will")
@@ -106,11 +109,13 @@ def parser() -> argparse.ArgumentParser:
     work.add_argument(
         "--run", required=True, metavar="RUN_ID", help="the run in progress, as its brief's check-work command names it"
     )
+    work.add_argument(
+        "--part",
+        choices=WORK_PARTS,
+        help="check one session's part only, as that session's brief names it (default: all three)",
+    )
 
     agent = commands.add_parser("launch-agent", help="print a LaunchAgent plist that runs the launcher on a schedule")
-    agent.add_argument(
-        "--instruction", type=Path, help="a task definition under src/instructions/ (default: run.json's)"
-    )
     agent.add_argument("--label", default=schedule.DEFAULT_LABEL)
     agent.add_argument("--boundary-check", action="store_true", help="schedule the boundary check instead of a run")
     agent.add_argument(
@@ -274,7 +279,8 @@ def check_edits(run_id: str, out=sys.stdout) -> int:
     if the day's post Draft passes too, and then measures the result. The two legs of an A/B pair are compared as
     the videos a run that ended now would leave: the one a new record that passes would be cut into, otherwise the
     one the leg's post shows. A record that cannot be cut this run, for a day whose open post shows a video, is no
-    problem to fix: the record stays as it is, and so does the post's video while its Draft is unchanged.
+    problem to fix: the record stays as it is, and so does the post's video while its Draft is unchanged and its
+    finished file is the file its record names; otherwise the line says where that file stands.
     """
     registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
     # As in check_drafts: reading the areas needs no git directories.
@@ -330,11 +336,12 @@ def check_edits(run_id: str, out=sys.stdout) -> int:
             current, unread = posts.read_draft(areas, found.draft_path(number))
             queued_from = found.posted[number].get("draft_sha256")
             keeps = (current is None and not unread) or (current is not None and current.sha256 == queued_from)
-            then = (
-                "the day's post keeps the video it shows"
-                if keeps
-                else "the day's video is cut from it again once it can be"
-            )
+            if not keeps:
+                then = "the day's video is cut from it again once it can be"
+            elif found.intact(number):
+                then = "the day's post keeps the video it shows"
+            else:
+                then = found.kept(number)
             print(
                 f"KEPT day {number}: {asset.edit}: it cannot be cut this run ({asset.detail}), so leave it as it is:"
                 f" {then}",
@@ -356,7 +363,7 @@ def rebuild_asset(record: str, env: dict[str, str], home: Path, out=sys.stdout) 
     """Render a finished asset again from its record under ledger/ and the footage place, and say how it compares."""
     registry = load_json(REPO_ROOT / PRODUCT_REGISTRY)
     boundary = resolve_boundary(REPO_ROOT, load_runtime_config(REPO_ROOT), registry, env, home)
-    where = filming.place(registry, boundary, env, home)
+    where = boundary.footage
     ok, lines = filming.rebuild(Store(LEDGER_DIR), record, where.path if where else None, env)
     for line in lines:
         print(line, file=out)
@@ -439,9 +446,10 @@ def work_context(run_id: str, config, registry, boundary, env, out):
     return plan.context
 
 
-def check_work(run_id: str, out=sys.stdout) -> int:
+def check_work(run_id: str, out=sys.stdout, part: str | None = None) -> int:
     """The launcher's own checks of a run's Listening work, outreach Drafts, and proposed rejection codes, for the
-    agent to use before it finishes. Nothing is written, kept, or queued here.
+    agent to use before it finishes. Nothing is written, kept, or queued here. Each of the three is one session's
+    work, so a session checks its own part alone: what a later session has not written yet is no problem of its.
 
     What may be offered is read from the record the launcher wrote for the run before the agent started, never
     worked out again: the Founder's decisions and records it rests on are saved only when the run ends. Every quote
@@ -497,7 +505,8 @@ def check_work(run_id: str, out=sys.stdout) -> int:
             for finding in sorted({finding.line() for finding in outcome.verdict.warnings}):
                 print(f"  - warning, which does not block: {finding}", file=out)
 
-    if record.get("listening"):
+    wanted = WORK_PARTS if part is None else (part,)
+    if record.get("listening") and listening.WORKFLOW in wanted:
         empty = sources.Snapshot(run_id, now.isoformat(), now.astimezone().date().isoformat())
         plan = listening.restore(record["listening"], source_config, snapshot or empty, store, run_id)
         result = listening.take(plan, context, areas, store, ledger, run_id, now, products, dict(seen), publish=False)
@@ -511,7 +520,7 @@ def check_work(run_id: str, out=sys.stdout) -> int:
             say(False, f"PROBLEM proposal {name}", problems)
         for outcome in result.replies:
             say_message(outcome, f"reply {outcome.target.key}")
-    if record.get("outreach"):
+    if record.get("outreach") and outreach.WORKFLOW in wanted:
         plan = outreach.restore(record["outreach"], areas, run_id)
         if plan.problem:
             print(f"{plan.problem[0].upper()}{plan.problem[1:]}.", file=out)
@@ -520,13 +529,14 @@ def check_work(run_id: str, out=sys.stdout) -> int:
         else:
             for outcome in outreach.take(plan, context, areas, store, ledger, run_id, now, products, False).outcomes:
                 say_message(outcome, f"{outcome.target.label}, {outreach.kind_of(outcome.target)}")
-    coded = learning.take(areas, store, ledger, products, run_id, now, publish=False)
-    for item, code in coded.coded:
-        say(True, f"OK code {item}: {code}, {learning.kind(code)}")
-    for name, problems in coded.set_aside:
-        say(False, f"PROBLEM code {name}", problems)
-    for reason in coded.uncoded():
-        say(False, f"PROBLEM code {reason.item}: its rejection reason has no code yet")
+    if learning.WORKFLOW in wanted:
+        coded = learning.take(areas, store, ledger, products, run_id, now, publish=False)
+        for item, code in coded.coded:
+            say(True, f"OK code {item}: {code}, {learning.kind(code)}")
+        for name, problems in coded.set_aside:
+            say(False, f"PROBLEM code {name}", problems)
+        for reason in coded.uncoded():
+            say(False, f"PROBLEM code {reason.item}: its rejection reason has no code yet")
     print(f"{checked} checked, {failed} with problems", file=out)
     return 1 if failed else 0
 
@@ -538,23 +548,25 @@ def main(argv: list[str] | None = None) -> int:
     home = Path.home()
     try:
         if args.command == "run":
-            return cycle.main(REPO_ROOT, args.instruction, args.trigger, env, home, args.once, arguments)
+            return cycle.main(REPO_ROOT, args.trigger, env, home, args.once, arguments)
         if args.command == "sitting":
             return serve.serve(REPO_ROOT, env, args.port)
         if args.command == "show-config":
-            resolved = launcher.Resolved(REPO_ROOT, env, home, Path("<run>.last-message.md"))
+            resolved = launcher.Resolved(REPO_ROOT, env, home)
             print(json.dumps(resolved.describe(), indent=2, sort_keys=True))
             return 0
         if args.command == "preflight":
-            resolved = launcher.Resolved(REPO_ROOT, env, home, Path("<run>.last-message.md"))
+            resolved = launcher.Resolved(REPO_ROOT, env, home)
             result = codex.run_preflight(
                 resolved.config, resolved.boundary, resolved.codex_bin, resolved.environment, "manual"
             )
+            reads = codex.run_read_probe(resolved.config, resolved.boundary, resolved.codex_bin, resolved.environment)
             network = codex.run_network_probe(
                 resolved.config, resolved.boundary, resolved.codex_bin, resolved.environment, resolved.network_targets
             )
-            print(json.dumps(dict(launcher.preflight_summary(result), network=network.as_json()), indent=2))
-            return 0 if result.ok and network.ok else launcher.EXIT_BOUNDARY
+            summary = dict(launcher.preflight_summary(result), footage=reads.as_json(), network=network.as_json())
+            print(json.dumps(summary, indent=2))
+            return 0 if result.ok and reads.ok and network.ok else launcher.EXIT_BOUNDARY
         if args.command == "check-incoming":
             return check_incoming()
         if args.command == "check-drafts":
@@ -566,14 +578,14 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "check-beta-drafts":
             return check_beta_drafts(args.run)
         if args.command == "check-work":
-            return check_work(args.run)
+            return check_work(args.run, part=args.part)
         if args.command == "launch-agent":
             config = settings.load(REPO_ROOT, env, home)
             if args.boundary_check:
                 program = schedule.boundary_check_arguments(ENTRY)
             else:
-                instruction = settings.instruction_path(REPO_ROOT, args.instruction or config.instruction)
-                program = schedule.run_arguments(ENTRY, instruction, args.once)
+                sessions.definitions(REPO_ROOT)  # a LaunchAgent is not rendered for a run that could not start
+                program = schedule.run_arguments(ENTRY, args.once)
             calendar = schedule.once(args.once) if args.once else schedule.weekly(*config.weekly)
             overrides = {
                 key: value for key, value in env.items() if key.startswith("GR0WTHLAB_") and key != cycle.PRE_RUN_ENV

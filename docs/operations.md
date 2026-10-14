@@ -24,12 +24,16 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
 5. It files each reviewed Dispatch request in `src/dispatches/` that needs filing, such as RepToday's Waitlist, under an identifier that never changes.
    A filed request stays open until the Founder decides it: any reviewed change to its text, the ask or any section, files the new text in its place, and no item the agent writes can replace it.
    A request is never filed again once the Founder approved it, and the same whole text is never asked again once the Founder rejected it.
+   A request is compared with its open item by reading that item's file in `ledger/review-queue/items/`: while the file cannot be read, nothing shows a reviewed change, so the open item stays as it is, the Review Queue output is incomplete, and the run's notice names the file.
+   A request with no open item is compared with each item of it the Founder rejected in the same way.
+   While a rejected item's file cannot be read, the fingerprint the run state holds for that item (of its ask and its request, not its Touches or Evidence) stands in for the file: the reviewed text's own fingerprint means the Founder rejected this ask, so it is not filed again, and another fingerprint means that item asked something else.
+   Where the run state holds no fingerprint either, nothing shows whether the Founder rejected this text, so the request is held: nothing is filed and nothing is withdrawn, the Review Queue output is incomplete, the run report and the run's notice name the file with the reason, and the next run compares them again.
    Two exceptions arise only after a reviewed change to the request's text while an item of it is open, which is firstmate's own reviewed act.
    A reviewed change that brings back a text the Founder rejected, while another text is open, files the rejected text again in that open item's place.
    An approval the Founder gave an item that a reviewed change had already replaced still counts as the request's approval, though Mandu hands no superseded item to firstmate: the replacement stays open for the Founder to decide, no reviewed change replaces it any more, nothing is filed after it, and the run report says so.
 6. It reads the 14-day kit from Mandu, works out which calendar days need post Drafts this run, now that the Founder's decisions are in, and fixes RepToday's `main` to one commit for claim checks.
    From the same kit it reads each asset's shot list and files the filming plan, one item per window, unless one is open or decided and the kit has not changed what must be filmed.
-   It lists the footage place, read-only, and measures every file there with `ffprobe`; the agent never opens the footage, and learns each file's name and measured facts from the brief.
+   It lists the window's footage folder in the footage place, read-only, and measures every file there with `ffprobe`; the agent never opens the footage, and learns each file's name and measured facts from the brief.
    It reads the Founder's Beta Build record (`ledger/founder/beta-builds/RepToday.json`), which is the only thing it takes as an approval.
    Until that record exists it does nothing more about the Beta Cohort, and the run report lists the approval as not recorded.
    Once it exists, it takes in the Founder's Beta Cohort reports (`ledger/evidence/beta-recruiting/reports/`) and fixes the run's next invitation batch: the next sign-ups that asked for a beta invitation and that no batch holds, good Fit first, then by sign-up date, at most the batch size in `config/run.json`.
@@ -43,25 +47,48 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    A source that is disallowed, refused, or failing is reported with its reason, queued in a notice, and marks its workflow incomplete; the run goes on.
    The first time it reads a subreddit's rules, it queues one notice that quotes and links them; no reply Draft for that subreddit is offered until the Founder acknowledges it, and the Founder's answer stands whatever the rules say later.
    It reads the Founder's outreach records from `ledger/founder/outreach/` and works out which messages may be offered: the personal-network ask, one message for each creator in `config/run.json` that the channel plan names, and one follow-up only for a creator who was written to, has not replied, and whose waiting period has passed.
-   It writes the agent's brief and runs the agent in the sandbox with the task definition `src/instructions/weekly-run.md`, at the reasoning effort [`config/guardrails/runtime.json`](../config/guardrails/runtime.json) sets, which is high.
-   The agent has no network, and every run proves it before the agent starts: the preflight tries each listed host from inside the sandbox and stops the run if one is reachable.
-   The agent writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records and the Founder's are, and never write there.
-   Every run proves that for the Founder's records before the agent starts: the preflight tries each of their five folders from inside the sandbox, and stops the run if one takes a file.
-   The agent has a time limit; one still running at it is stopped, and the run goes on without it ([When a run times out](#when-a-run-times-out)).
-7. Once the agent finishes, it restores its owner's read and write access to anything under `workspace/` the agent left without it, and the run report names every entry it fixed, before or after the agent.
-   It queues the items the agent wrote to `workspace/review-queue/incoming/` that pass the format, sets the rest aside, each copied whole to `ledger/review-queue/set-aside/<run id>/`, and turns every problem into one notice.
+   It then decides which workflows have work for the agent this run, and for each of those, one after another, writes that session's brief and runs one agent session in the sandbox, with that workflow's task definition from `src/instructions/weekly-run/`, at the reasoning effort [`config/guardrails/runtime.json`](../config/guardrails/runtime.json) sets, which is high ([One session per workflow](#one-session-per-workflow)).
+   No session has a network, and the launcher proves it before each one's agent starts: the preflight tries each listed host from inside the sandbox, and a session whose preflight reaches one, or does not finish, is not started.
+   It proves the same way, before each session, that no session can read raw footage: the preflight tries to list the footage place and each footage folder in it from inside the sandbox, and a session whose preflight can list one, or does not finish, is not started ([how raw footage is kept from the agent](#how-raw-footage-is-kept-from-the-agent)).
+   Every session writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records and the Founder's are, and never write there.
+   Before each session's agent starts, the preflight tries to create a file in each of the five folders of the Founder's records from inside the sandbox, and the session is started only when every one of those tries was refused: one that created a file, or a preflight that did not finish or did not try a folder, keeps that session from starting.
+   Every session runs under the same time limit, counted for it alone; one still running at it is stopped, and the run goes on to the next session ([When a session times out](#when-a-session-times-out)).
+   After each session it restores its owner's read and write access to anything under `workspace/` that session left without it, and the run report names every entry it fixed, before or after a session.
+   It then puts back any change in `workspace/instructions/`, before the next session starts, so every session starts from the Instructions as the run noted them before its first session and none reads what another session changed.
+   The run report names each change once, with the session it was found after.
+   An entry there that it could not read before the first session started is not guarded: it is left exactly as it is, and the run report names it.
+7. Once the last session has ended, it takes in what all of them wrote, in one pass.
+   It queues the items the sessions wrote to `workspace/review-queue/incoming/` that pass the format, sets the rest aside, each copied whole to `ledger/review-queue/set-aside/<run id>/`, and turns every problem into one notice.
    A post or a message written there is always set aside: the launcher queues those two kinds only from a Draft that passes its checks.
+   An item there that supersedes an open one is set aside too while that open item's file in `ledger/review-queue/items/` cannot be read and no run state remembers its fingerprint: the open item stands, and nothing replaces it in that run.
+   So is an item there with the kind and ask of any queued item, open or decided, whose file cannot be read and whose fingerprint no run state remembers: the ledger still shows that item's kind and ask, so an item with another kind or ask is queued as always, and the Review Queue output is incomplete and names the file.
+   In every workflow, only what the launcher could read takes an open item off the Review Queue: a decision the Founder recorded, a newer item that supersedes it, or a Draft or record that was read and no longer passes.
+   A read that fails is told in one of two ways, by what the launcher was doing when it failed.
+   Where it was judging an open item, and the failed read would otherwise have taken that item back or asked it again, the item stays exactly as it is under its identifier, not checked again, whatever else the check found.
+   The read may be a file that is unreadable, not in its format, or missing where the launcher itself keeps it, or a git read that fails.
+   The run report says so where it tells of the item, that workflow's output is incomplete with the read that failed as the reason, and the run's notice lists each item left that way; the next run checks it again.
+   Those places are the check of an open post, message, reply, or recruiting item against its Draft and what that check reads; an open invitation or Waitlist ask while a report of the Founder's cannot be read; an open follow-up whose record of the first message cannot be read; the open filming plan while the kit cannot be read; a Dispatch request's open item whose item file cannot be read; and an item in `incoming/` that supersedes an open item whose item file cannot be read.
+   Where a whole step did not run because its source could not be read, the launcher judged no item: that workflow's output always reads incomplete in the run report, with the real reason, and no item of that step is touched or listed.
+   Those are Beta Cohort recruiting while the Waitlist view or the Beta Build record cannot be used; a Dispatch request whose reviewed text in `src/dispatches/` cannot be read; the post Drafts while the calendar cannot be read; outreach while the channel plan or the kit cannot be read; replies while the kit cannot be read; and the video of a day whose copy the Founder approved, while that day's Draft cannot be read.
+   The run's notice names such a source only where its read failed as a source, as a package file the snapshot could not read, the Waitlist view, or the Beta Build record does, or where it was recorded as a launcher problem, as a reviewed Dispatch text or a kit that could not be prepared is; for the video of an approved day, the notice's line that no video was cut says its Draft could not be read.
+   A file that was read but could not then be parsed or decoded, which is how the calendar fails when it has lost its table and the channel plan when it is not UTF-8, is told in the run report, and the notice has no line of its own for it.
+   While the window's filming plan is open, a kit file that fails this way, the calendar among them, is why that plan stands, so the notice's list of open items not checked again names the plan with that file as its reason; with no such plan open and nothing else wrong, the run queues no notice.
    Every package-change proposal there declares whether it adds or changes an Angle or Hook (`new_angle`), and the Founder sees the declaration on the item.
    One that declares it does is set aside, with what to add, unless its Evidence names the record of a Listening quote the launcher already keeps; one that declares it does not is queued whatever it touches or says.
    The launcher never checks a declaration against a proposal's wording: the Founder is the check on a wrong declaration, at the sitting.
-   The package review counts as complete only when the agent's summary ends with the line `Review: complete`; otherwise the run report marks it incomplete and the notice says so.
-   That line is the agent's own word, so the run report also shows what the launcher itself counted of the session ([Reading the agent's work](#reading-the-agents-work)).
-   It checks each post Draft the agent wrote in `workspace/drafts/posts/` and queues a post only for one that passes; a blocked Draft is named in the run report and the notice with every failing rule or checklist line, and every check is kept in `ledger/evidence/post-drafts/`.
-   For a Draft that passes, it checks the day's edit record in `workspace/drafts/edits/`, if the agent wrote one, against the shot list and the footage, renders it with `ffmpeg` into `ledger/assets/` with the Draft's text drawn over it, and measures the result; the day's post then shows the finished video.
+   The package review counts as complete only when the Package review session's summary ends with the line `Session: complete`; otherwise the run report marks it incomplete and the notice says so.
+   That line is the agent's own word, so the run report also shows what the launcher itself counted of each session ([Reading each session's work](#reading-each-sessions-work)).
+   It checks each post Draft in `workspace/drafts/posts/` and queues a post only for one that passes; a blocked Draft is named in the run report and the notice with every failing rule or checklist line, and every check is kept in `ledger/evidence/post-drafts/`.
+   For a Draft that passes, it checks the day's edit record in `workspace/drafts/edits/`, if there is one, against the shot list and the footage, renders it with `ffmpeg` into `ledger/assets/` with the Draft's text drawn over it, and measures the result; the day's post then shows the finished video.
    An edit record that fails a check renders nothing and blocks the day's post, naming the rule; missing video tooling is reported as a skipped edit, never as a failed run; every check is kept in `ledger/evidence/filming/`.
+   For a post, what may be unread is its Draft, the Draft of its A/B pair's other leg, the day's edit record, a footage file that record names and that could not be read or measured, the ledger's record of the video cut from it, a kit file, the brand rules, the Product's code, or git's read of one file a claim cites.
+   A claim that cites a file the commit does not hold, and an edit record that names a footage file no longer in the footage place, are checks the launcher could make: the Draft is blocked and an open post withdrawn.
+   A post whose video's finished file is gone or changed still gives way to the same post without a video, but only through a Draft that was read and passes: while something that Draft's check needs cannot be read, the open post stands, the notice says where the file stands, and the first run that reads everything replaces it.
    A cut that fails for a reason outside the edit record (a tooling error, footage that changed while the run worked, a record that could not be written) holds the video as missing tooling does: nothing is blocked, an open post stands, and the run's notice names the failure.
-   Where the day's post shows a video when the run ends, the notice and the run report say that the video could not be cut again and that the post keeps the video it shows; they say a day has no video only when its post shows none.
-   The brief and `check-edits` tell the agent the same beforehand: the edit record of a day whose open post shows a video stays as it is while the video cannot be cut again, and is never reported as a problem to fix.
+   Where the day's post names a video when the run ends, the notice and the run report say that the video could not be cut again; they say a day has no video only when its post names none.
+   They say that the post keeps the video it shows only when the finished file is on disk and is the file the video's record and the post's queue entry name, which the launcher checks by fingerprint every time before it says so ("Video tooling and finished videos" below has what it says otherwise).
+   The Filming session's brief and `check-edits` tell the agent the same beforehand: the edit record of a day whose open post names a video stays as it is while the video cannot be cut again, and is never reported as a problem to fix.
+   The post Drafts session's brief names each such day too, since that post can keep its video only while its Draft stays as it is.
    Before it queues any post, it compares the two videos each A/B pair's posts are about to show, reading each from its own record in `ledger/evidence/filming/assets/`, which knows every footage file by its fingerprint and not by its name: when they show different footage outside their openings, nothing the run changed for the pair is offered, the posts that stood stay, and the run report and the notice name the pair.
    A day whose copy the Founder approved before its video existed gets its video only while its Draft is still that copy; otherwise no video is cut and the notice says so.
    It files each reviewed proposal in `src/proposals/` once, and never again whatever the Founder decides: the brand lint's word lists, and, in a run with outreach messages to offer, the loss-framing and sponsorship-ask lists.
@@ -70,15 +97,18 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    It withdraws an open recruiting item whose Draft stopped passing, or that outlived the end of recruiting, at the Founder's stop or once the Founder reports the cohort full, and keeps the run's recruiting Evidence in `ledger/evidence/beta-recruiting/`.
    It replaces an open invitation that holds a sign-up who left the Waitlist with the batch made again without them, and withdraws it when that batch cannot be made.
    It replaces an open Waitlist ask whose stated gap changed with one that states the current gap, and withdraws it once the cohort can reach its minimum.
-   It puts back any change the run made in `workspace/instructions/`, and names it in the run report.
-   An entry there that it could not read before the agent started is not guarded: it is left exactly as it is, and the run report names it.
+   While a report of the Founder's in `beta-reports/` cannot be read, no reported count ends recruiting and an open Waitlist ask is not judged by its gap, since a later report may correct a count; a recruiting Draft, or a package file it cites, that cannot be read leaves its open item as it is.
+   A report that cannot be read holds back only what rests on the Founder's counts.
+   It does not hold back what the Waitlist's view shows, since the view was read: an open invitation that holds a sign-up who left the Waitlist or its beta opt-in is still taken back.
+   It is replaced by the batch made again without them, as above, unless the counts that were read say the cohort is full: then it is withdrawn with that reason and no batch is made in its place, since a later report may correct that count, the notice names the report, and the Beta Cohort recruiting output is incomplete.
+   Nor does it hold back the address check: a recruiting Draft the brief asked for is read, and removed when it holds what looks like an email address, before anything else is weighed.
    It keeps each quote record whose words stand in the text it fetched from that record's link (`ledger/evidence/listening/quotes/`), and refuses every other: a refused record is removed, and only its file name and the reasons are kept.
-   Once the agent's work is taken in and the run ends, it removes the snapshot.
+   Once the sessions' work is taken in and the run ends, it removes the snapshot.
    It queues a proposed Angle or Hook only when every source it cites is a kept quote, with the confidence it counts itself, and discards an unsourced one with a note: the discarded file is removed, and only its name and the reasons are kept.
    It checks each message Draft in `workspace/drafts/messages/` and queues a message only for one that passes; an open message that may no longer be offered, such as a follow-up to a creator who has since replied, is withdrawn.
    Only a record that was read withdraws a follow-up: when `ledger/founder/outreach/` cannot be read, or the record of a creator's first message is missing after a follow-up was queued from it, cannot be read, or is not valid, that follow-up is neither offered nor withdrawn, an open one stays as it is, and the run report names the outreach records as failed and the Outreach output as incomplete, with the reason.
    For a message Draft, a source it is checked against that cannot be read withdraws nothing either: an open message or reply stands, not checked again, and the Outreach or Listening output is incomplete and names the source.
-   Those sources are the Angle bank, the checklist, and the brand rules; the Product's code, or git's read of one file a claim names when that read times out or cannot start; and the kept quote record a reply answers (`ledger/evidence/listening/quotes/`).
+   Those sources are the message's own Draft; the Angle bank, the checklist, and the brand rules; the Product's code, or git's read of one file a claim names when that read times out, cannot start, or fails on a file the commit holds; and the kept quote record a reply answers (`ledger/evidence/listening/quotes/`).
    A claim that names a file that is not there, and a reply whose quote record is absent altogether, are checks the launcher could make: the Draft is blocked and an open item withdrawn.
    It takes in the code the agent proposed for each rejection reason, writes it beside the Founder's words in that decision's Evidence, and rebuilds the learning ledger (`ledger/evidence/learning/ledger.json`), whose counts read "3 of 7".
    A proposed code that fails its check is set aside: its file is removed, and the run report and notice name it with the reasons.
@@ -90,8 +120,82 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    A record of the Founder's that holds what looks like an email address, as only one changed by hand can, is never committed.
    If `origin/main` moved meanwhile, it replays the records commit on top and retries once; a commit that cannot be pushed stays local and goes with the next run, and the run log says why the replay failed.
 
-The schedule, how often a start of the weekly schedule checks whether the week's run is owed, how many attempts it may take, the agent's time limit, the production clone's path, and the records step are in [`config/run.json`](../config/run.json).
-Launcher logs, Codex's event stream, Codex's own log with its record of each tool call, and each run's record go to `~/Library/Logs/gr0wthlab/`.
+The schedule, how often a start of the weekly schedule checks whether the week's run is owed, how many attempts it may take, each session's time limit and the bound on all of a run's sessions together, the production clone's path, and the records step are in [`config/run.json`](../config/run.json).
+Launcher logs, each session's event stream from Codex, Codex's own log of that session with its record of each tool call, and each run's record go to `~/Library/Logs/gr0wthlab/`: a run's own record is `<run id>.json`, and each session's files carry its workflow after the run's identifier, as in `<run id>.post-drafts.events.jsonl`.
+
+## One session per workflow
+
+A run does not hand the agent everything at once.
+It starts one sandboxed agent session for each workflow that has work due, one after another, and takes in what they all wrote once the last has ended.
+Until 2026-10-12 a run was one session that did every workflow's work, so each workflow added to it made that session longer for every other; [the change's own record](live-checks/20261012-gr0wthlab-session-per-workflow.md#one-session-per-workflow-us-me17) has the design and why.
+
+The sessions, in the order a run starts them:
+
+| Session | It has work due when | What it writes |
+| --- | --- | --- |
+| Package review | The snapshot read at least one package file | Package-change proposals in `workspace/review-queue/incoming/` |
+| Post Drafts | The plan lists a calendar day the Founder has not approved | The due days' Drafts in `workspace/drafts/posts/` |
+| Filming | The Filming table marks a day ready for an edit record | Edit records in `workspace/drafts/edits/` |
+| Beta Cohort recruiting | The Founder's gate is recorded and the plan asks for a Draft | The recruiting Drafts in `workspace/drafts/beta-recruiting/` |
+| Listening | The snapshot holds a thread or a review to read | Quote records, proposed Angles and Hooks, and reply Drafts |
+| Outreach | A message is due | The personal-network ask, the creator messages, and the one follow-up |
+| Rejection reasons | A rejection reason has no code yet, or a strategy reason has no proposal yet | A code for each reason, and the proposal a strategy reason needs |
+
+The order is fixed in launcher code ([`src/gr0wthlab/sessions.py`](../src/gr0wthlab/sessions.py)), because it follows from what each session needs.
+The package review comes first, so every later session can read what it proposed.
+The post Drafts come before Filming, since an edit record runs exactly as long as its day's Draft and a video is cut only from a Draft that passes.
+The rejection reasons come last, so their proposals can take account of every proposal the run already holds.
+Sessions never run at once: one checkout has one `workspace/`.
+
+Which sessions a run starts is decided once, before the first, from what the launcher read by then.
+A workflow with nothing due starts no session, and the run report says so with the reason, as in `no session: no calendar day is ready for an edit record`.
+
+What a session is, and is told:
+
+- Each session is a fresh Codex process started by the launcher, with the same command as every other but for where it writes its closing message.
+  So each runs under the same committed permission profile, with the network off, and keeps nothing from the session before it: only the files in `workspace/` pass from one to the next.
+  The launcher proves the boundary before each session's agent starts, and records the configuration fingerprint of each session's own command; the run report says whether they are all the same.
+- Its task definition is the part every session shares (`common.md`), then the shared parts its workflow uses (`items.md` for writing a proposal, `messages.md` for writing a message Draft), then its workflow's own part, all reviewed files in `src/instructions/weekly-run/`.
+  The launcher puts them together, so a rule that binds every session is written once, and a run refuses to start when a part is missing.
+- Its brief (`ledger/run-reports/<run id>.<workflow>.brief.md`) is written just before it starts and holds the run's facts, then its workflow's section alone.
+  It lists the package files the Product registry says that workflow's output needs (`needed_by` in [`config/products.json`](../config/products.json)); the package review's brief lists them all, and the Filming and Rejection reasons briefs list none, since those briefs hold what the sessions work from.
+  It names the sessions the run starts, and no workflow with nothing due, so nothing is said of work that has not begun.
+- A session that may write proposals is told which files wait in `incoming/`, by name alone, so it neither repeats one nor rests a claim on text an earlier session found stale.
+  The Filming session is told which ready days have a post Draft in place.
+
+The launcher takes nothing in while a session can still write.
+One take-in, once the last session has ended, keeps every take-in rule what it was when a run had one session: a post is queued together with its video, the two videos of an A/B pair are compared once, and the Review Queue is written once.
+A later session reads an earlier one's work as files in `workspace/`, never as queued items.
+Every session has the same six areas, so a later one can change a file an earlier one wrote before the launcher has read it; the counts below are made per session, by fingerprint, so the report shows it.
+The agent's Instructions are the exception, since every session is told to read its working guidance there.
+The launcher notes `workspace/instructions/` before the first session and puts it back as noted after every session, in the same step that restores access to `workspace/` and before the next session starts or anything is counted or taken in.
+So no session works from Instructions another session of the same run changed, and a file one session added there is gone before the next starts.
+That step is a restore and no take-in: nothing else in `workspace/` is read or changed by it.
+The report's Learning section and the notice say once what was changed and put back, each line with the session it was found after, as in ``after the Listening session: `instructions/outreach.md` was changed during the run and put back as it was``.
+A change that could not be put back is told the same way, and the next session then reads the file as it stands.
+
+One workflow's trouble stays its own.
+A session that does not start, is stopped at its time limit, or ends with an error leaves the sessions after it to run.
+The launcher takes in whatever that session had written, by the same rules, marks that workflow's outputs incomplete with the real reason, and only those, and names the session in the run's notice with the output it left incomplete.
+Starting a session and marking its output are one test.
+A session has work due exactly when its workflow owes work the launcher can name, which is the table above, and a session that was started and fell short always leaves its own workflow's output incomplete, whatever it had written by then: a session that wrote every file and then ended with an error still reads incomplete, since nothing shows that it finished.
+With the reason, the row names what the launcher can still name of that workflow's work: a day with no Draft, a ready day with no edit record, a missing recruiting Draft or message, a rejection reason with no accepted code, and a strategy reason with no package-change proposal.
+A Filming session is started for every week with a day ready for an edit record, also when each such day keeps the record an earlier run left: its work is then to check each record against the day's post Draft and the footage as they now stand, and to write again one that no longer passes.
+
+A session that ended with an error is told by its exit code, in the launcher's own words.
+Where Codex reported an error, the report adds the launcher's own class of it and never the error itself, which is text that Codex or the model's provider wrote and can hold account details: `ended with exit code 1 and an error the launcher recognizes as the model's provider refusing or limiting the request, whose own text is only in the run's local log`, or `an error Codex reported` where the launcher recognizes no class.
+The same words stand in the Outputs row, the workflow's line under Run state, the Sessions section, the summary, and the notice, and nothing in `ledger/` or `workspace/` repeats the error.
+It is in that run's record in the log folder, `codex_last_error` under the session in `~/Library/Logs/gr0wthlab/<run id>.json`, and in the session's own event stream beside it.
+The class says what the error is recognized as and nothing of what the agent did before it: a refusal can come after turns that wrote files, so that session's work is counted and taken in as any other session's, and its lines in the report say what the launcher counted.
+A session that did not start is told with the launcher's own reason, which after a `codex --version` or `codex sandbox` probe that exited with an error ends with up to 500 characters of what that probe wrote to its error stream; those probes run with no model.
+Where a later session could not do its work because an earlier one fell short, its own section of the report shows the work not done, such as a ready day with no edit record; its output is not marked incomplete for the other session's trouble.
+Every run still ends with its report.
+A run's exit code is 0 when every session it had work for ended without an error, and otherwise that of the first session that fell short, which is 6 for one stopped at a limit.
+
+Every session ends its summary with one line, `Session: complete` or `Session: incomplete: <what, and why>`.
+It is the agent's own word.
+The launcher reads it in two places only: the package review's output is complete only when the Package review session's summary ends with `Session: complete`, and a weekly attempt the Mac slept during is the week's run only when every session confirmed its work that way ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
+Every other output is judged by what the launcher itself can check.
 
 ## What is kept of what a run fetches
 
@@ -113,7 +217,7 @@ They are known gaps, not yet decided by the Founder:
   The reasons a Draft's checks give, kept with the Evidence of those checks, can quote the Draft.
   The reasons an edit record's checks give can quote its `shot` and `source` values whole.
   They are kept in the run's filming Evidence (`ledger/evidence/filming/<run id>.json`), in the day's post verdict in the post Drafts Evidence (`ledger/evidence/post-drafts/<run id>.json`), and in the run report and notice.
-- The run report quotes the agent's own summary, up to 4,000 characters.
+- The run report quotes each session's own summary, up to 4,000 characters each, where it quoted one session's before a run had several.
 - What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, and the line that says why a rejection code fits.
 
 Only three things leave their file name and the launcher's reasons and nothing else: a quote record the launcher refuses, a proposed Angle or Hook it discards from `workspace/review-queue/angles/`, and a rejection code it sets aside.
@@ -124,7 +228,7 @@ Each is removed from `workspace/` and copied nowhere.
 ```sh
 git clone https://github.com/hcho22/gr0wthlab.git ~/gr0wthlab
 cd ~/gr0wthlab
-src/bin/gr0wthlab preflight        # proves the write boundary and the closed network with no model
+src/bin/gr0wthlab preflight        # proves the write boundary, the footage folders unread, and the closed network with no model
 src/bin/gr0wthlab boundary-check   # the US-ME02 check, from this clone
 src/bin/gr0wthlab run              # the first run, on demand
 ```
@@ -150,6 +254,9 @@ Once it is installed, the first start begins that week's run unless a run has co
 The schedule lives only in `config/run.json`: the LaunchAgent takes its time and its interval from there, and each run reads the same entry to tell whether it started late and when the next run is due (`next_run` in the Review Queue).
 To change the sitting day or time, how often the launcher is started, or how many attempts a week's run may take, change `schedule` in `config/run.json` through a reviewed pull request.
 After a change of day, time, or interval, once it has reached the production clone, remove the LaunchAgent as under [Stop or remove the schedule](#stop-or-remove-the-schedule) and install it again as above, since a LaunchAgent keeps what it was rendered with; the number of attempts is read at every start and needs no reinstall.
+The same holds after any change to the launcher's command line, since a LaunchAgent starts the launcher with the command it was rendered with.
+A LaunchAgent rendered before the change to one session per workflow starts `run` with `--instruction <file>`, which `run` no longer takes: remove it and install it again once that change has reached the production clone, and do the same after any later change to the options `run` takes.
+Until then every start of the schedule, at the weekly time and at each check after it, ends at argument parsing: no run, no report, and no notice.
 After a change of day or time, the launcher's records hold no run for the new weekly time that has just passed, so the next start begins one.
 A window's `first_sitting`, once set, must fall on the sitting's day, so a change of day changes it in the same pull request; a run refuses to start otherwise.
 
@@ -246,7 +353,8 @@ Nothing is lost either way: every record was written when it was given.
 - Everything an item, a run report, or a record says is shown as text.
   The page lays an item out by its lines and makes no link, image, style, script, form, or tag from anything in it.
 - The page loads its own style sheet, script, and icon, and nothing else; its content security policy forbids every script, style, image, video, and request it did not ship.
-- The sandboxed agent cannot write `ledger/founder/`: every run's preflight proves it, and so does [the boundary check](#after-a-change-to-the-launcher-or-configuration).
+- The sandboxed agent cannot write `ledger/founder/`: the permission profile makes no part of it writable.
+  Before each session's agent starts, the preflight tries to create a file in each of the five folders from inside the sandbox, and the agent is started only when every try was refused; [the boundary check](#after-a-change-to-the-launcher-or-configuration) has the agent itself try each folder with both of its tools.
 
 ## A run happens when the Mac is awake
 
@@ -277,11 +385,14 @@ What a week looks like:
 - The Mac is asleep or off at 16:00: the run starts within about two minutes of the Mac next being fully awake, and its report says when it was due and when it started.
   A start more than `schedule.late_after_minutes` minutes after its time, 15 today, reads as started late, with how long after its time that was.
 - The Mac goes to sleep in the middle of a run: the run is frozen while the Mac sleeps and goes on whenever the Mac is running, a dark wake included.
-  If it finishes that way, its agent ending without an error and confirming its review, it is the week's run.
-  If it does not, whatever ended it and wherever in the run the Mac slept, the run does not count as the week's run: its report, where it has one, says that the Mac's sleep cut it short and for about how long the Mac slept, and a fresh, whole run starts by itself once the Mac is fully awake.
+  If it finishes that way, every session ending without an error and confirming its work, it is the week's run.
+  If it does not, whatever ended it and wherever in the run the Mac slept, in whichever session or between two, the run does not count as the week's run: its report, where it has one, says that the Mac's sleep cut it short and for about how long the Mac slept, and a fresh, whole run starts by itself once the Mac is fully awake.
   The fresh run's report says when the run was due, when it started, which attempt it is, and when each attempt before it started.
 
-A fresh run is a whole run under the same rules as any other: it queues nothing an earlier attempt already queued, asks again nothing the Founder decided, and keeps what was carried over.
+A fresh run is a whole run under the same rules as any other: it starts every session that has work due again, the ones that finished in the cut-short attempt included, queues nothing an earlier attempt already queued, asks again nothing the Founder decided, and keeps what was carried over.
+It does not resume at the first unfinished session.
+The cut-short attempt has already taken in what its finished sessions wrote, so the fresh session's brief lists that work as open, and a Draft already in place is rewritten only for a reason; a record of which sessions an attempt finished would need a rule for when it is stale, since a decision or a package change between two attempts changes what a finished session would have written.
+Repeating a finished session costs time and money, at most one run's worth for each attempt, which `schedule.attempts_per_week` bounds.
 An attempt that a fresh run is to follow queues no notice for being cut short, since nothing is needed from the Founder.
 Its notice also leaves out every part that only restates work its agent did not reach: a due day with no post Draft, a recruiting Draft that was not written, and an outreach message, first or follow-up, with no Draft.
 The fresh run, being a whole run, does that work again and reports on it itself.
@@ -297,23 +408,25 @@ That notice leaves nothing out: it lists the work the agent did not reach as any
 
 Which endings earn another attempt:
 
-- An attempt completed when its agent ended without an error and, besides, either the Mac stayed awake for the whole attempt or the agent's summary confirmed its review, ending with the line `Review: complete`.
+- An attempt completed when every session it had work for started and ended without an error and, besides, either the Mac stayed awake for the whole attempt or every one of those sessions confirmed its work, ending its summary with the line `Session: complete`.
   It is the week's run, and nothing follows it.
-  With the Mac awake throughout, an agent that ended without an error completed the attempt whether or not it confirmed its review; a review it did not confirm queues its notice as in any run.
+  A workflow with nothing due is no part of that.
+  With the Mac awake throughout, sessions that ended without an error completed the attempt whether or not each confirmed its work; a package review that was not confirmed queues its notice as in any run.
 - An attempt that did not complete and during which the Mac slept was cut short by sleep, and earns another.
-  The sleep counts wherever it fell: during the pre-run fetch in the production clone, while the launcher asked git for the checkout's boundary, during Codex's version probe or the boundary preflight, or while the agent ran.
-  It counts however the attempt then ended: refused before it started, stopped by an error, with its agent never started, stopped at its time limit, ended with an error, or ended without an error and without confirming its review.
-  The last is what an agent can leave that the Mac's sleep froze in the middle of its work: its report says that the agent ended without an error, that the Mac slept during the run, and that the review was not confirmed, where it would otherwise say that the run finished.
+  The sleep counts wherever it fell: during the pre-run fetch in the production clone, while the launcher asked git for the checkout's boundary, during Codex's version probe or a boundary preflight, while a session ran, or between two sessions.
+  It counts however the attempt then ended: refused before it started, stopped by an error, with a session never started, stopped at its time limit, or ended with an error, or with every session ended without an error and one of them not confirming its work.
+  The last is what an agent can leave that the Mac's sleep froze in the middle of its work, and the sleep can freeze whichever session is running, so the launcher asks every session's closing line and not one: the report says that every session ended without an error, that the Mac slept during the run, and which session did not confirm that it finished, where it would otherwise say that the run finished.
   Such an attempt does not block the week.
   A fresh, whole run follows by itself, within `schedule.attempts_per_week`, and that run's report names it as it names any earlier attempt.
 - An attempt that did not complete with the Mac awake throughout earns none and waits for the Founder.
-  That covers a run that timed out, whose agent stopped early or never started, that was refused before it started, or that an error stopped.
+  That covers a run with a session that timed out, stopped early, or never started, and a run that was refused before it started or that an error stopped.
+  The record of the week's run keeps how the first session that fell short ended.
   Its report, where it has one, says that no run starts by itself after it.
 - An attempt that left no ending, as when the Mac was restarted in the middle of it, earns none either, whether or not the Mac slept; the next run's report names it.
 
-The launcher tells sleep the same way for a whole attempt as for the agent's own time.
+The launcher tells sleep the same way for a whole attempt as for one session's own time.
 It reads the Mac's two clocks as a start begins: the wall clock, which goes on while the Mac sleeps, and awake time, which does not.
-It reads them again once the agent has ended, or when a start ends before it has a report.
+It reads them again once the last session has ended, or when a start ends before it has a report.
 A difference of 5 seconds or more between the two is the Mac asleep; anything less is the clocks' own difference.
 A start that restarts itself on newly fetched code carries its reading across the restart, so the fetch counts.
 An attempt that ended before its report has no report of its own to say that the Mac slept.
@@ -336,25 +449,59 @@ Until `first_sitting` is set, every run prepares calendar days 1 to 7 as the fir
 Once it is set, each run prepares the calendar days from the next day through the end of the week after the coming sitting (on the sitting's own day, exactly that week), skipping any day already approved, and each post's slot is its date at `slot`.
 A changed slot reaches an open post at the next run, which replaces the post with one that carries it.
 A post that shows a video keeps it through that change even when the video cannot be cut again in that run, for example while its footage is away or `ffmpeg` is missing: the post that replaces it shows the same finished file, as long as its Draft and its edit record are the ones it was made from and the file is still the one its record names.
-Otherwise the open post stands as it is, the run report says so, and the slot reaches it once the video is cut again.
+With another edit record, or a finished file that could not be read, the open post stands as it is, the run report says so, and the slot reaches it once the video is cut again.
+With a finished file that is gone or changed, the post that carries the slot shows no video ("Video tooling and finished videos" below).
 
 ## Set the footage place
 
 The footage place is the one folder where the Founder drops raw footage for gr0wthlab to cut.
-It is unset until the Founder sets it, in `filming.footage.local_path` for RepToday in [`config/products.json`](../config/products.json), through a reviewed pull request:
+The Founder named it on 2026-10-11: RepToday's own folder in Mandu, set in `filming.footage.local_path` for RepToday in [`config/products.json`](../config/products.json):
 
 ```json
-"footage": {"local_path": "~/Movies/gr0wthlab-footage", "env": "GR0WTHLAB_FOOTAGE_DIR", "access": "read-only"}
+"footage": {"local_path": "~/Mandu/projects/RepToday", "env": "GR0WTHLAB_FOOTAGE_DIR", "access": "read-only"}
 ```
 
-`~/Movies/gr0wthlab-footage` is the proposed place.
-It is outside the production clone, Mandu, and every Product checkout, it is not a folder iCloud syncs, and macOS lets the scheduled run read `~/Movies` without the consent prompt that guards the Desktop, Documents, and Downloads folders.
-The launcher refuses to start if the place overlaps this repository, Mandu, a Product checkout, or anything else the sandbox reads, since the agent could then open the footage.
-`GR0WTHLAB_FOOTAGE_DIR` overrides it on one machine, for example to try a run against test clips.
-The change touches `config/products.json`, so it needs the boundary check below.
+Raw footage goes in that folder's `window-<n>/` folders, the footage folders, beside the package in `gtm/`.
+`GR0WTHLAB_FOOTAGE_DIR` overrides the place on one machine, for example to try a run against test clips.
+The place is written from the home folder, so it does not move with `GR0WTHLAB_MANDU_DIR`: a machine or a test that points that at another Mandu sets `GR0WTHLAB_FOOTAGE_DIR` too, or its runs read the footage folders of the Mandu in the home folder.
+A change of the place is a reviewed change to `config/products.json`, so it needs the boundary check below.
 
-gr0wthlab only ever reads the footage place: it fingerprints and measures each file and cuts finished videos from them, and nothing in it writes, renames, moves, or deletes anything there.
-The sandboxed agent never opens it.
+### How raw footage is kept from the agent
+
+The sandboxed agent reads nothing in a footage folder, and the runtime enforces that, not a sentence in the task definition.
+The permission profile denies whatever it does not grant, and of Mandu it grants only the package paths the Product registry names: for RepToday, `projects/RepToday/gtm/` and the launch checklist.
+Nothing else in the Mandu checkout is granted, so the footage folders are refused to the agent's shell and to its file tool alike, with the rest of the Product's folder, every other folder in Mandu, and Mandu's `.git`.
+Each session's prompt lists the paths the agent can read of Mandu.
+[This change's live checks](live-checks/20261012-gr0wthlab-footage-place.md#what-the-runtime-refuses) have what was measured, and why the profile grants less of Mandu rather than denying the footage folders by name.
+
+Three things hold it, each stricter than the one before:
+
+1. The launcher refuses to start unless the profile it builds keeps the sandbox out of the footage folders (`keep_footage_unread` in [`src/gr0wthlab/boundary.py`](../src/gr0wthlab/boundary.py), the one place the rule is kept).
+   A place the sandbox can read is refused, whatever it is: this repository, a Product checkout, or a folder inside the package.
+   A place may hold something the sandbox reads only inside Mandu, and there never in a footage folder; the refusal says which of the three it is.
+2. Before each session's agent starts, with no model, the preflight tries inside that session's own sandbox to list the footage place and each footage folder that exists in it.
+   When every one of them is refused, the session says `preflight refused a listing of the footage place and of <n> footage folders in it` and goes on to its network probe.
+   A listing that succeeds keeps that session's agent from starting, with `the sandbox could read where raw footage is kept` and the folder: the run marks that session's workflow incomplete and goes on to the next session, whose own preflight comes first, so no session starts while a footage folder can be listed.
+   A probe that listed nothing and fell short, because it did not finish in time, ended with an error, or did not try a folder, keeps that session's agent from starting the same way, with `the check that the sandbox cannot read the footage place did not finish` and the reason; it says nothing of what the sandbox could read, since no record shows a listing.
+   The session's record holds the one wording, and the line the run prints, the run report's rows, and the notice repeat it.
+   The network probe before each session is worded the same way: only with a listed host it reached does the run print `the sandbox reached the network` and the session's record say `the sandbox's network was not closed`, and a probe that reached none and fell short says `the check that the sandbox cannot reach the network did not finish`, with the reason.
+   The run report's `Sandbox footage` line counts only what each session's own record of the listing covers.
+   It says `tried from inside the sandbox before each of <n> sessions` when every session's record holds an outcome for the place and for each footage folder that session had to try.
+   Otherwise it says `before <k> of <n> sessions` and then, for every other session, either `not tried before the <name> session` with the folders its listing left untried, or `nothing tried before the <name> session` where the listing never ran because that session's write proof had failed.
+   The `Sandbox network` line counts the listed hosts the same way; the network probe runs only once the write proof and the listing have passed, so the line says nothing was tried before a session where either had not.
+3. The boundary check below has the agent itself try each of them, and passes only on the runtime's own record of each refusal.
+
+Two things the agent can still learn, neither of them footage.
+The brief tells it each file's name, length, size, frame rate, and whether it has sound, since it writes the edit records.
+And the system still answers a question about one file by its full name, such as its size and dates, though the sandbox can neither list a footage folder nor open a file in one.
+
+Raw video in that folder sits in Mandu's working tree, and Mandu's git does not ignore it.
+gr0wthlab never writes to Mandu, so it cannot add the ignore rule: that is the Founder's to do in Mandu, for example a `projects/RepToday/window-*/` line in Mandu's `.gitignore`.
+Until it is there, a commit made in Mandu can take raw video into Mandu's history, and the boundary check, which fingerprints every changed or untracked file in Mandu before and after it runs, reads each clip twice.
+
+gr0wthlab only ever reads the footage folders: it fingerprints and measures each file and cuts finished videos from them, and nothing in it writes, renames, moves, or deletes anything there.
+For footage it reads only the place's `window-<n>/` folders, and `rebuild-asset` takes a source from nowhere else; the rest of that folder is the package, which the launcher reads as it always has.
+The sandboxed agent never opens a footage folder.
 Keep the footage there for as long as its videos may need rebuilding.
 Leave a file as it is, under the name it has, once a video was cut from it.
 Another recording put in its place under the same name is other footage: the later leg of an A/B pair cut from it is not offered beside a video cut from the first, the notice names the file, and `rebuild-asset` refuses it.
@@ -365,7 +512,8 @@ So keep a file under its name for as long as a post or a rebuild needs it.
 Name each file for its shot in the approved filming plan, in one folder per 14-day window:
 
 ```text
-~/Movies/gr0wthlab-footage/
+~/Mandu/projects/RepToday/
+  gtm/                   the package, as before
   window-1/
     d01-s1.mov           shot d01-s1 of the plan: day 1's first shot
     d01-s1-take-2.mov    another take: anything may follow the shot's name after a hyphen, space, or underscore
@@ -408,6 +556,30 @@ The command renders the video again beside where its record says it was, measure
 Anything else, such as a render by other tooling, which can encode the same frames differently, is reported and discarded, and whatever is at that path stays as it was.
 A video no open or approved post names can simply be deleted.
 
+A finished file is the only copy of its video, since it never enters git, so every run checks the file of each video an open post names: it must be on disk, and its fingerprint must be the SHA-256 the video's record and the post's queue entry hold.
+The launcher says a post shows or keeps a video only when that check passes.
+A post the Founder approved is never asked again, so its file is not checked and nothing about its file is reported.
+When an open post's file is gone, or is no longer the file its record names, nothing is substituted, and whatever is at that path is left as it is.
+When the run can cut the video again, it does, and the post stands or is replaced as for any video.
+When it cannot, for example while the footage or `ffmpeg` is away, the open post no longer has the video it names, and one of three things becomes of it, each decided by a standing rule and not by this check:
+
+- It is replaced by the same post without a video (the Founder's decision of 2026-10-12) when the run checks the post's own Draft and may ask for it again: the day is due in that run, the Draft the post was queued from is in place and passes, and the day's edit record is in place.
+  The rule is the one for any due day whose Draft passes while no video can be cut for it: its post is queued without one.
+  The new item says there is no video yet and why, approving it approves the copy and the beat plan only, and the video comes back for approval in a later item once it is cut again.
+  The run report and the notice name both posts and the file.
+- It leaves the queue when the run checks that Draft the same way and nothing may be asked in the post's place.
+  Two of the rules keep a decision from being asked again: a day's copy the Founder approved is never asked again, and a Draft the Founder rejected is not asked again until it changes.
+  The third is the item format: the post without a video is checked against it once more as it is queued, and one that does not follow it blocks the day as any failing check does, so nothing is queued.
+  The run report and the notice name the post and the file and say that nothing is asked in its place, and why: under the first two rules that the Founder already decided the day's copy, and under the third that its Draft no longer passes.
+- It stands as it is, and every run's report and notice name it and its file, when the run does not check the post's own Draft.
+  The rules are these: a run prepares, checks, and cuts only the days due in it, so nothing is cut for a day that is not due; an open post stands while its Draft is gone; an open post is not checked again, and so not withdrawn, while its Draft or anything else its check reads cannot be read (step 7 of [What one run does](#what-one-run-does) lists what that may be for a post); and a day whose copy the Founder approved is checked again only while its Draft is still that copy and it has an edit record.
+  It also stands, named the same way, when the run cut a video for the day and the pair check did not let it through, since nothing a run changed for a pair whose two videos differ is offered.
+
+Whatever else changed for the day, such as a Draft that was rewritten or fails a check, or an edit record that is gone, is settled as for any open post.
+The pair rule holds across the replacement: a leg whose post now shows no video has nothing to compare, and its video is compared with the other leg's again when it is cut again.
+A file that cannot be read is not a file that is gone: the report and the notice give the reason the read failed, nothing is said of whether the post keeps its video, the open post stands, and the report marks the filming output incomplete.
+The same holds when the video's own record under `ledger/evidence/filming/assets/` cannot be read or does not name the file the post names.
+
 ## Mark the Waitlist live
 
 No public post may go out before the Waitlist is live.
@@ -441,50 +613,61 @@ One that the Mac's sleep cut short is not run again by itself, and leaves the we
 Only one run works at a time in each checkout: a run started while another is in progress in the same checkout, scheduled or on demand, refuses to start with exit code 5, and that checkout's next run report says it was refused.
 A start of the weekly schedule refused that way has made no attempt, so the next check starts the run once the other has ended, if it is still owed.
 A run that cannot finish, for example because a file it must write cannot be written, stops with exit code 6 instead of a crash, and the next run report says so too, as it does when a run could not write its report.
-A run whose agent was stopped at its time limit also ends with exit code 6, after it has written its own report, which says it timed out.
+A run with a session that was stopped at its time limit also ends with exit code 6, after it has written its own report, which says which session timed out.
 Each checkout keeps its run lock (`ledger/run.lock`, never committed) and these notes for its next report (`ledger/notes/`) in its own `ledger/`, so a run in a firstmate worktree never blocks or hides a production run.
 
-## Reading the agent's work
+## Reading each session's work
 
-A run is one agent session, and it ends when the agent writes its final message.
-The launcher checks everything the agent wrote, but whether the agent did all its work is something only the agent says, in the `Review:` line that ends its summary.
-That line has read `Review: complete` after sessions that did the least, so no run should be judged by it alone.
+A run is one agent session for each workflow that has work due, and a session ends when its agent writes its final message.
+The launcher checks everything a session wrote, but whether an agent did all its work is something only the agent says, in the `Session:` line that ends its summary.
+Such a line has read complete after sessions that did the least, so no session should be judged by it alone.
 
-Each run report therefore has an `Agent's work` section, and a line in its summary, that set two things side by side and name each for what it is:
+Each run report therefore has a `Sessions` section, and a line for each session in its summary, that set two things side by side and name each for what it is:
 
-- What the launcher counted, from Codex's record of the session, the Draft files the run left, and the Review Queue.
-  None of it comes from what the agent says of itself.
-- The agent's own word: its closing `Review:` line, quoted.
+- What the launcher counted, from Codex's record of that session, the Draft files the run left, and the Review Queue.
+  None of it comes from what an agent says of itself.
+- The agent's own word: its closing `Session:` line, quoted.
 
-The counts:
+The section opens with one row for every workflow: how its session ended, or why it had none, with its agent time, its limit, its cost, and its agent's closing line.
+Then comes each session that was tried, with its counts, the brief it was given, and the agent's own summary, and last the run's totals.
 
-- `Agent time`, against the limit, with the model and reasoning effort the agent ran at.
-- `Package files read`: how many of the package files the brief listed came back to the model.
+The counts, each of one session alone:
+
+- `Agent time`, against that session's limit, with the model and reasoning effort it ran at.
+- `Approximate cost`, from that session's own token counts.
+- `Package files read`: how many of the package files that session's brief listed came back to the model.
   Codex shows the model at most about 40,000 characters of one command's output, the first and last halves of that, and cuts the middle.
   A session that prints every package file in one command is shown the first and last few, so naming a file in a command is not reading it.
   The launcher counts a file as read when at least half of its lines of 24 characters or more are in the part of some command's output the model was shown; the figure is `work_counts` in [`config/run.json`](../config/run.json), a fact about Codex that needs measuring again after a Codex upgrade or a change of model.
   A file with no line that long is counted only when a command that names its path was shown its whole text, since short lines such as a lone brace are in any output.
   The count is a floor: a file read some other way, such as by a pattern that does not name it, is not counted.
+  A session whose brief lists no package file, as the Filming and Rejection reasons briefs do, has none to count, and its line says so.
 - `Draft claims`: how many claims the post Drafts this session wrote or changed list, how many of them name a code location, and how many name none.
-  The post Drafts stay in `workspace/` from run to run, and the agent is told to leave an open day's Draft alone when nothing in it needs changing, so a Draft on disk is often an earlier run's work.
-  The launcher therefore takes the fingerprint of each due day's Draft before the agent starts, and counts a Draft as this session's only when it is new or its fingerprint differs once the agent has ended.
+  The post Drafts stay in `workspace/` from run to run, and the Post Drafts session is told to leave an open day's Draft alone when nothing in it needs changing, so a Draft on disk is often an earlier run's work.
+  Every session can write there, so the launcher takes the fingerprint of each due day's Draft before each session starts, and counts a Draft as a session's only when it is new or its fingerprint differs once that session has ended.
   The line says how many of the Drafts due those are, and a session that wrote or changed none has no Draft claims to count.
   A claim item that does not follow the format names no code location, so the two figures add up to the claims listed.
 - `Proposals this session wrote to incoming/`: how many package-change proposals this session wrote or changed in `workspace/review-queue/incoming/` that the launcher queued.
-  An Angle or a Hook the session proposes from Listening goes through `workspace/review-queue/angles/` instead: it is accounted for in the report's Listening section and is not in this count.
-  A run queues everything standing in `incoming/`, and a run that could not read the Review Queue, or was stopped before it took its items in, leaves its session's items there for the next run.
-  The launcher tells those apart as it does the Drafts, by each file's fingerprint before the agent starts and once it has ended, and the line names them beside the session's own: `0 queued; 5 more queued in this run were left by an earlier run`.
+  An Angle or a Hook the Listening session proposes goes through `workspace/review-queue/angles/` instead: it is accounted for in the report's Listening section and is not in this count.
+  The launcher tells one session's proposals from another's as it does the Drafts, by each file's fingerprint before the session starts and once it has ended.
 
-The launcher takes one reading of the Drafts due and of `incoming/` before the agent starts, and one once it has ended.
-When either cannot be taken, for example in a folder left closed, neither the Draft claims nor the proposals are counted and the launcher problems say why; the run starts and goes on as it would have.
+The run's totals follow: how many sessions ran of the ones with work due, their agent time together against the bound on all of a run's sessions, their cost together, and the Draft claims and proposals of the run's sessions together.
+A run queues everything standing in `incoming/`, and a run that could not read the Review Queue, or was stopped before it took its items in, leaves its sessions' items there for the next run.
+The totals name those beside the run's own: `0 queued; 5 more queued in this run were left by an earlier run`.
+
+The launcher takes one reading of the Drafts due and of `incoming/` before each session starts, and one once it has ended.
+When either cannot be taken, for example in a folder left closed, that session has neither Draft claims nor proposals counted and the launcher problems say why; the session starts and the run goes on as it would have.
 
 The counts inform the Founder and gate nothing: nothing is queued, blocked, or marked incomplete because of one, and every check of an item or a Draft is what it was.
-The launcher still reads the agent's closing line itself in two places, and the counts change neither: the package review's row is complete only on the line `Review: complete`, and a weekly attempt the Mac slept during is the week's run only when the agent ended without an error and its summary ends with that line ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
-A count that cannot be made is listed as a launcher problem, and the run goes on without it; that holds for the one reading the launcher makes for a count before the agent starts as well.
+The launcher still reads an agent's closing line itself in two places, and the counts change neither: the package review's row is complete only when the Package review session's summary ends with `Session: complete`, and a weekly attempt the Mac slept during is the week's run only when every session it started ended without an error and with that line ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
+A count that cannot be made is listed as a launcher problem, and the run goes on without it.
 The run's notice lists that problem like any other launcher problem, so a run that would have queued no notice queues one for it.
-The run's log record in `~/Library/Logs/gr0wthlab/` holds the same counts under `work`, with the name of every package file not read.
+The run's log record in `~/Library/Logs/gr0wthlab/`, `<run id>.json`, holds every session's counts under that session's `work`, with the name of every package file not read.
+Each session's own record there, `<run id>.<workflow>.json`, holds what its agent was started with and how it ended.
 
-What the counts looked like when they were introduced, on 2026-10-11, against Mandu and RepToday as they were.
+### What the counts have looked like
+
+The counts were introduced on 2026-10-11, when a run was still one session, against Mandu and RepToday as they were.
 Each run was on demand in a fresh clone, so each was a first week: a package review and the first batch's seven post Drafts.
 
 | Reasoning effort | Runs | Ended with the words `Review: complete` | Package files read, of 24 | Draft claims naming code | Proposals queued | Agent time | Cost a run |
@@ -492,68 +675,94 @@ Each run was on demand in a fresh clone, so each was a first week: a package rev
 | medium, Codex's default, on `main` before the change | 3 | 0 | 6, 11, and 24 | 4 of 25 | 0 to 1 | 59 s to 2 min 38 s | $0.012 to $0.028 |
 | high | 10 | 10 | 11 to 24, all 24 in four runs | 78 of 97 | 2 to 13 | 4 min 43 s to 18 min 42 s | $0.056 to $0.158 |
 
-Read a report against these counts.
-A run that says `Review: complete` after little agent time, few package files read, or with most claims naming no code did less than the runs at high effort did, whatever its closing line says.
-High effort does not make every session thorough: two of the ten read 11 and 17 of the 24 files and still said the review was complete.
-One more run, made after the table's ten, read 10 of the 24 in 10 min 31 s and said the same.
+High effort did not make every session thorough: two of the ten read 11 and 17 of the 24 files and still said the review was complete, and one more run, made after the table's ten, read 10 of the 24 in 10 min 31 s and said the same.
 A first run and then a second run in one clone each read all 24, and the second session wrote all seven Drafts again, so its Draft claims line counted all seven.
-[The US-ME02 spike note](spikes/us-me02-runtime-boundary.md#re-check-after-the-agents-reasoning-effort-and-the-work-counts-us-me17) lists every run and says what the sample does not show.
+One run with Listening, outreach, and filming in its one session was timed on 2026-10-12 against a synthetic package of 18 short files: its agent took 4 min 35 s and cost $0.038.
+[The US-ME02 spike note](spikes/us-me02-runtime-boundary.md#re-check-after-the-agents-reasoning-effort-and-the-work-counts-us-me17) lists every one of those runs and says what the sample does not show.
 
-Every run above was made before Listening, outreach, and filming joined the session.
-One run was timed on 2026-10-12 on the launcher that has them, once: a start of the weekly schedule at high effort in a throwaway production clone, against a synthetic package of 18 short files and not the real one.
+One run with a session per workflow was timed on 2026-10-12, once, at high effort: on demand in a throwaway production clone, against a read-only copy of the real package, with the fullest week that could be set up.
+Listening had no session, since `robots.txt` on both listed hosts disallows every address it would read.
 
-| What was due | How the run ended | Agent time | Package files read | Draft claims naming code | Proposals queued | Cost |
+| Session | How it ended | Agent time, of its 30 minute limit | Cost | Package files read | Other counts | The agent's own word |
 | --- | --- | --- | --- | --- | --- | --- |
-| The package review; post Drafts for days 1 to 7; an edit record for each of those days, with footage in place; the Beta Cohort invitation and the Waitlist ask; the personal-network ask and a first message to each of three creators. Listening had nothing to read | The agent ended by itself with exit code 0 and the words `Review: complete`; the run ended with exit code 0 and no launcher problem, on a Mac that stayed awake | 4 min 35 s of the 30 minute limit | 18 of 18 | 5 of 7, in the 7 of 7 Drafts due | 1 | $0.038 |
+| Package review | by itself, exit code 0 | 3 min 36 s | $0.048 | 19 of 25 | 4 proposals queued | `Session: complete` |
+| Post Drafts, days 1 to 7 | by itself, exit code 0 | 3 min 6 s | $0.035 | 13 of 18 | 7 of 7 Draft claims name code, in the 7 of 7 Drafts due; 1 proposal queued | `Session: complete` |
+| Filming, an edit record for each of days 1 to 7 | by itself, exit code 0 | 56 s | $0.008 | none listed | none | `Session: complete` |
+| Beta Cohort recruiting, the invitation and the Waitlist ask | by itself, exit code 0 | 42 s | $0.009 | 7 of 7 | none | `Session: complete` |
+| Outreach, the personal-network ask and three first messages | by itself, exit code 0 | 1 min 11 s | $0.015 | 5 of 7 | none | `Session: complete` |
+| Rejection reasons, one reason to code | by itself, exit code 0 | 1 min 22 s | $0.006 | none listed | none | `Session: complete` |
+| All six | 6 ran of the 6 with work due | 10 min 54 s | $0.121 | | 5 proposals queued | |
 
-The launcher queued five posts with their finished video, the invitation and the Waitlist ask, and the four messages, and blocked two post Drafts whose one claim no code supports.
-Listening read nothing because `www.reddit.com`'s `robots.txt` disallows every listed address and the synthetic research cites no App Store page, so the session had no quote, proposed Angle or Hook, or reply to write.
-It is one reading, on a package far smaller than the real one: it shows that the added work takes minutes, and not how long a session on the real package takes with that work in it.
-[The spike note](spikes/us-me02-runtime-boundary.md#the-weekly-run-timed-on-the-merged-launcher) has the set-up and what the run does not show.
+The whole run took 11 min 4 s, so the launcher's own work around the six sessions, with a boundary preflight before each, took about 10 seconds.
+The launcher queued the five proposals, the invitation and the Waitlist ask, and the four messages, coded the one reason, and blocked all seven post Drafts, each on the package's open trademark line, so no video was cut.
 
-## When a run times out
+Read a report against these counts.
+The six sessions together took about as long as the single session's median, 10 min 46 s, and cost about a fifth more than its average, $0.099, while doing four more workflows' work than those ten runs carried.
+A session that says `Session: complete` after little agent time, few package files read, or with most claims naming no code did less than these did, whatever its closing line says.
+Splitting the work did not make a session read everything: the Package review session read 19 of its 25 files and the Post Drafts session 13 of its 18.
+It is one reading, on a busy Mac, of a week with nothing for Listening to read; [the change's own record](live-checks/20261012-gr0wthlab-session-per-workflow.md#the-weekly-run-timed-with-one-session-per-workflow) has the set-up and what the run does not show.
 
-Every run ends with its report, so the agent has a time limit: `agent.time_limit_seconds` in [`config/run.json`](../config/run.json), 1800 seconds (30 minutes) today.
-The limit counts wall-clock time from the moment the agent starts, the Mac's sleep included.
+## When a session times out
+
+Every run ends with its report, so every session has a time limit and all of a run's sessions together have a bound, both in [`config/run.json`](../config/run.json).
+
+- A session's limit is `agent.time_limit_seconds`, 1800 seconds (30 minutes) today, the same for every workflow's session.
+  It is counted for each session alone.
+- The bound on all of a run's sessions together is `agent.run_time_limit_seconds`, 3600 seconds (60 minutes) today.
+  A session starts only while the run has time left, and gets a session's limit or what is left of the bound, whichever is less; the report gives the limit it ran with and, where the bound set it, says so.
+  A session the bound leaves no time for is not started, and its workflow is marked incomplete for that reason.
+  The time counted against the bound is each session's own agent time, added up.
+
+So the agent's part of a run takes at most about 60 minutes, where it took at most 30 while a run was one session.
+The bound is twice a session's limit so that one workflow's trouble stays its own: one session can run to its limit, and the others still have 30 minutes between them.
+
+Both counts are wall-clock time from the moment a session's agent starts, the Mac's sleep included.
 Nothing keeps the Mac awake for a run, and a sleeping Mac runs nothing, so the stop of an agent the Mac slept past its limit starts within about a second of the Mac waking, a dark wake included, not at the time of day the limit fell.
-Awake time is counted as well, and the agent is stopped at whichever count reaches the limit first, so a wall clock set back cannot extend a run; one set forward can end a run early.
-At high reasoning effort the agent took 283 to 1,122 seconds, median 646, in the ten runs measured on 2026-10-11, each a package review and one batch of post Drafts, most with four or five sessions running at once on the Mac.
-A healthy run on a Mac that stays awake therefore ends inside the limit, the longest measured at 62 percent of it; at Codex's default medium effort the 46 runs recorded before took 18 to 218 seconds.
-Those ten runs were made before Listening, outreach, and filming joined the session.
-One run at high effort that carries them was timed on 2026-10-12, with post Drafts, edit records, recruiting Drafts, and outreach messages all due beside the review: its agent took 275 seconds, 15 percent of the limit, and ended by itself ([Reading the agent's work](#reading-the-agents-work)).
-That run read a synthetic package far smaller than the real one and had no Listening document to read, and it is a single reading, so watch the report's `Agent time` line in the first weekly runs on the real package.
-An agent still running at the limit, for example because its model stream stalled, is stopped with every process the Mac's process table shows it started, which is its descendants and every process in a session one of them leads: each is asked to stop, and any still running after 10 seconds of awake time is forced.
-The launcher then reads the process table again to confirm that none of them is left, and finishes the run as it finishes any run.
-The stop does not find a process the agent detached earlier in the run: one in a session of its own whose parent has already ended, as a shell command that has finished can leave.
-Nothing in the process table ties such a process to the agent, so it is not stopped and the report does not speak for it; it outlives a run that finishes in time as well, since the launcher stops nothing then.
+Awake time is counted as well, and the agent is stopped at whichever count reaches the limit first, so a wall clock set back cannot extend a session; one set forward can end a session early.
 
-What the Founder sees after a timed-out run:
+How the limits sit against what was measured:
 
-- The run report's summary says `The run timed out`, and its Agent section says how long the agent ran by the wall clock, how many processes were asked to stop or forced, and whether any of them is still running.
-- If the Mac slept while the agent ran, in this or any other run, the summary and the Agent section say for about how long.
-  The summary of an attempt of the weekly schedule also says for about how long the Mac slept in the run outside the agent's time.
-- Each output that needed the agent, such as the package review and the post Drafts of a run with a day due, is marked incomplete with the reason; what the launcher does alone is complete as usual.
-- Whatever the agent had written is checked as always: an item or Draft that passes every check is queued, and one cut off mid-way fails its checks and is set aside or blocked, named in the report.
-- One notice in the Review Queue leads with the timeout and lists what it left incomplete; a second timed-out run the same day adds no second notice while the first is open.
-  A run of the weekly schedule that the Mac's sleep cut short queues no notice for the timeout alone while a fresh run is to follow, and its notice then leaves out the work its agent did not reach ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
-- The cost line says the cost is not available, or gives the part Codex had reported before the stop as a floor; it never says zero.
-- The run saves its records and releases the run lock, so the next run starts as usual and does the unfinished work again; the run itself ends with exit code 6.
+- In the run timed on 2026-10-12 with a session per workflow, the six sessions took 42 seconds to 3 min 36 s each, the longest 12 percent of its limit, and 10 min 54 s together, 18 percent of the bound ([Reading each session's work](#what-the-counts-have-looked-like)).
+- The longest single session measured on the real package, which did the package review and seven post Drafts in one, took 1,122 seconds, 62 percent of a session's limit, on a Mac running four or five such sessions at once; the ten runs of that kind took 283 to 1,122 seconds, median 646.
+- No session with a Listening document to read has been timed, nor a second week of the window, so watch the `Agent time` lines of the first weekly runs.
 
-A run of the weekly schedule that timed out on a Mac that slept during it needs nothing from the Founder: a fresh run starts by itself once the Mac is fully awake ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
-A run that timed out with the Mac awake, scheduled or on demand, is not run again by itself, and neither is a run on demand or a one-off scheduled run that the Mac slept through: start one on demand if the sitting needs the missing work.
-If healthy runs come near the limit, or runs keep timing out though the agent was working, raise `agent.time_limit_seconds` through a reviewed pull request; the report's `Agent time` line shows how long each run's agent took.
-A run that timed out because the Mac slept past the limit needs no higher limit.
-The value must be above zero and at most 86400 (a day); a run refuses to start on any other value and says why.
+A session still running at its limit, for example because its model stream stalled, is stopped with every process the Mac's process table shows it started, which is its descendants and every process in a session one of them leads: each is asked to stop, and any still running after 10 seconds of awake time is forced.
+The launcher then reads the process table again to confirm that none of them is left, and goes on to the next session.
+The stop does not find a process the agent detached earlier: one in a session of its own whose parent has already ended, as a shell command that has finished can leave.
+Nothing in the process table ties such a process to the agent, so it is not stopped and the report does not speak for it; it outlives a session that finishes in time as well, since the launcher stops nothing then.
+
+What the Founder sees after a run with a session that timed out:
+
+- The run report's summary says which session timed out, at what limit, and that the launcher stopped it and went on with the run.
+  The `Sessions` section says how long that session's agent ran by the wall clock, how many processes were asked to stop or forced, and whether any of them is still running.
+- A session the run's bound left no time for is named in the summary as well: it did not start, because the time that bounds all of a run's sessions together was used up before its turn.
+- If the Mac slept while a session ran, the summary and that session's lines say for about how long.
+  The summary of an attempt of the weekly schedule also says for about how long the Mac slept in the run outside its sessions' time.
+- Each output that needed that session is marked incomplete with the reason; the other sessions' outputs, and what the launcher does alone, are judged as usual.
+- Whatever the session had written is checked as always: an item or Draft that passes every check is queued, and one cut off mid-way fails its checks and is set aside or blocked, named in the report.
+- One notice in the Review Queue leads with the timeout, names every session that fell short, and lists what each left incomplete; a second run the same day whose notice would read the same adds no second notice while the first is open.
+  A run of the weekly schedule that the Mac's sleep cut short queues no notice for how its sessions ended alone while a fresh run is to follow, and its notice then leaves out the work its agents did not reach ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
+- The cost line of a stopped session says the cost is not available, or gives the part Codex had reported before the stop as a floor; it never says zero, and the run's total is then a floor too.
+- The run saves its records and releases the run lock, so the next run starts as usual and does the unfinished work again.
+  The run itself ends with exit code 6, unless an earlier session of it fell short another way, whose exit code it then ends with.
+
+A run of the weekly schedule with a session that timed out on a Mac that slept during the run needs nothing from the Founder: a fresh, whole run starts by itself once the Mac is fully awake ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
+A run with a session that timed out with the Mac awake, scheduled or on demand, is not run again by itself, and neither is a run on demand or a one-off scheduled run that the Mac slept through: start one on demand if the sitting needs the missing work.
+If healthy sessions come near their limit, or keep timing out though the agent was working, raise `agent.time_limit_seconds` through a reviewed pull request; it is one limit for every session, and each session's `Agent time` line shows how long it took.
+If healthy runs come near the bound, raise `agent.run_time_limit_seconds` the same way.
+A session that timed out because the Mac slept past its limit needs no higher limit.
+Each value must be above zero and at most 86400 (a day), and the bound must be at least a session's limit; a run refuses to start on anything else and says why.
 If the report names a process that could not be stopped, end it by hand (`kill -9 <process id>`) before the next run.
 
-There is one limit, on the agent's total time, and none on silence: Codex's event stream reports only whole steps, and the longest recorded run went 35 seconds without an event while it worked, so a long step and a stalled stream look the same from outside until the step ends.
+There is one limit on a session, on its agent's total time, and none on silence: Codex's event stream reports only whole steps, and the longest recorded run went 35 seconds without an event while it worked, so a long step and a stalled stream look the same from outside until the step ends.
 Every other process the launcher starts (git, Codex's version and sandbox probes, the boundary check's kernel-log query, and the `ffmpeg` and `ffprobe` that measure footage and cut video) has a fixed time limit of its own, counted on the same two clocks; one that passes it is stopped the same way, and the step that needed it fails with the reason or, where it can do without the answer, goes on with what it has.
 
 ## When RepToday's Waitlist build lands
 
 The Founder approves the Waitlist Dispatch request at a sitting, Mandu hands it to firstmate, and firstmate builds it in RepToday; until then every run reports the Waitlist view as skipped.
 Once the build writes its anonymous view, a reviewed gr0wthlab pull request sets `waitlist.view.local_path` for RepToday in [`config/products.json`](../config/products.json) to the file's path, and the next run reads it.
-The path must lie outside this clone, Mandu, and every Product checkout, all of which the sandbox reads; the launcher refuses to start otherwise, so the agent can never open the view.
+The path must lie outside this clone, Mandu, and every Product checkout; the launcher refuses to start otherwise, so the agent can never open the view.
+The sandbox reads this clone, every Product checkout, and of Mandu only the package paths, and the view may be nowhere in the Mandu checkout all the same.
 `GR0WTHLAB_WAITLIST_VIEW` overrides the path on one machine, for example to try the run against a test copy of the view.
 The change touches `config/products.json`, so it needs the boundary check below.
 
@@ -570,7 +779,7 @@ To stop immediately without a pull request, remove the schedule as above.
 ## After a change to the launcher or configuration
 
 A change to `src/bin/gr0wthlab` or the launcher's package, `config/guardrails/runtime.json`, `config/guardrails/fetch.json`, or `config/products.json` needs a fresh check on the Founder's Mac, which CI cannot run.
-Setting the footage place is one such change: the place is never one of the locations the sandbox reads, so the check should show the same policy as before.
+A change of the footage place is one such change: the check then shows the place and each footage folder in it refused to the sandbox.
 
 ```sh
 cd ~/gr0wthlab && src/bin/gr0wthlab preflight && src/bin/gr0wthlab boundary-check
@@ -579,18 +788,23 @@ cd ~/gr0wthlab && src/bin/gr0wthlab preflight && src/bin/gr0wthlab boundary-chec
 The boundary check passes only when the runtime's own records show all of this, never the agent's report:
 
 - Each of the fourteen forbidden targets was attempted and refused once per tool, each on its own: Codex's record of the run holds a patch that names that target's sentinel alone, refused as outside the permission profile, and the kernel's log holds a refused shell write to that target's sentinel by its full path.
-  Five of the fourteen are the folders of the Founder's records, `ledger/founder/decisions/`, `sittings/`, `beta-builds/`, `beta-reports/`, and `outreach/`, so the check shows for each that the agent cannot write an approval or any other record of the Founder's.
+  Five of the fourteen are the folders of the Founder's records, `ledger/founder/decisions/`, `sittings/`, `beta-builds/`, `beta-reports/`, and `outreach/`, where an approval or any other record of the Founder's would have to be written.
   The other nine are Mandu, the RepToday checkout, the repository root, `workspace/` outside the areas, `ledger/`, `src/`, `config/`, `config/guardrails/`, and the git directory.
+- Each forbidden read was attempted and refused, each on its own: the footage place and each footage folder that exists in it when the check runs.
+  For the shell, the kernel's log holds a refused read of that folder, by its full path, by the very process that Codex's record of the run's shell call shows the launcher's script started for it; the preflight's own refusals of the same folders never count.
+  For the file tool, which reads only files, Codex's record holds a `view_image` call that names the first footage file of each footage folder that has one, refused with the system's permission error.
+  A call on that file whose record shows neither that refusal nor a read, such as one that found the file no longer there, proves nothing either way: the read is handed over again like any step with no record, and its line says the call was not refused with the system's permission error and that its record shows no read.
+  A folder that does not exist yet has nothing to read and is not tried: the check's verdict counts the reads it had to prove, and `forbidden_reads` in its evidence file names them.
 - Nothing changed in this clone, Mandu, or any Product checkout against a snapshot taken before the check, once the check has removed the run's own files from the areas.
 - The kernel refused the connection to each of the check's two local listeners, and neither received one.
 - With no model, a probe inside the same sandbox reached neither the check's own listener nor any host listed in `config/guardrails/fetch.json`, each attempt refused by the kernel, after the same probe outside the sandbox reached that listener; and the launcher's own client sent nothing but a GET to a listed host and refused an address outside the list.
   The kernel's refusals of that probe's processes never count as the agent's own connection attempts.
 - Both permitted files landed in every area.
 
-The launcher writes every step for the agent: one patch per target, and one script, placed in `workspace/instructions/` for the length of the run, that holds every shell step.
+The launcher writes every step for the agent: one patch per target, one path per file-tool read, and one script, placed in `workspace/instructions/` for the length of the run, that holds every shell step.
 Every line the check prints states what a record shows, and names no cause beyond it.
 A step that has no record after a probe run is handed over again, in at most three probe runs per check; the output then shows `NOT YET PROVEN` for the earlier run and what it asks again for.
-These end the check as failed at once, with no further run: a sentinel that landed, a connection that got through, a change against the snapshot, a network proof that falls short in any way, a run that did not exit cleanly, with the one exception below, or a record of Codex's that is not whole.
+These end the check as failed at once, with no further run: a sentinel that landed, a listing or a read of footage that landed, a connection that got through, a change against the snapshot, a network proof that falls short in any way, a run that did not exit cleanly, with the one exception below, or a record of Codex's that is not whole.
 A `FAILED` run whose agent made a tool call names each target that has no record and what the record shows for it, for example `no patch named its sentinel`.
 A check that ends after more than one probe run with steps unproven closes with those steps and with how each probe run ended: its exit code, how far the agent had got, and, for an exit that was not clean, what the run's event stream holds of Codex's own errors.
 Read how each run ended before running the check again.

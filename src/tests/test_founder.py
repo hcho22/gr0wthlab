@@ -6,6 +6,7 @@ the other half, with no sandbox at all: whatever stands in workspace/, and whate
 reads as a Founder record only a plain file in one of the five real folders, and no run ever writes one.
 """
 
+import io
 import json
 import os
 import tempfile
@@ -206,8 +207,8 @@ class AreaTest(unittest.TestCase):
 
 
 class ProvenRefusedTest(unittest.TestCase):
-    """The third rule: every folder that holds Founder records is a forbidden target of every run's preflight and of
-    the boundary check, each on its own."""
+    """The third rule: every folder that holds Founder records is a forbidden target of the preflight before every
+    session and of the boundary check, each on its own."""
 
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
@@ -301,6 +302,82 @@ class ProvenRefusedTest(unittest.TestCase):
             with self.assertRaises(ConfigError) as raised:
                 launcher.Resolved(self.repo, env, self.home, Path("m.md"))
         self.assertIn("founder/outreach must be a real folder", str(raised.exception))
+
+
+class EverySessionTest(unittest.TestCase):
+    """A run starts one session for each workflow with work due, each through the launcher with the run's one resolved
+    configuration: the preflight before every session's agent tries each folder of the Founder's records."""
+
+    SESSIONS = ("package-review", "filming", "learning")
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name).resolve()
+        self.home = root / "home"
+        self.repo = fakes.make_repo(self.home / "gr0wthlab", fakes.git_env(root))
+        self.logs = root / "logs"
+        self.env = {
+            "GR0WTHLAB_LOG_DIR": str(self.logs),
+            "GR0WTHLAB_CODEX_BIN": str(fakes.install_codex(root / "bin")),
+        }
+        for name in ("Mandu", "RepToday", "Immerse"):
+            (self.home / name).mkdir()
+            self.env[f"GR0WTHLAB_{name.upper()}_DIR"] = str(self.home / name)
+        self.folders = [str(path) for path in founder.folders(self.repo / "ledger").values()]
+        self.resolved = launcher.Resolved(self.repo, self.env, self.home)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def session(self, name):
+        task = self.repo / "src/instructions/weekly-run/common.md"
+        facts = [f"Run brief, read it first: {self.repo / 'ledger/run-reports/brief.md'}"]
+        out = io.StringIO()
+        record = launcher.run(
+            self.repo,
+            task,
+            "on-demand",
+            self.env,
+            self.home,
+            out,
+            None,
+            facts,
+            "20261009T000000Z-on-demand-abcd",
+            time_limit=60,
+            session=name,
+            resolved=self.resolved,
+        )
+        return record, out.getvalue()
+
+    def test_each_session_s_preflight_is_refused_in_each_folder_and_its_record_says_so(self):
+        fingerprints = set()
+        for name in self.SESSIONS:
+            record, _ = self.session(name)
+            self.assertEqual((record["exit_code"], record["agent_started"]), (0, True), name)
+            refused = record["preflight"]["refused"]
+            self.assertEqual([path for path in refused if path in self.folders], self.folders, name)
+            self.assertEqual((record["preflight"]["breaches"], record["preflight"]["failures"]), ([], []), name)
+            saved = json.loads((self.logs / f"{record['run_id']}.{name}.json").read_text(encoding="utf-8"))
+            self.assertEqual(saved["preflight"]["refused"], refused, "each session keeps its own record")
+            fingerprints.add(record["fingerprint"])
+        self.assertEqual(len(fingerprints), 1, "every session is started with the same configuration")
+
+    def test_a_folder_gone_between_two_sessions_keeps_the_next_from_starting(self):
+        first, _ = self.session(self.SESSIONS[0])
+        self.assertTrue(first["agent_started"])
+        outreach = self.repo / "ledger" / "founder" / "outreach"
+        (outreach / ".gitkeep").unlink()
+        outreach.rmdir()
+        record, out = self.session(self.SESSIONS[1])
+        self.assertEqual((record["exit_code"], record["agent_started"]), (launcher.EXIT_CONFIG, False))
+        why = (
+            "the Founder's records folder ledger/founder/outreach must be a real folder that can be read, not missing"
+            " and not a link; the repository holds it, so restore it from git"
+        )
+        self.assertEqual(record["error"], why)
+        self.assertIn(f"gr0wthlab: refusing to start: {why}\n", out)
+        self.assertNotIn("preflight", record, "no preflight ran one target short")
+        self.assertNotIn(str(self.home), record["error"], "the line names the folder from the repository's root")
 
 
 class ForgeryTest(CycleTestCase):

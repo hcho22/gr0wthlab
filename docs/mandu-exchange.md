@@ -403,7 +403,7 @@ What gr0wthlab does with it:
 
 ## No address in any record
 
-The Marketing Engineer must never see, store, or send an email address, and it reads every record on this page.
+The Marketing Engineer must never see, store, or send an email address, and it reads every record on this page and, of the Mandu checkout, each Product's package paths.
 No record holds an email address, a name, or anything else about a person, in a reason, a note, or any other field; a person is only ever a Waitlist entry identifier.
 The sitting page refuses, with a plain reason, any line that holds something that looks like an email address, and says the rule beside every line the Founder can type.
 gr0wthlab refuses any of the Founder's records that holds something that looks like an email address, as one changed by hand could: it reads nothing from it, keeps nothing, and reports the record without repeating what it holds.

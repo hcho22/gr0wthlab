@@ -275,12 +275,12 @@ class InertTest(ServeTestCase):
         )
         fakes.behave(
             self.codex_dir,
-            {"write": {"review-queue/incoming/hostile.md": item}, "summary": hostile + "\n\nReview: complete\n"},
+            {"write": {"review-queue/incoming/hostile.md": item}, "summary": hostile + "\n\nSession: complete\n"},
         )
         code, out = self.run_cycle()
         self.assertEqual(code, 0, out)
         fakes.behave(self.codex_dir, {})
-        (self.item,) = [entry["id"] for entry in self.queue()["open"]]
+        (self.item,) = [entry["id"] for entry in self.queue()["open"] if entry["kind"] == "package-change-proposal"]
         self.serve()
 
     def test_the_item_reaches_the_browser_as_text_inside_the_page_s_own_markup(self):

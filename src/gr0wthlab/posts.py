@@ -5,8 +5,10 @@ The agent writes one Draft per calendar day under workspace/drafts/posts/window-
 the sandbox, checks each against the kit it read from Mandu before the agent started (drafts.evaluate) and queues a
 post item only for a Draft that passes, so a post never reaches the Review Queue any other way. A Draft that fails
 is blocked with every failing rule or checklist line named in the run report and a notice; an open post whose Draft
-no longer passes is withdrawn the same way. A day already approved is never asked again, and neither is a Draft the
-Founder rejected, until it changes.
+no longer passes is withdrawn the same way. Only a Draft the launcher could read and check takes an open post back:
+when the Draft, its pair's other leg, the day's edit record, a footage file, or the code a claim cites could not be
+read, the open post stands as it is (queue.stands), and the run reports the read as the workflow's gap. A day already
+approved is never asked again, and neither is a Draft the Founder rejected, until it changes.
 
 A day's video (US-ME09) is part of its post. When the run films, take is given the filming workflow, which turns the
 day's edit record into a finished asset once its Draft passes: the post item then shows the video file with the
@@ -30,7 +32,7 @@ from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import Boundary, ConfigError, load_json
 from .codebase import CLT_GIT, COMMIT, Code, open_code
 from .drafts import BLOCKS, DONE, Context, PostDraft, Verdict, evaluate, parse
-from .queue import APPROVED, OPEN, REJECTED, Ledger
+from .queue import APPROVED, OPEN, REJECTED, Ledger, stands
 from .settings import Settings, Window
 
 PLATFORMS_CONFIG = Path("config/platforms.json")
@@ -116,6 +118,12 @@ class DayResult:
     verdict: Verdict | None = None
     withdrawn: str | None = None  # the open item this day's blocked Draft took off the queue
     asset: object | None = None  # filming.Asset: what became of the day's edit record, when the run films
+    unread: list[str] = field(default_factory=list)  # each source its check needs that could not be read this run
+
+    @property
+    def stood(self) -> bool:
+        """Whether the day's open post was left as it is because a source its check needs could not be read."""
+        return self.status == KEPT and bool(self.unread)
 
 
 @dataclass
@@ -138,6 +146,11 @@ class Outcome:
     @property
     def withdrawn(self) -> list[str]:
         return [result.withdrawn for result in self.results if result.withdrawn]
+
+    @property
+    def unread(self) -> list[str]:
+        """Each source a day's Draft could not be checked against this run, once."""
+        return list(dict.fromkeys(reason for result in self.results for reason in result.unread))
 
 
 # Before the agent.
@@ -481,9 +494,12 @@ def read_draft(areas: Areas, path: Path) -> tuple[PostDraft | None, str]:
     return parse(text, areas.relative(path)), ""
 
 
-def reference_leg(plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas) -> tuple[PostDraft | None, bool, str]:
-    """The Draft an A/B leg must match beyond the Hook, whether the Founder approved the post it was queued from, and
-    why the leg cannot be compared with it when it cannot.
+def reference_leg(
+    plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas
+) -> tuple[PostDraft | None, bool, str, str]:
+    """The Draft an A/B leg must match beyond the Hook, whether the Founder approved the post it was queued from,
+    why the leg cannot be compared with it when it cannot, and why that Draft could not be read, when it is there
+    and could not be.
 
     Decided from the plan's standing and the Drafts as they are now. The launcher works that standing out once, after
     taking in the Founder's decisions and before the agent starts, and check-drafts reads its record of it, so both
@@ -494,14 +510,16 @@ def reference_leg(plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas)
     """
     other = plan.other_leg(day_plan.day)
     if other is None or (day_plan.open and day_plan.open.get("draft_sha256") == draft.sha256):
-        return None, False, ""
+        return None, False, "", ""
     posted = plan.posted.get(other.day)
-    current = read_draft(areas, plan.draft_path(other.day))[0]
+    current, unread = read_draft(areas, plan.draft_path(other.day))
     taken = any(due.day.day == other.day and not due.approved for due in plan.days)
     if taken and current is not None and current.sha256 != (posted or {}).get("draft_sha256"):
-        return (current if other.day < day_plan.day.day else None), False, ""
+        return (current if other.day < day_plan.day.day else None), False, "", ""
     if posted is None:
-        return None, False, ""
+        return None, False, "", ""
+    if unread:
+        return None, False, f"day {other.day}'s Draft, the one this leg must match beyond the Hook: {unread}", unread
     if current is None or current.sha256 != posted.get("draft_sha256"):
         return (
             None,
@@ -510,8 +528,9 @@ def reference_leg(plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas)
                 f"day {other.day}'s Draft is no longer the one `{posted['id']}` was queued from, so this leg cannot be"
                 " compared with it"
             ),
+            "",
         )
-    return current, posted["status"] == APPROVED, ""
+    return current, posted["status"] == APPROVED, "", ""
 
 
 def rejected_as(day_plan: DayPlan, draft: PostDraft, video: str | None) -> dict[str, object] | None:
@@ -548,10 +567,10 @@ def refused(rejected: Sequence[Mapping[str, object]], draft: str, edit: str | No
 
 def judge(plan: Plan, day_plan: DayPlan, draft: PostDraft, areas: Areas) -> Verdict:
     """Every check of one day's Draft, as the launcher and check-drafts both run them."""
-    reference, approved, problem = reference_leg(plan, day_plan, draft, areas)
+    reference, approved, problem, unread = reference_leg(plan, day_plan, draft, areas)
     verdict = evaluate(draft, plan.context, reference, day_plan.day.day, approved)
     if problem:
-        verdict.block("pair-legs", problem)
+        verdict.block("pair-legs", problem, unread=unread)
     return verdict
 
 
@@ -631,18 +650,23 @@ def read_day(plan: Plan, day_plan: DayPlan, areas: Areas, video=None) -> DayResu
         )
     draft, problem = read_draft(areas, plan.draft_path(number))
     if approved and (draft is None or draft.sha256 != approved.get("draft_sha256")):
-        why = "its Draft is gone" if draft is None else "its Draft is no longer that copy"
+        why = "its Draft could not be read" if problem else "its Draft is gone"
+        why = why if draft is None else "its Draft is no longer that copy"
         video.hold(number, f"the Founder approved its copy as `{approved['id']}`, and {why}")
         return DayResult(
             number,
             APPROVED_BEFORE,
             f"the Founder approved its copy; {why}, so no video is cut for it",
             str(approved["id"]),
+            unread=[problem] if problem else [],
         )
     if draft is None:
+        kept = stands(day_plan.open, [problem] if problem else [])
+        if kept:
+            # A Draft that could not be read says nothing of the post queued from an earlier one.
+            return DayResult(number, KEPT, kept.detail, kept.item, unread=[problem])
         if problem:
-            withdrawn = str(day_plan.open["id"]) if day_plan.open else None
-            return DayResult(number, BLOCKED, problem, withdrawn=withdrawn)
+            return DayResult(number, BLOCKED, problem, unread=[problem])
         if day_plan.open:
             return DayResult(number, KEPT, "no new Draft; the open item stands", str(day_plan.open["id"]))
         return DayResult(number, MISSING, f"no Draft at `{areas.relative(plan.draft_path(number))}`")
@@ -662,11 +686,19 @@ def settle_day(
     item yet, and queue_day gives it one.
 
     An open post never loses the video it shows because that video could not be cut again this run, while its Draft
-    is the one it was queued from and the day's edit record is in place. When only its slot changed and its edit
+    is the one it was queued from, the day's edit record is in place, and the video's finished file is the file its
+    record and the post name, by the one check the filming workflow keeps. When only its slot changed and its edit
     record is still the one the video was cut from, the post that replaces it shows the same video, carried over
-    from its own record, as long as the finished file is still the file that record names; otherwise the open post
-    stands as it is, and a new slot reaches it once the video is cut again. A day whose edit record is gone has no
-    video to offer, so the brief and check-edits tell the agent to leave such a day's record as it is."""
+    from its own record; with another edit record the open post stands as it is, and a new slot reaches it once the
+    video is cut again.
+
+    A finished file that is gone or changed is a video the post no longer has (the Founder's decision of 2026-10-12):
+    the same post is queued in its place without a video, saying there is none yet and why, as a Draft that changed
+    while its footage was away is, and the video comes back for approval once it is cut again. Where nothing may be
+    asked in its place, since the Founder approved the day's copy or rejected this Draft, the open post leaves the
+    queue. A file that could not be read is not a file that is gone: the open post stands, and the row says so.
+    A day whose edit record is gone has no video to offer, so the brief and check-edits tell the agent to leave such
+    a day's record as it is."""
     number = day_plan.day.day
     approved = day_plan.approved
     asset = None
@@ -676,12 +708,14 @@ def settle_day(
         # outside the record holds the video and blocks nothing.
         asset = video.results[number]
         verdict.blocks += asset.blocks
+        verdict.unread += [reason for reason in asset.unread if reason not in verdict.unread]
     offer(plan, day_plan, draft, verdict, products, asset)
     result = DayResult(number, BLOCKED, "", None, draft.path, draft.sha256, verdict, asset=asset)
-    if day_plan.open and unchecked(plan):
+    result.unread = list(dict.fromkeys(unchecked(plan) + verdict.unread))
+    kept = stands(day_plan.open, result.unread)
+    if kept:
         # The open item passed when it was queued; a source that cannot be read now does not withdraw it.
-        result.status, result.item = KEPT, str(day_plan.open["id"])
-        result.detail = f"not checked again, since {'; '.join(unchecked(plan))}; the open item stands"
+        result.status, result.item, result.detail = KEPT, kept.item, kept.detail
         return result
     if not verdict.passed:
         if day_plan.open:
@@ -689,6 +723,7 @@ def settle_day(
         return result
     shown = asset.sha256 if asset is not None and asset.finished else None
     posted = day_plan.open or {}
+    gone = None  # the open post that leaves the queue when nothing may be asked in its place
     queued_from = posted.get("draft") == draft.path and posted.get("draft_sha256") == draft.sha256
     moved = posted.get("slot") != day_plan.slot
     if queued_from and not moved and posted.get("asset_sha256") == shown:
@@ -698,18 +733,25 @@ def settle_day(
     if queued_from and posted.get("asset_sha256") and asset is not None and asset.held:
         # Its video could not be cut again this run for a reason outside the edit record, so the one it shows stands.
         same_record = asset.edit_sha256 == posted.get("edit_sha256")
-        carried = video.carry(asset, store) if moved and same_record else None
-        if carried is None:
+        file = video.file(number, store)
+        lost = file is not None and not file.intact and not file.unknown
+        carried = video.carry(asset, store) if moved and same_record and not lost else None
+        if carried is None and not lost:
             result.status, result.item = KEPT, str(posted["id"])
             result.detail = f"its video was not cut again ({asset.detail})"
-            if moved and same_record:
-                result.detail += ", and its finished file is gone or is no longer the file its record names"
+            if file is not None and not file.intact:
+                result.detail += f", and {file.told(' of the video it names')}"
             result.detail += "; the open item stands"
             if moved:
                 result.detail += ", and its new slot reaches it once the video is cut again"
             return result
-        asset = result.asset = carried
-        shown = carried.sha256
+        if lost:
+            # The post no longer has the video it names, so it gives way to one that shows none.
+            video.drop(asset, file)
+            gone = str(posted["id"])
+        else:
+            asset = result.asset = carried
+            shown = carried.sha256
     if approved and shown is None:
         why = asset.detail if asset is not None and asset.detail else "its video is not finished"
         return DayResult(
@@ -720,11 +762,12 @@ def settle_day(
             draft.path,
             draft.sha256,
             verdict,
+            withdrawn=gone,
             asset=asset,
         )
     rejected = rejected_as(day_plan, draft, shown)
     if rejected:
-        result.status, result.item = REPEATED, str(rejected["id"])
+        result.status, result.item, result.withdrawn = REPEATED, str(rejected["id"]), gone
         result.detail = "the Founder rejected this Draft, so it is not asked again until it changes"
         return result
     result.status = QUEUED
@@ -779,7 +822,9 @@ def queue_day(
     outcome.published.append(identifier)
     result.item = identifier
     notes = [f"replaces `{day_plan.open['id']}`"] if day_plan.open else []
-    if shown and asset.detail:
+    if asset is not None and asset.dropped:
+        notes.append(f"without the video that one named, which was not cut again this run ({asset.detail})")
+    elif shown and asset.detail:
         notes.append(f"with the video that one showed, which was not cut again this run ({asset.detail})")
     elif shown:
         notes.append("with its finished video")
@@ -1009,6 +1054,7 @@ def record(plan: Plan, outcome: Outcome, store: Store, run_id: str, now: datetim
                 "detail": result.detail,
                 "item": result.item,
                 "withdrawn": result.withdrawn,
+                "unread": result.unread,
                 "draft": result.draft,
                 "draft_sha256": result.sha256,
                 "video": result.asset.summary() if result.asset is not None else None,

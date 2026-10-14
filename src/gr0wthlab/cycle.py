@@ -4,24 +4,34 @@ Order: bring the production clone up to origin's main; snapshot the Go-To-Market
 decisions from ledger/founder/, which only `gr0wthlab sitting` writes (founder.py) and from which every Founder record
 below is read; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests
 that need filing; plan the post Drafts from the 14-day kit (posts.prepare); file the filming plan and list and measure
-the footage place (filming.prepare); read the Founder's Beta Build record and, only once it exists, plan the Beta
+the footage (filming.prepare); read the Founder's Beta Build record and, only once it exists, plan the Beta
 Cohort's next invitation batch (beta.prepare); read the fixed list of network sources into one snapshot (fetch.Client,
 the launcher's only way onto the network), which is working data removed when the run ends, and plan Listening from it
-and outreach from the Founder's records; brief the agent and run it inside the sandbox, which has no network
-(launcher.run); put back any change the run made to its own Instructions; queue the items it wrote to
-workspace/review-queue/incoming/ that pass the format, a post for each Draft it wrote that passes every check, with
-the video cut from its edit record when it has one (posts.take), the recruiting Drafts that pass theirs (beta.take),
-the quotes, proposals, and messages that pass theirs (listening.take, outreach.take), the code it proposed for each
-rejection reason (learning.take), and the reviewed proposals that need filing; count what the agent's session did, for
-the report to show beside the agent's own word (work.py); write the Review Queue and the run report; commit and push
-workspace/ and ledger/. Every step but the agent is deterministic code outside the sandbox. The launcher's records
-live in ledger/, which the agent can read and never write, so nothing it does can change them; in workspace/ the
-launcher only restores its owner's access to entries the agent left without it, removes what a stopped boundary
-check left at the top of the areas, before the first records step can commit it, reads the Drafts and the edit records,
-reads the items in incoming/ before the agent starts and once it has ended, removes a recruiting Draft that holds what
-looks like an email address, reads and removes the items, quote records, proposals, and codes it takes in, and puts
-the agent's Instructions back as they were. One run at a time per checkout holds the run lock in its ledger/ from the
-sync to the saved records; a run started meanwhile refuses to start, and the next report says so.
+and outreach from the Founder's records; decide which workflows have work for the agent, and for each of those, one
+after another in a fixed order, write its brief and run one agent session inside the sandbox, which has no network
+(sessions.py, launcher.run), and after each session put back any change it made to the agent's Instructions, so no
+session works from Instructions another changed; once the last session has ended, queue the items the sessions
+wrote to workspace/review-queue/incoming/ that pass the format, a post for
+each Draft that passes every check, with the video cut from its edit record when it has one (posts.take), the
+recruiting Drafts that pass theirs (beta.take), the quotes, proposals, and messages that pass theirs (listening.take,
+outreach.take), the code proposed for each rejection reason (learning.take), and the reviewed proposals that need
+filing; count what each session did, for the report to show beside that session's own word (work.py); write the Review
+Queue and the run report; commit and push workspace/ and ledger/. Every step but the sessions is deterministic code
+outside the sandbox. The launcher's records live in ledger/, which an agent can read and never write, so nothing it
+does can change them; in workspace/ the launcher only restores its owner's access to entries a session left without
+it, removes what a stopped boundary check left at the top of the areas, before the first records step can commit it,
+reads the Drafts and the edit records, reads the items in incoming/ before each session starts and once it has
+ended, removes a recruiting Draft that holds what looks like an email address, reads and removes the items, quote
+records, proposals, and codes it takes in, and after each session puts the agent's Instructions back as they were.
+Nothing is taken in
+while a session can still write: one take-in, after the last session, keeps every take-in rule what it was when a run
+had one session. One run at a time per checkout holds the run lock in its ledger/ from the sync to the saved records;
+a run started meanwhile refuses to start, and the next report says so.
+
+One session's trouble stays its own workflow's: a session that does not start, is stopped at its time limit, or ends
+with an error leaves the sessions after it to run, and marks only its own workflow's outputs incomplete. Every session
+has the same time limit, counted for that session alone, and all of a run's sessions together have one bound
+(config/run.json), so every run ends with its report.
 
 A weekly scheduled start comes first as a check (attempts.py): it begins a run only while the launcher's records show
 the week's run is still owed and the Mac is fully awake, and every run notes there how it ended, so a weekly run the
@@ -65,6 +75,7 @@ from . import (
     proposals,
     records,
     report,
+    sessions,
     settings,
     sources,
     waitlist,
@@ -73,8 +84,9 @@ from . import (
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, clear_probe_files, read_plain
 from .boundary import FOUNDER, LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
-from .queue import INCOMING, OPEN, QUEUE_FILE, REVIEW_QUEUE, SET_ASIDE, SUPERSEDED, Ledger, QueueError
+from .queue import INCOMING, OPEN, QUEUE_FILE, REVIEW_QUEUE, SET_ASIDE, SUPERSEDED, Ledger, QueueError, Stands
 from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLine, Unusable
+from .sessions import Session
 
 PRE_RUN_ENV = "GR0WTHLAB_PRE_RUN"
 EXIT_RECORDS = 4
@@ -87,6 +99,7 @@ SNAPSHOTS = "package-snapshots"
 SUMMARY_LIMIT = 4000
 WAITLIST_NEEDS = ("waitlist-counts", "weekly-read", "beta-recruiting")
 WORKING = "working"
+FILMING = "filming"
 # The folders, each inside one of the agent's areas, that the launcher takes the agent's work in from.
 INTAKE = (
     ("evidence", listening.QUOTES_IN),
@@ -98,8 +111,8 @@ INTAKE = (
 )
 # The package review's row when it is complete: complete by the agent's closing line alone, so the row says whose word
 # that is and where the launcher's own counts are.
-REVIEW_SAID_COMPLETE = "the agent said it finished its review; the launcher's counts are under Agent's work"
-# The two counts made from what stands in workspace/ before the agent starts and once it has ended.
+REVIEW_SAID_COMPLETE = "the agent said it finished its review; the launcher's counts are under Sessions"
+# The two counts made from what stands in workspace/ before a session starts and once it has ended.
 WRITTEN = "the Draft claims and the proposals"
 T = TypeVar("T")
 
@@ -393,11 +406,20 @@ class Cycle:
             self.store.write_json(path, waitlist.evidence(reading, state.run_id, self.now()))
             state.waitlist_file = self.store.relative(path)
 
-    def file_dispatches(self, state: RunState, ledger: Ledger, products: Sequence[str], seen: dict[str, str]) -> None:
+    def file_dispatches(
+        self,
+        state: RunState,
+        ledger: Ledger,
+        products: Sequence[str],
+        seen: dict[str, str],
+        hashes: Mapping[str, str],
+    ) -> None:
         """File each reviewed Dispatch request that needs filing, before the agent starts, so its brief lists it."""
         requests, problems = dispatch.load(self.repo_root, products)
         state.problems += problems
-        state.dispatches = dispatch.file(ledger, self.store, requests, products, seen, state.run_id, self.now())
+        state.dispatches = dispatch.file(ledger, self.store, requests, products, seen, state.run_id, self.now(), hashes)
+        state.problems += [filing.account() for filing in state.dispatches if filing.status == dispatch.HELD]
+        state.dispatch_unread = dispatch.unread(problems, state.dispatches)
         state.published += [str(filing.identifier) for filing in state.dispatches if filing.acted]
 
     def queue_notice(
@@ -480,7 +502,7 @@ class Cycle:
         if state.filming is not None and state.filming.standing.acted:
             drafting.add(state.filming.standing.item)
         drafting |= set(state.work_published)  # counted by Listening and outreach, each under its own workflow
-        agent_gap = state.agent_gap()
+        gap = state.agent_gap
         proposals = sum(
             1 for entry in queued if entry["kind"] == "package-change-proposal" and entry["id"] not in drafting
         )
@@ -520,13 +542,14 @@ class Cycle:
                 len(filed),
                 "; ".join(filing.account() for filing in state.dispatches)
                 or ("no reviewed Dispatch request" if ledger_ok else "none filed: the Review Queue could not be read"),
+                "; ".join(state.dispatch_unread),
             ),
             self.post_tally(state),
             self.filming_tally(state),
             self.beta_tally(state),
-            listening.tally(state.listening, state.listening_result, state.listening_problem, agent_gap),
-            outreach.tally(state.outreach, state.outreach_result, state.outreach_problem, agent_gap),
-            learning.tally(state.learning, state.learning_problem, agent_gap),
+            listening.tally(state.listening, state.listening_result, state.listening_problem, gap(listening.WORKFLOW)),
+            outreach.tally(state.outreach, state.outreach_result, state.outreach_problem, gap(outreach.WORKFLOW)),
+            learning.tally(state.learning, state.learning_problem, gap(learning.WORKFLOW)),
         ]
 
     def waitlist_tally(self, state: RunState, breach: str | None) -> run_state.Tally:
@@ -565,7 +588,7 @@ class Cycle:
     def filming_tally(self, state: RunState) -> run_state.Tally:
         if state.filming is None and state.filming_problem:
             return run_state.Tally("filming", 0, 0, state.filming_problem, state.filming_problem)
-        return filming.tally(state.filming, state.agent_gap())
+        return filming.tally(state.filming, state.agent_gap(FILMING))
 
     def beta_tally(self, state: RunState) -> run_state.Tally:
         """What Beta Cohort recruiting checked and acted on: the sign-ups that asked for an invitation, and each item
@@ -589,12 +612,13 @@ class Cycle:
         return run_state.Tally(beta.WORKFLOW, checked, acted, note, "; ".join(self.beta_gaps(state)))
 
     def beta_gaps(self, state: RunState) -> list[str]:
-        return beta.gaps(state.beta, state.beta_outcome, state.beta_problem, state.agent_gap())
+        return beta.gaps(state.beta, state.beta_outcome, state.beta_problem, state.agent_gap(beta.WORKFLOW))
 
     def post_gaps(self, state: RunState) -> list[str]:
         """Why the post Drafts are incomplete this run: a kit file, the code, or the brand rules could not be used,
-        a due day has no Draft, or the agent or the take-in fell short. A blocked Draft is the check working, not a
-        gap."""
+        a Draft could not be checked because something its check needs could not be read, a due day has no Draft, or
+        the post Drafts session or the take-in fell short. A Draft blocked by a check the launcher could make is the
+        check working, not a gap."""
         plan, outcome = state.posts, state.post_outcome
         if plan is None:
             return [state.posts_problem] if state.posts_problem else []
@@ -602,25 +626,64 @@ class Cycle:
         if outcome is None:
             gaps.append(state.posts_problem or "the Drafts were not taken in")
         else:
+            gaps += [reason for reason in outcome.unread if reason not in gaps]
             missing = [str(result.day) for result in outcome.results if result.status == posts.MISSING]
             if missing:
                 gaps.append(f"no Draft for day {', '.join(missing)}")
-        if plan.days and state.agent_gap():
-            gaps.append(state.agent_gap())
+        gap = state.agent_gap(sessions.POSTS)
+        if plan.days and gap:
+            gaps.append(gap)
         return gaps
+
+    def queue_gaps(self, state: RunState) -> list[str]:
+        """Why the Review Queue is incomplete this run though the ledger was read: an item file could not be, so a
+        reviewed Dispatch request, or an item the agent wrote, could not be compared with the item it would replace,
+        which therefore stands, or with one it may ask again, so it was not queued."""
+        review_queue = [reason for title, kept in state.stood if title == state.queue_title for reason in kept.unread]
+        return list(dict.fromkeys(state.dispatch_unread + state.queue_unread + review_queue))
+
+    def left_standing(self, state: RunState, config: settings.Settings, ledger: Ledger) -> None:
+        """Gather each open item this run left exactly as it was because a read its standing rests on could not be
+        made, with the output it belongs to: what every workflow decided through queue.stands, in one list, so the
+        run's notice names each item and the read that failed."""
+        state.queue_title = output_titles(config, ("review-queue",))[0]
+        found: list[tuple[str, Stands]] = []
+
+        def add(key: str, results: Sequence) -> None:
+            title = output_titles(config, (key,))[0]
+            found.extend((title, Stands(str(result.item), tuple(result.unread))) for result in results if result.stood)
+
+        add("post-drafts", state.post_outcome.results if state.post_outcome else ())
+        if state.filming is not None and state.filming.stood:
+            found.append((output_titles(config, ("filming-plan",))[0], state.filming.stood))
+        add(beta.WORKFLOW, state.beta_outcome.results if state.beta_outcome else ())
+        add("listening", state.listening_result.replies if state.listening_result else ())
+        add("outreach-drafts", state.outreach_result.outcomes if state.outreach_result else ())
+        if state.outreach is not None:
+            found += [(output_titles(config, ("outreach-drafts",))[0], kept) for kept in state.outreach.stood]
+        found += [
+            (state.queue_title, Stands(str(filing.identifier), (filing.unread,)))
+            for filing in state.dispatches
+            if filing.status == dispatch.UNREAD
+        ]
+        found += [(state.queue_title, kept) for kept in ledger.stood]
+        state.stood = found
 
     def outputs(self, state: RunState, config: settings.Settings, ledger_ok: bool) -> None:
         """Each output's status: a built output is incomplete when a failed source it needs names it, or when its own
-        step fell short. A step that needed the agent names the agent's not finishing among its gaps, and the outputs
-        whose rows hold that gap are the ones the run's notice names; the rows are therefore worked out before that
-        notice is written, and again once the Review Queue holds it."""
+        step fell short. A step that needed a session names that session's falling short among its gaps, and the
+        outputs whose rows hold that gap are the ones the run's notice names for the session; the rows are therefore
+        worked out before that notice is written, and again once the Review Queue holds it. One session's gap is
+        never put in another workflow's row, and a session that fell short always has its gap in its own."""
         failed = state.failed_sources()
-        agent_gap = state.agent_gap()
+        gap = state.agent_gap
         decisions = next((line.detail for line in state.sources if line.name == "Founder decisions"), "")
         queued = report.plural(len(state.queue_after), "open item") + (
             f"; {len(state.set_aside)} set aside" if state.set_aside else ""
         )
         review_gap = state.review_gap()
+        review = state.session(sessions.REVIEW)
+        reviewed = REVIEW_SAID_COMPLETE if review is None or review.due else f"no session: {review.why}"
         reading = state.waitlist
         skipped = {"waitlist-counts": reading.detail} if reading and reading.status == SKIPPED else {}
         if state.beta is None or state.beta.gate.status == beta.NOT_RECORDED:
@@ -629,12 +692,13 @@ class Cycle:
             )
         if state.filming is None and not state.filming_problem:
             skipped["filming-plan"] = "no active Product films"
+        heard, offered = gap(listening.WORKFLOW), gap(outreach.WORKFLOW)
         own = {
             "package-snapshot": ([], f"`{state.snapshot_file}`"),
-            "package-review": ([review_gap] if review_gap else [], REVIEW_SAID_COMPLETE),
+            "package-review": ([review_gap] if review_gap else [], reviewed),
             "decisions": ([] if ledger_ok else ["the ledger could not be read; no decision was matched"], decisions),
             "review-queue": (
-                [] if ledger_ok else ["the ledger could not be read; the queue was left as it was"],
+                self.queue_gaps(state) if ledger_ok else ["the ledger could not be read; the queue was left as it was"],
                 queued,
             ),
             "waitlist-counts": (
@@ -646,23 +710,24 @@ class Cycle:
             "post-drafts": (self.post_gaps(state), self.post_tally(state).note),
             beta.WORKFLOW: (self.beta_gaps(state), self.beta_tally(state).note),
             "filming-plan": (
-                filming.gaps(state.filming, agent_gap) if state.filming is not None else [state.filming_problem],
+                filming.gaps(state.filming, gap(FILMING)) if state.filming is not None else [state.filming_problem],
                 self.filming_tally(state).note,
             ),
             "listening": (
-                listening.gaps(state.listening, state.listening_result, state.listening_problem, agent_gap),
-                listening.tally(state.listening, state.listening_result, state.listening_problem, agent_gap).note,
+                listening.gaps(state.listening, state.listening_result, state.listening_problem, heard),
+                listening.tally(state.listening, state.listening_result, state.listening_problem, heard).note,
             ),
             "outreach-drafts": (
-                outreach.gaps(state.outreach, state.outreach_result, state.outreach_problem, agent_gap),
-                outreach.tally(state.outreach, state.outreach_result, state.outreach_problem, agent_gap).note,
+                outreach.gaps(state.outreach, state.outreach_result, state.outreach_problem, offered),
+                outreach.tally(state.outreach, state.outreach_result, state.outreach_problem, offered).note,
             ),
             "rejection-codes": (
-                learning.gaps(state.learning, state.learning_problem, agent_gap),
-                learning.tally(state.learning, state.learning_problem, agent_gap).note,
+                learning.gaps(state.learning, state.learning_problem, gap(learning.WORKFLOW)),
+                learning.tally(state.learning, state.learning_problem, gap(learning.WORKFLOW)).note,
             ),
         }
-        rows, agent_incomplete = [], []
+        rows = []
+        held: dict[str, list[str]] = {session.key: [] for session in state.sessions}
         for key, output in config.outputs.items():
             title = str(output.get("title", key))
             if not output.get("built"):
@@ -672,12 +737,14 @@ class Cycle:
                 rows.append([title, SKIPPED, skipped[key]])
                 continue
             gaps, done = own.get(key, ([], ""))
-            if agent_gap and agent_gap in gaps:
-                agent_incomplete.append(title)
+            for session in state.sessions:
+                if session.workflow.output == key and session.gap() and session.gap() in gaps:
+                    held[session.key].append(title)
             gaps = [f"{line.name} could not be read" for line in failed if title in line.needed_by] + gaps
             rows.append([title, INCOMPLETE if gaps else COMPLETE, "; ".join(gaps) or done])
         state.outputs = rows
-        state.agent_incomplete = tuple(agent_incomplete)
+        for session in state.sessions:
+            session.incomplete = tuple(held[session.key])
 
     def prepare_posts(
         self, state: RunState, config: settings.Settings, registry, boundary: Boundary, ledger: Ledger
@@ -778,7 +845,7 @@ class Cycle:
                 state.posts_problem = f"not taken in: {error}"
                 state.problems.append(f"the post Drafts could not be taken in ({error})")
         if state.filming is not None:
-            state.filming.settle(state.post_outcome)
+            state.filming.settle(state.post_outcome, self.store)
             try:
                 filming.record(state.filming, self.store, run_id, now)
             except (OSError, ConfigError) as error:
@@ -832,12 +899,13 @@ class Cycle:
             state.beta = beta.Plan(rules, gate, state.run_id)
             state.beta_problem = "not prepared: the Review Queue could not be read"
         else:
-            reports, reports_failure = None, None
+            reports, reports_failure, unreadable = None, None, []
             if gate.recorded:
                 reports, others, reports_failure = founder.read(root, beta.REPORTS)
                 reports = self.relative_records(reports)
                 for name, why in others:
                     state.problems.append(f"{beta.record_file(beta.REPORTS, name)} could not be used ({why})")
+                unreadable = [name for name, why in others if why != founder.STRAY]
             try:
                 state.beta = beta.prepare(
                     rules,
@@ -853,6 +921,7 @@ class Cycle:
                     self.store,
                     state.run_id,
                     self.now(),
+                    unreadable,
                 )
                 if state.beta.active:
                     record = self.store.path(RUN_REPORTS, beta.plan_file(state.run_id))
@@ -991,9 +1060,9 @@ class Cycle:
         states: run_state.States,
         network: tuple[fetch.Policy, sources.Config, outreach.Settings],
     ) -> None:
-        """Before the agent: read the network sources, plan Listening from them and outreach from the Founder's
-        outreach records, and record both plans for the agent's own check. Each step fails on its own; with no
-        ledger, as when the Review Queue could not be read, nothing is filed or matched."""
+        """Before the first session: read the network sources, plan Listening from them and outreach from the
+        Founder's outreach records, and record both plans for each session's own check. Each step fails on its own;
+        with no ledger, as when the Review Queue could not be read, nothing is filed or matched."""
         policy, source_config, outreach_settings = network
         mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
         today = self.now().astimezone().date()
@@ -1106,11 +1175,8 @@ class Cycle:
         now: datetime,
         seen: dict[str, str],
     ) -> None:
-        """After the agent: put back any change to its Instructions, then take in its Listening work, its outreach
-        Drafts, and the codes it proposed for rejection reasons, each on its own."""
-        if state.guidance is not None:
-            state.put_back = learning.put_back(state.guidance, areas)
-            state.problems += [f"{line}; no run may change its own Instructions yet" for line in state.put_back]
+        """After the last session: take in the Listening work, the outreach Drafts, and the codes proposed for
+        rejection reasons, each on its own."""
         if not ledger_ok:
             unread = "not taken in: the Review Queue could not be read"
             state.listening_problem = state.listening_problem or unread
@@ -1177,40 +1243,279 @@ class Cycle:
         state.outreach_filing = proposals.describe(filing, ledger)
 
     def counted(self, state: RunState, what: str, count: Callable[[], T]) -> T | None:
-        """Make one count of the agent's session, for the run report to show beside the agent's own word. The counts
-        gate nothing, so a count that cannot be made is a launcher problem and the run goes on without it."""
+        """Make one count of a session, for the run report to show beside the agent's own word. The counts gate
+        nothing, so a count that cannot be made is a launcher problem, told once however many sessions it is missing
+        from, and the run goes on without it."""
         try:
             return count()
         except (OSError, ConfigError) as error:
-            state.problems.append(f"{what} could not be counted ({error})")
+            problem = f"{what} could not be counted ({error})"
+            if problem not in state.problems:
+                state.problems.append(problem)
             return None
 
     def count_work(
-        self, state: RunState, config: settings.Settings, log_dir: Path, written: work.Written | None, taken_in: bool
+        self,
+        state: RunState,
+        config: settings.Settings,
+        log_dir: Path,
+        readings: Mapping[str, tuple[work.Standing | None, work.Standing | None]],
+        taken_in: bool,
     ) -> None:
-        """Count what the agent's session did, once it has ended and its items are taken in. written is what this
-        session wrote or changed of the Drafts due and the proposals in incoming/, so that nothing an earlier run left
-        is counted as its work; without it neither the Draft claims nor the proposals are counted. taken_in says
-        whether the launcher took in what stood in incoming/."""
+        """Count what each session did, once the last has ended and the run's items are taken in. readings holds, for
+        each session that ran, what stood in workspace/ of the Drafts due and of incoming/ before it started and once
+        it had ended: a Draft or a proposal is a session's own only when that session wrote or changed it, so nothing
+        an earlier run or another session left is counted as its work, and without both readings neither its Draft
+        claims nor its proposals are counted. The run's totals are read the same way, from before its first session
+        to after its last. taken_in says whether the launcher took in what stood in incoming/."""
         mandu = Path(state.mandu)
-        files = {
-            file.path: mandu / file.path
-            for result in state.snapshot
-            for file in result.files
-            if file.status != package.FAILED
-        }
-        claims = proposals = None
-        if written is not None:
-            set_aside = {item.name for item in state.set_aside}
-            queued = [name for name in written.proposals if taken_in and name not in set_aside]
-            claims, proposals = written.claims, work.count_proposals(written.proposals, queued)
-        state.work = self.counted(
+        set_aside = {item.name for item in state.set_aside}
+        ran = state.ran
+
+        def queued(written: work.Written) -> list[str]:
+            return [name for name in written.proposals if taken_in and name not in set_aside]
+
+        for session in ran:
+            before, after = readings.get(session.key, (None, None))
+            claims = proposals = None
+            if before is not None and after is not None:
+                written = work.written(before, after)
+                claims, proposals = written.claims, work.count_proposals(written.proposals, queued(written))
+            files = {
+                file.path: mandu / file.path
+                for file in report.brief_files(state, session)
+                if file.status != package.FAILED
+            }
+            events = log_dir / f"{launcher.log_name(state.run_id, session.key)}.events.jsonl"
+            session.work = self.counted(
+                state,
+                f"the {session.title} session's work",
+                lambda events=events, files=files, claims=claims, proposals=proposals: work.measure(
+                    events, config.shown_output_chars, files, claims, proposals
+                ),
+            )
+        first = readings.get(ran[0].key, (None, None))[0] if ran else None
+        last = readings.get(ran[-1].key, (None, None))[1] if ran else None
+        if first is not None and last is not None:
+            whole = work.written(first, last)
+            state.claims = whole.claims
+            state.proposals = work.count_proposals(whole.proposals, queued(whole), whole_run=True)
+
+    def nothing_due(self, state: RunState, key: str) -> str:
+        """Why one workflow has no work for the agent this run, or "" when it has, from what the launcher read before
+        the first session. A workflow has work exactly when the launcher can name it: a package file to review, a
+        calendar day whose copy is not approved, a day ready for an edit record, a recruiting Draft, a thread or a
+        review to read, a message that is due, a rejection reason with no code, or a strategy reason with no
+        proposal. This is the one test of a session: it decides whether the session starts, and a session it starts
+        that falls short always leaves its own workflow's output incomplete, whatever it had written by then, since
+        every workflow's gap rule adds the gap of a session that was due (Session.gap)."""
+        if key == sessions.REVIEW:
+            read = [file for result in state.snapshot for file in result.files if file.status != package.FAILED]
+            return "" if read else "no package file could be read"
+        if key == sessions.POSTS:
+            plan = state.posts
+            if plan is None:
+                problem = state.posts_problem
+                return f"the post Drafts were {problem}" if problem else "no active Product has a 14-day kit"
+            if not plan.days:
+                return "no calendar day is due this run"
+            waiting = any(not day_plan.approved for day_plan in plan.days)
+            return "" if waiting else "the Founder approved every calendar day due this run"
+        if key == FILMING:
+            found = state.filming
+            if found is None:
+                problem = state.filming_problem
+                return f"filming was {problem}" if problem else "no active Product films"
+            return "" if found.ready() else "no calendar day is ready for an edit record"
+        if key == beta.WORKFLOW:
+            plan = state.beta
+            if plan is None:
+                return "no Product recruits a Beta Cohort"
+            if state.beta_problem:
+                return f"recruiting was {state.beta_problem}"
+            if not plan.active:
+                return (
+                    "the Founder has recorded no approved Beta Build"
+                    if plan.gate.status == beta.NOT_RECORDED
+                    else "the Beta Build record could not be used"
+                )
+            return "" if plan.drafts else "no recruiting Draft is due this run"
+        if key == listening.WORKFLOW:
+            plan = state.listening
+            if plan is None:
+                problem = state.listening_problem
+                return f"Listening was {problem}" if problem else "no active Product listens"
+            if not plan.snapshot.readings and not plan.skipped:
+                return "no Listening source is configured"
+            return "" if plan.heard() else "no thread or review could be read this run"
+        if key == outreach.WORKFLOW:
+            plan = state.outreach
+            if plan is None:
+                problem = state.outreach_problem
+                return f"outreach was {problem}" if problem else "no active Product has a channel plan"
+            if plan.problem:
+                return plan.problem
+            return "" if plan.due() else "no outreach message is due this run"
+        waiting = learning.uncoded(state.reasons) or learning.owed(state.reasons)
+        return "" if waiting else "no rejection reason needs a code or a proposal"
+
+    def plan_sessions(self, state: RunState, config: settings.Settings) -> None:
+        """Decide once, before the first session starts, which workflows have work for the agent this run, in the
+        order their sessions run. A workflow with nothing due starts no session, and the report says why."""
+        state.run_limit = config.agent.run_time_limit
+        state.sessions = []
+        for found in sessions.WORKFLOWS:
+            why = self.nothing_due(state, found.key)
+            state.sessions.append(Session(found, not why, why, config.agent.time_limit))
+
+    def waiting_items(self, areas: Areas) -> list[tuple[str, str]]:
+        """Each file standing in incoming/ now, by its name, for the brief of a session that may write items: what
+        an earlier session of this run, or an earlier run, left there. Only the names are told, so a brief, which is
+        the launcher's record, repeats none of an agent's words; the session reads the files themselves."""
+        incoming = areas.path("review_queue", INCOMING)
+        try:
+            names = sorted(os.listdir(str(incoming))) if areas.real_folder(incoming) else []
+        except OSError:
+            return []
+        return [(name, "not taken in yet") for name in names]
+
+    def drafts_in_place(self, state: RunState, areas: Areas) -> list[tuple[int, str]]:
+        """For the Filming session's brief: each day ready for an edit record, with whether its post Draft is in
+        place, as the post Drafts session of this run or an earlier run left it."""
+        found = state.filming
+        days = []
+        for number in found.ready() if found is not None else []:
+            draft, problem = posts.read_draft(areas, found.draft_path(number))
+            name = found.draft_path(number).name
+            if draft is not None:
+                days.append((number, f"`{name}` is in place"))
+            elif problem:
+                days.append((number, f"`{name}` cannot be read ({problem}), so write no edit record for it this run"))
+            else:
+                days.append((number, "no post Draft, so write no edit record for it this run"))
+        return days
+
+    def write_brief(self, state: RunState, session: Session, areas: Areas) -> Path:
+        """Write one session's brief just before it starts, so it can name what earlier sessions left."""
+        brief = self.store.path(RUN_REPORTS, f"{state.run_id}.{session.key}.brief.md")
+        waiting = self.waiting_items(areas) if session.workflow.writes_items else []
+        in_place = self.drafts_in_place(state, areas) if session.key == FILMING else []
+        text = report.render_brief(
             state,
-            "the agent's work",
-            lambda: work.measure(
-                log_dir / f"{state.run_id}.events.jsonl", config.shown_output_chars, files, claims, proposals
-            ),
+            session,
+            canonical(self.repo_root),
+            areas.workspace,
+            self.store.root,
+            report.brief_files(state, session),
+            waiting,
+            in_place,
         )
+        self.store.write_text(brief, text)
+        session.brief = self.store.relative(brief)
+        return brief
+
+    def run_sessions(
+        self,
+        state: RunState,
+        config: settings.Settings,
+        definitions: Mapping[str, str],
+        areas: Areas,
+        products: Sequence[str],
+    ) -> dict[str, tuple[work.Standing | None, work.Standing | None]]:
+        """Run one agent session for each workflow that has work due, one after another, and return what stood in
+        workspace/ before and after each, for the counts. Each session is a fresh Codex process with the same
+        command, proved against the boundary before its agent starts, with its own brief and task definition, under
+        the one time limit every session has. A session that does not start, is stopped at its limit, or ends with
+        an error leaves the next to run. Once a session has ended, the launcher takes back its access to what the
+        session left and puts the agent's Instructions back as the run noted them before its first session, so
+        every session starts from those and none reads what another changed; each change it undoes is told once,
+        with the session it was found after.
+        A session starts only while the bound on all of the run's sessions together has time left, and gets what is
+        left of it when that is less than a session's limit."""
+        root = canonical(self.repo_root)
+        log_dir = launcher.default_log_dir(self.env, self.home)
+        readings: dict[str, tuple[work.Standing | None, work.Standing | None]] = {}
+        resolved = None  # what configures every session, resolved before the first and shared by all of them
+        for session in sessions.due(state.sessions):
+            # In tenths of a second, as a session's time is recorded, so that a limit reads as plainly as it is kept.
+            left = round(state.run_limit - state.agent_seconds, 1)
+            if left <= 0:
+                bound = process.limit_text(state.run_limit)
+                why = f"the {bound} that bounds all of a run's sessions together was used up before its turn"
+                self.not_started(session, EXIT_STOPPED, why, out_of_time=True)
+                continue
+            before = self.counted(state, WRITTEN, lambda: work.standing(state.posts, areas, products))
+            try:
+                resolved = resolved or launcher.Resolved(self.repo_root, self.env, self.home)
+            except (OSError, ConfigError) as error:
+                # Fail closed for this session, and resolve again for the next: what failed may have been passing.
+                self.not_started(session, launcher.EXIT_CONFIG, str(error))
+                continue
+            try:
+                brief = self.write_brief(state, session, areas)
+                session.record = launcher.run(
+                    self.repo_root,
+                    sessions.definition_files(root, session.workflow)[-1],
+                    state.trigger,
+                    self.env,
+                    self.home,
+                    out=self.out,
+                    now=state.started,
+                    facts=[sessions.header(state.sessions, session), f"Run brief, read it first: {brief}"],
+                    run_id=state.run_id,
+                    time_limit=min(session.limit, left),
+                    session=session.key,
+                    instruction=definitions[session.key],
+                    resolved=resolved,
+                )
+            except OSError as error:
+                self.not_started(session, launcher.EXIT_CONFIG, str(error))
+            name = launcher.log_name(state.run_id, session.key)
+            last_message = log_dir / f"{name}.last-message.md"
+            if session.started and last_message.is_file():
+                summary = last_message.read_text(encoding="utf-8", errors="replace")
+                session.summary = summary[:SUMMARY_LIMIT]
+                session.closing = (summary.strip().splitlines() or [""])[-1].strip()
+            if session.started:
+                session.usage = report.token_usage(log_dir / f"{name}.events.jsonl")
+                session.error = sessions.last_error(log_dir / f"{name}.events.jsonl")
+            if session.usage:
+                session.cost = report.cost(session.usage, config.prices)
+            left_running = report.left_running(session) if session.timed_out else None
+            if left_running:
+                state.problems.append(left_running)
+            # Before the next session reads workspace/, and before anything is counted or taken in from it.
+            state.problems += [problem for problem in records.restore_access(root) if problem not in state.problems]
+            undone = [f"after the {session.title} session: {line}" for line in learning.put_back(state.guidance, areas)]
+            state.put_back += undone
+            state.problems += [f"{line}; no run may change its own Instructions yet" for line in undone]
+            if session.started:
+                after = (
+                    self.counted(state, WRITTEN, lambda: work.standing(state.posts, areas, products))
+                    if before is not None
+                    else None
+                )
+                readings[session.key] = (before, after)
+        # Once more when no session was due, so that a run with no agent still leaves workspace/ readable.
+        state.problems += [problem for problem in records.restore_access(root) if problem not in state.problems]
+        return readings
+
+    def not_started(self, session: Session, code: int, why: str, **more: object) -> None:
+        """Record that a session the run came to was not started, with the launcher's exit status for that and the
+        reason, which the run report and the notice give as it is."""
+        session.record = dict({"session": session.key, "agent_started": False, "exit_code": code, "error": why}, **more)
+        self.say(f"session {session.key} was not started: {why}")
+
+    def exit_code(self, state: RunState) -> int:
+        """The run's exit status: 0 when every session it had work for ended without an error, and otherwise that of
+        the first session that fell short, which is EXIT_STOPPED for one stopped at a limit."""
+        short = state.short
+        if not short:
+            return 0
+        if short[0].shortfall == attempts.TIMED_OUT:
+            return EXIT_STOPPED
+        code = short[0].exit_code
+        return code if isinstance(code, int) and not isinstance(code, bool) and code else 1
 
     def leave_note(self, run_id: str, line: str) -> None:
         """A one-line note in ledger/notes/, which the next run's report shows."""
@@ -1311,7 +1616,6 @@ class Cycle:
 
     def run(
         self,
-        instruction: Path | None,
         trigger: str,
         once: str | None,
         argv: Sequence[str],
@@ -1329,7 +1633,7 @@ class Cycle:
             try:
                 for name, line in attempts.left_without_ending(self.store):
                     self.leave_note(name, line)
-                code = self.locked_run(instruction, trigger, once, argv, execve)
+                code = self.locked_run(trigger, once, argv, execve)
             except (OSError, ConfigError) as error:
                 started = self.started or self.now()
                 run_id = self.run_id or launcher.new_run_id(trigger, started)
@@ -1349,7 +1653,6 @@ class Cycle:
 
     def locked_run(
         self,
-        instruction: Path | None,
         trigger: str,
         once: str | None,
         argv: Sequence[str],
@@ -1362,7 +1665,7 @@ class Cycle:
             self.before = tuple(pre.get("taken", self.before))
         try:
             config = settings.load(self.repo_root, self.env, self.home)
-            task = config.instruction if instruction is None else settings.instruction_path(self.repo_root, instruction)
+            definitions = sessions.definitions(canonical(self.repo_root))
             if trigger not in launcher.TRIGGERS:
                 raise ConfigError(f"trigger must be one of {', '.join(launcher.TRIGGERS)}")
         except ConfigError as error:
@@ -1402,9 +1705,10 @@ class Cycle:
                 return 0  # only reached when execve is replaced in tests
 
         run_id = self.run_id = launcher.new_run_id(trigger, started)
-        state = RunState(run_id, trigger, started, str(task.relative_to(canonical(self.repo_root))), sync=sync)
+        state = RunState(run_id, trigger, started, str(sessions.FOLDER), sync=sync)
         state.problems += list(sync.get("repaired", []))
         state.late_after = timedelta(minutes=config.late_after_minutes)
+        state.titles = {key: str(output.get("title", key)) for key, output in config.outputs.items()}
         if trigger == "scheduled":
             state.due = report.due_time(started, config.weekly, once)
             if once is None:
@@ -1419,7 +1723,7 @@ class Cycle:
             founder.check(self.store.root)
             rules = settings.waitlist(registry, boundary, self.env, self.home)
             beta_rules = beta.rules(registry, config)
-            footage_place = filming.place(registry, boundary, self.env, self.home)
+            footage_place = boundary.footage
             policy = fetch.load_policy(canonical(self.repo_root))
             network = (policy, sources.load(canonical(self.repo_root), policy), outreach.settings(config.data))
         except ConfigError as error:
@@ -1442,6 +1746,11 @@ class Cycle:
         sittings = self.sitting_runs(state)
         hashes, unreadable = run_state.item_hashes(self.store.root, ledger.entries, products, states.review_queue)
         state.problems += unreadable
+        lost = {
+            identifier: f"`{entry['file']}`, its item file, could not be read"
+            for identifier, entry in ledger.entries.items()
+            if identifier not in hashes
+        }
         seen: dict[str, str] = {}
         for identifier, fingerprint in hashes.items():
             seen.setdefault(fingerprint, identifier)
@@ -1456,7 +1765,7 @@ class Cycle:
             )
         self.read_waitlist(state, config, rules)
         if ledger_ok:
-            self.file_dispatches(state, ledger, products, seen)
+            self.file_dispatches(state, ledger, products, seen, hashes)
         self.prepare_posts(state, config, registry, boundary, ledger)
         self.prepare_filming(state, config, footage_place, areas, ledger, ledger_ok, products, seen)
         state.queue_before = ledger.ordered()
@@ -1478,52 +1787,19 @@ class Cycle:
             self.say(f"removed boundary probe files left in the areas: {', '.join(state.probe_files_removed)}")
         state.guidance = learning.remember(areas)
         state.problems += state.guidance.problems
-        before = self.counted(state, WRITTEN, lambda: work.standing(state.posts, areas, products))
-        brief = self.store.path(RUN_REPORTS, f"{run_id}.brief.md")
-        self.store.write_text(
-            brief, report.render_brief(state, canonical(self.repo_root), areas.workspace, self.store.root)
-        )
-
-        try:
-            state.agent = launcher.run(
-                self.repo_root,
-                task,
-                trigger,
-                self.env,
-                self.home,
-                out=self.out,
-                now=started,
-                facts=[f"Run brief, read it first: {brief}"],
-                run_id=run_id,
-                time_limit=config.agent.time_limit,
-            )
-        except OSError as error:
-            state.agent = {"exit_code": launcher.EXIT_CONFIG, "agent_started": False, "error": str(error)}
+        self.plan_sessions(state, config)
+        readings = self.run_sessions(state, config, definitions, areas, products)
         state.slept = self.asleep()
         log_dir = launcher.default_log_dir(self.env, self.home)
-        last_message = log_dir / f"{run_id}.last-message.md"
-        if last_message.is_file():
-            summary = last_message.read_text(encoding="utf-8", errors="replace")
-            state.agent_summary = summary[:SUMMARY_LIMIT]
-            state.review = (summary.strip().splitlines() or [""])[-1].strip()
-        state.usage = report.token_usage(log_dir / f"{run_id}.events.jsonl")
-        if state.usage:
-            state.cost = report.cost(state.usage, config.prices)
-        left = report.left_running(state.stop) if state.timed_out else None
-        if left:
-            state.problems.append(left)
-        state.problems += records.restore_access(canonical(self.repo_root))
 
         now = self.now()
-        written = None
-        if before is not None and state.agent.get("agent_started"):
-            written = self.counted(
-                state, WRITTEN, lambda: work.written(before, work.standing(state.posts, areas, products))
-            )
         published: list[str] = []
         if ledger_ok:
             kept = evidence.records(self.store)
-            published, state.set_aside = ledger.take_incoming(areas, self.store, products, run_id, now, seen, kept)
+            published, state.set_aside = ledger.take_incoming(
+                areas, self.store, products, run_id, now, seen, kept, lost
+            )
+            state.queue_unread = ledger.unsettled
             state.published += published
         incoming = len(published) + len(state.set_aside)
         if ledger_ok:
@@ -1532,8 +1808,7 @@ class Cycle:
         elif state.posts is not None:
             state.posts_problem = "not taken in: the Review Queue could not be read"
         self.take_work(state, areas, ledger, ledger_ok, products, run_id, now, seen)
-        if state.agent.get("agent_started"):
-            self.count_work(state, config, log_dir, written, ledger_ok)
+        self.count_work(state, config, log_dir, readings, ledger_ok)
         report_path = self.store.path(RUN_REPORTS, f"{run_id}.md")
         state.problems += areas.problems
         areas.problems.clear()
@@ -1554,6 +1829,7 @@ class Cycle:
                     " report is the only place it is told"
                 )
         state.queue_after = ledger.ordered()
+        self.left_standing(state, config, ledger)
         self.outputs(state, config, ledger_ok)
         notice = report.problems_notice(state, self.store.relative(report_path))
         if notice and ledger_ok:
@@ -1613,34 +1889,54 @@ class Cycle:
             )
             saved = result.as_json()
             self.say(f"records: {result.status}: {result.detail}")
-        self.log(log_dir, run_id, sync, saved, report_path, state)
-        return int(state.agent.get("exit_code", 1))
+        code = self.exit_code(state)
+        self.log(log_dir, sync, saved, report_path, state, code)
+        return code
 
-    def log(self, log_dir: Path, run_id: str, sync, saved, report_path: Path, state: RunState) -> None:
-        path = log_dir / f"{run_id}.json"
-        try:
-            record = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            record = {"run_id": run_id}
-        record.update(
-            sync=sync,
-            records=saved,
-            report=str(report_path),
-            late=state.late,
-            ending=state.ending,
-            usage=state.usage,
-            cost_usd=state.cost,
-            work=state.work.as_json() if state.work else None,
-            queued=state.published,
-            problems=state.problems,
-            set_aside=[item.name for item in state.set_aside],
-        )
-        launcher.write_json(path, record)
+    def log(self, log_dir: Path, sync, saved, report_path: Path, state: RunState, code: int) -> None:
+        """The run's own record in the log folder: what the launcher did around its sessions, and every session with
+        the launcher's record of it, which each session's own file also holds, and what was read and counted of it."""
+        record = {
+            "run_id": state.run_id,
+            "trigger": state.trigger,
+            "started_at": state.started.isoformat(),
+            "exit_code": code,
+            "timed_out": state.timed_out,
+            "sessions": [
+                dict(
+                    session.record,
+                    workflow=session.key,
+                    due=session.due,
+                    why=session.why,
+                    ended=session.ended(),
+                    time_limit_of_its_own=session.limit,
+                    brief=session.brief,
+                    usage=session.usage,
+                    cost_usd=session.cost,
+                    codex_last_error=session.error or None,
+                    work=session.work.as_json() if session.work else None,
+                )
+                for session in state.sessions
+            ],
+            "run_time_limit_seconds": state.run_limit,
+            "agent_seconds": round(state.agent_seconds, 1),
+            "sync": sync,
+            "records": saved,
+            "report": str(report_path),
+            "late": state.late,
+            "ending": state.ending,
+            "usage": state.usage,
+            "cost_usd": state.cost,
+            "queued": state.published,
+            "problems": state.problems,
+            "set_aside": [item.name for item in state.set_aside],
+        }
+        log_dir.mkdir(parents=True, exist_ok=True)
+        launcher.write_json(log_dir / f"{state.run_id}.json", record)
 
 
 def main(
     repo_root: Path,
-    instruction: Path | None,
     trigger: str,
     env: Mapping[str, str],
     home: Path,
@@ -1649,4 +1945,4 @@ def main(
     out: TextIO = sys.stdout,
 ) -> int:
     cycle = Cycle(repo_root, env, home, out, lambda: datetime.now(timezone.utc))
-    return cycle.run(instruction, trigger, once, argv)
+    return cycle.run(trigger, once, argv)

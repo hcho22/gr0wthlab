@@ -6,6 +6,8 @@ An item is queued once, under an identifier that never changes, and is closed by
 or rejected) or by a newer item that supersedes it; a closed item never returns to the open list. A decision the
 Founder took on an item a newer one had already superseded is kept on that item, which stays superseded.
 An open item is carried over once the Founder has left it undecided at a sitting.
+A read that could not be made never closes or supersedes one: stands, below, is where each place that would have
+taken an open item back, or asked it again, weighs it.
 """
 
 from __future__ import annotations
@@ -55,6 +57,58 @@ class SetAside:
     problems: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class Stands:
+    """An open item a run left exactly as it was, since a read its standing rests on could not be made."""
+
+    item: str
+    unread: tuple[str, ...]  # each source that could not be read, with the reason
+
+    @property
+    def detail(self) -> str:
+        return f"not checked again, since {'; '.join(self.unread)}; the open item stands"
+
+
+def stands(current: Mapping[str, object] | None, unread: Sequence[str]) -> Stands | None:
+    """The one place a read that could not be made is weighed against an open item, wherever that read would
+    otherwise have taken the item back or asked it again.
+
+    Only what a record the launcher could read says ever withdraws, closes, or supersedes an open item. current is
+    the open item a workflow is about to judge, and unread each source that judgment needs and that could not be
+    read this run: a file that is missing where it must exist, unreadable, or not in its format, or a git read that
+    failed. With both, the item stands under its identifier, not checked again, whatever else the check found, and
+    the workflow reports each unread source as its gap; with either missing, the workflow goes on to its own
+    decision, which then rests on readable records alone.
+
+    The places that come here judge an open item: the check of an open post, message, reply, or recruiting item
+    against its Draft and what that check reads; an open invitation or Waitlist ask while a report of the Founder's
+    is unread; an open follow-up whose record of the first message is unread; the open filming plan while the kit
+    is unread; a Dispatch request's open item whose item file is unread; and an item in incoming/ that supersedes
+    an open item whose item file is unread. A step that did not run at all because its source could not be read
+    judges no item and does not come here: recruiting without a usable Waitlist view or Beta Build record, a
+    Dispatch request whose reviewed text is unread, post Drafts without the calendar, outreach without the channel
+    plan or the kit, replies without the kit, and the video of a day whose copy is approved and whose Draft is
+    unread. There the output always reads incomplete in the run report with the real reason, and no item of the
+    step is touched or listed. The run's notice names the source only where its read failed as a source or was
+    recorded as a launcher problem, and in the line that says no video was cut for an approved day; a calendar or
+    channel plan that was read but could not be parsed or decoded is told in the run report, and the notice has no
+    line of its own for it. While the window's filming plan is open, though, that plan stands on a calendar that
+    fails this way, as on any kit file, so the notice's list of open items not checked again names the plan with
+    the kit file as its reason.
+    """
+    if current is None or not unread:
+        return None
+    return Stands(str(current["id"]), tuple(dict.fromkeys(unread)))
+
+
+def may_repeat(item: exchange.Item, entry: Mapping[str, object]) -> bool:
+    """Whether an item may ask the same as a queued one whose item file could not be read. The ledger still holds
+    that one's kind and ask, so only its Draft or proposal is unknown: the two share a fingerprint if it is this
+    item's, and cannot share one otherwise."""
+    alike = exchange.Item({"kind": str(entry["kind"])}, str(entry["ask"]), item.body, "", "")
+    return exchange.item_hash(alike) == exchange.item_hash(item)
+
+
 def declaration_problem(item: exchange.Item, kept: Collection[str]) -> str | None:
     """Why a package-change proposal's declaration keeps it off the queue, if it does. One that declares it adds or
     changes an Angle or Hook needs sourced pain: an Evidence line that names, exactly, the record of a Listening
@@ -78,6 +132,8 @@ def slug_of(name: str) -> str:
 class Ledger:
     def __init__(self, entries: Sequence[Mapping[str, object]] = ()):
         self.entries: dict[str, dict[str, object]] = {str(entry["id"]): dict(entry) for entry in entries}
+        self.stood: list[Stands] = []  # each open item the take-in left as it was on a read that could not be made
+        self.unsettled: list[str] = []  # each item file, unread, that an item set aside from incoming/ may repeat
 
     @classmethod
     def load(cls, path: Path) -> Ledger:
@@ -193,12 +249,15 @@ class Ledger:
         now: datetime,
         seen: dict[str, str] | None = None,
         kept: Collection[str] = (),
+        unread: Mapping[str, str] | None = None,
     ) -> tuple[list[str], list[SetAside]]:
         """Queue every valid item the agent wrote to incoming/; set every other file aside with its problems.
 
         seen maps each queued item's fingerprint to its identifier; an item that asks the same thing as one already
         open or decided is set aside, so nothing decided is ever asked again under another name. kept holds the
-        record of each Listening quote the launcher keeps, as a path in ledger/.
+        record of each Listening quote the launcher keeps, as a path in ledger/. unread holds each queued item whose
+        fingerprint is not in seen, since its item file could not be read, with the reason; unsettled comes to hold
+        the reason for each of those an item here was set aside as a possible repeat of.
         """
         seen = {} if seen is None else seen
         incoming = areas.path("review_queue", INCOMING)
@@ -208,7 +267,7 @@ class Ledger:
         superseding: list[tuple[str, str]] = []
         for path in list(areas.files(incoming)):
             name = areas.relative(path)[len("review-queue/incoming/") :]
-            item, problems = self.check_incoming(path, name, products, seen, kept)
+            item, problems = self.check_incoming(path, name, products, seen, kept, unread or {})
             if item is None:
                 set_aside.append(self.set_aside(areas, store, path, name, run_id, problems))
                 continue
@@ -236,6 +295,7 @@ class Ledger:
         products: Sequence[str],
         seen: Mapping[str, str],
         kept: Collection[str] = (),
+        unread: Mapping[str, str] | None = None,
     ) -> tuple[exchange.Item | None, list[str]]:
         """Every rule a file in incoming/ must pass to be queued, for the launcher and the agent's own check alike:
         its name, the item format, a kind the launcher does not render from a Draft, sourced pain behind a proposal
@@ -243,8 +303,11 @@ class Ledger:
         from reviewed text nor queued from a Draft, and no repeat of an item queued or decided.
 
         name is the file's path inside incoming/; seen maps each queued item's fingerprint to its identifier, and
-        kept holds the record of each Listening quote the launcher keeps. The item comes back only when there is no
-        problem.
+        kept holds the record of each Listening quote the launcher keeps. unread holds each queued item whose item
+        file could not be read, so that seen lacks its fingerprint: an open one of them stands, and no item that
+        supersedes it takes its place in this run, and nothing shows an item with the kind and ask of one of them,
+        open or decided, is not a repeat of it, so that item is not queued. The item comes back only when there is
+        no problem.
         """
         problems: list[str] = []
         slug = slug_of(name)
@@ -283,11 +346,30 @@ class Ledger:
                 f"supersedes {target}, a {kind} the launcher queued from its Draft; only a change to that Draft in"
                 f" {FROM_DRAFT[kind]} replaces it"
             )
+        else:
+            lost = (unread or {}).get(target or "")
+            stood = stands(replaced or None, [lost] if lost else [])
+            if stood:
+                if stood not in self.stood:
+                    self.stood.append(stood)
+                problems.append(
+                    f"supersedes {target}: {lost}, so the open item stands and nothing replaces it in this run"
+                )
         fingerprint = exchange.item_hash(item)
         if fingerprint in seen:
             earlier = self.entries.get(seen[fingerprint])
             status = earlier["status"] if earlier else "also in incoming/"
             problems.append(f"asks the same as {seen[fingerprint]}, which is {status}")
+        else:
+            for identifier, lost in (unread or {}).items():
+                earlier = self.entries[identifier]
+                # The item this one supersedes is weighed above, on its own.
+                if identifier != target and may_repeat(item, earlier):
+                    self.unsettled.append(lost)
+                    problems.append(
+                        f"has the kind and ask of {identifier}, which is {earlier['status']}: {lost}, so nothing shows"
+                        " this item asks anything else"
+                    )
         return (None if problems else item), problems
 
     def set_aside(
