@@ -11,8 +11,9 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from gr0wthlab import examples
+from gr0wthlab import cycle, examples
 from tests import fakes
 
 POSTS = fakes.EXAMPLES
@@ -263,6 +264,18 @@ class ExampleRunTest(unittest.TestCase):
         lab = self.root / "labs" / f"post-drafts-{example.id}" / "gr0wthlab"
         self.assertEqual(list((lab / "src/examples").iterdir()), [lab / "src/examples/README.md"])
         self.assertEqual(list((lab / "ledger/run-reports").glob("*.requests.json")), [], "no source was read")
+
+    def test_a_lab_that_cannot_be_built_or_whose_run_stops_reads_as_not_run_with_why(self):
+        # Either is that example's trouble alone: the gate reads it as not compared, and the weekly run goes on.
+        example = examples.load(fakes.REPO, "post-drafts").examples[0]
+        with mock.patch.object(examples, "build", side_effect=OSError("the disk is full")):
+            run = self.run_example("post-drafts", example)
+        self.assertEqual((run.status, run.started), ("not run", False))
+        self.assertEqual(run.why, "its lab could not be built (the disk is full)")
+        with mock.patch.object(cycle.Cycle, "run", side_effect=RuntimeError("stopped")):
+            run = self.run_example("post-drafts", example)
+        self.assertEqual(run.status, "not run")
+        self.assertEqual(run.why, "its lab's run stopped (RuntimeError: stopped)")
 
 
 if __name__ == "__main__":
