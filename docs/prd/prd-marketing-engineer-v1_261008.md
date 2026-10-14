@@ -480,13 +480,13 @@ A cohort that reaches 20 to 50 was not reached there; that end of recruiting sta
 
 **Acceptance Criteria:**
 
-- [ ] Every rejection reason is kept as Evidence linked to its item.
-- [ ] A reason about execution (tone, length, a factual slip) may refine the Marketing Engineer's Instructions; a reason about strategy (Fit, an Angle, a claim, positioning) becomes a package-change proposal instead.
-- [ ] Each workflow has a set of about ten example inputs with their expected outputs, re-run on every Instructions change, and a change that makes any example worse is not kept.
-- [ ] Every kept Instructions change appears as a notice at the next sitting, with the reason that prompted it and the example results.
+- [x] Every rejection reason is kept as Evidence linked to its item.
+- [x] A reason about execution (tone, length, a factual slip) may refine the Marketing Engineer's Instructions; a reason about strategy (Fit, an Angle, a claim, positioning) becomes a package-change proposal instead.
+- [x] Each workflow has a set of about ten example inputs with their expected outputs, re-run on every Instructions change, and a change that makes any example worse is not kept.
+- [x] Every kept Instructions change appears as a notice at the next sitting, with the reason that prompted it and the example results.
 
-Rejection-reason coding landed early, with US-ME13 and US-ME14: each reason gets a code from a fixed list split into execution and strategy, a strategy reason is routed to a package-change proposal, and no run can change Instructions yet (`src/gr0wthlab/learning.py`).
-The refinement loop and the example re-run are still this story's to build, so its boxes stay open.
+Rejection-reason coding landed early, with US-ME13 and US-ME14: each reason gets a code from a fixed list split into execution and strategy, and a strategy reason is routed to a package-change proposal (`src/gr0wthlab/learning.py`).
+The refinement loop and the example re-run landed with this story, as `docs/adr/0003-instructions-change-only-through-their-example-set.md` records: an execution reason may lead to one proposed Instructions change a week, and the launcher keeps it only when its workflow's example set, run with the real agent on both sides of the change, shows no example doing worse.
 
 **Validation Test:**
 
