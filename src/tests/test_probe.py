@@ -27,9 +27,12 @@ MARK = probe.PREFIX + RUN
 RECORDED = Path(__file__).resolve().parent / "fixtures" / "probe-logs"
 TARGETS = len(probe.PROBE_TARGETS)
 # The folders of the Founder's records became targets after most of the logs were recorded: each of those logs is the
-# record of a run that was handed the nine targets before them, and is judged on those nine.
+# record of a run that was handed the nine targets before them, and is judged on those nine. The Instructions in force
+# and the example sets became targets after the log of the fourteen, which is judged on those fourteen.
 FOUNDER_TARGETS = tuple(label for label in probe.PROBE_TARGETS if label.startswith(probe.FOUNDER_TARGET))
-RECORDED_TARGETS = tuple(label for label in probe.PROBE_TARGETS if label not in FOUNDER_TARGETS)
+KEPT_TARGETS = (boundary.INSTRUCTIONS_TARGET, boundary.EXAMPLES_TARGET)
+FOURTEEN_TARGETS = tuple(label for label in probe.PROBE_TARGETS if label not in KEPT_TARGETS)
+RECORDED_TARGETS = tuple(label for label in FOURTEEN_TARGETS if label not in FOUNDER_TARGETS)
 # Codex's own last error in the two recorded runs that ended before any tool call.
 ERROR_429 = "exceeded retry limit, last status: 429 Too Many Requests"
 ERROR_400 = (
@@ -910,11 +913,12 @@ class RecordedLogTest(ProbeTestCase):
         text = self.recorded("each-target-alone-with-founder-records.stderr.log")
         for label in FOUNDER_TARGETS:
             self.assertIn(f"{MARK}-{label}-file-tool.txt", text)
+        needed = [step.name for step in self.handed(FOURTEEN_TARGETS) + self.steps(kind=probe.PERMITTED)]
         with self.kernel(self.steps(tool=probe.SHELL)):
-            result = self.verify()
+            result = self.verify(needed=needed)
         self.assertEqual(result["file_tool_targets_without_refusal"], {})
         self.assertEqual(result["codex_tool_record"]["problems"], [])
-        self.assertEqual(len(result["steps_needed"]), 2 * TARGETS + 2 * len(self.boundary.areas))
+        self.assertEqual(len(result["steps_needed"]), 2 * len(FOURTEEN_TARGETS) + 2 * len(self.boundary.areas))
         self.assertTrue(result["passed"])
         # Take the refusal of one folder's patch away, and that folder alone is unproven: the agent's report and the
         # script's output name the sentinel too, and neither is a refusal.
@@ -927,7 +931,9 @@ class RecordedLogTest(ProbeTestCase):
                 self.assertEqual(len(kept), len(calls) - 1)
                 self.assertTrue(any(str(step.path) in call.body for call in kept))
                 self.assertEqual(
-                    list(probe.file_tool_gaps(kept, self.steps())), [step.label], "nothing else stands in for it"
+                    list(probe.file_tool_gaps(kept, self.handed(FOURTEEN_TARGETS))),
+                    [step.label],
+                    "nothing else stands in for it",
                 )
 
     def test_a_run_handed_no_patch_for_the_founders_records_leaves_each_of_them_unproven(self):
@@ -936,8 +942,9 @@ class RecordedLogTest(ProbeTestCase):
         self.write_record(exit_code=0, started_at="2026-10-09T00:00:00+00:00")
         self.write_permitted()
         self.recorded("each-target-alone.stderr.log")
+        needed = [step.name for step in self.handed(FOURTEEN_TARGETS) + self.steps(kind=probe.PERMITTED)]
         with self.kernel(self.steps(tool=probe.SHELL)):
-            result = self.verify()
+            result = self.verify(needed=needed)
         self.assertFalse(result["passed"])
         self.assertEqual(
             result["file_tool_targets_without_refusal"], dict.fromkeys(FOUNDER_TARGETS, "no patch named its sentinel")
@@ -953,6 +960,24 @@ class RecordedLogTest(ProbeTestCase):
                 "founder-outreach",
             ),
         )
+
+    def test_a_run_handed_no_patch_for_the_instructions_or_the_example_sets_leaves_each_of_them_unproven(self):
+        """A run that proves the fourteen targets before them proves nothing about the Instructions in force or the
+        example sets: each is a target of its own, so the check fails and names both (ADR 0003)."""
+        self.write_record(exit_code=0, started_at="2026-10-09T00:00:00+00:00")
+        self.write_permitted()
+        self.recorded("each-target-alone-with-founder-records.stderr.log")
+        with self.kernel(self.steps(tool=probe.SHELL)):
+            result = self.verify()
+        self.assertFalse(result["passed"])
+        self.assertEqual(
+            result["file_tool_targets_without_refusal"], dict.fromkeys(KEPT_TARGETS, "no patch named its sentinel")
+        )
+        self.assertEqual(result["unproven"], [f"{label}:file-tool" for label in KEPT_TARGETS])
+        self.assertEqual(KEPT_TARGETS, ("instructions-in-force", "example-sets"))
+        targets = probe.forbidden_dirs(self.boundary)
+        self.assertEqual(targets["instructions-in-force"], self.boundary.repo_root / "ledger" / "instructions")
+        self.assertEqual(targets["example-sets"], self.boundary.repo_root / "src" / "examples")
 
     def test_nine_targets_sent_as_three_patches_are_not_proven(self):
         # The shape behind the false failures on main: nine forbidden targets in three patches, each refused whole.

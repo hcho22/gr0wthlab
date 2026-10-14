@@ -83,7 +83,7 @@ from . import (
 )
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, clear_probe_files, read_plain
-from .boundary import FOUNDER, LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
+from .boundary import FOUNDER, LEDGER, Boundary, ConfigError, canonical, check_kept_dirs, load_boundary, load_json
 from .queue import INCOMING, OPEN, QUEUE_FILE, REVIEW_QUEUE, SET_ASIDE, SUPERSEDED, Ledger, QueueError, Stands
 from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLine, Unusable
 from .sessions import Session
@@ -1680,6 +1680,7 @@ class Cycle:
             # Before the pre-run records step, which would commit a missing folder's removal and leave git nothing
             # to restore it from. That step changes no file, and a sync that moves main starts this process again.
             founder.check(self.store.root)
+            check_kept_dirs(canonical(self.repo_root))
         except ConfigError as error:
             self.say(f"refusing to start: {error}")
             return launcher.EXIT_CONFIG

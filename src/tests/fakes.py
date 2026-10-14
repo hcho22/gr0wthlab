@@ -238,10 +238,11 @@ def sources_with(subreddits=(), app_store: bool = False) -> dict:
 
 
 def make_repo(path: Path, env: dict[str, str], window: dict | None = None, films: bool = False) -> Path:
-    """A gr0wthlab checkout with the real configuration, task definition, proposals, and area READMEs, committed on
-    main; its window is QUIET_WINDOW unless a test gives another, no Product films unless a test says so, so a run
-    that is not about filming files no filming plan, and it reads no network source and prepares no outreach message
-    unless a test gives it some (set_sources, set_run)."""
+    """A gr0wthlab checkout with the real configuration, task definition, proposals, Instructions in force, and area
+    READMEs, and a folder for example sets that holds none, committed on main; its window is QUIET_WINDOW unless a
+    test gives another, no Product films unless a test says so, so a run that is not about filming files no filming
+    plan, and it reads no network source and prepares no outreach message unless a test gives it some (set_sources,
+    set_run)."""
     shutil.copytree(str(REPO / "config"), str(path / "config"))
     set_window(path, QUIET_WINDOW if window is None else window)
     set_filming(path, films)
@@ -249,10 +250,13 @@ def make_repo(path: Path, env: dict[str, str], window: dict | None = None, films
     set_run(path, "outreach", {"network_ask_source": None, "creators": []})
     shutil.copytree(str(REPO / "src" / "instructions"), str(path / "src" / "instructions"))
     shutil.copytree(str(REPO / "src" / "proposals"), str(path / "src" / "proposals"))
+    (path / "src" / "examples").mkdir()
+    (path / "src" / "examples" / "README.md").write_text("# examples\n")
     shutil.copy(str(REPO / ".gitignore"), str(path / ".gitignore"))
     (path / "ledger").mkdir()
     (path / "ledger" / "README.md").write_text("# ledger\n")
     make_founder(path / "ledger")
+    shutil.copytree(str(REPO / "ledger" / "instructions"), str(path / "ledger" / "instructions"))
     for area in AREAS:
         (path / "workspace" / area).mkdir(parents=True)
         (path / "workspace" / area / "README.md").write_text(f"# {area}\n")

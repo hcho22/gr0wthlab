@@ -1,6 +1,6 @@
 ## This session: the post Drafts
 
-Your working guidance is `workspace/instructions/post-drafts.md`.
+Your working guidance is `ledger/instructions/post-drafts.md`.
 Before this session the launcher read the 14-day kit from Mandu, worked out which calendar days this run prepares post Drafts for, and fixed the Product's code to one commit for claim checks.
 Once the last session has ended, it checks every post Draft and queues a post only for one that passes.
 This session writes the post Drafts; the Filming session, which comes after it, writes each day's edit record to the Draft you leave, so write no edit record here.
