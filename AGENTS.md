@@ -13,7 +13,7 @@ gr0wthlab is the Marketing Engineer's repository; [`README.md`](README.md) gives
   It is standard library only, starts no process, opens no connection, and calls no model; `src/tests/test_founder.py`, `test_page.py`, `test_sitting.py`, and `test_serve.py` hold each of these, and a change to the page is also driven in a real browser, which sends what no unit test's request does.
   A run knows a sitting took place from its sitting record, which the page's last view writes as its one way to finish before it stops, or from the `sitting` date of a decision given at it, and marks what that sitting left undecided as carried over; nothing else is read as the sign of a sitting.
   A sitting known from a decision alone has no time: its Evidence keeps `minutes` as null, and nothing counts it as zero.
-  A sitting that left neither leaves no mark: its undecided items come back without the carried-over mark, its time is not recorded, and nothing saved at it is lost.
+  A sitting that left neither leaves no mark: its undecided items come back without the carried-over mark, nothing records its time, the run report has no line for it, and nothing saved at it is lost.
   gr0wthlab reads nothing from Mandu but the Go-To-Market Package: `mandu.exchange` and `GR0WTHLAB_EXCHANGE_DIR` are gone and are no longer read.
 - [The v1 PRD](docs/prd/prd-marketing-engineer-v1_261008.md) is the story tracker: when a story lands and its Validation Test passes, flip that story's acceptance-criteria checkboxes and no others.
 - `workspace/` is the agent's only writable tree (Guardrail G1); code in `src/`, configuration in `config/` (Guardrails, the Product registry, and the run settings), and docs change only through firstmate's reviewed pull requests (G8).

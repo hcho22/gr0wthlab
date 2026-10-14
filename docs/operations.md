@@ -286,7 +286,7 @@ What the page walks through, one thing at a time:
    A carried-over item says so, and from which sitting.
    A post that shows a video plays that file on the page, so the video and its copy are approved together; when the file is missing, or is not the file the run measured, the page says so and offers no approval.
    A package-change proposal says what it declares about Angles and Hooks, since the Founder is the only check on that.
-3. While a Product's Beta Cohort is being recruited, the three counts: invitations sent, accepted, and sessions booked, each a total to date.
+3. While a Product's Beta Cohort is being recruited, the three counts: invitations sent, accepted, and first sessions booked, each a total to date.
    A count left blank is recorded as not reported, never as zero.
 4. The end: how long the sitting took, which the page measured and the Founder can correct, and one button that records the sitting and stops the page.
 
@@ -360,7 +360,7 @@ So, for a sitting that ended without its record:
 - With at least one decision given at it, every item left undecided is still marked carried over from that sitting, and the run report says `Sitting <date>: its time was not recorded.`
   That time is kept as not recorded, never as zero.
 - With no decision given at it, the sitting leaves no mark.
-  Its undecided items stay open and come back at the next sitting without the carried-over mark, its time is not recorded, and nothing the Founder saved is lost.
+  Its undecided items stay open and come back at the next sitting without the carried-over mark, nothing records its time, the run report has no line for it, and nothing the Founder saved is lost.
 
 An item counts as left undecided at a sitting when it is still open, was queued on or before the sitting's date, and was queued before a run first took in that sitting's record or a decision given at it.
 

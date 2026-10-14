@@ -661,14 +661,14 @@ class WalkTest(ServeTestCase):
         self.assertEqual(status, 422)
         refused = Seen(body)
         named = [text.strip() for text in refused.text]
-        for label in ("Invitations sent", "Accepted", "Sessions booked"):
+        for label in ("Invitations sent", "Accepted", "First sessions booked"):
             with self.subTest(label=label):
                 self.assertIn(label, named, "the field's own name")
                 self.assertIn(f"{label} must be a whole number, written in digits.", refused.said)
         fields = {"invitations_sent": "10", "accepted": "", "sessions_booked": ""}
         path, shown = self.follow(self.post("/counts/RepToday", fields))
         self.assertEqual(path, f"/counts/RepToday?saved=RepToday-{DAY}&kind=beta-reports")
-        words = "invitations sent 10, accepted not reported, sessions booked not reported"
+        words = "invitations sent 10, accepted not reported, first sessions booked not reported"
         self.assertIn(f"Saved. RepToday, on {DAY}: {words}.", shown.said)
         record = self.record("beta-reports", f"RepToday-{DAY}")
         self.assertEqual((record["invitations_sent"], record["accepted"], record["sessions_booked"]), (10, None, None))
@@ -866,7 +866,8 @@ class EndTest(ServeTestCase):
     def test_a_sitting_that_left_no_sitting_record_and_no_decision_leaves_no_mark_whatever_else_it_saved(self):
         """The decided corner: five items left for later, a Beta Cohort report saved, and the page's process ended.
         The report is taken in as any report is, and it is no sign of a sitting: the five stay open without the
-        carried-over mark, and the run knows of no sitting, so no time is recorded for one."""
+        carried-over mark, and the run knows of no sitting, so nothing records that sitting's time and the run
+        report has no line for it."""
         fakes.beta_mandu(self.mandu)
         view = self.root / "RepToday-exports" / "waitlist-view.json"
         self.env["GR0WTHLAB_WAITLIST_VIEW"] = str(view)

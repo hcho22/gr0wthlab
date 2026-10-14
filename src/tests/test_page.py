@@ -385,7 +385,7 @@ class ViewTest(unittest.TestCase):
                 "beta-reports",
                 "RepToday-2026-10-11",
                 dict(counts, sessions_booked=0),
-                "RepToday, on 2026-10-11: invitations sent 8, accepted not reported, sessions booked 0.",
+                "RepToday, on 2026-10-11: invitations sent 8, accepted not reported, first sessions booked 0.",
             ),
             ("beta-builds", "RepToday", build, "RepToday: Beta Build approved on 2026-10-09; recruiting is open."),
             (

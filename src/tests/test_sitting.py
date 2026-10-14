@@ -686,7 +686,7 @@ class RecruitingTest(SittingTestCase):
             ),
             ({"accepted": "three"}, "Accepted must be a whole number, written in digits"),
             ({"accepted": "-1"}, "Accepted must be a whole number, written in digits"),
-            ({"sessions_booked": "2.5"}, "Sessions booked must be a whole number, written in digits"),
+            ({"sessions_booked": "2.5"}, "First sessions booked must be a whole number, written in digits"),
             ({"invitations_sent": "1e3"}, "Invitations sent must be a whole number, written in digits"),
         ):
             with self.subTest(given=given):

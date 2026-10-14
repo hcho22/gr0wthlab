@@ -22,9 +22,8 @@ from collections.abc import Iterable, Mapping, Sequence
 from urllib.parse import quote
 
 from . import exchange, founder, sitting
-from .beta import COUNT_LABELS
 from .exchange import plural
-from .sitting import COUNTS, END, ITEM, START, Entry, Message, Recruiting, Saved, View
+from .sitting import COUNT_LABELS, COUNTS, END, ITEM, START, Entry, Message, Recruiting, Saved, View
 
 VOID = ("br", "hr", "input", "link", "meta", "source")
 KIND_NAMES = {
@@ -208,7 +207,7 @@ def saved_words(saved: Saved) -> str:
         return f"The sitting on {record.get('date')} took {plural(record.get('minutes'), 'minute')}."
     if saved.kind == founder.BETA_REPORTS:
         counts = ", ".join(
-            f"{COUNT_LABELS[key]} {'not reported' if record.get(key) is None else record.get(key)}"
+            f"{COUNT_LABELS[key].lower()} {'not reported' if record.get(key) is None else record.get(key)}"
             for key in exchange.BETA_COUNTS
         )
         return f"{record.get('product')}, on {record.get('date')}: {counts}."
@@ -695,7 +694,7 @@ class Page:
                 "p",
                 f"Last given on {latest.day}: "
                 + ", ".join(
-                    f"{COUNT_LABELS[key]} "
+                    f"{COUNT_LABELS[key].lower()} "
                     + ("not reported" if latest.counts.get(key) is None else str(latest.counts[key]))
                     for key in exchange.BETA_COUNTS
                 )
@@ -718,7 +717,7 @@ class Page:
             class_="sheet",
         )
         fields = [
-            self.small_field(key, sitting.count_label(key), typed.get(key, ""), "A whole number, or leave it blank")
+            self.small_field(key, COUNT_LABELS[key], typed.get(key, ""), "A whole number, or leave it blank")
             for key in exchange.BETA_COUNTS
         ]
         answer = tag(
@@ -831,8 +830,8 @@ class Page:
                 "Ctrl-C in the page's terminal stops it without this record, and keeps every record you gave. The"
                 " next run then knows this sitting took place only from a decision given at it. With one, it marks"
                 " what you left as carried over and reports the sitting's time as not recorded. With none, the"
-                " sitting leaves no mark: what you left comes back without the carried-over mark, and its time is"
-                " not recorded.",
+                " sitting leaves no mark: what you left comes back without the carried-over mark, nothing records"
+                " its time, and the run report has no line for it.",
                 class_="hint",
             ),
             class_="answer",

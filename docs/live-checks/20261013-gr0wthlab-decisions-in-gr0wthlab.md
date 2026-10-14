@@ -11,7 +11,7 @@ How to read the paths:
 - `<lab>` is the throwaway lab under `<tmp>` described below.
 - Where a quoted line held the home folder's or the temporary folder's full path, that prefix was replaced with `~` or `<tmp>`.
 
-All times are Mac local time (PDT, UTC-7): rounds 1 and 2 on 2026-10-12, rounds 3, 4, and 5 on 2026-10-13.
+All times are Mac local time (PDT, UTC-7): rounds 1 and 2 on 2026-10-12, rounds 3 to 6 on 2026-10-13.
 A run identifier carries the UTC date, which was already the next day each time.
 Codex CLI 0.160.0 with `gpt-6-luna` at `high` reasoning effort throughout.
 
@@ -344,7 +344,7 @@ Both labs' second runs and the second lab's terminal said `1 minutes`; the run r
 ## Round 5: after the review of the carry-over rule
 
 Review asked whether a sitting should be known from more than a decision, and the rule was decided as it stood: a run knows a sitting took place from its sitting record, which the page writes when the Founder ends the sitting on the page, or from a decision given at it, and nothing else is read as the sign of a sitting.
-A sitting that ended without its record, by the terminal, a crash, or a closed laptop, and at which no decision was given, leaves no mark: its undecided items stay open and come back at the next sitting without the carried-over mark, its time is not recorded, and nothing the Founder saved is lost.
+A sitting that ended without its record, by the terminal, a crash, or a closed laptop, and at which no decision was given, leaves no mark: its undecided items stay open and come back at the next sitting without the carried-over mark, nothing records its time, the run report has no line for it, and nothing the Founder saved is lost.
 This round changed no part of that rule in code; it states the rule and that corner the same way wherever either is described, and holds the corner with a unit test.
 
 It also changed launcher code in four small ways, which is why the boundary was checked again:
@@ -401,13 +401,52 @@ The last view's closing lines read, in that browser, as the page now has them: w
 - `ruff check` and `ruff format --check` on `src` and `src/bin/gr0wthlab`, ruff 0.15.20: clean.
 - The latest-Python job of CI, which runs on Linux, was not run here.
 
+## Round 6: the page's own name for the third count, and the corner in plain words
+
+Round 5 had the page take the run report's names for the three Beta Cohort counts, which renamed the page's third field to `Sessions booked`.
+That rename was not asked for, and the count means first sessions, so this round put the page's words back: the third count is `First sessions booked` on its field, in the reason a value typed there is refused, in what the page says was saved, and in its `Last given on` line.
+The page still has one set of names for the three, `sitting.COUNT_LABELS`, which the field and its refusal both read; the run report's own line keeps the wording it has on `main`, `sessions booked`, and neither follows the other.
+
+This round also says the corner of round 5 in plain words wherever it is described.
+For a sitting that left no sitting record and at which no decision was given, the run knows of no sitting: nothing records that sitting's time, and the run report has no line for it.
+The instruction for round 5's test had said the run report would say the time was not recorded; that was wrong for this corner and was withdrawn, and the test's assertions, which hold that the report has no line of a sitting, stand as they were.
+
+This round changed only the page (`src/gr0wthlab/sitting.py` and `src/gr0wthlab/page.py`), its tests, and documents, so no preflight and no boundary check was owed, and neither was run: round 5's stand.
+It ran on 2026-10-13 from about 20:26 to 20:57, on the tree this record lands with: `src` tree `36050227b795155180020e3d0a5e7039d6f7e032`, `config` tree unchanged, `b43d0624383aada9155906ee4b54515c3ecb3a5d`.
+
+### The page in a browser
+
+One throwaway lab under `<tmp>`, built from the worktree as round 5's was, with the no-model Codex stand-in, so no model was called; the sitting was driven in headless Chrome through `chrome-devtools-axi`.
+
+| Step | Run | What the page showed |
+| --- | --- | --- |
+| `src/bin/gr0wthlab run`, the stand-in writing five proposals | `20261014T032613Z-on-demand-d548` | 6 items open |
+| `src/bin/gr0wthlab sitting`: a Beta Build recorded on `What I did` by a click; on the counts view, `2.5` typed in the third field and the form sent | none | the field reads `First sessions booked`, and the page answered "Nothing was saved." and "First sessions booked must be a whole number, written in digits." |
+| the same view: 3 invitations sent and 1 accepted typed, the third field left blank, and the form sent | none | "Saved. RepToday, on 2026-10-13: invitations sent 3, accepted 1, first sessions booked not reported.", and "Last given on 2026-10-13: invitations sent 3, accepted 1, first sessions booked not reported." |
+| the last view opened | none | its closing lines end: "With none, the sitting leaves no mark: what you left comes back without the carried-over mark, nothing records its time, and the run report has no line for it." |
+| the page's process sent `kill -TERM`, the signal whose handler Ctrl-C shares | none | the terminal said `the sitting page has stopped`, and the command ended |
+
+No run followed that sitting: round 5's lab and `src/tests/test_serve.py` hold what a run makes of it.
+
+### What round 6 did not exercise
+
+- The preflight, the boundary check, the hole tests, and a weekly run with the real agent: this round changed no launcher code and no part of the permission profile.
+- The run report's counts line: unchanged, and `src/tests/test_sitting.py` and `src/tests/test_beta_cycle.py` hold its wording.
+- The page's other views, a narrow width, and the dark color scheme: unchanged this round.
+- A scheduled run, the real production clone, Mandu's side, and a browser other than Chrome, as in round 1.
+
+### Unit tests and lint on this round's tree
+
+- `/usr/bin/python3 -m unittest discover -s src/tests -t src`, under Python 3.9.6, run in the background on this round's tree: 1289 tests in 1839 s, and none failed.
+  Nothing under `src/` or `config/` changed after that run began.
+- `ruff check` and `ruff format --check` on `src` and `src/bin/gr0wthlab`, ruff 0.15.20: clean.
+- The latest-Python job of CI, which runs on Linux, was not run here.
+
 ## Screenshots
 
 Taken in round 2, on the page code as it was then, from the synthetic checkout; every name, message, and figure in them is fixture text.
 The merge in round 3 changed none of the page's own files.
-Round 4 changed the last view, so its screenshot, the end of the sitting, was taken again in round 4, from the second lab above.
-Round 5 renamed the third count's field, so the screenshot of the counts was taken again in round 5, from that round's lab.
-Round 5 also reworded the closing lines of the last view's side panel, and the end of the sitting was not taken again: its screenshot shows those lines as round 4 had them.
+Rounds 4 to 6 changed two views, the Beta Cohort counts and the end of the sitting, and both screenshots were taken again in round 6, from that round's lab, on the page as it is now.
 
 | Screen | Laptop, 1280 wide | Narrow, 390 wide |
 | --- | --- | --- |

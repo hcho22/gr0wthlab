@@ -34,7 +34,6 @@ from pathlib import Path
 
 from . import exchange, founder
 from .areas import UnsafeFile, read_plain
-from .beta import COUNT_LABELS
 from .boundary import FOUNDER, LEDGER, PRODUCT_REGISTRY, ConfigError, canonical, load_json
 from .messages import CREATOR
 from .queue import APPROVED, OPEN, QUEUE_FILE, REVIEW_QUEUE
@@ -53,6 +52,13 @@ HOLDS_ADDRESS = (
     "it holds something that looks like an email address; no record may hold an address or anything else about a person"
 )
 START, ITEM, COUNTS, END = "start", "item", "counts", "end"
+# The three Beta Cohort counts as the page names them: on each field, in the reason a value typed there is refused,
+# and in what the page says was saved.
+COUNT_LABELS = {
+    "invitations_sent": "Invitations sent",
+    "accepted": "Accepted",
+    "sessions_booked": "First sessions booked",
+}
 
 
 class Refused(Exception):
@@ -194,12 +200,6 @@ class View:
         steps = self.steps()
         index = steps.index(step) if step in steps else 0
         return steps[max(index - 1, 0)]
-
-
-def count_label(key: str) -> str:
-    """One of the three Beta Cohort counts as the page names it: on its field, and in the reason a value typed there
-    is refused."""
-    return COUNT_LABELS[key][:1].upper() + COUNT_LABELS[key][1:]
 
 
 def one_line(value: str, name: str, required: bool, reasons: list[str]) -> str | None:
@@ -498,7 +498,7 @@ class Sitting:
             raise Refused([f"no Beta Build is recorded for {product}, so there is no Beta Cohort to count"])
         reasons: list[str] = []
         counts = {
-            key: whole_number(given.get(key, ""), count_label(key), 0, None, reasons) for key in exchange.BETA_COUNTS
+            key: whole_number(given.get(key, ""), COUNT_LABELS[key], 0, None, reasons) for key in exchange.BETA_COUNTS
         }
         if not reasons and all(value is None for value in counts.values()):
             reasons.append("give at least one count; a count you leave blank is recorded as not reported, never zero")

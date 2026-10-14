@@ -316,7 +316,7 @@ Nothing else is read as the sign of a sitting: not a Beta Build record, a Beta C
 gr0wthlab counts an item as left undecided at the sitting when the item is still open, was queued on or before the sitting's date, and was queued before a run first took in that sitting's record or a decision given at it.
 Where a sitting ended without this record and a decision was given at it, its time is not known: the run report says the sitting's time was not recorded, and it is never counted as zero.
 A sitting that ended without this record, by the terminal, a crash, or a closed laptop, and at which no decision was given, leaves no mark.
-Its undecided items stay open and come back at the next sitting without the carried-over mark, its time is not recorded, and nothing the Founder saved is lost.
+Its undecided items stay open and come back at the next sitting without the carried-over mark, nothing records its time, the run report has no line for it, and nothing the Founder saved is lost.
 
 ## Beta Build records
 
