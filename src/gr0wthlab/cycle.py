@@ -143,36 +143,20 @@ def unusable(name: str, problems: Sequence[str], content: bytes | None = None) -
     return Unusable(name, tuple(problems), run_state.digest(f"{name}\n{hashlib.sha256(data).hexdigest()}"))
 
 
-def record_name(kind: str, name: str) -> str:
-    """One of the Founder's record files, by its path under ledger/. A file name can be typed by hand, so one that
-    looks like an address is never repeated."""
-    hidden = "(a file whose name is not repeated here)"
-    return f"{FOUNDER}/{kind}/{hidden if waitlist.looks_like_address(name) else name}"
-
-
 def read_records(ledger: Path, kind: str) -> tuple[list[founder.Raw], list[Unusable], str | None]:
     """(name, path, bytes) for every record file of one kind in ledger/founder/, the files there that are no record,
     and why the folder itself could not be read, if it could not."""
     found, others, failure = founder.read(ledger, kind)
-    return found, [unusable(record_name(kind, name), [why]) for name, why in others], failure
+    return found, [unusable(founder.named(kind, name), [why]) for name, why in others], failure
 
 
 def parse_records(kind: str, found, parser) -> tuple[list[tuple[object, Path, str]], list[Unusable]]:
-    """Each record a parser could use, with its path and fingerprint, and each it could not. A file that holds
-    anything that looks like an email address is refused whole, before anything in it is read."""
+    """Each record a parser could use, with its path and fingerprint, and each it could not (founder.parse)."""
     parsed, problems = [], []
     for name, path, data in found:
-        if founder.holds_address(name, data):
-            problems.append(unusable(record_name(kind, name), [founder.HOLDS_ADDRESS], data))
-            continue
-        try:
-            value = json.loads(data.decode("utf-8"))
-        except (UnicodeDecodeError, ValueError) as error:
-            problems.append(unusable(record_name(kind, name), [f"not JSON: {error}"], data))
-            continue
-        record, issues = parser(name[: -len(".json")], value)
+        record, issues = founder.parse(name, data, parser)
         if issues:
-            problems.append(unusable(record_name(kind, name), issues, data))
+            problems.append(unusable(founder.named(kind, name), issues, data))
         else:
             parsed.append((record, path, hashlib.sha256(data).hexdigest()))
     return parsed, problems
@@ -270,7 +254,9 @@ class Cycle:
         review_state: run_state.ReviewQueueState,
     ) -> None:
         """Take in the Founder's decision and sitting records from ledger/founder/; when the ledger could not be read,
-        no decision is matched and only sittings are taken in. A decision record for an item still open that cannot
+        no decision is matched and only sittings are taken in. A sitting that left no sitting record is still kept
+        as one that took place, from the date each decision given at it carries, so what it left undecided carries
+        over; its time is then not recorded. A decision record for an item still open that cannot
         be used is reported at every run until the Founder decides the item again on the page; any other record that
         cannot be used is reported by the first run to find it as it is, and the Review Queue state remembers it by
         its fingerprint while it stays so.
@@ -323,7 +309,7 @@ class Cycle:
             if outcome.status in ("unknown-item", "conflict"):
                 name = f"{outcome.decision.item}.json"
                 why = [report.outcome_text(outcome.status)]
-                problems.append(unusable(record_name(founder.DECISIONS, name), why, contents[name]))
+                problems.append(unusable(founder.named(founder.DECISIONS, name), why, contents[name]))
         problems = [named_item(record) for record in problems]
         state.unusable = problems + sitting_problems
         reported = {record.fingerprint for record in state.unusable}
@@ -373,6 +359,27 @@ class Cycle:
                 first = (existing or {}).get("taken_in_by_run", state.run_id)
                 self.store.write_json(target, dict(record, taken_in_by_run=first))
                 state.sittings.append(sitting)
+        # A sitting that ended without its record still took place: each decision given at it carries its date. Its
+        # time is not known, and is kept as null, never as zero.
+        given: dict[str, list[str]] = {}
+        for outcome in state.decisions:
+            if outcome.status == "taken" and outcome.decision.sitting:
+                given.setdefault(outcome.decision.sitting, []).append(digests[outcome.decision.item][0])
+        recorded = {sitting.day for sitting, _, _ in sittings}
+        unusable_records = {record.name for record in sitting_problems}
+        for day in sorted(set(given) - recorded):
+            target = self.store.path("evidence", "sittings", f"{day}.json")
+            try:
+                known = isinstance(json.loads(read_plain(target).decode("utf-8")), dict)
+            except (UnsafeFile, ValueError):
+                known = False
+            if known:
+                continue
+            record = {"date": day, "minutes": None, "note": None, "source": None, "shown_by": sorted(given[day])}
+            self.store.write_json(target, dict(record, taken_in_by_run=state.run_id))
+            # Only a folder that was read, and that holds no file for the date, shows that no time was recorded.
+            if not sitting_failure and founder.named(founder.SITTINGS, f"{day}.json") not in unusable_records:
+                state.untimed.append(day)
         taken = sum(1 for outcome in state.decisions if outcome.status == "taken")
         if unmatched:
             state.sources.append(unmatched)
@@ -451,7 +458,8 @@ class Cycle:
         return identifier
 
     def sitting_runs(self, state: RunState) -> dict[str, str]:
-        """Each sitting taken in so far, by date, with the run that first took in its record."""
+        """Each sitting known so far, by date, with the run that first took in a record of it: its sitting record,
+        or a decision given at it."""
         runs = {}
         folder = self.store.path("evidence", "sittings")
         for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
@@ -1719,7 +1727,6 @@ class Cycle:
         try:
             _, boundary = load_boundary(self.repo_root, self.env, self.home)
             registry = load_json(self.repo_root / "config" / "products.json")
-            settings.no_exchange(registry, self.env)
             founder.check(self.store.root)
             rules = settings.waitlist(registry, boundary, self.env, self.home)
             beta_rules = beta.rules(registry, config)

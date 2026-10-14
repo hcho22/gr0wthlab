@@ -704,6 +704,97 @@ class CarryOverTest(CycleTestCase):
         carried = {entry["id"]: entry.get("carried_over_from") for entry in self.queue()["open"]}
         self.assertEqual(carried, {"20261011-name-status-stale": day, "20261011-after": None})
 
+    def two_items_one_decided_at_a_sitting_that_left_no_record(self):
+        """Two items queued, and the Founder's decision on one of them, which carries the date of its sitting; the
+        page was stopped without the sitting's own record."""
+        two = {f"review-queue/incoming/{name}.md": fakes.proposal(title=name) for name in ("decided", "left")}
+        fakes.behave(self.codex_dir, {"write": two})
+        self.run_cycle()
+        self.decide("20261011-decided", "approve")
+        return "2026-10-11"
+
+    def sitting_evidence(self, day):
+        return json.loads((self.ledger() / f"evidence/sittings/{day}.json").read_text(encoding="utf-8"))
+
+    def carried(self):
+        return {entry["id"]: entry.get("carried_over_from") for entry in self.queue()["open"]}
+
+    def test_a_sitting_that_left_no_record_is_known_from_a_decision_given_at_it(self):
+        day = self.two_items_one_decided_at_a_sitting_that_left_no_record()
+        after = {"review-queue/incoming/after.md": fakes.proposal(title="queued after the sitting")}
+        fakes.behave(self.codex_dir, {"write": after})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=45))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.carried(), {"20261011-left": day, "20261011-after": None})
+        report = self.report()
+        self.assertIn(f"- Sitting {day}: its time was not recorded.", report)
+        self.assertIn("| Sittings | read | 0 records, 0 new |", report)
+        self.assertIn("1 new this run, 1 carried over", report)
+        kept = self.sitting_evidence(day)
+        self.assertEqual(
+            kept,
+            {
+                "date": day,
+                "minutes": None,
+                "note": None,
+                "source": None,
+                "shown_by": ["founder/decisions/20261011-decided.json"],
+                "taken_in_by_run": self.queue()["updated_by_run"],
+            },
+        )
+
+        # A later sitting of the same date is ended on the page: its time is kept from then on, and the date is
+        # still first known at the run that took the decision in, so nothing queued since is carried over from it.
+        self.sit(day)
+        fakes.behave(self.codex_dir, {})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        report = self.report()
+        self.assertIn(f"- Sitting {day}: 41 minutes.", report)
+        self.assertNotIn("its time was not recorded", report)
+        later = self.sitting_evidence(day)
+        self.assertEqual(
+            (later["minutes"], later["source"]["path"], later["taken_in_by_run"]),
+            (41, f"founder/sittings/{day}.json", kept["taken_in_by_run"]),
+        )
+        self.assertEqual(self.carried(), {"20261011-left": day, "20261011-after": None})
+
+    def test_a_sitting_whose_record_cannot_be_used_is_never_said_to_have_gone_unrecorded(self):
+        """A report says what a record shows: with a file for the date that is no record, the run knows the sitting
+        took place and does not know that no time was recorded."""
+        day = self.two_items_one_decided_at_a_sitting_that_left_no_record()
+        (self.exchange / "sittings" / f"{day}.json").write_text("{", encoding="utf-8")
+        fakes.behave(self.codex_dir, {})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        report = self.report()
+        self.assertEqual(self.carried()["20261011-left"], day)
+        self.assertIsNone(self.sitting_evidence(day)["minutes"])
+        self.assertIn(f"- Could not use `founder/sittings/{day}.json`: it is not JSON (line 1)", report)
+        self.assertNotIn("- Sitting ", report)
+
+    @unittest.skipIf(os.geteuid() == 0, "root can list any folder")
+    def test_a_sittings_folder_that_cannot_be_read_is_never_said_to_hold_no_record(self):
+        day = self.two_items_one_decided_at_a_sitting_that_left_no_record()
+        (self.exchange / "sittings").chmod(0o300)
+        fakes.behave(self.codex_dir, {})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        report = self.report()
+        self.assertEqual(self.carried()["20261011-left"], day)
+        self.assertIsNone(self.sitting_evidence(day)["minutes"])
+        self.assertIn("| Sittings | failed | `founder/sittings/` could not be read: Permission denied. |", report)
+        self.assertNotIn("- Sitting ", report)
+
+    def test_a_decision_that_was_not_taken_in_shows_no_sitting(self):
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        self.decide("20261011-unknown", "approve")
+        fakes.behave(self.codex_dir, {})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        carried = self.carried()
+        self.assertIn("20261011-name-status-stale", carried)
+        self.assertEqual(set(carried.values()), {None})
+        self.assertFalse((self.ledger() / "evidence/sittings").exists())
+        self.assertNotIn("- Sitting ", self.report())
+
 
 class RunLockTest(CycleTestCase):
     def hold_lock(self, repo):

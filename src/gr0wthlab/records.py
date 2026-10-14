@@ -328,9 +328,7 @@ def save_commit(git: Git, message: str, max_bytes: int, excluded: list[str] | No
             if Path(path).name == DOCUMENTATION:
                 git.run("checkout", "--quiet", "HEAD", "--", path, check=False)
             if excluded is not None:
-                # A file name can be typed by hand, so one that looks like an address is never repeated.
-                named = "a file whose name is not repeated here" if founder.holds_address(path, b"") else path
-                excluded.append(f"{named} ({reason})")
+                excluded.append(f"{path if founder.nameable(path) else founder.UNNAMED} ({reason})")
     if not staged(git):
         return None
     git.run("commit", "--quiet", "-m", message)

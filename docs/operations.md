@@ -17,6 +17,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
 2. It snapshots RepToday's Go-To-Market Package in Mandu (`ledger/evidence/package-snapshots/`).
 3. It takes in the Founder's decisions from `ledger/founder/decisions/`, which only the sitting page writes, and keeps each one as Evidence (`ledger/evidence/decisions/`).
    From then on a decision can no longer be changed on the page ([The weekly sitting](#the-weekly-sitting)).
+   It keeps each sitting it learns of as Evidence too (`ledger/evidence/sittings/`): from the sitting record, with its minutes, or, where a sitting ended without that record, from a decision given at it, with its time not recorded.
    It reads every other record of the Founder's from `ledger/founder/` too, and nothing in a run ever writes there.
 4. It reads RepToday's anonymous Waitlist view, once its build has made one, and keeps the counts by Source, Fit answer, and opt-in, per week and cumulative, with the entry identifiers, as Evidence (`ledger/evidence/waitlist/`).
    It checks every value for anything that looks like an email address first; on a hit it discards the whole read, keeps nothing from it, and queues a Guardrail breach notice.
@@ -280,13 +281,14 @@ What the page walks through, one thing at a time:
    If the weekly run due has not finished, the page says so first, and the queue and the report it shows are the earlier run's.
 2. Each open item, in the Review Queue's order, shown whole with what it touches and its Evidence.
    The Founder approves it, with a one-line note if wanted, rejects it, with a one-line reason, or leaves it for later.
-   Leaving it writes nothing: the item comes back at the next sitting, marked carried over.
+   Leaving it writes nothing: the item stays open and comes back at the next sitting.
+   The next run marks it carried over when it knows this sitting took place, from the sitting record or from a decision given at it ([Ending it](#ending-it)).
    A carried-over item says so, and from which sitting.
    A post that shows a video plays that file on the page, so the video and its copy are approved together; when the file is missing, or is not the file the run measured, the page says so and offers no approval.
    A package-change proposal says what it declares about Angles and Hooks, since the Founder is the only check on that.
 3. While a Product's Beta Cohort is being recruited, the three counts: invitations sent, accepted, and first sessions booked, each a total to date.
    A count left blank is recorded as not reported, never as zero.
-4. The end: how long the sitting took, which the page measured and the Founder can correct, and a button that stops the page.
+4. The end: how long the sitting took, which the page measured and the Founder can correct, and one button that records the sitting and stops the page.
 
 After each answer the page shows the next thing, with what was just saved above it, read back from its file.
 `Queue` in the bar lists every open item with its state, and jumps to any of them.
@@ -320,7 +322,8 @@ Every line the Founder types is kept in a record, so every limit holds at entry,
 - A decision can be changed, or taken back so the item is undecided again, until a run has taken it in, and never after.
   Open the item again, from `Queue` or from the line that says what was saved, and choose `Change it` or `Take it back`.
   Once a run has taken the decision in, the item is closed and never asked again.
-- A sitting record, the Beta Cohort counts of a date, and an outreach record are corrected by giving them again.
+- The Beta Cohort counts of a date and an outreach record are corrected by giving them again.
+- A sitting record is corrected on its own date: start the page again, and on its last view type the right total for the date in place of the number shown, which is this sitting's minutes added to the ones already recorded.
 - The Beta Build record cannot be removed; a Beta Build recorded by mistake is undone by stopping recruiting.
 - A message recorded as sent by mistake cannot be marked as not sent; the one thing that follows from it is a follow-up Draft after the waiting period, which the Founder can reject.
 
@@ -341,10 +344,21 @@ A run and a sitting may overlap, as when the Mac was asleep at the weekly time a
 - A decision the run has already taken in can no longer be changed, and the page says so.
 - Only one sitting page is served per checkout at a time; a second `sitting` command says so and ends.
 
-### Stopping it
+### Ending it
 
-Stop the page from its last view, `Stop the page`, or with Ctrl-C in its terminal.
-Nothing is lost either way: every record was written when it was given.
+End the sitting on the page's last view, with `Record the sitting and stop the page`.
+That one click saves the sitting record, with the minutes the page measured or the Founder corrected, shows what was saved, read back from its file, and stops the page; the page has no other way to stop.
+A second sitting on the same date adds its minutes to the ones the date's record held when it began.
+
+Ctrl-C in the terminal stops the page without the sitting record, as a crash or a closed laptop does.
+No record is lost that way: each was written when it was given.
+What the next run then knows of that sitting is the date each decision given at it carries:
+
+- With at least one decision given at it, every item left undecided is still marked carried over from that sitting, and the run report says `Sitting <date>: its time was not recorded.`
+  That time is kept as not recorded, never as zero.
+- With no decision given at it, nothing shows that the sitting took place, so nothing is carried over from it.
+
+An item counts as left undecided at a sitting when it is still open, was queued on or before the sitting's date, and was queued before a run first read a record of that sitting.
 
 ### What keeps the page the Founder's own
 

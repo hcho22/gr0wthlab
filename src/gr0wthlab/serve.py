@@ -1,10 +1,11 @@
 """The sitting page's server: a small page on the Founder's own Mac, which only the Founder can make decide.
 
-`gr0wthlab sitting` starts it, prints its address, and serves until the Founder stops it. It is the only way a
-Founder record is ever written (founder.py), so every request is held to this:
+`gr0wthlab sitting` starts it, prints its address, and serves until the Founder ends the sitting on its last view,
+which records the sitting and stops the page, or stops the command with Ctrl-C. It is the only way a Founder record
+is ever written (founder.py), so every request is held to this:
 
-- It listens on 127.0.0.1 only, on a port and behind a secret in its address that are new each time it starts. A
-  request whose address does not hold the secret gets a bare 404, whatever it asks for.
+- It listens on 127.0.0.1 only, on a free port the Mac gives it and behind a secret in its address, both new each
+  time it starts. A request whose address does not hold the secret gets a bare 404, whatever it asks for.
 - A request that changes anything is a POST to an address that holds the secret, whose Host and Origin are the page's
   own. Any other POST is refused and writes nothing; a GET never writes a record.
 - Every response forbids, by its content security policy, every script, style, image, video, form target, and
@@ -34,7 +35,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 from . import exchange, founder, sitting
 from .areas import UnsafeFile
 from .boundary import ConfigError
-from .page import Page
+from .page import Page, plural
 from .sitting import ITEM, Entry, Refused, Saved, Sitting, View
 
 HOST = "127.0.0.1"
@@ -70,8 +71,8 @@ class Server(ThreadingHTTPServer):
 
     daemon_threads = True
 
-    def __init__(self, state: Sitting, port: int = 0, out: TextIO = sys.stdout):
-        super().__init__((HOST, port), Handler)
+    def __init__(self, state: Sitting, out: TextIO = sys.stdout):
+        super().__init__((HOST, 0), Handler)
         self.state = state
         self.out = out
         self.secret = secrets.token_urlsafe(32)
@@ -222,8 +223,7 @@ class Handler(BaseHTTPRequestHandler):
                 saved = self.saved_record(query, founder.OUTREACH, founder.BETA_BUILDS)
                 return self.html(page.did(view, state, saved=saved))
             if parts == ["end"]:
-                saved = self.saved_record(query, founder.SITTINGS)
-                return self.html(page.end(view, state, saved=saved, last=last))
+                return self.html(page.end(view, state, last=last))
             if len(parts) == 2 and parts[0] == "item":
                 entry = view.find(parts[1])
                 if entry is None:
@@ -360,8 +360,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.see(page.url("counts", parts[1], saved=saved.stem, kind=saved.kind))
             if parts == ["end"]:
                 saved = state.record_sitting(get("minutes"), get("note"))
-                server.say(f"saved {saved.path}: {saved.record['minutes']} minutes")
-                return self.see(page.url("end", saved=saved.stem, kind=saved.kind))
+                server.say(f"saved {saved.path}: {plural(saved.record['minutes'], 'minute')}")
+                self.html(page.finished(saved))
+                server.say("the sitting has ended, from the page")
+                return server.stop_soon()
             if len(parts) == 3 and parts[:2] == ["did", "sent"]:
                 saved = state.record_sent(parts[2], get("sent_on"), get("replied_on"), get("wait_days"), get("note"))
                 server.say(f"saved {saved.path}")
@@ -374,17 +376,6 @@ class Handler(BaseHTTPRequestHandler):
                 saved = state.set_recruiting(parts[2], get("recruiting") == "stop", get("stopped_on"))
                 server.say(f"saved {saved.path}: recruiting {saved.record['recruiting']}")
                 return self.see(page.url("did", saved=saved.stem, kind=saved.kind))
-            if parts == ["stop"]:
-                self.html(
-                    page.plain(
-                        "The page has stopped",
-                        "Everything you saved is in ledger/founder/, and the next run takes it in.",
-                        "You can close this tab.",
-                    )
-                )
-                self.close_connection = True
-                server.say("stopped from the page")
-                return server.stop_soon()
         except Refused as refused:
             return self.refused(parts, fields, refused.reasons)
         return self.nothing_here()
@@ -412,9 +403,10 @@ class Handler(BaseHTTPRequestHandler):
         return self.html(page.did(view, state, reasons, fields, at=at.get(parts[1], "")), status)
 
 
-def serve(repo_root: Path, env: Mapping[str, str], port: int = 0, out: TextIO = sys.stdout) -> int:
-    """Serve one sitting until the Founder stops it, from the page or with Ctrl-C; returns the exit status."""
-    state = Sitting(repo_root, env)
+def serve(repo_root: Path, out: TextIO = sys.stdout) -> int:
+    """Serve one sitting until the Founder ends it on the page, which records it, or stops the command with Ctrl-C,
+    which does not; returns the exit status."""
+    state = Sitting(repo_root)
     lock = (state.ledger / sitting.SERVING_LOCK).open("a")
     try:
         try:
@@ -422,9 +414,9 @@ def serve(repo_root: Path, env: Mapping[str, str], port: int = 0, out: TextIO = 
         except BlockingIOError:
             raise ConfigError("another sitting page is already being served for this checkout; stop it first") from None
         try:
-            server = Server(state, port, out)
+            server = Server(state, out)
         except OSError as error:
-            raise ConfigError(f"the page could not be served on port {port} ({error.strerror or error})") from error
+            raise ConfigError(f"the page could not be served on {HOST} ({error.strerror or error})") from error
 
         def stop(signum: int, frame: object) -> None:
             server.stop_soon()
@@ -433,7 +425,7 @@ def serve(repo_root: Path, env: Mapping[str, str], port: int = 0, out: TextIO = 
         try:
             server.say(f"the sitting page for {os.path.basename(str(repo_root))}/ledger is at:")
             print(f"\n  {server.address}\n", file=out, flush=True)
-            server.say("open it in a browser on this Mac; stop it from its last page, or with Ctrl-C here")
+            server.say("open it in a browser on this Mac; its last page records the sitting and stops this command")
             server.serve_forever(poll_interval=0.2)
         finally:
             for name, handler in previous.items():

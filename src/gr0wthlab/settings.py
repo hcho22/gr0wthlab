@@ -230,24 +230,6 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
     )
 
 
-# What a configuration set while the Founder's records were still in Mandu: the folder in the Product registry, and the
-# variable that moved it on one machine.
-EXCHANGE_ENV = "GR0WTHLAB_EXCHANGE_DIR"
-RECORDS_MOVED = (
-    "gr0wthlab reads no record from Mandu any more: the Founder's decisions and records are in ledger/founder/ of"
-    " this repository, written by `src/bin/gr0wthlab sitting` (docs/adr/0002-the-founder-decides-in-gr0wthlab.md)"
-)
-
-
-def no_exchange(registry: Mapping, env: Mapping[str, str]) -> None:
-    """Refuse a configuration that still points at Mandu's exchange folder, and say where the records are now: a run
-    that went on would quietly read no decision from the folder its configuration names."""
-    if "exchange" in (registry.get("mandu") or {}):
-        raise ConfigError(f"config/products.json still sets mandu.exchange; remove it: {RECORDS_MOVED}")
-    if env.get(EXCHANGE_ENV):
-        raise ConfigError(f"{EXCHANGE_ENV} is set; unset it, and take it out of any LaunchAgent: {RECORDS_MOVED}")
-
-
 @dataclass(frozen=True)
 class Waitlist:
     """A Product's Waitlist: where its anonymous view is, if RepToday's build has made one, and how it is counted."""

@@ -7,11 +7,8 @@ a message sent and answered, and the filming plan. test_serve.py puts the same s
 
 import json
 import os
-import re
 import shutil
-import unittest
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 from gr0wthlab import exchange, founder, sitting
 from gr0wthlab.sitting import COUNTS, END, ITEM, START, Refused
@@ -19,7 +16,6 @@ from tests import fakes
 from tests.test_cycle import CycleTestCase
 
 WEEK = timedelta(days=7)
-SOURCES = Path(__file__).resolve().parents[1] / "gr0wthlab"
 # The evening of the first run's Sunday, when the Founder sits down: Sunday 2026-10-11 19:42 on the Mac's clock.
 SITTING = datetime(2026, 10, 12, 2, 42, tzinfo=timezone.utc)
 DAY = "2026-10-11"
@@ -41,7 +37,7 @@ class SittingTestCase(CycleTestCase):
     def sit_down(self, at=SITTING):
         """The Founder starts the sitting command; its clock is the test's, and so is its measure of time."""
         self.at = at
-        state = sitting.Sitting(self.repo, self.env, clock=lambda: self.at, elapsed=lambda: self.elapsed)
+        state = sitting.Sitting(self.repo, clock=lambda: self.at, elapsed=lambda: self.elapsed)
         state.begin()
         return state
 
@@ -173,7 +169,7 @@ class WalkTest(SittingTestCase):
         self.assertEqual(view.stray, [("`founder/decisions/notes.txt`", "only <name>.json record files belong here")])
 
     def test_the_sitting_is_timed_from_its_first_page_in_whole_minutes(self):
-        state = sitting.Sitting(self.repo, self.env, clock=lambda: SITTING, elapsed=lambda: self.elapsed)
+        state = sitting.Sitting(self.repo, clock=lambda: SITTING, elapsed=lambda: self.elapsed)
         self.assertEqual(state.minutes(), 1, "before any page is shown")
         self.elapsed = 100.0
         state.begin()
@@ -332,12 +328,13 @@ class DecideTest(SittingTestCase):
         state = self.sit_down()
         path = self.exchange / "decisions" / f"{item}.json"
         for damage, problem in (
-            ("{", "it is not JSON"),
+            ("{", "it is not JSON (line 1)"),
+            ("\xff", "it is not UTF-8 text"),
             (json.dumps({"exchange": 7, "item": item, "decision": "reject"}), "reason is required"),
             (json.dumps({"note": fakes.ADDRESS}), founder.HOLDS_ADDRESS),
         ):
             with self.subTest(damage=damage[:20]):
-                path.write_text(damage, encoding="utf-8")
+                path.write_bytes(damage.encode("latin-1"))
                 (entry,) = state.look().entries
                 self.assertFalse(entry.decided)
                 self.assertIn(problem, entry.record_problem)
@@ -498,6 +495,31 @@ class SittingRecordTest(SittingTestCase):
         self.assertEqual(queue["open"][0]["carried_over_from"], DAY)
         kept = json.loads((self.ledger() / f"evidence/sittings/{DAY}.json").read_text(encoding="utf-8"))
         self.assertEqual((kept["minutes"], kept["source"]["path"]), (15, f"founder/sittings/{DAY}.json"))
+
+    def test_a_sitting_adds_its_minutes_to_an_earlier_sitting_s_of_the_date_and_never_to_its_own(self):
+        """The minutes a sitting is added to are the ones the date's record held when the sitting began."""
+        self.one_proposal()
+        first = self.sit_down()
+        self.assertEqual(first.earlier, 0, "no sitting was recorded on this date before")
+        self.elapsed = 10 * 60
+        first.record_sitting(str(first.earlier + first.minutes()), "")
+        self.elapsed = 12 * 60
+        first.look()
+        self.assertEqual((first.earlier, first.minutes()), (0, 12), "its own record is not an earlier sitting's")
+
+        self.elapsed = 0.0
+        second = self.sit_down(SITTING + timedelta(hours=1))
+        self.assertEqual(second.earlier, 10, "the first sitting of the date recorded 10 minutes")
+        self.elapsed = 5 * 60
+        second.record_sitting(str(second.earlier + second.minutes()), "")
+        self.assertEqual(self.record("sittings", DAY)["minutes"], 15)
+        self.elapsed = 7 * 60
+        self.assertEqual((second.earlier, second.minutes()), (10, 7))
+
+    def test_a_record_of_the_date_that_cannot_be_used_adds_nothing(self):
+        self.one_proposal()
+        (self.exchange / "sittings" / f"{DAY}.json").write_text("{", encoding="utf-8")
+        self.assertEqual(self.sit_down().earlier, 0)
 
 
 class RecruitingTest(SittingTestCase):
@@ -923,52 +945,10 @@ class FilmingTest(SittingTestCase):
         self.assertIsNone(state.video({"kind": "message", "asset": "assets/window-1/linked.mp4"}))
 
 
-class OnlyTheSittingWritesTest(unittest.TestCase):
-    """The first rule of the invariant, read from the source: one module makes a Writer, and no other code reaches
-    into the Founder's records to write, move, or remove anything."""
-
-    def sources(self):
-        return {path.name: path.read_text(encoding="utf-8") for path in sorted(SOURCES.glob("*.py"))}
-
-    def test_only_the_sitting_command_makes_a_writer(self):
-        makers = [name for name, text in self.sources().items() if re.search(r"\bWriter\(", text)]
-        self.assertEqual(makers, ["sitting.py"], "founder.Writer is made in sitting.py and nowhere else")
-        self.assertEqual(len(re.findall(r"\bWriter\(", self.sources()["sitting.py"])), 1)
-
-    def test_only_the_sitting_command_asks_the_writer_to_write_or_remove(self):
-        users = [name for name, text in self.sources().items() if re.search(r"\bwriter\.(write|remove)\(", text)]
-        self.assertEqual(users, ["sitting.py"])
-
-    def test_the_run_never_imports_the_sitting_command(self):
-        """The weekly run, its checks, and the boundary check hold no code that could write a record: the modules a
-        run is made of never import sitting, page, or serve."""
-        for name, text in self.sources().items():
-            if name in ("sitting.py", "page.py", "serve.py", "cli.py"):
-                continue
-            with self.subTest(module=name):
-                self.assertIsNone(re.search(r"^\s*(from|import)\b.*\b(sitting|serve|page)\b", text, re.MULTILINE))
-
-    def test_the_sitting_command_starts_no_process_and_opens_no_connection(self):
-        """No model, no agent, and no network in a sitting: its three modules import nothing that could reach one."""
-        for name in ("sitting.py", "page.py", "serve.py"):
-            text = self.sources()[name]
-            with self.subTest(module=name):
-                for banned in ("subprocess", "urllib.request", "http.client", "fetch", "codex", "launcher", "process"):
-                    self.assertIsNone(
-                        re.search(rf"^\s*(from|import)\b.*\b{re.escape(banned)}\b", text, re.MULTILINE), banned
-                    )
-        self.assertNotIn("connect(", self.sources()["serve.py"])
-
-
 class StartTest(SittingTestCase):
     def test_a_sitting_refuses_to_start_where_a_run_would(self):
         from gr0wthlab.boundary import ConfigError
 
-        self.env["GR0WTHLAB_EXCHANGE_DIR"] = str(self.root / "exchange")
-        with self.assertRaises(ConfigError) as raised:
-            self.sit_down()
-        self.assertIn("GR0WTHLAB_EXCHANGE_DIR is set", str(raised.exception))
-        del self.env["GR0WTHLAB_EXCHANGE_DIR"]
         os.rename(self.exchange / "sittings", self.exchange / "sittings-away")
         with self.assertRaises(ConfigError) as raised:
             self.sit_down()

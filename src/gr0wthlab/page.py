@@ -766,9 +766,10 @@ class Page:
         state: sitting.Sitting,
         reasons: Sequence[str] = (),
         typed: Mapping[str, str] | None = None,
-        saved: Saved | None = None,
         last: tuple[Saved, Entry] | None = None,
     ) -> str:
+        """The last view, and the one way to end a sitting from the page: one click records how long it took and
+        stops the page."""
         rows = []
         for entry in view.entries:
             if entry.decision is not None:
@@ -794,28 +795,27 @@ class Page:
             tag("ol", *rows, class_="queue") if rows else tag("p", "The Review Queue had no open item."),
             tag(
                 "p",
-                "The next run takes each decision in. An item left for later comes back, marked carried over, at the"
-                " next sitting.",
+                "The next run takes each decision in. Once this sitting is recorded, an item left for later comes"
+                " back marked carried over at the next sitting.",
                 class_="meta",
             ),
             class_="sheet",
         )
-        measured = state.minutes()
-        earlier = view.sitting.minutes if view.sitting else 0
+        measured, earlier = state.minutes(), state.earlier
         if typed is not None:
             minutes, note = typed.get("minutes", ""), typed.get("note", "")
-        elif saved is not None:
-            minutes, note = str(saved.record.get("minutes", "")), str(saved.record.get("note") or "")
         else:
             minutes = str(min(sitting.MAX_MINUTES, earlier + measured))
             note = (view.sitting.note or "") if view.sitting else ""
         how = f"The page measured {plural(measured, 'minute')} for this sitting."
-        if earlier and saved is None:
-            how += f" {plural(earlier, 'minute')} are already recorded for {state.day}, so the two are added below."
+        if earlier:
+            how += (
+                f" {plural(earlier, 'minute')} {'was' if earlier == 1 else 'were'} already recorded for {state.day}"
+                " when it began, so the two are added below."
+            )
         answer = tag(
             "aside",
             *self.before(last),
-            self.record(saved),
             self.refusal(reasons),
             tag("h2", "How long it took"),
             tag("p", how + " Correct the number if it is wrong.", class_="hint"),
@@ -825,17 +825,23 @@ class Page:
                     "minutes", "Minutes", minutes, f"A whole number from 1 to {sitting.MAX_MINUTES}", True
                 ),
                 self.line_field("note", "A note, if you want one", note),
+                tag("button", "Record the sitting and stop the page", type="submit", class_="button primary"),
                 tag(
-                    "button",
-                    "Record the sitting" if saved is None else "Correct it",
-                    type="submit",
-                    class_="button primary",
+                    "p",
+                    "The page shows what was saved, then stops. To record something else first, go to What I did.",
+                    class_="hint",
                 ),
                 class_="choice",
             ),
             tag("a", "What I did", href=self.url("did"), class_="button quiet"),
-            self.form(self.url("stop"), tag("button", "Stop the page", type="submit", class_="button quiet")),
-            tag("p", "Stopping the page ends this command. Ctrl-C in its terminal does the same.", class_="hint"),
+            tag(
+                "p",
+                "Ctrl-C in the page's terminal stops it without this record, and keeps every record you gave. The"
+                " next run then knows of this sitting only from a decision given at it: with one, it marks what you"
+                " left as carried over and reports the sitting's time as not recorded; with none, nothing is carried"
+                " over from it.",
+                class_="hint",
+            ),
             class_="answer",
         )
         return self.frame(
@@ -1054,6 +1060,18 @@ class Page:
         )
 
     # Pages that stand alone.
+
+    def finished(self, saved: Saved) -> str:
+        """What ends a sitting: the sitting record as it was read back from its file, on a page that needs nothing
+        more from the server, which stops once it has sent it."""
+        return self.plain(
+            "The sitting has ended",
+            f"Saved. {saved_words(saved)}",
+            f"The record, as it was read back from {saved.path}:",
+            *(f"{key}: {value}" for key, value in saved_lines(saved)),
+            "Everything you saved is in ledger/founder/, and the next run takes it in.",
+            "The page has stopped. You can close this tab.",
+        )
 
     def plain(self, title: str, *lines: str) -> str:
         """A page with nothing on it but words, for an address that is not the page's or a page that has stopped."""

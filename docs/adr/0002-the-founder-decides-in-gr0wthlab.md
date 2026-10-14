@@ -39,7 +39,7 @@ It now holds by the same write boundary that keeps the agent out of `ledger/`, `
 | What | Path under `ledger/founder/` | Written |
 | --- | --- | --- |
 | Decisions | `decisions/<item id>.json` | When the Founder approves or rejects an item |
-| Sittings | `sittings/<YYYY-MM-DD>.json` | When the Founder ends a sitting |
+| Sittings | `sittings/<YYYY-MM-DD>.json` | When the Founder ends a sitting on the page's last view |
 | The Beta Build record | `beta-builds/<Product>.json` | When the Founder says a Beta Build passed Apple's review, stops recruiting, or reopens it |
 | Beta Cohort reports | `beta-reports/<Product>-<YYYY-MM-DD>.json` | When the Founder gives the counts |
 | Outreach records | `outreach/<item id>.json` | When the Founder sent a message, or heard back |
@@ -49,7 +49,7 @@ The records are saved with the launcher's other records: the production clone's 
 Each file is written whole, through a temporary file in the same folder that is then renamed.
 
 gr0wthlab reads no record from Mandu any more.
-`mandu.exchange` in `config/products.json` and `GR0WTHLAB_EXCHANGE_DIR` are gone, and a configuration that still sets either stops the run with a message that says where the records are now.
+`mandu.exchange` in `config/products.json` and `GR0WTHLAB_EXCHANGE_DIR` are gone and are no longer read.
 
 ## The page
 
@@ -63,6 +63,9 @@ gr0wthlab reads no record from Mandu any more.
 - While a Product's Beta Cohort is being recruited, it asks for the three counts.
   A count left blank is recorded as not reported, never as zero.
 - At the end it records how long the sitting took, which the page measured and the Founder can correct.
+  That is the one way to finish from the page: one click saves the sitting record, shows what was saved, and stops the page.
+  An item left undecided is carried over from a sitting the run knows took place, from that record or from the sitting's date on a decision given at it, so a page that ended any other way loses no carry-over once a decision was given.
+  The time of a sitting that ended without its record is reported as not recorded, never as zero.
 - Beside the walk it has one plain place for what the Founder did: a message sent, a reply received, the wait before a follow-up, a Beta Build approved, recruiting stopped or reopened.
 
 What the Founder clicks is what is saved, and the page then shows the record as it reads it back from the file.
@@ -74,14 +77,14 @@ There is no AI, no model call, and no network use anywhere in it.
 
 ### The page cannot be made to decide for the Founder
 
-- It listens on `127.0.0.1` only, on a port and behind a secret in its address that are new each time it starts.
+- It listens on `127.0.0.1` only, on a free port the Mac gives it and behind a secret in its address, both new each time it starts.
 - A request without the secret gets nothing.
   A request that changes anything is a POST to an address that holds the secret, whose `Host` and `Origin` are the page's own; any other is refused and writes nothing.
 - Everything the agent or a third party wrote is shown as text: an item, a run report, a record.
   The page lays an item out by its lines, a heading line, a list line, a quoted line, a table row, so it reads as it does in its file, and shows every character of it as written.
   It makes no link, image, style, script, form, or tag from anything it shows.
 - It loads nothing from anywhere else: it ships its own style sheet and script, and its content security policy forbids every script, style, image, video, and request the page did not ship itself.
-- It runs under the Mac's `/usr/bin/python3` with the standard library only, and stops on Ctrl-C or from its last page.
+- It runs under the Mac's `/usr/bin/python3` with the standard library only, and stops when the Founder ends the sitting on its last page, or on Ctrl-C.
 
 ## Correcting a record
 
@@ -91,8 +94,9 @@ A mis-click is corrected on the page, under these rules and no others:
   Changing it writes the record again, whole; taking it back removes the record, which leaves the item undecided.
   A run takes a decision in when it closes the item and writes the decision's Evidence (`ledger/evidence/decisions/<item id>.json`); from then on the page shows the decision and offers no change, and the item is never asked again.
   The page and the run take the same short lock around the two, so a change and a run that starts in the same moment cannot both win.
-- **A sitting record, a Beta Cohort report, and an outreach record** can be corrected at any time by giving them again; the file is written again, whole.
-  None can be removed on the page.
+- **A Beta Cohort report and an outreach record** can be corrected at any time by giving them again; the file is written again, whole.
+- **A sitting record** is written when a sitting is ended on the page, and again, whole, by a later sitting of the same date, whose last view shows the minutes of both for the Founder to correct.
+  None of these three can be removed on the page.
 - **The Beta Build record** is written again, whole, when recruiting is stopped or reopened; the approval date stays as it was first given, and the record cannot be removed on the page.
   A Beta Build recorded by mistake is undone by stopping recruiting.
 
@@ -127,7 +131,8 @@ It still acts on two kinds of approval, as it did before, and now reads each fro
 
 It acts on an approval only once a run has taken the decision in, which is when the decision can no longer change: the Review Queue lists the item as closed and approved, and the decision record says `approve`.
 
-Mandu's read-only side is Mandu's own work, built by Mandu's own agent from [the Mandu exchange](../mandu-exchange.md), and nothing in gr0wthlab waits for it: the Founder can run a sitting without it.
+Mandu's read-only side is made in Mandu through firstmate, as its own change after this one, from [the Mandu exchange](../mandu-exchange.md).
+Nothing in gr0wthlab waits for it: the Founder can run a sitting without it.
 
 ## Nothing was moved
 

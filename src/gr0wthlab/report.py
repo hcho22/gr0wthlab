@@ -88,6 +88,7 @@ class RunState:
     unusable: list[Unusable] = field(default_factory=list)
     reported_before: set[str] = field(default_factory=set)  # fingerprints of the unusable records already reported
     sittings: list[exchange.Sitting] = field(default_factory=list)
+    untimed: list[str] = field(default_factory=list)  # each sitting, by date, first known from a decision alone
     queue_before: list[Mapping[str, object]] = field(default_factory=list)
     replaced: dict[str, list[Mapping[str, object]]] = field(default_factory=dict)  # open id: decided items it replaced
     closed_proposals: list[Mapping[str, object]] = field(default_factory=list)
@@ -1017,8 +1018,9 @@ def render_report(state: RunState) -> str:
     if state.waitlist is not None:
         lines += ["", "## Waitlist", ""] + waitlist_lines(state.waitlist, state.waitlist_file, state.breach_notice)
     lines += ["", "## Founder decisions", ""] + (decision_lines(state) or ["No new decisions."])
-    if state.sittings:
-        lines += [""] + [f"- Sitting {sitting.day}: {sitting.minutes} minutes." for sitting in state.sittings]
+    if state.sittings or state.untimed:
+        lines += [""] + [f"- Sitting {sitting.day}: {plural(sitting.minutes, 'minute')}." for sitting in state.sittings]
+        lines += [f"- Sitting {day}: its time was not recorded." for day in state.untimed]
     lines += ["", "## Review Queue", ""]
     if state.queue_after:
         for number, entry in enumerate(state.queue_after, 1):

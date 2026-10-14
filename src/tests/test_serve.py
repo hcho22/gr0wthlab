@@ -8,27 +8,85 @@ is the page's own markup around text; and every response forbids whatever the pa
 import http.client
 import io
 import json
+import shutil
+import socket
+import subprocess
 import threading
 import unittest
 from datetime import timedelta
+from unittest import mock
 from urllib.parse import urlencode, urlsplit
 
-from gr0wthlab import exchange, serve
+from gr0wthlab import exchange, process, serve
 from tests import fakes
 from tests.test_page import HOSTILE, PAGE_TAGS, Seen
 from tests.test_sitting import DAY, SITTING, SittingTestCase
 
 FORM = {"Content-Type": "application/x-www-form-urlencoded"}
+# A page for the page's own script to run against, in node: it has only what is listed here, so a script that reaches
+# for anything else stops with an error. `used` lists each thing it may never do. Once the script has run, every
+# listener it added is called, each form's twice, and what the page then holds is printed.
+SCRIPT_HARNESS = r"""
+const used = [];
+const never = (name) => function () { used.push(name); };
+function element(kind, attributes, value) {
+  const self = {
+    attributes: Object.assign({}, attributes), value: value || "", textContent: "", className: "", listeners: {},
+    children: [], classList: { toggle() {} },
+    getAttribute(name) { return name in self.attributes ? self.attributes[name] : null; },
+    setAttribute(name, text) { self.attributes[name] = String(text); },
+    addEventListener(type, listener) { (self.listeners[type] = self.listeners[type] || []).push(listener); },
+    insertAdjacentElement() {},
+    querySelectorAll(selector) { return selector === "button" ? self.children : []; },
+    submit: never(kind + ".submit"), requestSubmit: never(kind + ".requestSubmit"), click: never(kind + ".click"),
+  };
+  return self;
+}
+const inputs = [element("input", { "data-counted": "", maxlength: "300" }, "what the Founder typed")];
+const forms = [element("form", { method: "post", action: "/secret/item/x/decide" })];
+forms[0].children = [element("button", { type: "submit" })];
+const clock = element("span", { "data-minutes": "7" });
+const timers = [];
+const page = {
+  document: {
+    querySelectorAll(selector) {
+      return selector === "form" ? forms : selector === "input[data-counted]" ? inputs : [];
+    },
+    querySelector(selector) { return selector === ".clock[data-minutes]" ? clock : null; },
+    createElement(kind) { return element(kind, {}); },
+    write: never("document.write"),
+  },
+  setInterval(listener) { timers.push(listener); },
+  Date, Number, Math,
+  fetch: never("fetch"), XMLHttpRequest: never("XMLHttpRequest"), WebSocket: never("WebSocket"),
+  EventSource: never("EventSource"), navigator: { sendBeacon: never("sendBeacon") },
+};
+require("vm").runInNewContext(require("fs").readFileSync(0, "utf8"), page);
+inputs.forEach((input) => (input.listeners.input || []).forEach((listener) => listener({ target: input })));
+const prevented = [];
+forms.forEach((form) => {
+  for (let send = 0; send < 2; send += 1) {
+    let held = false;
+    (form.listeners.submit || []).forEach((listener) => listener({ preventDefault() { held = true; } }));
+    prevented.push(held);
+  }
+});
+timers.forEach((listener) => listener());
+console.log(JSON.stringify({
+  used, prevented, typed: inputs.map((input) => input.value),
+  actions: forms.map((form) => form.attributes.action), clock: clock.textContent,
+}));
+"""
 
 
 class ServeTestCase(SittingTestCase):
     def serve(self, state=None):
         """The sitting page, served on a free port of the loopback address until the test ends."""
         self.said = io.StringIO()
-        self.server = serve.Server(state or self.sit_down(), 0, self.said)
-        thread = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
-        thread.start()
-        self.addCleanup(thread.join, 5)
+        self.server = serve.Server(state or self.sit_down(), self.said)
+        self.serving = threading.Thread(target=self.server.serve_forever, kwargs={"poll_interval": 0.02}, daemon=True)
+        self.serving.start()
+        self.addCleanup(self.serving.join, 5)
         self.addCleanup(self.server.server_close)
         self.addCleanup(self.server.shutdown)
         self.host, self.port = self.server.server_address
@@ -65,6 +123,43 @@ class ServeTestCase(SittingTestCase):
     def unwritten(self):
         return fakes.tree_digest(self.exchange)
 
+    def follow(self, answer):
+        status, headers, _ = answer
+        self.assertEqual(status, 303)
+        location = urlsplit(headers["Location"])
+        self.assertTrue(location.path.startswith(self.base + "/"))
+        path = location.path[len(self.base) :] + (f"?{location.query}" if location.query else "")
+        return path, Seen(self.get(path)[2])
+
+    def five_items(self):
+        """A first run that queues five items, in the order the Review Queue lists them."""
+        names = ("one", "two", "three", "four", "five")
+        writes = {f"review-queue/incoming/{name}.md": fakes.proposal(title=f"change {name}") for name in names}
+        fakes.behave(self.codex_dir, {"write": writes})
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        fakes.behave(self.codex_dir, {})
+        items = [entry["id"] for entry in self.queue()["open"]]
+        self.assertEqual(len(items), 5)
+        return items
+
+    def end_on_the_page(self, minutes):
+        """The Founder ends the sitting on the page's last view; returns what the page then shows."""
+        status, _, body = self.post("/end", {"minutes": minutes, "note": ""})
+        self.assertEqual(status, 200)
+        self.assert_stopped()
+        return Seen(body)
+
+    def end_the_process(self):
+        """The page's process ends with the sitting not ended on the page, as on Ctrl-C, a crash, or a closed
+        laptop: serving stops, and nothing more is written."""
+        self.server.shutdown()
+        self.assert_stopped()
+
+    def assert_stopped(self):
+        self.serving.join(5)
+        self.assertFalse(self.serving.is_alive(), "the page has stopped serving")
+
 
 class SecretTest(ServeTestCase):
     def setUp(self):
@@ -77,10 +172,11 @@ class SecretTest(ServeTestCase):
         self.assertEqual(self.server.address, f"http://127.0.0.1:{self.port}/{self.server.secret}/")
         self.assertGreaterEqual(len(self.server.secret), 43, "256 bits, as text")
         self.assertNotIn(self.server.secret, self.said.getvalue(), "the address is printed once, by the command")
-        other = serve.Server(self.sit_down(), 0, io.StringIO())
+        other = serve.Server(self.sit_down(), io.StringIO())
         try:
             self.assertNotEqual(other.secret, self.server.secret)
             self.assertEqual(other.server_address[0], "127.0.0.1")
+            self.assertNotEqual(other.server_address[1], self.port, "each page is given a free port of its own")
         finally:
             other.server_close()
 
@@ -118,13 +214,12 @@ class SecretTest(ServeTestCase):
             f"/item/{self.item}/take-back",
             f"/item/{self.item}?decision=approve",
             "/end?minutes=40",
-            "/stop",
             "/did/beta-build/RepToday?approved_on=2026-10-09",
         ):
             with self.subTest(path=path):
                 self.assertIn(self.get(path)[0], (200, 404))
         self.assertEqual(self.unwritten(), before)
-        self.assertEqual(self.get("/")[0], 200, "a GET for /stop stops nothing")
+        self.assertEqual(self.get("/")[0], 200, "a GET for /end ends nothing")
 
     def test_a_post_from_anywhere_but_the_page_s_own_form_is_refused_and_writes_nothing(self):
         before = self.unwritten()
@@ -212,26 +307,10 @@ class HeadersTest(ServeTestCase):
     def test_the_page_ships_its_own_style_sheet_script_and_icon_and_loads_nothing_else(self):
         self.one_proposal()
         self.serve()
-        status, headers, css = self.get("/static/page.css")
+        status, headers, _ = self.get("/static/page.css")
         self.assertEqual((status, headers["Content-Type"]), (200, "text/css; charset=utf-8"))
-        self.assertNotIn("url(", css)
-        self.assertNotIn("@import", css)
-        self.assertNotIn("http", css)
-        status, headers, script = self.get("/static/page.js")
+        status, headers, _ = self.get("/static/page.js")
         self.assertEqual((status, headers["Content-Type"]), (200, "text/javascript; charset=utf-8"))
-        for banned in (
-            "fetch(",
-            "XMLHttpRequest",
-            "WebSocket",
-            "sendBeacon",
-            "eval(",
-            "innerHTML",
-            "document.write",
-            "http",
-            ".submit(",
-            ".click(",
-        ):
-            self.assertNotIn(banned, script, "the script sends, fills, and chooses nothing")
         self.assertEqual(self.get("/static/icon.svg")[1]["Content-Type"], "image/svg+xml")
         for name in ("page.py", "../gr0wthlab/founder.py", "..%2Fgr0wthlab%2Ffounder.py", "page.css/x", ""):
             with self.subTest(name=name):
@@ -242,6 +321,25 @@ class HeadersTest(ServeTestCase):
             sorted(attrs["href"] for attrs in seen.named("link")),
             [f"{self.base}/static/icon.svg", f"{self.base}/static/page.css"],
         )
+
+    @unittest.skipUnless(shutil.which("node"), "node, which runs the page's script, is not on this machine")
+    def test_the_page_s_script_sends_fills_and_chooses_nothing(self):
+        """The script as the page serves it, run against a page of its own kind: one typed line, one form with its
+        button, and the clock. It may count, keep the clock moving, and stop a second send of a form; anything else
+        it reaches for is either listed in `used` or not there at all, which ends the script with an error."""
+        self.one_proposal()
+        self.serve()
+        script = self.get("/static/page.js")[2]
+        ran = subprocess.run(
+            [shutil.which("node"), "-e", SCRIPT_HARNESS], input=script, capture_output=True, text=True, timeout=60
+        )
+        self.assertEqual((ran.returncode, ran.stderr), (0, ""))
+        seen = json.loads(ran.stdout)
+        self.assertEqual(seen["used"], [], "it sends nothing, submits nothing, and clicks nothing")
+        self.assertEqual(seen["typed"], ["what the Founder typed"], "it fills nothing")
+        self.assertEqual(seen["actions"], ["/secret/item/x/decide"], "a form still goes where the page sent it")
+        self.assertEqual(seen["prevented"], [False, True], "the first send goes through, and only a second is held")
+        self.assertEqual(seen["clock"], "7 min")
 
     def test_an_error_inside_the_page_is_said_plainly_and_claims_nothing_saved(self):
         item = self.one_proposal()
@@ -258,8 +356,8 @@ class HeadersTest(ServeTestCase):
     def test_a_file_that_is_no_record_is_never_shown_as_saved(self):
         self.one_proposal()
         self.serve()
-        (self.repo / "ledger" / "founder" / "sittings" / f"{DAY}.json").write_text("[]\n", encoding="utf-8")
-        status, _, body = self.get(f"/end?saved={DAY}&kind=sittings")
+        (self.repo / "ledger" / "founder" / "beta-builds" / "RepToday.json").write_text("[]\n", encoding="utf-8")
+        status, _, body = self.get("/did?saved=RepToday&kind=beta-builds")
         self.assertEqual(status, 200)
         self.assertNotIn("Saved.", Seen(body).said)
 
@@ -345,14 +443,6 @@ class InertTest(ServeTestCase):
 
 
 class WalkTest(ServeTestCase):
-    def follow(self, answer):
-        status, headers, _ = answer
-        self.assertEqual(status, 303)
-        location = urlsplit(headers["Location"])
-        self.assertTrue(location.path.startswith(self.base + "/"))
-        path = location.path[len(self.base) :] + (f"?{location.query}" if location.query else "")
-        return path, Seen(self.get(path)[2])
-
     def test_us_me07_through_the_page_one_thing_at_a_time(self):
         ids = self.one_of_each()
         order = [entry["id"] for entry in self.queue()["open"]]
@@ -412,10 +502,10 @@ class WalkTest(ServeTestCase):
         self.assertIn("4 items decided, 2 left for later.", end.said)
         (minutes,) = [attrs["value"] for attrs in end.named("input") if attrs.get("name") == "minutes"]
         self.assertEqual(minutes, "38", "measured by the page")
-        path, shown = self.follow(self.post("/end", {"minutes": "41", "note": ""}))
-        self.assertEqual(path, f"/end?saved={DAY}&kind=sittings")
-        self.assertIn(f"founder/sittings/{DAY}.json", shown.said)
+        shown = self.end_on_the_page("41")
+        self.assertIn("The sitting has ended", shown.said)
         self.assertIn(f"Saved. The sitting on {DAY} took 41 minutes.", shown.said)
+        self.assertIn(f"The record, as it was read back from founder/sittings/{DAY}.json:", shown.said)
         self.assertEqual(self.record("sittings", DAY)["minutes"], 41, "corrected by the Founder")
         said = self.said.getvalue()
         self.assertIn(f"gr0wthlab: saved founder/decisions/{ids['post']}.json: approve", said)
@@ -431,8 +521,8 @@ class WalkTest(ServeTestCase):
             [closed[ids[kind]] for kind in ("post", "notice", "message", "package-change-proposal")],
             ["approved", "approved", "rejected", "rejected"],
         )
+        self.serve(self.sit_down(SITTING + timedelta(days=7)))
         after = Seen(self.get("/")[2]).said
-        self.assertIn("A run finished since you began.", after)
         self.assertIn("2 items to decide", after)
         self.assertIn("2 items carried over from an earlier sitting.", after)
         carried = Seen(self.get(f"/item/{ids['dispatch-request']}")[2]).said
@@ -441,6 +531,17 @@ class WalkTest(ServeTestCase):
         status, _, body = self.post(f"/item/{ids['post']}/decide", {"decision": "reject", "line": "Too late."})
         self.assertEqual(status, 409)
         self.assertEqual(self.record("decisions", ids["post"])["decision"], "approve")
+
+    def test_a_run_that_finishes_during_the_sitting_is_said_and_its_queue_is_the_one_shown(self):
+        item = self.one_proposal()
+        self.serve()
+        self.follow(self.post(f"/item/{item}/decide", {"decision": "approve", "line": ""}))
+        self.assertNotIn("A run finished since you began.", Seen(self.get("/")[2]).said)
+        self.next_run()
+        after = Seen(self.get("/")[2]).said
+        self.assertIn("A run finished since you began.", after)
+        self.assertIn("Nothing is waiting for you", after)
+        self.assertEqual(self.get(f"/item/{item}")[0], 404, "the run took the decision in")
 
     def test_a_mis_click_is_changed_or_taken_back_on_the_page_until_a_run_takes_it_in(self):
         item = self.one_proposal()
@@ -659,20 +760,177 @@ class VideoTest(ServeTestCase):
         self.assertEqual(self.records(), [])
 
 
-class StopTest(ServeTestCase):
-    def test_the_page_stops_from_its_last_page_and_only_by_a_post_of_its_own(self):
-        self.one_proposal()
-        server = self.serve()
-        self.assertEqual(self.post("/stop", {}, Origin="http://evil.example")[0], 403)
+class EndTest(ServeTestCase):
+    """The end of a sitting. The page has one way to finish: one click records the sitting, shows what was saved, and
+    stops the page. However a sitting ends, what it left undecided carries over once anything was decided at it."""
+
+    def approve_three_and_leave_two(self):
+        items = self.five_items()
+        self.serve()
         self.assertEqual(self.get("/")[0], 200)
-        status, _, body = self.post("/stop", {})
-        self.assertEqual(status, 200)
-        self.assertIn("The page has stopped", body)
-        self.assertIn("Everything you saved is in ledger/founder/, and the next run takes it in.", body)
-        stopped = threading.Event()
-        threading.Thread(target=lambda: (server.shutdown(), stopped.set()), daemon=True).start()
-        self.assertTrue(stopped.wait(5), "serving has ended")
-        self.assertIn("gr0wthlab: stopped from the page", self.said.getvalue())
+        for item in items[:3]:
+            self.follow(self.post(f"/item/{item}/decide", {"decision": "approve", "line": ""}))
+        self.elapsed = 38 * 60.0
+        return items
+
+    def evidence(self):
+        return json.loads((self.ledger() / f"evidence/sittings/{DAY}.json").read_text(encoding="utf-8"))
+
+    def test_the_last_view_has_one_way_to_finish_which_records_the_sitting_and_stops_the_page(self):
+        self.one_proposal()
+        self.serve()
+        before = self.unwritten()
+        end = Seen(self.get("/end")[2])
+        forms = [attrs["action"] for attrs in end.named("form")]
+        self.assertEqual(forms, [f"{self.base}/end"], "the one form of the last view records the sitting")
+        self.assertIn("Record the sitting and stop the page", end.said)
+        for path in ("/stop", "/end/stop"):
+            with self.subTest(path=path):
+                self.assertEqual(self.post(path, {})[0], 404, "nothing stops the page without recording")
+        self.assertEqual(self.post("/end", {"minutes": "12", "note": ""}, Origin="http://evil.example")[0], 403)
+        status, _, body = self.post("/end", {"minutes": "none", "note": ""})
+        self.assertEqual(status, 422)
+        self.assertIn("The minutes must be a whole number, written in digits.", Seen(body).said)
+        self.assertEqual(self.unwritten(), before)
+        self.assertEqual(self.get("/")[0], 200, "and the page is still there")
+
+        shown = self.end_on_the_page("12")
+        self.assertIn("The sitting has ended", shown.said)
+        self.assertIn(f"Saved. The sitting on {DAY} took 12 minutes.", shown.said)
+        for line in (f"date: {DAY}", "minutes: 12", "note: not given", f"exchange: {exchange.EXCHANGE_VERSION}"):
+            self.assertIn(line, shown.said, "every field of the record, as it was read back")
+        self.assertIn("The page has stopped. You can close this tab.", shown.said)
+        self.assertEqual(shown.named("form") + shown.named("script") + shown.named("link"), [], "it needs no more")
+        expected = {"exchange": exchange.EXCHANGE_VERSION, "date": DAY, "minutes": 12, "note": None}
+        self.assertEqual(self.record("sittings", DAY), expected)
+        said = self.said.getvalue()
+        self.assertIn(f"gr0wthlab: saved founder/sittings/{DAY}.json: 12 minutes", said)
+        self.assertIn("gr0wthlab: the sitting has ended, from the page", said)
+
+    def test_three_approved_two_left_and_the_sitting_ended_on_the_page(self):
+        items = self.approve_three_and_leave_two()
+        self.end_on_the_page("38")
+        queue = self.next_run()
+        self.assertEqual(
+            [(entry["id"], entry["carried_over"], entry["carried_over_from"]) for entry in queue["open"]],
+            [(item, True, DAY) for item in items[3:]],
+        )
+        self.assertEqual([entry["status"] for entry in queue["closed"]], ["approved"] * 3)
+        self.assertIn(f"- Sitting {DAY}: 38 minutes.", self.report())
+        kept = self.evidence()
+        self.assertEqual((kept["minutes"], kept["source"]["path"]), (38, f"founder/sittings/{DAY}.json"))
+
+    def test_three_approved_two_left_and_the_page_s_process_ended(self):
+        items = self.approve_three_and_leave_two()
+        self.end_the_process()
+        self.assertEqual(self.records("sittings"), [], "no sitting record was written")
+        queue = self.next_run()
+        self.assertEqual(
+            [(entry["id"], entry["carried_over"], entry["carried_over_from"]) for entry in queue["open"]],
+            [(item, True, DAY) for item in items[3:]],
+        )
+        self.assertEqual([entry["status"] for entry in queue["closed"]], ["approved"] * 3)
+        report = self.report()
+        self.assertIn(f"- Sitting {DAY}: its time was not recorded.", report)
+        self.assertNotIn(f"Sitting {DAY}: 0 minutes", report)
+        self.assertIn("2 carried over", report)
+        kept = self.evidence()
+        self.assertEqual((kept["date"], kept["minutes"], kept["source"]), (DAY, None, None))
+        self.assertEqual(kept["shown_by"], sorted(f"founder/decisions/{item}.json" for item in items[:3]))
+        self.assertEqual(kept["taken_in_by_run"], queue["updated_by_run"])
+
+        # The run after says nothing more of that sitting, and what it left is still carried over from it.
+        queue = self.next_run()
+        self.assertEqual([entry["carried_over_from"] for entry in queue["open"]], [DAY, DAY])
+        self.assertNotIn("- Sitting ", self.report())
+
+    def test_a_sitting_at_which_nothing_was_recorded_and_whose_process_ended_leaves_no_trace(self):
+        self.five_items()
+        self.serve()
+        self.assertEqual(self.get("/")[0], 200)
+        self.end_the_process()
+        queue = self.next_run()
+        self.assertEqual([entry["carried_over"] for entry in queue["open"]], [False] * 5)
+        self.assertNotIn("- Sitting ", self.report())
+
+    def test_the_minutes_shown_are_this_sitting_s_added_to_an_earlier_sitting_s_and_never_to_its_own(self):
+        self.one_proposal()
+        state = self.sit_down()
+        self.serve(state)
+
+        def minutes():
+            seen = Seen(self.get("/end")[2])
+            (value,) = [attrs["value"] for attrs in seen.named("input") if attrs.get("name") == "minutes"]
+            return value, seen.said
+
+        self.elapsed = 10 * 60.0
+        self.assertEqual(minutes()[0], "10")
+        # The record of this sitting stands, and the last view is drawn again: its minutes are not added to it.
+        state.record_sitting("10", "")
+        self.assertEqual(self.get("/did")[0], 200)
+        self.elapsed = 12 * 60.0
+        value, said = minutes()
+        self.assertEqual(value, "12")
+        self.assertNotIn("already recorded", said)
+        self.end_on_the_page("12")
+        self.assertEqual(self.record("sittings", DAY)["minutes"], 12)
+
+        self.elapsed = 0.0
+        self.serve(self.sit_down(SITTING + timedelta(hours=1)))
+        self.elapsed = 5 * 60.0
+        value, said = minutes()
+        self.assertEqual(value, "17", "the 12 minutes of the first sitting of the date and the 5 of this one")
+        self.assertIn(f"12 minutes were already recorded for {DAY} when it began, so the two are added below.", said)
+        shown = self.end_on_the_page(value)
+        self.assertIn(f"Saved. The sitting on {DAY} took 17 minutes.", shown.said)
+
+    def test_a_sitting_starts_no_process_and_opens_no_connection(self):
+        """No model, no agent, and no network in a sitting: with every way the launcher starts a process replaced
+        by a refusal, and every connection but the browser's own to the page refused, a whole sitting still works."""
+        ids = self.one_of_each()
+        self.serve()
+        own, connect = self.server.server_address, socket.socket.connect
+        elsewhere = []
+
+        def only_the_browser(sock, address):
+            if tuple(address[:2]) != tuple(own[:2]):
+                elsewhere.append(address)
+                raise AssertionError(f"a sitting tried to open a connection to {address}")
+            return connect(sock, address)
+
+        refusal = AssertionError("a sitting tried to start a process")
+        with (
+            mock.patch.object(socket.socket, "connect", only_the_browser),
+            mock.patch.object(process, "run", side_effect=refusal) as ran,
+            mock.patch.object(subprocess, "Popen", side_effect=refusal) as started,
+        ):
+            for path in ("/", "/queue", "/did", "/end", "/static/page.css", "/static/page.js", "/static/icon.svg"):
+                with self.subTest(path=path):
+                    self.assertEqual(self.get(path)[0], 200)
+            for kind, item in ids.items():
+                with self.subTest(kind=kind):
+                    self.assertEqual(self.get(f"/item/{item}")[0], 200)
+            self.follow(self.post(f"/item/{ids['message']}/decide", {"decision": "approve", "line": "Send it."}))
+            self.follow(self.post(f"/item/{ids['notice']}/decide", {"decision": "reject", "line": "Not needed."}))
+            self.follow(self.post(f"/item/{ids['notice']}/take-back", {}))
+            sent = {"sent_on": DAY, "replied_on": "", "wait_days": "", "note": ""}
+            self.follow(self.post(f"/did/sent/{ids['message']}", sent))
+            self.follow(self.post("/did/beta-build/RepToday", {"approved_on": "2026-10-09", "build": ""}))
+            counts = {"invitations_sent": "3", "accepted": "", "sessions_booked": ""}
+            self.follow(self.post("/counts/RepToday", counts))
+            self.follow(self.post("/did/recruiting/RepToday", {"recruiting": "stop", "stopped_on": DAY}))
+            self.end_on_the_page("20")
+        self.assertEqual((elsewhere, ran.call_count, started.call_count), ([], 0, 0))
+        self.assertEqual(
+            {kind: self.records(kind) for kind in ("decisions", "sittings", "beta-builds", "beta-reports", "outreach")},
+            {
+                "decisions": [f"{ids['message']}.json"],
+                "sittings": [f"{DAY}.json"],
+                "beta-builds": ["RepToday.json"],
+                "beta-reports": [f"RepToday-{DAY}.json"],
+                "outreach": [f"{ids['message']}.json"],
+            },
+        )
 
     def test_only_one_sitting_page_is_served_for_a_checkout(self):
         import fcntl
@@ -684,7 +942,7 @@ class StopTest(ServeTestCase):
         self.addCleanup(holder.close)
         fcntl.flock(holder.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         with self.assertRaises(ConfigError) as raised:
-            serve.serve(self.repo, self.env, 0, io.StringIO())
+            serve.serve(self.repo, io.StringIO())
         self.assertEqual(
             str(raised.exception), "another sitting page is already being served for this checkout; stop it first"
         )

@@ -62,13 +62,10 @@ def parser() -> argparse.ArgumentParser:
         help="the one-off time a scheduled run was due at; such a run always runs, as a run on demand does",
     )
 
-    sitting = commands.add_parser(
+    commands.add_parser(
         "sitting",
         help="the Founder's sitting: serve a small page on this Mac that shows the Review Queue one item at a time and"
         " saves each decision the Founder clicks; it prints the page's address",
-    )
-    sitting.add_argument(
-        "--port", type=int, default=0, metavar="PORT", help="the port on 127.0.0.1 to serve on (default: any free one)"
     )
 
     commands.add_parser("show-config", help="print the resolved run configuration and its fingerprint")
@@ -550,7 +547,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "run":
             return cycle.main(REPO_ROOT, args.trigger, env, home, args.once, arguments)
         if args.command == "sitting":
-            return serve.serve(REPO_ROOT, env, args.port)
+            return serve.serve(REPO_ROOT)
         if args.command == "show-config":
             resolved = launcher.Resolved(REPO_ROOT, env, home)
             print(json.dumps(resolved.describe(), indent=2, sort_keys=True))

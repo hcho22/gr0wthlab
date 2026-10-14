@@ -6,7 +6,8 @@ founder.Writer. Each method that writes is one explicit act of the Founder's:
 
 - decide and take_back: a decision on one open item, which can be changed or taken back until a run has taken it in;
 - report_counts: the three Beta Cohort counts, where a count left blank is recorded as not reported, never as zero;
-- record_sitting: how long the sitting took, which the page measured and the Founder can correct;
+- record_sitting: how long the sitting took, which the page measured and the Founder can correct; it is the one
+  way to end a sitting from the page, which then stops;
 - record_sent: an approved message sent, a reply received, the wait before the one follow-up;
 - record_beta_build and set_recruiting: a Beta Build approved, recruiting stopped or reopened.
 
@@ -31,7 +32,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from pathlib import Path
 
-from . import exchange, founder, settings
+from . import exchange, founder
 from .areas import UnsafeFile, read_plain
 from .boundary import FOUNDER, LEDGER, PRODUCT_REGISTRY, ConfigError, canonical, load_json
 from .messages import CREATOR
@@ -250,13 +251,11 @@ class Sitting:
     def __init__(
         self,
         repo_root: Path,
-        env: Mapping[str, str],
         clock: Callable[[], datetime] | None = None,
         elapsed: Callable[[], float] = time.monotonic,
     ):
         self.ledger = canonical(repo_root) / LEDGER
         registry = load_json(repo_root / PRODUCT_REGISTRY)
-        settings.no_exchange(registry, env)
         self.products = [str(product["name"]) for product in registry.get("products", [])]
         self.recruits = [
             str(product["name"])
@@ -267,6 +266,7 @@ class Sitting:
         self.clock = clock or (lambda: datetime.now().astimezone())
         self.elapsed = elapsed
         self.began: float | None = None  # when the first page was shown, on the clock that only runs forward
+        self.earlier = 0  # the minutes the date's sitting record held then, from an earlier sitting of the same date
         self.day = self.now().date().isoformat()  # the sitting's date
         self.first_run: str | None = None  # the run whose Review Queue the sitting began with
         self.hashes: dict[tuple[str, int, int], str] = {}
@@ -278,9 +278,13 @@ class Sitting:
         return self.now().date()
 
     def begin(self) -> None:
-        """Start the sitting's clock, the first time a page is shown."""
+        """Start the sitting's clock, the first time a page is shown, and note the minutes an earlier sitting of the
+        same date recorded. They are read here, once, before this sitting can write that record itself, so the
+        minutes this sitting measures are only ever added to another sitting's and never to its own."""
         if self.began is None:
             self.began = self.elapsed()
+            before = self.records(founder.SITTINGS, exchange.parse_sitting, View()).get(self.day, (None, ""))[0]
+            self.earlier = before.minutes if before else 0
 
     def minutes(self) -> int:
         """How long the sitting has taken so far, in whole minutes, as the page measured it."""
@@ -299,15 +303,8 @@ class Sitting:
         view.stray += [(founder.shown(kind, name), why) for name, why in others]
         records: dict[str, tuple[object | None, str]] = {}
         for name, _, data in found:
-            stem = name[: -len(".json")]
-            if founder.holds_address(name, data):
-                records[stem] = (None, founder.HOLDS_ADDRESS)
-                continue
-            try:
-                record, problems = parser(stem, json.loads(data.decode("utf-8")))
-            except (UnicodeDecodeError, ValueError):
-                record, problems = None, ["it is not JSON"]
-            records[stem] = (record, "; ".join(problems))
+            record, problems = founder.parse(name, data, parser)
+            records[name[: -len(".json")]] = (record, "; ".join(problems))
         return records
 
     def video(self, entry: Mapping[str, object]) -> Video | None:
@@ -508,7 +505,8 @@ class Sitting:
         return self.write(founder.BETA_REPORTS, f"{product}-{self.day}", record, exchange.parse_beta_report, reasons)
 
     def record_sitting(self, minutes: str, note: str) -> Saved:
-        """How long the sitting took, in minutes, with an optional one-line note; written again when corrected."""
+        """How long the sitting took, in minutes, with an optional one-line note: the record that ends a sitting.
+        A later sitting of the same date writes it again, whole, with the minutes of both."""
         reasons: list[str] = []
         number = whole_number(minutes, "The minutes", 1, MAX_MINUTES, reasons)
         if number is None and not reasons:

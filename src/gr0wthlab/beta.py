@@ -69,7 +69,6 @@ UNUSABLE = "unusable"
 DRAFT_FILES = {INVITATION: "invitation.md", WAITLIST_ASK: "waitlist-ask.md"}
 LABELS = {INVITATION: "Beta invitation", WAITLIST_ASK: "Waitlist ask"}
 COUNT_LABELS = {"invitations_sent": "invitations sent", "accepted": "accepted", "sessions_booked": "sessions booked"}
-HOLDS_ADDRESS = founder.HOLDS_ADDRESS
 
 # What a run does about the invitation batch.
 NEW = "new"
@@ -153,20 +152,6 @@ def record_file(folder: str, name: str) -> str:
     return founder.shown(folder, name)
 
 
-def read_record(data: bytes, parser, stem: str) -> tuple[object | None, list[str]]:
-    """One of the Founder's records, parsed. The address check runs over the file's name and the whole file first,
-    and a record that fails it is refused whole, so nothing it holds is ever repeated."""
-    if waitlist.looks_like_address(stem) or waitlist.looks_like_address(data.decode("utf-8", errors="replace")):
-        return None, [HOLDS_ADDRESS]
-    try:
-        value = json.loads(data.decode("utf-8"))
-    except UnicodeDecodeError:
-        return None, ["it is not UTF-8 text"]
-    except ValueError as error:
-        return None, [f"it is not JSON (line {getattr(error, 'lineno', '?')})"]
-    return parser(stem, value)
-
-
 @dataclass(frozen=True)
 class Gate:
     """What the Founder's Beta Build record says this run; recruiting exists only while it is recorded."""
@@ -203,7 +188,7 @@ def read_gate(product: str, found: Sequence[Raw], unusable: Sequence[tuple[str, 
     if match is None:
         others = [other for other, _, _ in found] + [other for other, _ in unusable]
         # A file name can be typed by hand, so one that looks like an address is counted, never repeated.
-        named = [f"`{other}`" for other in sorted(others) if not waitlist.looks_like_address(other)]
+        named = [f"`{other}`" for other in sorted(others) if founder.nameable(other)]
         strays = ""
         if others:
             hidden = len(others) - len(named)
@@ -216,7 +201,7 @@ def read_gate(product: str, found: Sequence[Raw], unusable: Sequence[tuple[str, 
         )
     _, path, data = match
     digest = hashlib.sha256(data).hexdigest()
-    record, problems = read_record(data, exchange.parse_beta_build, product)
+    record, problems = founder.parse(name, data, exchange.parse_beta_build)
     if record is None:
         why = "; ".join(problems)
         return Gate(
@@ -279,7 +264,7 @@ def read_reports(
     of those, each file that could not be read as a report at all, so what it counts is unknown."""
     usable, problems, unread = [], [], []
     for name, path, data in found:
-        record, issues = read_record(data, exchange.parse_beta_report, name[: -len(".json")])
+        record, issues = founder.parse(name, data, exchange.parse_beta_report)
         if record is None:
             problems.append(f"{record_file(REPORTS, name)}: {'; '.join(issues)}")
             unread.append(record_file(REPORTS, name))

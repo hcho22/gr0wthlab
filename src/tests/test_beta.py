@@ -110,11 +110,11 @@ class RecordsTest(unittest.TestCase):
         data = json.dumps(fakes.beta_report("2026-10-18", accepted=3)).encode("utf-8")
         usable, problems, unread = beta.read_reports("RepToday", [(name, Path("/m") / name, data)])
         self.assertEqual(usable, [])
-        self.assertEqual(unread, ["a file in `founder/beta-reports/` whose name is not repeated here"])
+        self.assertEqual(unread, ["`founder/beta-reports/(a file whose name is not repeated here)`"])
         self.assertEqual(
             problems,
             [
-                "a file in `founder/beta-reports/` whose name is not repeated here: it holds something that looks like"
+                "`founder/beta-reports/(a file whose name is not repeated here)`: it holds something that looks like"
                 " an email address, so nothing in it was read or kept"
             ],
         )

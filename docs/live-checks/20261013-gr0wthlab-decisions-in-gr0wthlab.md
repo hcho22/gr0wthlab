@@ -11,7 +11,7 @@ How to read the paths:
 - `<lab>` is the throwaway lab under `<tmp>` described below.
 - Where a quoted line held the home folder's or the temporary folder's full path, that prefix was replaced with `~` or `<tmp>`.
 
-All times are Mac local time (PDT, UTC-7): rounds 1 and 2 on 2026-10-12, round 3 on 2026-10-13.
+All times are Mac local time (PDT, UTC-7): rounds 1 and 2 on 2026-10-12, rounds 3 and 4 on 2026-10-13.
 A run identifier carries the UTC date, which was already the next day each time.
 Codex CLI 0.160.0 with `gpt-6-luna` at `high` reasoning effort throughout.
 
@@ -270,10 +270,82 @@ Read and left as they are, being `main`'s own and printed for these folders as f
 - The test modules this change adds or rewrites most (`test_founder`, `test_page`, `test_serve`, `test_sitting`, `test_settings`, `test_probe`) also passed under Python 3.12.13, 212 tests, as a stand-in for CI's latest-Python job, which runs on Linux and was not run here.
 - None of this change's tests asserts a count of the preflight's forbidden paths or a path only this Mac has: they name the five record folders inside each test's own temporary checkout.
 
+## Round 4: after the review of how a sitting ends
+
+Review changed how a sitting ends and what a run knows of it.
+The page's last view now has one way to finish, which records the sitting, shows what was saved, and stops the page; the control that stopped the page without the record is gone.
+A run marks what a sitting left undecided as carried over when it knows the sitting took place, from the sitting record or from the `sitting` date of a decision given at it, and reports the time of a sitting that left no record as not recorded.
+The same round removed the `--port` option of `sitting` and the refusal of a configuration that still sets `mandu.exchange` or `GR0WTHLAB_EXCHANGE_DIR`, gave the run and the page one reader of a record file (`founder.parse`), and replaced the tests that read source text with tests that run the code.
+
+The refusal that rounds 2 and 3 record under "A configuration that still names the exchange folder" no longer exists: the two settings are gone and are no longer read, so those two sections describe the code as it was then.
+
+This round ran on 2026-10-13 from about 18:27 to 19:07, with Codex CLI 0.160.0, on the tree this record lands with: `src` tree `bf9c97894c6648bc3aded7a9043855d7c3432c3c`, `config` tree unchanged, `b43d0624383aada9155906ee4b54515c3ecb3a5d`.
+`git status` in the worktree was not empty, since the round's changes were not committed yet; its listing was the same before the first command below and after the last.
+
+### The boundary, from the worktree, on the real configuration
+
+Run from the linked worktree, with `GR0WTHLAB_LOG_DIR` set to a folder under `<tmp>` and no other override, from 19:05.
+
+| Command | Run | What the records showed |
+| --- | --- | --- |
+| `src/bin/gr0wthlab show-config` | none (no model) | fingerprint `0a94ab4c7904c115f5a884f73c180172754eb8e9cd3e4e402837076ce3a54090` |
+| `src/bin/gr0wthlab preflight` | none (no model) | 6 areas written; 19 paths refused, each of the five folders of the Founder's records among them by its own path; no breach and no failure; the listing of the footage place refused, none listed, none untried; both listed hosts unreachable, none reached, none untried |
+| `src/bin/gr0wthlab boundary-check` | `20261014T020547Z-on-demand-f4a5` | PASSED at its first probe run; the same fingerprint; 43 steps to prove; 14 of 14 file-tool targets refused, each in a patch of its own; 16 kernel Seatbelt denials, one `file-write-create` for each of the five folders among them; 1 of 1 forbidden read refused; 12 of 12 permitted sentinels written; no sentinel escaped; no local connection got through; nothing changed since the snapshot; agent time 49.1 s |
+
+Before the preflight and after the boundary check, the `HEAD`, branch, `git status` listing, and stash count of the real Mandu, RepToday, and Immerse checkouts were read; the two readings are identical for all three.
+A content hash of each checkout, as rounds 1 to 3 took, was not taken this round.
+`~/Library/LaunchAgents` holds no gr0wthlab LaunchAgent.
+
+### The finding, reproduced on the commit before this round
+
+In a throwaway lab under `<tmp>`: an export of commit `87c69a394f69f84fb2d188b190a0154f4757f5f3` with the quiet settings the unit tests use, a synthetic Mandu and RepToday beside it, and the no-model Codex stand-in of `src/tests/fakes.py`, so no model was called.
+
+| Step | Run | What the records showed |
+| --- | --- | --- |
+| `src/bin/gr0wthlab run`, the stand-in writing five proposals | `20261014T013122Z-on-demand-750e` | 6 items open: the five proposals and the reviewed Dispatch request |
+| `src/bin/gr0wthlab sitting`, three proposals approved and the Dispatch request rejected by posts as the page's own form sends them, then a post to the page's `stop` control | none | four decision records in `ledger/founder/decisions/`, no file in `ledger/founder/sittings/`, and the command ended |
+| `src/bin/gr0wthlab run` | `20261014T013150Z-on-demand-fc8a` | the four decisions taken in; the two proposals left open with `carried_over` false; the report's summary says `0 carried over`; no `ledger/evidence/sittings/` |
+
+### The same sitting on this round's code, ended both ways
+
+Two labs built the same way from the worktree, each with a first run that left the same six items open, each sitting driven in headless Chrome through `chrome-devtools-axi`: the Dispatch request rejected with a typed reason and three proposals approved, each by a click on its button, and two proposals left.
+
+| How the sitting ended | Runs | What the records showed |
+| --- | --- | --- |
+| The page's process was killed (`kill -KILL`) with the last view open and nothing recorded there | `20261014T013124Z-on-demand-8593`, then `20261014T013332Z-on-demand-cded` | no file in `ledger/founder/sittings/`; the second run took the four decisions in and left the two proposals open with `carried_over` true and `carried_over_from` `2026-10-13`; its report says `2 carried over` and `Sitting 2026-10-13: its time was not recorded.`; `ledger/evidence/sittings/2026-10-13.json` holds `"minutes": null`, the four decision records under `shown_by`, and the second run as `taken_in_by_run` |
+| A click on `Record the sitting and stop the page` | `20261014T013345Z-on-demand-61e5`, then `20261014T013501Z-on-demand-7553` | the browser showed "The sitting has ended", "Saved. The sitting on 2026-10-13 took 1 minute.", and the four fields of the record as read back; the terminal said the record was saved and that the sitting had ended from the page, and the command ended; `ledger/founder/sittings/2026-10-13.json` holds 1 minute; the second run left the two proposals open with `carried_over` true from `2026-10-13`, and its Evidence of the sitting holds 1 minute and the sitting record as its source |
+
+In the second lab the last view was opened, then `What I did`, then the last view again before the click: it showed 1 minute both times.
+After that run, `git status` in the lab listed neither `ledger/founder.lock` nor `ledger/sitting.lock`.
+
+Two wordings were corrected after these lab runs and before the boundary check above.
+The first lab's page said "Ending the sitting below records it", which is wrong at a laptop's width, where the form is beside that sentence; the second lab ran with the sentence as it is now.
+Both labs' second runs and the second lab's terminal said `1 minutes`; the run report and the terminal now say `1 minute`, which the unit tests cover and no lab run repeated.
+
+### What round 4 did not exercise
+
+- A sitting that ended with Ctrl-C in its terminal, or by a closed laptop: the kill above stands for both, since each leaves the records already written and no sitting record.
+- A second sitting on the date of a first: the minutes of both, and a last view that never adds a sitting's minutes to its own record, stand on `src/tests/test_serve.py` and `src/tests/test_sitting.py`.
+- A sitting whose record cannot be used, or a `sittings/` folder that cannot be read, beside a decision given at that sitting: `src/tests/test_cycle.py` holds that the run then keeps the sitting as one that took place and does not say that its time was not recorded.
+- The real agent in a weekly run, the hole tests, and every route into the records: this round changed no part of the sandbox, the permission profile, or the probes, and the `config` tree is the one round 3 ran on.
+- The page's other views, at both widths and in both color schemes: unchanged this round, so round 2's stand; only the last view was looked at again, at 1280 wide in light and at 390 wide in dark.
+- A scheduled run, the real production clone, Mandu's side, and a browser other than Chrome, as in round 1.
+
+### Unit tests and lint on this round's tree
+
+- `/usr/bin/python3 -m unittest discover -s src/tests -t src`, under Python 3.9.6, run in the background before the live checks: 1287 tests in 1943 s, 1285 passed and 2 failed.
+  Both failures were expectations, not launcher faults: a test of this round that had not counted the notice an unusable record queues, and `test_attempts.UnreachedFilmingTest`, which compared a notice entry whole, where the notice is now marked carried over from the sitting the filming plan was approved at.
+  Both were corrected, and they passed with every test of the modules the corrections and the two wordings touch (`test_serve`, `test_page`, `test_report`, and the carry-over, decision, and sitting-record tests): 93 tests.
+  The whole suite was not run again after those corrections.
+- `ruff check` and `ruff format --check` on `src` and `src/bin/gr0wthlab`, ruff 0.15.20: clean.
+- The page's own script is now run in `src/tests/test_serve.py` under node, v20.19.5 here, against a stand-in page; the test is skipped where node is absent.
+- The latest-Python job of CI, which runs on Linux, was not run here.
+
 ## Screenshots
 
-Taken in round 2, on the final page code, from the synthetic checkout; every name, message, and figure in them is fixture text.
+Taken in round 2, on the page code as it was then, from the synthetic checkout; every name, message, and figure in them is fixture text.
 The merge in round 3 changed none of the page's own files.
+Round 4 changed the last view, so its screenshot, the end of the sitting, was taken again in round 4, from the second lab above.
 
 | Screen | Laptop, 1280 wide | Narrow, 390 wide |
 | --- | --- | --- |

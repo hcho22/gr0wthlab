@@ -407,9 +407,10 @@ class Ledger:
     def mark_carried_over(self, sittings: Mapping[str, str]) -> None:
         """Mark each open item the Founder left undecided at a sitting, with the date of the first such sitting.
 
-        sittings maps each sitting's date to the run that first took in its record. An item was open at a sitting
-        dated no earlier than the day it was queued whose record reached gr0wthlab only after the run that queued
-        it; an item queued after a sitting, even on the same day, is not carried over from it.
+        sittings maps each sitting's date to the run that first took in a record of it: its sitting record, or a
+        decision given at it. An item was open at a sitting dated no earlier than the day it was queued whose first
+        record reached gr0wthlab only after the run that queued it; an item queued after a sitting, even on the same
+        day, is not carried over from it.
         """
         for entry in self.open_entries():
             queued_on = datetime.fromisoformat(str(entry["published_at"])).astimezone().date().isoformat()

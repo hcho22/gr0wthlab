@@ -7,7 +7,8 @@ only place that enforces it:
 1. Only the Founder-side command writes a Founder record. `gr0wthlab sitting` (sitting.py), which the Founder starts
    outside the sandbox, is the only code that makes a Writer, and it writes only when a request from its own page asks
    it to. The weekly run, the agent, and every other command only read: the launcher's own Store refuses every path in
-   this area (areas.Store.path), and src/tests/test_founder.py reads the source to hold the first half.
+   this area (areas.Store.path), and src/tests/test_founder.py and test_probe.py hold the first half by running a
+   whole run, each check command, and the boundary check with the Writer replaced by a refusal.
 2. A Founder record is a plain file with one link, directly inside one of the five folders named in KINDS, each a real
    folder under a real ledger/founder/. Nothing under workspace/ is ever read as one, whatever its name, location, or
    content: read() opens no path outside those five folders and follows no link, so a link in a record's place, a file
@@ -20,7 +21,8 @@ only place that enforces it:
 
 The formats are the ones docs/mandu-exchange.md describes, parsed by exchange.py, which the page and the run share: the
 page checks a record with the run's own parser before it writes it. A record that parser cannot use, as one changed by
-hand or damaged can be, is not a record: the run names it with its problem and takes nothing from it.
+hand or damaged can be, is not a record: the run names it with its problem and takes nothing from it. parse() is the
+one way a record file becomes a record, for the run and for the page, and named() the one way a report names the file.
 
 A decision can be changed or taken back on the page until a run has taken it in, and never after. A run takes it in
 when it writes the decision's Evidence (taken_in); the page and the run hold locked() around a change and around the
@@ -35,10 +37,10 @@ import os
 import re
 import stat
 import time
-from collections.abc import Iterator, Mapping
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from pathlib import Path
-from typing import TextIO
+from typing import TextIO, TypeVar
 
 from .areas import UnsafeFile, read_plain, write_whole
 from .boundary import FOUNDER, FOUNDER_KINDS, ConfigError
@@ -57,8 +59,11 @@ LOCK_WAIT = 10.0
 # A record's file name without .json: an item identifier, a date, a Product, or a Product and a date.
 STEM = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,119}")
 HOLDS_ADDRESS = "it holds something that looks like an email address, so nothing in it was read or kept"
+# What a report says in place of a file name that looks like an address.
+UNNAMED = "a file whose name is not repeated here"
 
 Raw = tuple[str, Path, bytes]  # a record file: its name, its path, and its bytes
+T = TypeVar("T")
 # Why a file that is no record file is none: it is not a read that failed, so nothing it might hold is unknown.
 STRAY = "only <name>.json record files belong here"
 
@@ -99,12 +104,20 @@ def real_folder(path: Path) -> bool:
         return False
 
 
+def nameable(name: str) -> bool:
+    """Whether a report may repeat a file's name or path. Either can be typed by hand, so one that looks like an
+    address is never repeated: UNNAMED stands in its place."""
+    return not looks_like_address(name)
+
+
+def named(kind: str, name: str) -> str:
+    """One of the record files by its path under ledger/, the name a run reports and fingerprints it under."""
+    return f"{FOUNDER}/{kind}/{name if nameable(name) else f'({UNNAMED})'}"
+
+
 def shown(kind: str, name: str) -> str:
-    """One of the record files, as a report names it, by its path under ledger/. A file name can be typed by hand, so
-    one that looks like an address is never repeated."""
-    if looks_like_address(name):
-        return f"a file in `{FOUNDER}/{kind}/` whose name is not repeated here"
-    return f"`{FOUNDER}/{kind}/{name}`"
+    """The same file as a sentence of a report or of the page names it."""
+    return f"`{named(kind, name)}`"
 
 
 def read(ledger: Path, kind: str) -> tuple[list[Raw], list[tuple[str, str]], str | None]:
@@ -144,6 +157,26 @@ def holds_address(name: str, data: bytes) -> bool:
     """Whether a record file's name or anything in it looks like an email address, whatever its bytes; such a file is
     refused whole, so nothing it holds is ever read, kept, or repeated (FR-11)."""
     return looks_like_address(name) or looks_like_address(data.decode("utf-8", errors="replace"))
+
+
+def parse(
+    name: str, data: bytes, parser: Callable[[str, object], tuple[T | None, list[str]]]
+) -> tuple[T | None, list[str]]:
+    """One record file as the parser of its kind reads it: the record, or why the file is no record.
+
+    The address check runs over the file's name and the whole file before anything in it is read, so a file that
+    fails it is refused whole and nothing it holds is ever repeated (FR-11). Only then is it decoded and handed to
+    the parser, under the name it has without .json.
+    """
+    if holds_address(name, data):
+        return None, [HOLDS_ADDRESS]
+    try:
+        value = json.loads(data.decode("utf-8"))
+    except UnicodeDecodeError:
+        return None, ["it is not UTF-8 text"]
+    except ValueError as error:
+        return None, [f"it is not JSON (line {getattr(error, 'lineno', '?')})"]
+    return parser(name[: -len(".json")], value)
 
 
 def taken_in(ledger: Path, item: str) -> bool:

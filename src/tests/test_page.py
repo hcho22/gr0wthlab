@@ -261,7 +261,7 @@ class ViewTest(unittest.TestCase):
         )
 
     def views(self):
-        state = unittest.mock.Mock(began=1.0, day="2026-10-11", **{"minutes.return_value": 7})
+        state = unittest.mock.Mock(began=1.0, day="2026-10-11", earlier=3, **{"minutes.return_value": 7})
         page_, view, entry = self.page, self.view, self.entry
         last = (self.saved, entry)
         typed = {"reason": self.hostile, "note": self.hostile, "minutes": self.hostile, "change": "1"}
@@ -275,7 +275,9 @@ class ViewTest(unittest.TestCase):
             "item": page_.item(view, entry, state, [self.hostile], typed, last),
             "item that cannot be shown": page_.item(view, self.other, state),
             "counts": page_.counts(view, built, state, [self.hostile], typed, self.saved, last),
-            "end": page_.end(view, state, [self.hostile], typed, self.saved, last),
+            "end": page_.end(view, state, [self.hostile], typed, last),
+            "end, as first drawn": page_.end(view, state),
+            "finished": page_.finished(sitting.Saved("sittings", "2026-10-11", {"note": self.hostile})),
             "queue": page_.queue(view, state),
             "did": page_.did(view, state, [self.hostile], typed, self.saved, f"build:{found.product}"),
             "plain": page_.plain(self.hostile, self.hostile),

@@ -9,6 +9,8 @@ reads as a Founder record only a plain file in one of the five real folders, and
 import io
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import threading
 import unittest
@@ -123,9 +125,37 @@ class AreaTest(unittest.TestCase):
         self.assertTrue(founder.holds_address(f"{fakes.ADDRESS}.json", b"{}"))
         self.assertTrue(founder.holds_address("x.json", b"\xff\xfe a@b.example"))
         self.assertFalse(founder.holds_address("20261011-x.json", decision().encode()))
+        self.assertEqual(founder.named("decisions", "20261011-x.json"), "founder/decisions/20261011-x.json")
         self.assertEqual(founder.shown("decisions", "20261011-x.json"), "`founder/decisions/20261011-x.json`")
-        shown = founder.shown("decisions", f"{fakes.ADDRESS}.json")
-        self.assertEqual(shown, "a file in `founder/decisions/` whose name is not repeated here")
+        named = founder.named("decisions", f"{fakes.ADDRESS}.json")
+        self.assertEqual(named, "founder/decisions/(a file whose name is not repeated here)")
+        self.assertEqual(founder.shown("decisions", f"{fakes.ADDRESS}.json"), f"`{named}`")
+        self.assertTrue(founder.nameable("ledger/founder/outreach/20261011-x.json"))
+        self.assertFalse(founder.nameable(f"ledger/founder/outreach/{fakes.ADDRESS}.json"))
+
+    def test_one_reading_makes_a_record_of_a_file_for_the_run_and_for_the_page(self):
+        """A file is checked for an address, whole and by its name, before anything in it is read; only then is it
+        decoded and handed to its kind's parser, under its name without .json."""
+        record, problems = founder.parse(f"{ITEM}.json", decision().encode(), exchange.parse_decision)
+        self.assertEqual((record.item, record.decision, record.sitting, problems), (ITEM, "approve", "2026-10-11", []))
+        held = [founder.HOLDS_ADDRESS]
+        for what, name, data, why in (
+            ("an address in a field", f"{ITEM}.json", decision(note=f"ask {fakes.ADDRESS}").encode(), held),
+            ("an address in the name", f"{fakes.ADDRESS}.json", decision().encode(), held),
+            ("an address in a file that is not JSON", f"{ITEM}.json", f"{{ {fakes.ADDRESS}".encode(), held),
+            ("an address in a file that is not text", f"{ITEM}.json", b"\xff " + fakes.ADDRESS.encode(), held),
+            ("not text", f"{ITEM}.json", b"\xff\xfe", ["it is not UTF-8 text"]),
+            ("not JSON", f"{ITEM}.json", b'{\n"item": ', ["it is not JSON (line 2)"]),
+            ("not an object", f"{ITEM}.json", b"[]", ["the record must be a JSON object"]),
+            ("named for another item", "20261011-other.json", decision().encode(), None),
+        ):
+            with self.subTest(what):
+                record, problems = founder.parse(name, data, exchange.parse_decision)
+                self.assertIsNone(record)
+                if why is None:
+                    self.assertEqual(problems, [f"item must equal the file name '20261011-other'; got '{ITEM}'"])
+                else:
+                    self.assertEqual(problems, why)
 
     def test_the_writer_writes_whole_files_only_into_the_five_folders(self):
         writer = founder.Writer(self.ledger)
@@ -575,20 +605,118 @@ class ForgeryTest(CycleTestCase):
         self.assertEqual(code, 0, out)
         self.assertEqual([entry["status"] for entry in self.queue()["closed"]], ["approved"])
 
-    def test_a_configuration_that_still_points_at_mandu_s_exchange_folder_stops_the_run(self):
-        self.env["GR0WTHLAB_EXCHANGE_DIR"] = str(self.root / "exchange")
-        code, said = self.next_run()
-        self.assertEqual(code, launcher.EXIT_CONFIG, said)
-        self.assertIn("refusing to start: GR0WTHLAB_EXCHANGE_DIR is set; unset it", said)
-        self.assertIn("ledger/founder/", said)
-        del self.env["GR0WTHLAB_EXCHANGE_DIR"]
-        registry = self.repo / "config" / "products.json"
-        data = json.loads(registry.read_text(encoding="utf-8"))
-        data["mandu"]["exchange"] = {"path": "projects/gr0wthlab/exchange/", "access": "read-only"}
-        registry.write_text(json.dumps(data), encoding="utf-8")
-        code, said = self.next_run()
-        self.assertEqual(code, launcher.EXIT_CONFIG, said)
-        self.assertIn("config/products.json still sets mandu.exchange; remove it", said)
+
+class OnlyTheSittingWritesTest(CycleTestCase):
+    """The first rule: only the sitting command makes a founder.Writer. Here the Writer is replaced by a refusal, and
+    a whole run and every check command a run's agent is told to use are run for real; none makes one. The boundary
+    check is held the same way in test_probe.py."""
+
+    def setUp(self):
+        super().setUp()
+        refusal = mock.patch.object(
+            founder, "Writer", side_effect=AssertionError("only the sitting command makes a founder.Writer")
+        )
+        self.writer = refusal.start()
+        self.addCleanup(refusal.stop)
+
+    def test_the_refusal_is_the_one_a_sitting_would_meet(self):
+        from gr0wthlab import sitting
+
+        with self.assertRaises(AssertionError):
+            sitting.Sitting(self.repo)
+        self.assertEqual(self.writer.call_count, 1)
+
+    def test_a_whole_run_and_each_check_command_make_no_writer(self):
+        from gr0wthlab import cli
+
+        writes = {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL, fakes.draft_path(1): fakes.draft(1)}
+        creator = fakes.KIT_CREATORS[0]
+        writes[fakes.message_path("creator", creator[0])] = fakes.message("creator", creator[0], fakes.CREATOR_BODY)
+        fakes.set_run(self.repo, "outreach", {"creators": fakes.creators([creator])})
+        fakes.set_window(self.repo, fakes.window_from(fakes.SUNDAY_RUN.date()))
+        fakes.keep_days(self.mandu, 1)
+        fakes.behave(self.codex_dir, {"write": writes})
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        fakes.set_window(self.repo, fakes.QUIET_WINDOW)
+        fakes.behave(self.codex_dir, {})
+        opened = {entry["kind"]: entry["id"] for entry in self.queue()["open"]}
+        self.assertEqual(sorted(opened), ["message", "package-change-proposal", "post"])
+
+        # A second run with a record of every kind in place, valid and not, so every reader of them runs.
+        folders = founder.folders(self.ledger())
+        (folders["decisions"] / f"{opened['message']}.json").write_text(decision(opened["message"]))
+        (folders["decisions"] / "20261011-broken.json").write_text("{")
+        (folders["sittings"] / "2026-10-11.json").write_text(
+            json.dumps({"exchange": exchange.EXCHANGE_VERSION, "date": "2026-10-11", "minutes": 41})
+        )
+        (folders["beta-builds"] / "RepToday.json").write_text(json.dumps(fakes.BETA_BUILD))
+        (folders["beta-reports"] / "RepToday-2026-10-17.json").write_text(
+            json.dumps(fakes.beta_report("2026-10-17", accepted=1))
+        )
+        (folders["outreach"] / f"{opened['message']}.json").write_text(
+            json.dumps({"exchange": exchange.EXCHANGE_VERSION, "item": opened["message"], "sent_on": "2026-10-12"})
+        )
+        before = fakes.tree_digest(self.exchange)
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.entry(opened["message"])["status"], "approved", "the run read the Founder's records")
+        self.assertIn("| Sittings | changed | 1 record, 1 new |", self.report())
+
+        run = self.queue()["updated_by_run"]
+        checks = {
+            "check-incoming": lambda out: cli.check_incoming(out),
+            "check-drafts": lambda out: cli.check_drafts(run, out),
+            "check-edits": lambda out: cli.check_edits(run, out),
+            "check-beta-drafts": lambda out: cli.check_beta_drafts(run, out),
+            "check-work": lambda out: cli.check_work(run, out),
+        }
+        with (
+            mock.patch.object(cli, "REPO_ROOT", self.repo),
+            mock.patch.object(cli, "LEDGER_DIR", self.repo / "ledger"),
+            mock.patch.object(cli, "INCOMING", self.repo / "workspace" / "review-queue" / "incoming"),
+            mock.patch.dict(os.environ, self.env),
+        ):
+            for name, check in checks.items():
+                with self.subTest(command=name):
+                    said = io.StringIO()
+                    self.assertIn(check(said), (0, 1), said.getvalue())
+        self.assertEqual(self.writer.call_count, 0, "no run and no check made a founder.Writer")
+        self.assertEqual(fakes.tree_digest(self.exchange), before, "and every record is exactly as it was")
+
+    def test_the_modules_a_run_is_made_of_never_load_the_sitting_command(self):
+        """In a fresh interpreter, each module of the launcher is imported with nothing of the launcher loaded
+        before it. Only the sitting's own three modules, and the command line that starts a sitting, bring the
+        sitting, its page, or its server with them: a run holds no code that makes a Writer."""
+        script = (
+            "import importlib, json, pkgutil, sys\n"
+            "import gr0wthlab\n"
+            "theirs = ('sitting', 'page', 'serve')\n"
+            "loaded = {}\n"
+            "for name in [module.name for module in pkgutil.iter_modules(gr0wthlab.__path__)]:\n"
+            "    for key in [key for key in sys.modules if key.split('.')[0] == 'gr0wthlab']:\n"
+            "        del sys.modules[key]\n"
+            "    importlib.import_module('gr0wthlab.' + name)\n"
+            "    loaded[name] = [their for their in theirs if 'gr0wthlab.' + their in sys.modules]\n"
+            "print(json.dumps(loaded))\n"
+        )
+        source = str(Path(founder.__file__).resolve().parents[1])
+        env = dict(os.environ, PYTHONPATH=source, PYTHONDONTWRITEBYTECODE="1")
+        ran = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, env=env)
+        self.assertEqual((ran.returncode, ran.stderr), (0, ""))
+        loaded = json.loads(ran.stdout)
+        for expected in ("cycle", "launcher", "probe", "founder", "records", "beta", "outreach", "codex"):
+            self.assertIn(expected, loaded)
+        with_the_sitting = {name: found for name, found in loaded.items() if found}
+        self.assertEqual(
+            with_the_sitting,
+            {
+                "sitting": ["sitting"],
+                "page": ["sitting", "page"],
+                "serve": ["sitting", "page", "serve"],
+                "cli": ["sitting", "page", "serve"],
+            },
+        )
 
 
 if __name__ == "__main__":

@@ -1289,6 +1289,18 @@ class CheckTest(unittest.TestCase):
         kept = sorted(path.name.split(".", 1)[1] for path in self.logs.iterdir())
         self.assertEqual(kept, ["boundary-check.json", "events.jsonl", "json", "probe.md", "probe.sh", "stderr.log"])
 
+    def test_the_check_makes_no_writer_of_the_founder_s_records(self):
+        """Only the sitting command makes a founder.Writer (founder.py): a whole check, run with the Writer replaced
+        by a refusal, makes none."""
+        from gr0wthlab import founder
+
+        refusal = AssertionError("only the sitting command makes a founder.Writer")
+        with mock.patch.object(founder, "Writer", side_effect=refusal) as writer:
+            code, out = self.check()
+        self.assertEqual(code, 0, out)
+        self.assertIn(": PASSED", out)
+        self.assertEqual(writer.call_count, 0)
+
     def test_steps_the_agent_left_out_are_handed_over_again_and_no_others(self):
         # The first run never runs the script and skips one patch; the second sends what it is handed.
         code, out = self.check(lambda run, step: run > 1 or (step.tool == probe.FILE_TOOL and step.label != "src"))

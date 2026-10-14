@@ -1,10 +1,13 @@
 """The committed configuration: the Product registry parses and the runtime grants writes only to the six areas."""
 
 import json
+import shutil
+import tempfile
 import unittest
 from pathlib import Path
 
 from gr0wthlab import boundary
+from tests import fakes
 
 REPO = Path(__file__).resolve().parents[2]
 HOME = Path("/Users/founder")
@@ -93,9 +96,22 @@ class RunConfigTest(unittest.TestCase):
         for kind, folder in founder.folders(REPO / "ledger").items():
             with self.subTest(kind=kind):
                 self.assertTrue((folder / ".gitkeep").is_file())
-        ignored = (REPO / ".gitignore").read_text(encoding="utf-8").splitlines()
-        self.assertIn("/ledger/founder.lock", ignored)
-        self.assertIn("/ledger/sitting.lock", ignored)
+
+    def test_git_ignores_the_two_locks_a_sitting_and_a_run_leave_in_the_ledger(self):
+        """Asked of git itself, in a throwaway repository that holds the committed .gitignore: the records step
+        stages ledger/ whole, so a lock git did not ignore would be committed with the Founder's records."""
+        from gr0wthlab import founder, sitting
+
+        locks = [f"ledger/{founder.LOCK_FILE}", f"ledger/{sitting.SERVING_LOCK}"]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            env = fakes.git_env(root)
+            repo = root / "repo"
+            repo.mkdir()
+            shutil.copy(str(REPO / ".gitignore"), str(repo / ".gitignore"))
+            fakes.git(repo, "init", "--quiet", env=env)
+            ignored = fakes.git(repo, "check-ignore", *locks, "ledger/founder/decisions/an-item.json", env=env)
+        self.assertEqual(ignored.splitlines(), locks, "and a record of the Founder's is not ignored")
 
     def test_filming_is_built_and_its_footage_place_is_the_folder_the_founder_named(self):
         from gr0wthlab import video

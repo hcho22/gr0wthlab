@@ -801,7 +801,7 @@ class OutreachCycleTest(WorkCycleTestCase):
         )
         unread = (
             "Slow Strength, the one follow-up: the Founder's record of the first message could not be used"
-            f" (`founder/outreach/{ids[self.SLOW]}.json`: not JSON: "
+            f" (`founder/outreach/{ids[self.SLOW]}.json`: it is not JSON (line 1)"
         )
         self.assertIn(f"| Outreach records | failed | {unread}", report)
         self.assertIn(f"| Outreach Drafts | incomplete | Outreach records could not be read; {unread}", report)
@@ -925,7 +925,7 @@ class OutreachCycleTest(WorkCycleTestCase):
         outreach = self.section("Outreach")
         self.assertIn("records a message as sent that the Founder has not approved", outreach)
         self.assertIn("`founder/outreach/20261011-no-such-item.json` names no message in the Review Queue", outreach)
-        self.assertIn("`founder/outreach/20261011-message-creator-desk-reset.json`: not JSON", outreach)
+        self.assertIn("`founder/outreach/20261011-message-creator-desk-reset.json`: it is not JSON (line 1)", outreach)
         self.assertIn(
             "| Slow Strength | the one follow-up | not due | the first message to Slow Strength is not approved yet |",
             report,

@@ -1,8 +1,8 @@
 # Mandu exchange, version 7
 
 What Mandu may read from gr0wthlab (the Marketing Engineer), and the two things Mandu still does with what it reads.
-Mandu's own agent builds Mandu's read-only side from this page.
-Nobody has built that side yet: it is the next change, made in Mandu once version 7 has landed in gr0wthlab.
+Mandu's read-only side is built from this page.
+Nobody has built that side yet: it is the next change, made in Mandu through firstmate once version 7 has landed in gr0wthlab.
 Nothing in gr0wthlab waits for it: the Founder decides on gr0wthlab's own page, with or without Mandu.
 
 Since version 7 gr0wthlab writes every record on this page, and Mandu writes none of them ([ADR 0002](adr/0002-the-founder-decides-in-gr0wthlab.md)).
@@ -281,7 +281,7 @@ One file per decided item, `founder/decisions/<id>.json`:
 - An approval may carry `note`, one line of at most 300 characters, and has no `reason`.
 - `decided_at` is the time of the decision with its UTC offset, and `sitting` is the date of the sitting it was given at.
 
-An item the Founder leaves for later has no record; it returns, marked carried over, at the next sitting.
+An item the Founder leaves for later has no record; it returns at the next sitting, marked carried over once a run has read a record of the sitting it was left at ([Sitting records](#sitting-records)).
 
 The Founder can change a decision, or take it back, on the page until a run has taken it in, and never after.
 Changing it writes the file again, whole; taking it back removes the file, and the item is undecided again.
@@ -301,15 +301,21 @@ Such a record changes nothing: a decision already taken stands.
 
 ## Sitting records
 
-One file per sitting, `founder/sittings/<YYYY-MM-DD>.json`, with the minutes the Founder spent, which the page measured and the Founder can correct:
+One file per date of a sitting, `founder/sittings/<YYYY-MM-DD>.json`, with the minutes the Founder spent, which the page measured and the Founder can correct:
 
 ```json
 {"exchange": 7, "date": "2026-10-11", "minutes": 48, "note": null}
 ```
 
 `minutes` is a whole number from 1 to 600, and `date` equals the file name.
-The page writes it when the Founder ends the sitting: gr0wthlab counts an item as left undecided at the sitting when the item is still open, was queued on or before the sitting's date, and was queued before gr0wthlab first read this record.
-A second sitting on the same date writes the same file again, whole, with the minutes of both.
+The page writes it when the Founder ends the sitting on the page's last view, which is the one way to finish from the page: one click saves this record, shows what was saved, and stops the page.
+A second sitting on the same date writes the same file again, whole, with the minutes of both: the minutes the record held when the second sitting began, and the minutes of the second.
+
+gr0wthlab knows that a sitting took place on a date from this record, or from a decision record whose `sitting` is that date.
+So a page that ended any other way, stopped from its terminal, by a crash, or by a closed laptop, loses no carry-over once a decision was given at that sitting.
+gr0wthlab counts an item as left undecided at the sitting when the item is still open, was queued on or before the sitting's date, and was queued before gr0wthlab first read a record of that sitting.
+Where a sitting ended without this record, its time is not known: the run report says the sitting's time was not recorded, and it is never counted as zero.
+A sitting at which no decision was given, and which ended without this record, leaves nothing that says it took place, so nothing is carried over from it.
 
 ## Beta Build records
 

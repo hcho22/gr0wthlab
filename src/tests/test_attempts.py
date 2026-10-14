@@ -851,7 +851,9 @@ class UnreachedFilmingTest(FilmingRunCase, OwedRunTestCase):
         [plan] = [entry["id"] for entry in self.queue()["open"] if entry["kind"] == "filming-plan"]
         self.decide(plan, "approve")
         self.clip("d01-s1.mov")
-        before = self.notices()
+        # The notice that stood at the sitting the plan was approved at was left undecided there, so the run that
+        # takes the approval in marks it carried over: the notices are compared by which are open.
+        before = [entry["id"] for entry in self.notices()]
 
         code, out = self.slept_through(minutes=1)
         self.assertEqual(code, cycle.EXIT_STOPPED, out)
@@ -859,7 +861,7 @@ class UnreachedFilmingTest(FilmingRunCase, OwedRunTestCase):
         self.assertIn("| 1 | d01-s1 | no edit record | it is ready for an edit record and has none |", cut_short)
         self.assertIn("- Post Drafts: 1 no Draft.\n", cut_short)
         self.assertIn(f"- {FOLLOWS}\n", cut_short)
-        self.assertEqual(self.notices(), before)
+        self.assertEqual([entry["id"] for entry in self.notices()], before)
 
         cut = ("d01-s1", "d01-s1.mov", 2, 12)
         self.behavior = {
@@ -871,7 +873,7 @@ class UnreachedFilmingTest(FilmingRunCase, OwedRunTestCase):
         self.assertEqual(self.endings(), [("scheduled", attempts.SLEPT), ("scheduled", attempts.COMPLETED)])
         [post] = [entry for entry in self.queue()["open"] if entry["kind"] == "post"]
         self.assertEqual((post["day"], bool(post.get("asset"))), (1, True))
-        self.assertEqual(self.notices(), before)
+        self.assertEqual([entry["id"] for entry in self.notices()], before)
 
 
 class OnDemandTest(OwedRunTestCase):

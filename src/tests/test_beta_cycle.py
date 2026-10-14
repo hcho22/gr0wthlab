@@ -660,13 +660,13 @@ class WeekByWeekTest(BetaCycleTestCase):
         self.next_week()
         report = self.report()
         self.assertIn(
-            "| Beta Cohort reports | failed | 1 record, 0 new; 1 could not be used: a file in"
-            " `founder/beta-reports/` whose name is not repeated here: it holds something that looks like an email"
-            " address, so nothing in it was read or kept. |",
+            "| Beta Cohort reports | failed | 1 record, 0 new; 1 could not be used:"
+            " `founder/beta-reports/(a file whose name is not repeated here)`: it holds something that looks like an"
+            " email address, so nothing in it was read or kept. |",
             report,
         )
         self.assertIn(
-            "a file in `founder/beta-reports/` whose name is not repeated here could not be used (only <name>.json"
+            "`founder/beta-reports/(a file whose name is not repeated here)` could not be used (only <name>.json"
             " record files belong here)",
             report,
         )

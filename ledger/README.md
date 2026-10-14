@@ -19,7 +19,8 @@ Each run's records step commits this folder to `main` together with `workspace/`
 - `evidence/package-snapshots/<run id>.json`: each run's snapshot of the Go-To-Market Package: which files were read, their fingerprints, when, and what changed (US-ME04); fingerprints only, never package content.
 - `evidence/decisions/<item id>.json`: each Founder decision a run took in from `founder/decisions/`, with its reason or note, the record it came from and that record's fingerprint, and the newer item that had already superseded the decided one, if any (US-ME07).
   Its existence is the taking in: from then on the sitting page offers no change to that decision.
-- `evidence/sittings/<date>.json`: how long each sitting took, from the Founder's sitting record, and the run that first took it in.
+- `evidence/sittings/<date>.json`: each sitting a run knows took place, with the run that first took in a record of it, and how long it took, from the Founder's sitting record.
+  A sitting known only from the decisions given at it, which the file lists, has `"minutes": null`: its time was not recorded, and is never zero.
 - `evidence/waitlist/<run id>.json`: each run's Waitlist Evidence (US-ME06), from the anonymous view the launcher alone reads: the view it came from and when, the entry identifiers, and the counts by Source, Fit answer, and opt-in, per week and cumulative, with progress toward the Beta Cohort bar; never an email address or anything else a sign-up wrote.
   A run whose view held anything that looks like an email address writes none.
 - `evidence/post-drafts/<run id>.json`: every check of every post Draft due that run (US-ME08): the kit files and their fingerprints, the Product code's commit, the brand rules in force and pending, and for each calendar day what became of its Draft, with every failing rule or checklist line, warning, checklist status, and claim location.
