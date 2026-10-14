@@ -878,8 +878,10 @@ class FailuresTest(CycleTestCase):
         self.run_cycle()
         queue = self.queue()
         self.assertEqual([entry["kind"] for entry in queue["open"]], ["notice"])
-        kept = list((self.ledger() / "review-queue/set-aside").rglob("broken.md"))
-        self.assertEqual(len(kept), 1)
+        (kept,) = (self.ledger() / "review-queue/set-aside").iterdir()
+        self.assertEqual(kept.name, f"{queue['updated_by_run']}.json")
+        record = json.loads(kept.read_text(encoding="utf-8"))
+        self.assertEqual([entry["name"] for entry in record["items"]], ["broken.md"])
         notice = (self.ledger() / queue["open"][0]["file"]).read_text(encoding="utf-8")
         self.assertIn("`broken.md`: sections must be exactly", notice)
 
@@ -1889,6 +1891,40 @@ class PostDraftsTest(CycleTestCase):
         report = self.report()
         self.assertIn("| 3 | P03 / AB-2 leg A | blocked |", report)
         self.assertIn("| 1 | P01 / AB-1 leg A | kept |", report)
+
+    def test_a_refused_item_leaves_its_name_and_reasons_and_a_draft_waiting_for_a_fix_stays_as_written(self):
+        """Of what the launcher refuses, only a Draft waiting for a fix keeps the agent's words: each item set aside
+        from incoming/, of every kind, leaves its name and reasons, and nothing of its text anywhere."""
+        marker = "zqxstranger"
+        refused = fakes.refused_items(marker)
+        fakes.set_window(self.repo, {"first_sitting": None, "slot": None})
+        waiting = fakes.draft(3, caption="No grind here, only what zqxdraftwords said.")
+        writes = {fakes.draft_path(day): fakes.draft(day) for day in range(1, 8)}
+        writes[fakes.draft_path(3)] = waiting
+        writes.update({f"review-queue/incoming/{name}": text for name, text in refused.items()})
+        fakes.behave(self.codex_dir, {"write": writes})
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        queue = self.queue()
+        run = queue["updated_by_run"]
+        record = json.loads((self.ledger() / f"review-queue/set-aside/{run}.json").read_text(encoding="utf-8"))
+        self.assertEqual({entry["name"] for entry in record["items"]}, set(refused))
+        self.assertTrue(all(set(entry) == {"name", "reasons"} and entry["reasons"] for entry in record["items"]))
+        self.assertEqual(os.listdir(self.ledger() / "review-queue/set-aside"), [f"{run}.json"])
+        self.assertEqual(os.listdir(self.workspace() / "review-queue/incoming"), [])
+        report, notices = self.report(), self.notices()
+        for name in refused:
+            self.assertIn(f"- Set aside, not queued: `{name}`: ", report)
+            self.assertIn(f"- `{name}`: ", notices)
+        # Nothing the run left anywhere holds the refused files' words: the ledger, the workspace, and the run's
+        # record in the log folder. Only the fake agent's own instructions, in its folder, hold them.
+        for path in self.root.rglob("*"):
+            if path.is_file() and self.codex_dir not in path.parents and ".git" not in path.parts:
+                self.assertNotIn(marker.encode(), path.read_bytes(), path)
+        self.assertNotIn(marker, fakes.git(self.repo, "log", "--all", "-p", env=self.env))
+        # The Draft waiting for a fix is blocked and stays exactly as the agent wrote it.
+        self.assertIn("| 3 | P03 / AB-2 leg A | blocked |", report)
+        self.assertEqual((self.workspace() / fakes.draft_path(3)).read_text(encoding="utf-8"), waiting)
 
     def lose_the_claim_file(self):
         """Make git's read of the one file every claim cites fail, as a damaged object does, while the branch still

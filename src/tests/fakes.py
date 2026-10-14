@@ -601,6 +601,30 @@ def proposal(
     )
 
 
+def refused_items(marker: str) -> dict:
+    """One file the launcher refuses from incoming/ for each kind of item and each way the item format can fail, by
+    file name; every file carries marker in its title, its body, and its Evidence paths, and each failing line
+    carries it too, so a test can show none of it is kept."""
+    files = {
+        "a-post.md": proposal("post", extra="window: 1\nday: 3\n", title=marker),
+        "a-message.md": proposal("message", title=marker),
+        "a-filming-plan.md": proposal("filming-plan", title=marker),
+        "a-new-angle.md": proposal(new_angle="yes", title=marker),
+        "a-line.md": proposal("weekly-read-decision", extra=f"{marker}: it\n"),
+        "a-version.md": proposal("weekly-read-decision", extra=f"exchange: {marker} said\n"),
+        "a-repeat.md": proposal("dispatch-request", extra=f"supersedes: 20261011-{marker}\n"),
+        "a-source.md": proposal("notice").replace("Still says unverified: `", f"{marker}: "),
+        "a-section.md": PROPOSAL.replace("## Touches", f"## {marker} Touches"),
+        "a-kind.md": PROPOSAL.replace("kind: package-change-proposal", f"kind: {marker}"),
+    }
+    return {
+        name: text.replace("Replace the stale caveat with the cleared status.", f"{marker} said this.").replace(
+            "`projects/RepToday", f"`projects/RepToday/{marker}"
+        )
+        for name, text in files.items()
+    }
+
+
 # The Waitlist's anonymous view, as RepToday's build would write it: twelve sign-ups across every Source and Fit
 # answer over two weeks (the weeks of 2026-09-28 and 2026-10-05), generated an hour before SUNDAY_RUN.
 WAITLIST_ENTRIES = [
