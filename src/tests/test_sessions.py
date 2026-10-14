@@ -243,7 +243,7 @@ class OrderTest(SessionsCase):
             ("Filming", "no active Product films"),
             ("Beta Cohort recruiting", "the Founder has recorded no approved Beta Build"),
             ("Listening", "no Listening source is configured"),
-            ("Rejection reasons", "no rejection reason needs a code or a proposal"),
+            ("Rejection reasons", "no rejection reason needs a code, a proposal, or an Instructions change"),
         ):
             self.assertEqual(self.row(title), [f"no session: {why}", "-", "-", "-", "-"])
         for title in ("Package review", "Post Drafts", "Outreach"):
@@ -624,7 +624,9 @@ class TroubleTest(SessionsCase):
 
 class InstructionsGuardTest(SessionsCase):
     def test_no_session_reads_instructions_that_another_session_of_the_same_run_changed(self):
-        guide = self.workspace() / "instructions/outreach.md"
+        # The sandbox cannot write the Instructions in force at all; this test changes them from outside it, between
+        # two sessions, to show the launcher puts them back all the same, with what a session adds to its area.
+        guide = self.ledger() / "instructions/outreach.md"
         added = self.workspace() / "instructions/extra.md"
         guide.write_text("Write to one creator at a time.\n", encoding="utf-8")
         self.behave()
@@ -649,18 +651,21 @@ class InstructionsGuardTest(SessionsCase):
         self.assertEqual((guide.read_text(encoding="utf-8"), added.exists()), noted)
         # The report names each change once, with the session it was found after, though a session ran after it.
         report = self.report()
-        changed = "after the Post Drafts session: `instructions/outreach.md` was changed during the run and put back"
+        changed = (
+            "after the Post Drafts session: `ledger/instructions/outreach.md` was changed during the run and put back"
+        )
         self.assertIn(
-            "- Instructions were changed during the run and put back:\n"
+            "- What sessions changed in the Instructions, and the launcher put back:\n"
             "  - after the Post Drafts session: `instructions/extra.md` was added during the run and removed\n"
             f"  - {changed} as it was\n",
             report.split("## Learning\n", 1)[1].split("\n## ")[0] + "\n",
         )
-        self.assertEqual(report.count("`instructions/outreach.md` was"), 2)
-        self.assertIn(f"- {changed} as it was; no run may change its own Instructions yet\n", report)
+        self.assertEqual(report.count("`ledger/instructions/outreach.md` was"), 2)
+        why = "only the rejection reasons' session may propose an Instructions change, and only the launcher changes"
+        self.assertIn(f"- {changed} as it was; {why} the Instructions in force\n", report)
         _, notice = self.notice()
-        self.assertEqual(notice.count("`instructions/outreach.md` was"), 1)
-        self.assertIn(f"- {changed} as it was; no run may change its own Instructions yet", notice)
+        self.assertEqual(notice.count("`ledger/instructions/outreach.md` was"), 1)
+        self.assertIn(f"- {changed} as it was; {why} the Instructions in force", notice)
 
 
 class OwedWorkTest(SessionsCase):

@@ -1008,6 +1008,8 @@ class LearningCycleTest(WorkCycleTestCase):
         self.assertEqual(
             (strategy["reason"], strategy["proposal"]), ("This is not who the app is for.", "20261018-fit-answer")
         )
+        self.assertEqual(strategy["evidence"], f"evidence/decisions/{self.SECOND}.json", "linked to its Evidence")
+        self.assertEqual(self.read(strategy["evidence"])["item_file"], f"review-queue/items/{self.SECOND}.md")
         learned = self.section("Learning")
         self.assertIn(
             "- package-review: 2 rejections, 2 of 2 coded (fit 1 of 2, length 1 of 2); execution 1 of 2, strategy 1 of"
@@ -1021,7 +1023,11 @@ class LearningCycleTest(WorkCycleTestCase):
             learned,
         )
         self.assertIn(f"- Strategy reason `{self.SECOND}` (fit): answered by `20261018-fit-answer`.", learned)
-        self.assertIn("- Instructions (`workspace/instructions/`) are as they were before the run.", learned)
+        self.assertIn(
+            "- No session changed the Instructions in force (`ledger/instructions/`), or left anything in the"
+            " Instructions area (`workspace/instructions/`) but a proposed change.",
+            learned,
+        )
         self.assertIn(
             "| Rejection reasons coded | complete | 2 rejection reasons, 2 of 2 coded; 2 coded this run |", report
         )
@@ -1068,7 +1074,11 @@ class LearningCycleTest(WorkCycleTestCase):
         self.assertFalse(learning.may_refine_instructions("positioning"))
         learned = self.section("Learning")
         self.assertIn(f"- Strategy reason `{self.SECOND}` (positioning): no proposal queued yet.", learned)
-        self.assertIn("- Instructions were changed during the run and put back:", learned)
+        self.assertIn(
+            "- What sessions changed in the Instructions, and the launcher put back:\n  - after the Rejection reasons"
+            " session: `instructions/README.md` was changed during the run and put back as it was",
+            learned,
+        )
         self.assertIn(f"- Not coded yet: `{self.FIRST}`.", learned)
         self.assertIn("1 strategy reason still without a package-change proposal", report)
         self.agent()

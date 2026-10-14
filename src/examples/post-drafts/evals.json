@@ -1,12 +1,12 @@
 {
   "adapted_from": "the evals.json shape of github.com/coreyhaines31/marketingskills skills/*/evals/evals.json at commit 1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff (MIT; see THIRD_PARTY_NOTICES.md)",
   "skill_name": "post-drafts",
-  "description": "The post-Draft workflow's example set (US-ME08, F5), in the marketingskills evals.json shape: each example's prompt, the output expected, its assertions, and its files. A deterministic assertion is checked by the unit tests (src/tests/test_examples.py) against the synthetic kit in files/mandu and the code in files/code; a judged assertion waits for US-ME16's re-run on every Instructions change. An example's first file is its candidate Draft; a second file is the Draft of its A/B pair's reference leg.",
+  "description": "The post-Draft workflow's example set (US-ME08, F5), in the marketingskills evals.json shape: each example's prompt, the output expected, its assertions, and its files. An example that carries `run` is re-run by the agent on every change to the post-Draft Instructions (US-ME16, ADR 0003): its session drafts the calendar days `run` names in a throwaway lab built from `lab` and the example's own overlays, and its deterministic assertions are read off what the launcher took in. An example's first file, if it has one, is a candidate Draft the unit tests (src/tests/test_examples.py) check against the synthetic kit in files/mandu and the code in files/code; a second file is the Draft of its A/B pair's reference leg. A judged assertion is judged by nothing: the notice of a change lists it for the Founder.",
   "kit": "files/mandu",
   "code": "files/code",
   "assertion_kinds": {
-    "deterministic": "check is one of: passes; blocked_by (rule: a finding's rule, or the start of one); warns (rule); cites_angle (angle); hook_frozen; lint_passes",
-    "judged": "text is a statement a reviewer, or a model at US-ME16, judges true or false of the agent's Draft"
+    "deterministic": "check is one of: passes; blocked_by (rule: a finding's rule, or the start of one); not_blocked_by (rule); warns (rule); cites_angle (angle); hook_frozen; lint_passes; each of a re-run example for its day, or the day it names; and, for a re-run example only, queued (item: a kind; count; cites: words each queued item holds), nothing_queued (item), nothing_set_aside",
+    "judged": "text is a statement of the agent's Draft that no check decides; nothing judges it, and the notice of an Instructions change lists it as not judged"
   },
   "evals": [
     {
@@ -21,7 +21,8 @@
         {"kind": "judged", "text": "The captions read as calm and plain, in the brand's voice, with no hype."},
         {"kind": "judged", "text": "The hook beat's visual action, spoken line, and on-screen text do not repeat each other."}
       ],
-      "files": ["files/drafts/day-03-clean.md"]
+      "files": ["files/drafts/day-03-clean.md"],
+      "run": {"calendar_days": [3]}
     },
     {
       "id": 2,
@@ -33,7 +34,8 @@
         {"kind": "deterministic", "check": "cites_angle", "angle": "P01"},
         {"kind": "judged", "text": "Every behavioral claim the copy makes appears under Claims."}
       ],
-      "files": ["files/drafts/day-01-clean.md"]
+      "files": ["files/drafts/day-01-clean.md"],
+      "run": {"calendar_days": [1]}
     },
     {
       "id": 3,
@@ -92,7 +94,8 @@
       "assertions": [
         {"kind": "deterministic", "check": "blocked_by", "rule": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md line 12"}
       ],
-      "files": ["files/drafts/day-05-speed-angle.md"]
+      "files": ["files/drafts/day-05-speed-angle.md"],
+      "run": {"calendar_days": [5]}
     },
     {
       "id": 9,
@@ -167,10 +170,114 @@
       "assertions": [
         {"kind": "deterministic", "check": "blocked_by", "rule": "claim-unsupported"},
         {"kind": "deterministic", "check": "hook_frozen"},
+        {"kind": "deterministic", "check": "queued", "item": "package-change-proposal", "count": 1},
         {"kind": "judged", "text": "Every behavioral claim the copy makes appears under Claims, the Hook's included, and no listed claim is one the Draft does not make."},
         {"kind": "judged", "text": "A package-change proposal cites the frozen Hook and the code that lacks the behavior, and the Hook is unchanged."}
       ],
-      "files": ["files/drafts/day-02-unsupported-hook.md"]
+      "files": ["files/drafts/day-02-unsupported-hook.md"],
+      "run": {"calendar_days": [2]}
+    },
+    {
+      "id": 17,
+      "prompt": "Prepare the Draft for day 4 of window 1 (P04, primary YouTube Shorts) from the brief.",
+      "expected_output": "A Draft that passes every check: the frozen Hook opens it, the offline claim shows the code that builds a session on the device, and the item cites Angle P04.",
+      "assertions": [
+        {"kind": "deterministic", "check": "passes"},
+        {"kind": "deterministic", "check": "hook_frozen"},
+        {"kind": "deterministic", "check": "lint_passes"},
+        {"kind": "deterministic", "check": "cites_angle", "angle": "P04"},
+        {"kind": "deterministic", "check": "nothing_queued", "item": "package-change-proposal"},
+        {"kind": "judged", "text": "The video plan shows airplane mode switched on before the session appears, in one take with no cuts."}
+      ],
+      "files": [],
+      "run": {"calendar_days": [4]}
+    },
+    {
+      "id": 18,
+      "prompt": "Prepare the Draft for day 6 of window 1 (P06, primary TikTok) from the brief.",
+      "expected_output": "A Draft that passes every check and cites Angle P06; its Hook makes no behavioral claim, so it claims nothing the code would have to show.",
+      "assertions": [
+        {"kind": "deterministic", "check": "passes"},
+        {"kind": "deterministic", "check": "hook_frozen"},
+        {"kind": "deterministic", "check": "lint_passes"},
+        {"kind": "deterministic", "check": "cites_angle", "angle": "P06"},
+        {"kind": "judged", "text": "The captions say plainly what is on screen, with no hype word and no AI tell."}
+      ],
+      "files": [],
+      "run": {"calendar_days": [6]}
+    },
+    {
+      "id": 19,
+      "prompt": "Prepare the Draft for day 7 of window 1 (P07, primary TikTok) from the brief.",
+      "expected_output": "A Draft that passes every check and cites Angle P07, planned as the timer timelapse its Format names.",
+      "assertions": [
+        {"kind": "deterministic", "check": "passes"},
+        {"kind": "deterministic", "check": "hook_frozen"},
+        {"kind": "deterministic", "check": "lint_passes"},
+        {"kind": "deterministic", "check": "cites_angle", "angle": "P07"},
+        {"kind": "judged", "text": "Nothing in the video plan asks for footage the Angle's Format does not name."}
+      ],
+      "files": [],
+      "run": {"calendar_days": [7]}
+    },
+    {
+      "id": 20,
+      "prompt": "Prepare the Drafts for days 6 and 7 of window 1, both due in one run.",
+      "expected_output": "Two Drafts, each passing every check and citing its own Angle; neither borrows the other's Hook.",
+      "assertions": [
+        {"kind": "deterministic", "check": "passes", "day": 6},
+        {"kind": "deterministic", "check": "passes", "day": 7},
+        {"kind": "deterministic", "check": "cites_angle", "angle": "P06", "day": 6},
+        {"kind": "deterministic", "check": "cites_angle", "angle": "P07", "day": 7},
+        {"kind": "deterministic", "check": "nothing_set_aside"}
+      ],
+      "files": [],
+      "run": {"calendar_days": [6, 7]}
+    },
+    {
+      "id": 21,
+      "prompt": "Prepare the Draft for day 3 of window 1, where the brand rules now ban a word the frozen Hook holds.",
+      "expected_output": "A Draft that keeps the frozen Hook word for word, so the launcher blocks it on the banned word, and one package-change proposal that cites both the Hook and the brand rule; the agent never rewords a frozen Hook to pass.",
+      "assertions": [
+        {"kind": "deterministic", "check": "blocked_by", "rule": "banned_words_in_hook"},
+        {"kind": "deterministic", "check": "hook_frozen"},
+        {"kind": "deterministic", "check": "queued", "item": "package-change-proposal", "count": 1, "cites": ["brand-rules.json"]},
+        {"kind": "judged", "text": "The proposal leaves to the Founder which side changes, the Hook or the rule."}
+      ],
+      "files": [],
+      "run": {"calendar_days": [3], "mandu": ["files/labs/banned-hook-word/mandu"]}
+    },
+    {
+      "id": 22,
+      "prompt": "Prepare the Draft for day 1 of window 1, while an open checklist line blocks everything public.",
+      "expected_output": "A Draft written as the kit requires, which the launcher blocks naming the open checklist line, and one package-change proposal that cites the line.",
+      "assertions": [
+        {"kind": "deterministic", "check": "blocked_by", "rule": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md line 7"},
+        {"kind": "deterministic", "check": "hook_frozen"},
+        {"kind": "deterministic", "check": "queued", "item": "package-change-proposal", "count": 1, "cites": ["pre-publication-checklist.md"]}
+      ],
+      "files": [],
+      "run": {"calendar_days": [1], "mandu": ["files/labs/open-checklist-line/mandu"]}
     }
-  ]
+  ],
+  "lab": {
+    "mandu": [
+      "files/mandu"
+    ],
+    "code": "files/code",
+    "config": {
+      "window": {
+        "number": 1,
+        "first_sitting": null,
+        "slot": null
+      },
+      "waitlist": {
+        "live_since": null
+      },
+      "outreach": {
+        "network_ask_source": null,
+        "creators": []
+      }
+    }
+  }
 }

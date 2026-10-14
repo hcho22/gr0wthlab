@@ -978,7 +978,8 @@ class FailuresTest(CycleTestCase):
         self.assertEqual((self.workspace() / "instructions/README.md").read_text(encoding="utf-8"), "# instructions\n")
         self.assertIn(
             "- after the Package review session: `instructions/README.md` was changed during the run and put back as"
-            " it was; no run may change its own Instructions yet\n",
+            " it was; only the rejection reasons' session may propose an Instructions change, and only the launcher"
+            " changes the Instructions in force\n",
             problems,
         )
         queue = self.queue()

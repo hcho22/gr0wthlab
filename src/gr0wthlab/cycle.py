@@ -59,11 +59,13 @@ from . import (
     beta,
     dispatch,
     evidence,
+    examples,
     exchange,
     fetch,
     filming,
     footage,
     founder,
+    instructions,
     launcher,
     learning,
     listening,
@@ -181,6 +183,7 @@ class Cycle:
         clock: Callable[[], datetime],
         client: Callable[[fetch.Policy], fetch.Client] | None = None,
         clocks: process.Clock = process.CLOCK,
+        only: str | None = None,
     ):
         self.repo_root = repo_root
         self.env = env
@@ -197,6 +200,10 @@ class Cycle:
         self.noted = False  # how this run ended is in the record of the run due at its time
         self.since: Callable[[], tuple[float, float]] | None = None  # the clocks' reading from this start's beginning
         self.before = (0.0, 0.0)  # what this start had taken when it restarted on new code, as taken() gives it
+        # The one workflow a lab's run starts a session for, when this run is an example's (examples.py); a lab's run
+        # never tries an Instructions change of its own.
+        self.only = only
+        self.state: RunState | None = None  # this run's state once it has one, for an example's checks to read
 
     def say(self, message: str) -> None:
         print(f"gr0wthlab: {message}", file=self.out)
@@ -734,6 +741,7 @@ class Cycle:
                 learning.gaps(state.learning, state.learning_problem, gap(learning.WORKFLOW)),
                 learning.tally(state.learning, state.learning_problem, gap(learning.WORKFLOW)).note,
             ),
+            "instructions-changes": (instructions.gaps(state.instructions), instructions.status(state.instructions)),
         }
         rows = []
         held: dict[str, list[str]] = {session.key: [] for session in state.sessions}
@@ -1156,10 +1164,22 @@ class Cycle:
                     self.store, ledger, [str(p["name"]) for p in registry.get("products", [])], state.reasons
                 )
                 state.problems += problems
+                if state.instructions is not None:
+                    chosen, why = instructions.offer(state.reasons, ledger, self.store, canonical(self.repo_root))
+                    state.instructions.offer, state.instructions.offer_why = chosen, why
+            offered = state.instructions.offer if state.instructions is not None else None
             record = {
                 "run": state.run_id,
                 "listening": listening.plan_record(state.listening) if state.listening else None,
                 "outreach": outreach.plan_record(state.outreach, areas) if state.outreach else None,
+                "instructions": {
+                    "workflow": offered.workflow if offered else None,
+                    "reasons": list(offered.reasons) if offered else [],
+                    "why": state.instructions.offer_why if state.instructions is not None else "",
+                    "package_files": [
+                        file.path for result in state.snapshot for file in result.files if file.status != package.FAILED
+                    ],
+                },
             }
             self.store.write_json(self.store.path(RUN_REPORTS, f"{state.run_id}.work-plan.json"), record)
         except (OSError, ConfigError) as error:
@@ -1225,6 +1245,102 @@ class Cycle:
         except (OSError, ConfigError, ValueError) as error:
             state.learning_problem = f"the rejection reasons could not be coded ({error})"
             state.problems.append(state.learning_problem)
+
+    def learn(
+        self,
+        state: RunState,
+        config: settings.Settings,
+        areas: Areas,
+        ledger: Ledger,
+        ledger_ok: bool,
+        run_id: str,
+        now: datetime,
+        seen: dict[str, str],
+    ) -> None:
+        """Once the codes are taken in: take the proposed Instructions change the rejection reasons' session left,
+        re-run its workflow's example set with the text in force and with the proposed text, and keep it only if no
+        example did worse (ADR 0003). A kept change is written into ledger/instructions/ and queued as a notice for
+        the next sitting; the record of every change tried, kept or not, is kept in ledger/evidence/instructions/.
+        A reason the change cites is answered with its outcome, unless the gate could not judge the change, and an
+        offered execution reason a finished session proposed no change for is answered as such."""
+        outcome = state.instructions
+        if outcome is None:
+            return
+        found = state.learning.reasons if state.learning is not None else state.reasons
+        read = [file.path for result in state.snapshot for file in result.files if file.status != package.FAILED]
+        lines = instructions.package_lines(Path(state.mandu), read) if state.mandu else {}
+        outcome.taken = instructions.take(areas, self.store, outcome.offer, outcome.offer_why, found, lines)
+        session = state.session(learning.WORKFLOW)
+        finished = session is not None and session.finished
+        proposal = outcome.taken.proposal
+        cited = set(proposal.reasons) if proposal else set()
+        outcome.coded = [reason.item for reason in outcome.offer.coded(found)] if outcome.offer else []
+        if outcome.offer is not None and finished and not outcome.taken.refused:
+            outcome.answered = [reason.item for reason in outcome.offer.coded(found) if reason.item not in cited]
+            outcome.problems += instructions.answer(
+                self.store, outcome.answered, instructions.NONE_PROPOSED, None, run_id, now
+            )
+        if proposal is None:
+            return
+        if not ledger_ok:
+            outcome.problems.append(
+                f"the proposed change to the {instructions.title(proposal.workflow)} Instructions was not tried, as"
+                " the Review Queue could not be read to show a kept change; its reasons are offered again"
+            )
+            return
+        by_item = {reason.item: reason for reason in found}
+        try:
+            before = instructions.read_text(instructions.file_of(self.store, proposal.workflow))
+        except (OSError, UnsafeFile, UnicodeDecodeError) as error:
+            outcome.problems.append(f"`{instructions.relative(proposal.workflow)}` could not be read ({error})")
+            return
+        identifier = instructions.change_id(self.store, now.astimezone(), proposal.workflow)
+        change = instructions.Change(identifier, proposal, [by_item[item] for item in proposal.reasons], before)
+        outcome.change = change
+        log_dir = launcher.default_log_dir(self.env, self.home) / "examples"
+        self.say(f"re-running the {proposal.workflow} example set for the proposed Instructions change {identifier}")
+        change.gate = examples.gate(
+            canonical(self.repo_root),
+            proposal.workflow,
+            before,
+            proposal.text,
+            identifier,
+            self.env,
+            self.home,
+            log_dir,
+            config.learning.gate_time_limit,
+            config.learning.example_time_limit,
+            self.store.path(*examples.LABS),
+        )
+        self.say(f"Instructions change {identifier}: {change.outcome}: {change.why}")
+        change.record = self.store.relative(self.store.path(*instructions.RECORDS, f"{identifier}.json"))
+        if change.outcome == instructions.KEPT:
+            report_path = self.store.relative(self.store.path(RUN_REPORTS, f"{run_id}.md"))
+            title, body, touches, evidence_lines = instructions.notice(change, report_path)
+            item = exchange.Item({"kind": "notice"}, title, body, touches, evidence_lines)
+            extra = {"instructions": proposal.workflow, "change": identifier}
+            slug = f"instructions-{proposal.workflow}"
+            try:
+                instructions.apply(self.store, change)
+                try:
+                    change.notice = ledger.publish(self.store, item, slug, run_id, now, extra)
+                except (OSError, ConfigError):
+                    self.store.write_text(instructions.file_of(self.store, proposal.workflow), before)
+                    raise
+            except (OSError, ConfigError) as error:
+                change.gate.outcome = instructions.NOT_COMPARED
+                change.gate.why = f"its example set passed it, and it could not be written with its notice ({error})"
+            else:
+                state.published.append(change.notice)
+                seen.setdefault(exchange.item_hash(item), change.notice)
+        try:
+            instructions.record(self.store, change, run_id, now)
+        except OSError as error:
+            outcome.problems.append(f"the record of change `{identifier}` could not be written ({error})")
+        if change.outcome != instructions.NOT_COMPARED:
+            outcome.problems += instructions.answer(
+                self.store, list(proposal.reasons), change.outcome, identifier, run_id, now
+            )
 
     def file_outreach_lists(self, state: RunState, context, ledger: Ledger, products, run_id, now, seen) -> None:
         """File the loss-framing and sponsorship lists proposal unless it ever was, or Mandu's file holds them."""
@@ -1366,7 +1482,10 @@ class Cycle:
                 return plan.problem
             return "" if plan.due() else "no outreach message is due this run"
         waiting = learning.uncoded(state.reasons) or learning.owed(state.reasons)
-        return "" if waiting else "no rejection reason needs a code or a proposal"
+        offered = state.instructions.offer if state.instructions is not None else None
+        if waiting or (offered is not None and offered.coded(state.reasons)):
+            return ""
+        return "no rejection reason needs a code, a proposal, or an Instructions change"
 
     def plan_sessions(self, state: RunState, config: settings.Settings) -> None:
         """Decide once, before the first session starts, which workflows have work for the agent this run, in the
@@ -1375,6 +1494,8 @@ class Cycle:
         state.sessions = []
         for found in sessions.WORKFLOWS:
             why = self.nothing_due(state, found.key)
+            if self.only and found.key != self.only and not why:
+                why = f"this lab runs the {sessions.workflow(self.only).title} session only"
             state.sessions.append(Session(found, not why, why, config.agent.time_limit))
 
     def waiting_items(self, areas: Areas) -> list[tuple[str, str]]:
@@ -1495,9 +1616,17 @@ class Cycle:
                 state.problems.append(left_running)
             # Before the next session reads workspace/, and before anything is counted or taken in from it.
             state.problems += [problem for problem in records.restore_access(root) if problem not in state.problems]
-            undone = [f"after the {session.title} session: {line}" for line in learning.put_back(state.guidance, areas)]
+            # Only the rejection reasons' session may leave a proposed change, which is taken in once the last
+            # session has ended; everything else any session changed in the Instructions is put back.
+            keep = instructions.proposal_names(areas) if session.key == learning.WORKFLOW else ()
+            undone = learning.put_back(state.guidance, areas, self.store, keep)
+            undone = [f"after the {session.title} session: {line}" for line in undone]
             state.put_back += undone
-            state.problems += [f"{line}; no run may change its own Instructions yet" for line in undone]
+            state.problems += [
+                f"{line}; only the rejection reasons' session may propose an Instructions change, and only the"
+                " launcher changes the Instructions in force"
+                for line in undone
+            ]
             if session.started:
                 after = (
                     self.counted(state, WRITTEN, lambda: work.standing(state.posts, areas, products))
@@ -1719,6 +1848,7 @@ class Cycle:
 
         run_id = self.run_id = launcher.new_run_id(trigger, started)
         state = RunState(run_id, trigger, started, str(sessions.FOLDER), sync=sync)
+        self.state = state
         state.problems += list(sync.get("repaired", []))
         state.late_after = timedelta(minutes=config.late_after_minutes)
         state.titles = {key: str(output.get("title", key)) for key, output in config.outputs.items()}
@@ -1754,6 +1884,10 @@ class Cycle:
             state.problems.append(f"{error}; the Review Queue was left untouched this run")
         states = self.load_state(state, run_id)
         self.take_decisions(state, config, ledger, ledger_ok, states.review_queue)
+        if not self.only:
+            state.instructions = instructions.Outcome()
+            # Before any session reads them: a change whose notice the Founder rejected is undone first.
+            state.instructions.undone = instructions.undo(self.store, state.decisions, run_id, self.now())
         sittings = self.sitting_runs(state)
         hashes, unreadable = run_state.item_hashes(self.store.root, ledger.entries, products, states.review_queue)
         state.problems += unreadable
@@ -1796,7 +1930,12 @@ class Cycle:
         state.probe_files_removed = clear_probe_files(boundary)
         if state.probe_files_removed:
             self.say(f"removed boundary probe files left in the areas: {', '.join(state.probe_files_removed)}")
-        state.guidance = learning.remember(areas)
+        stale = instructions.clear_stale(areas)
+        state.problems += [
+            f"`{name}`, a proposed Instructions change an earlier run left, was removed before the first session"
+            for name in stale
+        ]
+        state.guidance = learning.remember(areas, self.store)
         state.problems += state.guidance.problems
         self.plan_sessions(state, config)
         readings = self.run_sessions(state, config, definitions, areas, products)
@@ -1819,6 +1958,7 @@ class Cycle:
         elif state.posts is not None:
             state.posts_problem = "not taken in: the Review Queue could not be read"
         self.take_work(state, areas, ledger, ledger_ok, products, run_id, now, seen)
+        self.learn(state, config, areas, ledger, ledger_ok, run_id, now, seen)
         self.count_work(state, config, log_dir, readings, ledger_ok)
         report_path = self.store.path(RUN_REPORTS, f"{run_id}.md")
         state.problems += areas.problems

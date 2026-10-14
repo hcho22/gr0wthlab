@@ -1,0 +1,18 @@
+{
+  "ask": "Approve the filming plan for RepToday window 1: 10 assets in 3 sittings",
+  "decided_at": "2026-10-04T19:40:00-07:00",
+  "decision": "approve",
+  "item": "20261004-filming-plan-w1",
+  "item_file": "review-queue/items/20261004-filming-plan-w1.md",
+  "kind": "filming-plan",
+  "note": null,
+  "reason": null,
+  "sitting": "2026-10-04",
+  "source": {
+    "path": "founder/decisions/20261004-filming-plan-w1.json",
+    "sha256": "6f599c6aaeb66d3a2003ec8cd4bd03e52cc737dee0be6d54cfdcc1389a10eeb6"
+  },
+  "superseded_by": null,
+  "taken_in_at": "2026-10-05T23:00:00+00:00",
+  "taken_in_by_run": "20261005T230000Z-on-demand-3a19"
+}

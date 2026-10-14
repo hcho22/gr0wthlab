@@ -1,12 +1,12 @@
 {
   "adapted_from": "the evals.json shape of github.com/coreyhaines31/marketingskills skills/*/evals/evals.json at commit 1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff (MIT; see THIRD_PARTY_NOTICES.md)",
   "skill_name": "outreach",
-  "description": "The outreach workflow's example set (US-ME14, F5), in the marketingskills evals.json shape. A deterministic assertion is checked by the unit tests (src/tests/test_example_sets.py) against the synthetic kit, whose channel plan names three synthetic creators; a judged assertion waits for US-ME16. An example's first file is its candidate Draft; a second file is the Founder's record of what was sent and answered, as the sitting page would write it in ledger/founder/outreach/, with the day the run happens.",
+  "description": "The outreach workflow's example set (US-ME14, F5), in the marketingskills evals.json shape. An example that carries `run` is re-run by the agent on every change to the outreach Instructions (US-ME16, ADR 0003): its session drafts the messages its lab makes due, in a throwaway lab built from `lab` and the example's own settings and records, and its deterministic assertions are read off what the launcher took in. An example's first file, if it has one, is a candidate Draft the unit tests (src/tests/test_example_sets.py) check against the synthetic kit, whose channel plan names three synthetic creators; a second file is the Founder's record of what was sent and answered, as the sitting page would write it in ledger/founder/outreach/, with the day the run happens. A judged assertion is judged by nothing: the notice of a change lists it for the Founder.",
   "kit": "../post-drafts/files/mandu",
   "code": "../post-drafts/files/code",
   "assertion_kinds": {
-    "deterministic": "check is one of: offered; blocked_by (rule: a finding's rule, or the start of one); not_offered (reason: part of the reason); carries_source_link",
-    "judged": "text is a statement a reviewer, or a model at US-ME16, judges true or false of the agent's Draft"
+    "deterministic": "check is one of: offered (to: a creator's key, or network); blocked_by (rule: a finding's rule, or the start of one); not_offered (reason: part of the reason); carries_source_link; and, for a re-run example only, queued (item: a kind; count; cites: words each queued item holds), nothing_queued (item), nothing_set_aside",
+    "judged": "text is a statement of the agent's Draft that no check decides; nothing judges it, and the notice of an Instructions change lists it as not judged"
   },
   "evals": [
     {
@@ -16,7 +16,8 @@
       "assertions": [
         {
           "kind": "deterministic",
-          "check": "offered"
+          "check": "offered",
+          "to": "network"
         },
         {
           "kind": "deterministic",
@@ -41,7 +42,16 @@
       ],
       "files": [
         "files/drafts/network-ask.md"
-      ]
+      ],
+      "run": {
+        "config": {
+          "outreach": {
+            "network_ask_source": "network",
+            "follow_up_wait_days": 7,
+            "creators": []
+          }
+        }
+      }
     },
     {
       "id": 2,
@@ -99,7 +109,8 @@
       "assertions": [
         {
           "kind": "deterministic",
-          "check": "offered"
+          "check": "offered",
+          "to": "slow-strength"
         },
         {
           "kind": "judged",
@@ -116,7 +127,21 @@
       ],
       "files": [
         "files/drafts/creator.md"
-      ]
+      ],
+      "run": {
+        "config": {
+          "outreach": {
+            "network_ask_source": null,
+            "follow_up_wait_days": 7,
+            "creators": [
+              {
+                "key": "slow-strength",
+                "name": "Slow Strength"
+              }
+            ]
+          }
+        }
+      }
     },
     {
       "id": 6,
@@ -189,7 +214,9 @@
       "assertions": [
         {
           "kind": "deterministic",
-          "check": "offered"
+          "check": "offered",
+          "to": "slow-strength",
+          "purpose": "creator-follow-up"
         },
         {
           "kind": "judged",
@@ -199,7 +226,24 @@
       "files": [
         "files/drafts/follow-up.md",
         "files/records/non-reply.json"
-      ]
+      ],
+      "run": {
+        "config": {
+          "outreach": {
+            "network_ask_source": null,
+            "follow_up_wait_days": 7,
+            "creators": [
+              {
+                "key": "slow-strength",
+                "name": "Slow Strength"
+              }
+            ]
+          }
+        },
+        "ledger": [
+          "files/labs/sent-no-reply/ledger"
+        ]
+      }
     },
     {
       "id": 11,
@@ -284,6 +328,290 @@
         "files/drafts/follow-up.md",
         "files/records/never-sent.json"
       ]
+    },
+    {
+      "id": 16,
+      "prompt": "Draft the message to Hallway Moves.",
+      "expected_output": "An ask-free message offering early access, a founder conversation, or story material; the launcher offers it.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "offered",
+          "to": "hallway-moves"
+        },
+        {
+          "kind": "deterministic",
+          "check": "nothing_set_aside"
+        },
+        {
+          "kind": "judged",
+          "text": "The message offers one thing, asks for nothing, and never mentions money, a post, or a mention."
+        },
+        {
+          "kind": "judged",
+          "text": "The message is short enough to read in one look: well under 150 words."
+        }
+      ],
+      "files": [],
+      "run": {
+        "config": {
+          "outreach": {
+            "network_ask_source": null,
+            "follow_up_wait_days": 7,
+            "creators": [
+              {
+                "key": "hallway-moves",
+                "name": "Hallway Moves"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 17,
+      "prompt": "Draft the message to Desk Reset.",
+      "expected_output": "An ask-free message the launcher offers, written to what the channel plan says of the creator and nothing more.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "offered",
+          "to": "desk-reset"
+        },
+        {
+          "kind": "judged",
+          "text": "The message does not write as if the Founder had seen work of the creator's that the plan does not describe."
+        }
+      ],
+      "files": [],
+      "run": {
+        "config": {
+          "outreach": {
+            "network_ask_source": null,
+            "follow_up_wait_days": 7,
+            "creators": [
+              {
+                "key": "desk-reset",
+                "name": "Desk Reset"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 18,
+      "prompt": "Draft the messages to all three creators the channel plan names, due in one run.",
+      "expected_output": "Three ask-free messages, one to each creator, each offered; none borrows another's offer or wording wholesale.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "offered",
+          "to": "slow-strength"
+        },
+        {
+          "kind": "deterministic",
+          "check": "offered",
+          "to": "hallway-moves"
+        },
+        {
+          "kind": "deterministic",
+          "check": "offered",
+          "to": "desk-reset"
+        },
+        {
+          "kind": "deterministic",
+          "check": "queued",
+          "item": "message",
+          "count": 3
+        }
+      ],
+      "files": [],
+      "run": {
+        "config": {
+          "outreach": {
+            "network_ask_source": null,
+            "follow_up_wait_days": 7,
+            "creators": [
+              {
+                "key": "slow-strength",
+                "name": "Slow Strength"
+              },
+              {
+                "key": "hallway-moves",
+                "name": "Hallway Moves"
+              },
+              {
+                "key": "desk-reset",
+                "name": "Desk Reset"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 19,
+      "prompt": "Draft the personal-network ask and the message to Slow Strength, both due in one run.",
+      "expected_output": "Both messages offered: the ask carries the personal-network Source link, and the creator message carries no link at all.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "offered",
+          "to": "network"
+        },
+        {
+          "kind": "deterministic",
+          "check": "carries_source_link"
+        },
+        {
+          "kind": "deterministic",
+          "check": "offered",
+          "to": "slow-strength"
+        }
+      ],
+      "files": [],
+      "run": {
+        "config": {
+          "outreach": {
+            "network_ask_source": "network",
+            "follow_up_wait_days": 7,
+            "creators": [
+              {
+                "key": "slow-strength",
+                "name": "Slow Strength"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 20,
+      "prompt": "Slow Strength has not replied, and the 30-day waiting period the Founder set when sending has passed. Draft the one follow-up.",
+      "expected_output": "The launcher offers the single follow-up, which says there will be no further contact.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "offered",
+          "to": "slow-strength",
+          "purpose": "creator-follow-up"
+        },
+        {
+          "kind": "judged",
+          "text": "The follow-up is shorter than the first message and says plainly that it is the last."
+        }
+      ],
+      "files": [],
+      "run": {
+        "config": {
+          "outreach": {
+            "network_ask_source": null,
+            "follow_up_wait_days": 7,
+            "creators": [
+              {
+                "key": "slow-strength",
+                "name": "Slow Strength"
+              }
+            ]
+          }
+        },
+        "ledger": [
+          "files/labs/longer-wait-passed/ledger"
+        ]
+      }
+    },
+    {
+      "id": 21,
+      "prompt": "The Founder rejected the first message to Slow Strength as too formal. Draft it again.",
+      "expected_output": "A rewritten message that answers the Founder's reason and still asks for nothing; the launcher offers it.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "offered",
+          "to": "slow-strength"
+        },
+        {
+          "kind": "judged",
+          "text": "The new message reads as the Founder talking to a friend, answering the reason given."
+        },
+        {
+          "kind": "judged",
+          "text": "The message offers one thing, asks for nothing, and never mentions money, a post, or a mention."
+        }
+      ],
+      "files": [],
+      "run": {
+        "config": {
+          "outreach": {
+            "network_ask_source": null,
+            "follow_up_wait_days": 7,
+            "creators": [
+              {
+                "key": "slow-strength",
+                "name": "Slow Strength"
+              }
+            ]
+          }
+        },
+        "ledger": [
+          "files/labs/first-message-rejected/ledger"
+        ]
+      }
+    },
+    {
+      "id": 22,
+      "prompt": "Draft the personal-network ask once the Waitlist is live.",
+      "expected_output": "An identity-framed ask carrying the personal-network Source link exactly as the Waitlist Dispatch request defines it; the launcher offers it.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "offered",
+          "to": "network"
+        },
+        {
+          "kind": "deterministic",
+          "check": "carries_source_link"
+        },
+        {
+          "kind": "judged",
+          "text": "The ask is framed around who the reader is, never around what they lose by not acting."
+        }
+      ],
+      "files": [],
+      "run": {
+        "config": {
+          "outreach": {
+            "network_ask_source": "network",
+            "follow_up_wait_days": 7,
+            "creators": []
+          },
+          "waitlist": {
+            "live_since": "2026-10-05"
+          }
+        }
+      }
     }
-  ]
+  ],
+  "lab": {
+    "mandu": [
+      "../post-drafts/files/mandu"
+    ],
+    "code": "../post-drafts/files/code",
+    "config": {
+      "window": {
+        "number": 1,
+        "first_sitting": null,
+        "slot": null
+      },
+      "waitlist": {
+        "live_since": null
+      },
+      "outreach": {
+        "network_ask_source": null,
+        "follow_up_wait_days": 7,
+        "creators": []
+      }
+    }
+  }
 }

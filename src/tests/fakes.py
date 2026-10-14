@@ -41,7 +41,10 @@ QUIET_WINDOW = {"number": 1, "first_sitting": "2099-01-04", "slot": "19:00"}
 # changes the mode of is done once in a run, by the session whose workflow the path belongs to (ROUTES), or by the
 # run's first session when that workflow has no session this run, so a test still says only what "the agent" wrote.
 # Each session's prompt is kept as prompt.<workflow>.txt, the last one also as prompt.txt, and sessions.txt lists the
-# sessions started, in order, since behave() was last called. A session told to break the next preflight leaves the
+# sessions started, in order, since behave() was last called. "when_instructions" plays an agent that follows its
+# Instructions: each of its keys is a piece of text, and a session whose workflow's Instructions in force, in the
+# ledger/instructions/ beside its brief, hold that text behaves as the key's value says over everything else, as the
+# examples' labs need (examples.py). A session told to break the next preflight leaves the
 # sandbox refusing every area once, so the session after it does not start and the one after that does; one told it is
 # refused ends as Codex does when the model's provider refuses a request, with that error and exit code 1.
 ROUTES = (
@@ -53,6 +56,7 @@ ROUTES = (
     ("drafts/messages/replies/", "listening"),
     ("drafts/messages/outreach/", "outreach"),
     ("evidence/learning/", "learning"),
+    ("instructions/", "learning"),
 )
 FAKE_CODEX = """#!{python}
 import json, os, re, shutil, signal, subprocess, sys, time
@@ -126,6 +130,10 @@ def mine(relative):
 
 brief = Path(re.search(r"Run brief, read it first: (\\S+)", prompt).group(1))
 workspace = brief.parents[2] / "workspace"
+guidance = brief.parents[2] / "ledger" / "instructions" / ((session or "") + ".md")
+for text, override in behavior.get("when_instructions", {{}}).items():
+    if session and guidance.is_file() and text in guidance.read_text():
+        behavior = dict(behavior, **override)
 for relative in behavior.get("rmtree", []):
     if mine(relative):
         shutil.rmtree(workspace / relative)
