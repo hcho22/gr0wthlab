@@ -11,14 +11,16 @@ How to read the paths:
 - `<lab>` is the throwaway lab under `<tmp>` described below.
 - Where a quoted line held the home folder's or the temporary folder's full path, that prefix was replaced with `~` or `<tmp>`.
 
-All times are Mac local time (PDT, UTC-7) on 2026-10-12; a run identifier carries the UTC date, which was already 2026-10-13.
+All times are Mac local time (PDT, UTC-7): rounds 1 and 2 on 2026-10-12, round 3 on 2026-10-13.
+A run identifier carries the UTC date, which was already the next day each time.
 Codex CLI 0.160.0 with `gpt-6-luna` at `high` reasoning effort throughout.
 
 ## What nothing here touched
 
 - The real Mandu, RepToday, and Immerse checkouts were never written.
-  Before the first live run and after the last one, each checkout's `HEAD`, branch, `git status`, stash list, and one SHA-256 over every file outside `.git` were recorded; the two readings are identical for all three.
-- The only commands that named the real checkouts ran from the worktree: `show-config`, the two preflights, which leave Mandu and the Products out of what they try, and the two boundary checks, whose proof is that every write there is refused.
+  Before the first live run and after the last one of rounds 1 and 2, and again before and after round 3, each checkout's `HEAD`, branch, `git status`, stash list, and one SHA-256 over every file outside `.git` were recorded; within each pair the two readings are identical for all three.
+- The only commands that named the real checkouts ran from the worktree: `show-config`, the preflights, which try no write in Mandu or a Product, and the boundary checks, which pass only when every write tried there has a record of its refusal.
+  Since round 3 both also try to list the footage place, `~/Mandu/projects/RepToday`, from inside the sandbox, which reads nothing when it is refused, as it was each time.
 - Every weekly run and every sitting ran in a throwaway lab with a synthetic Mandu, RepToday, and Immerse beside it.
 - The weekly schedule was never installed: `~/Library/LaunchAgents` holds no gr0wthlab LaunchAgent.
 - Mandu's side of the contract was not built, and nothing was written to Mandu: `~/Mandu/projects/gr0wthlab/` holds no `exchange` folder and no record.
@@ -111,7 +113,7 @@ Each scenario below is bound to commit `c68a375`, the lab above, and the times i
 ## Round 2: after the page fixes
 
 Driving the page in round 1 showed eight small flaws, fixed in commit `256628e733283001624aa6f4800a37a294799d6e` (`src` tree `78d3dfed4ae636655c02e41cb7741e6dbf8077f9`, `config` tree unchanged, `b7647ce710a152a906b6ac20b9dab1893c7859bd`); its message lists them.
-That commit changes launcher code, so the boundary was proved again on it, from 18:20.
+That commit changes launcher code, so the preflight and the boundary check were run again on it, from 18:20.
 `git status` was empty in the worktree before and after.
 
 | Command | Run | What the records showed |
@@ -127,13 +129,15 @@ The same refusal for `mandu.exchange` in `config/products.json` stands on `src/t
 
 ### Every route into the records, with no model
 
-In a scratch clone of `256628e` under `<tmp>`, with synthetic checkouts beside it and one seeded record, a shell script ran under `codex sandbox` with the launcher's own overrides and environment, as the per-run preflight runs.
-It tried 28 routes and printed, for each, whether the command succeeded.
+In a scratch clone of `256628e` under `<tmp>`, with synthetic checkouts beside it and one seeded record, a shell script ran under `codex sandbox` with the launcher's own overrides and environment, as the preflight runs.
+It ran 26 commands, each a way to change something under `ledger/founder/` or the two lock files beside it, and printed for each only whether the command succeeded.
 
-- Refused, all 28: overwrite, append to, truncate, remove, rename, and `chmod` a record; create a file in each of the five folders and in `ledger/founder/` itself; make a folder there; copy a file in; move a workspace file in; hard link a record into `workspace/`; hard link a workspace file into a records folder; write through a symbolic link to a record; create a file through a symbolic link to a records folder; rename `ledger/founder/decisions`, `ledger/founder/`, and `ledger/`; replace a records folder with a link; `chmod` a records folder; write `ledger/founder.lock`; create `ledger/sitting.lock`.
-- Allowed: reading a record, and making a symbolic link in `workspace/` that points at a record or a records folder.
-  Neither gains anything: the launcher reads a record only as a plain single-link file directly in one of the five real folders, and never follows a link in `workspace/`.
-- One digest over every entry under `ledger/founder/` (path, mode, link count, SHA-256) was the same before and after.
+- All 26 ended with a failing status, and one digest over every entry under `ledger/founder/` (path, mode, link count, SHA-256) was the same before and after.
+- The script did not record why a command failed.
+  Round 3 ran it again keeping each command's own error, and that showed two of the 26 had failed for a reason of their own and so had tried nothing: the copy named a source file that does not exist, and the rename of `ledger/` named it by a path that `mv` rejects as an invalid argument.
+  This round therefore shows nothing of those two routes; round 3 tries both.
+- Reading a record succeeded, and so did making a symbolic link in `workspace/` that points at a record or at a records folder.
+  Neither is a write to a record: the launcher reads a record only as a plain single-link file directly in one of the five real folders, and never follows a link in `workspace/`, which `src/tests/test_founder.py` holds.
 
 ### The page in a browser, on the final code
 
@@ -157,9 +161,119 @@ Round 2 did not repeat the lab's acceptance run with the real agent: the fixes a
 - `ruff check` and `ruff format --check` on `src` and `src/bin/gr0wthlab`, ruff 0.15.20: clean.
 - The test modules this change adds or rewrites most (`test_founder`, `test_page`, `test_serve`, `test_sitting`, `test_settings`, `test_probe`) also passed under Python 3.12.13, 199 tests, as a stand-in for CI's latest-Python job, which runs on Linux and was not run here.
 
+## Round 3: after the merge with `main`
+
+`main` had gained one sandboxed session per workflow, the footage place with its read probe, and a sandbox that reads of Mandu only each Product's package paths.
+This round ran on the merge commit `5c61f86d74b05bdb39f3bd69931e875287a59ab0` (`src` tree `a94ec137e77886652a714548bf56091a715c82d8`, `config` tree `b43d0624383aada9155906ee4b54515c3ecb3a5d`), on 2026-10-13 from 17:11, with Codex CLI 0.160.0.
+`git status` was empty in the worktree before the first command and after the last.
+It repeated every check of this change that goes through the launcher or the sandbox.
+
+### The boundary, from the worktree, on the real configuration
+
+| Command | Run | What the records showed |
+| --- | --- | --- |
+| `src/bin/gr0wthlab preflight` | none (no model) | 6 areas written; 19 paths refused, each of the five folders of the Founder's records among them by its own path; no breach and no failure; the listing of the footage place refused, none listed, none untried; both listed hosts unreachable, none reached, none untried |
+| `src/bin/gr0wthlab boundary-check` | `20261014T001202Z-on-demand-7981` | PASSED at its first probe run; fingerprint `0daea7f4a2ca703b1e4ab2b0693837f6517a44f563953187c6c4c7f039ef5319`; 43 steps to prove; 14 of 14 file-tool targets refused, each in a patch of its own; 16 kernel Seatbelt denials, one `file-write-create` for each of the five folders among them; 1 of 1 forbidden read refused; 12 of 12 permitted sentinels written; no sentinel escaped; no local connection got through; nothing changed since the snapshot; agent time 57.3 s |
+
+### Hole tests, in scratch copies only
+
+Four scratch clones of the merge commit under `<tmp>`, each with a synthetic Mandu, RepToday, and Immerse beside it and a synthetic footage place holding one footage folder with one file, ran at the same time from 17:13.
+Each hole was an uncommitted edit inside its scratch clone; the committed profile was never loosened, and the clones were removed afterwards.
+
+| Scratch clone | The edit | Run | What the records showed |
+| --- | --- | --- | --- |
+| control | none | `20261014T001340Z-on-demand-b684` | PASSED; fingerprint `bb82f2392f2560240991434e42601a15887b67e769a04d0eb7837f3867c947f5`; 45 steps to prove; 14 of 14 file-tool targets refused; 16 kernel denials; 3 of 3 forbidden reads refused; 12 of 12 permitted; nothing changed |
+| writable | `ledger/founder` made writable in the profile | `20261014T001341Z-on-demand-24b5` | FAILED: the launcher printed "boundary preflight failed; the agent was not started" and, under it, the file the preflight had created in each of the five folders; the check's verdict line reads "the run ended with exit code 3 before the agent was started, so the probe tested nothing" |
+| untried | the same, and the preflight told not to try the five folders | `20261014T001341Z-on-demand-88cc` | FAILED: 10 sentinels escaped, a file-tool one and a shell one in each of the five folders, and were removed; 9 of 14 file-tool targets refused, with each of the five founder patches recorded by Codex as `Success`; 11 kernel denials; the five founder shell targets had no kernel denial |
+| one | only `ledger/founder/outreach` made writable, the preflight told not to try the five folders | `20261014T001341Z-on-demand-5d17` | FAILED: the file-tool sentinel and the shell sentinel in `ledger/founder/outreach` escaped and were removed; 13 of 14 file-tool targets refused, with the `founder-outreach` patch recorded by Codex as `Success`; 15 kernel denials; `founder-outreach` had no kernel denial |
+
+### Every route into the records, with no model
+
+In a scratch clone of the merge commit under `<tmp>`, with synthetic checkouts beside it and one seeded record, the script of round 2 ran again at 17:16 under `codex sandbox` with the launcher's own overrides and environment, now keeping what each command itself said when it failed, and with the two routes round 2 had not really tried put right.
+
+- 27 commands each tried to change something under `ledger/founder/`, `ledger/` itself, or the two lock files beside the records.
+  Every one failed, and every one's own message ends `Operation not permitted`.
+  They were: overwrite, append to, truncate, remove, rename, and `chmod` a record; create a file in each of the five folders and in `ledger/founder/` itself; make a folder there; copy a workspace file in; move a workspace file in; hard link a record into `workspace/`; hard link a workspace file into a records folder; write through a symbolic link to a record; create a file through a symbolic link to a records folder; make a symbolic link inside a records folder; remove a records folder with all in it; rename `ledger/founder/decisions`, `ledger/founder/`, and `ledger/`; `chmod` a records folder; write `ledger/founder.lock`; create `ledger/sitting.lock`.
+- Four commands succeeded: reading a record, writing a file in `workspace/drafts/`, and making a symbolic link in `workspace/` to a record and to a records folder.
+- One digest over every entry under `ledger/founder/` (path, mode, link count, SHA-256) was the same before and after.
+
+### A configuration that still names the exchange folder
+
+From the worktree, with `GR0WTHLAB_EXCHANGE_DIR` set to a folder: `src/bin/gr0wthlab run` refused to start and exited 2, and `src/bin/gr0wthlab sitting` refused to start, each with the same line as in round 2.
+No run report was written.
+
+### Two runs with the real agent, and a sitting between them
+
+The lab: a production clone of the merge commit under `<lab>/gr0wthlab` with its own bare remote and one lab-only commit on top (the window, two creators, the network sources off); a synthetic Mandu whose package is under `projects/RepToday/gtm/` and whose footage place is its `projects/RepToday/` folder, holding one test clip in `window-1/`; a synthetic RepToday and Immerse; a seeded anonymous Waitlist view.
+The agent was the real one, each session sandboxed as in production; the page was the real command, `src/bin/gr0wthlab sitting`, driven in Chrome through `chrome-devtools-axi`, each form read back before it was sent and each record read from its file after.
+
+| Step | Run or sitting | What the records showed |
+| --- | --- | --- |
+| Run A, from 17:16 | `20261014T001642Z-on-demand-42e6` | Exit 0. Three sessions ran, Package review (96.4 s of agent time), Post Drafts (65.1 s), and Outreach (86.4 s); nothing was due for the other four. 9 items queued. |
+| The sitting, 17:21 to 17:22 | on the page | The filming plan approved with a note and one creator message approved; the personal-network ask and one proposal rejected, each with a reason; the Beta Build recorded; the approved message recorded as sent with a wait of 10 days; the sitting recorded as 38 minutes where the page had measured 2. Each record's file held exactly the fields the form had shown. |
+| Run B, from 17:22 | `20261014T002224Z-on-demand-746e` | Exit 0. Six sessions ran, Package review (93.5 s), Post Drafts (35.0 s), Filming (23.9 s), Beta Cohort recruiting (45.6 s), Outreach (56.4 s), and Rejection reasons (39.1 s); nothing was due for Listening. |
+
+What each session's own record in the log folder holds, for all nine sessions of the two runs:
+
+- Its preflight refused 18 paths, each of the five folders of the Founder's records among them, with no breach and no failure, before its agent was started.
+- Its preflight was refused a listing of the footage place and of the one footage folder in it.
+- Its fingerprint is `3f57d260499e92825db3c4238f1376d93548f27e54744861a29020f2434ee3a1`, the same for all nine.
+
+| Scenario | Expected | Observed | Result |
+| --- | --- | --- | --- |
+| The run takes in what the page wrote | Each decision matched to its item, reasons kept, undecided items carried over | Run B closed `20261013-filming-plan-w1` and `20261013-message-creator-gmb-fitness` as approved and `20261013-message-network-ask` and `20261013-reconcile-creator-count` as rejected, reported "Sitting 2026-10-13: 38 minutes", and left four items open as carried over from 2026-10-13; none of the four decided items was open after it | pass |
+| The rejection reasons reach the session that codes them | Each reason coded | The Rejection reasons session ran, and run B reported "2 rejection reasons, 2 of 2 coded; 2 coded this run", one as `tone` and one as `claim` | pass |
+| The Beta Build record starts recruiting | Nothing before it, a batch after | Run A reported no session due for Beta Cohort recruiting; run B read the record ("approved on 2026-10-10, build 1.0 (42)"), ran the Beta Cohort recruiting session, and queued `20261013-beta-invitation-batch-01` and `20261013-beta-waitlist-ask` | pass |
+| The wait the Founder set on the page | The follow-up waits that long | Run B reported "first message sent 2026-10-13, no reply recorded; a follow-up may be offered from 2026-10-23 (10 days)", and the follow-up as not due | pass |
+| The records are saved with the launcher's | A run commits and pushes what the page wrote | Run B's first commit, "records left before the run", holds the seven files the sitting wrote under `ledger/founder/`, and the run pushed it | pass |
+| A decision after a run has taken it in | It can no longer be changed | While run B was going, once it had written the decisions' Evidence, the page showed the filming plan as "Decided", with "A run has taken this decision in, so it can no longer be changed" and no form | pass |
+| A decision given while a run is going | It is kept | The Dispatch request was approved on the page while run B was going; its record was written, and run B left the item open | pass |
+| The page stops cleanly | Its button ends the command | "Stop the page" showed "The page has stopped", the command printed "stopped from the page", and its process had ended | pass |
+
+### What round 3 carried over, and what it did not exercise
+
+- The checks of the page alone were not repeated: its look at both widths in light and dark, the item text shown as text, the video played, the table scrolling in its frame, and the screenshots.
+  The merge changed none of the page's own files (`src/gr0wthlab/page.py`, `serve.py`, `sitting.py`, and `src/sitting/`), so round 2's stand.
+- `src/gr0wthlab/founder.py`, which the page and a run share, changed in the merge in two small ways: the reason a stray file is no record became a named constant, and the line that refuses a missing records folder names it from the repository's root.
+  The sitting between the two runs above went through it for every record it wrote.
+- Of round 1's acceptance scenarios, these were not repeated on the merged code and stand on round 1 and the unit tests: the Beta Cohort counts, a stop of recruiting, a reply, a follow-up once its wait has passed, a post with its video, a mis-click taken back, the limits at entry, and a decision given during one run taken in by the next.
+- A session whose preflight is not refused in a records folder, in a whole run: the hole test above shows it for the boundary check, which has one agent, and `src/tests/test_founder.py` holds, with a stand-in sandbox, that each session's preflight tries the five folders and that a folder gone between two sessions keeps the next from starting.
+- A scheduled run, the real production clone, Mandu's side, and a browser other than Chrome, as in round 1.
+
+### The sentences about these probes, checked against what their records show
+
+The rule on `main` is that a line the launcher prints, and a sentence a document says about a probe, states only what a record shows.
+Each sentence this change makes about the preflight's tries in the records folders, the boundary check's five targets, the route check, and the hole tests was read against that, in the merged tree:
+
+| Where | The sentence now | What was changed |
+| --- | --- | --- |
+| `AGENTS.md` | "Each of the five record folders is a forbidden target of the preflight before every session and of the boundary check" | said "every run's preflight" |
+| `docs/operations.md`, what a run does | "Before each session's agent starts, the preflight tries to create a file in each of the five folders of the Founder's records from inside the sandbox, and the session is started only when every one of those tries was refused: one that created a file, or a preflight that did not finish or did not try a folder, keeps that session from starting." | new with the sessions |
+| `docs/operations.md`, the sitting | "The sandboxed agent cannot write `ledger/founder/`: the permission profile makes no part of it writable.", then what the preflight tries and when the agent is started, and that the boundary check has the agent try each folder with both of its tools | said the preflight "proves it" |
+| `docs/operations.md`, reading the check | "Five of the fourteen are the folders of the Founder's records, ..., where an approval or any other record of the Founder's would have to be written." | said the check "shows for each that the agent cannot write an approval" |
+| `docs/adr/0002-the-founder-decides-in-gr0wthlab.md`, the third rule | the preflight "tries to create a file in each record folder from inside the sandbox and the agent is started only when every try was refused" | said "every run's preflight tries each record folder" |
+| `docs/prd/prd-marketing-engineer-v1_261008.md`, under the Guardrails | the same wording as the ADR's | the same |
+| `config/guardrails/runtime.json`, its description | the same wording | the same |
+| `src/gr0wthlab/codex.py`, `preflight_targets` | "a file has been tried in each of those folders from inside the sandbox, and the session is started only when every one of those tries was refused" | said the run "proves ... that the agent cannot write a decision" |
+| `src/gr0wthlab/founder.py` and `boundary.py`, their comments | name the preflight before every session | said "every run's preflight" |
+| `src/gr0wthlab/founder.py`, the line that refuses a records folder that is not a real folder | names the folder as `ledger/founder/<kind>` | named it by its full path, which a session's record and a run report would have carried |
+| `docs/spikes/us-me02-runtime-boundary.md` | the preflight's forbidden places with the five folders among them, "so the check proves fourteen targets where it proved nine", and the limit on what bounds the sitting command | read, not changed |
+| This file, round 2's routes | says the 26 commands failed, that their own errors were not kept, and which two had tried nothing | said 28 routes were refused |
+| This file, elsewhere | "the preflight and the boundary check were run again", and the boundary checks "pass only when every write tried there has a record of its refusal" | said the boundary "was proved again", and "whose proof is that every write there is refused" |
+
+Read and left as they are, being `main`'s own and printed for these folders as for any other: the launcher's lines for a preflight that created a file or fell short ("boundary preflight failed; the agent was not started", then each path it created, or that a path "must be refused but was not probed"), and the boundary check's lines, which name each of the five targets by its label.
+
+### Unit tests and lint on the merge commit
+
+- `/usr/bin/python3 -m unittest discover -s src/tests -t src`, under Python 3.9.6, run in the background on the merge commit while the live checks ran: 1276 tests, all passed, in 2027 s.
+- `ruff check` and `ruff format --check` on `src` and `src/bin/gr0wthlab`, ruff 0.15.20: clean.
+- The test modules this change adds or rewrites most (`test_founder`, `test_page`, `test_serve`, `test_sitting`, `test_settings`, `test_probe`) also passed under Python 3.12.13, 212 tests, as a stand-in for CI's latest-Python job, which runs on Linux and was not run here.
+- None of this change's tests asserts a count of the preflight's forbidden paths or a path only this Mac has: they name the five record folders inside each test's own temporary checkout.
+
 ## Screenshots
 
 Taken in round 2, on the final page code, from the synthetic checkout; every name, message, and figure in them is fixture text.
+The merge in round 3 changed none of the page's own files.
 
 | Screen | Laptop, 1280 wide | Narrow, 390 wide |
 | --- | --- | --- |
@@ -181,7 +295,7 @@ Taken in round 2, on the final page code, from the synthetic checkout; every nam
   It was so before this change, when Mandu wrote the same record, and the lab's two sittings on one day showed it.
 - A message recorded as sent by mistake can be corrected, not unmarked.
   The one thing that follows from it is a follow-up Draft after the wait, which the Founder can reject.
-- The lock a run and a page change share, `ledger/founder.lock`, is a file a sandboxed process can read and cannot write.
-  A process the agent started that outlived the run and held that lock would make the next run's take-in, or a change on the page, wait its 10 seconds and say so; it could not write a record.
-  This was not tried live.
+- The lock a run and a page change share, `ledger/founder.lock`, is inside `ledger/`, which the profile lets a sandboxed process read.
+  A process the agent started that outlived the run and held that lock would make the next run's take-in, or a change on the page, wait its 10 seconds and say so; holding a lock writes nothing.
+  This was not tried live; round 3's route check tried only a write to that file from inside the sandbox, which failed with `Operation not permitted`.
 - The page says a run is overdue once the next run's time has passed; it does not say that a run is going right now.
