@@ -1,6 +1,8 @@
-# A real run refuses to start, and its records step to push, while the repository is not confirmed private
+# A real run refuses to start while the repository is public, and pushes its records only while GitHub says it is private
 
-The guard on a public gr0wthlab repository: in the production clone a run asks GitHub whether the repository `origin` pushes to is private before it does anything else, and the records step asks again before each push (`src/gr0wthlab/visibility.py`, [operations](../operations.md#the-repository-must-be-private)).
+The guard on a public gr0wthlab repository: in the production clone a run asks GitHub whether the repository `origin` pushes to is private before it does anything else, and refuses to start only when GitHub says plainly that it is public.
+It asks again once the run's work is taken in, before the notice and the run report are written, and the records are pushed only when that answer says plainly that the repository is private; any other answer keeps them local, and the run report and the notice say so with the reason (`src/gr0wthlab/visibility.py`, [operations](../operations.md#the-repository-must-be-private)).
+Until round 3 the start refused on any answer that was not plainly private, and the records step asked just before each push; rounds 1 and 2 record that guard.
 It serves no story of its own; it keeps the Founder's records off a public repository from the first real run on.
 
 ## Round 1: the first re-check
@@ -72,3 +74,48 @@ The repository on GitHub was still public.
 
 **What was not exercised:** the three ways of falling short of an answer (GitHub out of reach, no login, no gh) and the live `private` answer were not run again; they stand on round 1, whose `src/gr0wthlab/visibility.py` the merge did not change.
 Everything round 1 lists as not exercised still stands as it says there.
+
+## Round 3: the re-check after the narrower start guard
+
+After review, the Founder chose on 2026-10-14 that a start refuses only on GitHub's plain word that the repository is public, so that a passing network failure at a weekly start no longer costs the week's run.
+An answer that falls short of confirming that the repository is private now lets the run go ahead, and the question is asked again once the run's work is taken in, before the notice and the run report are written, so that the run's own report and notice can say that its records were kept local, with the reason.
+
+**What was run:** from the same linked worktree, with the fix not yet committed, on 2026-10-14 from 10:50 PDT, with Codex CLI 0.160.0 and gh 2.96.0 in `/usr/local/bin`.
+The repository on GitHub was still public.
+
+```sh
+env -i HOME="$HOME" PATH=/usr/bin:/bin:/usr/sbin:/sbin GR0WTHLAB_PRODUCTION_CLONE="$PWD" GR0WTHLAB_LOG_DIR=<scratch>/logs [one setting below] src/bin/gr0wthlab run
+GR0WTHLAB_LOG_DIR=<scratch>/bc-logs src/bin/gr0wthlab preflight
+GR0WTHLAB_LOG_DIR=<scratch>/bc-logs src/bin/gr0wthlab boundary-check
+```
+
+**On which commit:** `7925ea4457b0e359c6db93eb2066098ae3b26d14` with the fix on top and not committed, whose `src` tree is `24fb29ec0ec8675fd921710e75e6aaa7b331ca94` and `config` tree `b43d0624383aada9155906ee4b54515c3ecb3a5d`, as `git rev-parse <commit>:src` and `git rev-parse <commit>:config` print for the commit that holds this fix.
+`git status` listed the fix's 10 changed files and nothing else before the runs, and the same 10 after the boundary check.
+`show-config` printed the configuration fingerprint `02e92343693f4b965e1d4eced781bd0c1a8156e367fb67c69c22261e0c912932`.
+
+**Each run's identifier:** neither `run` start got one, since each ended before a run identifier is made; the boundary check was `20261014T175051Z-on-demand-e518`.
+
+**What the records showed:**
+
+| Run | Setting | Exit code | What the launcher printed (the account name replaced by `<owner>`) |
+| --- | --- | --- | --- |
+| the real repository as it is | none | 4 | `` refusing to start: the GitHub repository `<owner>/gr0wthlab` is public: a real run would publish its Drafts, its Evidence, and the Founder's records there, so the repository must be made private first `` |
+| GitHub out of reach | `HTTPS_PROXY=http://127.0.0.1:9` | 4 | `pre-run: refused: the clone is on a detached HEAD, not main`, then `refusing to start; the production clone needs attention first` |
+
+- The public refusal printed that one line, in the same words as rounds 1 and 2, in 1.84 seconds of wall-clock time.
+- With GitHub out of reach, the start went past the question to GitHub to the pre-run sync, which refused the linked worktree for being on a detached HEAD, in 0.57 seconds; in round 1 the same setting ended at the question with `refusing to start: could not confirm that the GitHub repository is private`.
+- The same question asked through `visibility.ask` with that setting answered `unconfirmed`, with `` gh api exited with 1: Get "https://api.github.com/repos/<owner>/gr0wthlab": proxyconnect tcp: dial tcp 127.0.0.1:9: connect: connection refused `` (the account name replaced by `<owner>`).
+- The scratch log folder stayed empty after both starts, and `ledger/` held only `founder/`, `README.md`, and `run.lock` after them.
+
+| Command | Run identifier | What the records showed |
+| --- | --- | --- |
+| `src/bin/gr0wthlab preflight` | none (no model) | exit code 0; 6 areas written; 19 paths refused; no breach and no failure; the listing of the footage place refused, none listed, none untried; both listed hosts unreachable, none reached, none untried |
+| `src/bin/gr0wthlab boundary-check` | `20261014T175051Z-on-demand-e518` | PASSED at its first probe run; fingerprint `02e92343693f4b965e1d4eced781bd0c1a8156e367fb67c69c22261e0c912932`; 43 steps to prove; 0 sentinels escaped; 12 of 12 permitted sentinels written; 14 of 14 file-tool targets refused, each in a patch of its own; 16 kernel Seatbelt denials naming the run's sentinels or the check's listeners; 1 of 1 forbidden read refused; no local connection got through; 3 sandbox network targets refused, none reached; nothing changed since the snapshot; agent time 51.1 s |
+
+**What was not exercised:**
+
+- A whole run that goes ahead on an answer that falls short, keeps its commit local, and says so in its own report and notice: the linked worktree's pre-run sync refuses it first, and a production clone on `main` would run `main`'s code after its sync.
+  It stands on `src/tests/test_cycle.py` (`test_a_repository_that_cannot_be_confirmed_private_runs_and_keeps_its_records_local`) and, for a start of the weekly schedule, `src/tests/test_attempts.py` (`test_a_weekly_start_that_cannot_confirm_the_repository_private_still_makes_the_week_s_run`), each with a stand-in for GitHub's answer.
+- A run that pushes because GitHub says the repository is private, and a repository made public between the start and the push: `src/tests/test_cycle.py` (`test_a_private_repository_is_asked_about_before_the_run_and_again_before_the_push`, `test_a_repository_made_public_during_the_run_is_not_pushed_to`) and `src/tests/test_records.py` (`VisibilityTest`), with round 1's live `private` answer.
+- No login and no gh were not run again; round 1 records `visibility.ask`'s answer for each, which this round's code did not change, and the start now lets either go ahead as it did GitHub out of reach above.
+- The real `~/gr0wthlab` production clone, which does not exist yet.

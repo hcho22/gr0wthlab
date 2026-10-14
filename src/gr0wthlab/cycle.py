@@ -1,6 +1,6 @@
 """One Marketing Engineer run, scheduled or on demand, from the pre-run sync to the saved records.
 
-Order: in the production clone, refuse to start unless GitHub says the repository its records are pushed to is private
+Order: in the production clone, refuse to start while GitHub says the repository its records are pushed to is public
 (visibility.py), then bring it up to origin's main; snapshot the Go-To-Market Package; take in the Founder's decisions
 from ledger/founder/, which only `gr0wthlab sitting` writes (founder.py) and from which every Founder record below is
 read; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests that need filing;
@@ -16,9 +16,10 @@ the sessions wrote to workspace/review-queue/incoming/ that pass the format, a p
 each Draft that passes every check, with the video cut from its edit record when it has one (posts.take), the
 recruiting Drafts that pass theirs (beta.take), the quotes, proposals, and messages that pass theirs (listening.take,
 outreach.take), the code proposed for each rejection reason (learning.take), and the reviewed proposals that need
-filing; count what each session did, for the report to show beside that session's own word (work.py); write the Review
-Queue and the run report; commit workspace/ and ledger/ and push them once GitHub says again that the repository is
-private. Every step but the sessions is deterministic code
+filing; count what each session did, for the report to show beside that session's own word (work.py); in the
+production clone, ask GitHub again whether the repository is private, and on any other answer say in the notice and the
+run report that the records stay local; write the Review Queue and the run report; commit workspace/ and ledger/, and
+push them only if GitHub said then that the repository is private. Every step but the sessions is deterministic code
 outside the sandbox. The launcher's records live in ledger/, which an agent can read and never write, so nothing it
 does can change them; in workspace/ the launcher only restores its owner's access to entries a session left without
 it, removes what a stopped boundary check left at the top of the areas, before the first records step can commit it,
@@ -1697,7 +1698,7 @@ class Cycle:
         if production and not pre:
             # Before anything else a run does: from the first real run on, its records are pushed to that repository.
             answer = self.private(config)
-            if not answer.private:
+            if answer.status == visibility.PUBLIC:
                 self.say(f"refusing to start: {answer.refusal}")
                 return EXIT_RECORDS
         if pre:
@@ -1856,6 +1857,12 @@ class Cycle:
         state.queue_after = ledger.ordered()
         self.left_standing(state, config, ledger)
         self.outputs(state, config, ledger_ok)
+        pushable = self.private(config) if production and config.records.save_after_run else None
+        if pushable is not None and not pushable.private:
+            state.problems.append(
+                f"this run's records were kept local, not pushed: {pushable.refusal}; a later run pushes them once"
+                " GitHub says the repository is private"
+            )
         notice = report.problems_notice(state, self.store.relative(report_path))
         if notice and ledger_ok:
             state.notice = self.queue_notice(
@@ -1903,7 +1910,7 @@ class Cycle:
 
         self.note_ending(state, config)
         saved = None
-        if production and config.records.save_after_run:
+        if pushable is not None:
             result = records.save(
                 self.repo_root,
                 config.records.remote,
@@ -1911,12 +1918,10 @@ class Cycle:
                 run_id,
                 self.env,
                 config.records.max_file_bytes,
-                lambda: self.private(config),
+                pushable,
             )
             saved = result.as_json()
             self.say(f"records: {result.status}: {result.detail}")
-            if result.status == records.WITHHELD:
-                self.leave_note(run_id, f"Run {run_id}'s records were committed and {result.detail}.")
         code = self.exit_code(state)
         self.log(log_dir, sync, saved, report_path, state, code)
         return code
