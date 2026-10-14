@@ -538,7 +538,8 @@ class ForgeryTest(CycleTestCase):
         code, out = self.next_run({"write": {"review-queue/incoming/claimed.md": item}})
         self.assertEqual(code, 0, out)
         self.assertEqual([entry["kind"] for entry in self.queue()["open"]], ["package-change-proposal", "notice"])
-        self.assertIn("front matter line 'decision: approve' is not one of", self.report())
+        self.assertIn("line 3 of the front matter is not one of", self.report())
+        self.assertNotIn("decision: approve", self.report())
         self.assert_still_undecided()
 
     def test_an_item_written_as_decided_in_the_queue_s_own_folder_changes_nothing(self):

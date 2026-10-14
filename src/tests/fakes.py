@@ -17,6 +17,8 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
+from gr0wthlab import visibility
+
 REPO = Path(__file__).resolve().parents[2]
 AREAS = ("evidence", "drafts", "review-queue", "weekly-reads", "run-reports", "instructions")
 EXAMPLES = REPO / "src" / "examples" / "post-drafts"
@@ -599,6 +601,30 @@ def proposal(
     )
 
 
+def refused_items(marker: str) -> dict:
+    """One file the launcher refuses from incoming/ for each kind of item and each way the item format can fail, by
+    file name; every file carries marker in its title, its body, and its Evidence paths, and each failing line
+    carries it too, so a test can show none of it is kept."""
+    files = {
+        "a-post.md": proposal("post", extra="window: 1\nday: 3\n", title=marker),
+        "a-message.md": proposal("message", title=marker),
+        "a-filming-plan.md": proposal("filming-plan", title=marker),
+        "a-new-angle.md": proposal(new_angle="yes", title=marker),
+        "a-line.md": proposal("weekly-read-decision", extra=f"{marker}: it\n"),
+        "a-version.md": proposal("weekly-read-decision", extra=f"exchange: {marker} said\n"),
+        "a-repeat.md": proposal("dispatch-request", extra=f"supersedes: 20261011-{marker}\n"),
+        "a-source.md": proposal("notice").replace("Still says unverified: `", f"{marker}: "),
+        "a-section.md": PROPOSAL.replace("## Touches", f"## {marker} Touches"),
+        "a-kind.md": PROPOSAL.replace("kind: package-change-proposal", f"kind: {marker}"),
+    }
+    return {
+        name: text.replace("Replace the stale caveat with the cleared status.", f"{marker} said this.").replace(
+            "`projects/RepToday", f"`projects/RepToday/{marker}"
+        )
+        for name, text in files.items()
+    }
+
+
 # The Waitlist's anonymous view, as RepToday's build would write it: twelve sign-ups across every Source and Fit
 # answer over two weeks (the weeks of 2026-09-28 and 2026-10-05), generated an hour before SUNDAY_RUN.
 WAITLIST_ENTRIES = [
@@ -1027,6 +1053,24 @@ def make_test_clip(
 
 
 # The web the launcher's client reads, without a network.
+
+
+class GitHub:
+    """A stand-in for GitHub's answer to whether the repository a production clone pushes to is private: the answers,
+    private, public, or unconfirmed, given one per question, the last one repeating; asked lists every question."""
+
+    NAME = "example/gr0wthlab"
+
+    def __init__(self, *answers: str):
+        self.answers = list(answers) or [visibility.PRIVATE]
+        self.asked: list[tuple[Path, str]] = []
+
+    def __call__(self, repo: Path, remote: str, env) -> visibility.Answer:
+        self.asked.append((Path(repo), remote))
+        status = self.answers[min(len(self.asked), len(self.answers)) - 1]
+        if status == visibility.UNCONFIRMED:
+            return visibility.Answer(status, "gh api exited with 1: error connecting to api.github.com")
+        return visibility.read(self.NAME, json.dumps({"private": status == visibility.PRIVATE, "visibility": status}))
 
 
 class Web:
