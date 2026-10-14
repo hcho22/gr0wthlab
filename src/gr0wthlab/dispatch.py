@@ -1,9 +1,10 @@
 """Dispatch requests the launcher files from reviewed text in src/dispatches/, each once.
 
-A Dispatch request asks the Founder to approve a change to a Product; Mandu hands it to firstmate only once the Founder
-approves it, and gr0wthlab never sends it anywhere itself. Each file in src/dispatches/ is one request in the Review
-Queue item format, named <key>.md, and changes only through a reviewed pull request. The launcher queues it under an
-identifier that never changes and marks its queue entry with the key, then, run after run:
+A Dispatch request asks the Founder to approve a change to a Product; once the Founder approves it, Mandu gives the
+Founder a ready-to-send message for it, which the Founder passes to firstmate, and gr0wthlab never sends it anywhere
+itself. Each file in src/dispatches/ is one request in the Review Queue item format, named <key>.md, and changes only
+through a reviewed pull request. The launcher queues it under an identifier that never changes and marks its queue
+entry with the key, then, run after run:
 
 - leaves it open while its whole text is unchanged, and files the new text in its place, superseding it, once a
   reviewed change alters any of it; no item the agent writes can supersede it (queue.check_incoming), so it stays
@@ -22,7 +23,7 @@ firstmate's own reviewed act:
 - the rejected-text rule applies only while nothing is open, so a reviewed change that brings back a text the Founder
   rejected, while another text is open, files the rejected text again in that open item's place;
 - an approval the Founder gave an item that a reviewed change had already replaced still counts as the request's
-  approval, though Mandu hands no superseded item to firstmate: the replacement stays open for the Founder to decide,
+  approval, though Mandu gives no message for a superseded item: the replacement stays open for the Founder to decide,
   no reviewed change replaces it any more, and nothing is filed after it.
 
 A request is compared with its open item by reading that item's file. When the file cannot be read, nothing shows
