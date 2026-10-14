@@ -339,13 +339,13 @@ class LoopTest(WorkCycleTestCase):
         change = json.loads(self.change_records()[0].read_text(encoding="utf-8"))
         self.assertEqual(change["outcome"], "not kept")
         self.assertIn(
-            "example 1 got worse: `passes` held with the Instructions in force and failed with the change, and did so"
-            " again when the example was run again",
+            "example 1 got worse: `passes` held with the Instructions in force, and again when they were run again,"
+            " and failed with the change",
             change["why"],
         )
         self.assertEqual(change["gate"]["not_run"], [2], "the gate stops at the first example that is worse")
-        self.assertEqual(change["gate"]["sessions"], 4, "example 1 on both sides, and again on both sides")
-        self.assertIsNotNone(change["gate"]["examples"][0]["run_again"])
+        self.assertEqual(change["gate"]["sessions"], 3, "example 1 on both sides, and in force again")
+        self.assertEqual(change["gate"]["examples"][0]["in_force_again"]["side"], "in force")
         self.assertIsNone(change["notice"])
         self.assertEqual([entry for entry in self.items("notice") if entry.get("instructions")], [])
         not_again = "The Instructions are as they were; the reasons it cites are not offered again."
@@ -460,8 +460,8 @@ class LoopTest(WorkCycleTestCase):
 
 
 class RepeatTest(unittest.TestCase):
-    """An agent's output varies from one session to the next, so an example that did worse with a change is run again
-    on both sides, and is worse only when the same assertion does worse again."""
+    """An agent's output varies from one session to the next, so where a check did worse with a change the
+    Instructions in force are run again, and the check is not taken as the change's doing when it fails there too."""
 
     SET = examples.ExampleSet(
         "post-drafts",
@@ -495,42 +495,42 @@ class RepeatTest(unittest.TestCase):
             )
         return found, calls
 
-    def test_a_flip_that_does_not_repeat_keeps_the_change(self):
-        found, calls = self.gate([True, False, True, True, True, True])
+    def test_a_check_that_fails_in_force_too_when_run_again_is_not_the_change_s_doing(self):
+        found, calls = self.gate([True, False, False, True, True])
         self.assertEqual(found.outcome, examples.KEPT, found.why)
-        self.assertEqual(
-            calls,
-            [(1, "in force"), (1, "proposed"), (1, "in force"), (1, "proposed"), (2, "in force"), (2, "proposed")],
-        )
+        self.assertEqual(calls, [(1, "in force"), (1, "proposed"), (1, "in force"), (2, "in force"), (2, "proposed")])
         lines = "\n".join(examples.result_lines(found))
         self.assertIn(
-            "- Example 1: `passes` did worse with the change once; run again on both sides, it did not, so the"
-            " example is not worse.",
+            "- Example 1: `passes` did worse with the change; run again with the Instructions in force, `passes`"
+            " failed there too, so the change is not taken as the cause.",
             lines,
         )
-        # The table shows the repeat beside the first round, so a row never reads worse than the example was.
-        self.assertIn(
-            "| 1: Example 1. | 1 of 1 check held; run again, 1 of 1 check held"
-            " | 0 of 1 check held; run again, 1 of 1 check held |",
-            lines,
-        )
+        # The table shows the repeat beside the side that was run again.
+        self.assertIn("| 1: Example 1. | 1 of 1 check held; run again, 0 of 1 check held | 0 of 1 check held |", lines)
         self.assertIn("| 2: Example 2. | 1 of 1 check held | 1 of 1 check held |", lines)
-        self.assertEqual(found.sessions, 6)
+        self.assertEqual(found.sessions, 5)
 
-    def test_a_flip_that_repeats_keeps_the_change_out_and_stops_the_gate(self):
-        found, calls = self.gate([True, False, True, False])
+    def test_a_check_that_holds_again_in_force_is_worse_and_stops_the_gate(self):
+        # Live, an agent followed a harmful line in one session of two: one failure with the change is enough
+        # once the Instructions in force hold again, or a change that does harm half the time would pass.
+        found, calls = self.gate([True, False, True])
         self.assertEqual(found.outcome, examples.NOT_KEPT)
-        self.assertIn("did so again when the example was run again", found.why)
+        self.assertIn("held with the Instructions in force, and again when they were run again", found.why)
         self.assertEqual([example.id for example in found.not_run], [2])
-        self.assertEqual(len(calls), 4)
+        self.assertEqual(calls, [(1, "in force"), (1, "proposed"), (1, "in force")])
+        self.assertIn(
+            "- Example 1: `passes` did worse with the change; run again with the Instructions in force, `passes` held"
+            " again, so the example is worse.",
+            examples.result_lines(found),
+        )
 
     def test_a_repeat_that_does_not_run_to_its_end_leaves_the_change_not_compared(self):
-        found, _ = self.gate([True, False, True, None])
+        found, _ = self.gate([True, False, None])
         self.assertEqual(found.outcome, examples.NOT_COMPARED)
-        self.assertIn("example 1 could not be compared: run again, with the change", found.why)
+        self.assertIn("example 1 could not be compared: run again with the Instructions in force,", found.why)
 
     def test_a_repeat_the_bound_leaves_no_time_for_is_not_compared(self):
-        tight, calls = self.gate_with_bound([True, False, True, True], 20)
+        tight, calls = self.gate_with_bound([True, False, True], 20)
         self.assertEqual(tight.outcome, examples.NOT_COMPARED)
         self.assertIn("bound of 20 seconds of agent time was used up", tight.why)
         self.assertEqual(len(calls), 2, "nothing was started past the bound")

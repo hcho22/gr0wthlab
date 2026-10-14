@@ -225,7 +225,7 @@ They change from an execution-coded rejection reason only through that workflow'
    Each lab is removed once its checks are read, and each lab run's log is kept in `~/Library/Logs/gr0wthlab/examples/<change id>/`, beside the sessions' own files.
 5. **The verdict.**
    An example is worse when a deterministic assertion held with the Instructions in force and fails with the change.
-   Since the agent's output varies from one session to the next, an example that did worse is run again on both sides, and counts as worse only when the same assertion does worse again; the notice and the record say what the repeat showed.
+   Since the agent's output varies from one session to the next, where an assertion did worse the example is run again with the Instructions in force, and the assertion counts as worse unless it fails there too; the notice and the record say what the repeat showed.
    The change is kept only when every example ran to its end on both sides, its repeat included, and none is worse; the launcher stops at the first example that is worse or could not be compared.
    Judged statements, such as one about tone, are judged by nothing: the notice lists them as not judged.
 6. **The bound.**

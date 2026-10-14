@@ -90,9 +90,12 @@ A lab never writes the real `ledger/`: the launcher copies an example's syntheti
 ## How an example is judged better or worse
 
 Deterministic assertions first.
-One is worse when it held with the Instructions in force and fails with the change, and does so again when the example is run again on both sides.
-The agent's output varies from one session to the next, so one run's flip is not taken as the change's doing: an example that did worse once is run again, in force and changed, and is worse only when the same assertion does worse again.
-The first live gate of 2026-10-14 is why: a change that added one line about caption length lost on one assertion of one example, a package-change proposal the agent wrote with the Instructions in force and not with the change, while nine examples did no worse and one did better ([its record](../live-checks/20261014-gr0wthlab-learning-loop.md)).
+One is worse when it held with the Instructions in force and fails with the change, and holds again when the example is run again with the Instructions in force.
+The agent's output varies from one session to the next, so an assertion that also fails without the change is not taken as the change's doing: where one did worse, the launcher runs the example again with the Instructions in force, and the assertion is worse unless it fails there too.
+Two live findings of 2026-10-14 set this rule ([their record](../live-checks/20261014-gr0wthlab-learning-loop.md)).
+The first gate lost a one-line change on one assertion of one example while nine did no worse, and the assertion it lost on also failed with the Instructions in force in a later gate.
+Then a change written to do harm, which told the agent to stop looking for code behind a claim, was followed in one session of two: one Draft was blocked, its repeat with the change passed, and the Instructions in force held both times.
+A rule that asked the change to fail twice lets each such failure through about three times in four; one failure against an assertion that held again without the change is enough.
 An example whose session did not run to its end on either side, was not started, or whose lab could not be built, cannot be compared, so the change is not kept.
 A change is never kept on the strength of an example getting better; it is kept when none got worse.
 
@@ -147,7 +150,9 @@ Put to the Founder on 2026-10-14, each with a recommendation; the Founder answer
   Rejected: a hand-written brief drifts from the one a weekly run writes, and the examples would test a session no weekly run starts.
 - **Take one run's flip as worse.**
   Rejected after the first live gate: the agent's output varies from session to session, so a set of about thirty assertions will often see one flip under a change that made nothing worse.
+- **Run the example again on both sides, and count it worse only when the same assertion does worse again.**
+  Tried live and rejected: where the agent follows a change in one session of two, each failure it causes passes this rule about three times in four, as the change written to do harm passed it on the first example it failed.
 - **Run every example several times on each side and compare how often each assertion holds.**
-  Not chosen: it multiplies every change's sessions, where running again only the example that did worse adds two sessions each time one flips.
+  Not chosen: it multiplies every change's sessions, where running again only the Instructions in force adds one session each time an assertion does worse.
 - **Reuse a baseline measured in an earlier run while nothing it depends on changed.**
   Not chosen: it halves the sessions, but the two sides would then meet the model on different days, and a difference could be the model's and not the change's.

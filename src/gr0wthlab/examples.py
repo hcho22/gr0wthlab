@@ -190,21 +190,21 @@ class Run:
 
 @dataclass
 class Pair:
-    """One example run on both sides of a change, and, where it did worse with the change, the same run again: an
-    agent's output varies from one session to the next, so one assertion's flip is taken as the change's doing only
-    when the repeat shows the same assertion doing worse again."""
+    """One example run on both sides of a change, and, where a check did worse with the change, the Instructions in
+    force run again: an agent's output varies from one session to the next, so a check that failed with the change is
+    taken as the change's doing unless it fails without the change too."""
 
     example: Example
     before: Run | None = None
     after: Run | None = None
-    again: Pair | None = None
+    again: Run | None = None  # the Instructions in force, run again where a check did worse with the change
 
     @property
     def compared(self) -> bool:
         return bool(self.before and self.after and self.before.ran and self.after.ran)
 
     def flipped(self) -> list[str]:
-        """The checks that held with the text in force and failed with the proposed text, this once."""
+        """The checks that held with the text in force and failed with the proposed text."""
         if not self.compared:
             return []
         after = {check.name: check for check in self.after.checks}
@@ -214,22 +214,29 @@ class Pair:
             if check.held and check.name in after and not after[check.name].held
         ]
 
+    def cleared(self) -> list[str]:
+        """The checks that did worse with the change and failed with the Instructions in force too, run again."""
+        if self.again is None or not self.again.ran:
+            return []
+        again = {check.name: check.held for check in self.again.checks}
+        return [name for name in self.flipped() if name in again and not again[name]]
+
     def worse(self) -> list[str]:
-        """Each check that did worse with the change on both runs of the example, in words."""
+        """Each check that did worse with the change and held again with the Instructions in force, in words."""
         names = self.flipped()
-        if self.again is not None:
-            names = [name for name in names if name in self.again.flipped()]
-        elif names:
-            return []  # one run's flip alone is not yet worse: the gate runs the example again first
+        if names and (self.again is None or not self.again.ran):
+            return []  # not yet worse: the gate runs the Instructions in force again first
+        cleared = self.cleared()
         after = {check.name: check for check in self.after.checks} if self.after else {}
         return [
-            f"`{name}` held with the Instructions in force and failed with the change, and did so again when the"
-            f" example was run again" + (f" ({after[name].detail})" if after.get(name) and after[name].detail else "")
+            f"`{name}` held with the Instructions in force, and again when they were run again, and failed with the"
+            " change" + (f" ({after[name].detail})" if after.get(name) and after[name].detail else "")
             for name in names
+            if name not in cleared
         ]
 
     def unrun(self) -> str:
-        """Why one run of the example on both sides could not be compared, or ""."""
+        """Why the example on both sides could not be compared, or ""."""
         for run in (self.before, self.after):
             if run is not None and not run.ran:
                 return f"with the {'Instructions in force' if run.side == IN_FORCE else 'change'}, {run.why}"
@@ -238,24 +245,30 @@ class Pair:
     def not_compared(self) -> str:
         """Why this example could not be compared, its repeat included, or ""."""
         missing = self.unrun()
-        if missing:
+        if missing or not self.flipped():
             return missing
-        if self.flipped() and self.again is None:
-            return "it did worse with the change once and was not run again"
-        missing = self.again.unrun() if self.again is not None else ""
-        return f"run again, {missing}" if missing else ""
+        if self.again is None:
+            return "it did worse with the change and the Instructions in force were not run again"
+        return f"run again with the Instructions in force, {self.again.why}" if not self.again.ran else ""
 
     def repeat_line(self) -> str:
-        """What the repeat of an example showed, for the notice and the record, or ""."""
-        if self.again is None or self.again.unrun():
+        """What running the Instructions in force again showed, for the notice and the record, or ""."""
+        flipped = self.flipped()
+        if not flipped or self.again is None or not self.again.ran:
             return ""
-        flipped = ", ".join(f"`{name}`" for name in self.flipped())
-        if self.worse():
-            return f"Example {self.example.id}: {flipped} did worse with the change, and did so again when run again."
+        cleared = self.cleared()
+        held = [name for name in flipped if name not in cleared]
+        said = [f"{quoted(held)} held again"] if held else []
+        said += [f"{quoted(cleared)} failed there too"] if cleared else []
+        verdict = "so the example is worse" if held else "so the change is not taken as the cause"
         return (
-            f"Example {self.example.id}: {flipped} did worse with the change once; run again on both sides, it did not,"
-            " so the example is not worse."
+            f"Example {self.example.id}: {quoted(flipped)} did worse with the change; run again with the Instructions"
+            f" in force, {' and '.join(said)}, {verdict}."
         )
+
+
+def quoted(names: Sequence[str]) -> str:
+    return ", ".join(f"`{name}`" for name in names)
 
 
 @dataclass
@@ -271,9 +284,7 @@ class Gate:
     def runs(self) -> list[Run]:
         found = []
         for pair in self.pairs:
-            for each in (pair, pair.again):
-                if each is not None:
-                    found += [run for run in (each.before, each.after) if run is not None]
+            found += [run for run in (pair.before, pair.after, pair.again) if run is not None]
         return found
 
     @property
@@ -328,12 +339,7 @@ class Gate:
                     "prompt": pair.example.prompt,
                     "in_force": pair.before.as_json() if pair.before else None,
                     "proposed": pair.after.as_json() if pair.after else None,
-                    "run_again": {
-                        "in_force": pair.again.before.as_json() if pair.again.before else None,
-                        "proposed": pair.again.after.as_json() if pair.again.after else None,
-                    }
-                    if pair.again
-                    else None,
+                    "in_force_again": pair.again.as_json() if pair.again else None,
                     "worse": pair.worse(),
                     "not_judged": pair.example.judged,
                 }
@@ -353,8 +359,8 @@ def result_lines(gate: Gate) -> list[str]:
         "| --- | --- | --- |",
     ]
     for pair in gate.pairs:
-        before = result(pair.before, pair.again.before if pair.again else None, pair.again is not None)
-        after = result(pair.after, pair.again.after if pair.again else None, pair.again is not None)
+        before = result(pair.before, pair.again)
+        after = result(pair.after, None)
         lines.append(f"| {pair.example.id}: {cell(pair.example.prompt)} | {cell(before)} | {cell(after)} |")
     for example in gate.not_run:
         lines.append(f"| {example.id}: {cell(example.prompt)} | not run | not run |")
@@ -362,7 +368,8 @@ def result_lines(gate: Gate) -> list[str]:
     if repeats:
         lines += [
             "",
-            "An example that did worse with the change is run again on both sides before it counts as worse:",
+            "Where a check did worse with the change, the Instructions in force were run again: a check that fails"
+            " there too is not taken as the change's doing.",
             "",
         ]
         lines += [f"- {line}" for line in repeats]
@@ -374,12 +381,10 @@ def result_lines(gate: Gate) -> list[str]:
     return lines
 
 
-def result(run: Run | None, again: Run | None, repeated: bool) -> str:
+def result(run: Run | None, again: Run | None) -> str:
     """One side of an example in the notice's table, its repeat beside it when it was run again."""
     text = run.summary() if run else "not run"
-    if repeated:
-        text += f"; run again, {again.summary() if again else 'not run'}"
-    return text
+    return f"{text}; run again, {again.summary()}" if again is not None else text
 
 
 def cell(text: str) -> str:
@@ -696,35 +701,26 @@ def gate(
         result.why = str(error)
         return result
 
-    def spent(*more: Pair | None) -> float:
-        return result.seconds + sum(
-            run.seconds for pair in more if pair is not None for run in (pair.before, pair.after) if run is not None
+    def run_one(example: Example, side: str, text: str, round_: str, spent: float) -> Run:
+        left = bound - spent
+        if left <= 0:
+            return Run(side, "not run", f"the gate's bound of {bound:.0f} seconds of agent time was used up")
+        name = f"{example.id:02d}-{'in-force' if side == IN_FORCE else 'proposed'}{round_}"
+        root = labs / change / name
+        run = run_example(
+            repo_root, example_set, example, side, text, root, env, home, log_dir / change, min(example_limit, left)
         )
-
-    def run_both(example: Example, pair: Pair, round_: str, *earlier: Pair) -> None:
-        for side, text in ((IN_FORCE, before), (PROPOSED, proposed)):
-            left = bound - spent(*earlier, pair)
-            if left <= 0:
-                run = Run(side, "not run", f"the gate's bound of {bound:.0f} seconds of agent time was used up")
-            else:
-                name = f"{example.id:02d}-{'in-force' if side == IN_FORCE else 'proposed'}{round_}"
-                root = labs / change / name
-                limit = min(example_limit, left)
-                run = run_example(repo_root, example_set, example, side, text, root, env, home, log_dir / change, limit)
-                shutil.rmtree(str(root), ignore_errors=True)
-            if side == IN_FORCE:
-                pair.before = run
-            else:
-                pair.after = run
-            if not run.ran:
-                return
+        shutil.rmtree(str(root), ignore_errors=True)
+        return run
 
     for index, example in enumerate(example_set.examples):
         pair = Pair(example)
-        run_both(example, pair, "")
-        if pair.compared and pair.flipped():
-            pair.again = Pair(example)
-            run_both(example, pair.again, "-again", pair)
+        pair.before = run_one(example, IN_FORCE, before, "", result.seconds)
+        if pair.before.ran:
+            pair.after = run_one(example, PROPOSED, proposed, "", result.seconds + pair.before.seconds)
+        if pair.flipped():
+            spent = result.seconds + pair.before.seconds + pair.after.seconds
+            pair.again = run_one(example, IN_FORCE, before, "-again", spent)
         result.pairs.append(pair)
         if pair.not_compared() or pair.worse():
             result.not_run = list(example_set.examples[index + 1 :])
