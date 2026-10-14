@@ -1,4 +1,4 @@
-# A refused item leaves only its name and the reasons
+# A refused item leaves only its name and the reasons (US-ME07, US-ME13)
 
 A file the launcher sets aside from `workspace/review-queue/incoming/`, of any kind and the filming plan included, is no longer copied whole into `ledger/review-queue/set-aside/<run id>/`.
 It is removed, and the run's set-aside record, `ledger/review-queue/set-aside/<run id>.json`, keeps under the run's identifier each file's name and its reasons, and nothing else.
