@@ -143,35 +143,19 @@ class CheckTest(EditTestCase):
                 base = record(1, ("d01-s1", "d01-s1.mov", 2, 12))
                 rules, lines = self.rules(replace(base, segments=[replace(base.segments[0], source=source)]), 1)
                 self.assertIn("footage-place", rules)
-                self.assertIn("footage-place: its source names a file outside the footage place (segment 1)", lines)
-
-    def test_no_finding_repeats_a_shot_or_source_the_record_gives(self):
-        """Each finding says which segment's value breaks which rule, never the value itself."""
-        marker = "zqxstranger"
-        base = record(1, ("d01-s1", "d01-s1.mov", 2, 12))
-        for shot, source in (
-            (f"d01-{marker}", "window-1/d01-s1.mov"),
-            ("d01-s1", f"window-1/{marker}.mov"),
-            ("d01-s1", f"../{marker}.mov"),
-            (f"{marker} said", f"/Users/{marker}/said.mov"),
-        ):
-            with self.subTest(shot=shot, source=source):
-                segment = replace(base.segments[0], shot=shot, source=source)
-                rules, lines = self.rules(replace(base, segments=[segment]), 1)
-                self.assertTrue(rules)
-                self.assertNotIn(marker, " ".join(lines))
+                self.assertIn(f"footage-place: {source!r} names a source outside the footage place (segment 1)", lines)
 
     def test_a_file_the_footage_place_does_not_hold_cannot_be_used(self):
         rules, lines = self.rules(record(1, ("d01-s1", "d01-s1-take-9.mov", 2, 12)), 1)
         self.assertEqual(rules, ["footage-place"])
-        self.assertIn("its source names no file the footage place holds", lines[0])
+        self.assertIn("the footage place holds no file 'window-1/d01-s1-take-9.mov'", lines[0])
 
     def test_a_file_is_used_only_as_the_shot_it_is_named_for(self):
         rules, lines = self.rules(record(1, ("d01-s1", "d02-s2.mov", 2, 12)), 1)
         self.assertEqual(rules, ["shot-list"])
         self.assertIn("`window-1/d02-s2.mov` is footage of shot d02-s2, so it cannot be used as d01-s1", lines[0])
         rules, lines = self.rules(record(1, ("d09-s1", "d01-s1.mov", 2, 12)), 1)
-        self.assertIn("its shot is not a shot of day 1's shot list (d01-s1)", lines[0])
+        self.assertIn("'d09-s1' is not a shot of day 1's shot list (d01-s1)", lines[0])
 
     def test_a_shot_that_may_not_be_cut_is_one_unbroken_source_range(self):
         cut = record(1, ("d01-s1", "d01-s1.mov", 1, 5), ("d01-s1", "d01-s1.mov", 7, 13))
@@ -230,7 +214,7 @@ class CheckTest(EditTestCase):
     def test_nothing_runs_at_another_speed_unless_its_shot_list_says_it_is_not_real_time(self):
         rules, lines = self.rules(record(1, ("d01-s1", "d01-s1.mov", 0, 14, {"speed": 1.4})), 1)
         self.assertEqual(rules, ["real-time"])
-        self.assertIn("d01-s1 does not play in real time, and its shot list says real time", lines[0])
+        self.assertIn("d01-s1 plays at 1.4x, and its shot list says real time", lines[0])
         founder = record(
             2,
             ("d02-s1", "d02-s1a-take-1.mov", 0, 4.5, {"speed": 1.5}),
@@ -247,7 +231,7 @@ class CheckTest(EditTestCase):
         for start, end, said in (
             (-1, 9, "in must be 0 or later"),
             (5, 5, "out at least one frame after it"),
-            (6, 16, "out is past the end of `window-1/d01-s1.mov`, which measures 14.00s"),
+            (6, 16, "out is 16s, past the end of `window-1/d01-s1.mov`, which measures 14.00s"),
         ):
             with self.subTest(said=said):
                 rules, lines = self.rules(record(1, ("d01-s1", "d01-s1.mov", start, end)), 1)

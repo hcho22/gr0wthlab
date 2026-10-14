@@ -14,7 +14,7 @@ Each run's records step commits this folder to `main` together with `workspace/`
   It replaces a post only when its Draft, its slot, or its video changes, and a Beta Cohort invitation or a Waitlist ask, which carry `beta`, only when its recruiting Draft, its batch, or its gap changes.
   The filming plan carries `origin` too, with a fingerprint of what must be filmed, so it is filed once per window and replaced only when the kit changes that.
 - `review-queue/items/<id>.md`: each queued item, under an identifier that never changes.
-- `review-queue/set-aside/<run id>.json`: what the launcher refused to queue that run from `workspace/review-queue/incoming/`: each file's name, the kind its front matter names when that is one of the item kinds, when it was set aside, and the reasons, which never repeat the file's text.
+- `review-queue/set-aside/<run id>.json`: what the launcher refused to queue that run from `workspace/review-queue/incoming/`: each file's name and the reasons, which never repeat the file's text.
   The file itself is removed and copied nowhere, and that run's notice names it.
   An invalid run state file is set aside beside it, in `review-queue/set-aside/<run id>/`.
 - `evidence/package-snapshots/<run id>.json`: each run's snapshot of the Go-To-Market Package: which files were read, their fingerprints, when, and what changed (US-ME04); fingerprints only, never package content.

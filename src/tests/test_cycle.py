@@ -880,9 +880,7 @@ class FailuresTest(CycleTestCase):
         (kept,) = (self.ledger() / "review-queue/set-aside").iterdir()
         self.assertEqual(kept.name, f"{queue['updated_by_run']}.json")
         record = json.loads(kept.read_text(encoding="utf-8"))
-        self.assertEqual(
-            [(entry["name"], entry["kind"]) for entry in record["items"]], [("broken.md", "package-change-proposal")]
-        )
+        self.assertEqual([entry["name"] for entry in record["items"]], ["broken.md"])
         notice = (self.ledger() / queue["open"][0]["file"]).read_text(encoding="utf-8")
         self.assertIn("`broken.md`: sections must be exactly", notice)
 
@@ -1803,25 +1801,22 @@ class PostDraftsTest(CycleTestCase):
 
     def test_a_refused_item_leaves_its_name_and_reasons_and_a_draft_waiting_for_a_fix_stays_as_written(self):
         """Of what the launcher refuses, only a Draft waiting for a fix keeps the agent's words: each item set aside
-        from incoming/, of every kind, leaves its name, kind, time, and reasons, and nothing of its text anywhere."""
+        from incoming/, of every kind, leaves its name and reasons, and nothing of its text anywhere."""
         marker = "zqxstranger"
         refused = fakes.refused_items(marker)
         fakes.set_window(self.repo, {"first_sitting": None, "slot": None})
         waiting = fakes.draft(3, caption="No grind here, only what zqxdraftwords said.")
         writes = {fakes.draft_path(day): fakes.draft(day) for day in range(1, 8)}
         writes[fakes.draft_path(3)] = waiting
-        writes.update({f"review-queue/incoming/{name}": text for name, (_, text) in refused.items()})
+        writes.update({f"review-queue/incoming/{name}": text for name, text in refused.items()})
         fakes.behave(self.codex_dir, {"write": writes})
         code, out = self.run_cycle()
         self.assertEqual(code, 0, out)
         queue = self.queue()
         run = queue["updated_by_run"]
         record = json.loads((self.ledger() / f"review-queue/set-aside/{run}.json").read_text(encoding="utf-8"))
-        self.assertEqual(
-            {entry["name"]: entry["kind"] for entry in record["items"]},
-            {name: kind for name, (kind, _) in refused.items()},
-        )
-        self.assertTrue(all(entry["reasons"] and entry["set_aside_at"] for entry in record["items"]))
+        self.assertEqual({entry["name"] for entry in record["items"]}, set(refused))
+        self.assertTrue(all(set(entry) == {"name", "reasons"} and entry["reasons"] for entry in record["items"]))
         self.assertEqual(os.listdir(self.ledger() / "review-queue/set-aside"), [f"{run}.json"])
         self.assertEqual(os.listdir(self.workspace() / "review-queue/incoming"), [])
         report, notices = self.report(), self.notices()

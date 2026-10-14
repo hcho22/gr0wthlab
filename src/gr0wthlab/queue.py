@@ -2,8 +2,8 @@
 
 The ledger lives in ledger/review-queue/queue.json, beside the published items; only the launcher writes there, and
 the agent can only read it. The agent proposes items in workspace/review-queue/incoming/, which the launcher checks.
-A file it sets aside from there is removed and copied nowhere: the run's set-aside record keeps its name, its kind,
-when it was set aside, and why, and the reasons describe what is wrong without repeating the file's text.
+A file it sets aside from there is removed and copied nowhere: the run's set-aside record keeps its name and why,
+and the reasons describe what is wrong without repeating the file's text.
 An item is queued once, under an identifier that never changes, and is closed by the Founder's decision (approved
 or rejected) or by a newer item that supersedes it; a closed item never returns to the open list. A decision the
 Founder took on an item a newer one had already superseded is kept on that item, which stays superseded.
@@ -57,7 +57,6 @@ class SetAside:
     """A file the launcher refused to queue from incoming/: all that is kept of it."""
 
     name: str
-    kind: str | None  # the kind its front matter names, when that is one of the item kinds
     problems: tuple[str, ...]
 
 
@@ -129,21 +128,17 @@ def declaration_problem(item: exchange.Item, kept: Collection[str]) -> str | Non
     return None
 
 
-def record_set_aside(store: Store, set_aside: Sequence[SetAside], run_id: str, now: datetime) -> list[SetAside]:
-    """Write the run's set-aside record, review-queue/set-aside/<run>.json: each file's name, kind, when it was set
-    aside, and why. A record that cannot be written is said in each file's reasons."""
+def record_set_aside(store: Store, set_aside: Sequence[SetAside], run_id: str) -> list[SetAside]:
+    """Write the run's set-aside record, review-queue/set-aside/<run>.json: each file's name and why. A record that
+    cannot be written is said in each file's reasons."""
     if not set_aside:
         return []
-    when = now.isoformat()
-    items = [
-        {"name": item.name, "kind": item.kind, "set_aside_at": when, "reasons": list(item.problems)}
-        for item in set_aside
-    ]
+    items = [{"name": item.name, "reasons": list(item.problems)} for item in set_aside]
     try:
         store.write_json(store.path(REVIEW_QUEUE, SET_ASIDE, f"{run_id}.json"), {"run": run_id, "items": items})
     except (OSError, ConfigError) as error:
         problem = f"the set-aside record could not be written ({error})"
-        return [SetAside(item.name, item.kind, (*item.problems, problem)) for item in set_aside]
+        return [SetAside(item.name, (*item.problems, problem)) for item in set_aside]
     return list(set_aside)
 
 
@@ -308,7 +303,7 @@ class Ledger:
         for old, new in superseding:
             if self.entries[old]["status"] == OPEN:
                 self.close(self.entries[old], SUPERSEDED, run_id, now, superseded_by=new)
-        return published, record_set_aside(store, set_aside, run_id, now)
+        return published, record_set_aside(store, set_aside, run_id)
 
     def check_incoming(
         self,
@@ -397,13 +392,9 @@ class Ledger:
         return (None if problems else item), problems
 
     def set_aside(self, areas: Areas, path: Path, name: str, problems: Sequence[str]) -> SetAside:
-        """Remove a file from incoming/, keeping its name, its kind, and the reasons, and nothing of its text."""
-        try:
-            kind = exchange.declared_kind(read_plain(path).decode("utf-8"))
-        except (UnsafeFile, UnicodeDecodeError, OSError):
-            kind = None
+        """Remove a file from incoming/, keeping its name and the reasons, and nothing of its text."""
         areas.remove(path)
-        return SetAside(name, kind, tuple(problems))
+        return SetAside(name, tuple(problems))
 
     def ordered(self) -> list[dict[str, object]]:
         """Open items in presentation order: posts by nearest slot, then posts with no slot yet by window and day, then

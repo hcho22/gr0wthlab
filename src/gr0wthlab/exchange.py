@@ -143,7 +143,11 @@ def check_fields(fields: Mapping[str, str], products: Sequence[str], published: 
         problems.append(f"kind must be one of: {', '.join(KINDS)}")
     version = fields.get("exchange")
     if published or version is not None:
-        problem = version_problem(int(version) if version and re.fullmatch(r"[0-9]+", version) else version)
+        problem = (
+            version_problem(int(version))
+            if version and re.fullmatch(r"[0-9]+", version)
+            else "exchange must be a version number"
+        )
         if problem:
             problems.append(problem)
     if published:
@@ -188,13 +192,6 @@ def check_fields(fields: Mapping[str, str], products: Sequence[str], published: 
     supersedes = fields.get("supersedes")
     if supersedes is not None and not ID_PATTERN.fullmatch(supersedes):
         problems.append("supersedes must name an item id")
-
-
-def declared_kind(text: str) -> str | None:
-    """The kind an item's front matter names, when it is one of KINDS; None for any other value or none."""
-    fields, _ = front_matter(text.splitlines(), [])
-    kind = fields.get("kind")
-    return kind if kind in KINDS else None
 
 
 def sections(lines: list[str], problems: list[str]) -> tuple[str, list[tuple[str, str]]]:

@@ -2283,7 +2283,7 @@ class EditRunTest(FilmingRunCase):
         self.run_ok()
         self.assertTrue(self.entry(post["id"])["withdrawn"])
         notice = self.notice()
-        self.assertIn("footage-place: its source names no file the footage place holds (segment 1)", notice)
+        self.assertIn("footage-place: the footage place holds no file 'window-1/d01-s1-take-2.mov'", notice)
         self.assertIn(f"- The open post `{post['id']}` for day 1 is withdrawn, since its edit record does not", notice)
         self.assertNotIn("left exactly as it is", notice)
 

@@ -357,13 +357,13 @@ def check(
         shot = spec.shot(segment.shot)
         if shot is None:
             listed = ", ".join(shot.id for shot in spec.shots)
-            block("shot-list", f"its shot is not a shot of day {spec.day}'s shot list ({listed})", where)
+            block("shot-list", f"{segment.shot!r} is not a shot of day {spec.day}'s shot list ({listed})", where)
         if not inside(segment.source):
-            block("footage-place", "its source names a file outside the footage place", where)
+            block("footage-place", f"{segment.source!r} names a source outside the footage place", where)
             continue
         clip = clips.get(segment.source)
         if clip is None:
-            block("footage-place", "its source names no file the footage place holds", where)
+            block("footage-place", f"the footage place holds no file {segment.source!r}", where)
             continue
         if clip.problem or clip.facts is None:
             block("footage", f"`{clip.name}` cannot be used: {clip.problem or 'it was not measured'}", where)
@@ -382,13 +382,13 @@ def check(
                     if shot.real_time
                     else "its shot list does not say it may run at another speed"
                 )
-                block("real-time", f"{shot.id} does not play in real time, and {why}", where)
+                block("real-time", f"{shot.id} plays at {segment.speed:g}x, and {why}", where)
         if segment.start < 0 or segment.end - segment.start < 1 / canvas.fps - EPSILON:
             block("source-range", "in must be 0 or later, and out at least one frame after it", where)
         elif segment.end > clip.facts.duration + EPSILON:
             block(
                 "source-range",
-                f"out is past the end of `{clip.name}`, which measures {clip.facts.duration:.2f}s",
+                f"out is {segment.end:g}s, past the end of `{clip.name}`, which measures {clip.facts.duration:.2f}s",
                 where,
             )
     runs = [(name, list(run)) for name, run in groupby(edit.segments, key=lambda segment: segment.shot)]

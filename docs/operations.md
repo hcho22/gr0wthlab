@@ -60,7 +60,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    An entry there that it could not read before the first session started is not guarded: it is left exactly as it is, and the run report names it.
 7. Once the last session has ended, it takes in what all of them wrote, in one pass.
    It queues the items the sessions wrote to `workspace/review-queue/incoming/` that pass the format, sets the rest aside, and turns every problem into one notice.
-   A file set aside is removed and copied nowhere: the run's set-aside record, `ledger/review-queue/set-aside/<run id>.json`, keeps its name, its kind, when it was set aside, and the reasons ([what is kept](#where-the-agents-own-words-are-kept)).
+   A file set aside is removed and copied nowhere: the run's set-aside record, `ledger/review-queue/set-aside/<run id>.json`, keeps its name and the reasons ([what is kept](#where-the-agents-own-words-are-kept)).
    A post or a message written there is always set aside: the launcher queues those two kinds only from a Draft that passes its checks.
    An item there that supersedes an open one is set aside too while that open item's file in `ledger/review-queue/items/` cannot be read and no run state remembers its fingerprint: the open item stands, and nothing replaces it in that run.
    So is an item there with the kind and ask of any queued item, open or decided, whose file cannot be read and whose fingerprint no run state remembers: the ledger still shows that item's kind and ask, so an item with another kind or ask is queued as always, and the Review Queue output is incomplete and names the file.
@@ -223,19 +223,21 @@ Of everything the launcher refuses, a Draft waiting for a fix is the one place a
 Everything else the launcher refuses is removed from `workspace/`, copied nowhere, and leaves only its name and the launcher's reasons:
 
 - A file set aside from `workspace/review-queue/incoming/`, of any kind, a post, a message, or a filming plan written there included.
-  The run's set-aside record, `ledger/review-queue/set-aside/<run id>.json`, keeps its name, the kind its front matter names when that is one of the item kinds, when it was set aside, and the reasons; the run report and notice name it with the reasons.
+  The run's set-aside record, `ledger/review-queue/set-aside/<run id>.json`, keeps its name and the reasons, under the run's identifier; the run report and notice name it with the reasons.
 - A quote record the launcher refuses, a proposed Angle or Hook it discards from `workspace/review-queue/angles/`, and a rejection code it sets aside.
 
-The reasons given for any of these, and for an edit record's checks, say which line, field, or segment breaks which rule, in the launcher's own words, and never repeat what the file says.
-A front matter line is named by its number, an Evidence line by its place in the list, an unexpected section by count, and an edit record's shot or footage file by its segment.
-A reason may still name what the rule itself sets, such as the shot list, a footage file's name and measured length, or a queued item's identifier.
-They are kept in the set-aside record, in each run's Listening Evidence (`ledger/evidence/listening/runs/<run id>.json`), in the run's filming Evidence (`ledger/evidence/filming/<run id>.json`) and the day's post verdict in the post Drafts Evidence, and in the run report and notice.
+The reasons given for any of these say which line or field breaks which rule, in the launcher's own words, and never repeat what the file says.
+A front matter line is named by its number, an Evidence line by its place in the list, and an unexpected section by count.
+A reason may still name what the rule itself sets, such as a queued item's identifier.
+That no reason repeats the refused file is firstmate's reading of the Founder's choice of 2026-10-13 for what the launcher refuses from the agent's outbox, `workspace/review-queue/incoming/`, and not a separate decision of the Founder's.
+They are kept in the set-aside record, in each run's Listening Evidence (`ledger/evidence/listening/runs/<run id>.json`), and in the run report and notice.
 
 These also keep the agent's words, and none of them is a refusal:
 
 - What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, and the line that says why a rejection code fits.
 - Any other file the agent leaves in `workspace/` that the launcher neither takes in nor puts back is committed as written.
-  An edit record waiting for a fix is one: its format holds no words, only each piece's shot, footage file, and times.
+  An edit record waiting for a fix is one: its `shot` and `source` values can hold any text, and it stays committed as written.
+  The reasons its checks give can quote those two values whole, and are kept in the run's filming Evidence (`ledger/evidence/filming/<run id>.json`), in the day's post verdict in the post Drafts Evidence, and in the run report and notice.
   So are the files in `workspace/review-queue/incoming/` in a run whose Review Queue could not be read, which takes in nothing from there.
 - The run report quotes each session's own summary, up to 4,000 characters each, where it quoted one session's before a run had several.
 - Outside the repository, each session's event stream and Codex's log of it in `~/Library/Logs/gr0wthlab/` hold what the agent wrote, a refused file included: they are the runtime's own records, which the boundary check reads, and nothing in the repository copies them.
