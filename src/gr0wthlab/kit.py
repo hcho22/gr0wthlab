@@ -126,6 +126,7 @@ class Kit:
     asset_checks: tuple[AssetCheck, ...] = ()
     competitors: tuple[Competitor, ...] = ()
     problems: dict[str, str] = field(default_factory=dict)
+    unread: set[str] = field(default_factory=set)  # each role among the problems whose file could not be read at all
 
 
 # Tables.

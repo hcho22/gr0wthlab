@@ -809,16 +809,15 @@ class FilmingPlanTest(FilmingRunCase):
         )
         self.assertIn(f"`replace-plan.md`: supersedes {PLAN}, which the launcher filed from reviewed text", report)
 
-    def test_a_kit_that_cannot_be_read_plans_nothing_and_says_so(self):
+    def test_a_kit_that_cannot_be_used_plans_nothing_and_says_so(self):
         (self.mandu / ANGLES).write_text("# Angle bank\n\nNo table here.\n", encoding="utf-8")
         queue = self.run_ok()
         self.assertEqual([entry for entry in queue["open"] if entry["kind"] == "filming-plan"], [])
         report = self.report()
-        self.assertIn(f"Nothing could be planned this run: the kit could not be read: `{ANGLES}` (", report)
+        self.assertIn(f"Nothing could be planned this run: the kit could not be used: `{ANGLES}` (", report)
+        self.assertNotIn("the kit could not be read", report)
         name = f"RepToday package: `{ANGLES}`"
-        self.assertIn(
-            f"| Filming plan and edits | incomplete | {name} could not be used; the kit could not be read:", report
-        )
+        self.assertIn(f"| Filming plan and edits | incomplete | {name} could not be used |", report)
         self.assertRegex(
             report, rf"\| {name} \| unusable \| first snapshot of this file; read, but could not be used: "
         )
@@ -827,14 +826,30 @@ class FilmingPlanTest(FilmingRunCase):
         self.assertIn(" Incomplete: Post Drafts, Filming plan and edits.\n", notice)
         self.assertEqual(notice.count(f"- {name}: "), 1, notice)
 
-    def test_an_open_plan_stands_under_its_id_while_the_kit_it_is_compared_with_cannot_be_read(self):
+    def test_a_kit_file_that_cannot_be_read_plans_nothing_and_says_so(self):
+        (self.mandu / ANGLES).unlink()
+        queue = self.run_ok()
+        self.assertEqual([entry for entry in queue["open"] if entry["kind"] == "filming-plan"], [])
+        report = self.report()
+        self.assertIn(f"Nothing could be planned this run: the kit could not be read: `{ANGLES}` (", report)
+        self.assertNotIn("the kit could not be used", report)
+        self.assertIn(
+            f"| Filming plan and edits | incomplete | RepToday package: `{ANGLES}` could not be read; the kit could not"
+            f" be read: `{ANGLES}` (",
+            report,
+        )
+
+    def test_an_open_plan_stands_under_its_id_while_the_kit_it_is_compared_with_cannot_be_used(self):
         queue = self.run_ok(days=(1, 8))
         (plan,) = [entry for entry in queue["open"] if entry["kind"] == "filming-plan"]
         angles = self.mandu / ANGLES
         text = angles.read_text(encoding="utf-8")
         angles.write_text("# Angle bank\n\nNo table here.\n", encoding="utf-8")
         self.run_ok()
-        self.assert_stands(plan, "Filming plan and edits", f"the kit could not be read: `{ANGLES}` (")
+        self.assert_stands(plan, "Filming plan and edits", f"`{ANGLES}`")
+        self.assertIn(
+            f"- `{plan['id']}` (Filming plan and edits): the kit could not be used: `{ANGLES}` (", self.notices()
+        )
         self.assertIn(f"The open plan `{plan['id']}` stands as it is.", self.report())
         unusable = (
             f"- RepToday package: `{ANGLES}`: its fingerprint changed since the previous snapshot; read, but could"

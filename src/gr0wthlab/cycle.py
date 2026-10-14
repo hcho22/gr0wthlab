@@ -583,7 +583,7 @@ class Cycle:
     def post_tally(self, state: RunState) -> run_state.Tally:
         """What the post-Draft workflow checked and acted on: each Draft taken in, each item queued or withdrawn, and
         the brand-rules proposal when this run filed it, whether or not any Draft was taken in."""
-        outcome = state.post_outcome
+        plan, outcome = state.posts, state.post_outcome
         gaps = self.post_gaps(state)
         if outcome is None:
             checked, acted = 0, 0
@@ -591,7 +591,9 @@ class Cycle:
         else:
             checked = len(outcome.results)
             acted = len(outcome.published) + len(outcome.withdrawn)
-            note = f"{report.plural(checked, 'day')}: {', '.join(outcome.counts()) or 'none due'}"
+            unusable = plan is not None and "calendar" in plan.context.kit.problems
+            none = "none prepared, as the calendar could not be used" if unusable else "none due"
+            note = f"{report.plural(checked, 'day')}: {', '.join(outcome.counts()) or none}"
             if outcome.withdrawn:
                 note += f"; {len(outcome.withdrawn)} withdrawn"
         if state.filed:
@@ -647,13 +649,29 @@ class Cycle:
         gap = state.agent_gap(sessions.POSTS)
         if plan.days and gap:
             gaps.append(gap)
-        # A kit file the run read and could not use is named by its failed source, which leads the row: once is enough.
+        return gaps
+
+    def told(self, state: RunState) -> dict[str, set[str]]:
+        """Each output's own gaps that say no more than that a package file could not be used, where that file's
+        failed source, read and not usable, leads the output's row and says so already: the row says it once. The
+        tally, and with it the run's own line, keeps every gap."""
         unusable = {line.name for line in state.sources if line.status == package.UNUSABLE}
-        paths = plan.context.paths
-        told = {role for role, path in paths.items() if f"{plan.product} package: `{path}`" in unusable}
-        said = {f"`{paths[role]}` could not be used" for role in told}
-        said |= {"brand-rules.json could not be used"} if "brand_rules" in told else set()
-        return [reason for reason in gaps if reason not in said]
+        told: dict[str, set[str]] = {}
+        plan = state.posts
+        if plan is not None:
+            paths = plan.context.paths
+            named = {role for role, path in paths.items() if f"{plan.product} package: `{path}`" in unusable}
+            told["post-drafts"] = {f"`{paths[role]}` could not be used" for role in named}
+            if "brand_rules" in named:
+                told["post-drafts"].add("brand-rules.json could not be used")
+            failed = [role for role in filming.ROLES if role in plan.context.kit.problems]
+            if state.filming is not None and failed and named.issuperset(failed):
+                told["filming-plan"] = {state.filming.problem}
+        recruiting = state.beta
+        if recruiting is not None and recruiting.active and recruiting.context is not None:
+            if f"{recruiting.rules.product} package: `{recruiting.rules.brand_rules}`" in unusable:
+                told[beta.WORKFLOW] = {"brand-rules.json could not be used"}
+        return told
 
     def queue_gaps(self, state: RunState) -> list[str]:
         """Why the Review Queue is incomplete this run though the ledger was read: an item file could not be, so a
@@ -691,10 +709,11 @@ class Cycle:
 
     def outputs(self, state: RunState, config: settings.Settings, ledger_ok: bool) -> None:
         """Each output's status: a built output is incomplete when a failed source it needs names it, or when its own
-        step fell short. A step that needed a session names that session's falling short among its gaps, and the
-        outputs whose rows hold that gap are the ones the run's notice names for the session; the rows are therefore
-        worked out before that notice is written, and again once the Review Queue holds it. One session's gap is
-        never put in another workflow's row, and a session that fell short always has its gap in its own."""
+        step fell short; a gap of its own that says no more than such a source is left out of its row. A step that
+        needed a session names that session's falling short among its gaps, and the outputs whose rows hold that gap
+        are the ones the run's notice names for the session; the rows are therefore worked out before that notice is
+        written, and again once the Review Queue holds it. One session's gap is never put in another workflow's row,
+        and a session that fell short always has its gap in its own."""
         failed = state.failed_sources()
         gap = state.agent_gap
         decisions = next((line.detail for line in state.sources if line.name == "Founder decisions"), "")
@@ -748,6 +767,7 @@ class Cycle:
         }
         rows = []
         held: dict[str, list[str]] = {session.key: [] for session in state.sessions}
+        told = self.told(state)
         for key, output in config.outputs.items():
             title = str(output.get("title", key))
             if not output.get("built"):
@@ -760,7 +780,9 @@ class Cycle:
             for session in state.sessions:
                 if session.workflow.output == key and session.gap() and session.gap() in gaps:
                     held[session.key].append(title)
-            gaps = [f"{line.name} {line.failure}" for line in failed if title in line.needed_by] + gaps
+            gaps = [f"{line.name} {line.failure}" for line in failed if title in line.needed_by] + [
+                reason for reason in gaps if reason not in told.get(key, ())
+            ]
             rows.append([title, INCOMPLETE if gaps else COMPLETE, "; ".join(gaps) or done])
         state.outputs = rows
         for session in state.sessions:

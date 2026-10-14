@@ -260,8 +260,11 @@ def read_kit(mandu: Path, roles: Mapping[str, str]) -> tuple[kit.Kit, dict[str, 
             files[role] = (relative, hashlib.sha256(data).hexdigest())
         except UnicodeDecodeError:
             parsed.problems[role] = "it is not UTF-8 text"
-        except (OSError, kit.KitError) as error:
-            parsed.problems[role] = getattr(error, "strerror", None) or str(error)
+        except kit.KitError as error:
+            parsed.problems[role] = str(error)
+        except OSError as error:
+            parsed.problems[role] = error.strerror or str(error)
+            parsed.unread.add(role)
     parsers = (
         ("calendar", "days", kit.parse_calendar),
         ("calendar", "asset_checks", kit.parse_asset_checks),
@@ -277,6 +280,7 @@ def read_kit(mandu: Path, roles: Mapping[str, str]) -> tuple[kit.Kit, dict[str, 
             except kit.KitError as error:
                 parsed.problems[role] = str(error)
     rules_problem = parsed.problems.pop("brand_rules", "")
+    parsed.unread.discard("brand_rules")
     rules_data: object = None
     if "brand_rules" in texts:
         try:

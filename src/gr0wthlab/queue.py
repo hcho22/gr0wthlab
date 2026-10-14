@@ -92,12 +92,11 @@ def stands(current: Mapping[str, object] | None, unread: Sequence[str]) -> Stand
     Dispatch request whose reviewed text is unread, post Drafts without the calendar, outreach without the channel
     plan or the kit, replies without the kit, and the video of a day whose copy is approved and whose Draft is
     unread. There the output always reads incomplete in the run report with the real reason, and no item of the
-    step is touched or listed. The run's notice names the source only where its read failed as a source or was
-    recorded as a launcher problem, and in the line that says no video was cut for an approved day; a calendar or
-    channel plan that was read but could not be parsed or decoded is told in the run report, and the notice has no
-    line of its own for it. While the window's filming plan is open, though, that plan stands on a calendar that
-    fails this way, as on any kit file, so the notice's list of open items not checked again names the plan with
-    the kit file as its reason.
+    step is touched or listed. The run's notice names the source only where its read failed as a source, where it was
+    read and could not be used, as a calendar or channel plan that could not be parsed or decoded, or was recorded as
+    a launcher problem, and in the line that says no video was cut for an approved day. While the window's filming
+    plan is open, that plan also stands on a calendar that fails this way, as on any kit file, so the notice's list
+    of open items not checked again names the plan with the kit file as its reason.
     """
     if current is None or not unread:
         return None

@@ -578,7 +578,9 @@ def context(rules: Rules, boundary: Boundary) -> Context:
         problem = error.strerror or str(error)
     except UnicodeDecodeError:
         problem = "it is not UTF-8 text"
-    except ValueError as error:  # not JSON, or not the rules lint.Rules reads
+    except json.JSONDecodeError as error:
+        problem = f"not JSON: {error}"
+    except ValueError as error:  # not the rules lint.Rules reads
         problem = str(error)
     return Context(rules.product, mandu, rules.citable, rules.k8, brand_rules, problem)
 

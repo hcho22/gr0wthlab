@@ -1009,6 +1009,16 @@ class UnusableSourceTest(WorkCycleTestCase):
             parts[0],
         )
 
+    def test_a_calendar_without_its_table_leaves_the_post_drafts_incomplete_in_the_run_state(self):
+        (self.mandu / self.CALENDAR).write_text("# 14-day cadence\n\nThe table went missing.\n", encoding="utf-8")
+        report = self.go()
+        account = (
+            f"0 days: none prepared, as the calendar could not be used; incomplete: `{self.CALENDAR}` could not be used"
+        )
+        self.assertIn(f"\n- post-drafts: checked=0 acted=0 note={account}\n", report)
+        summary = next(line for line in report.splitlines() if line.startswith("- checked="))
+        self.assertIn(f"post-drafts {account}", summary)
+
     def test_a_channel_plan_that_is_not_valid_text_is_a_failed_source_with_one_notice(self):
         (self.mandu / self.CHANNEL_PLAN).write_bytes(b"\xff\xfe channel plan \x80\n")
         self.agent()

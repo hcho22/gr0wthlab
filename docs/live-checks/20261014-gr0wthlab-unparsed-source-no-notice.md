@@ -69,8 +69,8 @@ Its configuration fingerprint is `d2704c9d943c203a3f91161b46baeee9f6711fdef1222e
 
 ### What this round did not exercise
 
-- A broken file under an open item was not run live: the open filming plan that stands on an unusable kit file, and an open message that stands on an unusable `brand-rules.json`, stand on the unit tests (`test_an_open_plan_stands_under_its_id_while_the_kit_it_is_compared_with_cannot_be_read`, `test_open_messages_stand_under_their_ids_while_the_brand_rules_cannot_be_read`).
-- `brand-rules.json` that is not JSON, the competitor research folder, and Beta Cohort recruiting's read of the brand rules were not run live; the first two stand on unit tests, and the third on none of its own.
+- A broken file under an open item was not run live: the open filming plan that stands on an unusable kit file, and an open message that stands on an unusable `brand-rules.json`, stand on the unit tests (`test_an_open_plan_stands_under_its_id_while_the_kit_it_is_compared_with_cannot_be_used`, `test_open_messages_stand_under_their_ids_while_the_brand_rules_cannot_be_read`).
+- `brand-rules.json` that is not JSON, the competitor research folder, and Beta Cohort recruiting's read of the brand rules were not run live; each stands on unit tests, recruiting's on `test_brand_rules_that_cannot_be_read_block_a_new_draft_and_keep_an_open_one`.
 - A missing calendar stands on a unit test (`test_a_missing_calendar_is_a_source_that_could_not_be_read_as_before`).
 - The two live runs used synthetic inputs, never Mandu or a real Product checkout, which no check here may change; Mandu and the Product checkouts were not fingerprinted around the boundary check.
 - No weekly run was made on a schedule, and Mandu's side was not shown the notice.

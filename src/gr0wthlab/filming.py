@@ -362,7 +362,7 @@ class Filming:
     record: str | None = None
     env: Mapping[str, str] = field(default_factory=dict)  # what the video tooling runs with
     apart: list[str] = field(default_factory=list)  # each pair whose two videos differ, as the Founder is told
-    stood: Stands | None = None  # the open plan, left as it is while the kit it is compared with could not be read
+    stood: Stands | None = None  # the open plan, left as it is while the kit it is compared with could not be used
     videos: dict[int, Shown] = field(default_factory=dict)  # each day whose open post names a video, as last looked at
     dropped: dict[int, str] = field(default_factory=dict)  # each day whose open post lost its video: that post
     replaced: list[str] = field(default_factory=list)  # each such post that left the queue, as the Founder is told
@@ -1252,11 +1252,17 @@ def prepare(
         problem=problem,
         env=dict(env),
     )
-    unread = [
-        f"`{plan.context.paths.get(role, role)}` ({parsed.problems[role]})" for role in ROLES if role in parsed.problems
-    ]
-    if unread:
-        filming.problem = f"the kit could not be read: {', '.join(unread)}"
+    reasons = []
+    for what, unread in (("read", True), ("used", False)):
+        files = [
+            f"`{plan.context.paths.get(role, role)}` ({parsed.problems[role]})"
+            for role in ROLES
+            if role in parsed.problems and (role in parsed.unread) == unread
+        ]
+        if files:
+            reasons.append(f"the kit could not be {what}: {', '.join(files)}")
+    if reasons:
+        filming.problem = "; ".join(reasons)
         filming.standing = Standing(NOT_FILED, None, filming.problem)
         mine = (entry for entry in ledger.entries.values() if entry.get("origin") == origin(where.product, window))
         filming.stood = stands(next((entry for entry in mine if entry["status"] == OPEN), None), [filming.problem])
@@ -1550,14 +1556,14 @@ def tally(filming: Filming | None, agent_gap: str) -> Tally:
 
 
 def gaps(filming: Filming, agent_gap: str) -> list[str]:
-    """Why the filming output is incomplete this run: the kit or the canvas could not be read, the plan could not be
-    filed, the footage place could not be listed, an edit record, a footage file it names, or the record of its video
-    could not be read, the finished file of a video an open post names could not be read, or the Filming session fell
-    short. A session that fell short is always a gap, whatever it had written by then, since a day was ready for an
-    edit record when it started, and with it each ready day still without one is named. An edit that waits on
-    footage, approval, or tooling is not a gap: the report names it as not cut. Neither is a ready day that a session
-    which finished left without an edit record, nor a finished file that is gone or changed, which the notice
-    names."""
+    """Why the filming output is incomplete this run: the kit could not be read or used, the canvas could not be read,
+    the plan could not be filed, the footage place could not be listed, an edit record, a footage file it names, or
+    the record of its video could not be read, the finished file of a video an open post names could not be read, or
+    the Filming session fell short. A session that fell short is always a gap, whatever it had written by then, since
+    a day was ready for an edit record when it started, and with it each ready day still without one is named. An
+    edit that waits on footage, approval, or tooling is not a gap: the report names it as not cut. Neither is a ready
+    day that a session which finished left without an edit record, nor a finished file that is gone or changed, which
+    the notice names."""
     found = []
     if filming.problem:
         found.append(filming.problem)
