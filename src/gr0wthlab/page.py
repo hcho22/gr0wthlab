@@ -68,7 +68,9 @@ def tag(name: str, /, *children: object, **attributes: object) -> H:
     return H(opening) if name in VOID else H(opening + join(children) + f"</{name}>")
 
 
-# An item's text, laid out by its lines.
+# An item's text, laid out by its lines. A table cell of one word up to this long is kept on one line.
+
+WORD = 16
 
 
 def cells(line: str) -> list[str]:
@@ -76,6 +78,12 @@ def cells(line: str) -> list[str]:
     row = row[1:] if row.startswith("|") else row
     row = row[:-1] if row.endswith("|") and not row.endswith("\\|") else row
     return [cell.replace("\\|", "|").strip() for cell in re.split(r"(?<!\\)\|", row)]
+
+
+def word(cell: str) -> str | None:
+    """The class of a table cell that is one short word, such as a date or a figure, which is never broken across
+    lines."""
+    return "doc-word" if cell and len(cell) <= WORD and not any(char.isspace() for char in cell) else None
 
 
 def document(source: str) -> H:
@@ -116,7 +124,9 @@ def document(source: str) -> H:
                     tag(
                         "table",
                         tag("thead", tag("tr", *(tag("th", cell) for cell in head))),
-                        tag("tbody", *(tag("tr", *(tag("td", cell) for cell in row)) for row in rows)),
+                        tag(
+                            "tbody", *(tag("tr", *(tag("td", cell, class_=word(cell)) for cell in row)) for row in rows)
+                        ),
                     ),
                     class_="doc-table wide" if len(head) > 3 else "doc-table",
                 )

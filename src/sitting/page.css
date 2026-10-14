@@ -417,6 +417,11 @@ th {
   text-transform: uppercase;
 }
 
+/* A date or a figure reads as one word: it is never broken at its hyphen. */
+td.doc-word {
+  white-space: nowrap;
+}
+
 tbody tr:last-child td {
   border-bottom: 0;
 }
