@@ -97,11 +97,13 @@ Everything the first round did not exercise is still not exercised.
 Two review rounds changed launcher code after `a3a86af`.
 The first, `143db89`, keeps every reason in the post Drafts' tally and in the run's own line, and leaves out of an Outputs row only a gap that the failed source leading the row already says.
 It also words the filming plan's reason "the kit could not be used" for a kit file that was read, keeping "could not be read" for one that was not; gives recruiting the post Drafts' "not JSON" reason for brand rules that are not JSON; and says in the post Drafts' tally that no day was prepared, rather than none due, when the calendar could not be used.
-The second names on the line of a package file read and not usable exactly the outputs whose rows carry a gap naming the file, never the package snapshot or review, so the notice's line and the Outputs table agree, and leaves out of every such row, outreach and Listening included, only a gap of its own that says no more than that the file could not be used.
+The second names on the line of a package file read and not usable exactly the outputs whose rows carry a gap naming the file, never the package snapshot or review, so the notice's line and the Outputs table agree, and leaves out of every such row, outreach and Listening included, a gap of its own that says no more than the file's line says, with its reason: that the file could not be used, or the filming plan's reason when every kit file that reason names is such a file leading the row.
+A gap that says more, such as that no outreach message was prepared, stays.
 It also reads brand rules that hold `null` as rules, so they give "must hold a JSON object", as recruiting does.
 The checks below ran on the second round's working tree before its commit, whose `src/` is tree `2bb96c84310d07be038d660c282b39499df1ea42` and whose `config/` is tree `b43d0624383aada9155906ee4b54515c3ecb3a5d`, recorded from a throwaway index.
 On that tree the unit modules the two rounds touch passed under `/usr/bin/python3` (`test_cycle`, 98 tests; `test_work_cycle`, 61; `test_beta_cycle`, 35; `test_posts`, `test_report`, and `test_kit`, 72), as did ruff 0.15.20 on the changed files.
 `test_filming` had run 84 of its tests with none failing when this was written, and had not finished; it and the full suite were left to the pipeline's test step.
+A later review round changed only the docstring of `Cycle.unusable_files` under `src/`, which is then tree `78be69157ca5a7748421dbc8f79c6361eb1b7114`; nothing below was run again for it.
 Every check ran on 2026-10-14, Mac local time (PDT), with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort, and no other session's `codex exec` agent was running when each started.
 
 ### The boundary

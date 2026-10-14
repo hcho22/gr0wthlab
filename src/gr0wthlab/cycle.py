@@ -653,9 +653,10 @@ class Cycle:
 
     def unusable_files(self, state: RunState) -> dict[str, tuple[set[str], set[str]]]:
         """Each package file the run read and could not use, by its source line's name: what in a gap names it, its
-        path or, for the brand rules, what every step says of them; and each gap that says no more than that it could
-        not be used, which a row its failed source leads leaves out, since the source says so already. The tally, and
-        with it the run's own line, keeps every gap."""
+        path or, for the brand rules, what every step says of them; and each gap that says no more than that line,
+        with its reason, says, which a row the line leads leaves out: that the file could not be used, and the filming
+        plan's reason when every kit file it names is such a file. A gap that says more, such as that no outreach
+        message was prepared, stays, and the tally, and with it the run's own line, keeps every gap."""
         unusable = {line.name for line in state.sources if line.status == package.UNUSABLE}
         rules_lost = "brand-rules.json could not be used"
         found: dict[str, tuple[set[str], set[str]]] = {}
