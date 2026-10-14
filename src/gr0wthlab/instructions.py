@@ -236,12 +236,13 @@ def passages(line: str) -> list[str]:
 def package_lines(mandu: Path, paths: Sequence[str]) -> dict[str, str]:
     """Every passage of at least PACKAGE_LINE characters in the package files a run read, with the file it is in,
     from the Mandu checkout: each line, or each cell of a table row, in lowercase with its spacing made single. A file
-    that cannot be read now adds none."""
+    that cannot be read now adds none; one that is not valid text, which the run counts as a failed source, still adds
+    every line that decodes, since the agent could copy those."""
     found: dict[str, str] = {}
     for relative_path in paths:
         try:
-            text = (mandu / relative_path).read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
+            text = (mandu / relative_path).read_text(encoding="utf-8", errors="replace")
+        except OSError:
             continue
         for line in text.splitlines():
             for passage in passages(line):

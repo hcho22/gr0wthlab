@@ -127,6 +127,14 @@ class CheckTest(WorkCycleTestCase):
         own, _ = self.proposal()
         self.assertEqual(self.problems(own, package), [], "a line of the agent's own passes")
 
+    def test_a_package_file_that_is_not_valid_text_still_guards_every_line_that_decodes(self):
+        mandu = Path(self.root) / "garbled-mandu"
+        plan = "projects/RepToday/gtm/06-channels/channel-plan.md"
+        (mandu / plan).parent.mkdir(parents=True)
+        (mandu / plan).write_bytes(b"\xff\xfe broken line\nSend one message to each creator, never two.\n")
+        package = instructions.package_lines(mandu, [plan, "projects/RepToday/missing.md"])
+        self.assertEqual(package, {"send one message to each creator, never two.": plan})
+
     def test_a_file_without_its_front_matter_is_no_proposal(self):
         self.assertEqual(
             instructions.parse("Shorter captions.\n", "post-drafts.md"),
