@@ -14,8 +14,9 @@ Each run's records step commits this folder to `main` together with `workspace/`
   It replaces a post only when its Draft, its slot, or its video changes, and a Beta Cohort invitation or a Waitlist ask, which carry `beta`, only when its recruiting Draft, its batch, or its gap changes.
   The filming plan carries `origin` too, with a fingerprint of what must be filmed, so it is filed once per window and replaced only when the kit changes that.
 - `review-queue/items/<id>.md`: each queued item, under an identifier that never changes.
-- `review-queue/set-aside/<run id>/`: what the launcher refused to queue that run from `workspace/review-queue/incoming/`, each file copied whole and named in that run's notice.
-  A proposed Angle or Hook the launcher discards from `workspace/review-queue/angles/` is not copied here.
+- `review-queue/set-aside/<run id>.json`: what the launcher refused to queue that run from `workspace/review-queue/incoming/`: each file's name, the kind its front matter names when that is one of the item kinds, when it was set aside, and the reasons, which never repeat the file's text.
+  The file itself is removed and copied nowhere, and that run's notice names it.
+  An invalid run state file is set aside beside it, in `review-queue/set-aside/<run id>/`.
 - `evidence/package-snapshots/<run id>.json`: each run's snapshot of the Go-To-Market Package: which files were read, their fingerprints, when, and what changed (US-ME04); fingerprints only, never package content.
 - `evidence/decisions/<item id>.json`: each Founder decision a run took in from `founder/decisions/`, with its reason or note, the record it came from and that record's fingerprint, and the newer item that had already superseded the decided one, if any (US-ME07).
   Its existence is the taking in: from then on the sitting page offers no change to that decision.
@@ -36,17 +37,9 @@ Each run's records step commits this folder to `main` together with `workspace/`
   A record is kept only when its quote stands word for word in the text fetched from its link, and a link is recorded once.
   It is the only Evidence kept of what a run fetched.
   The request log (`run-reports/<run id>.requests.json`) also holds the `robots.txt` rule lines of the group that applied to each host, each Allow and Disallow with its path as fetched, beside the addresses and outcomes.
-  Known gaps, not yet decided by the Founder: nothing else the agent writes is checked against what was fetched, so text of its own that repeats a source's words is committed today in each of these places.
-  A file set aside from `workspace/review-queue/incoming/` is copied whole to `review-queue/set-aside/<run id>/`.
-  A Draft stays in `workspace/` and is committed as written until it passes or is rewritten, as is any other file the agent leaves in `workspace/` that the launcher neither takes in nor puts back.
-  The reasons in a run report or a notice can repeat pieces of a file's text (a front matter line, up to 80 characters of an Evidence line, the headings found), and the reasons a Draft's checks give, kept with the Evidence of those checks, can quote the Draft.
-  The reasons an edit record's checks give can quote its `shot` and `source` values whole.
-  They are kept in that run's filming Evidence (`evidence/filming/<run id>.json`), in the day's post verdict in the post Drafts Evidence (`evidence/post-drafts/<run id>.json`), and in the run report and notice.
-  The run report quotes each session's own summary, up to 4,000 characters each.
+  Where else the agent's own words, which may repeat a source's, are kept is listed once, in [operations](../docs/operations.md#where-the-agents-own-words-are-kept).
   The error Codex reported for a session is never repeated here: it is text Codex or the model's provider wrote, so a report, a notice, and every other record give the session's exit code and the launcher's own class of the error, and the error itself stays in the run's record in the log folder, outside this repository.
   The reason a session did not start is the launcher's own, and after a Codex probe that exited with an error it ends with up to 500 characters of what that probe wrote to its error stream; those probes run with no model.
-  What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, and the line that says why a rejection code fits.
-  Three things are removed and leave their file name and the launcher's reasons only, with no copy made: a quote record the launcher refuses, a proposed Angle or Hook it discards from `workspace/review-queue/angles/`, and a rejection code it sets aside.
 - `evidence/listening/runs/<run id>.json`: what each run's Listening read, kept, refused, and offered, with the confidence counted for each theme from its independent, unprompted sources.
   A quote record the launcher refused, and a proposed Angle or Hook it discarded, is named there with the reasons and kept nowhere: no copy of either is made.
 - `evidence/outreach/<run id>.json`: every check of every outreach message that run, and what the Founder's outreach records said of each creator.

@@ -65,17 +65,11 @@ gr0wthlab is the Marketing Engineer's repository; [`README.md`](README.md) gives
   The retention rule is about what the launcher keeps of what a run fetched.
   As Evidence of what was fetched it keeps only a validated quote, with its link, date read, and document hash, beside the rules a subreddit's rules notice quotes.
   The request log it commits (`ledger/run-reports/<run id>.requests.json`) also holds the `robots.txt` rule lines of the group that applied to each host, each Allow and Disallow with its path as fetched, beside the addresses and outcomes.
-  Known gaps, not yet decided by the Founder: nothing else the agent writes is checked against what was fetched, so text of its own that repeats a source's words is committed today in each of these places.
-  A file set aside from `incoming/` is copied whole to `ledger/review-queue/set-aside/<run id>/`.
-  A Draft stays in `workspace/` and is committed as written until it passes or is rewritten, as is any other file the agent leaves in `workspace/` that the launcher neither takes in nor puts back.
-  The reasons in a run report or a notice can repeat pieces of a file's text (a front matter line, up to 80 characters of an Evidence line, the headings found), and the reasons a Draft's checks give can quote the Draft.
-  The reasons an edit record's checks give can quote its `shot` and `source` values whole.
-  The run report quotes each session's own summary, up to 4,000 characters each.
+  Nothing else the agent writes is checked against what was fetched; [operations](docs/operations.md#where-the-agents-own-words-are-kept) is the one list of where its own words may sit, so change it there and nowhere else.
+  Of what the launcher refuses, a Draft waiting for a fix is the one place they may (the Founder's decision of 2026-10-13): everything else refused leaves only its name and the launcher's reasons, a file set aside from `incoming/` in the run's set-aside record (`queue.record_set_aside`), and no reason repeats what the refused file or an edit record says.
   The error Codex reported for a session is text Codex or the model's provider wrote, and no report, notice, or record in `ledger/` repeats it: `Session.failure` in `src/gr0wthlab/sessions.py` is the one wording, the exit code and the launcher's own class of the error, and the text stays in the run's record in the log folder (`codex_last_error`).
   That class says only what the error is recognized as, never what the agent did before it.
   The reason a session did not start is the launcher's own, and after a `codex --version` or `codex sandbox` probe that exited with an error it ends with up to 500 characters of what that probe wrote to its error stream; those probes run with no model.
-  What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, and the line that says why a rejection code fits.
-  Three things are removed and leave their file name and the launcher's reasons only: a refused quote record, a discarded `angles/` proposal, and a set-aside rejection code.
   An item marks any text a third party wrote with `exchange.third_party`, the one marking [`docs/mandu-exchange.md`](docs/mandu-exchange.md) tells Mandu's side is data.
   The agent's work in Listening and outreach is taken in the same way as a post Draft: a quote, a proposed Angle or Hook, and a message each become a record or an item only through `listening.py`, `outreach.py`, and `messages.py`.
   Every package-change proposal declares `new_angle`: one that declares `yes`, since it adds or changes an Angle or Hook (FR-7), is queued only when its Evidence names a kept quote's record exactly (`queue.declaration_problem`), and one that declares `no` is queued whatever it touches or says.
