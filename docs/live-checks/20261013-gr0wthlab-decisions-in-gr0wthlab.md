@@ -11,7 +11,7 @@ How to read the paths:
 - `<lab>` is the throwaway lab under `<tmp>` described below.
 - Where a quoted line held the home folder's or the temporary folder's full path, that prefix was replaced with `~` or `<tmp>`.
 
-All times are Mac local time (PDT, UTC-7): rounds 1 and 2 on 2026-10-12, rounds 3 to 7 on 2026-10-13.
+All times are Mac local time (PDT, UTC-7): rounds 1 and 2 on 2026-10-12, rounds 3 to 8 on 2026-10-13.
 A run identifier carries the UTC date, which was already the next day each time.
 Codex CLI 0.160.0 with `gpt-6-luna` at `high` reasoning effort throughout.
 
@@ -481,6 +481,64 @@ That first look showed the "Nothing was saved." block touching the note under it
   Only `src/sitting/page.css` changed after that run began, and `src/tests/test_serve.py`, which serves it, passed again afterwards: 32 tests.
 - `ruff check` and `ruff format --check` on `src` and `src/bin/gr0wthlab`, ruff 0.15.20: clean.
 - The latest-Python job of CI, which runs on Linux, was not run here.
+
+## Round 8: a missing records folder stops the run before the records step
+
+A live test of round 7's commit found that a run in the production clone with a folder of the Founder's records missing committed the folder's removal in its pre-run records step, and only then refused to start.
+The refusal says to restore the folder from git, which then failed, since `HEAD` no longer held it; a folder made again by hand let the next run push the removal to `main`.
+`Cycle.locked_run` now checks the five folders (`founder.check`) before the pre-run records step, in place of the check it made after it.
+That step changes no file, and a sync that moves `main` starts the run's process again, which checks again.
+The same round gave a code chip on an item's flag (the earlier item in "It replaces") the sheet's color, since the flag's own tint hid it and left only its padding, which read as a space before the full stop.
+
+This round changed launcher code, so the boundary was checked again.
+It ran on 2026-10-13 from about 22:30 to 22:35, with Codex CLI 0.160.0, on `src` tree `bd58c9baf225ad21082b873036cffef18d6661e8` and `config` tree `b43d0624383aada9155906ee4b54515c3ecb3a5d`, unchanged.
+After the checks, one line of the new test in `src/tests/test_cycle.py` was split in two, so the tree this record lands with is `src` tree `41f6b2b081b830bc4c74132287852758aafd221c`; no file the launcher runs changed.
+`git status` in the worktree was not empty, since the round's changes were not committed yet; its listing was the same before the preflight and after the boundary check.
+
+### The finding, before and after, in a lab
+
+Two throwaway labs under `<tmp>`, each a production clone of a throwaway bare remote, with the quiet settings, a synthetic Mandu and RepToday beside it, and the no-model Codex stand-in, so no model was called.
+The first was an export of round 7's commit, `e35ede4e28b255806dd87888ba0fa77a3231e509`; the second an export of this round's tree.
+In each, a first `src/bin/gr0wthlab run` pushed its records, `ledger/founder/outreach/` was removed, and `src/bin/gr0wthlab run` was started again.
+
+| Lab | Runs | What the records showed |
+| --- | --- | --- |
+| Round 7's commit | `20261014T053036Z-on-demand-70c2`, then two starts refused | the first refused start printed `pre-run: current: ... records left before this run, an earlier run's or a sitting's, were committed first` before the refusal; the clone's `HEAD` was then a new commit, `chore(records): records left before the run of 20261014T053039Z`, removing `ledger/founder/outreach/.gitkeep`; `git restore ledger/founder/outreach` exited 1 with `pathspec 'ledger/founder/outreach' did not match any file(s) known to git` |
+| This round's tree | `20261014T053046Z-on-demand-ae4e`, a start refused, then `20261014T053049Z-on-demand-20dd` | the refused start printed the refusal and no `pre-run` line, exited 2, and left the clone's `HEAD` and the remote's where the first run put them; `git restore ledger/founder/outreach` exited 0 and left `git status` empty; the next run pushed its records, and the remote's `HEAD` holds `ledger/founder/outreach/.gitkeep` |
+| This round's tree, `ledger/founder/sittings/` replaced by a link into `workspace/` | a start refused | the same refusal, naming `ledger/founder/sittings`; `HEAD` and the remote's unchanged; with the link removed, `git restore ledger/founder/sittings` exited 0 and left `git status` empty |
+
+### The boundary, from the worktree, on the real configuration
+
+Run from the linked worktree, with `GR0WTHLAB_LOG_DIR` set to a folder under `<tmp>` and no other override, from 22:33.
+
+| Command | Run | What the records showed |
+| --- | --- | --- |
+| `src/bin/gr0wthlab show-config` | none (no model) | fingerprint `0a94ab4c7904c115f5a884f73c180172754eb8e9cd3e4e402837076ce3a54090`, the one rounds 4 and 5 printed |
+| `src/bin/gr0wthlab preflight` | none (no model) | 6 areas written; 19 paths refused, each of the five folders of the Founder's records among them by its own path; no breach and no failure; the listing of the footage place refused, none listed, none untried; both listed hosts unreachable, none reached, none untried |
+| `src/bin/gr0wthlab boundary-check` | `20261014T053303Z-on-demand-f312` | PASSED at its first probe run; the same fingerprint; 43 steps to prove; 14 of 14 file-tool targets refused, each in a patch of its own; 16 kernel Seatbelt denials, one `file-write-create` for each of the five folders among them; 1 of 1 forbidden read refused; 12 of 12 permitted sentinels written; no sentinel escaped; no local connection got through; nothing changed since the snapshot; agent time 79.7 s |
+
+Just before, the same two commands ran in a third lab under `<tmp>`, an export of this round's tree with its configuration as committed and a synthetic Mandu and RepToday beside it: the preflight refused 18 paths, each of the five folders among them, with no breach and no failure, and `boundary-check` run `20261014T053114Z-on-demand-3de7` PASSED at its first probe run with the same counts as above, agent time 59.0 s.
+
+Before the preflight and after the boundary check, the `HEAD`, branch, `git status` listing, and stash count of the real Mandu, RepToday, and Immerse checkouts were read; the two readings are identical for all three.
+A content hash of each checkout was not taken this round.
+`~/Library/LaunchAgents` holds no gr0wthlab LaunchAgent.
+
+### The flag's code chip in a browser
+
+A static page linking `src/sitting/page.css`, holding the flag "It replaces" with an item identifier as the page writes it, was opened in headless Chrome through `chrome-devtools-axi`, in the dark and the light color scheme.
+In both the chip showed on the flag in its own color, with its padding inside it; in the dark scheme Chrome computed the chip as `rgb(27, 30, 37)` on the flag's `rgb(36, 40, 49)`.
+
+### What round 8 did not exercise
+
+- The flag on the served page, after a run that replaced an item: round 7 says why the lab cannot time that by hand, and the static page above used the same style sheet and markup.
+- A real-agent weekly run, the hole tests, and every route into the records: this round changed neither the sandbox nor the permission profile nor the probes, so round 3's stand.
+- A scheduled run, the real production clone, Mandu's side, and a browser other than Chrome, as in round 1.
+
+### Unit tests on this round's tree
+
+- `/usr/bin/python3 -m unittest`, under Python 3.9.6, on `tests.test_cycle.ProductionCloneTest`, the two tests of `tests.test_cycle.DecisionRoundTripTest` that stop a run for a records folder, and `tests.test_founder`: 44 tests, and none failed.
+  The new test, `test_a_missing_records_folder_stops_the_run_before_its_removal_is_committed`, failed on round 7's `src/gr0wthlab/cycle.py` at its check that nothing was committed, and passed again on its own after its line was split.
+- The whole suite and lint were not run in this round; CI runs both.
 
 ## Screenshots
 

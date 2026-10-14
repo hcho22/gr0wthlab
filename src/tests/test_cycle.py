@@ -1522,6 +1522,27 @@ class ProductionCloneTest(CycleTestCase):
         self.assertEqual(self.queue(self.clone)["closed"][0]["status"], "rejected")
         self.assertEqual(fakes.git(self.clone, "status", "--porcelain", env=self.env), "")
 
+    def test_a_missing_records_folder_stops_the_run_before_its_removal_is_committed(self):
+        """The refusal says to restore the folder from git, so the pre-run records step must not commit its removal
+        first: git can still restore it, and nothing about it reaches main."""
+        code, out = self.run_cycle(repo=self.clone)
+        self.assertEqual(code, 0, out)
+        head = fakes.git(self.clone, "rev-parse", "HEAD", env=self.env)
+        shutil.rmtree(str(self.clone / "ledger/founder/outreach"))
+        code, out = self.run_cycle(repo=self.clone, at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(code, launcher.EXIT_CONFIG, out)
+        self.assertIn("founder/outreach must be a real folder that can be read", out)
+        self.assertIn("restore it from git", out)
+        self.assertEqual(fakes.git(self.clone, "rev-parse", "HEAD", env=self.env), head, "nothing was committed")
+        self.assertEqual(fakes.git(self.remote, "rev-parse", "HEAD", env=self.env), head, "nothing was pushed")
+
+        fakes.git(self.clone, "restore", "ledger/founder/outreach", env=self.env)
+        self.assertEqual(fakes.git(self.clone, "status", "--porcelain", env=self.env), "")
+        code, out = self.run_cycle(repo=self.clone, at=fakes.SUNDAY_RUN + timedelta(days=7, minutes=5))
+        self.assertEqual(code, 0, out)
+        saved = fakes.git(self.remote, "ls-tree", "-r", "--name-only", "HEAD", env=self.env).split()
+        self.assertIn("ledger/founder/outreach/.gitkeep", saved)
+
     def leave_probe_files(self, repo):
         """What a boundary check killed mid-run leaves at the top of the areas: its script and a sentinel."""
         left = [

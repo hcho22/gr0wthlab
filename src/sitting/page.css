@@ -273,6 +273,11 @@ p {
   font-size: 14.5px;
 }
 
+/* A code chip on the flag's own tint would show only as its padding. */
+.flag code {
+  background: var(--sheet);
+}
+
 .note {
   margin: 0 0 14px;
   padding: 12px 14px;

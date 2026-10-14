@@ -1677,6 +1677,9 @@ class Cycle:
             definitions = sessions.definitions(canonical(self.repo_root))
             if trigger not in launcher.TRIGGERS:
                 raise ConfigError(f"trigger must be one of {', '.join(launcher.TRIGGERS)}")
+            # Before the pre-run records step, which would commit a missing folder's removal and leave git nothing
+            # to restore it from. That step changes no file, and a sync that moves main starts this process again.
+            founder.check(self.store.root)
         except ConfigError as error:
             self.say(f"refusing to start: {error}")
             return launcher.EXIT_CONFIG
@@ -1728,7 +1731,6 @@ class Cycle:
         try:
             _, boundary = load_boundary(self.repo_root, self.env, self.home)
             registry = load_json(self.repo_root / "config" / "products.json")
-            founder.check(self.store.root)
             rules = settings.waitlist(registry, boundary, self.env, self.home)
             beta_rules = beta.rules(registry, config)
             footage_place = boundary.footage
