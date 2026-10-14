@@ -3,7 +3,7 @@
 The guard on a public gr0wthlab repository: in the production clone a run that saves its records (`records.save_after_run`) asks GitHub whether the repository `origin` pushes to is private before it does anything else, and refuses to start only when GitHub says plainly that it is public.
 It asks again once the run's work is taken in, before the notice and the run report are written, and again just before each push, and the records are pushed only when those answers say plainly that the repository is private; any other answer keeps them local, and the run report and the notice say so with the reason, or the next run's report for an answer just before a push (`src/gr0wthlab/visibility.py`, [operations](../operations.md#the-repository-must-be-private)).
 Until round 3 the start refused on any answer that was not plainly private, and the records step asked just before each push; rounds 1 and 2 record that guard.
-Round 3 recorded the guard with the question asked once after the run's work and not again before the pushes, and with the start asked whatever `records.save_after_run` said; round 4 records the guard as it is now.
+Round 3 recorded the guard with the question asked once after the run's work and not again before the pushes, and with the start asked whatever `records.save_after_run` said; round 4 recorded it with a run restarted on new code not asking again at its start, and round 5 records the guard as it is now.
 It serves no story of its own; it keeps the Founder's records off a public repository from the first real run on.
 
 ## Round 1: the first re-check
@@ -151,3 +151,30 @@ The repository on GitHub was still public, and `config/run.json` had `records.sa
 - A repository made public after the run report was written and before the push retried after `origin/main` moved, and the next run's report line about it: `src/tests/test_cycle.py` (`test_a_repository_made_public_during_the_run_is_not_pushed_to`) and `src/tests/test_records.py` (`VisibilityTest.test_the_retried_push_after_a_moved_remote_asks_again`), each with a stand-in for GitHub's answer.
 - GitHub out of reach at the start was not run again; round 3 records it, and this round did not change how the start treats an answer that falls short.
 - Everything round 3 lists as not exercised still stands as it says there.
+
+## Round 5: the re-check after the third review
+
+After the third review, the Founder chose on 2026-10-14 that a run restarted on new code after its sync asks GitHub again at its start, by the new code's configuration, before it does anything else, so a reviewed change that turns `records.save_after_run` on while the repository is public stops the restarted run before any session.
+
+**What was run:** from the same linked worktree, with the fix not yet committed, on 2026-10-14 from 11:19 PDT, with Codex CLI 0.160.0 and gh 2.96.0 in `/usr/local/bin`, the same commands as in round 4: the real repository's refusal, then `src/bin/gr0wthlab preflight` and `src/bin/gr0wthlab boundary-check`.
+The repository on GitHub was still public, and `config/run.json` had `records.save_after_run` on.
+
+**On which commit:** `6208391d220fc8e67f9588445c8a7dce5c902cb7` with the fix on top and not committed, whose `src` tree is `d97b19af6840c7665c79b3dd62e661d237357699` and `config` tree `b43d0624383aada9155906ee4b54515c3ecb3a5d`, as `git rev-parse <commit>:src` and `git rev-parse <commit>:config` print for the commit that holds this fix.
+`git status` listed the fix's 3 changed files and nothing else before the runs, and the same 3 after the boundary check.
+`show-config` printed the configuration fingerprint `02e92343693f4b965e1d4eced781bd0c1a8156e367fb67c69c22261e0c912932`.
+
+**Each run's identifier:** the refused run got none; the boundary check was `20261014T181925Z-on-demand-971e`.
+
+**What the records showed:**
+
+| Command | Run identifier | What the records showed |
+| --- | --- | --- |
+| `src/bin/gr0wthlab run`, the real repository as it is | none | exit code 4; it printed only `` refusing to start: the GitHub repository `<owner>/gr0wthlab` is public: a real run would publish its Drafts, its Evidence, and the Founder's records there, so the repository must be made private first `` (the account name replaced by `<owner>`), in 1.37 seconds; the scratch log folder stayed empty; `ledger/` held only `founder/`, `README.md`, and `run.lock` |
+| `src/bin/gr0wthlab preflight` | none (no model) | exit code 0; 6 areas written; 19 paths refused; no breach and no failure; the listing of the footage place refused, none listed, none untried; both listed hosts unreachable, none reached, none untried |
+| `src/bin/gr0wthlab boundary-check` | `20261014T181925Z-on-demand-971e` | PASSED at its first probe run; fingerprint `02e92343693f4b965e1d4eced781bd0c1a8156e367fb67c69c22261e0c912932`; 43 steps to prove; 0 sentinels escaped; 12 of 12 permitted sentinels written; 14 of 14 file-tool targets refused, each in a patch of its own; 16 kernel Seatbelt denials naming the run's sentinels or the check's listeners; 1 of 1 forbidden read refused; no local connection got through; 3 sandbox network targets refused, none reached; nothing changed since the snapshot; agent time 36.8 s |
+
+**What was not exercised:**
+
+- A run restarted on new code that turns `records.save_after_run` on while the repository is public: no production clone exists, and the linked worktree's pre-run sync refuses a detached HEAD before any restart.
+  It stands on `src/tests/test_cycle.py` (`test_a_run_restarted_on_a_configuration_that_saves_asks_again_and_refuses_while_public`), with a stand-in for GitHub's answer.
+- Everything round 4 lists as not exercised still stands as it says there.

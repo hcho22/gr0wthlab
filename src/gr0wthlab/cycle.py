@@ -1694,7 +1694,7 @@ class Cycle:
             return launcher.EXIT_CONFIG
 
         production = canonical(self.repo_root) == config.records.production_clone
-        if production and not pre and config.records.save_after_run:
+        if production and config.records.save_after_run:
             # Before anything else a run does: from the first real run on, its records are pushed to that repository.
             answer = self.private(config)
             if answer.status == visibility.PUBLIC:

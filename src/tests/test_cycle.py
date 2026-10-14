@@ -1703,6 +1703,39 @@ class ProductionCloneTest(CycleTestCase):
         self.assertEqual(fakes.git(self.remote, "rev-parse", "HEAD", env=self.env), head, "nothing was pushed")
         self.assertNotIn("kept local", self.report(self.clone))
 
+    def test_a_run_restarted_on_a_configuration_that_saves_asks_again_and_refuses_while_public(self):
+        """The process that runs the sessions asks by its own configuration, so a reviewed change the sync brings in
+        that turns saving on, while the repository is public, stops the restarted run before any session."""
+        fakes.set_run(self.repo, "records", {"save_after_run": False})
+        fakes.git(self.repo, "commit", "--quiet", "-am", "save no records", env=self.env)
+        fakes.git(self.repo, "push", "--quiet", "origin", "main", env=self.env)
+        fakes.git(self.clone, "pull", "--quiet", env=self.env)
+        fakes.set_run(self.repo, "records", {"save_after_run": True})
+        fakes.git(self.repo, "commit", "--quiet", "-am", "save records again", env=self.env)
+        fakes.git(self.repo, "push", "--quiet", "origin", "main", env=self.env)
+        head = fakes.git(self.remote, "rev-parse", "HEAD", env=self.env)
+        self.github = fakes.GitHub("public")
+        calls = []
+        code, out = self.run_cycle(repo=self.clone, execve=lambda *args: calls.append(args))
+        self.assertEqual(len(calls), 1, out)
+        self.assertEqual(self.github.asked, [], "the configuration before the sync saved nothing")
+
+        self.env[cycle.PRE_RUN_ENV] = calls[0][2][cycle.PRE_RUN_ENV]
+        code, out = self.run_cycle(repo=self.clone)
+        self.assertEqual(code, cycle.EXIT_RECORDS, out)
+        self.assertEqual(
+            out,
+            "gr0wthlab: refusing to start: the GitHub repository `example/gr0wthlab` is public: a real run would"
+            " publish its Drafts, its Evidence, and the Founder's records there, so the repository must be made"
+            " private first\n",
+        )
+        self.assertEqual(self.github.asked, [(self.clone, "origin")])
+        self.assertFalse((self.codex_dir / "prompt.txt").exists(), "no session started")
+        self.assertEqual(list((self.ledger(self.clone) / "evidence" / "package-snapshots").glob("*.json")), [])
+        self.assertEqual(list((self.ledger(self.clone) / "run-reports").glob("2*")), [])
+        self.assertEqual(fakes.git(self.clone, "rev-parse", "HEAD", env=self.env), head, "nothing was committed")
+        self.assertEqual(fakes.git(self.remote, "rev-parse", "HEAD", env=self.env), head, "nothing was pushed")
+
     def test_a_run_outside_the_production_clone_asks_github_nothing(self):
         self.github = fakes.GitHub("public")
         code, out = self.run_cycle()

@@ -12,7 +12,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
 
 1. In the production clone only, while `records.save_after_run` is on, it first asks GitHub whether the repository `origin` pushes to is private, and refuses to start while GitHub says plainly that it is public ([The repository must be private](#the-repository-must-be-private)).
    Any other answer lets the run go ahead, and its records stay local unless GitHub says plainly, when asked again at step 8 and just before each push at step 9, that the repository is private.
-   Then it fetches `origin` and fast-forwards `main`, and restarts itself on the new code.
+   Then it fetches `origin` and fast-forwards `main`, and restarts itself on the new code, which asks GitHub again by its own configuration before it does anything else.
    Before that, it restores its owner's read and write access to anything under `workspace/` left without it.
    It refuses to start if the clone is not on `main`, has changes outside `workspace/` and `ledger/`, or has local commits outside them.
    If the fetch fails, for example offline, it runs the current code and says so in the run report.
@@ -265,6 +265,7 @@ A first run that ends with `records: withheld` did not hear from GitHub that the
 ### The repository must be private
 
 A run in the production clone that saves its records (`records.save_after_run`) asks GitHub whether the repository `origin` pushes to is private before it does anything else, asks again once its sessions' work is taken in, before it writes its notice and run report, and asks again just before each push.
+A run that restarts itself on new code after its sync asks again, by the new code's configuration, before it does anything else, so a reviewed change that turns `records.save_after_run` on while the repository is public stops the restarted run before any session.
 A run with `records.save_after_run` off pushes nothing and asks GitHub nothing, whatever the repository is.
 The question is one `gh api repos/<owner>/<name>` read, outside the sandbox, with the same GitHub login the push uses, and GitHub has 60 seconds to answer.
 While GitHub says the repository is public, the run refuses to start with exit code 4 and says so: nothing is fetched, snapshotted, started, or saved.
