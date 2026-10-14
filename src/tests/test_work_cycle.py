@@ -1027,6 +1027,23 @@ class UnusableSourceTest(WorkCycleTestCase):
         self.assertIn("read, but could not be used: it is not UTF-8 text. Incomplete: Outreach Drafts.", parts[0])
         self.assertEqual(len([entry for entry in self.queue()["open"] if entry["kind"] == "notice"]), 1)
 
+    def test_a_research_file_that_is_not_valid_text_makes_its_folder_one_failed_source(self):
+        folder = "projects/RepToday/gtm/01-research/"
+        (self.mandu / folder / "competitor-ironfit.md").write_bytes(b"\xff\xfe not text\n")
+        self.agent()
+        report = self.go()
+        self.assertIn(
+            f"| RepToday package: `{folder}competitor-ironfit.md` | read | first snapshot of this file |", report
+        )
+        self.assertRegex(
+            report, rf"\| RepToday package: `{folder}` \| unusable \| Read, but could not be used: [^|]+\. \|"
+        )
+        self.assertIn(f"- Sources: 1 failed (RepToday package: `{folder}`),", report)
+        self.assertIn(f"| Post Drafts | incomplete | RepToday package: `{folder}` could not be used |", report)
+        parts = self.source_notices()
+        self.assertEqual(len(parts), 1, self.notices())
+        self.assertIn(f"- RepToday package: `{folder}`: Read, but could not be used: ", parts[0])
+
     def test_well_formed_files_make_no_failed_source(self):
         self.agent()
         report = self.go()
