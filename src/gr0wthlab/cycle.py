@@ -1376,6 +1376,8 @@ class Cycle:
             if plan is None:
                 problem = state.posts_problem
                 return f"the post Drafts were {problem}" if problem else "no active Product has a 14-day kit"
+            if "calendar" in plan.context.kit.problems:
+                return "the calendar could not be used"
             if not plan.days:
                 return "no calendar day is due this run"
             waiting = any(not day_plan.approved for day_plan in plan.days)

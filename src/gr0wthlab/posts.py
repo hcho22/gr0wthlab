@@ -221,6 +221,13 @@ def unchecked(plan: Plan) -> list[str]:
     return reasons
 
 
+def no_day(plan: Plan) -> str:
+    """Why a plan holds no day, as a run's summary says it: the calendar could not be used, or none was due."""
+    if "calendar" in plan.context.kit.problems:
+        return "no day was prepared, as the calendar could not be used"
+    return "no calendar day was due"
+
+
 def slot_for(window: Window, number: int) -> str | None:
     if window.day_1 is None or window.slot is None:
         return None
@@ -1264,7 +1271,9 @@ def report_lines(plan: Plan | None, outcome: Outcome | None, filing: str, proble
         lines.append(f"- Every check of every Draft: `{outcome.record}`.")
     days = {day_plan.day.day: day_plan.day for day_plan in plan.days}
     if not outcome.results:
-        return lines + ["", "No calendar day was due this run."]
+        # The plan's reason, which opens this section, says why when the calendar could not be used.
+        none = "No day was prepared" if "calendar" in plan.context.kit.problems else "No calendar day was due"
+        return lines + ["", f"{none} this run."]
     lines += ["", "| Day | Angle / pair leg | Result | Detail |", "| --- | --- | --- | --- |"]
     for result in outcome.results:
         label = leg_label(days[result.day]) if result.day in days else "-"

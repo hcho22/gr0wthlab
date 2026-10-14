@@ -993,7 +993,8 @@ def summary_lines(state: RunState) -> list[str]:
     outcome = state.post_outcome
     if outcome is not None:
         counts = outcome.counts()
-        lines.append(f"- Post Drafts: {', '.join(counts) or 'no calendar day was due'}.")
+        none = posts.no_day(state.posts) if state.posts else "no calendar day was due"
+        lines.append(f"- Post Drafts: {', '.join(counts) or none}.")
     elif state.posts_problem:
         lines.append(f"- Post Drafts: {state.posts_problem}")
     if state.filming is not None or state.filming_problem:

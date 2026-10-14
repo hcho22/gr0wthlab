@@ -993,6 +993,10 @@ class UnusableSourceTest(WorkCycleTestCase):
         )
         self.assertIn(f"- Sources: 1 failed ({name}),", report)
         self.assertIn(f"| Post Drafts | incomplete | {name} could not be used |", report)
+        self.assertIn("- Post Drafts: no day was prepared, as the calendar could not be used.", report)
+        self.assertIn("| Post Drafts | no session: the calendar could not be used |", report)
+        self.assertIn("\n\nNo day was prepared this run.\n", report)
+        self.assertNotIn("no calendar day", report.lower())
         notices = [entry for entry in self.queue()["open"] if entry["kind"] == "notice"]
         self.assertEqual(len(notices), 1)
         parts = self.source_notices()
