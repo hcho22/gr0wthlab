@@ -1036,13 +1036,14 @@ class UnusableSourceTest(WorkCycleTestCase):
             f"| RepToday package: `{folder}competitor-ironfit.md` | read | first snapshot of this file |", report
         )
         self.assertRegex(
-            report, rf"\| RepToday package: `{folder}` \| unusable \| Read, but could not be used: [^|]+\. \|"
+            report,
+            rf"\| RepToday package: `{folder}` \| unusable \| Read, but could not be used: it is not UTF-8 text\. \|",
         )
         self.assertIn(f"- Sources: 1 failed (RepToday package: `{folder}`),", report)
         self.assertIn(f"| Post Drafts | incomplete | RepToday package: `{folder}` could not be used |", report)
         parts = self.source_notices()
         self.assertEqual(len(parts), 1, self.notices())
-        self.assertIn(f"- RepToday package: `{folder}`: Read, but could not be used: ", parts[0])
+        self.assertIn(f"- RepToday package: `{folder}`: Read, but could not be used: it is not UTF-8 text.", parts[0])
 
     def test_well_formed_files_make_no_failed_source(self):
         self.agent()

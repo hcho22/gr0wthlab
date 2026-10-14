@@ -194,7 +194,7 @@ def parse_calendar(text: str) -> dict[int, KitDay]:
             raise KitError(f"calendar line {line} has {len(row)} cells; the header has {len(header)}")
         day_text = cell(row, header, "Day")
         if not re.fullmatch(r"[0-9]+", day_text):
-            raise KitError(f"calendar line {line}: day {day_text!r} is not a number")
+            raise KitError(f"calendar line {line}: its day is not a number")
         day = int(day_text)
         if day in days:
             raise KitError(f"calendar line {line}: day {day} appears twice")

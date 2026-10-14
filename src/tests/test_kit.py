@@ -61,6 +61,12 @@ class CalendarTest(unittest.TestCase):
             with self.subTest(why=why), self.assertRaisesRegex(kit.KitError, why):
                 kit.parse_calendar(text)
 
+    def test_why_a_calendar_does_not_parse_never_repeats_a_cell(self):
+        text = "| Day | Asset | Angle | Platform |\n|---|---|---|---|\n| one | x | P01 | TikTok |\n"
+        with self.assertRaises(kit.KitError) as raised:
+            kit.parse_calendar(text)
+        self.assertEqual(str(raised.exception), "calendar line 3: its day is not a number")
+
 
 class AnglesAndPairsTest(unittest.TestCase):
     def test_each_angle_has_its_sourced_pain_hook_format_signal_and_kill_criterion(self):

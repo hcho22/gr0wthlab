@@ -258,7 +258,9 @@ def read_kit(mandu: Path, roles: Mapping[str, str]) -> tuple[kit.Kit, dict[str, 
                 data = (mandu / relative).read_bytes()
                 texts[role] = data.decode("utf-8")
             files[role] = (relative, hashlib.sha256(data).hexdigest())
-        except (OSError, UnicodeDecodeError, kit.KitError) as error:
+        except UnicodeDecodeError:
+            parsed.problems[role] = "it is not UTF-8 text"
+        except (OSError, kit.KitError) as error:
             parsed.problems[role] = getattr(error, "strerror", None) or str(error)
     parsers = (
         ("calendar", "days", kit.parse_calendar),
