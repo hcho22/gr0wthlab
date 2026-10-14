@@ -2,6 +2,8 @@
 
 The ledger lives in ledger/review-queue/queue.json, beside the published items; only the launcher writes there, and
 the agent can only read it. The agent proposes items in workspace/review-queue/incoming/, which the launcher checks.
+A file it sets aside from there is removed and copied nowhere: the run's set-aside record keeps its name and why,
+and the reasons describe what is wrong without repeating the file's text.
 An item is queued once, under an identifier that never changes, and is closed by the Founder's decision (approved
 or rejected) or by a newer item that supersedes it; a closed item never returns to the open list. A decision the
 Founder took on an item a newer one had already superseded is kept on that item, which stays superseded.
@@ -52,8 +54,9 @@ class DecisionOutcome:
 
 @dataclass(frozen=True)
 class SetAside:
+    """A file the launcher refused to queue from incoming/: all that is kept of it."""
+
     name: str
-    moved_to: str
     problems: tuple[str, ...]
 
 
@@ -89,12 +92,11 @@ def stands(current: Mapping[str, object] | None, unread: Sequence[str]) -> Stand
     Dispatch request whose reviewed text is unread, post Drafts without the calendar, outreach without the channel
     plan or the kit, replies without the kit, and the video of a day whose copy is approved and whose Draft is
     unread. There the output always reads incomplete in the run report with the real reason, and no item of the
-    step is touched or listed. The run's notice names the source only where its read failed as a source or was
-    recorded as a launcher problem, and in the line that says no video was cut for an approved day; a calendar or
-    channel plan that was read but could not be parsed or decoded is told in the run report, and the notice has no
-    line of its own for it. While the window's filming plan is open, though, that plan stands on a calendar that
-    fails this way, as on any kit file, so the notice's list of open items not checked again names the plan with
-    the kit file as its reason.
+    step is touched or listed. The run's notice names the source only where its read failed as a source, where it was
+    read and could not be used, as a calendar or channel plan that could not be parsed or decoded, or was recorded as
+    a launcher problem, and in the line that says no video was cut for an approved day. While the window's filming
+    plan is open, that plan also stands on a calendar that fails this way, as on any kit file, so the notice's list
+    of open items not checked again names the plan with the kit file as its reason.
     """
     if current is None or not unread:
         return None
@@ -123,6 +125,20 @@ def declaration_problem(item: exchange.Item, kept: Collection[str]) -> str | Non
             " quotes under ## Sourced pain"
         )
     return None
+
+
+def record_set_aside(store: Store, set_aside: Sequence[SetAside], run_id: str) -> list[SetAside]:
+    """Write the run's set-aside record, review-queue/set-aside/<run>.json: each file's name and why. A record that
+    cannot be written is said in each file's reasons."""
+    if not set_aside:
+        return []
+    items = [{"name": item.name, "reasons": list(item.problems)} for item in set_aside]
+    try:
+        store.write_json(store.path(REVIEW_QUEUE, SET_ASIDE, f"{run_id}.json"), {"run": run_id, "items": items})
+    except (OSError, ConfigError) as error:
+        problem = f"the set-aside record could not be written ({error})"
+        return [SetAside(item.name, (*item.problems, problem)) for item in set_aside]
+    return list(set_aside)
 
 
 def slug_of(name: str) -> str:
@@ -269,13 +285,13 @@ class Ledger:
             name = areas.relative(path)[len("review-queue/incoming/") :]
             item, problems = self.check_incoming(path, name, products, seen, kept, unread or {})
             if item is None:
-                set_aside.append(self.set_aside(areas, store, path, name, run_id, problems))
+                set_aside.append(self.set_aside(areas, path, name, problems))
                 continue
             try:
                 identifier = self.publish(store, item, slug_of(name), run_id, now)
             except (OSError, ConfigError) as error:
                 problem = f"could not be queued ({error})"
-                set_aside.append(self.set_aside(areas, store, path, name, run_id, [problem]))
+                set_aside.append(self.set_aside(areas, path, name, [problem]))
                 continue
             areas.remove(path)
             published.append(identifier)
@@ -286,7 +302,7 @@ class Ledger:
         for old, new in superseding:
             if self.entries[old]["status"] == OPEN:
                 self.close(self.entries[old], SUPERSEDED, run_id, now, superseded_by=new)
-        return published, set_aside
+        return published, record_set_aside(store, set_aside, run_id)
 
     def check_incoming(
         self,
@@ -333,7 +349,9 @@ class Ledger:
             problems.append(problem)
         target = item.fields.get("supersedes")
         replaced = self.entries.get(target, {}) if target else {}
-        if target and replaced.get("status") != OPEN:
+        if target and not replaced:
+            problems.append("supersedes names no item in the Review Queue; name an open item by its identifier")
+        elif target and replaced.get("status") != OPEN:
             problems.append(f"supersedes {target}, which is not an open item")
         elif replaced.get("origin"):
             problems.append(
@@ -372,18 +390,10 @@ class Ledger:
                     )
         return (None if problems else item), problems
 
-    def set_aside(
-        self, areas: Areas, store: Store, path: Path, name: str, run_id: str, problems: Sequence[str]
-    ) -> SetAside:
-        """Take a file out of incoming/ into review-queue/set-aside/<run>/, keeping a plain file's text."""
-        target = store.path(REVIEW_QUEUE, SET_ASIDE, run_id, name.replace("/", "--"))
-        try:
-            store.write_bytes(target, read_plain(path))
-        except (UnsafeFile, OSError) as error:
-            problems = list(problems) + [f"not kept: {error}"]
-            target = None
+    def set_aside(self, areas: Areas, path: Path, name: str, problems: Sequence[str]) -> SetAside:
+        """Remove a file from incoming/, keeping its name and the reasons, and nothing of its text."""
         areas.remove(path)
-        return SetAside(name, store.relative(target) if target else "", tuple(problems))
+        return SetAside(name, tuple(problems))
 
     def ordered(self) -> list[dict[str, object]]:
         """Open items in presentation order: posts by nearest slot, then posts with no slot yet by window and day, then

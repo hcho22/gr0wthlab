@@ -1,32 +1,34 @@
 """One Marketing Engineer run, scheduled or on demand, from the pre-run sync to the saved records.
 
-Order: bring the production clone up to origin's main; snapshot the Go-To-Market Package; take in the Founder's
-decisions from ledger/founder/, which only `gr0wthlab sitting` writes (founder.py) and from which every Founder record
-below is read; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests
-that need filing; plan the post Drafts from the 14-day kit (posts.prepare); file the filming plan and list and measure
-the footage (filming.prepare); read the Founder's Beta Build record and, only once it exists, plan the Beta
+Order: in the production clone, while it saves its records, refuse to start while GitHub says the repository they are
+pushed to is public (visibility.py), then bring it up to origin's main; snapshot the Go-To-Market Package; take in the
+Founder's decisions from ledger/founder/, which only `gr0wthlab sitting` writes (founder.py) and from which every
+Founder record below is read; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch
+requests that need filing; plan the post Drafts from the 14-day kit (posts.prepare); file the filming plan and list and
+measure the footage (filming.prepare); read the Founder's Beta Build record and, only once it exists, plan the Beta
 Cohort's next invitation batch (beta.prepare); read the fixed list of network sources into one snapshot (fetch.Client,
-the launcher's only way onto the network), which is working data removed when the run ends, and plan Listening from it
-and outreach from the Founder's records; decide which workflows have work for the agent, and for each of those, one
-after another in a fixed order, write its brief and run one agent session inside the sandbox, which has no network
-(sessions.py, launcher.run), and after each session put back any change it made to the agent's Instructions, so no
-session works from Instructions another changed; once the last session has ended, queue the items the sessions
-wrote to workspace/review-queue/incoming/ that pass the format, a post for
-each Draft that passes every check, with the video cut from its edit record when it has one (posts.take), the
-recruiting Drafts that pass theirs (beta.take), the quotes, proposals, and messages that pass theirs (listening.take,
-outreach.take), the code proposed for each rejection reason (learning.take), and the reviewed proposals that need
-filing; count what each session did, for the report to show beside that session's own word (work.py); write the Review
-Queue and the run report; commit and push workspace/ and ledger/. Every step but the sessions is deterministic code
-outside the sandbox. The launcher's records live in ledger/, which an agent can read and never write, so nothing it
-does can change them; in workspace/ the launcher only restores its owner's access to entries a session left without
-it, removes what a stopped boundary check left at the top of the areas, before the first records step can commit it,
-reads the Drafts and the edit records, reads the items in incoming/ before each session starts and once it has
-ended, removes a recruiting Draft that holds what looks like an email address, reads and removes the items, quote
-records, proposals, and codes it takes in, and after each session puts the agent's Instructions back as they were.
-Nothing is taken in
-while a session can still write: one take-in, after the last session, keeps every take-in rule what it was when a run
-had one session. One run at a time per checkout holds the run lock in its ledger/ from the sync to the saved records;
-a run started meanwhile refuses to start, and the next report says so.
+the launcher's only way onto the network besides the production clone's git and gh steps), which is working data removed
+when the run ends, and plan Listening from it and outreach from the Founder's records; decide which workflows have work
+for the agent, and for each of those, one after another in a fixed order, write its brief and run one agent session
+inside the sandbox, which has no network (sessions.py, launcher.run), and after each session put back any change it made
+to the agent's Instructions, so no session works from Instructions another changed; once the last session has ended,
+queue the items the sessions wrote to workspace/review-queue/incoming/ that pass the format, a post for each Draft that
+passes every check, with the video cut from its edit record when it has one (posts.take), the recruiting Drafts that
+pass theirs (beta.take), the quotes, proposals, and messages that pass theirs (listening.take, outreach.take), the code
+proposed for each rejection reason (learning.take), and the reviewed proposals that need filing; count what each session
+did, for the report to show beside that session's own word (work.py); in the production clone, while it saves its
+records, ask GitHub again whether the repository is private, and on any other answer say in the notice and the run
+report that the records stay local; write the Review Queue and the run report; commit workspace/ and ledger/, and push
+them only if GitHub said then, and says again just before each push, that the repository is private. Every step but the
+sessions is deterministic code outside the sandbox. The launcher's records live in ledger/, which an agent can read and
+never write, so nothing it does can change them; in workspace/ the launcher only restores its owner's access to entries
+a session left without it, removes what a stopped boundary check left at the top of the areas, before the first records
+step can commit it, reads the Drafts and the edit records, reads the items in incoming/ before each session starts and
+once it has ended, removes a recruiting Draft that holds what looks like an email address, reads and removes the items,
+quote records, proposals, and codes it takes in, and after each session puts the agent's Instructions back as they were.
+Nothing is taken in while a session can still write: one take-in, after the last session, keeps every take-in rule what
+it was when a run had one session. One run at a time per checkout holds the run lock in its ledger/ from the sync to the
+saved records; a run started meanwhile refuses to start, and the next report says so.
 
 One session's trouble stays its own workflow's: a session that does not start, is stopped at its time limit, or ends
 with an error leaves the sessions after it to run, and marks only its own workflow's outputs incomplete. Every session
@@ -80,6 +82,7 @@ from . import (
     sessions,
     settings,
     sources,
+    visibility,
     waitlist,
     work,
 )
@@ -183,6 +186,7 @@ class Cycle:
         clock: Callable[[], datetime],
         client: Callable[[fetch.Policy], fetch.Client] | None = None,
         clocks: process.Clock = process.CLOCK,
+        github: Callable[[Path, str, Mapping[str, str]], visibility.Answer] | None = None,
         only: str | None = None,
     ):
         self.repo_root = repo_root
@@ -192,6 +196,7 @@ class Cycle:
         self.clock = clock
         self.client = client or fetch.Client  # the real network, through fetch.send, unless a test gives another
         self.clocks = clocks
+        self.github = github or visibility.ask  # GitHub itself, through gh, unless a test gives another
         self.store = Store(canonical(repo_root) / LEDGER)
         self.started: datetime | None = None
         self.run_id: str | None = None
@@ -585,7 +590,7 @@ class Cycle:
     def post_tally(self, state: RunState) -> run_state.Tally:
         """What the post-Draft workflow checked and acted on: each Draft taken in, each item queued or withdrawn, and
         the brand-rules proposal when this run filed it, whether or not any Draft was taken in."""
-        outcome = state.post_outcome
+        plan, outcome = state.posts, state.post_outcome
         gaps = self.post_gaps(state)
         if outcome is None:
             checked, acted = 0, 0
@@ -593,7 +598,9 @@ class Cycle:
         else:
             checked = len(outcome.results)
             acted = len(outcome.published) + len(outcome.withdrawn)
-            note = f"{report.plural(checked, 'day')}: {', '.join(outcome.counts()) or 'none due'}"
+            unusable = plan is not None and "calendar" in plan.context.kit.problems
+            none = "none prepared, as the calendar could not be used" if unusable else "none due"
+            note = f"{report.plural(checked, 'day')}: {', '.join(outcome.counts()) or none}"
             if outcome.withdrawn:
                 note += f"; {len(outcome.withdrawn)} withdrawn"
         if state.filed:
@@ -651,6 +658,39 @@ class Cycle:
             gaps.append(gap)
         return gaps
 
+    def unusable_files(self, state: RunState) -> dict[str, tuple[set[str], set[str]]]:
+        """Each package file the run read and could not use, by its source line's name: what in a gap names it, its
+        path or, for the brand rules, what every step says of them; and each gap that says no more than that line,
+        with its reason, says, which a row the line leads leaves out: that the file could not be used, and the filming
+        plan's reason when every kit file it names is such a file. A gap that says more, such as that no outreach
+        message was prepared, stays, and the tally, and with it the run's own line, keeps every gap."""
+        unusable = {line.name for line in state.sources if line.status == package.UNUSABLE}
+        rules_lost = "brand-rules.json could not be used"
+        found: dict[str, tuple[set[str], set[str]]] = {}
+
+        def add(product: str, path: str, rules: bool = False) -> None:
+            name = f"{product} package: `{path}`"
+            if name in unusable:
+                names, said = found.setdefault(name, (set(), set()))
+                names.update([f"`{path}`", *[rules_lost] * rules])
+                said.update([f"`{path}` could not be used", *[rules_lost] * rules])
+
+        plan = state.posts
+        if plan is not None:
+            for role, path in plan.context.paths.items():
+                add(plan.product, path, role == "brand_rules")
+        if state.beta is not None and state.beta.active:
+            add(state.beta.rules.product, state.beta.rules.brand_rules, True)
+        if state.outreach is not None:
+            add(state.outreach.product, state.outreach.plan_path)
+        if plan is not None and state.filming is not None:
+            paths, problems = plan.context.paths, plan.context.kit.problems
+            kit = [f"{plan.product} package: `{paths[role]}`" for role in filming.ROLES if role in problems]
+            if kit and all(name in found for name in kit):
+                for name in kit:
+                    found[name][1].add(state.filming.problem)
+        return found
+
     def queue_gaps(self, state: RunState) -> list[str]:
         """Why the Review Queue is incomplete this run though the ledger was read: an item file could not be, so a
         reviewed Dispatch request, or an item the agent wrote, could not be compared with the item it would replace,
@@ -687,10 +727,13 @@ class Cycle:
 
     def outputs(self, state: RunState, config: settings.Settings, ledger_ok: bool) -> None:
         """Each output's status: a built output is incomplete when a failed source it needs names it, or when its own
-        step fell short. A step that needed a session names that session's falling short among its gaps, and the
-        outputs whose rows hold that gap are the ones the run's notice names for the session; the rows are therefore
-        worked out before that notice is written, and again once the Review Queue holds it. One session's gap is
-        never put in another workflow's row, and a session that fell short always has its gap in its own."""
+        step fell short; a gap of its own that says no more than such a source is left out of its row. A package file
+        the run read and could not use is needed by exactly the outputs whose own gaps name it, never the package
+        snapshot or review, so the notice's line for it names the rows the report shows incomplete for it. A step
+        that needed a session names that session's falling short among its gaps, and the outputs whose rows hold that
+        gap are the ones the run's notice names for the session; the rows are therefore worked out before that notice
+        is written, and again once the Review Queue holds it. One session's gap is never put in another workflow's row,
+        and a session that fell short always has its gap in its own."""
         failed = state.failed_sources()
         gap = state.agent_gap
         decisions = next((line.detail for line in state.sources if line.name == "Founder decisions"), "")
@@ -743,6 +786,17 @@ class Cycle:
             ),
             "instructions-changes": (instructions.gaps(state.instructions), instructions.status(state.instructions)),
         }
+        shown = {
+            key: own.get(key, ([], ""))[0]
+            for key, output in config.outputs.items()
+            if output.get("built") and key not in skipped and key not in ("package-snapshot", "package-review")
+        }
+        files = self.unusable_files(state)
+        for line in failed:
+            if line.name in files:
+                names = files[line.name][0]
+                named = [key for key, gaps in shown.items() if any(part in gap for gap in gaps for part in names)]
+                line.needed_by = output_titles(config, tuple(named))
         rows = []
         held: dict[str, list[str]] = {session.key: [] for session in state.sessions}
         for key, output in config.outputs.items():
@@ -757,7 +811,9 @@ class Cycle:
             for session in state.sessions:
                 if session.workflow.output == key and session.gap() and session.gap() in gaps:
                     held[session.key].append(title)
-            gaps = [f"{line.name} could not be read" for line in failed if title in line.needed_by] + gaps
+            leading = [line for line in failed if title in line.needed_by]
+            told = {said for line in leading if line.name in files for said in files[line.name][1]}
+            gaps = [f"{line.name} {line.failure}" for line in leading] + [gap for gap in gaps if gap not in told]
             rows.append([title, INCOMPLETE if gaps else COMPLETE, "; ".join(gaps) or done])
         state.outputs = rows
         for session in state.sessions:
@@ -787,6 +843,51 @@ class Cycle:
         else:
             detail = f"`{code.branch}` at `{code.short}`, read at that commit for claim checks"
             state.sources.append(SourceLine(f"{code.name} repository", package.READ, detail, needs))
+
+    def unusable_sources(self, state: RunState, config: settings.Settings) -> None:
+        """Mark each package file the snapshot read that launcher code then could not use, as it could not be parsed
+        or decoded, as a failed source, with the real reason and, for the sessions' briefs, the outputs whose own step
+        cannot go on without it: a kit file for the post Drafts and, of the files the filming plan reads, for filming;
+        the brand rules for recruiting; and the channel plan for outreach. Once the run's rows are worked out,
+        Cycle.outputs names in their place every output whose row names the file. A file whose read failed is a
+        failed source already, and one file is one line however many steps could not use it."""
+        found: dict[tuple[str, str], tuple[dict[str, None], dict[str, None]]] = {}  # file: (reasons, output keys)
+
+        def add(product: str, path: str, reason: str, *keys: str) -> None:
+            reasons, outputs = found.setdefault((product, path), ({}, {}))
+            reasons[reason.rstrip(".")] = None
+            outputs.update(dict.fromkeys(keys))
+
+        plan = state.posts
+        if plan is not None:
+            paths = plan.context.paths
+            for role, problem in plan.context.kit.problems.items():
+                if role in paths:
+                    filmed = state.filming is not None and role in filming.ROLES
+                    add(plan.product, paths[role], problem, "post-drafts", *["filming-plan"] * filmed)
+            if plan.context.rules is None and plan.context.rules_problem and "brand_rules" in paths:
+                add(plan.product, paths["brand_rules"], plan.context.rules_problem, "post-drafts")
+        recruiting = state.beta
+        if recruiting is not None and recruiting.active and recruiting.context is not None:
+            if recruiting.context.rules is None and recruiting.context.rules_problem:
+                rules = recruiting.rules
+                add(rules.product, rules.brand_rules, recruiting.context.rules_problem, beta.WORKFLOW)
+        if state.outreach is not None and state.outreach.unusable:
+            add(state.outreach.product, state.outreach.plan_path, state.outreach.unusable, "outreach-drafts")
+        for (product, path), (reasons, keys) in found.items():
+            name = f"{product} package: `{path}`"
+            under = name[:-1] if path.endswith("/") else name  # a folder's files are named under it
+            covered = [line for line in state.sources if line.name.startswith(under)]
+            if not covered or any(line.status == package.FAILED for line in covered):
+                continue  # not read by the snapshot, or its read failed: either way not a file read and unusable
+            line = next((line for line in covered if line.name == name), None)
+            if line is None:  # a folder whose files were each read, and which could not be used as a whole
+                line = SourceLine(name, package.UNUSABLE, "")
+                state.sources.append(line)
+            told = f"{line.detail.rstrip('.')}; read, but" if line.detail else "Read, but"
+            line.status = package.UNUSABLE
+            line.detail = f"{told} could not be used: {'; '.join(reasons)}."
+            line.needed_by = output_titles(config, tuple(keys))
 
     def prepare_filming(
         self,
@@ -1442,6 +1543,8 @@ class Cycle:
             if plan is None:
                 problem = state.posts_problem
                 return f"the post Drafts were {problem}" if problem else "no active Product has a 14-day kit"
+            if "calendar" in plan.context.kit.problems:
+                return "the calendar could not be used"
             if not plan.days:
                 return "no calendar day is due this run"
             waiting = any(not day_plan.approved for day_plan in plan.days)
@@ -1655,6 +1758,10 @@ class Cycle:
         code = short[0].exit_code
         return code if isinstance(code, int) and not isinstance(code, bool) and code else 1
 
+    def private(self, config: settings.Settings) -> visibility.Answer:
+        """GitHub's answer on whether the repository the production clone pushes its records to is private."""
+        return self.github(self.repo_root, config.records.remote, self.env)
+
     def leave_note(self, run_id: str, line: str) -> None:
         """A one-line note in ledger/notes/, which the next run's report shows."""
         self.store.write_text(self.store.path(NOTES_DIR, f"{run_id}.txt"), line + "\n")
@@ -1815,6 +1922,12 @@ class Cycle:
             return launcher.EXIT_CONFIG
 
         production = canonical(self.repo_root) == config.records.production_clone
+        if production and config.records.save_after_run:
+            # Before anything else a run does: from the first real run on, its records are pushed to that repository.
+            answer = self.private(config)
+            if answer.status == visibility.PUBLIC:
+                self.say(f"refusing to start: {answer.refusal}")
+                return EXIT_RECORDS
         if pre:
             sync = pre["sync"]
         elif not production:
@@ -1925,6 +2038,7 @@ class Cycle:
         )
         areas.ensure_folder(areas.path("review_queue", INCOMING))
         self.prepare_work(state, config, registry, boundary, areas, ledger if ledger_ok else None, states, network)
+        self.unusable_sources(state, config)
         # A stopped boundary check's script sits among the agent's Instructions, so every run removes what such a check
         # left before it remembers them: the guard would put back after the agent whatever it had remembered.
         state.probe_files_removed = clear_probe_files(boundary)
@@ -1989,6 +2103,12 @@ class Cycle:
         state.queue_after = ledger.ordered()
         self.left_standing(state, config, ledger)
         self.outputs(state, config, ledger_ok)
+        pushable = self.private(config) if production and config.records.save_after_run else None
+        if pushable is not None and not pushable.private:
+            state.problems.append(
+                f"this run's records were kept local, not pushed: {pushable.refusal}; a later run pushes them once"
+                " GitHub says the repository is private"
+            )
         notice = report.problems_notice(state, self.store.relative(report_path))
         if notice and ledger_ok:
             state.notice = self.queue_notice(
@@ -2036,7 +2156,7 @@ class Cycle:
 
         self.note_ending(state, config)
         saved = None
-        if production and config.records.save_after_run:
+        if pushable is not None:
             result = records.save(
                 self.repo_root,
                 config.records.remote,
@@ -2044,9 +2164,12 @@ class Cycle:
                 run_id,
                 self.env,
                 config.records.max_file_bytes,
+                lambda: self.private(config) if pushable.private else pushable,
             )
             saved = result.as_json()
             self.say(f"records: {result.status}: {result.detail}")
+            if result.status == records.WITHHELD and pushable.private:
+                self.leave_note(run_id, f"Run {run_id}'s records were committed and {result.detail}.")
         code = self.exit_code(state)
         self.log(log_dir, sync, saved, report_path, state, code)
         return code

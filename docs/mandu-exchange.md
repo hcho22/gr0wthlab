@@ -1,8 +1,7 @@
 # Mandu exchange, version 7
 
 What Mandu may read from gr0wthlab (the Marketing Engineer), and the two things Mandu still does with what it reads.
-Mandu's read-only side is built from this page.
-Nobody has built that side yet: it is the next change, made in Mandu through firstmate once version 7 has landed in gr0wthlab.
+Mandu's read-only side is built from this page, as Mandu's gr0wthlab-reader skill (https://github.com/hcho22/Mandu/pull/11).
 Nothing in gr0wthlab waits for it: the Founder decides on gr0wthlab's own page, with or without Mandu.
 
 Since version 7 gr0wthlab writes every record on this page, and Mandu writes none of them ([ADR 0002](adr/0002-the-founder-decides-in-gr0wthlab.md)).
@@ -41,14 +40,17 @@ Mandu never writes, moves, or deletes a file in gr0wthlab, never records a decis
 It may read everything in the table above to show the Founder status: what is open, what was decided and why, what the last run reported, what was sent, and where Beta Cohort recruiting stands.
 If the time in `queue.json`'s `next_run` has passed, the weekly run due then has not finished, so the queue and the report are from an earlier run.
 
-It still acts on two kinds of approval, each read from gr0wthlab:
+Reading status writes nothing.
+
+It still acts on two kinds of approval, each read from gr0wthlab, and only when the Founder asks it to, never on its own when it reads gr0wthlab:
 
 - **A package change the Founder approved.**
   Mandu applies an approved `package-change-proposal` to the Go-To-Market Package, with the Founder's note if there is one.
   Applying it is Mandu's own write in Mandu's own repository; gr0wthlab sees the change at its next run, in its snapshot of the package.
 - **A Dispatch request the Founder approved.**
-  Mandu hands an approved `dispatch-request`, with the Founder's note if there is one, to firstmate under Mandu's existing Dispatch arrangement.
-  A Dispatch request that is undecided, rejected, or superseded never reaches firstmate.
+  Mandu notes the handoff in Mandu's own gr0wthlab log and gives the Founder a ready-to-send message for an approved `dispatch-request`, with the Founder's note if there is one, which the Founder passes to firstmate.
+  Mandu never hands it to firstmate itself, and writes nothing outside Mandu.
+  A Dispatch request that is undecided, rejected, or superseded is never handed on.
 
 Mandu acts on an approval only when both of these hold:
 
@@ -181,7 +183,7 @@ It takes an open Waitlist ask off the queue the same way once the cohort can rea
 
 A Dispatch request asks the Founder to approve a change to the Product it names in `product`, which firstmate then builds through that Product's normal reviewed path.
 gr0wthlab never sends a Dispatch request anywhere itself.
-Once the Founder has approved one, Mandu hands that item to firstmate ([What Mandu does](#what-mandu-does)).
+Once the Founder has approved one and asks Mandu for it, Mandu gives the Founder a ready-to-send message for it, which the Founder passes to firstmate ([What Mandu does](#what-mandu-does)).
 
 ### Text a third party wrote
 

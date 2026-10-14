@@ -128,7 +128,7 @@ def front_matter(lines: list[str], problems: list[str]) -> tuple[dict[str, str],
         key, colon, value = line.partition(":")
         key, value = key.strip(), value.strip()
         if not colon or key not in ITEM_KEYS:
-            problems.append(f"front matter line {line!r} is not one of: {', '.join(ITEM_KEYS)}")
+            problems.append(f"line {index + 1} of the front matter is not one of: {', '.join(ITEM_KEYS)}")
         elif key in fields:
             problems.append(f"front matter names {key} twice")
         else:
@@ -143,7 +143,11 @@ def check_fields(fields: Mapping[str, str], products: Sequence[str], published: 
         problems.append(f"kind must be one of: {', '.join(KINDS)}")
     version = fields.get("exchange")
     if published or version is not None:
-        problem = version_problem(int(version) if version and re.fullmatch(r"[0-9]+", version) else version)
+        problem = (
+            version_problem(int(version))
+            if version and re.fullmatch(r"[0-9]+", version)
+            else "exchange must be a version number"
+        )
         if problem:
             problems.append(problem)
     if published:
@@ -220,10 +224,23 @@ def evidence_problems(text: str) -> list[str]:
             problems.append("Evidence holds only list items (- ...)")
     if not entries:
         problems.append("Evidence needs at least one list item")
-    for entry in entries:
+    for number, entry in enumerate(entries, 1):
         if not SOURCE_PATTERN.search(entry):
-            problems.append(f"Evidence line has no source (a URL or a `path`): {entry[:80]!r}")
+            problems.append(f"Evidence item {number} has no source (a URL or a `path`)")
     return problems
+
+
+def sections_found(headings: Sequence[str], expected: Sequence[str]) -> str:
+    """How the ## sections an item has differ from the ones it needs, in the launcher's words: which are missing,
+    how many others there are, and whether the rest are out of order, never what the other headings say."""
+    missing = [heading for heading in expected if heading not in headings]
+    others = sum(1 for heading in headings if heading not in expected)
+    told = [f"missing {', '.join('## ' + heading for heading in missing)}"] if missing else []
+    if others:
+        told.append(f"{others} other {'section' if others == 1 else 'sections'}")
+    if len(headings) > len(set(headings)):
+        told.append("a section given more than once")
+    return ", ".join(told) if told else "the sections are out of order"
 
 
 def references(evidence: str) -> set[str]:
@@ -246,7 +263,8 @@ def check_item(text: str, products: Sequence[str], published: bool = False) -> I
     expected = [KINDS.get(kind, "Draft"), "Touches", "Evidence", "Options"]
     headings = [heading for heading, _ in found]
     if headings != expected:
-        problems.append(f"sections must be exactly: {', '.join('## ' + h for h in expected)}; found {headings}")
+        wanted = ", ".join("## " + heading for heading in expected)
+        problems.append(f"sections must be exactly: {wanted}; {sections_found(headings, expected)}")
         return ItemCheck(None, problems)
     content = dict(found)
     for heading in expected[:2]:

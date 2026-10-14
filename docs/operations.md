@@ -10,8 +10,10 @@ The format of every record, and what Mandu may read: [the Mandu exchange](mandu-
 `src/bin/gr0wthlab run` does the whole run, scheduled or on demand.
 A run on demand always does it, and so does a one-off scheduled start (`--once`); a start of the weekly schedule does it only while the week's run is still owed and the Mac is fully awake, and otherwise ends at once ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
 
-1. In the production clone only, it fetches `origin` and fast-forwards `main`, then restarts itself on the new code.
-   Before that, it restores its owner's read and write access to anything under `workspace/` left without it.
+1. In the production clone only, while `records.save_after_run` is on, it first asks GitHub whether the repository `origin` pushes to is private, and refuses to start while GitHub says plainly that it is public ([The repository must be private](#the-repository-must-be-private)).
+   Any other answer lets the run go ahead, and its records stay local unless GitHub says plainly, when asked again at step 8 and just before each push at step 9, that the repository is private.
+   Then it fetches `origin` and fast-forwards `main`, and restarts itself on the new code, which asks GitHub again by its own configuration before it does anything else.
+   Before the fetch, it restores its owner's read and write access to anything under `workspace/` left without it.
    It refuses to start if the clone is not on `main`, has changes outside `workspace/` and `ledger/`, or has local commits outside them.
    If the fetch fails, for example offline, it runs the current code and says so in the run report.
 2. It snapshots RepToday's Go-To-Market Package in Mandu (`ledger/evidence/package-snapshots/`).
@@ -31,7 +33,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    Where the run state holds no fingerprint either, nothing shows whether the Founder rejected this text, so the request is held: nothing is filed and nothing is withdrawn, the Review Queue output is incomplete, the run report and the run's notice name the file with the reason, and the next run compares them again.
    Two exceptions arise only after a reviewed change to the request's text while an item of it is open, which is firstmate's own reviewed act.
    A reviewed change that brings back a text the Founder rejected, while another text is open, files the rejected text again in that open item's place.
-   An approval the Founder gave an item that a reviewed change had already replaced still counts as the request's approval, though Mandu hands no superseded item to firstmate: the replacement stays open for the Founder to decide, no reviewed change replaces it any more, nothing is filed after it, and the run report says so.
+   An approval the Founder gave an item that a reviewed change had already replaced still counts as the request's approval, though no superseded item is ever handed on to firstmate: the replacement stays open for the Founder to decide, no reviewed change replaces it any more, nothing is filed after it, and the run report says so.
 6. It reads the 14-day kit from Mandu, works out which calendar days need post Drafts this run, now that the Founder's decisions are in, and fixes RepToday's `main` to one commit for claim checks.
    From the same kit it reads each asset's shot list and files the filming plan, one item per window, unless one is open or decided and the kit has not changed what must be filmed.
    It lists the window's footage folder in the footage place, read-only, and measures every file there with `ffprobe`; the agent never opens the footage, and learns each file's name and measured facts from the brief.
@@ -61,7 +63,8 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    The run report names each change once, with the session it was found after.
    An entry there that it could not read before the first session started is not guarded: it is left exactly as it is, and the run report names it.
 7. Once the last session has ended, it takes in what all of them wrote, in one pass.
-   It queues the items the sessions wrote to `workspace/review-queue/incoming/` that pass the format, sets the rest aside, each copied whole to `ledger/review-queue/set-aside/<run id>/`, and turns every problem into one notice.
+   It queues the items the sessions wrote to `workspace/review-queue/incoming/` that pass the format, sets the rest aside, and turns every problem into one notice.
+   A file set aside is removed and copied nowhere: the run's set-aside record, `ledger/review-queue/set-aside/<run id>.json`, keeps its name and the reasons ([what is kept](#where-the-agents-own-words-are-kept)).
    A post or a message written there is always set aside: the launcher queues those two kinds only from a Draft that passes its checks.
    An item there that supersedes an open one is set aside too while that open item's file in `ledger/review-queue/items/` cannot be read and no run state remembers its fingerprint: the open item stands, and nothing replaces it in that run.
    So is an item there with the kind and ask of any queued item, open or decided, whose file cannot be read and whose fingerprint no run state remembers: the ledger still shows that item's kind and ask, so an item with another kind or ask is queued as always, and the Review Queue output is incomplete and names the file.
@@ -73,9 +76,15 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    Those places are the check of an open post, message, reply, or recruiting item against its Draft and what that check reads; an open invitation or Waitlist ask while a report of the Founder's cannot be read; an open follow-up whose record of the first message cannot be read; the open filming plan while the kit cannot be read; a Dispatch request's open item whose item file cannot be read; and an item in `incoming/` that supersedes an open item whose item file cannot be read.
    Where a whole step did not run because its source could not be read, the launcher judged no item: that workflow's output always reads incomplete in the run report, with the real reason, and no item of that step is touched or listed.
    Those are Beta Cohort recruiting while the Waitlist view or the Beta Build record cannot be used; a Dispatch request whose reviewed text in `src/dispatches/` cannot be read; the post Drafts while the calendar cannot be read; outreach while the channel plan or the kit cannot be read; replies while the kit cannot be read; and the video of a day whose copy the Founder approved, while that day's Draft cannot be read.
-   The run's notice names such a source only where its read failed as a source, as a package file the snapshot could not read, the Waitlist view, or the Beta Build record does, or where it was recorded as a launcher problem, as a reviewed Dispatch text or a kit that could not be prepared is; for the video of an approved day, the notice's line that no video was cut says its Draft could not be read.
-   A file that was read but could not then be parsed or decoded, which is how the calendar fails when it has lost its table and the channel plan when it is not UTF-8, is told in the run report, and the notice has no line of its own for it.
-   While the window's filming plan is open, a kit file that fails this way, the calendar among them, is why that plan stands, so the notice's list of open items not checked again names the plan with that file as its reason; with no such plan open and nothing else wrong, the run queues no notice.
+   The run's notice names such a source only where its read failed as a source, as a package file the snapshot could not read, the Waitlist view, or the Beta Build record does; where it was read and could not be used, as below; or where it was recorded as a launcher problem, as a reviewed Dispatch text or a kit that could not be prepared is; for the video of an approved day, the notice's line that no video was cut says its Draft could not be read.
+   A package file the snapshot read that the launcher then could not parse or decode, which is how the calendar fails when it has lost its table and the channel plan when it is not UTF-8, is a failed source like one that could not be read.
+   The run report's Sources table shows it as `unusable`, with what the snapshot found and why the file could not be used, the summary counts it among the failed sources, and the run's notice names it once, with the outputs it leaves incomplete.
+   Those are exactly the outputs whose rows in the same run carry a gap that names the file, so the notice and the run report's Outputs table agree: the post Drafts for a kit file, the brand rules among them, and the filming plan as well for the calendar, the Angle bank, and the A/B pairs; Beta Cohort recruiting for the brand rules once it has started; outreach for the channel plan; and outreach and Listening for the Angle bank, the checklist, or the brand rules whenever a message or reply could not be checked against it that run.
+   The package snapshot and the package review are never among them, as the snapshot read the file.
+   Each of those rows starts with the file's line and leaves out a gap of its own that says no more than that line says, with the reason it gives in the Sources table: that the file could not be used, or the filming plan's reason when every kit file that reason names is such a file leading the row.
+   A gap that says more, such as that no outreach message was prepared, stays.
+   A message or reply that such a file leaves unchecked is told where its item is, as before.
+   While the window's filming plan is open, a kit file that fails this way, the calendar among them, is also why that plan stands, so the notice's list of open items not checked again names the plan with that file as its reason.
    Every package-change proposal there declares whether it adds or changes an Angle or Hook (`new_angle`), and the Founder sees the declaration on the item.
    One that declares it does is set aside, with what to add, unless its Evidence names the record of a Listening quote the launcher already keeps; one that declares it does not is queued whatever it touches or says.
    The launcher never checks a declaration against a proposal's wording: the Founder is the check on a wrong declaration, at the sitting.
@@ -117,9 +126,10 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    A proposed code that fails its check is set aside: its file is removed, and the run report and notice name it with the reasons.
    The `Rejection reasons coded` output is complete only when every reason the brief listed has an accepted code, or there was none to code; a reason left without one, or a reason that could not be read, marks it incomplete, and the reason is asked for again at the next run.
    It then takes in the proposed Instructions change the Rejection reasons session left, if any, re-runs that workflow's example set with the Instructions in force and with the change, and keeps the change only if no example did worse ([Instructions changes](#instructions-changes)).
-8. It writes `ledger/review-queue/queue.json`, each workflow's run state (`ledger/run-reports/state/`), and the run report (`ledger/run-reports/<run id>.md`), whose first line is `checked=N acted=N note=...` even when nothing happened.
+8. In the production clone only, while `records.save_after_run` is on, it asks GitHub again whether the repository is private; on any answer but a plain private, the run report and the run's notice say that this run's records were kept local, with the reason.
+   It writes `ledger/review-queue/queue.json`, each workflow's run state (`ledger/run-reports/state/`), and the run report (`ledger/run-reports/<run id>.md`), whose first line is `checked=N acted=N note=...` even when nothing happened.
    It notes how the run ended in the record of the week's run (`ledger/run-reports/attempts/`), which the next start of the weekly schedule reads.
-9. In the production clone only, it commits the changed `workspace/` and `ledger/` paths and pushes them to `main`, never anything else and never by force; a change to a README in either is put back, since only a reviewed pull request changes documentation.
+9. In the production clone only, it commits the changed `workspace/` and `ledger/` paths and, only if GitHub said at step 8 that the repository is private and says so again just before each push, pushes them to `main`, never anything else and never by force; a change to a README in either is put back, since only a reviewed pull request changes documentation.
    The records the Founder made at a sitting are in `ledger/founder/`, so they are saved here too: those made before the run by its first records step, and those made while it ran by this one.
    A record of the Founder's that holds what looks like an email address, as only one changed by hand can, is never committed.
    If `origin/main` moved meanwhile, it replays the records commit on top and retries once; a commit that cannot be pushed stays local and goes with the next run, and the run log says why the replay failed.
@@ -256,22 +266,41 @@ Besides the kept quotes, the launcher's own records of the reading say where it 
 The request log also holds the `robots.txt` rule lines of the group that applied to each host, each Allow and Disallow with its path as fetched.
 `check-work --run <run id>` checks quotes against the snapshot, so it answers only while that run is in progress.
 
-Nothing else the agent writes is checked against what was fetched, so text of its own that repeats a source's words is committed today in each of these places.
-They are known gaps, not yet decided by the Founder:
+## Where the agent's own words are kept
 
-- A file the launcher sets aside from `workspace/review-queue/incoming/` is copied whole to `ledger/review-queue/set-aside/<run id>/`: a package-change proposal that declares `new_angle: yes` and names no kept quote, a file that fails the item format, and a post, a message, or a filming plan written there.
-- A Draft the agent wrote, a reply that failed its checks included, stays in `workspace/` and is committed as written until it passes or is rewritten, as is any other file the agent leaves in `workspace/` that the launcher neither takes in nor puts back.
-- The reasons in a run report or a notice can repeat pieces of a file's text: a front matter line, up to 80 characters of an Evidence line, the headings found.
-  The reasons a Draft's checks give, kept with the Evidence of those checks, can quote the Draft.
-  The reasons an edit record's checks give can quote its `shot` and `source` values whole.
-  They are kept in the run's filming Evidence (`ledger/evidence/filming/<run id>.json`), in the day's post verdict in the post Drafts Evidence (`ledger/evidence/post-drafts/<run id>.json`), and in the run report and notice.
-- The run report quotes each session's own summary, up to 4,000 characters each, where it quoted one session's before a run had several.
+Nothing else the agent writes is checked against what was fetched, so text of its own can repeat a stranger's words.
+This is the one list of the places such text may sit; `AGENTS.md` and `ledger/README.md` point here.
+
+Of everything the launcher refuses, a Draft waiting for a fix is the one place a stranger's words may still sit (the Founder's decision of 2026-10-13):
+
+- A Draft the agent wrote, a reply that failed its checks included, stays in `workspace/` and is committed as written until it passes or is rewritten.
+  The reasons its checks give can quote it, where those checks are kept: the Evidence of each workflow's Draft checks, such as the day's post verdict in `ledger/evidence/post-drafts/<run id>.json`, and the run report and notice.
+
+Everything else the launcher refuses is removed from `workspace/`, copied nowhere, and leaves only its name and the launcher's reasons:
+
+- A file set aside from `workspace/review-queue/incoming/`, of any kind, a post, a message, or a filming plan written there included.
+  The run's set-aside record, `ledger/review-queue/set-aside/<run id>.json`, keeps its name and the reasons, under the run's identifier; the run report and notice name it with the reasons.
+- A quote record the launcher refuses, a proposed Angle or Hook it discards from `workspace/review-queue/angles/`, and a rejection code it sets aside.
+
+The reasons given for any of these say which line or field breaks which rule, in the launcher's own words, and never repeat what the file says.
+A front matter line is named by its number, an Evidence line by its place in the list, and an unexpected section by count.
+A reason may still name what the rule itself sets, such as a queued item's identifier.
+That no reason repeats the refused file is firstmate's reading of the Founder's choice of 2026-10-13 for what the launcher refuses from the agent's outbox, `workspace/review-queue/incoming/`, and not a separate decision of the Founder's.
+They are kept in the set-aside record, in each run's Listening Evidence (`ledger/evidence/listening/runs/<run id>.json`), and in the run report and notice.
+
+These also keep the agent's words, and none of them is a refusal:
+
 - What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, and the line that says why a rejection code fits.
-
-Only three things leave their file name and the launcher's reasons and nothing else: a quote record the launcher refuses, a proposed Angle or Hook it discards from `workspace/review-queue/angles/`, and a rejection code it sets aside.
-Each is removed from `workspace/` and copied nowhere.
+- Any other file the agent leaves in `workspace/` that the launcher neither takes in nor puts back is committed as written.
+  An edit record waiting for a fix is one: its `shot` and `source` values can hold any text, and it stays committed as written.
+  The reasons its checks give can quote those two values whole, and are kept in the run's filming Evidence (`ledger/evidence/filming/<run id>.json`), in the day's post verdict in the post Drafts Evidence, and in the run report and notice.
+  So are the files in `workspace/review-queue/incoming/` in a run whose Review Queue could not be read, which takes in nothing from there.
+- The run report quotes each session's own summary, up to 4,000 characters each, where it quoted one session's before a run had several.
+- Outside the repository, each session's event stream and Codex's log of it in `~/Library/Logs/gr0wthlab/` hold what the agent wrote, a refused file included: they are the runtime's own records, which the boundary check reads, and nothing in the repository copies them.
 
 ## Set up the production clone (once, after merge)
+
+Make the GitHub repository private first: from the first real run on, every run pushes the Drafts, the Evidence, the Review Queue, the run reports, and every line the Founder types on the sitting page to it, and a changed or withdrawn decision keeps its first wording in the history.
 
 ```sh
 git clone https://github.com/hcho22/gr0wthlab.git ~/gr0wthlab
@@ -284,6 +313,22 @@ src/bin/gr0wthlab run              # the first run, on demand
 The first run should end with `records: pushed`; check that `main` on GitHub gained one `chore(records): outputs of run …` commit touching only `workspace/` and `ledger/`.
 Then hold the first sitting: `src/bin/gr0wthlab sitting` ([The weekly sitting](#the-weekly-sitting)).
 The push uses the Mac's git credentials for `https://github.com` (the `gh auth git-credential` helper); if it fails, the commit stays local and the next run pushes it.
+A first run that ends with `records: withheld` did not hear from GitHub that the repository is private, and its run report and notice, or the next run's report, give the reason ([The repository must be private](#the-repository-must-be-private)).
+
+### The repository must be private
+
+A run in the production clone that saves its records (`records.save_after_run`) asks GitHub whether the repository `origin` pushes to is private before it does anything else, asks again once its sessions' work is taken in, before it writes its notice and run report, and asks again just before each push.
+A run that restarts itself on new code after its sync asks again, by the new code's configuration, before it does anything else, so a reviewed change that turns `records.save_after_run` on while the repository is public stops the restarted run before any session.
+A run with `records.save_after_run` off pushes nothing and asks GitHub nothing, whatever the repository is.
+The question is one `gh api repos/<owner>/<name>` read, outside the sandbox, with the same GitHub login the push uses, and GitHub has 60 seconds to answer.
+While GitHub says the repository is public, the run refuses to start with exit code 4 and says so: nothing is fetched, snapshotted, started, or saved.
+A weekly start refused this way is an attempt that did not complete, as any refused start is: with the Mac awake throughout, the week's run then waits for the Founder ([Which endings earn another attempt](#a-run-happens-when-the-mac-is-awake)).
+When the first answer only falls short of confirming that the repository is private, because GitHub cannot be reached, `gh` is missing or has no login, `origin` does not push to a repository on github.com, or the answer does not say plainly that the repository is private or public, the run goes ahead, so a passing network failure does not cost the week's run.
+Nothing is ever taken as private but GitHub's own answer that it is, so the records are pushed only when the second answer, and the answer just before each push, say plainly that the repository is private.
+On any other second answer, a repository made public during the run included, the records step does not push: the run ends with `records: withheld`, its commit stays local as after a failed push, and the run report's Launcher problems and the run's notice say that this run's records were kept local, with the reason.
+On any other answer just before a push, the first or the one retried after `origin/main` moved, the push does not happen either: the run ends with `records: withheld`, and since its report is already written, the next run's report says why.
+The first run that finds the repository private again pushes the commits kept that way.
+Every other checkout, such as a firstmate worktree or a lab, asks GitHub nothing.
 
 ## Install the weekly schedule
 
@@ -826,7 +871,7 @@ Every other process the launcher starts (git, Codex's version and sandbox probes
 
 ## When RepToday's Waitlist build lands
 
-The Founder approves the Waitlist Dispatch request at a sitting, Mandu hands it to firstmate, and firstmate builds it in RepToday; until then every run reports the Waitlist view as skipped.
+The Founder approves the Waitlist Dispatch request at a sitting, passes it to firstmate in the message Mandu gives the Founder for it, and firstmate builds it in RepToday; until then every run reports the Waitlist view as skipped.
 Once the build writes its anonymous view, a reviewed gr0wthlab pull request sets `waitlist.view.local_path` for RepToday in [`config/products.json`](../config/products.json) to the file's path, and the next run reads it.
 The path must lie outside this clone, Mandu, and every Product checkout; the launcher refuses to start otherwise, so the agent can never open the view.
 The sandbox reads this clone, every Product checkout, and of Mandu only the package paths, and the view may be nowhere in the Mandu checkout all the same.
@@ -841,6 +886,8 @@ rm ~/Library/LaunchAgents/gr0wthlab.weekly-run.plist
 ```
 
 To keep running but stop saving records to GitHub, set `records.save_after_run` (or `records.sync_before_run`) to `false` in `config/run.json` through a reviewed pull request; the next run picks it up when it fast-forwards.
+With `records.save_after_run` off, a run pushes nothing and does not ask GitHub whether the repository is private, so it starts whether the repository is public or not ([The repository must be private](#the-repository-must-be-private)).
+While the repository is public, a run that still saves refuses before its sync can bring that change in, so bring it in by hand first: `git -C ~/gr0wthlab pull --ff-only`.
 To stop immediately without a pull request, remove the schedule as above.
 
 ## After a change to the launcher or configuration

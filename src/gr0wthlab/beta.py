@@ -574,9 +574,13 @@ def context(rules: Rules, boundary: Boundary) -> Context:
     brand_rules, problem = None, ""
     try:
         brand_rules = lint.Rules(json.loads((mandu / rules.brand_rules).read_text(encoding="utf-8")))
-    except (OSError, UnicodeDecodeError) as error:
-        problem = getattr(error, "strerror", None) or str(error)
-    except ValueError as error:  # not JSON, or not the rules lint.Rules reads
+    except OSError as error:
+        problem = error.strerror or str(error)
+    except UnicodeDecodeError:
+        problem = "it is not UTF-8 text"
+    except json.JSONDecodeError as error:
+        problem = f"not JSON: {error}"
+    except ValueError as error:  # not the rules lint.Rules reads
         problem = str(error)
     return Context(rules.product, mandu, rules.citable, rules.k8, brand_rules, problem)
 

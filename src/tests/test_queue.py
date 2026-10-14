@@ -102,9 +102,60 @@ class IncomingTest(LedgerTestCase):
         names = {item.name: item for item in set_aside}
         self.assertEqual(set(names), {"broken.md", "Bad Name.md", "nested/deep.md", ".hidden.md"})
         self.assertTrue(any("sections must be exactly" in problem for problem in names["broken.md"].problems))
-        self.assertEqual(names["nested/deep.md"].moved_to, "review-queue/set-aside/RUN1/nested--deep.md")
-        self.assertTrue((self.repo / "ledger" / names["broken.md"].moved_to).is_file())
         self.assertEqual(list(self.incoming.iterdir()), [])
+        record = json.loads((self.repo / "ledger/review-queue/set-aside/RUN1.json").read_text(encoding="utf-8"))
+        self.assertEqual(
+            record,
+            {"run": "RUN1", "items": [{"name": item.name, "reasons": list(item.problems)} for item in set_aside]},
+        )
+        kept = sorted(path.name for path in (self.repo / "ledger/review-queue").rglob("*") if path.is_file())
+        self.assertEqual(kept, ["RUN1.json"], "nothing of a set-aside file is kept but its record")
+
+    def test_a_set_aside_file_leaves_its_name_and_reasons_and_none_of_its_words(self):
+        """Every line of every file below carries the marker; no reason, record, or other file in the ledger does."""
+        marker = "zqxstranger"
+
+        seen = {}
+        self.drop("first.md", fakes.PROPOSAL)
+        self.ledger.take_incoming(self.areas, self.store, PRODUCTS, "RUN0", NOW, seen)
+        files = fakes.refused_items(marker)
+        # The same ask as the queued item, with the marker only where an item's fingerprint does not look.
+        files["a-twin.md"] = fakes.PROPOSAL.replace("`projects/", f"`{marker}/")
+        for name, text in files.items():
+            self.drop(name, text)
+        published, set_aside = self.ledger.take_incoming(self.areas, self.store, PRODUCTS, "RUN1", NOW, seen)
+        self.assertEqual(published, [])
+        self.assertEqual({item.name for item in set_aside}, set(files))
+        for item in set_aside:
+            with self.subTest(name=item.name):
+                self.assertTrue(item.problems)
+                self.assertNotIn(marker, " ".join(item.problems).casefold())
+        reasons = {item.name: item.problems for item in set_aside}
+        self.assertIn("line 3 of the front matter is not one of", reasons["a-line.md"][0])
+        self.assertIn("exchange must be a version number", reasons["a-version.md"])
+        self.assertIn("supersedes names no item in the Review Queue", reasons["a-repeat.md"][0])
+        self.assertEqual(reasons["a-twin.md"], ("asks the same as 20261011-first, which is open",))
+        self.assertIn("Evidence item 2 has no source (a URL or a `path`)", reasons["a-source.md"])
+        self.assertIn(
+            "sections must be exactly: ## Proposal, ## Touches, ## Evidence, ## Options; missing ## Touches,"
+            " 1 other section",
+            reasons["a-section.md"],
+        )
+        for path in (self.repo / "ledger").rglob("*"):
+            if path.is_file():
+                self.assertNotIn(marker, path.read_text(encoding="utf-8").casefold(), path)
+        self.assertEqual(list(self.incoming.iterdir()), [])
+
+    def test_a_set_aside_record_that_cannot_be_written_is_said_in_each_file_s_reasons(self):
+        (self.repo / "ledger/review-queue").mkdir(parents=True)
+        (self.repo / "ledger/review-queue/set-aside").write_text("not a folder\n", encoding="utf-8")
+        self.drop("broken.md", fakes.PROPOSAL.replace("## Touches", "## Changes"))
+        published, set_aside = self.take()
+        self.assertEqual(published, [])
+        (item,) = set_aside
+        self.assertTrue(item.problems[0].startswith("sections must be exactly"))
+        self.assertTrue(item.problems[-1].startswith("the set-aside record could not be written ("), item.problems)
+        self.assertEqual(list(self.incoming.iterdir()), [], "the file is removed all the same, and copied nowhere")
 
     def test_links_are_never_followed(self):
         secret = self.repo.parent / "secret.md"
@@ -113,7 +164,7 @@ class IncomingTest(LedgerTestCase):
         os.link(str(secret), str(self.incoming / "hard.md"))
         published, set_aside = self.take()
         self.assertEqual(published, [])
-        self.assertEqual({item.name: item.moved_to for item in set_aside}, {"linked.md": "", "hard.md": ""})
+        self.assertEqual({item.name for item in set_aside}, {"linked.md", "hard.md"})
         self.assertTrue(secret.is_file())
         self.assertFalse(any((self.repo / "ledger/review-queue/set-aside").rglob("*.md")))
 

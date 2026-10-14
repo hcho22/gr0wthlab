@@ -953,6 +953,15 @@ class WeekByWeekTest(BetaCycleTestCase):
         self.next_week()
         self.assertEqual(self.messages(), [])
         self.assertIn("- brand-rules.json: could not be used:", self.report())
+        name = f"RepToday package: `{rules.relative_to(self.mandu)}`"
+        row = next(line for line in self.report().splitlines() if line.startswith("| Beta Cohort recruiting | "))
+        self.assertIn(f"| Beta Cohort recruiting | incomplete | {name} could not be used", row)
+        self.assertEqual(row.count("brand-rules.json"), 1, "the row names the file once")
+        with self.assertRaises(json.JSONDecodeError) as raised:
+            json.loads("{not json")
+        why = f" could not be used: not JSON: {raised.exception}. Incomplete: Post Drafts, Beta Cohort recruiting."
+        (line,) = [line for line in self.notices().splitlines() if line.startswith(f"- {name}: ")]
+        self.assertTrue(line.endswith(why), line)
         rules.write_text(text, encoding="utf-8")
         self.next_week()
         first = self.invitation()

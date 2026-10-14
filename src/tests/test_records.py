@@ -5,6 +5,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from gr0wthlab import records
 from tests import fakes
@@ -48,8 +49,11 @@ class RecordsTestCase(unittest.TestCase):
     def prepare(self):
         return records.prepare(self.clone, "origin", "main", "20261011T230000Z", self.env, MAX)
 
-    def save(self):
-        return records.save(self.clone, "origin", "main", "RUN1", self.env, MAX)
+    def save(self, github=None):
+        github = github or fakes.GitHub()
+        return records.save(
+            self.clone, "origin", "main", "RUN1", self.env, MAX, lambda: github(self.clone, "origin", {})
+        )
 
     def remote_files(self, revision="main"):
         return self.git(self.remote, "show", "--name-only", "--format=", revision).split()
@@ -334,8 +338,76 @@ class SaveTest(RecordsTestCase):
         self.git(self.clone, "remote", "set-url", "origin", str(self.remote))
         prepared = self.prepare()
         self.assertEqual(prepared.unpushed, 1)
-        self.assertIn("this run pushes 1 unpushed records commit", prepared.detail)
+        self.assertIn("1 records commit is not pushed yet", prepared.detail)
         self.assertEqual(self.save().status, records.PUSHED)
+
+
+class VisibilityTest(RecordsTestCase):
+    """The records step asks GitHub again just before each push, and pushes only on its plain word that the repository
+    is private; anything else keeps the commits local, as a failed push does."""
+
+    def assert_kept_local(self, result, before):
+        self.assertEqual(result.status, records.WITHHELD, result.detail)
+        self.assertIsNotNone(result.commit)
+        self.assertEqual(self.git(self.remote, "rev-parse", "main"), before, "nothing was pushed")
+        self.assertEqual(self.git(self.clone, "rev-parse", "HEAD"), result.commit)
+        self.assertEqual(self.git(self.clone, "status", "--porcelain"), "")
+
+    def test_a_public_repository_is_never_pushed_to(self):
+        self.write("workspace/run-reports/r.md")
+        before = self.git(self.remote, "rev-parse", "main")
+        github = fakes.GitHub("public")
+        with mock.patch.object(records, "push", wraps=records.push) as pushed:
+            result = self.save(github)
+        self.assert_kept_local(result, before)
+        self.assertEqual(pushed.call_count, 0)
+        self.assertEqual(
+            result.detail,
+            "not pushed: the GitHub repository `example/gr0wthlab` is public: a real run would publish its Drafts, its"
+            " Evidence, and the Founder's records there, so the repository must be made private first; the commits"
+            " stay local for the next run",
+        )
+        self.assertEqual(len(github.asked), 1)
+
+    def test_an_answer_that_is_not_private_keeps_the_commits_local_with_the_reason(self):
+        self.write("workspace/run-reports/r.md")
+        before = self.git(self.remote, "rev-parse", "main")
+        result = self.save(fakes.GitHub("unconfirmed"))
+        self.assert_kept_local(result, before)
+        self.assertIn(
+            "not pushed: could not confirm that the GitHub repository is private (gh api exited with 1: error"
+            " connecting to api.github.com)",
+            result.detail,
+        )
+
+    def test_the_retried_push_after_a_moved_remote_asks_again(self):
+        self.land_upstream("src/new.py", "x = 1\n")
+        self.write("workspace/run-reports/r.md")
+        before = self.git(self.remote, "rev-parse", "main")
+        github = fakes.GitHub("private", "public")
+        with mock.patch.object(records, "push", wraps=records.push) as pushed:
+            result = self.save(github)
+        self.assertEqual(result.status, records.WITHHELD, result.detail)
+        self.assertEqual(len(github.asked), 2)
+        self.assertEqual(pushed.call_count, 1, "the first push, which the moved remote refused")
+        self.assertEqual(self.git(self.remote, "rev-parse", "main"), before)
+
+    def test_nothing_to_save_asks_nothing(self):
+        github = fakes.GitHub("public")
+        self.assertEqual(self.save(github).status, records.NOTHING)
+        self.assertEqual(github.asked, [])
+
+    def test_commits_kept_from_a_public_repository_are_pushed_once_it_is_private(self):
+        self.write("workspace/run-reports/r.md")
+        self.save(fakes.GitHub("public"))
+        self.write("workspace/run-reports/s.md")
+        self.save(fakes.GitHub("public"))
+        prepared = self.prepare()
+        self.assertIn("2 records commits are not pushed yet", prepared.detail)
+        result = self.save()
+        self.assertEqual((result.status, result.pushed), (records.PUSHED, 2), result.detail)
+        self.assertEqual(self.remote_files("main~1"), ["workspace/run-reports/r.md"])
+        self.assertEqual(self.remote_files(), ["workspace/run-reports/s.md"])
 
 
 class BackgroundTest(RecordsTestCase):
