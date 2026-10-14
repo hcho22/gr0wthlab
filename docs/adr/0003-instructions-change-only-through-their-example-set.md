@@ -107,7 +107,8 @@ No model ever judges an example.
 
 One example is one agent session, at the reasoning effort every session has.
 The whole sessions measured on 2026-10-12 took 42 to 217 seconds at about $0.02 each, so one example is estimated at 1 to 2 minutes and $0.01 to $0.03 at API prices, and one change, with both sides and about ten examples, at about 20 sessions, before any judging.
-The live validation of this change measures one and records it.
+Measured live on 2026-10-14 on the Post Drafts set, a change that was kept took 22 sessions, 2,327 seconds of agent time, and about $0.24; one that was not kept at its last example took 20 sessions, 1,610 seconds, and about $0.21 ([the record](../live-checks/20261014-gr0wthlab-learning-loop.md)).
+A re-run session took 44 to 209 seconds.
 
 A weekly run tries at most one change.
 When reasons of several workflows wait, the workflow of the oldest waiting reason goes first, and the others wait for a later run.
