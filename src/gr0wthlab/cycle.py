@@ -1,35 +1,34 @@
 """One Marketing Engineer run, scheduled or on demand, from the pre-run sync to the saved records.
 
-Order: in the production clone, refuse to start while GitHub says the repository its records are pushed to is public
-(visibility.py), then bring it up to origin's main; snapshot the Go-To-Market Package; take in the Founder's decisions
-from ledger/founder/, which only `gr0wthlab sitting` writes (founder.py) and from which every Founder record below is
-read; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests that need filing;
-plan the post Drafts from the 14-day kit (posts.prepare); file the filming plan and list and measure the footage
-(filming.prepare); read the Founder's Beta Build record and, only once it exists, plan the Beta Cohort's next invitation
-batch (beta.prepare); read the fixed list of network sources into one snapshot (fetch.Client, the launcher's only way
-onto the network besides the production clone's git and gh steps), which is working data removed when the run ends, and
-plan Listening from it and outreach from the Founder's records; decide which workflows have work for the agent, and for
-each of those, one after another in a fixed order, write its brief and run one agent session inside the sandbox, which
-has no network (sessions.py, launcher.run), and after each session put back any change it made to the agent's
-Instructions, so no session works from Instructions another changed; once the last session has ended, queue the items
-the sessions wrote to workspace/review-queue/incoming/ that pass the format, a post for
-each Draft that passes every check, with the video cut from its edit record when it has one (posts.take), the
-recruiting Drafts that pass theirs (beta.take), the quotes, proposals, and messages that pass theirs (listening.take,
-outreach.take), the code proposed for each rejection reason (learning.take), and the reviewed proposals that need
-filing; count what each session did, for the report to show beside that session's own word (work.py); in the
-production clone, ask GitHub again whether the repository is private, and on any other answer say in the notice and the
-run report that the records stay local; write the Review Queue and the run report; commit workspace/ and ledger/, and
-push them only if GitHub said then that the repository is private. Every step but the sessions is deterministic code
-outside the sandbox. The launcher's records live in ledger/, which an agent can read and never write, so nothing it
-does can change them; in workspace/ the launcher only restores its owner's access to entries a session left without
-it, removes what a stopped boundary check left at the top of the areas, before the first records step can commit it,
-reads the Drafts and the edit records, reads the items in incoming/ before each session starts and once it has
-ended, removes a recruiting Draft that holds what looks like an email address, reads and removes the items, quote
-records, proposals, and codes it takes in, and after each session puts the agent's Instructions back as they were.
-Nothing is taken in
-while a session can still write: one take-in, after the last session, keeps every take-in rule what it was when a run
-had one session. One run at a time per checkout holds the run lock in its ledger/ from the sync to the saved records;
-a run started meanwhile refuses to start, and the next report says so.
+Order: in the production clone, while it saves its records, refuse to start while GitHub says the repository they are
+pushed to is public (visibility.py), then bring it up to origin's main; snapshot the Go-To-Market Package; take in the
+Founder's decisions from ledger/founder/, which only `gr0wthlab sitting` writes (founder.py) and from which every
+Founder record below is read; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch
+requests that need filing; plan the post Drafts from the 14-day kit (posts.prepare); file the filming plan and list and
+measure the footage (filming.prepare); read the Founder's Beta Build record and, only once it exists, plan the Beta
+Cohort's next invitation batch (beta.prepare); read the fixed list of network sources into one snapshot (fetch.Client,
+the launcher's only way onto the network besides the production clone's git and gh steps), which is working data removed
+when the run ends, and plan Listening from it and outreach from the Founder's records; decide which workflows have work
+for the agent, and for each of those, one after another in a fixed order, write its brief and run one agent session
+inside the sandbox, which has no network (sessions.py, launcher.run), and after each session put back any change it made
+to the agent's Instructions, so no session works from Instructions another changed; once the last session has ended,
+queue the items the sessions wrote to workspace/review-queue/incoming/ that pass the format, a post for each Draft that
+passes every check, with the video cut from its edit record when it has one (posts.take), the recruiting Drafts that
+pass theirs (beta.take), the quotes, proposals, and messages that pass theirs (listening.take, outreach.take), the code
+proposed for each rejection reason (learning.take), and the reviewed proposals that need filing; count what each session
+did, for the report to show beside that session's own word (work.py); in the production clone, while it saves its
+records, ask GitHub again whether the repository is private, and on any other answer say in the notice and the run
+report that the records stay local; write the Review Queue and the run report; commit workspace/ and ledger/, and push
+them only if GitHub said then, and says again just before each push, that the repository is private. Every step but the
+sessions is deterministic code outside the sandbox. The launcher's records live in ledger/, which an agent can read and
+never write, so nothing it does can change them; in workspace/ the launcher only restores its owner's access to entries
+a session left without it, removes what a stopped boundary check left at the top of the areas, before the first records
+step can commit it, reads the Drafts and the edit records, reads the items in incoming/ before each session starts and
+once it has ended, removes a recruiting Draft that holds what looks like an email address, reads and removes the items,
+quote records, proposals, and codes it takes in, and after each session puts the agent's Instructions back as they were.
+Nothing is taken in while a session can still write: one take-in, after the last session, keeps every take-in rule what
+it was when a run had one session. One run at a time per checkout holds the run lock in its ledger/ from the sync to the
+saved records; a run started meanwhile refuses to start, and the next report says so.
 
 One session's trouble stays its own workflow's: a session that does not start, is stopped at its time limit, or ends
 with an error leaves the sessions after it to run, and marks only its own workflow's outputs incomplete. Every session
@@ -1695,7 +1694,7 @@ class Cycle:
             return launcher.EXIT_CONFIG
 
         production = canonical(self.repo_root) == config.records.production_clone
-        if production and not pre:
+        if production and not pre and config.records.save_after_run:
             # Before anything else a run does: from the first real run on, its records are pushed to that repository.
             answer = self.private(config)
             if answer.status == visibility.PUBLIC:
@@ -1918,10 +1917,12 @@ class Cycle:
                 run_id,
                 self.env,
                 config.records.max_file_bytes,
-                pushable,
+                lambda: self.private(config) if pushable.private else pushable,
             )
             saved = result.as_json()
             self.say(f"records: {result.status}: {result.detail}")
+            if result.status == records.WITHHELD and pushable.private:
+                self.leave_note(run_id, f"Run {run_id}'s records were committed and {result.detail}.")
         code = self.exit_code(state)
         self.log(log_dir, sync, saved, report_path, state, code)
         return code

@@ -1596,14 +1596,15 @@ class ProductionCloneTest(CycleTestCase):
         code, out = self.run_cycle(repo=self.clone)
         self.assertEqual(code, 0, out)
         self.assertIn("records: pushed", out)
-        self.assertEqual(self.github.asked, [(self.clone, "origin")] * 2)
+        self.assertEqual(self.github.asked, [(self.clone, "origin")] * 3)
         self.assertNotIn("kept local", self.report(self.clone))
         changed = fakes.git(self.remote, "diff", "--name-only", "HEAD~1", "HEAD", env=self.env).split()
         self.assertIn("workspace/drafts/day-3.md", changed)
 
     def test_a_repository_made_public_during_the_run_is_not_pushed_to(self):
         """The commit stays local, as after a failed push, and the run's own report and notice say why; the first run
-        that finds the repository private pushes it."""
+        that finds the repository private pushes it. Made public after the report was written, and before the push
+        retried once the remote moved, it is not pushed to either, and the next run's report says why."""
         fakes.behave(self.codex_dir, {"write": {"drafts/day-3.md": "a Draft\n"}})
         head = fakes.git(self.remote, "rev-parse", "HEAD", env=self.env)
         self.github = fakes.GitHub("private", "public")
@@ -1627,6 +1628,43 @@ class ProductionCloneTest(CycleTestCase):
         self.assertIn("records: pushed", out)
         fakes.git(self.remote, "merge-base", "--is-ancestor", kept, "HEAD", env=self.env)
 
+        fakes.behave(self.codex_dir, {"write": {"drafts/day-3.md": "another Draft\n"}})
+        answers, landed = fakes.GitHub("private", "private", "private", "public"), []
+
+        def github(repo, remote, env):
+            if len(answers.asked) == 2:
+                landed.append(self.land_on_remote())
+            return answers(repo, remote, env)
+
+        self.github = github
+        code, out = self.run_cycle(repo=self.clone, at=fakes.SUNDAY_RUN + timedelta(days=7, minutes=10))
+        self.assertEqual(code, 0, out)
+        withheld = f"not pushed: {refusal}; the commits stay local for the next run"
+        self.assertIn(f"records: withheld: {withheld}\n", out)
+        self.assertEqual(len(answers.asked), 4, "the retried push was asked about again")
+        self.assertEqual(fakes.git(self.remote, "rev-parse", "HEAD", env=self.env), landed[0], "nothing was pushed")
+        late = fakes.git(self.clone, "rev-parse", "HEAD", env=self.env)
+        self.assertEqual(fakes.git(self.clone, "rev-parse", "HEAD~1", env=self.env), landed[0], "replayed on top")
+        self.assertNotIn("kept local", self.report(self.clone), "the report was written before the answer")
+        run_id = re.search(r"^gr0wthlab: run (\S+) \(", out, re.M).group(1)
+
+        self.github = fakes.GitHub()
+        code, out = self.run_cycle(repo=self.clone, at=fakes.SUNDAY_RUN + timedelta(days=7, minutes=15))
+        self.assertEqual(code, 0, out)
+        self.assertIn("records: pushed", out)
+        self.assertIn(f"\n- Run {run_id}'s records were committed and {withheld}.\n", self.report(self.clone))
+        fakes.git(self.remote, "merge-base", "--is-ancestor", late, "HEAD", env=self.env)
+
+    def land_on_remote(self):
+        """A commit another clone pushes to the remote while a run is going; returns it."""
+        other = self.root / "elsewhere"
+        fakes.git(self.root, "clone", "--quiet", str(self.remote), str(other), env=self.env)
+        (other / "landed.md").write_text("landed meanwhile\n", encoding="utf-8")
+        fakes.git(other, "add", "landed.md", env=self.env)
+        fakes.git(other, "commit", "--quiet", "-m", "landed meanwhile", env=self.env)
+        fakes.git(other, "push", "--quiet", "origin", "main", env=self.env)
+        return fakes.git(other, "rev-parse", "HEAD", env=self.env)
+
     def assert_kept_local(self, head, refusal):
         """Nothing reached the remote, the run's records are committed in the clone, and the run's own report and its
         notice say they were kept local, with GitHub's answer; returns the kept commit."""
@@ -1646,6 +1684,24 @@ class ProductionCloneTest(CycleTestCase):
         notice = next(entry for entry in self.queue(self.clone)["open"] if entry["id"] == named.group(1))
         self.assertIn(told, (self.ledger(self.clone) / notice["file"]).read_text(encoding="utf-8"))
         return kept
+
+    def test_a_run_that_saves_nothing_starts_while_the_repository_is_public(self):
+        """With records.save_after_run off a run pushes nothing, so it asks GitHub nothing and starts as any run
+        does."""
+        fakes.set_run(self.clone, "records", {"save_after_run": False})
+        fakes.git(self.clone, "commit", "--quiet", "-am", "save no records", env=self.env)
+        fakes.git(self.clone, "push", "--quiet", "origin", "main", env=self.env)
+        head = fakes.git(self.remote, "rev-parse", "HEAD", env=self.env)
+        fakes.behave(self.codex_dir, {"write": {"drafts/day-3.md": "a Draft\n"}})
+        self.github = fakes.GitHub("public")
+        code, out = self.run_cycle(repo=self.clone)
+        self.assertEqual(code, 0, out)
+        self.assertTrue((self.codex_dir / "prompt.txt").exists(), "the session ran")
+        self.assertIn("pre-run: current", out)
+        self.assertIsNone(re.search(r"^gr0wthlab: records:", out, re.M), out)
+        self.assertEqual(self.github.asked, [])
+        self.assertEqual(fakes.git(self.remote, "rev-parse", "HEAD", env=self.env), head, "nothing was pushed")
+        self.assertNotIn("kept local", self.report(self.clone))
 
     def test_a_run_outside_the_production_clone_asks_github_nothing(self):
         self.github = fakes.GitHub("public")

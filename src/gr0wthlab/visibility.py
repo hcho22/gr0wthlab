@@ -2,9 +2,10 @@
 launcher outside the sandbox.
 
 From the first real run on, every run commits the Drafts, the Evidence, and the Founder's records and pushes them,
-so the production clone's run refuses to start while GitHub's answer says plainly that the repository is public, and
-pushes its records only when GitHub, asked again once the run's work is done, says plainly that it is private. An
-answer that cannot be had or is not clear is never taken as private: the run goes ahead and keeps its records local.
+so a run in the production clone that saves its records refuses to start while GitHub's answer says plainly that the
+repository is public, and pushes them only when GitHub, asked again once the run's work is done and again just before
+each push, says plainly that it is private. An answer that cannot be had or is not clear is never taken as private:
+the run goes ahead and keeps its records local.
 The question is one read, `gh api repos/<owner>/<name>`, with the GitHub login the records step pushes with (git's
 `gh auth git-credential` helper for https://github.com, docs/operations.md), bounded by TIMEOUT.
 """
