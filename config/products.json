@@ -139,6 +139,10 @@
           "competitors": "projects/RepToday/gtm/01-research/",
           "note": "Which package file plays each part in the post-Draft checks (US-ME08); each is one of the sources above, so every run snapshots it. The competitors are the ones the research names in its files that start with competitor. The filming plan (US-ME09) reads its shot lists from the same calendar, angles, and pairs files."
         },
+        "weekly_read": {
+          "read_the_results": "projects/RepToday/gtm/05-social-pmf/read-the-results.md",
+          "note": "The package file that holds the binding rules for reading results (US-ME12), which the Weekly Read session applies; the launcher reads it only for the floor's own figure, and for whether it already says the floor counts views. It is one of the sources above, and the rules are never restated here. The calendar, the Angle bank, and the pairs the read covers are post_drafts' files."
+        },
         "listening": {
           "fit": "projects/RepToday/gtm/02-brand/positioning.md",
           "note": "The package file that defines the customer the Product is built for, which the Marketing Engineer reads to score each Listening quote's Fit (US-ME13); it is one of the sources above, and the definition is never restated here. The competitors whose App Store reviews are read are post_drafts.competitors, each by the store page its own section of the research cites. The places Listening reads are in config/sources.json."

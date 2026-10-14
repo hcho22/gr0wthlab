@@ -41,6 +41,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    Until that record exists it does nothing more about the Beta Cohort, and the run report lists the approval as not recorded.
    Once it exists, it takes in the Founder's Beta Cohort reports (`ledger/evidence/beta-recruiting/reports/`) and fixes the run's next invitation batch: the next sign-ups that asked for a beta invitation and that no batch holds, good Fit first, then by sign-up date, at most the batch size in `config/run.json`.
    It offers at most one batch at a time, and the next only after the Founder has decided the last.
+   In a week whose Weekly Read is due, it works out from the kit exactly what that read asks of the Founder, takes in the numbers he has given for it on the sitting page as Evidence for each post (`ledger/evidence/results/`), writes the ask into the Review Queue for the page, and, the first time while anything asked is not given, queues one notice that lists it ([The Weekly Read](#the-weekly-read)).
    It reads the fixed list of network sources in `config/sources.json` itself, outside the sandbox: the three subreddits' newest threads and rules, and App Store reviews of the competitors the research names.
    Every request is a credential-free GET to a host listed in `config/guardrails/fetch.json`; it reads each host's `robots.txt` first and never requests a path that file disallows.
    No read waits forever: each wait on a host ends after `timeout_seconds` and each whole read after `read_deadline_seconds`, both in that file, so a host that answers a byte at a time is cut off and reported as a source not read.
@@ -54,7 +55,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    No session has a network, and the launcher proves it before each one's agent starts: the preflight tries each listed host from inside the sandbox, and a session whose preflight reaches one, or does not finish, is not started.
    It proves the same way, before each session, that no session can read raw footage: the preflight tries to list the footage place and each footage folder in it from inside the sandbox, and a session whose preflight can list one, or does not finish, is not started ([how raw footage is kept from the agent](#how-raw-footage-is-kept-from-the-agent)).
    Every session writes only in the six `workspace/` areas; it can read `ledger/`, where the launcher keeps its records and the Founder's are, and never write there.
-   Before each session's agent starts, the preflight tries to create a file in each of the five folders of the Founder's records from inside the sandbox, and the session is started only when every one of those tries was refused: one that created a file, or a preflight that did not finish or did not try a folder, keeps that session from starting.
+   Before each session's agent starts, the preflight tries to create a file in each of the six folders of the Founder's records from inside the sandbox, and the session is started only when every one of those tries was refused: one that created a file, or a preflight that did not finish or did not try a folder, keeps that session from starting.
    Every session runs under the same time limit, counted for it alone; one still running at it is stopped, and the run goes on to the next session ([When a session times out](#when-a-session-times-out)).
    After each session it restores its owner's read and write access to anything under `workspace/` that session left without it, and the run report names every entry it fixed, before or after a session.
    It then puts back any change in `workspace/instructions/`, before the next session starts, so every session starts from the Instructions as the run noted them before its first session and none reads what another session changed.
@@ -95,7 +96,8 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    The post Drafts session's brief names each such day too, since that post can keep its video only while its Draft stays as it is.
    Before it queues any post, it compares the two videos each A/B pair's posts are about to show, reading each from its own record in `ledger/evidence/filming/assets/`, which knows every footage file by its fingerprint and not by its name: when they show different footage outside their openings, nothing the run changed for the pair is offered, the posts that stood stay, and the run report and the notice name the pair.
    A day whose copy the Founder approved before its video existed gets its video only while its Draft is still that copy; otherwise no video is cut and the notice says so.
-   It files each reviewed proposal in `src/proposals/` once, and never again whatever the Founder decides: the brand lint's word lists, and, in a run with outreach messages to offer, the loss-framing and sponsorship-ask lists.
+   It files each reviewed proposal in `src/proposals/` once, and never again whatever the Founder decides: the brand lint's word lists, the wording that says the 200-impression floor counts each platform's views while `read-the-results.md` does not say so, and, in a run with outreach messages to offer, the loss-framing and sponsorship-ask lists.
+   It checks the Weekly Read memo when its session was due, and, when it passes, keeps the memo the Founder reads in `ledger/weekly-reads/` and queues one Weekly Read decision item for each of its lines; a memo that fails a check stays in `workspace/weekly-reads/` as written, and the notice names each failing check.
    It checks each recruiting Draft the brief asked for in `workspace/drafts/beta-recruiting/`, and queues the invitation, with its batch attached, or the Waitlist ask only from a Draft that passes; a blocked Draft is named in the run report and the notice with every failing rule.
    A recruiting Draft that holds anything that looks like an email address is removed from `workspace/`, so the records step never saves it.
    It withdraws an open recruiting item whose Draft stopped passing, or that outlived the end of recruiting, at the Founder's stop or once the Founder reports the cohort full, and keeps the run's recruiting Evidence in `ledger/evidence/beta-recruiting/`.
@@ -139,6 +141,7 @@ The sessions, in the order a run starts them:
 | Session | It has work due when | What it writes |
 | --- | --- | --- |
 | Package review | The snapshot read at least one package file | Package-change proposals in `workspace/review-queue/incoming/` |
+| Weekly Read | A Weekly Read is due, the Founder has given numbers for it, and its memo was not written from exactly those, with none of its items decided | The memo in `workspace/weekly-reads/`, and a Dispatch request where a result would change the product |
 | Post Drafts | The plan lists a calendar day the Founder has not approved | The due days' Drafts in `workspace/drafts/posts/` |
 | Filming | The Filming table marks a day ready for an edit record | Edit records in `workspace/drafts/edits/` |
 | Beta Cohort recruiting | The Founder's gate is recorded and the plan asks for a Draft | The recruiting Drafts in `workspace/drafts/beta-recruiting/` |
@@ -148,6 +151,7 @@ The sessions, in the order a run starts them:
 
 The order is fixed in launcher code ([`src/gr0wthlab/sessions.py`](../src/gr0wthlab/sessions.py)), because it follows from what each session needs.
 The package review comes first, so every later session can read what it proposed.
+The Weekly Read comes next, so the post Drafts session can read its memo.
 The post Drafts come before Filming, since an edit record runs exactly as long as its day's Draft and a video is cut only from a Draft that passes.
 The rejection reasons come last, so their proposals can take account of every proposal the run already holds.
 Sessions never run at once: one checkout has one `workspace/`.
@@ -221,6 +225,7 @@ This is the one list of the places such text may sit; `AGENTS.md` and `ledger/RE
 Of everything the launcher refuses, a Draft waiting for a fix is the one place a stranger's words may still sit (the Founder's decision of 2026-10-13):
 
 - A Draft the agent wrote, a reply that failed its checks included, stays in `workspace/` and is committed as written until it passes or is rewritten.
+  The Weekly Read memo is the Weekly Read's Draft: one that fails a check stays in `workspace/weekly-reads/` the same way, with any comment it quotes, which is always one the Founder gave on the sitting page.
   The reasons its checks give can quote it, where those checks are kept: the Evidence of each workflow's Draft checks, such as the day's post verdict in `ledger/evidence/post-drafts/<run id>.json`, and the run report and notice.
 
 Everything else the launcher refuses is removed from `workspace/`, copied nowhere, and leaves only its name and the launcher's reasons:
@@ -237,7 +242,7 @@ They are kept in the set-aside record, in each run's Listening Evidence (`ledger
 
 These also keep the agent's words, and none of them is a refusal:
 
-- What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, and the line that says why a rejection code fits.
+- What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, the line that says why a rejection code fits, and each line of a Weekly Read memo that passed, in the memo the Founder reads and in its item.
 - Any other file the agent leaves in `workspace/` that the launcher neither takes in nor puts back is committed as written.
   An edit record waiting for a fix is one: its `shot` and `source` values can hold any text, and it stays committed as written.
   The reasons its checks give can quote those two values whole, and are kept in the run's filming Evidence (`ledger/evidence/filming/<run id>.json`), in the day's post verdict in the post Drafts Evidence, and in the run report and notice.
@@ -318,7 +323,8 @@ What the page walks through, one thing at a time:
 
 1. What the last run reports: the summary at the top of its run report.
    If the weekly run due has not finished, the page says so first, and the queue and the report it shows are the earlier run's.
-2. Each open item, in the Review Queue's order, shown whole with what it touches and its Evidence.
+2. In a week whose Weekly Read is due, each post's numbers first, one post at a time, as [The Weekly Read](#the-weekly-read) says.
+3. Each open item, in the Review Queue's order, shown whole with what it touches and its Evidence.
    The Founder approves it, with a one-line note if wanted, rejects it, with a one-line reason, or leaves it for later.
    Leaving it writes nothing: the item stays open and comes back at the next sitting.
    The next run marks it carried over when it knows this sitting took place, which it knows from the sitting record or from a decision given at it, and from nothing else ([Ending it](#ending-it)).
@@ -326,9 +332,9 @@ What the page walks through, one thing at a time:
    A post that shows a video plays that file on the page, so the video and its copy are approved together.
    The page asks the launcher's own check of a finished file: when the file is missing or changed, or the video's record is missing or does not name that file, the page says so in the words a run report would use and offers no approval.
    A package-change proposal says what it declares about Angles and Hooks, since the Founder is the only check on that.
-3. While a Product's Beta Cohort is being recruited, the three counts: invitations sent, accepted, and first sessions booked, each a total to date.
+4. While a Product's Beta Cohort is being recruited, the three counts: invitations sent, accepted, and first sessions booked, each a total to date.
    A count left blank is recorded as not reported, never as zero.
-4. The end: how long the sitting took, which the page measured and the Founder can correct, and one button that records the sitting and stops the page.
+5. The end: how long the sitting took, which the page measured and the Founder can correct, and one button that records the sitting and stops the page.
 
 After each answer the page shows the next thing, with what was just saved above it, read back from its file.
 `Queue` in the bar lists every open item with its state, and jumps to any of them.
@@ -413,7 +419,7 @@ An item counts as left undecided at a sitting when it is still open, was queued 
   The page lays an item out by its lines and makes no link, image, style, script, form, or tag from anything in it.
 - The page loads its own style sheet, script, and icon, and nothing else; its content security policy forbids every script, style, image, video, and request it did not ship.
 - The sandboxed agent cannot write `ledger/founder/`: the permission profile makes no part of it writable.
-  Before each session's agent starts, the preflight tries to create a file in each of the five folders from inside the sandbox, and the agent is started only when every try was refused; [the boundary check](#after-a-change-to-the-launcher-or-configuration) has the agent itself try each folder with both of its tools.
+  Before each session's agent starts, the preflight tries to create a file in each of the six folders from inside the sandbox, and the agent is started only when every try was refused; [the boundary check](#after-a-change-to-the-launcher-or-configuration) has the agent itself try each folder with both of its tools.
 
 ## A run happens when the Mac is awake
 
@@ -492,6 +498,79 @@ An attempt that ended before its report has no report of its own to say that the
 The record of the week's run says so (`cut-short-by-sleep`, with `asleep_seconds`), and the fresh run's report names the attempt.
 
 After an attempt that earns none, start a run on demand once the cause is dealt with; the next scheduled run is otherwise the next week's.
+
+## The Weekly Read
+
+Each 14-day window has two Weekly Reads, on its day 7 and its day 14, the Sundays one and two weeks after the window's first sitting ([Set the 14-day window](#set-the-14-day-window)).
+A read is due from its day for a week, so the scheduled run on that Sunday and any run on demand that week work on it.
+The day-7 read covers days 1 to 5, as the calendar's midpoint gate says; the package names no range for the day-14 read, so it covers every day posted before its own day, 1 to 13, and the freshest posts fall under the floor by the floor's own rule.
+
+gr0wthlab reads no platform: the Founder posts by hand ([ADR 0003](adr/0003-posting-is-manual.md)), and the Weekly Read uses no YouTube connection ([ADR 0004](adr/0004-the-weekly-read-uses-no-youtube-connection.md)), so there is nothing to set up in Google Cloud and no access to grant.
+The numbers come from the Founder, who reads them in TikTok Studio or YouTube Studio and gives them on the sitting page.
+
+### What a read asks for
+
+The run works out exactly what to ask from the 14-day kit, and nothing more:
+
+- Each post the read covers, on the platform the calendar names as the one whose metrics adjudicate it, and on no other: nothing is asked of YouTube for a post TikTok judges, nor of TikTok for one YouTube judges.
+- Its views, which the 200-impression floor counts on each platform (the Founder's decision of 2026-10-14).
+- The numbers its Angle's pre-registered signal and kill criterion name, such as TikTok's watched-full rate or YouTube's share viewed rather than swiped away, and its comment count where they name comments.
+  A number they name that the platform's Studio numbers hold none of, such as saves on YouTube, is named in the ask and not asked.
+- The numbers the signals and kill criteria of the read's other posts on the same platform name, since `read-the-results.md` ranks each post against the others in the bank on its own pre-registered metric, and a rank needs that number for every post: each TikTok post is asked for every number any TikTok post's Angle names, and each YouTube post likewise.
+  The ask says which numbers are its own Angle's and which are for the rank.
+- The text of its comments, since comment content is a first-class result.
+
+No follower count is ever asked or kept, and no number that no signal, kill criterion, or read rule names.
+The run writes the ask into the Review Queue (`results` in `queue.json`) for the sitting page, which reads no package file, and queues one notice that lists it the first time anything asked is not given.
+
+### Giving the numbers
+
+On the sitting page, right after the run's summary, each post asked for has a step of its own: its day, Angle, and the platform's Studio, why each number is asked, a field for each number, one for its comments, and the day the Founder read them.
+
+- Give each number as the Studio shows it for the post: whole numbers in digits, with commas if you like, and percentages with or without the sign.
+  A shortened figure such as 1.2K is refused, since it is not the number itself.
+- Leave a number blank when the Studio does not show it: it is recorded as not reported, never as zero.
+- Paste the comments one a line, their words only and never who wrote them; at most 40, each at most 300 characters, and nothing that looks like an email address.
+- The day you read them is the source of every number in the record, the export date of US-ME11; it is today unless you change it, and never a day still ahead.
+- `Leave it for later` writes nothing; a post with nothing given is not reported, and never taken to be not posted.
+- Giving them again replaces the record, whole.
+
+The page keeps no screenshot and no file: either can show a follower count or a commenter's name, neither of which gr0wthlab keeps, so the Founder reads the numbers from his screenshots or his file and types them ([ADR 0005](adr/0005-the-founder-types-the-weekly-read-numbers.md)).
+Each post's numbers are one record in `ledger/founder/results/`, which only the page writes; the formats are in [the Mandu exchange](mandu-exchange.md).
+
+Once the numbers are given, start a run so the Weekly Read takes them in:
+
+```sh
+~/gr0wthlab/src/bin/gr0wthlab run
+```
+
+While it runs, decide the other items; when it finishes, the page says the queue changed and shows the read's decision items ([A sitting while a run is going](#a-sitting-while-a-run-is-going)).
+
+### The memo and its decisions
+
+The Weekly Read session starts once numbers are given for the read, and again whenever the Founder gives more or corrects one while none of the read's items is decided.
+It applies `read-the-results.md` exactly, the only rule source, and writes the memo in `workspace/weekly-reads/`.
+The launcher checks the memo before anything is queued from it:
+
+- every Angle with a post the read covers has exactly one line, every pair with both legs covered one line at the day-14 read, and the day-7 read one line on whether the day-14 flex slot is earned;
+- every line ends in keep, kill, change, or test, and "insufficient data" is a result of its own, never a fail;
+- nothing is killed at day 7, and a kill at day 14 needs the Angle flagged at risk at day 7, since a kill takes two consecutive Weekly Reads;
+- an Angle none of whose posts reached the floor on the platform that judges it is insufficient data, and the floor is `read-the-results.md`'s own figure, counted in views;
+- the flex slot goes only to an Angle whose line says it cleared its signal, never on rank alone, and a pair is resolved only when both legs reached the floor;
+- every number has its n beside it, every unread or at-risk Angle and every pair to repost says what would settle it at the next read, and every comment quoted is word for word one the Founder gave for that post.
+
+A memo that passes becomes the memo the Founder reads, `ledger/weekly-reads/window-<n>-read-<07|14>.md`: one line that says the floor counts each platform's views, one that says what the read cannot tell, the launcher's own table of every post's numbers with its n and "not reported" where nothing was given, whether each post is readable or unread, under the floor or with its views not given, and how many comments were given as text, the agent's lines with the comments they quote as third-party text, the Waitlist counts by Source and Fit with progress toward the opt-in bar, and the Founder's sitting time in the week before the read.
+Each of its decision lines becomes its own Weekly Read decision item, which the Founder decides like any other.
+When the memo is written again, its items replace the read's open ones line for line, and an open item no line replaces is withdrawn; once the Founder has decided any item of a read, its memo stands as it is.
+A result that `read-the-results.md` says would change the product is listed under the memo's Product lines, and, where it warrants one, comes as a Dispatch request for the Founder to decide, never acted on.
+
+The run report's Weekly Read section says which read is due, how many posts it asks for and how many were given, the notice, the memo, and its items; the Post results row is incomplete while anything asked is not given, and names those posts as not reported.
+
+### The floor in the package
+
+`read-the-results.md` says "Any post under 200 impressions is unread, not failed", while neither platform's numbers that the kit lists name impressions.
+The Founder decided on 2026-10-14 that the floor counts each platform's views, and every memo says so.
+Until `read-the-results.md` says it too, each run files `src/proposals/read-the-results-views-floor.md` once, through the usual route, for the Founder to approve and Mandu to apply; it is never filed again, whatever he decides.
 
 ## Set the 14-day window
 
@@ -848,8 +927,8 @@ cd ~/gr0wthlab && src/bin/gr0wthlab preflight && src/bin/gr0wthlab boundary-chec
 
 The boundary check passes only when the runtime's own records show all of this, never the agent's report:
 
-- Each of the fourteen forbidden targets was attempted and refused once per tool, each on its own: Codex's record of the run holds a patch that names that target's sentinel alone, refused as outside the permission profile, and the kernel's log holds a refused shell write to that target's sentinel by its full path.
-  Five of the fourteen are the folders of the Founder's records, `ledger/founder/decisions/`, `sittings/`, `beta-builds/`, `beta-reports/`, and `outreach/`, where an approval or any other record of the Founder's would have to be written.
+- Each of the fifteen forbidden targets was attempted and refused once per tool, each on its own: Codex's record of the run holds a patch that names that target's sentinel alone, refused as outside the permission profile, and the kernel's log holds a refused shell write to that target's sentinel by its full path.
+  Six of the fifteen are the folders of the Founder's records, `ledger/founder/decisions/`, `sittings/`, `beta-builds/`, `beta-reports/`, `outreach/`, and `results/`, where an approval or any other record of the Founder's would have to be written.
   The other nine are Mandu, the RepToday checkout, the repository root, `workspace/` outside the areas, `ledger/`, `src/`, `config/`, `config/guardrails/`, and the git directory.
 - Each forbidden read was attempted and refused, each on its own: the footage place and each footage folder that exists in it when the check runs.
   For the shell, the kernel's log holds a refused read of that folder, by its full path, by the very process that Codex's record of the run's shell call shows the launcher's script started for it; the preflight's own refusals of the same folders never count.

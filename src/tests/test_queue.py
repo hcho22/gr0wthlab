@@ -330,8 +330,11 @@ class OrderAndPersistenceTest(LedgerTestCase):
         self.message("message")
         self.take()
         self.drop("old-request.md", fakes.proposal("dispatch-request"))
-        self.drop("decision.md", fakes.proposal("weekly-read-decision"))
         self.take("RUN2", NOW + timedelta(days=7))
+        # A Weekly Read decision, as the launcher queues it from a memo that passed its checks.
+        fields = {"kind": "weekly-read-decision", "product": "RepToday", "window": "1", "read": "7"}
+        item = exchange.Item(fields, "Weekly Read day 7: P01, keep", "The line.", "- P01", "- `a/b.md` line 1")
+        self.ledger.publish(self.store, item, "decision", "RUN2", NOW + timedelta(days=7))
         order = [entry["id"][9:] for entry in self.ledger.ordered()]
         self.assertEqual(
             order,

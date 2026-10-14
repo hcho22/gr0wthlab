@@ -30,6 +30,7 @@ FORMATS = {
     "beta-recruiting": "## Writing a recruiting Draft",
     "listening": "## Listening",
     "learning": "## Coding a rejection reason",
+    "weekly-read": "## Writing the memo",
 }
 SHARED = {sessions.ITEMS: "## Writing an item", sessions.MESSAGES: "## Writing a message Draft"}
 REJECTED = "20261011-name-status-stale"
@@ -39,16 +40,27 @@ CODE = f"---\nitem: {REJECTED}\ncode: length\n---\n\nThe Founder says it takes t
 class WorkflowsTest(unittest.TestCase):
     def test_the_sessions_run_in_the_order_each_one_s_work_needs(self):
         keys = list(sessions.KEYS)
-        self.assertEqual(len(set(keys)), 7)
+        self.assertEqual(len(set(keys)), 8)
         # The package review first, so every later session can read what it proposed.
         self.assertEqual(keys[0], sessions.REVIEW)
+        # The Weekly Read next, so the post Drafts session can read its memo.
+        self.assertLess(keys.index("weekly-read"), keys.index(sessions.POSTS))
         # An edit record runs exactly as long as its day's Draft, so the post Drafts come before filming.
         self.assertLess(keys.index(sessions.POSTS), keys.index("filming"))
         # The rejection reasons last, so their proposals can take account of every proposal the run already holds.
         self.assertEqual(keys[-1], "learning")
         self.assertEqual(
             keys,
-            ["package-review", "post-drafts", "filming", "beta-recruiting", "listening", "outreach", "learning"],
+            [
+                "package-review",
+                "weekly-read",
+                "post-drafts",
+                "filming",
+                "beta-recruiting",
+                "listening",
+                "outreach",
+                "learning",
+            ],
         )
 
     def test_every_workflow_names_an_output_the_run_report_accounts_for(self):
@@ -62,9 +74,9 @@ class WorkflowsTest(unittest.TestCase):
     def test_a_session_is_named_in_its_prompt_among_the_sessions_the_run_starts(self):
         found = [sessions.Session(workflow, workflow.key != "filming") for workflow in sessions.WORKFLOWS]
         self.assertEqual(
-            sessions.header(found, found[1]),
-            "Session: post-drafts, the Post Drafts session, 2 of the 6 this run starts (package-review, post-drafts,"
-            " beta-recruiting, listening, outreach, learning).",
+            sessions.header(found, found[2]),
+            "Session: post-drafts, the Post Drafts session, 3 of the 7 this run starts (package-review, weekly-read,"
+            " post-drafts, beta-recruiting, listening, outreach, learning).",
         )
 
 
@@ -89,7 +101,7 @@ class TaskDefinitionTest(unittest.TestCase):
 
     def test_a_shared_part_is_carried_by_the_workflows_that_use_it_and_by_no_other(self):
         using = {
-            sessions.ITEMS: {"package-review", "post-drafts", "learning"},
+            sessions.ITEMS: {"package-review", "weekly-read", "post-drafts", "learning"},
             sessions.MESSAGES: {"listening", "outreach"},
         }
         for part, heading in SHARED.items():
@@ -101,7 +113,8 @@ class TaskDefinitionTest(unittest.TestCase):
                     self.assertEqual(text in self.definitions[workflow.key], carried)
                     self.assertEqual(self.definitions[workflow.key].count(heading), int(carried))
         self.assertEqual(
-            [w.key for w in sessions.WORKFLOWS if w.writes_items], ["package-review", "post-drafts", "learning"]
+            [w.key for w in sessions.WORKFLOWS if w.writes_items],
+            ["package-review", "weekly-read", "post-drafts", "learning"],
         )
 
     def test_each_definition_gives_its_own_workflow_s_format_and_no_other_s(self):
@@ -240,6 +253,7 @@ class OrderTest(SessionsCase):
             "- The run finished.\n- Sessions: 3 ran (Package review, Post Drafts, Outreach); nothing was due", report
         )
         for title, why in (
+            ("Weekly Read", "window 1's first Weekly Read is due on day 7, Sunday 2026-10-18"),
             ("Filming", "no active Product films"),
             ("Beta Cohort recruiting", "the Founder has recorded no approved Beta Build"),
             ("Listening", "no Listening source is configured"),
@@ -254,15 +268,17 @@ class OrderTest(SessionsCase):
         self.assertEqual(self.row("All sessions")[0], "3 ran of the 3 with work due")
         self.assertRegex(self.row("All sessions")[3], r"^about \$0\.02[56]$")
         self.assertIn(
-            "- Sessions: 3 ran of the 3 with work due; nothing was due for Filming, Beta Cohort recruiting,"
-            " Listening, Rejection reasons.",
+            "- Sessions: 3 ran of the 3 with work due; nothing was due for Weekly Read, Filming, Beta Cohort"
+            " recruiting, Listening, Rejection reasons.",
             report,
         )
         self.assertIn(", over its 3 sessions.", report)
         # Each session has its own files in the log folder, and the run's record holds every workflow.
         run = self.run_record()
         self.assertEqual([found["workflow"] for found in run["sessions"]], list(sessions.KEYS))
-        self.assertEqual([found["due"] for found in run["sessions"]], [True, True, False, False, False, True, False])
+        self.assertEqual(
+            [found["due"] for found in run["sessions"]], [True, False, True, False, False, False, True, False]
+        )
         self.assertEqual((run["exit_code"], run["timed_out"], run["run_time_limit_seconds"]), (0, False, 3600))
         for key in ("package-review", "post-drafts", "outreach"):
             for kind in ("json", "events.jsonl", "stderr.log", "last-message.md"):
@@ -897,11 +913,18 @@ class FullWeekTest(FilmingRunCase, BetaCycleTestCase):
         self.decide(REJECTED, "reject", reason="Too long to read in a minute.")
         self.clip("d01-s1.mov")
         self.approve_build()
+        # The window began the day after the first run's sitting, so the second run is day 7's: its Weekly Read is
+        # due, with the numbers the Founder gave for day 1, and the post due is day 8's, the re-cut leg of day 1.
+        fakes.set_window(
+            self.repo, {"first_sitting": fakes.SUNDAY_RUN.astimezone().date().isoformat(), "slot": "19:00"}
+        )
         read_on = (fakes.SUNDAY_RUN + timedelta(days=7)).astimezone().date().isoformat()
+        fakes.give_results(self.exchange, 1, read_on=read_on, views=412, watched_full_percent=31.0)
         return {
             "review-queue/incoming/launch-date-stale.md": fakes.proposal(title="record the launch date"),
-            fakes.draft_path(1): fakes.filming_draft(1),
-            fakes.edit_path(1): fakes.edit_record(1, DAY_1),
+            "weekly-reads/window-1-read-07.md": fakes.WEEKLY_MEMO_DAY_1,
+            fakes.draft_path(8): fakes.filming_draft(8),
+            fakes.edit_path(8): fakes.edit_record(8, DAY_1),
             fakes.INVITATION: fakes.beta_draft(),
             fakes.WAITLIST_ASK: fakes.beta_draft("waitlist-ask-clean"),
             **quote_file(read_on=read_on),
@@ -920,9 +943,9 @@ class FullWeekTest(FilmingRunCase, BetaCycleTestCase):
         self.assertEqual(fakes.sessions_started(self.codex_dir), list(sessions.KEYS))
         report = self.report()
         titles = [workflow.title for workflow in sessions.WORKFLOWS]
-        self.assertIn(f"- The run finished.\n- Sessions: 7 ran ({', '.join(titles)}).\n", report)
-        self.assertIn("- Sessions: 7 ran of the 7 with work due.\n", report)
-        self.assertIn(", over its 7 sessions.", report)
+        self.assertIn(f"- The run finished.\n- Sessions: 8 ran ({', '.join(titles)}).\n", report)
+        self.assertIn("- Sessions: 8 ran of the 8 with work due.\n", report)
+        self.assertIn(", over its 8 sessions.", report)
         table = report.split("## Sessions\n", 1)[1].split("\n### ", 1)[0]
         self.assertEqual(re.findall(r"^\| ([^|]+) \| ended by itself, exit code 0 \|", table, re.M), titles)
         self.assertEqual(re.findall(r"^### (.+)$", report, re.M), [*titles, "The run's totals"])
@@ -933,13 +956,22 @@ class FullWeekTest(FilmingRunCase, BetaCycleTestCase):
         opened = [entry["kind"] for entry in queue["open"] if entry["published_by_run"] in report]
         self.assertEqual(
             sorted(kind for kind in opened if kind != "notice"),
-            ["message", "message", "message", "package-change-proposal", "post"],
+            [
+                "message",
+                "message",
+                "message",
+                "package-change-proposal",
+                "post",
+                "weekly-read-decision",
+                "weekly-read-decision",
+            ],
         )
         post = next(entry for entry in queue["open"] if entry["kind"] == "post")
         self.assertTrue(post["asset"], "the post shows the video cut from the Filming session's edit record")
         outputs = report.split("## Outputs\n\n")[1].split("\n\n")[0]
         for title in (
             "Package review (contradictions)",
+            "Weekly Read memo",
             "Filming plan and edits",
             "Listening Evidence",
             "Outreach Drafts",
@@ -952,6 +984,7 @@ class FullWeekTest(FilmingRunCase, BetaCycleTestCase):
         self.assertIn("edits: 1 finished", outputs)
         # Each brief holds its own workflow's section, and each prompt its own workflow's part.
         sections = {
+            "weekly-read": "## Weekly Read",
             "post-drafts": "## Post Drafts",
             "filming": "## Filming",
             "beta-recruiting": "## Beta Cohort recruiting",
@@ -968,7 +1001,7 @@ class FullWeekTest(FilmingRunCase, BetaCycleTestCase):
             self.assertTrue(prompt.endswith("\n---\n\n" + definitions[key]), key)
             self.assertEqual(prompt.count(OWN), 1)
             self.assertIn(f"- Instruction: {self.repo}/src/instructions/weekly-run/{key}.md\n", prompt)
-        self.assertIn("- Day 1: `day-01.md` is in place", self.brief(session="filming"))
+        self.assertIn("- Day 8: `day-08.md` is in place", self.brief(session="filming"))
         # A brief that tells its session how to cite a package file points at the Changes list only where it has
         # one: the Rejection reasons brief lists no package file, and so has no such list.
         for key in ("package-review", "post-drafts", "learning"):
@@ -977,6 +1010,7 @@ class FullWeekTest(FilmingRunCase, BetaCycleTestCase):
             self.assertEqual(listed, key != "learning", key)
             self.assertIn("In the items you write, cite a package file by its path inside the Mandu checkout", brief)
             self.assertEqual("as in the Changes list" in brief, listed, key)
+        self.assertIn("--part weekly-read`", self.brief(session="weekly-read"))
         self.assertIn("--part listening`", self.brief(session="listening"))
         self.assertIn("--part learning`", self.brief(session="learning"))
         # The last session, whose proposals go to incoming/, is told what the first one left there.
@@ -1013,18 +1047,18 @@ class FullWeekTest(FilmingRunCase, BetaCycleTestCase):
 
     def test_a_ready_day_with_no_draft_is_told_to_the_filming_session_and_stays_the_post_drafts_trouble(self):
         writes = self.full_week()
-        writes.pop(fakes.draft_path(1))
-        writes.pop(fakes.edit_path(1))
+        writes.pop(fakes.draft_path(8))
+        writes.pop(fakes.edit_path(8))
         code, out = self.second_run({"write": writes, "sessions": {"post-drafts": {"exit": 3}}})
         self.assertEqual(code, 3, out)
         self.assertEqual(fakes.sessions_started(self.codex_dir), list(sessions.KEYS))
-        self.assertIn("- Day 1: no post Draft, so write no edit record for it this run", self.brief(session="filming"))
+        self.assertIn("- Day 8: no post Draft, so write no edit record for it this run", self.brief(session="filming"))
         outputs = self.report().split("## Outputs\n\n")[1].split("\n\n")[0]
-        self.assertIn("| Post Drafts | incomplete | no Draft for day 1; its session ended with exit code 3 |", outputs)
+        self.assertIn("| Post Drafts | incomplete | no Draft for day 8; its session ended with exit code 3 |", outputs)
         # The Filming session ended by itself, so its output is not marked incomplete for the other session's trouble;
         # its own section still names the day with no edit record.
         self.assertIn("| Filming plan and edits | complete |", outputs)
-        self.assertIn("| 1 | d01-s1 | no edit record | it is ready for an edit record and has none |", self.report())
+        self.assertIn("| 8 | d01-s1 | no edit record | it is ready for an edit record and has none |", self.report())
 
 
 if __name__ == "__main__":

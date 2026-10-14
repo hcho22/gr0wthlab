@@ -55,6 +55,7 @@ ROUTES = (
     ("drafts/messages/replies/", "listening"),
     ("drafts/messages/outreach/", "outreach"),
     ("evidence/learning/", "learning"),
+    ("weekly-reads/", "weekly-read"),
 )
 FAKE_CODEX = """#!{python}
 import json, os, re, shutil, signal, subprocess, sys, time
@@ -1311,3 +1312,73 @@ def workspace_areas(root: Path):
     for _, path in pairs:
         path.mkdir(parents=True, exist_ok=True)
     return Areas(SimpleNamespace(repo_root=root, areas=pairs))
+
+
+# The Weekly Read (US-ME11, US-ME12): what the Founder gives on the sitting page, and a memo that passes every check.
+
+
+def give_results(
+    founder_root: Path,
+    day: int,
+    platform: str = "tiktok",
+    read: int = 7,
+    read_on: str = "2026-10-18",
+    texts=None,
+    window: int = 1,
+    **numbers,
+) -> Path:
+    """The Founder's record of one post's numbers for a Weekly Read, as the sitting page writes it."""
+    from gr0wthlab import exchange
+
+    record = {
+        "exchange": exchange.EXCHANGE_VERSION,
+        "window": window,
+        "read": read,
+        "platform": platform,
+        "day": day,
+        "numbers": numbers,
+        "comments": texts,
+        "read_on": read_on,
+        "recorded_at": f"{read_on}T18:30:00-07:00",
+    }
+    return write_record(founder_root / "results", f"{exchange.result_stem(window, read, platform, day)}.json", record)
+
+
+WEEKLY_MEMO_DAY_1 = "\n".join(
+    [
+        "# Weekly Read, window 1, day 7",
+        "",
+        "## Angles",
+        "",
+        "- P01 (day 1): insufficient data. One post alone is too few readable posts to rank."
+        " What would settle it: day 8 at the day-14 read. Decision: test",
+        "",
+        "## Flex slot",
+        "",
+        "- Flex slot: not earned. No Angle cleared its signal. Decision: keep",
+        "",
+        "## Product",
+        "",
+        "- None this read.",
+        "",
+    ]
+)
+
+# A day-14 Weekly Read memo of a window whose calendar holds day 1 alone: one Angle, no pair, so one decision item.
+WEEKLY_MEMO_DAY_14 = "\n".join(
+    [
+        "# Weekly Read, window 1, day 14",
+        "",
+        "## Angles",
+        "",
+        "- P01 (day 1): insufficient data. One post alone is too few readable posts to rank."
+        " What would settle it: a second read of its posts in window 2. Decision: keep",
+        "",
+        "## Pairs",
+        "",
+        "## Product",
+        "",
+        "- None this read.",
+        "",
+    ]
+)

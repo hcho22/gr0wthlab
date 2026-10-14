@@ -28,6 +28,7 @@ from . import (
     schedule,
     sessions,
     waitlist,
+    weekly_read,
     work,
 )
 from .attempts import ASLEEP_AT_LEAST, asleep_for
@@ -144,6 +145,13 @@ class RunState:
     probe_files_removed: list[str] = field(default_factory=list)
     work_published: list[str] = field(default_factory=list)  # the items Listening and outreach queued this run
     check_work: str = ""  # the command the agent checks its Listening and outreach work with
+    weekly: weekly_read.Plan | None = None  # the Weekly Read due this run: what it asked, what was given, its memo
+    weekly_why: str = ""  # why no Weekly Read is due this run, when none is
+    weekly_problem: str = ""  # why the Weekly Read was not prepared or not taken in, when it was not
+    weekly_outcome: weekly_read.Outcome | None = None
+    results_notice: str | None = None  # the notice that lists what to give for the read, when this run queued it
+    rules_text: str | None = None  # read-the-results.md as this run read it, for the floor and the floor proposal
+    floor_filing: str = ""  # where the proposal that the floor counts views stands
     attempt: attempts.Attempt | None = None  # a weekly scheduled run: which attempt at the run due, and those before
     slept: float = 0.0  # about how many seconds the Mac was asleep from the run's start to its last session's end
 
@@ -694,6 +702,8 @@ def render_brief(
         lines += [""] + outreach.brief_lines(state.outreach, context, mandu, check)
     if key == learning.WORKFLOW:
         lines += [""] + learning.brief_lines(state.reasons, workspace)
+    if key == weekly_read.WORKFLOW and state.weekly is not None:
+        lines += [""] + weekly_read.brief_lines(state.weekly, workspace, mandu, check)
     lines += ["", "## Where to write", ""]
     if session.workflow.writes_items:
         lines += [
@@ -1036,6 +1046,14 @@ def render_report(state: RunState) -> str:
         lines.append("Nothing is waiting for the Founder.")
     for item in state.set_aside:
         lines.append(f"- Set aside, not queued: `{item.name}`: {'; '.join(item.problems)}")
+    lines += [""] + weekly_read.report_lines(
+        state.weekly,
+        state.weekly_outcome,
+        state.weekly_why,
+        state.weekly_problem,
+        state.floor_filing,
+        state.results_notice,
+    )
     lines += [""] + posts.report_lines(state.posts, state.post_outcome, state.filing, state.posts_problem)
     if state.filming is not None or state.filming_problem:
         lines += [""] + filming.report_lines(state.filming, state.filming_problem)
@@ -1227,6 +1245,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     if recruiting:
         sections.append(recruiting)
     for section in (
+        weekly_read.notice_section(state.weekly, state.weekly_outcome, day),
         listening.notice_section(state.listening, state.listening_result, day),
         outreach.notice_section(state.outreach, state.outreach_result, day, state.again),
         learning.notice_section(state.learning, day),

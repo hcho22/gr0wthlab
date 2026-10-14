@@ -1020,5 +1020,78 @@ class EndTest(ServeTestCase):
         )
 
 
+class ResultsServeTest(ServeTestCase):
+    """The Weekly Read's numbers through the served page: one post at a time, from the page's own form only."""
+
+    def setUp(self):
+        super().setUp()
+        first = fakes.SUNDAY_RUN.astimezone().date() - timedelta(days=7)
+        fakes.set_window(self.repo, {"first_sitting": first.isoformat(), "slot": "19:00"})
+        fakes.keep_days(self.mandu, 1, 2, 3, 4, 5)
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+
+    def test_a_post_s_numbers_are_asked_given_and_read_back(self):
+        self.serve()
+        start = Seen(self.get("/")[2])
+        (begin,) = [attrs["href"] for attrs in start.named("a") if attrs.get("class") == "button primary"]
+        self.assertEqual(begin, f"{self.base}/result/tiktok-1", "the numbers come first")
+        status, _, body = self.get("/result/youtube-3")
+        self.assertEqual(status, 200)
+        page = Seen(body)
+        self.assertIn("Day 3 in YouTube Studio", page.said)
+        self.assertIn("Numbers 3 of 5", page.said)
+        names = [attrs["name"] for attrs in page.named("input") if attrs.get("type") == "text"]
+        self.assertEqual(names, ["views", "viewed_percent", "comments", "read_on"])
+        self.assertEqual([attrs["name"] for attrs in page.named("textarea")], ["comment_text"])
+        before = self.unwritten()
+        refused = self.post("/result/youtube-3", {"views": "950", "read_on": DAY}, Origin="http://evil.example")
+        self.assertEqual(refused[0], 403)
+        self.assertEqual(self.unwritten(), before)
+        path, shown = self.follow(
+            self.post(
+                "/result/youtube-3", {"views": "950", "viewed_percent": "72.5", "read_on": DAY, "comment_text": ""}
+            )
+        )
+        self.assertTrue(path.startswith("/result/youtube-3?saved=window-1-read-07-youtube-day-03"))
+        self.assertIn("You gave these on " + DAY, shown.said)
+        record = json.loads((self.exchange / "results/window-1-read-07-youtube-day-03.json").read_text())
+        self.assertEqual(record["numbers"], {"views": 950, "viewed_percent": 72.5, "comments": None})
+        self.assertIn("saved founder/results/window-1-read-07-youtube-day-03.json", self.said.getvalue())
+
+    def test_a_post_asked_for_its_comment_count_keeps_the_count_and_the_text_apart(self):
+        """A post whose signal names comments is asked for their count and their text: each field has a name of its
+        own, so neither is lost to the other, as one form name for both once lost the count in a real browser."""
+        self.serve()
+        page = Seen(self.get("/result/tiktok-2")[2])
+        names = [attrs["name"] for attrs in page.named("input") + page.named("textarea")]
+        self.assertEqual(len(names), len(set(names)), names)
+        self.assertIn("comments", names)
+        self.follow(
+            self.post(
+                "/result/tiktok-2",
+                {
+                    "views": "1,400",
+                    "comments": "2",
+                    "comment_text": "one missed day and I quit\nSame here",
+                    "read_on": DAY,
+                },
+            )
+        )
+        record = json.loads((self.exchange / "results/window-1-read-07-tiktok-day-02.json").read_text())
+        self.assertEqual(record["numbers"], {"views": 1400, "watched_full_percent": None, "comments": 2})
+        self.assertEqual(record["comments"], ["one missed day and I quit", "Same here"])
+
+    def test_a_refused_figure_keeps_what_was_typed_and_says_why(self):
+        self.serve()
+        status, _, body = self.post("/result/tiktok-1", {"views": "1.2K", "watched_full_percent": "31", "read_on": DAY})
+        self.assertEqual(status, 422)
+        page = Seen(body)
+        self.assertIn("Video views: give the exact number the Studio shows for the post", page.said)
+        typed = {attrs["name"]: attrs.get("value") for attrs in page.named("input") if attrs.get("type") == "text"}
+        self.assertEqual(typed["views"], "1.2K")
+        self.assertFalse((self.exchange / "results/window-1-read-07-tiktok-day-01.json").exists())
+
+
 if __name__ == "__main__":
     unittest.main()

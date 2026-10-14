@@ -36,7 +36,11 @@ QUEUE_FILE = "queue.json"
 MAX_SLUG = 60
 # The kinds the launcher renders only from a Draft that passed its checks, each with the folders its Drafts are
 # written in. No file of these kinds is taken from incoming/, and no item written there supersedes one.
-FROM_DRAFT = {"post": "drafts/posts/", "message": "drafts/messages/ or drafts/beta-recruiting/"}
+FROM_DRAFT = {
+    "post": "drafts/posts/",
+    "message": "drafts/messages/ or drafts/beta-recruiting/",
+    "weekly-read-decision": "weekly-reads/, the Weekly Read memo,",
+}
 
 
 class QueueError(Exception):
@@ -248,7 +252,7 @@ class Ledger:
         for key in ("product", "new_angle", "slot", "asset", "supersedes"):
             if item.fields.get(key):
                 entry[key] = item.fields[key]
-        for key in ("window", "day"):
+        for key in ("window", "day", "read"):
             if item.fields.get(key):
                 entry[key] = int(item.fields[key])
         entry.update(extra or {})
@@ -434,19 +438,24 @@ class Ledger:
             else:
                 entry.pop("carried_over_from", None)
 
-    def as_json(self, run_id: str, now: datetime, report: str, next_run: datetime) -> dict[str, object]:
-        """queue.json: when the next weekly run is due, the open items in presentation order, then every closed item."""
+    def as_json(
+        self, run_id: str, now: datetime, report: str, next_run: datetime, results: Mapping[str, object] | None = None
+    ) -> dict[str, object]:
+        """queue.json: when the next weekly run is due, what the Weekly Read due asks the Founder to give on the
+        sitting page, if one is due, the open items in presentation order, then every closed item."""
         closed = sorted(
             (entry for entry in self.entries.values() if entry["status"] != OPEN),
             key=lambda entry: (str(entry.get("closed_at", "")), str(entry["id"])),
         )
-        return {
+        found: dict[str, object] = {
             "exchange": exchange.EXCHANGE_VERSION,
             "updated_by_run": run_id,
             "updated_at": now.isoformat(),
             "run_report": report,
             "next_run": next_run.isoformat(),
             "paths": "Every path here is relative to the ledger/ directory that holds this file's folder.",
-            "open": self.ordered(),
-            "closed": closed,
         }
+        if results:
+            found["results"] = dict(results)
+        found.update(open=self.ordered(), closed=closed)
+        return found

@@ -524,6 +524,18 @@ input[type="text"] {
   font: 15px/1.4 var(--sans);
 }
 
+textarea {
+  width: 100%;
+  min-height: 7.5em;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--ground);
+  color: var(--ink);
+  font: 15px/1.4 var(--sans);
+  resize: vertical;
+}
+
 input.small {
   max-width: 220px;
   font-family: var(--mono);
@@ -639,7 +651,8 @@ details[open] summary {
   margin: 0;
 }
 
-.record div {
+/* Each row of a record, and only the row: a value of several lines holds a div of its own for each. */
+.record > div {
   display: grid;
   grid-template-columns: 160px minmax(0, 1fr);
   gap: 10px;
@@ -776,7 +789,7 @@ details[open] summary {
     display: none;
   }
 
-  .record div {
+  .record > div {
     grid-template-columns: minmax(0, 1fr);
     gap: 0;
   }

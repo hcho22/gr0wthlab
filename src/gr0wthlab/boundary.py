@@ -27,9 +27,9 @@ LEDGER = "ledger"
 # The Founder's records, a folder of ledger/: a run reads them too, and only `gr0wthlab sitting` writes them
 # (founder.py).
 FOUNDER = "founder"
-# Its five folders, one for each kind of Founder record. Each is a forbidden target of the preflight before every
+# Its six folders, one for each kind of Founder record. Each is a forbidden target of the preflight before every
 # session and of the boundary check; founder.py names the kinds and holds the rules.
-FOUNDER_KINDS = ("decisions", "sittings", "beta-builds", "beta-reports", "outreach")
+FOUNDER_KINDS = ("decisions", "sittings", "beta-builds", "beta-reports", "outreach", "results")
 # The reasoning efforts Codex's model catalog lists for the run's model. Codex passes any other text on, and the model's
 # service refuses it only once the agent starts, after everything a run does before its agent.
 REASONING_EFFORTS = ("low", "medium", "high", "xhigh", "max")

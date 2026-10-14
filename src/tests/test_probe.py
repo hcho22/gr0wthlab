@@ -903,11 +903,11 @@ class RecordedLogTest(ProbeTestCase):
         self.assertTrue(result["passed"])
 
     def test_every_target_the_founders_records_among_them_refused_in_a_patch_of_its_own_passes(self):
-        # The probe's steps as the launcher writes them since the Founder's records are targets: fourteen patches,
-        # one per target, and the script. Each folder of the records has its own refused patch in Codex's record.
+        # The probe's steps as the launcher writes them since the six folders of the Founder's records are targets:
+        # fifteen patches, one per target, and the script. Each folder has its own refused patch in Codex's record.
         self.write_record(exit_code=0, started_at="2026-10-09T00:00:00+00:00")
         self.write_permitted()
-        text = self.recorded("each-target-alone-with-founder-records.stderr.log")
+        text = self.recorded("each-target-alone-with-six-founder-folders.stderr.log")
         for label in FOUNDER_TARGETS:
             self.assertIn(f"{MARK}-{label}-file-tool.txt", text)
         with self.kernel(self.steps(tool=probe.SHELL)):
@@ -951,8 +951,16 @@ class RecordedLogTest(ProbeTestCase):
                 "founder-beta-builds",
                 "founder-beta-reports",
                 "founder-outreach",
+                "founder-results",
             ),
         )
+
+    def test_a_run_handed_five_folders_of_the_founders_records_proves_nothing_of_the_sixth(self):
+        """The log recorded while the Founder's records had five folders proves those five, each in a patch of its
+        own, and nothing of the results folder added after it: a folder is proven only by its own refused patch."""
+        gaps, problems = self.gaps("each-target-alone-with-founder-records.stderr.log", probe.PROBE_TARGETS)
+        self.assertEqual(problems, [])
+        self.assertEqual(list(gaps), ["founder-results"])
 
     def test_nine_targets_sent_as_three_patches_are_not_proven(self):
         # The shape behind the false failures on main: nine forbidden targets in three patches, each refused whole.

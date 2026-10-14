@@ -46,7 +46,9 @@ STATIC_FILES = {
     "page.js": "text/javascript; charset=utf-8",
     "icon.svg": "image/svg+xml",
 }
-MAX_BODY = 16 * 1024
+# The largest form is a post's Weekly Read numbers with up to 40 comments of 300 characters, which form encoding can
+# make several times longer than the text typed.
+MAX_BODY = 64 * 1024
 FORM = "application/x-www-form-urlencoded"
 POLICY = (
     "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; media-src 'self'; form-action 'self';"
@@ -236,6 +238,12 @@ class Handler(BaseHTTPRequestHandler):
                     return self.html(page.did(view, state), HTTPStatus.NOT_FOUND)
                 saved = self.saved_record(query, founder.BETA_REPORTS)
                 return self.html(page.counts(view, recruiting, state, saved=saved, last=last))
+            if len(parts) == 2 and parts[0] == "result":
+                asked = view.asked_for(parts[1])
+                if asked is None:
+                    return self.html(page.start(view, state), HTTPStatus.NOT_FOUND)
+                saved = self.saved_record(query, founder.RESULTS)
+                return self.html(page.result(view, asked, state, saved=saved, last=last))
             if len(parts) == 2 and parts[0] == "video":
                 entry = view.find(parts[1])
                 if entry is None or entry.video is None or entry.video.path is None:
@@ -358,6 +366,10 @@ class Handler(BaseHTTPRequestHandler):
                 saved = state.report_counts(parts[1], fields)
                 server.say(f"saved {saved.path}")
                 return self.see(page.url("counts", parts[1], saved=saved.stem, kind=saved.kind))
+            if len(parts) == 2 and parts[0] == "result":
+                saved = state.record_result(parts[1], fields)
+                server.say(f"saved {saved.path}")
+                return self.see(page.url("result", parts[1], saved=saved.stem, kind=saved.kind))
             if parts == ["end"]:
                 saved = state.record_sitting(get("minutes"), get("note"))
                 server.say(f"saved {saved.path}: {exchange.plural(saved.record['minutes'], 'minute')}")
@@ -392,6 +404,11 @@ class Handler(BaseHTTPRequestHandler):
             key = "reason" if fields.get("decision") == exchange.REJECT else "note"
             typed = {key: fields.get("line", ""), "change": "1"}
             return self.html(page.item(view, entry, state, reasons, typed), status)
+        if parts[0] == "result":
+            asked = view.asked_for(parts[1])
+            if asked is None:
+                return self.html(page.start(view, state, reasons), HTTPStatus.CONFLICT)
+            return self.html(page.result(view, asked, state, reasons, fields), status)
         if parts[0] == "counts":
             recruiting = view.product(parts[1])
             if recruiting is None or recruiting.build is None:

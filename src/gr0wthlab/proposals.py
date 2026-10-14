@@ -1,5 +1,6 @@
 """Package-change proposals the launcher files itself, once each: a reviewed text in src/proposals/ that firstmate
-wrote for the Founder to decide, such as the brand lint's word lists (F1).
+wrote for the Founder to decide, such as the brand lint's word lists (F1), or that says in the package what the
+Founder decided, such as the floor counting views (ADR 0004).
 
 Each is queued at most once, under the identifier it first got, and never re-asked whatever the Founder decides: the
 ledger entry's origin names the text it came from, which also keeps any item the agent writes from superseding it
@@ -22,6 +23,9 @@ from .queue import Ledger
 
 PROPOSALS = Path("src/proposals")
 BRAND_RULES = PROPOSALS / "brand-rules-word-lists.md"
+# The Founder's decision of 2026-10-14 that the 200-impression floor counts each platform's views, for Mandu to put in
+# read-the-results.md (ADR 0004).
+VIEWS_FLOOR = PROPOSALS / "read-the-results-views-floor.md"
 ORIGIN = "proposal"
 FILED = "filed"
 QUEUED_BEFORE = "queued before"

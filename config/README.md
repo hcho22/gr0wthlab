@@ -5,7 +5,7 @@ Configuration the Marketing Engineer reads but cannot write (Guardrail G8).
 - [`products.json`](products.json): the Product registry - each Product's status, gate, and the read-only locations of its repository and Go-To-Market Package.
   It records where strategy lives, never the strategy itself.
   It also says where RepToday's anonymous Waitlist view is, once its build lands, and how the run counts it, including the good-Fit definition the Founder approves.
-  It names which package file plays each part in the post-Draft checks (`post_drafts`), which one defines Fit for Listening (`listening`), and which one names the outreach (`outreach`), each one of the package sources every run snapshots.
+  It names which package file plays each part in the post-Draft checks (`post_drafts`), which one holds the rules for reading results (`weekly_read`), which one defines Fit for Listening (`listening`), and which one names the outreach (`outreach`), each one of the package sources every run snapshots.
   It names the thesis folder every Beta Cohort invitation cites, the brand rules its lint reads, and the cohort's size (`beta_recruiting`); a recruiting Draft may cite only the package sources that `beta-recruiting` needs.
   It says where RepToday's raw footage is (`filming.footage`): RepToday's own folder in Mandu, whose `window-<n>/` folders only the launcher reads, and reads only.
   Of Mandu the sandboxed agent reads the package paths named here (`go_to_market_package`: its `path`, `launch_checklist`, and `sources`) and nothing else, so a package file the agent must read is one of them.

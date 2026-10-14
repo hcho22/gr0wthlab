@@ -77,11 +77,13 @@ from . import (
     proposals,
     records,
     report,
+    results,
     sessions,
     settings,
     sources,
     visibility,
     waitlist,
+    weekly_read,
     work,
 )
 from . import state as run_state
@@ -564,7 +566,24 @@ class Cycle:
             listening.tally(state.listening, state.listening_result, state.listening_problem, gap(listening.WORKFLOW)),
             outreach.tally(state.outreach, state.outreach_result, state.outreach_problem, gap(outreach.WORKFLOW)),
             learning.tally(state.learning, state.learning_problem, gap(learning.WORKFLOW)),
+            self.weekly_tally(state),
         ]
+
+    def weekly_tally(self, state: RunState) -> run_state.Tally:
+        """What the Weekly Read checked and acted on: the posts it asks for, and the notice and decision items it
+        queued."""
+        found, outcome = state.weekly, state.weekly_outcome
+        incomplete = "; ".join(
+            weekly_read.gaps(found, outcome, state.weekly_problem, state.agent_gap(weekly_read.WORKFLOW))
+        )
+        if found is None:
+            note = f"not prepared: {state.weekly_problem}" if state.weekly_problem else state.weekly_why or "none due"
+            return run_state.Tally(weekly_read.WORKFLOW, 0, 0, note, incomplete)
+        acted = len(outcome.published) if outcome else 0
+        acted += int(bool(state.results_notice))
+        note = f"{len(found.taken.given)} of {report.plural(len(found.read.asks), 'post')} given; "
+        note += weekly_read.outcome_line(found, outcome)
+        return run_state.Tally(weekly_read.WORKFLOW, len(found.read.asks), acted, note, incomplete)
 
     def waitlist_tally(self, state: RunState, breach: str | None) -> run_state.Tally:
         """The Waitlist's line: the sign-ups counted, or why there are no counts; a routine read acts on nothing, and a
@@ -706,6 +725,11 @@ class Cycle:
             )
         if state.filming is None and not state.filming_problem:
             skipped["filming-plan"] = "no active Product films"
+        weekly = state.weekly
+        if weekly is None and not state.weekly_problem:
+            skipped["results"] = skipped["weekly-read"] = state.weekly_why or "no Weekly Read is due"
+        elif weekly is not None and not weekly.due and not weekly.read.floor_problem:
+            skipped["weekly-read"] = weekly.why
         heard, offered = gap(listening.WORKFLOW), gap(outreach.WORKFLOW)
         own = {
             "package-snapshot": ([], f"`{state.snapshot_file}`"),
@@ -734,6 +758,14 @@ class Cycle:
             "outreach-drafts": (
                 outreach.gaps(state.outreach, state.outreach_result, state.outreach_problem, offered),
                 outreach.tally(state.outreach, state.outreach_result, state.outreach_problem, offered).note,
+            ),
+            "results": (
+                results.gaps(weekly.read if weekly else None, weekly.taken if weekly else None, state.weekly_problem),
+                f"{len(weekly.taken.given)} of {len(weekly.read.asks)} posts given" if weekly else "",
+            ),
+            "weekly-read": (
+                weekly_read.gaps(weekly, state.weekly_outcome, state.weekly_problem, gap(weekly_read.WORKFLOW)),
+                weekly_read.outcome_line(weekly, state.weekly_outcome) if weekly else "",
             ),
             "rejection-codes": (
                 learning.gaps(state.learning, state.learning_problem, gap(learning.WORKFLOW)),
@@ -889,6 +921,122 @@ class Cycle:
         elif filing.status == proposals.UNUSABLE:
             state.problems.append(f"`{filing.source}` could not be filed: {filing.detail}")
         state.filing = proposals.describe(filing, ledger)
+
+    def prepare_weekly_read(
+        self,
+        state: RunState,
+        config: settings.Settings,
+        registry: Mapping,
+        boundary: Boundary,
+        ledger: Ledger,
+        ledger_ok: bool,
+        review_state: run_state.ReviewQueueState,
+    ) -> None:
+        """Before the first session: the Weekly Read due this run, what it asks the Founder to give on the sitting
+        page, what he has given, taken in as Evidence for each post, and whether its memo is due. The notice that
+        lists what to give is queued once for each read, while anything it asks is not given."""
+        mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
+        role = results.rules_path(registry)
+        if role is not None:
+            try:
+                state.rules_text = (mandu / role).read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError):
+                state.rules_text = None
+        read_day, why = results.due(config.window, self.now().astimezone().date())
+        if read_day is None:
+            state.weekly_why = why
+            state.sources.append(SourceLine(results.GIVEN, SKIPPED, f"no Weekly Read is due: {why}."))
+            return
+        plan = state.posts
+        if plan is None:
+            state.weekly_problem = f"not prepared: {state.posts_problem or 'no active Product has a 14-day kit'}"
+            return
+        context = plan.context
+        kit_problem = "; ".join(
+            f"`{context.paths.get(name, name)}` could not be used ({context.kit.problems[name]})"
+            for name in ("calendar", "angles", "pairs")
+            if name in context.kit.problems
+        )
+        read = results.prepare(config.window, read_day, context.kit, kit_problem, state.rules_text)
+        paths = {name: str(context.paths[name]) for name in ("calendar", "angles", "pairs")}
+        paths["read_the_results"] = role or "read-the-results.md"
+        try:
+            taken = results.take(self.store, read, state.run_id, self.now())
+            state.weekly = weekly_read.plan(read, taken, context.kit, paths, self.store, ledger)
+        except (OSError, ConfigError) as error:
+            state.weekly_problem = f"not prepared: {error}"
+            state.problems.append(f"the Weekly Read could not be prepared ({error})")
+            return
+        needs = output_titles(config, results.NEEDS)
+        state.sources += [
+            SourceLine(name, status, detail, needs) for name, status, detail in results.source_lines(read, taken)
+        ]
+        found = [unusable(name, problems, data) for name, problems, data in taken.unusable]
+        state.unusable += found
+        review_state.reported = sorted(set(review_state.reported) | {record.fingerprint for record in found})
+        queued = any(entry.get("origin") == read.origin for entry in ledger.entries.values())
+        if ledger_ok and taken.missing(read) and not queued:
+            title, body, touches, evidence = results.notice(read, paths)
+            item = exchange.Item({"kind": "notice", "product": plan.product}, title, body, touches, evidence)
+            try:
+                identifier = ledger.publish(
+                    self.store, item, f"notice-{read.stem()}", state.run_id, self.now(), origin=read.origin
+                )
+            except (OSError, ConfigError) as error:
+                state.problems.append(f"the notice of what to give for the {read.name} could not be written ({error})")
+            else:
+                state.results_notice = identifier
+                state.published.append(identifier)
+
+    def take_weekly_read(
+        self,
+        state: RunState,
+        areas: Areas,
+        ledger: Ledger,
+        products: Sequence[str],
+        run_id: str,
+        now: datetime,
+        seen: dict[str, str],
+    ) -> None:
+        """Once the last session has ended: check the Weekly Read memo when it was due, and queue one decision item for
+        each of its lines; and file, once, the proposal that read-the-results.md say the floor counts views."""
+        plan = state.weekly
+        if plan is not None and plan.due:
+            told = (
+                report.waitlist_lines(state.waitlist, state.waitlist_file, state.breach_notice)
+                if state.waitlist is not None
+                else ["The Waitlist was not read this run."]
+            )
+            spent = weekly_read.time_lines(self.store, plan.read, plan.read.on)
+            try:
+                outcome = weekly_read.take(
+                    plan, areas, self.store, ledger, state.posts.product, run_id, now, told, spent
+                )
+            except (OSError, ConfigError) as error:
+                state.weekly_problem = f"not taken in: {error}"
+                state.problems.append(f"the Weekly Read memo could not be taken in ({error})")
+            else:
+                state.weekly_outcome = outcome
+                state.published += outcome.published
+        if state.posts is None or state.rules_text is None:
+            return
+        if results.views_counted(state.rules_text):
+            state.floor_filing = (
+                f"`{proposals.VIEWS_FLOOR}`: not filed; `read-the-results.md` already says the floor counts views."
+            )
+            return
+        try:
+            filing = proposals.file_once(
+                canonical(self.repo_root), proposals.VIEWS_FLOOR, None, self.store, ledger, products, run_id, now, seen
+            )
+        except (OSError, ConfigError) as error:
+            state.problems.append(f"`{proposals.VIEWS_FLOOR}` could not be filed ({error})")
+            return
+        if filing.status == proposals.FILED:
+            state.published.append(filing.item)
+        elif filing.status == proposals.UNUSABLE:
+            state.problems.append(f"`{filing.source}` could not be filed: {filing.detail}")
+        state.floor_filing = proposals.describe(filing, ledger)
 
     def prepare_beta(
         self,
@@ -1168,6 +1316,7 @@ class Cycle:
                 "run": state.run_id,
                 "listening": listening.plan_record(state.listening) if state.listening else None,
                 "outreach": outreach.plan_record(state.outreach, areas) if state.outreach else None,
+                "weekly_read": weekly_read.plan_record(state.weekly) if state.weekly else None,
             }
             self.store.write_json(self.store.path(RUN_REPORTS, f"{state.run_id}.work-plan.json"), record)
         except (OSError, ConfigError) as error:
@@ -1373,6 +1522,11 @@ class Cycle:
             if plan.problem:
                 return plan.problem
             return "" if plan.due() else "no outreach message is due this run"
+        if key == weekly_read.WORKFLOW:
+            if state.weekly is None:
+                problem = state.weekly_problem
+                return f"the Weekly Read was {problem}" if problem else state.weekly_why or "no Weekly Read is due"
+            return state.weekly.why
         waiting = learning.uncoded(state.reasons) or learning.owed(state.reasons)
         return "" if waiting else "no rejection reason needs a code or a proposal"
 
@@ -1815,6 +1969,7 @@ class Cycle:
         self.prepare_beta(
             state, config, beta_rules, registry, boundary, ledger, ledger_ok, areas, states.beta_recruiting
         )
+        self.prepare_weekly_read(state, config, registry, boundary, ledger, ledger_ok, states.review_queue)
         areas.ensure_folder(areas.path("review_queue", INCOMING))
         self.prepare_work(state, config, registry, boundary, areas, ledger if ledger_ok else None, states, network)
         # A stopped boundary check's script sits among the agent's Instructions, so every run removes what such a check
@@ -1845,6 +2000,10 @@ class Cycle:
         elif state.posts is not None:
             state.posts_problem = "not taken in: the Review Queue could not be read"
         self.take_work(state, areas, ledger, ledger_ok, products, run_id, now, seen)
+        if ledger_ok:
+            self.take_weekly_read(state, areas, ledger, products, run_id, now, seen)
+        elif state.weekly is not None and state.weekly.due:
+            state.weekly_problem = "not taken in: the Review Queue could not be read"
         self.count_work(state, config, log_dir, readings, ledger_ok)
         report_path = self.store.path(RUN_REPORTS, f"{run_id}.md")
         state.problems += areas.problems
@@ -1893,8 +2052,9 @@ class Cycle:
             # While a fresh run is to follow by itself, the next weekly run is the one already due.
             next_run = state.due.astimezone() if state.again else report.next_due(now, config.weekly)
             try:
+                asked = state.weekly.read.as_json() if state.weekly is not None and state.weekly.read.asks else None
                 self.store.write_json(
-                    ledger_path, ledger.as_json(run_id, now, self.store.relative(report_path), next_run)
+                    ledger_path, ledger.as_json(run_id, now, self.store.relative(report_path), next_run, asked)
                 )
             except OSError as error:
                 state.problems.append(
