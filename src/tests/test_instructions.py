@@ -296,6 +296,10 @@ class LoopTest(WorkCycleTestCase):
         execution = self.read(f"evidence/decisions/{DAY_1}.json")
         self.assertEqual(execution["instructions"]["outcome"], "kept")
         self.assertEqual(execution["instructions"]["change"], "20261018-post-drafts")
+        # The learning ledger the same run writes says the same, not only the next run's.
+        learned_reasons = {reason["item"]: reason for reason in self.read("evidence/learning/ledger.json")["reasons"]}
+        self.assertEqual(learned_reasons[DAY_1]["instructions"], execution["instructions"])
+        self.assertNotIn("instructions", learned_reasons[DAY_3], "a strategy reason never leads to a change")
 
         learned = self.section("Instructions")
         offered = "- Offered: a change to the Post Drafts Instructions, from its workflow's reasons coded as execution:"

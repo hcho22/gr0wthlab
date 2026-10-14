@@ -462,19 +462,31 @@ def apply(store: Store, change: Change) -> None:
 
 
 def answer(
-    store: Store, items: Sequence[str], outcome: str, change: str | None, run_id: str, now: datetime
+    store: Store,
+    items: Sequence[str],
+    outcome: str,
+    change: str | None,
+    run_id: str,
+    now: datetime,
+    found: Sequence[learning.Reason] = (),
 ) -> list[str]:
     """Write into each reason's decision Evidence what became of it as a change to its Instructions, so it is not
-    offered again; and return each that could not be written, with why."""
+    offered again, and into its reason among `found`, from which the learning ledger is written; and return each that
+    could not be written, with why."""
     problems = []
+    by_item = {reason.item: reason for reason in found}
     for item in items:
         path = learning.decision_file(store, item)
+        answered = {"outcome": outcome, "change": change, "by_run": run_id, "at": now.isoformat()}
         try:
             data = json.loads(read_text(path))
-            data["instructions"] = {"outcome": outcome, "change": change, "by_run": run_id, "at": now.isoformat()}
+            data["instructions"] = answered
             store.write_json(path, data)
         except (OSError, UnsafeFile, ValueError) as error:
             problems.append(f"`{store.relative(path)}` could not record what became of its reason ({error})")
+        else:
+            if item in by_item:
+                by_item[item].instructions = answered
     return problems
 
 

@@ -294,10 +294,15 @@ def take(
     answered(store, ledger, products, result.reasons)
     if publish:
         areas.remove_empty_folders(folder)
-        path = store.path(*LEDGER_FILE)
-        store.write_json(path, ledger_record(result.reasons, run_id, now))
-        result.record = store.relative(path)
+        result.record = write_ledger(store, result.reasons, run_id, now)
     return result
+
+
+def write_ledger(store: Store, found: Sequence[Reason], run_id: str, now: datetime) -> str:
+    """Write the learning ledger from every reason as it stands, and return its path from ledger/."""
+    path = store.path(*LEDGER_FILE)
+    store.write_json(path, ledger_record(found, run_id, now))
+    return store.relative(path)
 
 
 def counts(found: Sequence[Reason]) -> dict[str, dict[str, object]]:

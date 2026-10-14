@@ -1278,7 +1278,7 @@ class Cycle:
         if outcome.offer is not None and finished and not outcome.taken.refused:
             outcome.answered = [reason.item for reason in outcome.offer.coded(found) if reason.item not in cited]
             outcome.problems += instructions.answer(
-                self.store, outcome.answered, instructions.NONE_PROPOSED, None, run_id, now
+                self.store, outcome.answered, instructions.NONE_PROPOSED, None, run_id, now, found
             )
         if proposal is None:
             return
@@ -1339,7 +1339,7 @@ class Cycle:
             outcome.problems.append(f"the record of change `{identifier}` could not be written ({error})")
         if change.outcome != instructions.NOT_COMPARED:
             outcome.problems += instructions.answer(
-                self.store, list(proposal.reasons), change.outcome, identifier, run_id, now
+                self.store, list(proposal.reasons), change.outcome, identifier, run_id, now, found
             )
 
     def file_outreach_lists(self, state: RunState, context, ledger: Ledger, products, run_id, now, seen) -> None:
@@ -1959,6 +1959,13 @@ class Cycle:
             state.posts_problem = "not taken in: the Review Queue could not be read"
         self.take_work(state, areas, ledger, ledger_ok, products, run_id, now, seen)
         self.learn(state, config, areas, ledger, ledger_ok, run_id, now, seen)
+        if state.instructions is not None and state.learning is not None and state.learning.record:
+            # The learning ledger was written when the codes were taken in; write it again with what the Instructions
+            # change made of each reason, so this run's records agree.
+            try:
+                learning.write_ledger(self.store, state.learning.reasons, run_id, now)
+            except OSError as error:
+                state.instructions.problems.append(f"`{state.learning.record}` could not be written again ({error})")
         self.count_work(state, config, log_dir, readings, ledger_ok)
         report_path = self.store.path(RUN_REPORTS, f"{run_id}.md")
         state.problems += areas.problems
