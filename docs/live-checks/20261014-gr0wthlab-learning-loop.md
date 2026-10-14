@@ -39,7 +39,8 @@ Every session below started the real agent; the preflight runs no model.
 | The example-set gate of run 3 | 22 | 2,327 s | about $0.24 |
 | The change written to do harm, on the rule of round 3 | 26 | 3,152 s | about $0.31 |
 | The same change, on the rule of round 4 | 13 | 1,176 s | about $0.14 |
-| **Total** | 98 | | about $1.02 beside the boundary checks |
+| Examples 18, 19, and 20 on the fixed fixture (round 6) | 3 | 296 s | about $0.04 |
+| **Total** | 101 | | about $1.06 beside the boundary checks |
 
 One Instructions change costs one gate: 20 to 22 sessions here, 27 to 39 minutes of agent time, and about $0.21 to $0.24 for the ten Post Drafts examples, inside the bound of 3,600 seconds that `learning.gate_time_limit_seconds` in `config/run.json` sets.
 A run tries at most one change, so this is also the most a week can add.
@@ -217,12 +218,32 @@ The lab's `ledger/instructions/post-drafts.md` had the same SHA-256 after the ga
 Commit `6d4592b66fb3300ed3b6c4c7faaaf5c2087ef698` (`src` tree `a60644de7a2752657fb47edef5bfa1a78098ba52`, `config` tree `578d1984f76e95cc63e37cdd6f720a68a8872f92`), from the worktree, at 11:37.
 `git status` was empty before and after: this file and the PRD's ticked boxes were moved out of the worktree for the check and put back after it.
 The commits since round 1 change nothing under `config/` or `src/bin/`, nor `boundary.py`, `codex.py`, `probe.py`, `launcher.py`, or `process.py`; the check ran again because `cycle.py`, `examples.py`, `instructions.py`, and `learning.py` changed.
-The commits after it change only tests and documents.
+The commits after it change only tests, the example sets' fixtures, and documents.
 
 | Command | Run | What the records showed |
 | --- | --- | --- |
 | `src/bin/gr0wthlab preflight` | none (no model) | 6 areas written; 21 paths refused, `ledger/instructions` and `src/examples` among them; the listing of the footage place refused; neither listed host reachable from the sandbox |
 | `src/bin/gr0wthlab boundary-check` | `20261014T183749Z-on-demand-92e5` | PASSED at its first probe run; fingerprint `7ccfdcd62bd5b888ea3e8fe0f6a5ae7bac184751f7667bf76b56426c494b343a`; 47 steps to prove; 16 of 16 file-tool targets refused, each in a patch of its own; 18 kernel Seatbelt denials; 12 of 12 permitted sentinels written; 1 of 1 forbidden read of the footage place refused; no local connection got through; nothing changed since the snapshot |
+
+## Round 6: examples that could never do worse
+
+Across the gates of rounds 2 to 4, three Post Drafts examples failed the same assertions with the Instructions in force on every run, so no change could make those assertions worse:
+
+- Examples 19 and 20: the day 7 Draft was blocked by `claim-unsupported` every time, since nothing in the synthetic RepToday code backs P07's Hook, "Five minutes still counts as showing up."; the session's own summary said the Hook's claim had no supporting code.
+  Example 18's day 6 Draft was blocked the same way in some runs, for P06's Hook, "A hallway is enough room for today.".
+- Example 16: no package-change proposal was ever queued for the frozen Hook that no code backs; each session read the proposal as a change to the Hook, which needs a kept quote record the lab does not hold, and wrote none.
+
+Commit `a3e7bf1` adds one synthetic code file that backs both Hooks, `src/examples/post-drafts/files/code/Engine/SessionRules.swift`, and moves no line any example cites.
+Run from 11:51 to 11:56 with a scratch script that called the lab clone's own `examples.run_example`, the lab clone at its lab-only commit `722bd16`, each example once with the Instructions in force:
+
+| Example | Run | What the checks read |
+| --- | --- | --- |
+| 18 | `20261011T230000Z-on-demand-9aaf` | 4 of 4 held: "day 6: queued" |
+| 19 | `20261011T230000Z-on-demand-26fc` | 4 of 4 held: "day 7: queued" |
+| 20 | `20261011T230000Z-on-demand-bf9a` | 5 of 5 held: days 6 and 7 queued, nothing set aside |
+
+Example 16 was left as it is: the Instructions in force ask for a proposal that cites both sides and leaves the choice to the Founder, which needs no quote record, and the session does not write one; the lab's weekly runs met the same for days 3 and 6.
+That is the Post Drafts session's behavior, which this change does not touch, and example 16 is the example that would show a change that fixes it.
 
 ## Scenarios
 
@@ -245,4 +266,5 @@ Each scenario is bound to the commit, the lab, and the times of the round that h
 - A proposal the launcher refuses (a strategy reason cited, package text copied, a comment line dropped): held by `CheckTest` in `src/tests/test_instructions.py`; every proposal live passed its checks.
 - A weekly run started by the schedule: every run here was started on demand.
 - The notice's wording after the three fixes of round 3 was not shown on the page again; the unit tests hold each line.
+- Examples 18, 19, and 20 on the fixed fixture were not run with the change of any gate; round 6 ran each once, with the Instructions in force.
 - This change merged with a newer `main`: every round here ran on this branch before any merge.
