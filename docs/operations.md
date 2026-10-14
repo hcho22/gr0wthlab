@@ -225,7 +225,8 @@ They change from an execution-coded rejection reason only through that workflow'
    Each lab is removed once its checks are read, and each lab run's log is kept in `~/Library/Logs/gr0wthlab/examples/<change id>/`, beside the sessions' own files.
 5. **The verdict.**
    An example is worse when a deterministic assertion held with the Instructions in force and fails with the change.
-   The change is kept only when every example ran to its end on both sides and none is worse; the launcher stops at the first example that is worse or could not be compared.
+   Since the agent's output varies from one session to the next, an example that did worse is run again on both sides, and counts as worse only when the same assertion does worse again; the notice and the record say what the repeat showed.
+   The change is kept only when every example ran to its end on both sides, its repeat included, and none is worse; the launcher stops at the first example that is worse or could not be compared.
    Judged statements, such as one about tone, are judged by nothing: the notice lists them as not judged.
 6. **The bound.**
    The example sessions together have `learning.gate_time_limit_seconds` of agent time, 3600, and each `learning.example_time_limit_seconds`, 600, or what is left of the bound ([`config/run.json`](../config/run.json)).

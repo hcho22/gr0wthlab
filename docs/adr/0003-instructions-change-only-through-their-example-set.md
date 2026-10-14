@@ -90,7 +90,9 @@ A lab never writes the real `ledger/`: the launcher copies an example's syntheti
 ## How an example is judged better or worse
 
 Deterministic assertions first.
-One is worse when it held with the Instructions in force and fails with the change.
+One is worse when it held with the Instructions in force and fails with the change, and does so again when the example is run again on both sides.
+The agent's output varies from one session to the next, so one run's flip is not taken as the change's doing: an example that did worse once is run again, in force and changed, and is worse only when the same assertion does worse again.
+The first live gate of 2026-10-14 is why: a change that added one line about caption length lost on one assertion of one example, a package-change proposal the agent wrote with the Instructions in force and not with the change, while nine examples did no worse and one did better ([its record](../live-checks/20261014-gr0wthlab-learning-loop.md)).
 An example whose session did not run to its end on either side, was not started, or whose lab could not be built, cannot be compared, so the change is not kept.
 A change is never kept on the strength of an example getting better; it is kept when none got worse.
 
@@ -143,5 +145,9 @@ Put to the Founder on 2026-10-14, each with a recommendation; the Founder answer
   Rejected: a candidate written by hand does not change with the Instructions, so the re-run would pass every change and test nothing.
 - **Write a brief for each example by hand and run only the session.**
   Rejected: a hand-written brief drifts from the one a weekly run writes, and the examples would test a session no weekly run starts.
+- **Take one run's flip as worse.**
+  Rejected after the first live gate: the agent's output varies from session to session, so a set of about thirty assertions will often see one flip under a change that made nothing worse.
+- **Run every example several times on each side and compare how often each assertion holds.**
+  Not chosen: it multiplies every change's sessions, where running again only the example that did worse adds two sessions each time one flips.
 - **Reuse a baseline measured in an earlier run while nothing it depends on changed.**
   Not chosen: it halves the sessions, but the two sides would then meet the model on different days, and a difference could be the model's and not the change's.

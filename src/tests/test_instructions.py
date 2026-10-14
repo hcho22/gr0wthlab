@@ -334,10 +334,13 @@ class LoopTest(WorkCycleTestCase):
         change = json.loads(self.change_records()[0].read_text(encoding="utf-8"))
         self.assertEqual(change["outcome"], "not kept")
         self.assertIn(
-            "example 1 got worse: `passes` held with the Instructions in force and failed with the change",
+            "example 1 got worse: `passes` held with the Instructions in force and failed with the change, and did so"
+            " again when the example was run again",
             change["why"],
         )
         self.assertEqual(change["gate"]["not_run"], [2], "the gate stops at the first example that is worse")
+        self.assertEqual(change["gate"]["sessions"], 4, "example 1 on both sides, and again on both sides")
+        self.assertIsNotNone(change["gate"]["examples"][0]["run_again"])
         self.assertIsNone(change["notice"])
         self.assertEqual([entry for entry in self.items("notice") if entry.get("instructions")], [])
         not_again = "The Instructions are as they were; the reasons it cites are not offered again."
@@ -449,6 +452,93 @@ class LoopTest(WorkCycleTestCase):
             " the first session",
             self.report(),
         )
+
+
+class RepeatTest(unittest.TestCase):
+    """An agent's output varies from one session to the next, so an example that did worse with a change is run again
+    on both sides, and is worse only when the same assertion does worse again."""
+
+    SET = examples.ExampleSet(
+        "post-drafts",
+        Path("."),
+        {},
+        tuple(
+            examples.Example(number, f"Example {number}.", "", ({"kind": "deterministic", "check": name},), {})
+            for number, name in ((1, "passes"), (2, "hook_frozen"))
+        ),
+    )
+
+    def gate(self, script):
+        """The gate over two examples, each run returning the checks the script gives, in the order they run: a
+        list of booleans by check, one Run per call; None for a run that did not run to its end."""
+        calls = []
+
+        def run_example(repo_root, example_set, example, side, text, root, env, home, log_dir, limit):
+            calls.append((example.id, side))
+            held = script.pop(0)
+            if held is None:
+                return examples.Run(side, "not run", "its session did not run to its end", seconds=1.0)
+            checks = [examples.Check(assertion, held) for assertion in example.checks]
+            return examples.Run(side, examples.RAN, checks=checks, seconds=10.0, cost=0.01, lab_run="r", started=True)
+
+        with (
+            mock.patch.object(examples, "load", return_value=self.SET),
+            mock.patch.object(examples, "run_example", run_example),
+        ):
+            found = examples.gate(
+                Path("."), "post-drafts", "a\n", "b\n", "c", {}, Path("."), Path("."), 100, 50, Path(".")
+            )
+        return found, calls
+
+    def test_a_flip_that_does_not_repeat_keeps_the_change(self):
+        found, calls = self.gate([True, False, True, True, True, True])
+        self.assertEqual(found.outcome, examples.KEPT, found.why)
+        self.assertEqual(
+            calls,
+            [(1, "in force"), (1, "proposed"), (1, "in force"), (1, "proposed"), (2, "in force"), (2, "proposed")],
+        )
+        lines = "\n".join(examples.result_lines(found))
+        self.assertIn(
+            "- Example 1: `passes` did worse with the change once; run again on both sides, it did not, so the"
+            " example is not worse.",
+            lines,
+        )
+        self.assertEqual(found.sessions, 6)
+
+    def test_a_flip_that_repeats_keeps_the_change_out_and_stops_the_gate(self):
+        found, calls = self.gate([True, False, True, False])
+        self.assertEqual(found.outcome, examples.NOT_KEPT)
+        self.assertIn("did so again when the example was run again", found.why)
+        self.assertEqual([example.id for example in found.not_run], [2])
+        self.assertEqual(len(calls), 4)
+
+    def test_a_repeat_that_does_not_run_to_its_end_leaves_the_change_not_compared(self):
+        found, _ = self.gate([True, False, True, None])
+        self.assertEqual(found.outcome, examples.NOT_COMPARED)
+        self.assertIn("example 1 could not be compared: run again, with the change", found.why)
+
+    def test_a_repeat_the_bound_leaves_no_time_for_is_not_compared(self):
+        tight, calls = self.gate_with_bound([True, False, True, True], 20)
+        self.assertEqual(tight.outcome, examples.NOT_COMPARED)
+        self.assertIn("bound of 20 seconds of agent time was used up", tight.why)
+        self.assertEqual(len(calls), 2, "nothing was started past the bound")
+
+    def gate_with_bound(self, script, bound):
+        calls = []
+
+        def run_example(repo_root, example_set, example, side, text, root, env, home, log_dir, limit):
+            calls.append((example.id, side))
+            checks = [examples.Check(assertion, script.pop(0)) for assertion in example.checks]
+            return examples.Run(side, examples.RAN, checks=checks, seconds=10.0, lab_run="r", started=True)
+
+        with (
+            mock.patch.object(examples, "load", return_value=self.SET),
+            mock.patch.object(examples, "run_example", run_example),
+        ):
+            found = examples.gate(
+                Path("."), "post-drafts", "a\n", "b\n", "c", {}, Path("."), Path("."), bound, 50, Path(".")
+            )
+        return found, calls
 
 
 class KeptOutOfReachTest(unittest.TestCase):
