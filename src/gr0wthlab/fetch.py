@@ -6,7 +6,8 @@ reviewed pull request changes (Guardrail G8):
 
 - one method, GET, with no body, cookie, or credential (G5), over HTTPS on port 443, to a host the configuration
   lists and to no other; nothing else in the launcher opens a network connection, and send() is the one place this
-  module does;
+  module does; beyond it, only the production clone's records step reaches GitHub, through git (records.py) and one
+  `gh api` read of whether the repository is private (visibility.py), with the Mac's GitHub login;
 - each host's robots.txt is binding: it is read first, and a path it disallows for this reader is never requested;
   a robots.txt that cannot be read refuses the whole host for the run, since nothing shows what it allows;
 - a small bounded number of requests per run, spaced out on each host, and a wait a host asks for (Retry-After, or

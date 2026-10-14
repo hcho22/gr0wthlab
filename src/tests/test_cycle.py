@@ -50,6 +50,7 @@ class CycleTestCase(unittest.TestCase):
         self.awake = asked.start()
         self.addCleanup(asked.stop)
         self.web = fakes.Web()  # the web a run reads; no test opens the real one
+        self.github = fakes.GitHub()  # GitHub's answer to whether the repository is private; no test asks the real one
 
     def tearDown(self):
         for root, dirs, files in os.walk(self.tmp.name):
@@ -64,7 +65,7 @@ class CycleTestCase(unittest.TestCase):
             self.clock.set(at)
         out = io.StringIO()
         reader = lambda policy: fakes.client(self.web, policy)  # noqa: E731
-        runner = cycle.Cycle(repo or self.repo, self.env, self.home, out, self.clock, reader, clocks)
+        runner = cycle.Cycle(repo or self.repo, self.env, self.home, out, self.clock, reader, clocks, self.github)
         kwargs = {"execve": execve} if execve else {}
         code = runner.run(trigger, once, ["run"], **kwargs)
         return code, out.getvalue()
@@ -1542,6 +1543,98 @@ class ProductionCloneTest(CycleTestCase):
         self.assertEqual(code, 0, out)
         saved = fakes.git(self.remote, "ls-tree", "-r", "--name-only", "HEAD", env=self.env).split()
         self.assertIn("ledger/founder/outreach/.gitkeep", saved)
+
+    def test_a_public_repository_refuses_the_run_before_it_does_anything(self):
+        """From the first real run on, a run pushes the Drafts, the Evidence, and the Founder's records, so while the
+        repository is public nothing is fetched, snapshotted, started, or saved."""
+        left, _ = self.leave_probe_files(self.clone)
+        draft = self.clone / "workspace/drafts/day-3.md"
+        draft.write_text("a Draft\n", encoding="utf-8")
+        head = fakes.git(self.clone, "rev-parse", "HEAD", env=self.env)
+        self.github = fakes.GitHub("public")
+        code, out = self.run_cycle(repo=self.clone)
+        self.assertEqual(code, cycle.EXIT_RECORDS, out)
+        self.assertEqual(
+            out,
+            "gr0wthlab: refusing to start: the GitHub repository `example/gr0wthlab` is public: a real run would"
+            " publish its Drafts, its Evidence, and the Founder's records there, so the repository must be made"
+            " private first\n",
+        )
+        self.assertEqual(self.github.asked, [(self.clone, "origin")])
+        self.assert_nothing_done(head, left, draft)
+
+    def test_a_repository_that_cannot_be_confirmed_private_refuses_the_run_with_the_reason(self):
+        left, _ = self.leave_probe_files(self.clone)
+        draft = self.clone / "workspace/drafts/day-3.md"
+        draft.write_text("a Draft\n", encoding="utf-8")
+        head = fakes.git(self.clone, "rev-parse", "HEAD", env=self.env)
+        self.github = fakes.GitHub("unconfirmed")
+        code, out = self.run_cycle(repo=self.clone)
+        self.assertEqual(code, cycle.EXIT_RECORDS, out)
+        self.assertEqual(
+            out,
+            "gr0wthlab: refusing to start: could not confirm that the GitHub repository is private (gh api exited with"
+            " 1: error connecting to api.github.com), and a real run would publish its Drafts, its Evidence, and the"
+            " Founder's records there\n",
+        )
+        self.assert_nothing_done(head, left, draft)
+
+    def assert_nothing_done(self, head, left, draft):
+        self.assertFalse((self.codex_dir / "prompt.txt").exists(), "no session started")
+        self.assertFalse((self.clone / ".git" / "FETCH_HEAD").exists(), "nothing was fetched")
+        self.assertEqual(list((self.ledger(self.clone) / "evidence" / "package-snapshots").glob("*.json")), [])
+        self.assertEqual(list((self.ledger(self.clone) / "run-reports").glob("2*")), [])
+        self.assertEqual([path for path in left if not path.exists()], [], "nothing was removed")
+        self.assertEqual(fakes.git(self.clone, "rev-parse", "HEAD", env=self.env), head, "nothing was committed")
+        self.assertEqual(fakes.git(self.remote, "rev-parse", "HEAD", env=self.env), head, "nothing was pushed")
+        self.assertIn("?? workspace/drafts/day-3.md", fakes.git(self.clone, "status", "--porcelain", env=self.env))
+        self.assertEqual(draft.read_text(encoding="utf-8"), "a Draft\n")
+
+    def test_a_private_repository_is_asked_about_before_the_run_and_again_before_the_push(self):
+        fakes.behave(self.codex_dir, {"write": {"drafts/day-3.md": "a Draft\n"}})
+        code, out = self.run_cycle(repo=self.clone)
+        self.assertEqual(code, 0, out)
+        self.assertIn("records: pushed", out)
+        self.assertEqual(self.github.asked, [(self.clone, "origin")] * 2)
+
+    def test_a_repository_made_public_during_the_run_is_not_pushed_to(self):
+        """The commit stays local, as after a failed push, and the next run's report says why; the first run that
+        finds the repository private pushes it."""
+        fakes.behave(self.codex_dir, {"write": {"drafts/day-3.md": "a Draft\n"}})
+        head = fakes.git(self.remote, "rev-parse", "HEAD", env=self.env)
+        self.github = fakes.GitHub("private", "public")
+        code, out = self.run_cycle(repo=self.clone)
+        self.assertEqual(code, 0, out)
+        withheld = (
+            "not pushed: the GitHub repository `example/gr0wthlab` is public: a real run would publish its Drafts, its"
+            " Evidence, and the Founder's records there, so the repository must be made private first; the commits"
+            " stay local for the next run"
+        )
+        self.assertIn(f"records: withheld: {withheld}\n", out)
+        self.assertEqual(fakes.git(self.remote, "rev-parse", "HEAD", env=self.env), head, "nothing was pushed")
+        kept = fakes.git(self.clone, "rev-parse", "HEAD", env=self.env)
+        self.assertNotEqual(kept, head)
+        self.assertIn("workspace/drafts/day-3.md", fakes.git(self.clone, "show", "--name-only", kept, env=self.env))
+        run_id = re.search(r"^gr0wthlab: run (\S+) \(", out, re.M).group(1)
+
+        self.github = fakes.GitHub("public")
+        code, out = self.run_cycle(repo=self.clone, at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(code, cycle.EXIT_RECORDS, out)
+        self.assertEqual(fakes.git(self.remote, "rev-parse", "HEAD", env=self.env), head, "nothing was pushed")
+
+        self.github = fakes.GitHub()
+        code, out = self.run_cycle(repo=self.clone, at=fakes.SUNDAY_RUN + timedelta(days=7, minutes=5))
+        self.assertEqual(code, 0, out)
+        self.assertIn("records: pushed", out)
+        self.assertIn(f"\n- Run {run_id}'s records were committed and {withheld}.\n", self.report(self.clone))
+        fakes.git(self.remote, "merge-base", "--is-ancestor", kept, "HEAD", env=self.env)
+
+    def test_a_run_outside_the_production_clone_asks_github_nothing(self):
+        self.github = fakes.GitHub("public")
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        self.assertIn("not the production clone", self.report())
+        self.assertEqual(self.github.asked, [])
 
     def leave_probe_files(self, repo):
         """What a boundary check killed mid-run leaves at the top of the areas: its script and a sentinel."""

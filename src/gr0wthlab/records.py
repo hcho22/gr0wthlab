@@ -4,7 +4,8 @@ Before a run, restore the owner's access to everything under workspace/, then br
 origin by fast-forward, or by replaying unpushed records commits on top of it.
 After a run, commit the changed workspace/ and ledger/ paths, the agent's outputs, the launcher's records, and the
 records the Founder made on the sitting page since the last run (ledger/founder/), and push them to main, never
-anything else and never by force; a README in either is documentation, which only a reviewed pull request changes, so
+anything else and never by force, and only after GitHub has said again, just before each push, that the repository
+is private (visibility.py); a README in either is documentation, which only a reviewed pull request changes, so
 a change to one is put back instead. A Founder record that holds what looks like an email address, as only one changed
 by hand can, is never committed.
 Only the production clone (config/run.json's records.production_clone) runs either step; every other checkout,
@@ -15,11 +16,11 @@ from __future__ import annotations
 
 import os
 import stat
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from . import founder, process
+from . import founder, process, visibility
 from .boundary import FOUNDER, LEDGER
 from .report import plural
 
@@ -45,6 +46,7 @@ REFUSED = "refused"
 PUSHED = "pushed"
 NOTHING = "nothing to save"
 NOT_PUSHED = "not pushed"
+WITHHELD = "withheld"
 
 
 def said(completed: process.Completed) -> str:
@@ -341,8 +343,18 @@ def save_commit(git: Git, message: str, max_bytes: int, excluded: list[str] | No
     return git.head()
 
 
-def save(repo: Path, remote: str, branch: str, run_id: str, env: Mapping[str, str], max_bytes: int) -> Save:
-    """Commit this run's workspace/ and ledger/ changes and push main; on a moved remote, replay and retry once."""
+def save(
+    repo: Path,
+    remote: str,
+    branch: str,
+    run_id: str,
+    env: Mapping[str, str],
+    max_bytes: int,
+    confirm: Callable[[], visibility.Answer],
+) -> Save:
+    """Commit this run's workspace/ and ledger/ changes and push main; on a moved remote, replay and retry once.
+    Before each push, confirm asks GitHub whether the repository is private: any other answer keeps the commits local.
+    """
     git = Git(repo, env)
     upstream = f"{remote}/{branch}"
     result = Save(NOT_PUSHED, "")
@@ -366,6 +378,8 @@ def save(repo: Path, remote: str, branch: str, run_id: str, env: Mapping[str, st
         if foreign:
             result.detail = f"{branch} has local commits outside workspace/ and ledger/; nothing was pushed"
             return result
+        if withheld(result, confirm):
+            return result
         if push(git, remote, branch):
             result.status, result.pushed = PUSHED, len(unpushed)
             result.detail = f"pushed {plural(len(unpushed), 'records commit')} to {upstream}"
@@ -386,6 +400,8 @@ def save(repo: Path, remote: str, branch: str, run_id: str, env: Mapping[str, st
             )
             return result
         unpushed = git.commits(f"{upstream}..HEAD")
+        if withheld(result, confirm):
+            return result
         if push(git, remote, branch):
             result.status, result.pushed = PUSHED, len(unpushed)
             result.detail = f"{upstream} had moved; replayed and pushed {plural(len(unpushed), 'records commit')}"
@@ -395,6 +411,16 @@ def save(repo: Path, remote: str, branch: str, run_id: str, env: Mapping[str, st
     except GitError as error:
         result.detail = str(error)
         return result
+
+
+def withheld(result: Save, confirm: Callable[[], visibility.Answer]) -> bool:
+    """Whether the push must not happen because GitHub did not say the repository is private, with why in result."""
+    answer = confirm()
+    if answer.private:
+        return False
+    result.status = WITHHELD
+    result.detail = f"not pushed: {answer.refusal}; the commits stay local for the next run"
+    return True
 
 
 def push(git: Git, remote: str, branch: str) -> bool:

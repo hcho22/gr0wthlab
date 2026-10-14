@@ -10,10 +10,11 @@ The format of every record, and what Mandu may read: [the Mandu exchange](mandu-
 `src/bin/gr0wthlab run` does the whole run, scheduled or on demand.
 A run on demand always does it, and so does a one-off scheduled start (`--once`); a start of the weekly schedule does it only while the week's run is still owed and the Mac is fully awake, and otherwise ends at once ([A run happens when the Mac is awake](#a-run-happens-when-the-mac-is-awake)).
 
-1. In the production clone only, it fetches `origin` and fast-forwards `main`, then restarts itself on the new code.
+1. In the production clone only, it first asks GitHub whether the repository `origin` pushes to is private, and refuses to start unless GitHub says plainly that it is ([The repository must be private](#the-repository-must-be-private)).
+   Then it fetches `origin` and fast-forwards `main`, and restarts itself on the new code.
    Before that, it restores its owner's read and write access to anything under `workspace/` left without it.
    It refuses to start if the clone is not on `main`, has changes outside `workspace/` and `ledger/`, or has local commits outside them.
-   If the fetch fails, for example offline, it runs the current code and says so in the run report.
+   If the fetch fails, it runs the current code and says so in the run report; a Mac that is offline gets no further than the question to GitHub, so that run refuses to start.
 2. It snapshots RepToday's Go-To-Market Package in Mandu (`ledger/evidence/package-snapshots/`).
 3. It takes in the Founder's decisions from `ledger/founder/decisions/`, which only the sitting page writes, and keeps each one as Evidence (`ledger/evidence/decisions/`).
    From then on a decision can no longer be changed on the page ([The weekly sitting](#the-weekly-sitting)).
@@ -226,6 +227,8 @@ Each is removed from `workspace/` and copied nowhere.
 
 ## Set up the production clone (once, after merge)
 
+Make the GitHub repository private first: from the first real run on, every run pushes the Drafts, the Evidence, the Review Queue, the run reports, and every line the Founder types on the sitting page to it, and a changed or withdrawn decision keeps its first wording in the history.
+
 ```sh
 git clone https://github.com/hcho22/gr0wthlab.git ~/gr0wthlab
 cd ~/gr0wthlab
@@ -237,6 +240,18 @@ src/bin/gr0wthlab run              # the first run, on demand
 The first run should end with `records: pushed`; check that `main` on GitHub gained one `chore(records): outputs of run …` commit touching only `workspace/` and `ledger/`.
 Then hold the first sitting: `src/bin/gr0wthlab sitting` ([The weekly sitting](#the-weekly-sitting)).
 The push uses the Mac's git credentials for `https://github.com` (the `gh auth git-credential` helper); if it fails, the commit stays local and the next run pushes it.
+
+### The repository must be private
+
+A run in the production clone asks GitHub whether the repository `origin` pushes to is private before it does anything else, and the records step asks again just before each push.
+The question is one `gh api repos/<owner>/<name>` read, outside the sandbox, with the same GitHub login the push uses, and GitHub has 60 seconds to answer.
+While GitHub says the repository is public, the run refuses to start with exit code 4 and says so: nothing is fetched, snapshotted, started, or saved.
+It refuses the same way, with the reason, whenever it cannot confirm that the repository is private: GitHub cannot be reached, `gh` is missing or has no login, `origin` does not push to a repository on github.com, or the answer does not say plainly that the repository is private or public.
+Nothing is ever taken as private but GitHub's own answer that it is.
+A weekly start refused this way is an attempt that did not complete, as any refused start is: with the Mac awake throughout, the week's run then waits for the Founder ([Which endings earn another attempt](#a-run-happens-when-the-mac-is-awake)).
+If the repository was made public during a run, the records step does not push: the run ends with `records: withheld`, its commit stays local as after a failed push, and the next run's report says why.
+The first run that finds the repository private again pushes the commits kept that way.
+Every other checkout, such as a firstmate worktree or a lab, asks GitHub nothing.
 
 ## Install the weekly schedule
 

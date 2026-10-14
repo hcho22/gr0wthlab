@@ -1,22 +1,24 @@
 """One Marketing Engineer run, scheduled or on demand, from the pre-run sync to the saved records.
 
-Order: bring the production clone up to origin's main; snapshot the Go-To-Market Package; take in the Founder's
-decisions from ledger/founder/, which only `gr0wthlab sitting` writes (founder.py) and from which every Founder record
-below is read; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests
-that need filing; plan the post Drafts from the 14-day kit (posts.prepare); file the filming plan and list and measure
-the footage (filming.prepare); read the Founder's Beta Build record and, only once it exists, plan the Beta
-Cohort's next invitation batch (beta.prepare); read the fixed list of network sources into one snapshot (fetch.Client,
-the launcher's only way onto the network), which is working data removed when the run ends, and plan Listening from it
-and outreach from the Founder's records; decide which workflows have work for the agent, and for each of those, one
-after another in a fixed order, write its brief and run one agent session inside the sandbox, which has no network
-(sessions.py, launcher.run), and after each session put back any change it made to the agent's Instructions, so no
-session works from Instructions another changed; once the last session has ended, queue the items the sessions
-wrote to workspace/review-queue/incoming/ that pass the format, a post for
+Order: in the production clone, refuse to start unless GitHub says the repository its records are pushed to is private
+(visibility.py), then bring it up to origin's main; snapshot the Go-To-Market Package; take in the Founder's decisions
+from ledger/founder/, which only `gr0wthlab sitting` writes (founder.py) and from which every Founder record below is
+read; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests that need filing;
+plan the post Drafts from the 14-day kit (posts.prepare); file the filming plan and list and measure the footage
+(filming.prepare); read the Founder's Beta Build record and, only once it exists, plan the Beta Cohort's next invitation
+batch (beta.prepare); read the fixed list of network sources into one snapshot (fetch.Client, the launcher's only way
+onto the network besides the production clone's git and gh steps), which is working data removed when the run ends, and
+plan Listening from it and outreach from the Founder's records; decide which workflows have work for the agent, and for
+each of those, one after another in a fixed order, write its brief and run one agent session inside the sandbox, which
+has no network (sessions.py, launcher.run), and after each session put back any change it made to the agent's
+Instructions, so no session works from Instructions another changed; once the last session has ended, queue the items
+the sessions wrote to workspace/review-queue/incoming/ that pass the format, a post for
 each Draft that passes every check, with the video cut from its edit record when it has one (posts.take), the
 recruiting Drafts that pass theirs (beta.take), the quotes, proposals, and messages that pass theirs (listening.take,
 outreach.take), the code proposed for each rejection reason (learning.take), and the reviewed proposals that need
 filing; count what each session did, for the report to show beside that session's own word (work.py); write the Review
-Queue and the run report; commit and push workspace/ and ledger/. Every step but the sessions is deterministic code
+Queue and the run report; commit workspace/ and ledger/ and push them once GitHub says again that the repository is
+private. Every step but the sessions is deterministic code
 outside the sandbox. The launcher's records live in ledger/, which an agent can read and never write, so nothing it
 does can change them; in workspace/ the launcher only restores its owner's access to entries a session left without
 it, removes what a stopped boundary check left at the top of the areas, before the first records step can commit it,
@@ -78,6 +80,7 @@ from . import (
     sessions,
     settings,
     sources,
+    visibility,
     waitlist,
     work,
 )
@@ -181,6 +184,7 @@ class Cycle:
         clock: Callable[[], datetime],
         client: Callable[[fetch.Policy], fetch.Client] | None = None,
         clocks: process.Clock = process.CLOCK,
+        github: Callable[[Path, str, Mapping[str, str]], visibility.Answer] | None = None,
     ):
         self.repo_root = repo_root
         self.env = env
@@ -189,6 +193,7 @@ class Cycle:
         self.clock = clock
         self.client = client or fetch.Client  # the real network, through fetch.send, unless a test gives another
         self.clocks = clocks
+        self.github = github or visibility.ask  # GitHub itself, through gh, unless a test gives another
         self.store = Store(canonical(repo_root) / LEDGER)
         self.started: datetime | None = None
         self.run_id: str | None = None
@@ -1526,6 +1531,10 @@ class Cycle:
         code = short[0].exit_code
         return code if isinstance(code, int) and not isinstance(code, bool) and code else 1
 
+    def private(self, config: settings.Settings) -> visibility.Answer:
+        """GitHub's answer on whether the repository the production clone pushes its records to is private."""
+        return self.github(self.repo_root, config.records.remote, self.env)
+
     def leave_note(self, run_id: str, line: str) -> None:
         """A one-line note in ledger/notes/, which the next run's report shows."""
         self.store.write_text(self.store.path(NOTES_DIR, f"{run_id}.txt"), line + "\n")
@@ -1685,6 +1694,12 @@ class Cycle:
             return launcher.EXIT_CONFIG
 
         production = canonical(self.repo_root) == config.records.production_clone
+        if production and not pre:
+            # Before anything else a run does: from the first real run on, its records are pushed to that repository.
+            answer = self.private(config)
+            if not answer.private:
+                self.say(f"refusing to start: {answer.refusal}")
+                return EXIT_RECORDS
         if pre:
             sync = pre["sync"]
         elif not production:
@@ -1896,9 +1911,12 @@ class Cycle:
                 run_id,
                 self.env,
                 config.records.max_file_bytes,
+                lambda: self.private(config),
             )
             saved = result.as_json()
             self.say(f"records: {result.status}: {result.detail}")
+            if result.status == records.WITHHELD:
+                self.leave_note(run_id, f"Run {run_id}'s records were committed and {result.detail}.")
         code = self.exit_code(state)
         self.log(log_dir, sync, saved, report_path, state, code)
         return code

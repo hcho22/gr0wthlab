@@ -412,6 +412,17 @@ class OnlySleepEarnsAnotherRunTest(OwedRunTestCase):
         self.assertEqual((refused["attempt"], refused["ending"], refused["run"]), (1, attempts.REFUSED, None))
         self.assertEqual(self.run_cycle(repo=clone, trigger="scheduled", at=at(minutes=3)), (0, ""))
 
+    def test_a_production_clone_whose_repository_is_public_refuses_once_and_waits_for_the_founder(self):
+        _, clone = self.production()
+        self.github = fakes.GitHub("public")
+        code, out = self.run_cycle(repo=clone, trigger="scheduled", at=at(minutes=1))
+        self.assertEqual(code, cycle.EXIT_RECORDS)
+        self.assertIn("refusing to start: the GitHub repository `example/gr0wthlab` is public", out)
+        [refused] = self.record(clone)["runs"]
+        self.assertEqual((refused["attempt"], refused["ending"], refused["run"]), (1, attempts.REFUSED, None))
+        self.assertEqual(self.run_cycle(repo=clone, trigger="scheduled", at=at(minutes=3)), (0, ""))
+        self.assertEqual(len(self.github.asked), 1, "GitHub is not asked again every few minutes")
+
     def test_an_attempt_that_left_no_ending_is_not_started_again_and_the_next_report_says_so(self):
         """What a run leaves that was stopped before its report, as by a restart of the Mac."""
         store = Store(self.ledger())

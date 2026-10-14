@@ -10,7 +10,7 @@ import time
 os.environ["TZ"] = "PST8PDT,M3.2.0,M11.1.0"
 time.tzset()
 
-from gr0wthlab import fetch  # noqa: E402
+from gr0wthlab import fetch, visibility  # noqa: E402
 
 # No unit test may open the network. fetch.send is the launcher's one way onto it, so here it is replaced by a refusal:
 # a test that forgets to give a client its own transport fails at once, on any machine. REAL_SEND keeps the real
@@ -23,6 +23,18 @@ def no_network(host, target, headers, timeout, limit, deadline):
 
 
 fetch.send = no_network
+
+# Nor may a unit test ask GitHub whether a repository is private: a production clone's run gets a stand-in for the
+# answer (fakes.GitHub), and visibility.ask is replaced by a refusal. REAL_ASK keeps it for the tests of the question
+# itself, which give it a stand-in for gh.
+REAL_ASK = visibility.ask
+
+
+def no_github(repo, remote, env):
+    raise AssertionError(f"a unit test tried to ask GitHub whether the repository {remote} pushes to is private")
+
+
+visibility.ask = no_github
 
 # Nor may anything else the launcher runs in a unit test: a connection or a name lookup beyond this machine is refused
 # at the socket, whatever opened it, and listed here, so a whole run under test shows that it tried none. The boundary
