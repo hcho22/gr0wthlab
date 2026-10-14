@@ -961,6 +961,32 @@ class RecordedLogTest(ProbeTestCase):
             ),
         )
 
+    def test_every_target_the_instructions_and_example_sets_among_them_refused_in_a_patch_of_its_own_passes(self):
+        # The probe's steps as the launcher writes them since the Instructions in force and the example sets are
+        # targets: sixteen patches, one per target, and the script. Each of the two has its own refused patch.
+        self.write_record(exit_code=0, started_at="2026-10-09T00:00:00+00:00")
+        self.write_permitted()
+        text = self.recorded("each-target-alone-with-instructions-and-examples.stderr.log")
+        for label in KEPT_TARGETS:
+            self.assertIn(f"{MARK}-{label}-file-tool.txt", text)
+        with self.kernel(self.steps(tool=probe.SHELL)):
+            result = self.verify()
+        self.assertEqual(result["file_tool_targets_without_refusal"], {})
+        self.assertEqual(result["codex_tool_record"]["problems"], [])
+        self.assertEqual(len(result["steps_needed"]), 2 * TARGETS + 2 * len(self.boundary.areas))
+        self.assertTrue(result["passed"])
+        # Take the refusal of either one's patch away, and that one alone is unproven.
+        calls, _ = probe.tool_record(self.logs, RUN, True)
+        for step in self.steps(tool=probe.FILE_TOOL):
+            if step.label not in KEPT_TARGETS:
+                continue
+            with self.subTest(label=step.label):
+                kept = [call for call in calls if not probe.refused_alone(call, str(step.path))]
+                self.assertEqual(len(kept), len(calls) - 1)
+                self.assertEqual(
+                    list(probe.file_tool_gaps(kept, self.steps())), [step.label], "nothing else stands in for it"
+                )
+
     def test_a_run_handed_no_patch_for_the_instructions_or_the_example_sets_leaves_each_of_them_unproven(self):
         """A run that proves the fourteen targets before them proves nothing about the Instructions in force or the
         example sets: each is a target of its own, so the check fails and names both (ADR 0003)."""
