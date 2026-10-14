@@ -498,7 +498,8 @@ def notice(change: Change, report_path: str) -> tuple[str, str, str, str]:
     shown = changed_lines(change.before, change.proposal.text)
     for what, number, text in shown[:SHOWN_LINES]:
         cut = text if len(text) <= SHOWN_CHARACTERS else text[:SHOWN_CHARACTERS].rstrip() + "..."
-        lines.append(f"- Line {number}, {what}: {cut}" if cut.strip() else f"- Line {number}, {what}: (an empty line)")
+        shown_text = f'"{cut}"' if cut.strip() else "(an empty line)"
+        lines.append(f"- Line {number}, {what}: {shown_text}")
     if len(shown) > SHOWN_LINES:
         lines.append(f"- And {plural(len(shown) - SHOWN_LINES, 'more changed line')}: the record has the whole text.")
     lines += ["", "**The example set**", ""]

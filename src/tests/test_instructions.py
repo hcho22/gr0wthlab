@@ -273,7 +273,8 @@ class LoopTest(WorkCycleTestCase):
         self.assertIn(f'- Your reason for rejecting `{DAY_1}`: "{LONG}"', text)
         self.assertIn("The agent coded it `length`, an execution code:", text)
         self.assertIn("Keep caption lines short, as the Founder rejected long ones.", text)
-        self.assertIn(f"- Line {len(self.in_force.splitlines()) + 1}, added: {ADDED}", text)
+        # Quoted, so an Instructions line that is itself a list item never runs into the sentence.
+        self.assertIn(f'- Line {len(self.in_force.splitlines()) + 1}, added: "{ADDED}"', text)
         self.assertIn("| 1: Prepare the Draft for day 3", text)
         self.assertIn("| 4 of 4 checks held | 4 of 4 checks held |", text)
         self.assertIn("Not judged by anything, by the launcher or a model; yours to judge, if you want to:", text)
