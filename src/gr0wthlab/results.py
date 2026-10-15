@@ -351,16 +351,23 @@ class Given:
 @dataclass
 class Taken:
     """What a run took in for the read due: each usable record by its platform and day, each record that cannot be
-    used with why, why the folder could not be read, and the Evidence written."""
+    used with why, and each post of the read it was given for, why the folder could not be read, and the Evidence
+    written."""
 
     given: dict[tuple[str, int], Given] = field(default_factory=dict)
     unusable: list[tuple[str, list[str], bytes | None]] = field(default_factory=list)  # name, why, its bytes
+    unusable_posts: set[tuple[str, int]] = field(default_factory=set)  # given, but the record cannot be used
     failure: str = ""
     changed: list[str] = field(default_factory=list)  # Evidence files this run wrote or wrote again
     evidence: dict[int, str] = field(default_factory=dict)  # each covered day's Evidence file, under ledger/
 
     def missing(self, read: Read) -> list[Ask]:
-        return [ask for ask in read.asks if (ask.platform, ask.day) not in self.given]
+        """Each post the Founder has given nothing for; one whose record cannot be used was given."""
+        return [
+            ask
+            for ask in read.asks
+            if (ask.platform, ask.day) not in self.given and (ask.platform, ask.day) not in self.unusable_posts
+        ]
 
 
 def readable(read: Read, taken: Taken, ask: Ask) -> bool | None:
@@ -376,20 +383,30 @@ def readable(read: Read, taken: Taken, ask: Ask) -> bool | None:
 def take(store: Store, read: Read, run_id: str, now: datetime) -> Taken:
     """Take in the Founder's results records for the read due, and write each covered post's Evidence: every number
     asked of it, given or not reported, with the record it came from and the date he read the numbers as its source.
-    A record that cannot be used is named with its problem and nothing is taken from it."""
+    A record that cannot be used is named with its problem and nothing is taken from it; the post it was given for
+    keeps the Evidence an earlier run wrote, since a record that cannot be read says nothing of what was given."""
     taken = Taken()
     found, others, failure = founder.read(store.root, founder.RESULTS)
     if failure:
         taken.failure = f"`{FOUNDER}/{founder.RESULTS}/` could not be read: {failure}"
         return taken
-    taken.unusable += [(founder.named(founder.RESULTS, name), [why], None) for name, why in others]
     prefix = read.stem() + "-"
+
+    def unusable(name: str, problems: list[str], data: bytes | None) -> None:
+        taken.unusable.append((founder.named(founder.RESULTS, name), problems, data))
+        ours = name.startswith(prefix) and name.endswith(".json")
+        named = exchange.RESULT_STEM.fullmatch(name[: -len(".json")]) if ours else None
+        if named:
+            taken.unusable_posts.add((named.group(3), int(named.group(4))))
+
+    for name, why in others:
+        unusable(name, [why], None)
     for name, path, data in found:
         if not name.startswith(prefix):
             continue  # another read's record
         result, problems = founder.parse(name, data, exchange.parse_result)
         if result is None:
-            taken.unusable.append((founder.named(founder.RESULTS, name), problems, data))
+            unusable(name, problems, data)
             continue
         taken.given[(result.platform, result.day)] = Given(
             result, store.relative(path), hashlib.sha256(data).hexdigest()
@@ -397,6 +414,10 @@ def take(store: Store, read: Read, run_id: str, now: datetime) -> Taken:
     for number in read.covered:
         asked = [ask for ask in read.asks if ask.day == number]
         target = store.path(*EVIDENCE, f"window-{read.window}", f"read-{read.read:02d}", f"day-{number:02d}.json")
+        if any((platform, number) in taken.unusable_posts for platform in exchange.PLATFORMS):
+            if target.exists():
+                taken.evidence[number] = store.relative(target)
+            continue
         record = post_evidence(read, number, asked, taken)
         try:
             existing = json.loads(read_plain(target).decode("utf-8"))
@@ -458,7 +479,8 @@ def post_evidence(read: Read, number: int, asked: Sequence[Ask], taken: Taken) -
 
 def source_lines(read: Read, taken: Taken) -> list[tuple[str, str, str]]:
     """Each platform's line for the run report: (name, status, detail). A platform the read asks nothing of has no
-    line; one the Founder gave nothing for yet is skipped with that reason, since he gives them at the sitting."""
+    line; one the Founder gave nothing for yet is skipped with that reason, since he gives them at the sitting; one
+    whose every record given cannot be used is failed, and a post given but unusable is never said not given."""
     lines = []
     changed = {path.rsplit("/", 1)[-1] for path in taken.changed}
     for platform in (TIKTOK, YOUTUBE):
@@ -470,13 +492,21 @@ def source_lines(read: Read, taken: Taken) -> list[tuple[str, str, str]]:
             lines.append((name, FAILED, f"{taken.failure}."))
             continue
         given = [ask for ask in asks if (platform, ask.day) in taken.given]
-        missing = [str(ask.day) for ask in asks if (platform, ask.day) not in taken.given]
+        lost = [str(ask.day) for ask in asks if (platform, ask.day) in taken.unusable_posts]
+        missing = [str(ask.day) for ask in taken.missing(read) if ask.platform == platform]
+        if not given and lost:
+            lines.append(
+                (name, FAILED, f"given for the {read.name}, but no record of it can be used: day {', '.join(lost)}.")
+            )
+            continue
         if not given:
             lines.append(
                 (name, SKIPPED, f"not given yet for the {read.name}: the Founder gives them on the sitting page")
             )
             continue
         detail = f"{exchange.plural(len(given), 'post')} of {len(asks)} given for the {read.name}"
+        if lost:
+            detail += f"; given, but its record cannot be used: day {', '.join(lost)}"
         if missing:
             detail += f"; not given, so not reported: day {', '.join(missing)}"
         fresh = any(f"day-{ask.day:02d}.json" in changed for ask in given)

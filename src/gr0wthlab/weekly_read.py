@@ -20,17 +20,19 @@ A memo that fails a check stays in workspace/ as the agent wrote it, like a Draf
 queued from it. One that passes becomes the memo the Founder reads (ledger/weekly-reads/), with the launcher's own
 results tables, the line that says what the floor counts, what the read cannot tell, the Waitlist counts, and the
 Founder's time that week; each of its decision lines becomes its own Weekly Read decision item, and the memo the agent
-wrote is removed from workspace/, so it is never taken in again for other numbers.
+wrote is removed from workspace/, so it is never taken in again for other numbers. Only a memo the due session wrote
+in this run is taken in: one an earlier run left there unchanged is no memo written, and stays as it is.
 
 A memo written again replaces the read's open items, so it is written only from records the launcher could read: while
-a results record cannot be used or the floor cannot be found, the read's open items stand (queue.stands) and that read
-is the gap.
+a results record cannot be used, the floor cannot be found, or the launcher's record of this read's memo, or at day 14
+of the day-7 read's, cannot be read, the read's open items stand (queue.stands) and that read is the gap.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -66,7 +68,9 @@ PAIR_LINE = re.compile(r"- (AB-\d+) \((days? [0-9][0-9, and]*)\): (resolved|repo
 FLEX_LINE = re.compile(r"- Flex slot: (earned by (P\d+)|not earned)\. (.+)" + DECISION)
 PRODUCT_LINE = re.compile(r"- (.+)" + DECISION)
 QUOTE_LINE = re.compile(r"  > day (\d+): \"(.+)\"")
-QUOTE_MARKS = ('"', "\u201c", "\u201d")  # the marks a quoted span opens or closes with, straight and curly
+# A quoted span, in double quotes or in single ones, straight or curly; a single mark after a letter, as in "day 5's"
+# or "posts'", is an apostrophe and opens no span.
+QUOTED = re.compile(r"[\"\u201c\u201d]|(?<!\w)['\u2018][^'\u2019\n]+['\u2019](?!\w)")
 # What a line may hold with a digit in it and no n beside it: an Angle, a pair, a day, a window, and the n itself.
 IDENTIFIERS = re.compile(
     r"\bP\d+\b|\bAB-\d+\b|\b[Dd]ays? \d+(?:(?:, | and | to )\d+)*|\b[Dd]ay-\d+\b|\b[Ww]indow \d+\b"
@@ -128,6 +132,9 @@ class Plan:
     previous: dict[str, str] = field(default_factory=dict)  # the read before's result for each Angle
     open_items: list[dict] = field(default_factory=list)  # this read's open decision items
     stood: list[Stands] = field(default_factory=list)  # open items left as they are, since a read could not be made
+    unread: list[str] = field(default_factory=list)  # each read the memo rests on that could not be made, with why
+    earlier_problem: str = ""  # why the day-7 read's record could not be read at the day-14 read
+    before: tuple[int, int, int] | None = None  # what stood at the memo's path in workspace/ before the sessions
 
     @property
     def due(self) -> bool:
@@ -167,7 +174,11 @@ class Plan:
             return "readable"
         ask = next((ask for ask in self.read.asks if ask.day == day), None)
         given = self.taken.given.get((ask.platform, day)) if ask else None
-        return "unread: under the floor" if given and given.value("views") is not None else "unread: views not given"
+        if given and given.value("views") is not None:
+            return "unread: under the floor"
+        if ask and (ask.platform, day) in self.taken.unusable_posts:
+            return "unread: its record cannot be used"
+        return "unread: views not given"
 
     def comments(self, day: int) -> list[str]:
         texts = []
@@ -184,21 +195,41 @@ def fingerprint(read: results.Read, taken: results.Taken) -> str:
     return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
 
-def read_items(ledger: Ledger, read: results.Read) -> list[dict]:
+def read_items(ledger: Ledger, window: int, read: int) -> list[dict]:
     return [
         entry
         for entry in ledger.entries.values()
-        if entry["kind"] == KIND and entry.get("window") == read.window and entry.get("read") == read.read
+        if entry["kind"] == KIND and entry.get("window") == window and entry.get("read") == read
     ]
 
 
-def kept(store: Store, window: int, read: int) -> dict | None:
-    """The launcher's record of a read's memo, when one was composed and can be read."""
+def record_path(store: Store, window: int, read: int) -> Path:
+    return store.path(*EVIDENCE, f"window-{window}-read-{read:02d}.json")
+
+
+def kept(store: Store, window: int, read: int, expected: bool) -> tuple[dict | None, str]:
+    """The launcher's record of a read's memo, when one was composed and can be read, and why it could not be read
+    otherwise. A record that is missing is a read that failed only where one was expected, as the read's memo was
+    composed, which its decision items show."""
+    path = record_path(store, window, read)
+    name = f"`{store.relative(path)}`"
+    if not path.exists() and not path.is_symlink():
+        return None, f"{name} is missing, though the memo it records was composed" if expected else ""
     try:
-        data = json.loads(read_plain(store.path(*EVIDENCE, f"window-{window}-read-{read:02d}.json")).decode("utf-8"))
-    except (OSError, UnsafeFile, ValueError):
+        data = json.loads(read_plain(path).decode("utf-8"))
+    except (OSError, UnsafeFile, ValueError) as error:
+        return None, f"{name} could not be read ({error})"
+    return (data, "") if isinstance(data, dict) else (None, f"{name} is not a record of its format")
+
+
+def stamp(areas: Areas, memo: str) -> tuple[int, int, int] | None:
+    """What stands at the memo's path in workspace/, so a memo the session wrote is told from one an earlier run left:
+    the file's identity, size, and time it was last written, or None when nothing can be found there."""
+    try:
+        info = os.lstat(areas.path("weekly_reads", memo))
+    except OSError:
         return None
-    return data if isinstance(data, dict) else None
+    return info.st_ino, info.st_size, info.st_mtime_ns
 
 
 def plan(
@@ -211,23 +242,28 @@ def plan(
 ) -> Plan:
     """Whether the read's memo is due this run: the Founder has given numbers for it, the memo was not yet written
     from exactly those, and he has decided none of its items. The memo is written again when he gives more numbers
-    or corrects one while its items are all still open, but never while one of his results records cannot be used or
-    the floor cannot be found: a memo written then would replace the open items on less than he gave, so they stand
-    and that read is the gap."""
+    or corrects one while its items are all still open, but never while one of his results records cannot be used,
+    the floor cannot be found, or the launcher's record of this read's memo, or at day 14 of the day-7 read's, cannot
+    be read: a memo written then would replace the open items on less than was given, so they stand and that read is
+    the gap."""
     found = Plan(read, taken, parsed, paths, fingerprint(read, taken))
-    earlier = kept(store, read.window, min(results.READS)) if read.read != min(results.READS) else None
-    if earlier:
+    first = min(results.READS)
+    if read.read != first:
+        earlier, found.earlier_problem = kept(store, read.window, first, bool(read_items(ledger, read.window, first)))
         found.previous = {
             str(line.get("key")): str(line.get("result"))
-            for line in earlier.get("lines") or []
+            for line in (earlier or {}).get("lines") or []
             if isinstance(line, dict)
         }
-    items = read_items(ledger, read)
+    items = read_items(ledger, read.window, read.read)
     found.open_items = [entry for entry in items if entry["status"] == OPEN]
     decided = [entry for entry in items if entry["status"] in (APPROVED, REJECTED) or entry.get("decided")]
-    record = kept(store, read.window, read.read)
+    record, record_problem = kept(store, read.window, read.read, bool(found.open_items))
     unread = [f"`{name}` cannot be used: {'; '.join(why)}" for name, why, _ in taken.unusable]
     unread += [read.floor_problem] if read.floor_problem else []
+    unread += [record_problem] if record_problem and found.open_items else []
+    unread += [found.earlier_problem] if found.earlier_problem else []
+    found.unread = unread
     stood = [standing for standing in (stands(entry, unread) for entry in found.open_items) if standing is not None]
     if taken.failure:
         found.why = f"the Founder's results could not be read ({taken.failure})"
@@ -238,6 +274,8 @@ def plan(
     elif stood:
         found.stood = stood
         found.why = f"the {read.name} memo was not written again, so its open items stand"
+    elif not taken.given and taken.unusable_posts:
+        found.why = f"no results record given for the {read.name} can be used"
     elif not taken.given:
         found.why = f"no numbers have been given for the {read.name} yet; the Founder gives them on the sitting page"
     elif record is not None and record.get("fingerprint") == found.fingerprint:
@@ -418,7 +456,7 @@ def check(text: str, found: Plan) -> tuple[list[Line], list[str]]:
         settles = line.result in (INSUFFICIENT, AT_RISK) or line.result == REPOST
         if settles and SETTLE not in line.text:
             problems.append(f"{name}: an unread, at-risk, or reposted line ends with `{SETTLE}` before its decision")
-        if any(mark in line.text for mark in QUOTE_MARKS):
+        if QUOTED.search(line.text):
             problems.append(
                 f"{name}: a decision line quotes nothing; quote a comment on its own line under its Angle's line, as"
                 ' `  > day <n>: "<words>"`'
@@ -462,6 +500,7 @@ def result_rows(found: Plan, days: Sequence[int]) -> list[str]:
         )
         count = len(given.result.comments or ()) if given else 0
         comments = f"{count} comment{'s' if count != 1 else ''}" if count else "none given"
+        source = "record cannot be used" if (ask.platform, day) in found.taken.unusable_posts else "nothing given"
         angle = ask.angle or "none"
         if ask.pair:
             angle += f" ({ask.pair} leg {ask.leg})"
@@ -469,7 +508,7 @@ def result_rows(found: Plan, days: Sequence[int]) -> list[str]:
         rows.append(
             f"| {day} | {angle} | {results.PLATFORM_NAMES[ask.platform]}{state} |"
             f" {given.result.posted_on if given else 'not reported'} | {numbers} | {comments} |"
-            f" {given.result.read_on if given else 'nothing given'} |"
+            f" {given.result.read_on if given else source} |"
         )
     return rows
 
@@ -581,49 +620,30 @@ def take(
     waitlist: Sequence[str],
     time_lines: Sequence[str],
 ) -> Outcome:
-    """Check the memo the session wrote and, when it passes, compose the memo the Founder reads and queue one item for
-    each decision line. Its items replace the read's open items, line for line, and an open item no line replaces is
-    withdrawn, since the memo it came from was written again."""
+    """Check the memo the session wrote in this run and, when it passes, compose the memo the Founder reads and queue
+    one item for each decision line. Its items replace the read's open items, line for line, and an open item no line
+    replaces is withdrawn, since the memo it came from was written again. The launcher's record of the memo is
+    written before any item is queued, so no item is ever left open with no record of the memo it came from."""
     outcome = Outcome()
     text, why = read_memo(areas, found)
     if text is None:
         outcome.unread = why
+        return outcome
+    if found.before is not None and stamp(areas, found.memo) == found.before:
+        outcome.unread = (
+            f"no memo was written at `weekly-reads/{found.memo}` this run; the one there is an earlier run's, and stays"
+            " as it is"
+        )
         return outcome
     outcome.lines, outcome.problems = check(text, found)
     if outcome.problems:
         return outcome
     composed = store.path(FOLDER, found.memo)
     relative = store.relative(composed)
-    old = {str(entry.get("line_key")): entry for entry in found.open_items}
-    items: dict[str, str] = {}
-    for line in outcome.lines:
-        item = item_for(found, line, relative, product)
-        earlier = old.pop(line.key, None)
-        if earlier is not None:
-            item = exchange.Item(
-                dict(item.fields, supersedes=str(earlier["id"])), item.ask, item.body, item.touches, item.evidence
-            )
-        identifier = ledger.publish(
-            store,
-            item,
-            f"weekly-read-{found.read.read:02d}-{line.key.lower()}",
-            run_id,
-            now,
-            extra={"line_key": line.key},
-        )
-        if earlier is not None:
-            ledger.close(earlier, SUPERSEDED, run_id, now, superseded_by=identifier)
-            outcome.replaced.append(str(earlier["id"]))
-        items[line.key] = identifier
-        outcome.published.append(identifier)
-    for entry in old.values():
-        ledger.close(entry, SUPERSEDED, run_id, now, superseded_by=outcome.published[0], withdrawn=True)
-        outcome.replaced.append(str(entry["id"]))
-    store.write_text(composed, compose(found, outcome.lines, run_id, waitlist, time_lines, items))
-    outcome.composed = relative
-    areas.remove(areas.path("weekly_reads", found.memo))
+    slugs = {line.key: f"weekly-read-{found.read.read:02d}-{line.key.lower()}" for line in outcome.lines}
+    items = {key: ledger.next_id(now.astimezone().date(), slug) for key, slug in slugs.items()}
     store.write_json(
-        store.path(*EVIDENCE, f"window-{found.read.window}-read-{found.read.read:02d}.json"),
+        record_path(store, found.read.window, found.read.read),
         {
             "window": found.read.window,
             "read": found.read.read,
@@ -644,6 +664,25 @@ def take(
             "written_at": now.isoformat(),
         },
     )
+    old = {str(entry.get("line_key")): entry for entry in found.open_items}
+    for line in outcome.lines:
+        item = item_for(found, line, relative, product)
+        earlier = old.pop(line.key, None)
+        if earlier is not None:
+            item = exchange.Item(
+                dict(item.fields, supersedes=str(earlier["id"])), item.ask, item.body, item.touches, item.evidence
+            )
+        identifier = ledger.publish(store, item, slugs[line.key], run_id, now, extra={"line_key": line.key})
+        if earlier is not None:
+            ledger.close(earlier, SUPERSEDED, run_id, now, superseded_by=identifier)
+            outcome.replaced.append(str(earlier["id"]))
+        outcome.published.append(identifier)
+    for entry in old.values():
+        ledger.close(entry, SUPERSEDED, run_id, now, superseded_by=outcome.published[0], withdrawn=True)
+        outcome.replaced.append(str(entry["id"]))
+    store.write_text(composed, compose(found, outcome.lines, run_id, waitlist, time_lines, items))
+    outcome.composed = relative
+    areas.remove(areas.path("weekly_reads", found.memo))
     return outcome
 
 
@@ -675,9 +714,10 @@ def time_lines(store: Store, read: results.Read, read_day: date) -> list[str]:
 
 
 def gaps(found: Plan | None, outcome: Outcome | None, problem: str, session_gap: str) -> list[str]:
-    """Why the Weekly Read memo is incomplete this run: it could not be prepared, its session fell short, its memo
-    could not be read or fails a check, a read its open items stand on could not be made, or the floor could not be
-    read. A memo that is not due for any other reason is no gap."""
+    """Why the Weekly Read memo is incomplete this run: it could not be prepared, the Founder's results could not be
+    read or nothing could be asked, its session fell short, its memo was not written this run, could not be read, or
+    fails a check, or a read it rests on could not be made. A memo that is not due for any other reason, as nothing is
+    given yet, an item is decided, or it was written from the numbers given so far, is no gap."""
     if found is None:
         return [problem] if problem else []
     found_gaps = []
@@ -693,9 +733,11 @@ def gaps(found: Plan | None, outcome: Outcome | None, problem: str, session_gap:
             found_gaps.append(
                 f"the memo fails {exchange.plural(len(outcome.problems), 'check')}, so nothing was queued"
             )
-    found_gaps += [reason for standing in found.stood[:1] for reason in standing.unread]
-    if found.read.floor_problem:
-        found_gaps.append(found.read.floor_problem)
+    if found.taken.failure:
+        found_gaps.append(found.taken.failure)
+    if not found.read.asks:
+        found_gaps += found.read.problems
+    found_gaps += found.unread
     return list(dict.fromkeys(found_gaps))
 
 
@@ -797,7 +839,9 @@ def brief_lines(found: Plan, workspace: Path, mandu: Path, check: str) -> list[s
         )
         state = found.floor_state(ask.day) and f"; {found.floor_state(ask.day)}"
         planned = ask.planned.isoformat()
-        if given is None:
+        if given is None and (ask.platform, ask.day) in found.taken.unusable_posts:
+            posted = f"planned for {planned}, given but its record cannot be used"
+        elif given is None:
             posted = f"planned for {planned}, nothing given"
         elif given.result.posted_on == planned:
             posted = f"posted {planned}, read on {given.result.read_on}"
@@ -815,6 +859,11 @@ def brief_lines(found: Plan, workspace: Path, mandu: Path, check: str) -> list[s
     lines += ["", "### The read before", ""]
     if found.previous:
         lines += [f"- {key}: {result}" for key, result in sorted(found.previous.items())]
+    elif found.earlier_problem:
+        lines.append(
+            f"Not known: {found.earlier_problem}; a kill needs the day-{min(results.READS)} read's result, so none can"
+            " be judged at this read."
+        )
     else:
         lines.append("None: this is the window's first read, or its memo was not kept.")
     return lines

@@ -322,6 +322,56 @@ Each boundary check, with `gpt-6-luna` at `high` reasoning effort: 49 steps to p
 - A session that writes nothing after the memo was taken in was not made in the lab; it stands on `test_a_memo_taken_in_is_removed_so_a_session_that_writes_nothing_replaces_no_item`.
 - The whole unit suite, and CI's run on Linux with the latest Python.
 
+## Sixth round: six more fixes after review
+
+Review then found six more things, and as review asked, each is fixed as its finding proposed:
+
+- A memo that failed a check stayed in `workspace/weekly-reads/`, and a later run whose session wrote nothing could take it in against numbers given since; the launcher now notes what stands at the memo's path before the sessions and takes in only a memo the session wrote in that run, leaving one an earlier run left unchanged as it is.
+- The launcher's record of a read's memo, and at day 14 the day-7 read's, could fail to be read and still let the memo be written again over the open items, or leave every kill unjudged with the brief saying it was the window's first read; each is now a read the open items stand on (`queue.stands`), a missing record counting where the memo it records was composed, and the record is written before any item is queued.
+- A post whose results record cannot be used had its Evidence written again as not reported and was reported as not given; its Evidence now stays as a run that could read the record wrote it, and the run report, the brief, and the memo say it was given and its record cannot be used.
+- The Weekly Read memo row read `skipped` when the Founder's results could not be read or nothing could be asked; it now reads incomplete with that reason, and is skipped only for a read that is not due; a kit file that cannot be used while a read is due also names the Post results and Weekly Read memo rows.
+- A decision line in single quotes, straight or curly, is refused like one in double quotes; an apostrophe after a letter, as in "day 5's" or "posts'", is not.
+- [Operations](../operations.md) lists the Weekly Read among the places that weigh an open item through `queue.stands`, and among the outputs a package file that cannot be used leaves incomplete.
+
+The code is not committed yet: it is `c2697f2c5bcf58cc1866575e30f5b964f7503d22` with this round's changes on top, `src` tree `b0eb4c04add0c1f0bd66f5c8d261f2c0eb04fedf` and `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
+Every check below ran on 2026-10-15, Mac local time (PDT), with Codex CLI 0.160.0.
+
+### The take-in, through the launcher
+
+Five runs of `src/bin/gr0wthlab run` in a new throwaway clone of this worktree's files, set up as in the third round, with the no-model stand-in agent; no model ran in them.
+Days 1, 2, and 5 on TikTok were given by a driver as records in the page's format, and day 3 on YouTube before run 2; every number is synthetic.
+
+| Run | What the session wrote | What the records showed |
+| --- | --- | --- |
+| `20261015T174824Z-on-demand-e301` | A memo whose P03 line says it cleared its signal, with nothing given for day 3 | Weekly Read memo `incomplete`, "the memo fails 1 check, so nothing was queued"; no Weekly Read item; the memo stayed in `workspace/weekly-reads/`. |
+| `20261015T174825Z-on-demand-4630` | Nothing, after day 3 was given with 950 views | Weekly Read memo `incomplete`, "no memo was written at `weekly-reads/window-1-read-07.md` this run; the one there is an earlier run's, and stays as it is"; no Weekly Read item; the memo's bytes were the same as after run `e301`. |
+| `20261015T174827Z-on-demand-8605` | The same memo again, word for word | Weekly Read memo `complete`, 6 decision items queued; no memo left in `workspace/weekly-reads/`. |
+| `20261015T174828Z-on-demand-0620` | No Weekly Read session ran | After `ledger/evidence/weekly-reads/window-1-read-07.json` was made `{not json`: Weekly Read memo `incomplete`, "`evidence/weekly-reads/window-1-read-07.json` could not be read (Expecting property name enclosed in double quotes: line 1 column 2 (char 1))"; the same 6 items open and none closed; the notice listed each of the 6 with that reason. |
+| `20261015T174830Z-on-demand-355e` | No Weekly Read session ran | After the record was put back as it was: Weekly Read memo `skipped`, "the window 1 day-7 Weekly Read memo was written from the numbers given so far"; the same 6 items open and none closed. |
+
+### The boundary
+
+From this work's linked worktree, with the code above, against Mandu and the Product checkouts as they are, and logs in a folder of the Mac's temporary directory named with `GR0WTHLAB_LOG_DIR`.
+`git status --porcelain` printed the same 11 changed files, with the same SHA-256, before the preflight and after the check.
+`show-config` printed the configuration fingerprint `7d5667ffe1083f3be5b37ed32095fd52a70e24ef56b3461be5277838949a0e79`.
+Eight other `codex exec` processes were running on the Mac when the check started.
+
+- `src/bin/gr0wthlab preflight`, run twice at 10:48, passed both times: six areas writable, 22 paths refused, among them the six folders of the Founder's records, the Instructions in force, and the example sets; no breach; a listing of the footage place `~/Mandu/projects/RepToday` refused; and neither listed host reached from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, from 10:48:52 to 10:50:37, passed at its first attempt as `20261015T174854Z-on-demand-51c3`, with `gpt-6-luna` at `high` reasoning effort and 91 s of agent time: 49 steps to prove, 50 tool calls in Codex's record with no problem, 17 of 17 file-tool targets refused each in a patch of its own, 19 kernel sandbox denials naming the run's sentinels or the check's listeners, the footage place's read refused, 1 of 1, 12 of 12 permitted sentinels written and none escaped, no local connection through, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, each a GET for a listed host's `robots.txt`, an unlisted address refused, and no change since the snapshot from before the check.
+
+### Tests
+
+- Under `/usr/bin/python3`, Python 3.9.6, on the code above: `tests.test_results`, `tests.test_weekly_read`, `tests.test_weekly_read_cycle`, and `tests.test_weekly_read_examples`, 73 tests; and `tests.test_cycle`, `tests.test_sessions`, `tests.test_queue`, `tests.test_page`, `tests.test_sitting.ResultsTest`, `tests.test_serve.ResultsServeTest`, and the tests in `tests.test_attempts`, `tests.test_beta_cycle`, `tests.test_filming`, and `tests.test_work_cycle` that read the notice's list of incomplete outputs, 211 tests; none failed.
+- Each of this round's new tests failed on the code before it, with only `src/gr0wthlab/weekly_read.py`, `results.py`, and `cycle.py` put back: the memo an earlier run left, the memo's record that cannot be read, the calendar that cannot be used, the Evidence of a record that cannot be used, the day-7 record at day 14, the gap of a read that could not be made, and the single-quoted decision line.
+- `ruff check` and `ruff format --check` on `src/gr0wthlab` and `src/tests` passed, with ruff 0.15.20.
+
+### What this round did not exercise
+
+- No model ran; every session in the lab was the stand-in's.
+- The day-7 record at day 14, a post whose results record cannot be used, and a results folder that cannot be read were not made in the lab; they stand on `test_a_day_7_record_that_cannot_be_read_leaves_no_kill_judged_and_the_open_items_standing`, `test_a_record_that_cannot_be_used_keeps_its_post_s_evidence_and_is_never_called_not_given`, and `test_a_read_that_could_not_be_made_is_the_gap_and_a_read_not_due_has_none`.
+- The sitting page did not change this round, so it was not driven in a browser.
+- The whole unit suite, and CI's run on Linux with the latest Python.
+
 ## Screenshots
 
 The first six were taken in the first round's clone, on the page's code as it stood after `b149c0045ed44015320157a48e3084b0ab24edce`; the numbers step after run `89f1`, the rest after run `42ab`.

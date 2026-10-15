@@ -797,7 +797,7 @@ class Cycle:
         weekly = state.weekly
         if weekly is None and not state.weekly_problem:
             skipped["results"] = skipped["weekly-read"] = state.weekly_why or "no Weekly Read is due"
-        elif weekly is not None and not weekly.due and not weekly.read.floor_problem and not weekly.stood:
+        elif weekly is not None and not weekly.due and not weekly_read.gaps(weekly, None, "", ""):
             skipped["weekly-read"] = weekly.why
         heard, offered = gap(listening.WORKFLOW), gap(outreach.WORKFLOW)
         own = {
@@ -907,10 +907,11 @@ class Cycle:
         """Mark each package file the snapshot read that launcher code then could not use, as it could not be parsed
         or decoded, as a failed source, with the real reason and, for the sessions' briefs, the outputs whose own step
         cannot go on without it: a kit file for the post Drafts and, of the files the filming plan reads, for filming;
-        the brand rules for recruiting; the channel plan for outreach; and read-the-results.md, whose floor the
-        Weekly Read memo is checked against. Once the run's rows are worked out,
-        Cycle.outputs names in their place every output whose row names the file. A file whose read failed is a
-        failed source already, and one file is one line however many steps could not use it."""
+        the brand rules for recruiting; the channel plan for outreach; of the files a Weekly Read due asks from, for
+        the post results and the memo; and read-the-results.md, whose floor the Weekly Read memo is checked against.
+        Once the run's rows are worked out, Cycle.outputs names in their place every output whose row names the file.
+        A file whose read failed is a failed source already, and one file is one line however many steps could not
+        use it."""
         found: dict[tuple[str, str], tuple[dict[str, None], dict[str, None]]] = {}  # file: (reasons, output keys)
 
         def add(product: str, path: str, reason: str, *keys: str) -> None:
@@ -924,7 +925,15 @@ class Cycle:
             for role, problem in plan.context.kit.problems.items():
                 if role in paths:
                     filmed = state.filming is not None and role in filming.ROLES
-                    add(plan.product, paths[role], problem, "post-drafts", *["filming-plan"] * filmed)
+                    asked = state.weekly is not None and role in ("calendar", "angles", "pairs")
+                    add(
+                        plan.product,
+                        paths[role],
+                        problem,
+                        "post-drafts",
+                        *["filming-plan"] * filmed,
+                        *results.NEEDS * asked,
+                    )
             if plan.context.rules is None and plan.context.rules_problem and "brand_rules" in paths:
                 add(plan.product, paths["brand_rules"], plan.context.rules_problem, "post-drafts")
         recruiting = state.beta
@@ -1067,9 +1076,11 @@ class Cycle:
         ledger: Ledger,
         ledger_ok: bool,
         review_state: run_state.ReviewQueueState,
+        areas: Areas,
     ) -> None:
         """Before the first session: the Weekly Read due this run, what it asks the Founder to give on the sitting
-        page, what he has given, taken in as Evidence for each post, and whether its memo is due. The notice that
+        page, what he has given, taken in as Evidence for each post, whether its memo is due, and what stands at the
+        memo's path in workspace/ before any session, so only a memo written this run is taken in. The notice that
         lists what to give is queued once for each read, while anything it asks is not given."""
         mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
         role = results.rules_path(registry)
@@ -1110,6 +1121,7 @@ class Cycle:
         try:
             taken = results.take(self.store, read, state.run_id, self.now())
             state.weekly = weekly_read.plan(read, taken, context.kit, paths, self.store, ledger)
+            state.weekly.before = weekly_read.stamp(areas, state.weekly.memo)
         except (OSError, ConfigError) as error:
             state.weekly_problem = f"not prepared: {error}"
             state.problems.append(f"the Weekly Read could not be prepared ({error})")
@@ -2272,7 +2284,7 @@ class Cycle:
         self.prepare_beta(
             state, config, beta_rules, registry, boundary, ledger, ledger_ok, areas, states.beta_recruiting
         )
-        self.prepare_weekly_read(state, config, registry, boundary, ledger, ledger_ok, states.review_queue)
+        self.prepare_weekly_read(state, config, registry, boundary, ledger, ledger_ok, states.review_queue, areas)
         areas.ensure_folder(areas.path("review_queue", INCOMING))
         self.prepare_work(state, config, registry, boundary, areas, ledger if ledger_ok else None, states, network)
         self.unusable_sources(state, config)

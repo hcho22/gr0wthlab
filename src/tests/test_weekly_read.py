@@ -133,14 +133,21 @@ class CheckTest(unittest.TestCase):
     def test_a_decision_line_quotes_nothing_so_every_quote_is_checked_and_marked_as_third_party(self):
         line = "- P05 (day 5): insufficient data. Its signal names no number the Founder gave."
         self.assertIn(line, GOOD_DAY_7)
-        for quoted in ('"works offline finally"', "\u201cworks offline finally\u201d"):
+        refusal = (
+            "P05: a decision line quotes nothing; quote a comment on its own line under its Angle's line, as"
+            ' `  > day <n>: "<words>"`'
+        )
+        for quoted in (
+            '"works offline finally"',
+            "\u201cworks offline finally\u201d",
+            "'works offline finally'",
+            "\u2018works offline finally\u2019",
+        ):
             with self.subTest(quoted=quoted):
                 text = GOOD_DAY_7.replace(line, line[:-1] + f", and a viewer said {quoted}.")
-                self.assertIn(
-                    "P05: a decision line quotes nothing; quote a comment on its own line under its Angle's line, as"
-                    ' `  > day <n>: "<words>"`',
-                    self.problems(text),
-                )
+                self.assertIn(refusal, self.problems(text))
+        apostrophes = GOOD_DAY_7.replace(line, line[:-1] + ", as day 5's and the posts' figures show.")
+        self.assertNotIn(refusal, self.problems(apostrophes), "an apostrophe opens no quoted span")
 
     def test_insufficient_data_is_its_own_result_and_every_line_ends_in_a_decision(self):
         text = GOOD_DAY_7.replace("Decision: test\n  >", "Decision: maybe\n  >")
@@ -208,6 +215,42 @@ class Day14Test(unittest.TestCase):
         found.previous = {"P06": "at risk"}
         problems = weekly_read.check(self.memo(self.lines(verdicts), pairs), found)[1]
         self.assertEqual(problems, [])
+
+    def test_a_day_7_record_that_cannot_be_read_leaves_no_kill_judged_and_the_open_items_standing(self):
+        lab = self.lab({day: 500 for day in range(1, 14)})
+        verdicts = {
+            angle: ("cleared its signal", "keep") for angle in ("P01", "P02", "P03", "P04", "P05", "P06", "P07")
+        }
+        pairs = [
+            "- AB-1 (days 1 and 8): resolved. Leg A ranked well above leg B. Decision: keep",
+            "- AB-2 (days 3 and 10): resolved. Leg B ranked well above leg A. Decision: keep",
+        ]
+        record = weekly_read.record_path(lab.store, 1, 7)
+        record.parent.mkdir(parents=True, exist_ok=True)
+        record.write_text("{not json", encoding="utf-8")
+        found = lab.plan()
+        self.assertTrue(
+            found.earlier_problem.startswith("`evidence/weekly-reads/window-1-read-07.json` could not be read ("),
+            found.earlier_problem,
+        )
+        self.assertTrue(found.due, "with no open item to stand, the memo is written on what can be read")
+        self.assertIn(found.earlier_problem, weekly_read.gaps(found, None, "", ""))
+        brief = "\n".join(weekly_read.brief_lines(found, Path("/w"), Path("/m"), ""))
+        self.assertIn(f"Not known: {found.earlier_problem}; a kill needs the day-7 read's result", brief)
+        record.unlink()
+        self.assertEqual(lab.plan().earlier_problem, "", "no day-7 memo was composed, so none is missing")
+        _, outcome = lab.take(self.memo(self.lines(verdicts), pairs))
+        self.assertEqual(len(outcome.published), 9)
+        record.write_text("{not json", encoding="utf-8")
+        found = lab.plan()
+        self.assertFalse(found.due)
+        self.assertEqual(sorted(standing.item for standing in found.stood), sorted(outcome.published))
+        lab.ledger.entries["day-7"] = {"id": "day-7", "kind": weekly_read.KIND, "window": 1, "read": 7, "status": OPEN}
+        record.unlink()
+        self.assertEqual(
+            lab.plan().earlier_problem,
+            "`evidence/weekly-reads/window-1-read-07.json` is missing, though the memo it records was composed",
+        )
 
     def test_a_pair_resolves_only_when_both_legs_were_readable(self):
         views = {day: 500 for day in range(1, 14)}
@@ -341,6 +384,28 @@ class TakeTest(unittest.TestCase):
         found = self.lab.plan()
         self.assertEqual(
             found.why, "the Founder has decided items of the window 1 day-7 Weekly Read, so its memo stands as it is"
+        )
+
+
+class GapTest(unittest.TestCase):
+    """The memo's row is skipped only for a read that is not due; a read that could not be made is its gap."""
+
+    def plan(self, read, taken):
+        lab = Lab([])
+        self.addCleanup(lab.close)
+        return weekly_read.plan(read, taken, synthetic_kit(), PATHS, lab.store, lab.ledger)
+
+    def test_a_read_that_could_not_be_made_is_the_gap_and_a_read_not_due_has_none(self):
+        read = results.prepare(WINDOW, 7, synthetic_kit(), "", RULES)
+        self.assertEqual(weekly_read.gaps(self.plan(read, results.Taken()), None, "", ""), [], "nothing given yet")
+        failed = self.plan(read, results.Taken(failure="`founder/results/` could not be read: Permission denied"))
+        self.assertEqual(
+            weekly_read.gaps(failed, None, "", ""), ["`founder/results/` could not be read: Permission denied"]
+        )
+        unasked = results.prepare(WINDOW, 7, None, "`a/cadence.md` could not be used (no days)", RULES)
+        self.assertEqual(
+            weekly_read.gaps(self.plan(unasked, results.Taken()), None, "", ""),
+            ["nothing could be asked: `a/cadence.md` could not be used (no days)"],
         )
 
 

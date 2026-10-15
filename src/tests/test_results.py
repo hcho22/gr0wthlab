@@ -350,6 +350,35 @@ class TakeTest(unittest.TestCase):
         self.assertEqual([ask.day for ask in taken.missing(self.read)], [5])
         self.assertEqual(results.gaps(self.read, taken), ["not given yet, so not reported: day 5 (P05), TikTok"])
 
+    def test_a_record_that_cannot_be_used_keeps_its_post_s_evidence_and_is_never_called_not_given(self):
+        self.give(record(1, views=412))
+        results.take(self.store, self.read, "run-1", NOW)
+        kept = self.evidence(1)
+        folder = founder.folders(self.ledger)[founder.RESULTS]
+        (folder / "window-1-read-07-tiktok-day-01.json").write_text('{"exchange": 8, "window": 1}')
+        taken = results.take(self.store, self.read, "run-2", NOW)
+        self.assertEqual(self.evidence(1), kept, "kept as the run that could read the record wrote it")
+        self.assertNotIn("evidence/results/window-1/read-07/day-01.json", taken.changed)
+        self.assertEqual(taken.evidence[1], "evidence/results/window-1/read-07/day-01.json")
+        self.assertEqual(taken.unusable_posts, {("tiktok", 1)})
+        self.assertNotIn(1, [ask.day for ask in taken.missing(self.read)])
+        lines = {name: (status, detail) for name, status, detail in results.source_lines(self.read, taken)}
+        self.assertEqual(
+            lines["TikTok Studio numbers (sitting page)"],
+            (FAILED, "given for the window 1 day-7 Weekly Read, but no record of it can be used: day 1."),
+        )
+        self.give(record(2, views=180))
+        taken = results.take(self.store, self.read, "run-3", NOW)
+        lines = {name: detail for name, _, detail in results.source_lines(self.read, taken)}
+        self.assertEqual(
+            lines["TikTok Studio numbers (sitting page)"],
+            "1 post of 3 given for the window 1 day-7 Weekly Read; given, but its record cannot be used: day 1; not"
+            " given, so not reported: day 5",
+        )
+        gaps = results.gaps(self.read, taken)
+        self.assertIn("not given yet, so not reported: day 3 (P03, AB-2 leg A), YouTube Shorts", " ".join(gaps))
+        self.assertNotIn("day 1 (P01", next(gap for gap in gaps if gap.startswith("not given yet")))
+
     def test_the_floor_reads_views_on_the_platform_that_judges_the_post(self):
         self.give(record(1, views=199))
         self.give(record(3, "youtube", views=200))

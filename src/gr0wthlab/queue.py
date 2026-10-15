@@ -94,9 +94,10 @@ def stands(current: Mapping[str, object] | None, unread: Sequence[str]) -> Stand
     is unread; an open follow-up whose record of the first message is unread; the open filming plan while the kit
     is unread; a Dispatch request's open item whose item file is unread; an item in incoming/ that supersedes an
     open item whose item file is unread; and a Weekly Read's open decision items while one of the Founder's results
-    records for that read cannot be used or the floor cannot be found, since the memo written again would replace
-    them. A step that did not run at all because its source could not be read
-    judges no item and does not come here: recruiting without a usable Waitlist view or Beta Build record, a
+    records for that read cannot be used, the floor cannot be found, or the launcher's record of that read's memo, or
+    at day 14 of the day-7 read's, is unread, since the memo written again would replace them. A step that did not
+    run at all because its source could not be read judges no item and does not come here: recruiting without a
+    usable Waitlist view or Beta Build record, a
     Dispatch request whose reviewed text is unread, post Drafts without the calendar, outreach without the channel
     plan or the kit, replies without the kit, and the video of a day whose copy is approved and whose Draft is
     unread. There the output always reads incomplete in the run report with the real reason, and no item of the
