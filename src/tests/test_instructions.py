@@ -580,6 +580,16 @@ class RepeatTest(unittest.TestCase):
             )
         return found, calls
 
+    def test_a_changed_line_is_quoted_without_its_indent(self):
+        # Live, an indented continuation line read '"  Each later beat...' on the sitting page.
+        before = "# Post Drafts\n\n- Beat 1 is the hook.\n"
+        text = before + "  Each later beat says something new.\n"
+        proposal = instructions.Proposal("post-drafts.md", "post-drafts", (DAY_1,), "Later beats say more.", text)
+        gate = examples.Gate("post-drafts", outcome=examples.KEPT, why="no example did worse")
+        change = instructions.Change("c", proposal, [reason(DAY_1, LONG, "length")], before, gate)
+        _, body, _, _ = instructions.notice(change, "run-reports/r.md")
+        self.assertIn('- Line 4, added: "Each later beat says something new."', body)
+
     def test_an_assertion_is_named_in_plain_words(self):
         """The notice names an assertion to the Founder, so it reads as words and never as a list's code."""
         queued = {"kind": "deterministic", "check": "queued", "item": "package-change-proposal", "count": 1}

@@ -524,6 +524,7 @@ def notice(change: Change, report_path: str) -> tuple[str, str, str, str]:
     lines += ["", "**The change, in the agent's words**", "", change.proposal.summary, "", "**Line by line**", ""]
     shown = changed_lines(change.before, change.proposal.text)
     for what, number, text in shown[:SHOWN_LINES]:
+        text = text.strip()  # a list item's continuation line is indented, which the quote need not show
         cut = text if len(text) <= SHOWN_CHARACTERS else text[:SHOWN_CHARACTERS].rstrip() + "..."
         shown_text = f'"{cut}"' if cut.strip() else "(an empty line)"
         lines.append(f"- Line {number}, {what}: {shown_text}")
