@@ -294,6 +294,8 @@ def check(
     if workflow != chosen.workflow:
         return problems + [f"this run offers a change to the {title(chosen.workflow)} Instructions only"]
     by_item = {reason.item: reason for reason in found}
+    if not proposal.reasons:
+        problems.append("`reasons:` must name at least one offered rejection reason coded as execution")
     unknown = [item for item in proposal.reasons if item not in by_item]
     if unknown:
         problems.append(f"`reasons:` names {plural(len(unknown), 'item')} that no rejection reason belongs to")

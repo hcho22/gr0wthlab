@@ -36,6 +36,8 @@ QUEUE_FILE = "queue.json"
 MAX_SLUG = 60
 # The kinds the launcher renders only from a Draft that passed its checks, each with the folders its Drafts are
 # written in. No file of these kinds is taken from incoming/, and no item written there supersedes one.
+# How a file in incoming/ that passed every check and could not be written to the queue is set aside.
+NOT_QUEUED = "could not be queued"
 FROM_DRAFT = {"post": "drafts/posts/", "message": "drafts/messages/ or drafts/beta-recruiting/"}
 
 
@@ -290,7 +292,7 @@ class Ledger:
             try:
                 identifier = self.publish(store, item, slug_of(name), run_id, now)
             except (OSError, ConfigError) as error:
-                problem = f"could not be queued ({error})"
+                problem = f"{NOT_QUEUED} ({error})"
                 set_aside.append(self.set_aside(areas, path, name, [problem]))
                 continue
             areas.remove(path)

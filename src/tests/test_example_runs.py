@@ -305,6 +305,33 @@ class ExampleRunTest(unittest.TestCase):
             f"its lab's run stopped before it finished, with exit status {cycle.EXIT_STOPPED}; its log says why",
         )
 
+    def test_a_check_that_cannot_be_read_or_an_item_the_lab_cannot_queue_reads_as_not_run(self):
+        example = examples.load(fakes.REPO, "post-drafts").examples[0]
+
+        def unreadable(assertion, example, state, lab):
+            raise OSError("the item file is gone")
+
+        with mock.patch.dict(examples.EVALUATORS, {"post-drafts": unreadable}):
+            run = self.run_example("post-drafts", example)
+        self.assertEqual(run.status, "not run")
+        name = examples.describe(example.checks[0])
+        self.assertEqual(run.why, f"its check `{name}` could not be read (OSError: the item file is gone)")
+
+        review = next(found for found in examples.load(fakes.REPO, "package-review").examples if found.id == 1)
+        published = Ledger.publish
+
+        def publish(ledger, store, item, slug, *args, **kwargs):
+            if slug == "name-status":
+                raise OSError("the disk is full")
+            return published(ledger, store, item, slug, *args, **kwargs)
+
+        with mock.patch.object(Ledger, "publish", publish):
+            run = self.run_example("package-review", review)
+        self.assertEqual((run.status, run.checks), ("not run", []))
+        self.assertEqual(
+            run.why, "its session's work was not taken in: `name-status.md` could not be queued (the disk is full)"
+        )
+
     def test_a_lab_that_cannot_be_built_or_whose_run_stops_reads_as_not_run_with_why(self):
         # Either is that example's trouble alone: the gate reads it as not compared, and the weekly run goes on.
         example = examples.load(fakes.REPO, "post-drafts").examples[0]

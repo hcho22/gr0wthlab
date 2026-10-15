@@ -71,6 +71,13 @@ class CheckTest(WorkCycleTestCase):
             [f"`{DAY_3}` is coded `fit`, a strategy code, which never changes Instructions"],
         )
 
+    def test_a_change_that_cites_no_reason_is_refused(self):
+        proposal, problems = self.proposal(reasons=",")
+        self.assertEqual((problems, proposal.reasons), ([], ()))
+        self.assertEqual(
+            self.problems(proposal), ["`reasons:` must name at least one offered rejection reason coded as execution"]
+        )
+
     def test_a_reason_not_offered_this_run_or_with_no_code_is_refused(self):
         self.found.append(reason("20261011-post-w1-day-04", "Too wordy.", ""))
         offer = instructions.Offer("post-drafts", (DAY_1, "20261011-post-w1-day-04"))

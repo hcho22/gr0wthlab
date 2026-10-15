@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
-from . import beta, beta_drafts, fetch, filming, messages, posts, process, video
+from . import beta, beta_drafts, fetch, filming, messages, posts, process, queue, video
 from .areas import UnsafeFile, read_plain
 from .boundary import canonical
 from .exchange import plural
@@ -646,8 +646,8 @@ def run_example(
     limit: float,
 ) -> Run:
     """Run one example in a lab of its own, with the given Instructions text, and read its checks off what the lab's
-    run took in. A lab whose launcher could not take the session's work in, or whose run stopped, says nothing of the
-    Instructions, so the example is not run."""
+    run took in. A lab whose launcher could not take the session's work in, whose run stopped, or one of whose checks
+    could not be read says nothing of the Instructions, so the example is not run."""
     from . import cycle
 
     try:
@@ -690,7 +690,6 @@ def run_example(
     if code:
         result.why = f"its lab's run stopped before it finished, with exit status {code}; its log says why"
         return result
-    result.status = RAN
     evaluate = EVALUATORS.get(example_set.workflow)
     for assertion in example.checks:
         try:
@@ -698,15 +697,24 @@ def run_example(
                 raise SetError(f"no check reads {example_set.workflow}'s work")
             held, detail = evaluate(assertion, example, state, lab)
         except Exception as error:
-            # A check that cannot be read did not hold; the example is still compared on what could be read.
-            held, detail = False, f"the check could not be read ({type(error).__name__}: {error})"
+            result.why = f"its check `{describe(assertion)}` could not be read ({type(error).__name__}: {error})"
+            return result
         result.checks.append(Check(assertion, held, detail))
+    result.status = RAN
     return result
 
 
 def take_in_problem(state, workflow: str) -> str:
-    """Why a lab's launcher could not take its session's work in, or "": the filming session's edit records are taken
-    in with the post Drafts."""
+    """Why a lab's launcher could not take its session's work in, or "": an item in incoming/ it could not queue, or
+    the workflow's own take-in; the filming session's edit records are taken in with the post Drafts."""
+    lost = [
+        f"`{item.name}` {problem}"
+        for item in state.set_aside
+        for problem in item.problems
+        if problem.startswith(queue.NOT_QUEUED)
+    ]
+    if lost:
+        return f"not taken in: {'; '.join(lost)}"
     return {
         "post-drafts": state.posts_problem,
         "filming": state.posts_problem,
