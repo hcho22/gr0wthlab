@@ -688,7 +688,7 @@ def render_brief(
     lines += ["", "## Founder decisions taken in this run", ""]
     lines += decision_lines(state, taken_only=True) or ["None."]
     if session.workflow.writes_items:
-        lines += [""] + item_lines(state, standing)
+        lines += [""] + item_lines(state, standing, ledger)
     if key == sessions.REVIEW:
         lines += ["", "## Waitlist", ""]
         if state.waitlist is not None:
@@ -734,9 +734,12 @@ def render_brief(
     return "\n".join(lines)
 
 
-def item_lines(state: RunState, standing: Sequence[tuple[str, str]]) -> list[str]:
+def item_lines(state: RunState, standing: Sequence[tuple[str, str]], ledger: Path) -> list[str]:
     """What a session that may write items is told of the Review Queue: what is open, what was decided, and what
-    stands in incoming/ that the launcher has not taken in yet."""
+    stands in incoming/ that the launcher has not taken in yet. Each package-change proposal comes with its item file,
+    since its title, which the session that wrote it chose, may not name what it asks, and the launcher refuses only
+    a repeat of its exact wording."""
+    proposal = "package-change-proposal"
     lines = ["## Open Review Queue items", ""]
     if state.queue_before:
         lines += [
@@ -744,8 +747,14 @@ def item_lines(state: RunState, standing: Sequence[tuple[str, str]]) -> list[str
             "An item filed by the launcher changes only through a reviewed change to its source text, and a post or a"
             " message only through its Draft, so an item that supersedes any of them is refused.",
         ]
+        if any(entry["kind"] == proposal for entry in state.queue_before):
+            lines.append(
+                "A title may not name all a proposal asks: before you write a package-change proposal, read the file"
+                " of each one listed here, and write nothing that asks the same."
+            )
         for entry in state.queue_before:
             filed = ", filed by the launcher" if entry.get("origin") else ""
+            filed += f", `{ledger / str(entry['file'])}`" if entry["kind"] == proposal else ""
             line = f"- `{entry['id']}` ({entry['kind']}{filed}): {entry['ask']}"
             for earlier in state.replaced.get(str(entry["id"]), ()):
                 line += (
@@ -757,10 +766,14 @@ def item_lines(state: RunState, standing: Sequence[tuple[str, str]]) -> list[str
         lines.append("None.")
     lines += ["", "## Package-change proposals already decided or withdrawn", ""]
     if state.closed_proposals:
-        lines.append("Do not propose these again unless new Evidence answers the reason.")
+        lines.append(
+            "Do not propose these again unless new Evidence answers the reason; before you write a package-change"
+            " proposal, read the file of each one listed here."
+        )
         for entry in state.closed_proposals:
             status = entry["status"] + (f" and {entry['decided']}" if entry.get("decided") else "")
-            lines.append(f"- `{entry['id']}` {status}: {entry['ask']}.{founder_words(entry)}")
+            file = ledger / str(entry["file"])
+            lines.append(f"- `{entry['id']}` {status} (`{file}`): {entry['ask']}.{founder_words(entry)}")
     else:
         lines.append("None.")
     lines += ["", "## Items waiting in the incoming folder", ""]
