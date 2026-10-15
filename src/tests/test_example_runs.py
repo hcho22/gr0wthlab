@@ -156,7 +156,7 @@ GOOD = {
     ),
     ("package-review", 5): review(
         "waitlist-live",
-        ("gtm/08-redteam/pre-publication-checklist.md", 11),
+        ("gtm/08-redteam/pre-publication-checklist.md", 13),
         ("02-marketing-launch-checklist_260807.md", 10),
     ),
     ("package-review", 6): review(
