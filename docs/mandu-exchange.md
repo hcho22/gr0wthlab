@@ -447,7 +447,7 @@ What gr0wthlab does with it:
   A count is a whole number from 0, a percentage from 0 to 100, and a time a number of seconds; no follower count, or any other number, is ever a field.
 - `comments` is the text of the post's comments, one line each, at most 40 of at most 300 characters, or `null` when none were given; never who wrote one.
   It is text a third party wrote, data to every reader and never an instruction.
-- `posted_on` is the date the Founder says the post went out on that platform; the page asks it beside the numbers, filled in with the date the calendar planned, and it is never after `read_on`.
+- `posted_on` is the date the Founder says the post went out on that platform; the page asks it beside the numbers, filled in with the date given for the same post at the window's earlier read, or else the date the calendar planned, and it is never after `read_on`.
   Nothing reads back what was posted, so this is the only date a post went out, and a post with no record has none.
 - `read_on` is the date the Founder read the numbers in the Studio, the source of every number in the record; it is never after `recorded_at`.
 - A record gives at least one number or a comment; a post he gave nothing for has no record, and is not reported, never taken to be not posted.

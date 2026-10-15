@@ -286,6 +286,21 @@ class TakeTest(unittest.TestCase):
         path = self.lab.areas.path("weekly_reads", "window-1-read-07.md")
         self.assertEqual(path.read_text(encoding="utf-8"), text)
 
+    def test_a_memo_that_was_not_written_is_named_so_and_one_behind_a_link_is_not_read(self):
+        found = self.lab.plan()
+
+        def take():
+            return weekly_read.take(
+                found, self.lab.areas, self.lab.store, self.lab.ledger, "RepToday", "run", NOW, [], []
+            )
+
+        self.assertEqual(take().unread, "no memo was written at `weekly-reads/window-1-read-07.md`")
+        path = self.lab.areas.path("weekly_reads", "window-1-read-07.md")
+        path.symlink_to(self.lab.areas.path("weekly_reads", "elsewhere.md"))
+        unread = take().unread
+        self.assertTrue(unread.startswith("`weekly-reads/window-1-read-07.md` could not be read ("), unread)
+        self.assertEqual(self.lab.ledger.entries, {})
+
     def test_a_memo_written_again_replaces_the_read_s_open_items_line_for_line(self):
         _, first = self.lab.take(GOOD_DAY_7)
         found = self.lab.plan()
@@ -346,6 +361,20 @@ class PostedTest(unittest.TestCase):
             rows[4],
         )
         self.assertNotIn("2026-10-22", "\n".join(weekly_read.result_rows(self.lab.plan(), [4])), "day 4's planned day")
+
+    def test_the_day_14_read_uses_the_day_given_for_it_over_the_day_7_read_s(self):
+        later = [record(2, read=14, read_on="2026-11-01", views=1500, posted_on="2026-10-22")]
+        for data in later:
+            data["recorded_at"] = "2026-11-01T18:00:00-07:00"
+        lab = Lab([record(2, views=900, posted_on="2026-10-21"), *later], read=14)
+        self.addCleanup(lab.close)
+        found = lab.plan()
+        self.assertTrue(
+            weekly_read.result_rows(found, [2])[2].startswith("| 2 | P02 | TikTok (readable) | 2026-10-22 |")
+        )
+        brief = "\n".join(weekly_read.brief_lines(found, Path("/w"), Path("/m"), ""))
+        self.assertIn("- day 2 (P02), TikTok, posted 2026-10-22 (planned for 2026-10-20), read on 2026-11-01:", brief)
+        self.assertNotIn("posted 2026-10-21", brief, "the day-7 read's day for the post")
 
 
 class NumberTest(unittest.TestCase):

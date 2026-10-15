@@ -762,15 +762,17 @@ class Page:
         last: tuple[Saved, Entry] | None = None,
     ) -> str:
         """One post the Weekly Read due asks for: what to give and where it shows, then a field for the day it went
-        out, prefilled with the day the calendar planned it, one for each number, and one for the comments. Everything
-        the queue's ask says is shown as text."""
+        out, prefilled with the day given for this read, else the day given for the same post at the window's earlier
+        read, else the day the calendar planned it; one for each number, and one for the comments. Everything the
+        queue's ask says is shown as text."""
         step = (RESULT, asked.key)
         ask = asked.ask
         studio = str(ask.get("studio", ""))
         record = asked.record
         planned = str(ask.get("planned", ""))
+        posted = record or asked.earlier
         if typed is None:
-            typed = {"posted_on": record.posted_on if record else planned}
+            typed = {"posted_on": posted.posted_on if posted else planned}
             typed["read_on"] = record.read_on if record else state.day
             if record is not None:
                 for number, _ in asked.numbers:
@@ -780,16 +782,18 @@ class Page:
         angle = str(ask.get("angle") or "no Angle")
         if ask.get("pair"):
             angle += f", {ask['pair']} leg {ask.get('leg')}"
-        if record is None:
+        if posted is None:
             when = f"Planned for {planned}"
-        elif record.posted_on == planned:
-            when = f"Posted {record.posted_on}"
         else:
-            when = f"Posted {record.posted_on}, planned for {planned}"
+            when = f"Posted {posted.posted_on}"
+            if record is None:
+                when += f", as you gave it for the day-{posted.read} read"
+            if posted.posted_on != planned:
+                when += f", planned for {planned}"
         given = (
             tag("p", f"You gave these on {record.read_on}; giving them again replaces them.", class_="meta")
             if record
-            else tag("p", "Nothing is given for this post yet.", class_="meta")
+            else tag("p", f"Nothing is given for this post for the day-{asked.read} read yet.", class_="meta")
         )
         problem = (
             tag("p", f"The record in its place cannot be used: {asked.record_problem}.", class_="note warn")

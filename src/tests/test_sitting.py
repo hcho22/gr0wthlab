@@ -1144,3 +1144,35 @@ class ResultsTest(SittingTestCase):
         )
         self.assertEqual(evidence["platforms"]["tiktok"]["source"]["read_on"], DAY)
         self.assertEqual(evidence["platforms"]["tiktok"]["posted_on"], POSTED)
+
+    def test_the_day_14_read_offers_the_day_given_at_the_day_7_read_and_keeps_the_day_changed_there(self):
+        """Days 1 to 5 are asked again at the day-14 read: the day a post went out is filled in as the Founder gave it
+        at the day-7 read, the calendar's day only where he gave none, and a day he changes is what the day-14 read
+        keeps and its run uses."""
+        state = self.sit_down()
+        state.record_result("tiktok-2", {"views": "900", "posted_on": "2026-10-07", "read_on": DAY})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + WEEK)  # Sunday 2026-10-18, day 14: the day-14 read is due
+        self.assertEqual(code, 0, out)
+        later = self.sit_down(at=SITTING + WEEK)
+        self.assertEqual({asked.read for asked in later.look().asked}, {14})
+        said, typed = self.typed(later, "tiktok-2")
+        self.assertEqual(typed["posted_on"], "2026-10-07", "as given at the day-7 read")
+        self.assertIn("Posted 2026-10-07, as you gave it for the day-7 read, planned for 2026-10-06, P02.", said)
+        self.assertIn("Nothing is given for this post for the day-14 read yet.", said)
+        said, typed = self.typed(later, "tiktok-5")
+        self.assertEqual(typed["posted_on"], "2026-10-09", "nothing given at the day-7 read: the calendar's day")
+        self.assertIn("Planned for 2026-10-09, P05.", said)
+        saved = later.record_result("tiktok-2", {"views": "1500", "posted_on": "2026-10-08", "read_on": "2026-10-18"})
+        self.assertEqual(saved.path, "founder/results/window-1-read-14-tiktok-day-02.json")
+        self.assertEqual(saved.record["posted_on"], "2026-10-08")
+        self.assertIn("Posted 2026-10-08, planned for 2026-10-06, P02.", self.typed(later, "tiktok-2")[0])
+        code, out = self.run_cycle(at=SITTING + WEEK + timedelta(minutes=30))
+        self.assertEqual(code, 0, out)
+        evidence = json.loads(
+            (self.ledger() / "evidence/results/window-1/read-14/day-02.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(evidence["platforms"]["tiktok"]["posted_on"], "2026-10-08")
+        self.assertIn(
+            "- day 2 (P02), TikTok, posted 2026-10-08 (planned for 2026-10-06), read on 2026-10-18:",
+            self.brief(session="weekly-read"),
+        )

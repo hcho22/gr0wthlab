@@ -590,7 +590,7 @@ The run writes the ask into the Review Queue (`results` in `queue.json`) for the
 
 On the sitting page, right after the run's summary, each post asked for has a step of its own: its day, Angle, and the platform's Studio, why each number is asked, a field for the day it went out, one for each number, one for its comments, and the day the Founder read them.
 
-- The day it went out is filled in with the day the calendar planned it; change it when the post went out on another day.
+- The day it went out is filled in with the day you gave for the same post at the window's earlier read, or, where you gave none, the day the calendar planned it; change it when the post went out on another day, and that read's record, the agent's brief, the memo, and the Evidence use the day you give.
   Until you give it, the page, the notice, and the agent's brief call the calendar's day the day the post was planned, never the day it was posted.
 - Give each number as the Studio shows it for the post: whole numbers in digits, with commas if you like, and percentages with or without the sign.
   A shortened figure such as 1.2K is refused, since it is not the number itself.

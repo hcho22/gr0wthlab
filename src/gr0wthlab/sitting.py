@@ -175,6 +175,7 @@ class Asked:
     read: int
     record: exchange.Result | None = None
     record_problem: str = ""  # why the record in its place cannot be used, when one cannot
+    earlier: exchange.Result | None = None  # the same post's usable record from the window's latest earlier read
 
     @property
     def platform(self) -> str:
@@ -191,6 +192,15 @@ class Asked:
     @property
     def stem(self) -> str:
         return exchange.result_stem(self.window, self.read, self.platform, self.day)
+
+    @property
+    def earlier_stems(self) -> list[str]:
+        """The names of the same post's records at the window's earlier reads that cover its day, the latest first."""
+        return [
+            exchange.result_stem(self.window, read, self.platform, self.day)
+            for read in sorted(exchange.READ_DAYS, reverse=True)
+            if read < self.read and self.day <= exchange.READ_DAYS[read]
+        ]
 
     @property
     def numbers(self) -> list[tuple[str, str]]:
@@ -516,6 +526,8 @@ class Sitting:
             given = self.records(founder.RESULTS, exchange.parse_result, view)
             for asked in found[2]:
                 asked.record, asked.record_problem = given.get(asked.stem, (None, ""))
+                earlier = [given.get(stem, (None, ""))[0] for stem in asked.earlier_stems]
+                asked.earlier = next((record for record in earlier if record is not None), None)
             view.asked = found[2]
 
         for entry in opened:

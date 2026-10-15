@@ -540,10 +540,10 @@ class Outcome:
 
 def read_memo(areas: Areas, found: Plan) -> tuple[str | None, str]:
     path = areas.path("weekly_reads", found.memo)
+    if not path.exists() and not path.is_symlink():
+        return None, f"no memo was written at `weekly-reads/{found.memo}`"
     try:
         return read_plain(path).decode("utf-8"), ""
-    except FileNotFoundError:
-        return None, f"no memo was written at `weekly-reads/{found.memo}`"
     except (OSError, UnsafeFile) as error:
         return None, f"`weekly-reads/{found.memo}` could not be read ({error})"
     except UnicodeDecodeError:

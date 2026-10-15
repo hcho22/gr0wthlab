@@ -216,10 +216,60 @@ From this work's linked worktree, with the code above, against Mandu and the Pro
 - The whole unit suite, and CI's run on Linux with the latest Python.
 - Mandu's gr0wthlab-reader, which reads version 7, was not run on a results record.
 
+## Fourth round: a later read offers the day given at the earlier one
+
+Review then found that the day-14 read, which asks again for days 1 to 5, filled in the day a post went out with the calendar's day even where the Founder had given another day for the same post at the day-7 read.
+As review then asked, a post's step now fills in the day from the same post's usable record on the same platform at the window's earlier read, and says so; the calendar's day fills it in only where no such record exists.
+A day the Founder changes at the later read is what that read's record, the brief, the memo, and the Evidence use, as before.
+The line under a step with nothing given now names its read, such as "Nothing is given for this post for the day-14 read yet."
+The lab's first run below also showed a memo that was not written reported as "`weekly-reads/window-1-read-14.md` could not be read (cannot open without following links: No such file or directory)": `read_plain` raises its own error for a missing file, so the branch that names a memo not written never ran; it now checks for the file first, as `posts.read_draft` does.
+
+The code is not committed yet: it is `c0d18096a84a0f028cad8b341d4d64f221bef83d` with this round's changes on top, `src` tree `955ee3923903668bafe889761a5cc6fa33b8cd0b` and `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
+Every check below ran on 2026-10-15, Mac local time (PDT), with Codex CLI 0.160.0.
+
+### The page in Chrome, and the runs around it
+
+The lab was set up as in the third round, in a new throwaway clone of this worktree's files, with the no-model stand-in agent, which wrote no memo in any run; no model ran in them.
+
+| Run | What the records showed |
+| --- | --- |
+| `20261015T163417Z-on-demand-0545` | The day-7 read due, with the window's first sitting on 2026-10-04. Day 2 was then given on the page as gone out on 2026-10-07, planned for 2026-10-06, with 1,400 views: the record `window-1-read-07-tiktok-day-02.json` held `"posted_on": "2026-10-07"`. |
+| `20261015T163454Z-on-demand-6694` | After the clone's window was moved a week earlier, to a first sitting on 2026-09-27, so that the day-14 read was due the same day; the calendar's days moved with it, and the queue's `results` asked for days 1 to 5 of the day-14 read, day 2 `planned` for 2026-09-29. |
+| `20261015T163529Z-on-demand-4190` | After day 2 was given for the day-14 read, below. Day 2's record for the day-14 read held `"posted_on": "2026-10-08"` and 2,100 views, and its record for the day-7 read still held 2026-10-07 and 1,400. The brief's line read "day 2 (P02), TikTok, posted 2026-10-08 (planned for 2026-09-29), read on 2026-10-15", and `evidence/results/window-1/read-14/day-02.json` held `"posted_on": "2026-10-08"`. Weekly Read memo `incomplete`, "`weekly-reads/window-1-read-14.md` could not be read (cannot open without following links: No such file or directory)". |
+| `20261015T163642Z-on-demand-eb9d` | After `read_memo` checked for the file first. Weekly Read memo `incomplete`, "no memo was written at `weekly-reads/window-1-read-14.md`", and the notice's line for the memo said the same. |
+
+On the page, after run `6694`:
+
+- Day 2's step for the day-14 read said "Posted 2026-10-07, as you gave it for the day-7 read, planned for 2026-09-29, P02." and "Nothing is given for this post for the day-14 read yet.", and its field "The day it went out" held 2026-10-07.
+- Day 5, given nothing at the day-7 read, said "Planned for 2026-10-02, P05.", and its field held 2026-10-02.
+- Day 2 was given for the day-14 read as gone out on 2026-10-08, with 2,100 views; the step then said "Posted 2026-10-08, planned for 2026-09-29, P02.", and the saved note "posted on 2026-10-08".
+
+### The boundary
+
+From this work's linked worktree, with the code above, against Mandu and the Product checkouts as they are, and logs in a folder of the Mac's temporary directory named with `GR0WTHLAB_LOG_DIR`.
+`git status --porcelain` printed the same 7 changed files, with the same SHA-256, before the preflight and after the check.
+`show-config` printed the configuration fingerprint `7d5667ffe1083f3be5b37ed32095fd52a70e24ef56b3461be5277838949a0e79`.
+
+- `src/bin/gr0wthlab preflight`, run twice at 09:41, passed both times: six areas writable, 22 paths refused, among them the six folders of the Founder's records, the Instructions in force, and the example sets; no breach; a listing of the footage place `~/Mandu/projects/RepToday` refused; and neither listed host reached from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, from 09:41:13 to 09:42:55, passed at its first attempt as `20261015T164116Z-on-demand-0533`, with `gpt-6-luna` at `high` reasoning effort and 87 s of agent time: 49 steps to prove, 30 tool calls in Codex's record with no problem, 17 of 17 file-tool targets refused each in a patch of its own, 19 kernel sandbox denials naming the run's sentinels or the check's listeners, the footage place's read refused, 1 of 1, 12 of 12 permitted sentinels written and none escaped, no local connection through, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, each a GET for a listed host's `robots.txt`, an unlisted address refused, and no change since the snapshot from before the check.
+
+### Tests
+
+- Under `/usr/bin/python3`, Python 3.9.6, on the code above: `tests.test_results`, `tests.test_weekly_read`, `tests.test_weekly_read_examples`, `tests.test_weekly_read_cycle`, `tests.test_page`, `tests.test_sessions`, `tests.test_sitting.ResultsTest`, `tests.test_serve.ResultsServeTest`, and `tests.test_cycle.DecisionRoundTripTest`, 140 tests in one process, and none failed.
+- `test_the_day_14_read_offers_the_day_given_at_the_day_7_read_and_keeps_the_day_changed_there` failed on the code before this round, its field holding 2026-10-06 where 2026-10-07 was given at the day-7 read.
+- `ruff check` and `ruff format --check` on the files this round changed passed, with ruff 0.15.20.
+
+### What this round did not exercise
+
+- No model ran: the stand-in wrote no memo, so no memo was composed for the day-14 read in the lab, and the memo's Posted column for it stands on `test_the_day_14_read_uses_the_day_given_for_it_over_the_day_7_read_s`.
+- The lab reached the day-14 read by moving the window's first sitting a week earlier, not by a week passing, so its day-14 calendar days fall before the days given at its day-7 read.
+- Everything the third round did not exercise.
+
 ## Screenshots
 
 The first six were taken in the first round's clone, on the page's code as it stood after `b149c0045ed44015320157a48e3084b0ab24edce`; the numbers step after run `89f1`, the rest after run `42ab`.
-The third round then added the day a post went out to a post's numbers step and its saved record, and a Posted column to an item's table, so the last four, taken in the third round's clone after runs `2f5c` and `cfc4`, show those screens as they are now.
+The third round then added the day a post went out to a post's numbers step and its saved record, and a Posted column to an item's table; the next four, taken in the third round's clone after runs `2f5c` and `cfc4`, show those screens as they were after that round.
+The fourth round made a later read offer the day given at the earlier one, and the line under a step with nothing given name its read; the last two, taken in the fourth round's clone after run `6694`, show a step of the day-14 read.
 Every number, comment, date, and name in them is synthetic.
 The 390-wide view is Chrome's device emulation at twice the pixels; the 500-wide view is Chrome's narrowest window.
 
@@ -234,3 +284,5 @@ The 390-wide view is Chrome's device emulation at twice the pixels; the 500-wide
 | The numbers saved with the day the post went out (third round) | [dark](20261014-gr0wthlab-weekly-read/08-numbers-step-posted-laptop-dark.png) | |
 | A day it went out after the day read, refused (third round) | | [dark, 500 wide](20261014-gr0wthlab-weekly-read/09-posted-after-read-refused-500-dark.png) |
 | A Weekly Read decision item with its Posted column (third round) | [dark](20261014-gr0wthlab-weekly-read/10-weekly-read-item-posted-laptop-dark.png) | |
+| A day-14 step that offers the day given at the day-7 read (fourth round) | [dark](20261014-gr0wthlab-weekly-read/11-day-14-step-offers-day-7-day-laptop-dark.png) | |
+| The same step once the day is changed there and saved (fourth round) | [dark](20261014-gr0wthlab-weekly-read/12-day-14-step-day-changed-laptop-dark.png) | |
