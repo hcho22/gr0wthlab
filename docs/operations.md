@@ -251,12 +251,13 @@ They change from an execution-coded rejection reason only through that workflow'
    A kept change in force whose notice the Review Queue does not hold is said so in that run's report: a notice that could not be queued in its Summary, its Instructions section, and the run's problems notice, and a queue that could not be written, which loses that problems notice too, in its Summary and Instructions section.
    The next run files the notice again from its record, before the first session, exactly as it was; until the Founder decides it, no other change to that workflow's Instructions is tried.
    A decision such a run takes in again from the same record keeps the code its reason was given and what became of the reason as a change to the Instructions, so no reason is offered twice.
-   The run report's Instructions section has all of it, and the Outputs table an `Instructions changes` row, incomplete when a proposal was refused or a change could not be judged.
+   The run report's Instructions section has all of it, and the Outputs table an `Instructions changes` row, incomplete when a proposal was refused, a change could not be judged, a rejected change could not be undone, a kept change is in force without its notice, or a record of any of it could not be read or written.
    The example set's sessions are not among the run's own sessions; the report counts their sessions, agent time, and approximate cost on a line of their own.
 8. **The Founder's answer.**
    Acknowledging the notice keeps the change.
    Rejecting it, with a reason, makes the next run put the workflow's Instructions back to the text before the change, before any session starts, and the run report says so; the reason is kept and coded like any other, under that workflow.
    An undo is made only while the Instructions still hold the text the change wrote: one a reviewed pull request has changed since is left as it is, and the run report and notice say so.
+   A rejection taken in again, as after a Review Queue that could not be written, leaves a change an earlier run already undid for it as that run left it, and the run report says it was undone.
 
 To undo a kept change by hand, restore the file from git history (the records step committed it with the run's records), as a reviewed change.
 An example set changes only through a reviewed pull request; `src/tests/test_example_runs.py` runs every example the agent re-runs in its lab with a stand-in agent that writes a good output, and fails when an example could not hold.
