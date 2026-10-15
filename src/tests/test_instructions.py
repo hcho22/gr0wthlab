@@ -602,6 +602,7 @@ class LoopTest(WorkCycleTestCase):
         )
         self.assertIn(f"- Instructions: {unshown}.", self.section("Summary"))
         self.assertIn(f"- {unshown}.", self.section("Instructions"))
+        self.assertIn(f"| Instructions changes | incomplete | {unshown}", self.report(), "the Outputs row agrees")
         self.assertNotIn("shows it at the next sitting", self.section("Instructions"))
         self.assert_filed_again_once_held_and_undone(proposed, weeks=2)
 
@@ -636,6 +637,8 @@ class LoopTest(WorkCycleTestCase):
             " of their last change.",
             learned,
         )
+        answered = self.read(f"evidence/decisions/{DAY_1}.json")["instructions"]
+        self.assertEqual((answered["outcome"], answered["change"]), ("kept", "20261018-post-drafts"))
         self.assertEqual(self.instructions_text(), proposed)
 
         fakes.behave(self.codex_dir, {})
@@ -653,6 +656,8 @@ class LoopTest(WorkCycleTestCase):
             json.loads(self.change_records()[0].read_text(encoding="utf-8"))["undone"]["reason"],
             "I prefer the captions as they were.",
         )
+        offered = self.read(f"evidence/decisions/{DAY_1}.json")["instructions"]
+        self.assertEqual(offered["change"], "20261018-post-drafts", "a reason a kept change answered is not offered")
 
     def test_a_gate_that_stops_leaves_the_change_not_compared_and_the_run_ends_with_its_report(self):
         with mock.patch.object(examples, "run_example", side_effect=OSError("the log folder is full")):

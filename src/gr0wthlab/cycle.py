@@ -2161,6 +2161,7 @@ class Cycle:
                 )
                 if state.instructions is not None:
                     state.instructions.queue_lost(f"the Review Queue could not be written ({error})")
+                    self.outputs(state, config, ledger_ok)
             state.queue_after = ledger.ordered()
             try:
                 self.save_state(state, ledger, states, products, now)
