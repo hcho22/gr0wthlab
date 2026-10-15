@@ -10,13 +10,13 @@ How to read the paths:
 - `<lab>` is the throwaway lab `<tmp>/gr0wthlab-us-me16-lab` described below.
 - Where a quoted line held the home folder's or the temporary folder's full path, that prefix was replaced with `~` or `<tmp>`.
 
-All times are Mac local time (PDT, UTC-7) on 2026-10-14; a run identifier carries the UTC time, which round 7's runs put on 2026-10-15.
+All times are Mac local time (PDT, UTC-7) on 2026-10-14; a run identifier carries the UTC time, which the runs of rounds 7 and 8 put on 2026-10-15.
 Codex CLI 0.160.0 with `gpt-6-luna` at `high` reasoning effort throughout.
 
 ## What nothing here touched
 
 - Nothing here wrote the real Mandu, RepToday, or Immerse checkout.
-  At 08:04, before the first live check, and at 11:38, after the last one, each checkout's `HEAD`, branch, `git status` line count, stash count, and one SHA-256 over every file outside `.git` and outside any footage folder were recorded.
+  At 08:04, before the first live check, and at 11:38, after round 5's, each checkout's `HEAD`, branch, `git status` line count, stash count, and one SHA-256 over every file outside `.git` and outside any footage folder were recorded.
   RepToday's two readings are identical.
   Immerse's `HEAD` moved by one commit of its own work, dated 09:42, and Mandu's `HEAD` stayed while files outside `projects/RepToday/` and `projects/gr0wthlab/` changed between 10:19 and 11:15.
   No file under those two Mandu folders, outside the footage folders, was modified after 08:04, and neither holds a change against Mandu's `HEAD`.
@@ -33,7 +33,7 @@ Every session below started the real agent; the preflight runs no model.
 
 | What | Sessions | Agent time | Cost at API prices |
 | --- | --- | --- | --- |
-| Boundary checks (round 1: the worktree, the control, two hole tests; rounds 5 and 7: the worktree) | 6 | not summed | not reported by the check |
+| Boundary checks (round 1: the worktree, the control, two hole tests; rounds 5, 7, and 8: the worktree) | 7 | not summed | not reported by the check |
 | Lab weekly runs 1, 1b, 1c, 2, 3, and 4 | 15 | 1,060 s | about $0.15 |
 | The example-set gate of run 2 | 20 | 1,610 s | about $0.21 |
 | The example-set gate of run 3 | 22 | 2,327 s | about $0.24 |
@@ -42,7 +42,7 @@ Every session below started the real agent; the preflight runs no model.
 | Examples 18, 19, and 20 on the fixed fixture (round 6) | 3 | 296 s | about $0.04 |
 | The example-set gate of run 4, on the merged head (round 7) | 20 | 1,935 s | about $0.24 |
 | The change written to do harm, on the merged head (round 7) | 3 | 195 s | about $0.03 |
-| **Total** | 128 | | about $1.36 beside the boundary checks |
+| **Total** | 129 | | about $1.36 beside the boundary checks |
 
 One Instructions change costs one gate: 20 to 22 sessions here, 27 to 39 minutes of agent time, and about $0.21 to $0.24 for the ten Post Drafts examples, in each of the three weekly runs' gates, which ran every example, inside the bound of 3,600 seconds that `learning.gate_time_limit_seconds` in `config/run.json` sets.
 A run tries at most one change, so this is also the most a week can add.
@@ -303,6 +303,26 @@ The change written to do harm, run as in round 4 through the lab clone's own `ex
 
 The record says "not kept: example 1 got worse", 3 sessions, 195 seconds, about $0.03, with examples 2 to 22 not run, and the lab's `ledger/instructions/post-drafts.md` had the same SHA-256 after the gate as before it.
 
+## Round 8: the boundary after review
+
+The review commits `36d9083` to `cc55973` changed launcher code in `cycle.py`, `examples.py`, `instructions.py`, `queue.py`, and `cli.py`, as [operations](../operations.md#instructions-changes) now describes: among other things, a kept change's record is written before its text, a notice the Review Queue lost is filed again and holds its workflow, and a decision or a Reject taken in again keeps what the run before made of it.
+They change nothing under `config/` or `src/bin/`, nor `boundary.py`, `codex.py`, `probe.py`, `launcher.py`, or `process.py`; `213d1b3` after them changes only `docs/operations.md`.
+The checks ran on commit `213d1b3b7bba5807af9ec490937d2cbbd475a216` (`src` tree `98feda833d0f2633d4e22b924f0986db7f21fe8b`, `config` tree `578d1984f76e95cc63e37cdd6f720a68a8872f92`), from 21:16 to 21:18.
+They ran from the linked worktree the review gate made for this change at 18:00, with no `GR0WTHLAB_*` override but `GR0WTHLAB_LOG_DIR`, a folder under `<tmp>`, and each command under `caffeinate -i -s -m`.
+`git status` was empty in the worktree before and after, and no `codex exec` process was running on the Mac when the boundary check started.
+`show-config` printed the configuration fingerprint `2d624cc7a28132af413d53fe54187e87a99611580309772adecd055fd5688ca4`, which the boundary check's run also names.
+It is not the fingerprint rounds 1, 5, and 7 recorded: the command it covers names the checkout's own path and git folders, and those rounds ran before this worktree was made.
+
+| Command | Run | What the records showed |
+| --- | --- | --- |
+| `ruff check` and `ruff format --check`, as CI runs them | none | all checks passed; 101 files already formatted |
+| `src/bin/gr0wthlab preflight` | none (no model) | 6 areas written, `workspace/instructions` among them; 21 paths refused, `ledger/instructions` and `src/examples` among them, each by its own path; the listing of the footage place refused; neither listed host reachable from the sandbox |
+| `src/bin/gr0wthlab boundary-check` | `20261015T041717Z-on-demand-0037` | PASSED at its first probe run, from 21:17:15 to 21:18:32, agent 69 seconds; 47 steps to prove; 16 of 16 file-tool targets refused, each in a patch of its own; 18 kernel Seatbelt denials naming the run's sentinels or the check's listeners; 12 of 12 permitted sentinels written; 1 of 1 forbidden read of the footage place refused; no local connection got through; 3 sandbox network targets refused, none reached; nothing changed since the snapshot |
+
+The unit suite did not run as a whole on these commits.
+The gate's test step ran two of its modules on `cc55973`, whose `src` tree is this round's: `tests.test_instructions` and `tests.test_example_runs`, 51 tests OK in 463 seconds, finished by 20:41.
+The rest of the suite last ran in round 7, on `1f5779f`.
+
 ## Scenarios
 
 Each scenario is bound to the commit, the lab, and the times of the round that holds its evidence.
@@ -314,7 +334,7 @@ Each scenario is bound to the commit, the lab, and the times of the round that h
 | A strategy reason never changes the Instructions | A package-change proposal or none; no change cites it | The Fit reason became `20261014-remove-day-4-offline-post`; no change cited either strategy reason; the session did not write a proposal for the positioning reason on a rejected proposal | Pass | Run 3's record and the learning ledger | The positioning reason still waits for a proposal |
 | A kept change appears as a notice at the next sitting | The notice shows the reason, its code, the change, and every example's result | As listed under "The notice, as the page showed it" | Pass | Sitting 3 | Read on the page before the fixes of round 3, each held by a unit test |
 | A change that makes an example worse is not kept | Not kept, the Instructions in force byte for byte as before | Kept on the rule of round 3; not kept on the rule of round 4, Instructions unchanged | Pass on the rule that ships | Round 4 | Through `examples.gate`, the function a weekly run calls, with the change written by hand rather than proposed by a session |
-| The sandbox writes neither the Instructions in force nor the example sets | Each refused, proven on its own; each hole fails the check | Refused in rounds 1 and 5; the three holes failed as listed | Pass | Rounds 1 and 5 | None beyond the boundary check's own |
+| The sandbox writes neither the Instructions in force nor the example sets | Each refused, proven on its own; each hole fails the check | Refused in rounds 1, 5, 7, and 8; the three holes failed as listed | Pass | Rounds 1, 5, 7, and 8 | None beyond the boundary check's own |
 
 ## What was not exercised
 
@@ -327,3 +347,7 @@ Each scenario is bound to the commit, the lab, and the times of the round that h
 - Examples 18, 19, and 20 on the fixed fixture were not run with the change of any gate; round 6 ran each once, with the Instructions in force.
 - The record of a change not kept, which since `8e80049` keeps none of the agent's text: no change was refused or not kept through a weekly run in round 7, so `LoopTest` in `src/tests/test_instructions.py` alone holds it, a whole run with a fake agent.
 - Commit `0551259` came after round 7's suite and lab; `src/tests/test_instructions.py` ran on it and passed, and the rest of the suite did not run again for it.
+- No round here ran what the review commits `36d9083` to `cc55973` added: round 8 ran the boundary alone, with no weekly run, gate, or sitting.
+  Unit tests alone hold it, and of those only `src/tests/test_instructions.py` and `src/tests/test_example_runs.py` ran on these commits.
+- A kept change's record written before its text, so that a record that cannot be written leaves the Instructions in force as they were, and a notice that cannot be queued puts them back: held only by `test_a_kept_change_whose_record_cannot_be_written_is_not_applied_and_its_reasons_are_offered_again` and `test_a_kept_change_whose_notice_cannot_be_queued_keeps_no_text_and_its_reasons_are_offered_again` in `src/tests/test_instructions.py`, each a whole run with a fake agent.
+- A kept change's notice lost with the Review Queue, which the next run files again while it holds the workflow until the Founder decides it; a decision taken in again from the same record, which keeps its reason's code and Instructions answer; and a Reject taken in again, which stands as undone: held only by `test_a_kept_change_whose_notice_and_put_back_fail_has_its_notice_filed_again_by_the_next_run`, `test_a_kept_change_whose_queue_cannot_be_written_has_its_notice_filed_again_by_the_next_run`, `test_a_reason_a_change_not_kept_answered_is_not_offered_again_after_its_queue_was_lost`, and `test_a_reject_taken_in_again_after_its_undo_s_queue_was_lost_stands_as_undone` in `src/tests/test_instructions.py`, each a whole run with a fake agent.
