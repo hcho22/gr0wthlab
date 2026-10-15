@@ -663,7 +663,9 @@ def undo(store: Store, outcomes: Sequence, run_id: str, now: datetime) -> list[U
     """For each notice of a kept change the Founder decided, as this run took the decision in: record the decision in
     the change's record, and where it is a rejection, put the workflow's Instructions back to the text they had
     before the change. A text that no longer is the one the change wrote, as after a reviewed change to it, is left
-    as it is, and the run report says so; so is a record that could not be used."""
+    as it is, and the run report says so; so is a record that could not be used. A rejection an earlier run already
+    undid the change for, taken in again as after a Review Queue that could not be written, stands as that run left
+    it."""
     found = []
     for outcome in outcomes:
         entry, decision = outcome.entry, outcome.decision
@@ -675,6 +677,10 @@ def undo(store: Store, outcomes: Sequence, run_id: str, now: datetime) -> list[U
         path = store.path(*RECORDS, f"{identifier}.json")
         try:
             data = json.loads(read_text(path))
+            if rejected and data.get("undone") and (data.get("decided") or {}).get("notice") == result.notice:
+                result.done = True
+                found.append(result)
+                continue
             data["decided"] = {"decision": decision.decision, "by_run": run_id, "notice": result.notice}
             if rejected:
                 current = read_text(file_of(store, workflow))

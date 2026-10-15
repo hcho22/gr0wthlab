@@ -606,6 +606,38 @@ class LoopTest(WorkCycleTestCase):
         self.assertNotIn("shows it at the next sitting", self.section("Instructions"))
         self.assert_filed_again_once_held_and_undone(proposed, weeks=2)
 
+    def test_a_reject_taken_in_again_after_its_undo_s_queue_was_lost_stands_as_undone(self):
+        self.learn(self.in_force + ADDED + "\n")
+        notice = next(entry["id"] for entry in self.items("notice") if entry.get("instructions"))
+        self.decide(notice, "reject", reason="I prefer the captions as they were.")
+        written = Store.write_json
+        queue = self.ledger() / "review-queue/queue.json"
+
+        def write_json(store, path, data):
+            if Path(path) == queue:
+                raise OSError("the disk is full")
+            return written(store, path, data)
+
+        fakes.behave(self.codex_dir, {})
+        with mock.patch.object(Store, "write_json", write_json):
+            self.go(weeks=2)
+        self.assertEqual(self.instructions_text(), self.in_force)
+        undone = json.loads(self.change_records()[0].read_text(encoding="utf-8"))
+        self.assertIn(notice, [entry["id"] for entry in self.items("notice")], "the lost queue still shows it open")
+
+        fakes.behave(self.codex_dir, {})
+        report = self.go(weeks=3)
+        self.assertEqual(self.instructions_text(), self.in_force)
+        again = json.loads(self.change_records()[0].read_text(encoding="utf-8"))
+        self.assertEqual((again["decided"], again["undone"]), (undone["decided"], undone["undone"]))
+        self.assertIn(
+            "- The Post Drafts Instructions were put back as they were before change `20261018-post-drafts`, since the"
+            f' Founder rejected its notice `{notice}`: "I prefer the captions as they were."',
+            self.section("Instructions"),
+        )
+        self.assertNotIn("was not undone", report)
+        self.assertNotIn("was not undone", self.notices())
+
     def assert_filed_again_once_held_and_undone(self, proposed, weeks):
         """The next run files the change's notice once, from its record, and holds its workflow while the notice is
         undecided, though an execution reason of the workflow waits; a Reject then undoes the change."""
