@@ -31,7 +31,7 @@ Nothing else in the rules changes.
 
 - The floor as written: `projects/RepToday/gtm/05-social-pmf/read-the-results.md` line 15
 - What is measurable at zero followers names views and no impressions: `projects/RepToday/gtm/05-social-pmf/angles.md` line 14
-- The Founder's decision of 2026-10-14 that the floor counts views: `docs/adr/0004-the-weekly-read-uses-no-youtube-connection.md`
+- The Founder's decision of 2026-10-14 that the floor counts views: `docs/adr/0005-the-weekly-read-uses-no-youtube-connection.md`
 
 ## Options
 

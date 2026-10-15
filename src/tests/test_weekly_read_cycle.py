@@ -1,6 +1,6 @@
 """The Weekly Read across whole runs (US-ME11, US-ME12): the notice of what to give, the Founder's numbers taken in as
 Evidence per post, the memo the agent writes, its checks, and its decision items. Every number here is synthetic,
-and no run reads any platform: the Founder gives every number on the sitting page (ADR 0004)."""
+and no run reads any platform: the Founder gives every number on the sitting page (ADR 0005)."""
 
 import io
 import json

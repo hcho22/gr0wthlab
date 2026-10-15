@@ -568,7 +568,7 @@ Each 14-day window has two Weekly Reads, on its day 7 and its day 14, the Sunday
 A read is due from its day for a week, so the scheduled run on that Sunday and any run on demand that week work on it.
 The day-7 read covers days 1 to 5, as the calendar's midpoint gate says; the package names no range for the day-14 read, so it covers every day posted before its own day, 1 to 13, and the freshest posts fall under the floor by the floor's own rule.
 
-gr0wthlab reads no platform: the Founder posts by hand ([ADR 0003](adr/0003-posting-is-manual.md)), and the Weekly Read uses no YouTube connection ([ADR 0004](adr/0004-the-weekly-read-uses-no-youtube-connection.md)), so there is nothing to set up in Google Cloud and no access to grant.
+gr0wthlab reads no platform: the Founder posts by hand ([ADR 0004](adr/0004-posting-is-manual.md)), and the Weekly Read uses no YouTube connection ([ADR 0005](adr/0005-the-weekly-read-uses-no-youtube-connection.md)), so there is nothing to set up in Google Cloud and no access to grant.
 The numbers come from the Founder, who reads them in TikTok Studio or YouTube Studio and gives them on the sitting page.
 
 ### What a read asks for
@@ -598,7 +598,7 @@ On the sitting page, right after the run's summary, each post asked for has a st
 - `Leave it for later` writes nothing; a post with nothing given is not reported, and never taken to be not posted.
 - Giving them again replaces the record, whole.
 
-The page keeps no screenshot and no file: either can show a follower count or a commenter's name, neither of which gr0wthlab keeps, so the Founder reads the numbers from his screenshots or his file and types them ([ADR 0005](adr/0005-the-founder-types-the-weekly-read-numbers.md)).
+The page keeps no screenshot and no file: either can show a follower count or a commenter's name, neither of which gr0wthlab keeps, so the Founder reads the numbers from his screenshots or his file and types them ([ADR 0006](adr/0006-the-founder-types-the-weekly-read-numbers.md)).
 Each post's numbers are one record in `ledger/founder/results/`, which only the page writes; the formats are in [the Mandu exchange](mandu-exchange.md).
 
 Once the numbers are given, start a run so the Weekly Read takes them in:

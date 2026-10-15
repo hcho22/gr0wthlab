@@ -1,8 +1,8 @@
 # The Weekly Read, from numbers the Founder gives on the sitting page (US-ME11, US-ME12)
 
-This change builds the Weekly Read with no YouTube connection, the Founder's decision of 2026-10-14 ([ADR 0004](../adr/0004-the-weekly-read-uses-no-youtube-connection.md)).
-In a read week a run lists, for each post the read covers, the numbers to give from TikTok Studio or YouTube Studio; the Founder types them on the sitting page ([ADR 0005](../adr/0005-the-founder-types-the-weekly-read-numbers.md)), each post's numbers a results record in `ledger/founder/results/`; the next run turns them into Evidence, the Weekly Read session writes the memo, and the launcher checks it, composes the memo the Founder reads, and queues one Weekly Read decision item for each of its lines.
-It also shows the scheduling service as not used, since the Founder posts by hand ([ADR 0003](../adr/0003-posting-is-manual.md)).
+This change builds the Weekly Read with no YouTube connection, the Founder's decision of 2026-10-14 ([ADR 0005](../adr/0005-the-weekly-read-uses-no-youtube-connection.md)).
+In a read week a run lists, for each post the read covers, the numbers to give from TikTok Studio or YouTube Studio; the Founder types them on the sitting page ([ADR 0006](../adr/0006-the-founder-types-the-weekly-read-numbers.md)), each post's numbers a results record in `ledger/founder/results/`; the next run turns them into Evidence, the Weekly Read session writes the memo, and the launcher checks it, composes the memo the Founder reads, and queues one Weekly Read decision item for each of its lines.
+It also shows the scheduling service as not used, since the Founder posts by hand ([ADR 0004](../adr/0004-posting-is-manual.md)).
 
 It changes launcher code, `config/run.json`, and the Product registry (`config/products.json`, which names `read-the-results.md` for the Weekly Read), and adds `ledger/founder/results/`, the sixth folder of the Founder's records, which is a forbidden target of the preflight and of the boundary check.
 It changes nothing in the permission profile, the Codex command, or the fetch policy.

@@ -243,7 +243,7 @@ class FirstRunTest(CycleTestCase):
         # Posting is manual, so the scheduling service is not used by the Founder's choice, never a source that failed.
         self.assertIn(
             "| Scheduling service | not used | posting is manual, the Founder's choice of 2026-10-11"
-            " (docs/adr/0003-posting-is-manual.md) |",
+            " (docs/adr/0004-posting-is-manual.md) |",
             report,
         )
         self.assertIn("| Scheduling-service drafts | not used | posting is manual,", report)

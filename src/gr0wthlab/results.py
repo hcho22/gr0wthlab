@@ -1,8 +1,8 @@
 """The results a Weekly Read judges (US-ME11): the numbers and comments the Founder gives on the sitting page in a
 read week, and the Evidence each post's numbers become.
 
-gr0wthlab reads no platform: the Founder posts by hand (ADR 0003), and the weekly read uses no YouTube connection
-(ADR 0004). So in a read week the run works out from the 14-day kit exactly what to ask for, and nothing more: each
+gr0wthlab reads no platform: the Founder posts by hand (ADR 0004), and the weekly read uses no YouTube connection
+(ADR 0005). So in a read week the run works out from the 14-day kit exactly what to ask for, and nothing more: each
 post the read covers, on the platform the calendar names as the one whose metrics adjudicate it, with its views for
 the floor, the numbers the pre-registered signals and kill criteria of the read's posts on that platform name, since
 read-the-results.md ranks each post against the others in the bank on its own metric, and its comments, since comment
@@ -518,6 +518,6 @@ def notice(read: Read, paths: Mapping[str, str]) -> tuple[str, str, str, str]:
     evidence = (
         f"- What each post is asked for comes from the signals and kill criteria of the Angles: `{paths['angles']}`\n"
         f"- Each post's day, Angle, and judging platform: `{paths['calendar']}`\n"
-        "- Why the Founder gives these numbers by hand: `docs/adr/0004-the-weekly-read-uses-no-youtube-connection.md`"
+        "- Why the Founder gives these numbers by hand: `docs/adr/0005-the-weekly-read-uses-no-youtube-connection.md`"
     )
     return title, "\n".join(lines).rstrip() + "\n", touches, evidence

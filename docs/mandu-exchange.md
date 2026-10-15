@@ -10,7 +10,7 @@ The Founder's decisions, sitting records, Beta Build record, Beta Cohort reports
 Mandu writes nothing that gr0wthlab reads except each Product's Go-To-Market Package, which stays in Mandu and which gr0wthlab only reads.
 Two later stories add something the Founder gives, each with a version number of its own: the TikTok export (US-ME11) and the confirmation that starts Immerse Listening (US-ME18).
 By the Founder's decision of 2026-10-12 both are given on the sitting page, in gr0wthlab; Mandu receives neither, and records neither.
-Version 8 adds the first: in a week whose Weekly Read is due, the Founder gives each post's numbers on the page, read from TikTok Studio or YouTube Studio, since the Weekly Read uses no YouTube connection ([ADR 0004](adr/0004-the-weekly-read-uses-no-youtube-connection.md)), and each is a results record.
+Version 8 adds the first: in a week whose Weekly Read is due, the Founder gives each post's numbers on the page, read from TikTok Studio or YouTube Studio, since the Weekly Read uses no YouTube connection ([ADR 0005](adr/0005-the-weekly-read-uses-no-youtube-connection.md)), and each is a results record.
 What the page asks for the second, and what record it keeps, is settled when its story is built.
 
 ## Where things are
