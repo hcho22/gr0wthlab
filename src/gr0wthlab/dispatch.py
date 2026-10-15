@@ -1,10 +1,10 @@
 """Dispatch requests the launcher files from reviewed text in src/dispatches/, each once.
 
-A Dispatch request asks the Founder to approve a change to a Product; once the Founder approves it, Mandu gives the
-Founder a ready-to-send message for it, which the Founder passes to firstmate, and gr0wthlab never sends it anywhere
-itself. Each file in src/dispatches/ is one request in the Review Queue item format, named <key>.md, and changes only
-through a reviewed pull request. The launcher queues it under an identifier that never changes and marks its queue
-entry with the key, then, run after run:
+A Dispatch request asks the Founder to approve a change to a Product; once the Founder has approved it and asks Mandu
+for it, Mandu gives the Founder a ready-to-send message for it, which the Founder passes to firstmate, and gr0wthlab
+never sends it anywhere itself. Each file in src/dispatches/ is one request in the Review Queue item format, named
+<key>.md, and changes only through a reviewed pull request. The launcher queues it under an identifier that never
+changes and marks its queue entry with the key, then, run after run:
 
 - leaves it open while its whole text is unchanged, and files the new text in its place, superseding it, once a
   reviewed change alters any of it; no item the agent writes can supersede it (queue.check_incoming), so it stays

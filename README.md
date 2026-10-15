@@ -23,7 +23,7 @@ The specification and decision records under `docs/` (the PRD, the [design decis
 | --- | --- | --- |
 | Founder | Every approval and every public act (posting, sending, confirming a publishing schedule), filming, and the weekly TikTok export | - |
 | Marketing Engineer | Evidence, Drafts, Review Queue items, Weekly Read memos, run reports, and its own Instructions; its repository also serves the Founder's sitting page and keeps the Founder's decisions | Publish, send, spend, see email addresses, write to Mandu or a Product repository, write or change a decision of the Founder's, or change its own code or Guardrails |
-| Mandu | Each Product's Go-To-Market Package, applying approved package changes, handing approved Dispatch requests to firstmate, and showing the Founder the Marketing Engineer's status | Build the Marketing Engineer, record a decision of the Founder's, or write anything the Marketing Engineer reads but the Go-To-Market Package |
+| Mandu | Each Product's Go-To-Market Package, applying approved package changes and giving the Founder a ready-to-send message for each approved Dispatch request when the Founder asks, and showing the Founder the Marketing Engineer's status | Build the Marketing Engineer, record a decision of the Founder's, or write anything the Marketing Engineer reads but the Go-To-Market Package |
 | firstmate | Building and changing the Marketing Engineer's code and Guardrails through reviewed pull requests, and carrying out approved Dispatches | Act on a Dispatch the Founder has not approved |
 | Scheduling service | Publishing approved posts at the fixed slot after the Founder confirms the schedule | - |
 

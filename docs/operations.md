@@ -881,7 +881,7 @@ Every other process the launcher starts (git, Codex's version and sandbox probes
 
 ## When RepToday's Waitlist build lands
 
-The Founder approves the Waitlist Dispatch request at a sitting, passes it to firstmate in the message Mandu gives the Founder for it, and firstmate builds it in RepToday; until then every run reports the Waitlist view as skipped.
+The Founder approves the Waitlist Dispatch request at a sitting, asks Mandu for it, and passes the ready-to-send message Mandu gives for it to firstmate, which builds it in RepToday; until then every run reports the Waitlist view as skipped.
 Once the build writes its anonymous view, a reviewed gr0wthlab pull request sets `waitlist.view.local_path` for RepToday in [`config/products.json`](../config/products.json) to the file's path, and the next run reads it.
 The path must lie outside this clone, Mandu, and every Product checkout; the launcher refuses to start otherwise, so the agent can never open the view.
 The sandbox reads this clone, every Product checkout, and of Mandu only the package paths, and the view may be nowhere in the Mandu checkout all the same.

@@ -143,7 +143,7 @@ class FilingTest(unittest.TestCase):
         return lambda: path.write_text(text, encoding="utf-8")
 
     def published(self, identifier):
-        """A queued item as Mandu reads it, to give the Founder a ready-to-send message for it once approved."""
+        """A queued item as Mandu reads it when the Founder, having approved it, asks for a ready-to-send message."""
         return (self.store.root / str(self.ledger.entries[identifier]["file"])).read_text(encoding="utf-8")
 
     def revise(self):
