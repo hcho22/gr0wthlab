@@ -289,7 +289,7 @@ def studio_number(value: str, label: str, kind: str, reasons: list[str]) -> floa
     text = value.strip()
     if not text:
         return None
-    if kind == exchange.PERCENT and text.endswith("%"):
+    if kind in (exchange.PERCENT, exchange.PERCENT_VIEWED) and text.endswith("%"):
         text = text[:-1].strip()
     if re.search(r"[kKmM]$", text):
         reasons.append(f"{label}: give the exact number the Studio shows for the post, not a shortened one like 1.2K")

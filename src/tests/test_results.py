@@ -8,7 +8,7 @@ import unittest
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from gr0wthlab import exchange, founder, kit, results
+from gr0wthlab import exchange, founder, kit, results, sitting
 from gr0wthlab.areas import Store
 from gr0wthlab.package import CHANGED, FAILED, READ, SKIPPED
 from gr0wthlab.settings import Window
@@ -186,11 +186,20 @@ class FloorTest(unittest.TestCase):
         self.assertIsNone(results.floor_from("- Posts below some reach are not judged."))
 
     def test_a_read_says_when_the_floor_cannot_be_found(self):
-        read = results.prepare(WINDOW, 7, synthetic_kit(), "", "nothing about a floor")
+        read = results.prepare(WINDOW, 7, synthetic_kit(), "", "nothing about a floor", "a/read-the-results.md")
         self.assertIsNone(read.floor)
-        self.assertIn("no longer says the floor", read.floor_problem)
+        self.assertEqual(read.rules_unusable, "it no longer says the floor in the words this read finds it by")
+        self.assertEqual(
+            read.floor_problem,
+            "`a/read-the-results.md` could not be used (it no longer says the floor in the words this read finds it by)"
+            ", so the floor is not known",
+        )
+        read = results.prepare(WINDOW, 7, synthetic_kit(), "", None, "a/read-the-results.md", "it is not UTF-8 text")
+        self.assertEqual(read.rules_unusable, "it is not UTF-8 text")
+        self.assertIn("could not be used (it is not UTF-8 text)", read.floor_problem)
         read = results.prepare(WINDOW, 7, synthetic_kit(), "", None)
-        self.assertIn("could not be read", read.floor_problem)
+        self.assertEqual(read.floor_problem, "`read-the-results.md` could not be read, so the floor is not known")
+        self.assertEqual(read.rules_unusable, "", "a file that could not be read is a failed source, not one unusable")
 
 
 class RecordTest(unittest.TestCase):
@@ -222,6 +231,23 @@ class RecordTest(unittest.TestCase):
         ):
             with self.subTest(numbers=numbers):
                 self.assertTrue(any(expected in problem for problem in self.parse(record(1, **numbers))[1]))
+
+    def test_youtube_s_average_percentage_viewed_may_pass_100_and_the_other_percentages_may_not(self):
+        """YouTube Studio counts every loop of a Short in its average percentage viewed, so the exact figure the
+        Founder types can be over 100; a share of viewers never can."""
+        result, problems = self.parse(record(3, "youtube", views=150, average_percentage_viewed=112.4))
+        self.assertEqual((problems, result.numbers["average_percentage_viewed"]), ([], 112.4))
+        for numbers, expected in (
+            ({"average_percentage_viewed": 1000.5}, "average_percentage_viewed must be a percentage from 0 to 1000"),
+            ({"viewed_percent": 100.5}, "viewed_percent must be a percentage from 0 to 100"),
+        ):
+            with self.subTest(numbers=numbers):
+                problems = self.parse(record(3, "youtube", views=150, **numbers))[1]
+                self.assertTrue(any(problem.startswith(expected) for problem in problems), problems)
+        reasons = []
+        self.assertEqual(sitting.studio_number("112.4%", "Average percentage viewed", "percent viewed", reasons), 112.4)
+        self.assertIsNone(sitting.studio_number("101%", "Viewed", exchange.PERCENT, reasons))
+        self.assertEqual(reasons, ["Viewed must be a percentage from 0 to 100"])
 
     def test_a_youtube_record_takes_youtube_s_numbers(self):
         result, problems = self.parse(record(3, "youtube", views=150, viewed_percent=61.5))

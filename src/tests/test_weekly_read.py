@@ -130,6 +130,18 @@ class CheckTest(unittest.TestCase):
             self.problems(text),
         )
 
+    def test_a_decision_line_quotes_nothing_so_every_quote_is_checked_and_marked_as_third_party(self):
+        line = "- P05 (day 5): insufficient data. Its signal names no number the Founder gave."
+        self.assertIn(line, GOOD_DAY_7)
+        for quoted in ('"works offline finally"', "\u201cworks offline finally\u201d"):
+            with self.subTest(quoted=quoted):
+                text = GOOD_DAY_7.replace(line, line[:-1] + f", and a viewer said {quoted}.")
+                self.assertIn(
+                    "P05: a decision line quotes nothing; quote a comment on its own line under its Angle's line, as"
+                    ' `  > day <n>: "<words>"`',
+                    self.problems(text),
+                )
+
     def test_insufficient_data_is_its_own_result_and_every_line_ends_in_a_decision(self):
         text = GOOD_DAY_7.replace("Decision: test\n  >", "Decision: maybe\n  >")
         self.assertTrue(any(problem.startswith("Angles line 5 does not read") for problem in self.problems(text)))
@@ -378,8 +390,8 @@ class PostedTest(unittest.TestCase):
 
 
 class NumberTest(unittest.TestCase):
-    def test_identifiers_and_quotes_need_no_n(self):
-        self.assertEqual(weekly_read.bare_numbers('P01 (days 1 and 8) on day-14, window 1: "200 day streak"'), [])
+    def test_identifiers_need_no_n(self):
+        self.assertEqual(weekly_read.bare_numbers("P01 (days 1 and 8) on day-14, window 1"), [])
         self.assertEqual(weekly_read.bare_numbers("412 views (n=1) and 31.5% (n=1) of 3 readable posts (n=3)"), [])
         self.assertEqual(weekly_read.bare_numbers("412 views and 31.5%"), ["412", "31.5"])
 

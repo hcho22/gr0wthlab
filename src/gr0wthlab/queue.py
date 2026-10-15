@@ -92,8 +92,10 @@ def stands(current: Mapping[str, object] | None, unread: Sequence[str]) -> Stand
     The places that come here judge an open item: the check of an open post, message, reply, or recruiting item
     against its Draft and what that check reads; an open invitation or Waitlist ask while a report of the Founder's
     is unread; an open follow-up whose record of the first message is unread; the open filming plan while the kit
-    is unread; a Dispatch request's open item whose item file is unread; and an item in incoming/ that supersedes
-    an open item whose item file is unread. A step that did not run at all because its source could not be read
+    is unread; a Dispatch request's open item whose item file is unread; an item in incoming/ that supersedes an
+    open item whose item file is unread; and a Weekly Read's open decision items while one of the Founder's results
+    records for that read cannot be used or the floor cannot be found, since the memo written again would replace
+    them. A step that did not run at all because its source could not be read
     judges no item and does not come here: recruiting without a usable Waitlist view or Beta Build record, a
     Dispatch request whose reviewed text is unread, post Drafts without the calendar, outreach without the channel
     plan or the kit, replies without the kit, and the video of a day whose copy is approved and whose Draft is

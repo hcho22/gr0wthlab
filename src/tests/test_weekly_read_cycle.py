@@ -4,6 +4,7 @@ and no run reads any platform: the Founder gives every number on the sitting pag
 
 import io
 import json
+import re
 import unittest
 from datetime import timedelta
 
@@ -12,6 +13,7 @@ from tests import fakes
 from tests.test_cycle import CycleTestCase
 
 TODAY = fakes.SUNDAY_RUN.astimezone().date()  # Sunday 2026-10-11, the day-7 read's own day below
+RULES = "projects/RepToday/gtm/05-social-pmf/read-the-results.md"
 # Every post of the read on TikTok given, and neither YouTube post: P03 and P04 are judged on YouTube.
 MEMO = "\n".join(
     [
@@ -174,7 +176,8 @@ class WeeklyReadRunTest(CycleTestCase):
         view = self.root / "RepToday-exports" / "waitlist-view.json"
         self.env["GR0WTHLAB_WAITLIST_VIEW"] = str(view)
         fakes.write_view(view, fakes.waitlist_view())
-        day = self.sit()
+        first = self.sit((TODAY - timedelta(days=7)).isoformat())  # the window's first sitting, a week before the read
+        read_day = self.sit()  # the read's own sitting, which counts toward the next read
         self.give_tiktok()
         fakes.behave(self.codex_dir, {"write": {"weekly-reads/window-1-read-07.md": MEMO}})
         code, out = self.run_cycle()
@@ -186,7 +189,90 @@ class WeeklyReadRunTest(CycleTestCase):
         self.assertIn("| tiktok | 2 | 4 | 3 | 3 | 2 |", waitlist)
         self.assertIn("| lost-the-routine | 3 | 6 | 5 |", waitlist)
         self.assertNotIn(fakes.ADDRESS, memo)
-        self.assertIn(f"- Sitting {day}: 41 minutes", memo.split("## The Founder's time this week", 1)[1])
+        spent = memo.split("## The Founder's time this week", 1)[1]
+        self.assertIn(f"- Sitting {first}: 41 minutes", spent)
+        self.assertNotIn(read_day, spent, "no sitting is in two memos")
+
+    def test_a_memo_taken_in_is_removed_so_a_session_that_writes_nothing_replaces_no_item(self):
+        self.give_tiktok()
+        fakes.behave(self.codex_dir, {"write": {"weekly-reads/window-1-read-07.md": MEMO}})
+        self.run_cycle()
+        first = sorted(entry["id"] for entry in self.items())
+        self.assertFalse((self.workspace() / "weekly-reads/window-1-read-07.md").exists(), "taken in, so removed")
+        # The Founder gives YouTube's numbers, and the session the memo is due in writes nothing.
+        fakes.give_results(self.exchange, 3, "youtube", read_on=TODAY.isoformat(), views=950, viewed_percent=72.5)
+        fakes.behave(self.codex_dir, {})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))
+        self.assertEqual(code, 0, out)
+        self.assertIn("weekly-read", fakes.sessions_started(self.codex_dir))
+        self.assertEqual(sorted(entry["id"] for entry in self.items()), first, "no item is replaced")
+        self.assertIn(
+            "| Weekly Read memo | incomplete | no memo was written at `weekly-reads/window-1-read-07.md` |",
+            self.report(),
+        )
+
+    def test_a_results_record_that_cannot_be_used_leaves_the_read_s_open_items_standing(self):
+        self.give_tiktok()
+        fakes.behave(self.codex_dir, {"write": {"weekly-reads/window-1-read-07.md": MEMO}})
+        self.run_cycle()
+        before = next(entry for entry in self.items() if entry["line_key"] == "P01")
+        record = self.exchange / "results/window-1-read-07-tiktok-day-01.json"
+        given = record.read_bytes()
+        record.write_text('{"exchange": 8, "window": 1}', encoding="utf-8")
+        fakes.behave(self.codex_dir, {"write": {"weekly-reads/window-1-read-07.md": MEMO}})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("weekly-read", fakes.sessions_started(self.codex_dir), "no memo is written on less")
+        self.assert_stands(
+            before, "Weekly Read memo", "`founder/results/window-1-read-07-tiktok-day-01.json` cannot be used"
+        )
+        record.write_bytes(given)
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=2))
+        self.assertEqual(code, 0, out)
+        self.assert_never_asked_again(before)
+        # A record the launcher can read still has the memo written again, and replaces the open items.
+        fakes.give_results(self.exchange, 3, "youtube", read_on=TODAY.isoformat(), views=950, viewed_percent=72.5)
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=3))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.entry(before["id"])["status"], "superseded")
+
+    def test_a_floor_that_cannot_be_found_leaves_the_open_items_standing_and_the_file_unusable(self):
+        self.give_tiktok()
+        fakes.behave(self.codex_dir, {"write": {"weekly-reads/window-1-read-07.md": MEMO}})
+        self.run_cycle()
+        before = next(entry for entry in self.items() if entry["line_key"] == "P01")
+        rules = self.mandu / RULES
+        text = rules.read_text(encoding="utf-8")
+        rules.write_text(text.replace("under 200 impressions is unread", "under 200 views is unread"), encoding="utf-8")
+        fakes.behave(self.codex_dir, {"write": {"weekly-reads/window-1-read-07.md": MEMO}})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("weekly-read", fakes.sessions_started(self.codex_dir))
+        reason = f"`{RULES}` could not be used (it no longer says the floor in the words this read finds it by)"
+        self.assert_stands(before, "Weekly Read memo", reason)
+        origins = [entry.get("origin") for entry in self.queue()["open"] + self.queue()["closed"]]
+        self.assertNotIn("proposal/read-the-results-views-floor", origins, "no floor line for the proposal to change")
+        self.assertRegex(
+            self.report(),
+            rf"\| RepToday package: `{re.escape(RULES)}` \| unusable \| [^|]*; read, but could not be used: it no"
+            r" longer says the floor in the words this read finds it by\. \|",
+        )
+
+    def test_a_rules_file_that_is_not_text_is_an_unusable_source_and_the_memo_s_gap(self):
+        (self.mandu / RULES).write_bytes(b"\xff\xfe not text")
+        self.give_tiktok()
+        fakes.behave(self.codex_dir, {"write": {"weekly-reads/window-1-read-07.md": MEMO}})
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        report = self.report()
+        self.assertRegex(
+            report,
+            rf"\| RepToday package: `{re.escape(RULES)}` \| unusable \| [^|]*; read, but could not be used: it is not"
+            r" UTF-8 text\. \|",
+        )
+        row = next(line for line in report.splitlines() if line.startswith("| Weekly Read memo | "))
+        self.assertIn("| Weekly Read memo | incomplete | ", row)
+        self.assertIn(f"`{RULES}` could not be used (it is not UTF-8 text), so the floor is not known", row)
 
     def test_numbers_given_later_write_the_memo_again_and_replace_its_open_items(self):
         self.give_tiktok()

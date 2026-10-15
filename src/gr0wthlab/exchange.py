@@ -558,7 +558,7 @@ def parse_outreach(stem: str, data: object) -> tuple[Outreach | None, list[str]]
 
 TIKTOK, YOUTUBE = "tiktok", "youtube"
 PLATFORMS = (TIKTOK, YOUTUBE)
-WHOLE, SECONDS, PERCENT = "whole", "seconds", "percent"
+WHOLE, SECONDS, PERCENT, PERCENT_VIEWED = "whole", "seconds", "percent", "percent viewed"
 # The numbers the Founder may give for a post, as each platform's own Studio shows them, and what kind of number each
 # is. No follower count is among them, nor any number no signal, kill criterion, or read rule names.
 NUMBERS = {
@@ -575,7 +575,7 @@ NUMBERS = {
     YOUTUBE: {
         "views": WHOLE,
         "viewed_percent": PERCENT,
-        "average_percentage_viewed": PERCENT,
+        "average_percentage_viewed": PERCENT_VIEWED,
         "likes": WHOLE,
         "comments": WHOLE,
         "shares": WHOLE,
@@ -585,6 +585,8 @@ READ_DAYS = {7: 5, 14: 13}  # each read's day, and the last calendar day it cove
 MAX_COMMENTS = 40
 MAX_WHOLE = 10**12
 MAX_SECONDS = 86400
+# YouTube's average percentage viewed counts every loop of a Short, so it runs past 100.
+MAX_PERCENT_VIEWED = 1000
 RESULT_STEM = re.compile(r"window-([1-9][0-9]?)-read-(07|14)-(tiktok|youtube)-day-([0-9]{2})")
 
 
@@ -617,6 +619,8 @@ def number_problem(kind: str, value: object) -> str | None:
         return None if isinstance(value, int) and 0 <= value <= MAX_WHOLE else "a whole number from 0"
     if kind == SECONDS:
         return None if 0 <= value <= MAX_SECONDS else f"a number of seconds from 0 to {MAX_SECONDS}"
+    if kind == PERCENT_VIEWED:
+        return None if 0 <= value <= MAX_PERCENT_VIEWED else f"a percentage from 0 to {MAX_PERCENT_VIEWED}"
     return None if 0 <= value <= 100 else "a percentage from 0 to 100"
 
 

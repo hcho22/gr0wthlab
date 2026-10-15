@@ -52,6 +52,7 @@ The memo is one Markdown file with exactly these parts, in this order:
 - Put `(n=<posts>)` right after every number you write, with at most four words between them, such as `412 views (n=1)` or `ranked first of 3 readable posts (n=3)`; a day, an Angle, or a pair is not a number here.
   Do not write the floor's figure: the memo the Founder reads states it.
 - Quote comments that describe the pains the Angles target, each on its own line under its Angle's line, as `  > day <n>: "<words>"`, word for word from the comments the brief gives for that day; quote none of anyone's name.
+  Quote nowhere else: a decision line holds no quotation marks.
 - Under Flex slot (day 7 only), one line: `- Flex slot: earned by P<n>. ...` only when that Angle's line says it cleared its signal, never because it merely ranked first among weak posts; otherwise `- Flex slot: not earned. ...`.
 - Under Pairs (day 14 only), one line for every pair the brief lists: `- AB-<n> (days <n> and <n>): resolved. ...` only when both legs were readable and the rank gap is large, otherwise `repost` with what would settle it.
 - Under Product, one line for each result `read-the-results.md` says would change the product, ending in a decision, or `- None this read.`

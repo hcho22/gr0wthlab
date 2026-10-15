@@ -13,12 +13,18 @@ Founder's numbers (results.py):
 - the flex slot goes only to an Angle whose line says it cleared its signal, never to one that merely ranked first;
 - a pair is resolved only when both legs reached the floor;
 - every number the agent writes has its n beside it, every unread or at-risk Angle and every pair to repost says what
-  would settle it at the next read, and every comment quoted is found word for word in what the Founder gave.
+  would settle it at the next read, and every comment quoted is on a quote line of its own and found word for word in
+  what the Founder gave; a decision line quotes nothing.
 
 A memo that fails a check stays in workspace/ as the agent wrote it, like a Draft waiting for a fix, and nothing is
 queued from it. One that passes becomes the memo the Founder reads (ledger/weekly-reads/), with the launcher's own
 results tables, the line that says what the floor counts, what the read cannot tell, the Waitlist counts, and the
-Founder's time that week; each of its decision lines becomes its own Weekly Read decision item.
+Founder's time that week; each of its decision lines becomes its own Weekly Read decision item, and the memo the agent
+wrote is removed from workspace/, so it is never taken in again for other numbers.
+
+A memo written again replaces the read's open items, so it is written only from records the launcher could read: while
+a results record cannot be used or the floor cannot be found, the read's open items stand (queue.stands) and that read
+is the gap.
 """
 
 from __future__ import annotations
@@ -33,7 +39,7 @@ from pathlib import Path
 
 from . import exchange, kit, results
 from .areas import Areas, Store, UnsafeFile, read_plain
-from .queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger
+from .queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger, Stands, stands
 
 WORKFLOW = "weekly-read"
 KIND = "weekly-read-decision"
@@ -60,6 +66,7 @@ PAIR_LINE = re.compile(r"- (AB-\d+) \((days? [0-9][0-9, and]*)\): (resolved|repo
 FLEX_LINE = re.compile(r"- Flex slot: (earned by (P\d+)|not earned)\. (.+)" + DECISION)
 PRODUCT_LINE = re.compile(r"- (.+)" + DECISION)
 QUOTE_LINE = re.compile(r"  > day (\d+): \"(.+)\"")
+QUOTE_MARKS = ('"', "\u201c", "\u201d")  # the marks a quoted span opens or closes with, straight and curly
 # What a line may hold with a digit in it and no n beside it: an Angle, a pair, a day, a window, and the n itself.
 IDENTIFIERS = re.compile(
     r"\bP\d+\b|\bAB-\d+\b|\b[Dd]ays? \d+(?:(?:, | and | to )\d+)*|\b[Dd]ay-\d+\b|\b[Ww]indow \d+\b"
@@ -120,6 +127,7 @@ class Plan:
     why: str = ""  # why no memo is due this run, or "" when one is
     previous: dict[str, str] = field(default_factory=dict)  # the read before's result for each Angle
     open_items: list[dict] = field(default_factory=list)  # this read's open decision items
+    stood: list[Stands] = field(default_factory=list)  # open items left as they are, since a read could not be made
 
     @property
     def due(self) -> bool:
@@ -203,7 +211,9 @@ def plan(
 ) -> Plan:
     """Whether the read's memo is due this run: the Founder has given numbers for it, the memo was not yet written
     from exactly those, and he has decided none of its items. The memo is written again when he gives more numbers
-    or corrects one while its items are all still open."""
+    or corrects one while its items are all still open, but never while one of his results records cannot be used or
+    the floor cannot be found: a memo written then would replace the open items on less than he gave, so they stand
+    and that read is the gap."""
     found = Plan(read, taken, parsed, paths, fingerprint(read, taken))
     earlier = kept(store, read.window, min(results.READS)) if read.read != min(results.READS) else None
     if earlier:
@@ -216,14 +226,20 @@ def plan(
     found.open_items = [entry for entry in items if entry["status"] == OPEN]
     decided = [entry for entry in items if entry["status"] in (APPROVED, REJECTED) or entry.get("decided")]
     record = kept(store, read.window, read.read)
+    unread = [f"`{name}` cannot be used: {'; '.join(why)}" for name, why, _ in taken.unusable]
+    unread += [read.floor_problem] if read.floor_problem else []
+    stood = [standing for standing in (stands(entry, unread) for entry in found.open_items) if standing is not None]
     if taken.failure:
         found.why = f"the Founder's results could not be read ({taken.failure})"
     elif not read.asks:
         found.why = f"nothing could be asked for the {read.name}"
-    elif not taken.given:
-        found.why = f"no numbers have been given for the {read.name} yet; the Founder gives them on the sitting page"
     elif decided:
         found.why = f"the Founder has decided items of the {read.name}, so its memo stands as it is"
+    elif stood:
+        found.stood = stood
+        found.why = f"the {read.name} memo was not written again, so its open items stand"
+    elif not taken.given:
+        found.why = f"no numbers have been given for the {read.name} yet; the Founder gives them on the sitting page"
     elif record is not None and record.get("fingerprint") == found.fingerprint:
         found.why = f"the {read.name} memo was written from the numbers given so far"
     return found
@@ -233,9 +249,8 @@ def plan(
 
 
 def bare_numbers(text: str) -> list[str]:
-    """Each number in a line with no n beside it: a quote, an Angle, a pair, a day, and a window are not counted."""
-    masked = re.sub(r'"[^"]*"', lambda match: '"' + "x" * (len(match.group(0)) - 2) + '"', text)
-    masked = IDENTIFIERS.sub(lambda match: "x" * len(match.group(0)), masked)
+    """Each number in a line with no n beside it: an Angle, a pair, a day, and a window are not counted."""
+    masked = IDENTIFIERS.sub(lambda match: "x" * len(match.group(0)), text)
     masked = re.sub(r"\(n=\d+\)", "(n=#)", masked)
     found = []
     for match in NUMBER.finditer(masked):
@@ -403,6 +418,11 @@ def check(text: str, found: Plan) -> tuple[list[Line], list[str]]:
         settles = line.result in (INSUFFICIENT, AT_RISK) or line.result == REPOST
         if settles and SETTLE not in line.text:
             problems.append(f"{name}: an unread, at-risk, or reposted line ends with `{SETTLE}` before its decision")
+        if any(mark in line.text for mark in QUOTE_MARKS):
+            problems.append(
+                f"{name}: a decision line quotes nothing; quote a comment on its own line under its Angle's line, as"
+                ' `  > day <n>: "<words>"`'
+            )
         bare = bare_numbers(line.text)
         if bare:
             problems.append(f"{name}: {exchange.plural(len(bare), 'number')} with no `(n=<posts>)` beside it")
@@ -601,6 +621,7 @@ def take(
         outcome.replaced.append(str(entry["id"]))
     store.write_text(composed, compose(found, outcome.lines, run_id, waitlist, time_lines, items))
     outcome.composed = relative
+    areas.remove(areas.path("weekly_reads", found.memo))
     store.write_json(
         store.path(*EVIDENCE, f"window-{found.read.window}-read-{found.read.read:02d}.json"),
         {
@@ -627,10 +648,11 @@ def take(
 
 
 def time_lines(store: Store, read: results.Read, read_day: date) -> list[str]:
-    """The Founder's reported time in the week before the read: each sitting kept as Evidence in it, its minutes or
-    that they were not recorded, never zero."""
+    """The Founder's reported time in the week before the read: each sitting kept as Evidence in the seven days before
+    the read's own day, its minutes or that they were not recorded, never zero. The read's own day is the next read's,
+    since its sitting is often still going when the memo is written, so no sitting is in two memos."""
     lines = []
-    start = read_day - timedelta(days=7)
+    start, last = read_day - timedelta(days=7), read_day - timedelta(days=1)
     folder = store.path("evidence", "sittings")
     for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
         try:
@@ -639,14 +661,14 @@ def time_lines(store: Store, read: results.Read, read_day: date) -> list[str]:
         except (OSError, UnsafeFile, ValueError, KeyError, TypeError):
             lines.append(f"- `{store.relative(path)}` could not be read, so its time is not counted")
             continue
-        if start <= day <= read_day:
+        if start <= day <= last:
             minutes = record.get("minutes")
             lines.append(
                 f"- Sitting {day.isoformat()}: {minutes} minutes"
                 if isinstance(minutes, int)
                 else f"- Sitting {day.isoformat()}: its time was not recorded"
             )
-    return lines or [f"- No sitting is recorded from {start.isoformat()} to {read_day.isoformat()}."]
+    return lines or [f"- No sitting is recorded from {start.isoformat()} to {last.isoformat()}."]
 
 
 # What the brief, the run report, and the notice say of the Weekly Read.
@@ -654,7 +676,8 @@ def time_lines(store: Store, read: results.Read, read_day: date) -> list[str]:
 
 def gaps(found: Plan | None, outcome: Outcome | None, problem: str, session_gap: str) -> list[str]:
     """Why the Weekly Read memo is incomplete this run: it could not be prepared, its session fell short, its memo
-    could not be read or fails a check, or the floor could not be read. A memo that is not due is no gap."""
+    could not be read or fails a check, a read its open items stand on could not be made, or the floor could not be
+    read. A memo that is not due for any other reason is no gap."""
     if found is None:
         return [problem] if problem else []
     found_gaps = []
@@ -670,9 +693,10 @@ def gaps(found: Plan | None, outcome: Outcome | None, problem: str, session_gap:
             found_gaps.append(
                 f"the memo fails {exchange.plural(len(outcome.problems), 'check')}, so nothing was queued"
             )
+    found_gaps += [reason for standing in found.stood[:1] for reason in standing.unread]
     if found.read.floor_problem:
         found_gaps.append(found.read.floor_problem)
-    return found_gaps
+    return list(dict.fromkeys(found_gaps))
 
 
 def outcome_line(found: Plan, outcome: Outcome | None) -> str:

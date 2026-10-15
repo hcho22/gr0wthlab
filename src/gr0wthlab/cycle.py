@@ -722,6 +722,8 @@ class Cycle:
             add(state.beta.rules.product, state.beta.rules.brand_rules, True)
         if state.outreach is not None:
             add(state.outreach.product, state.outreach.plan_path)
+        if plan is not None and state.weekly is not None:
+            add(plan.product, state.weekly.paths["read_the_results"])
         if plan is not None and state.filming is not None:
             paths, problems = plan.context.paths, plan.context.kit.problems
             kit = [f"{plan.product} package: `{paths[role]}`" for role in filming.ROLES if role in problems]
@@ -762,6 +764,8 @@ class Cycle:
             if filing.status == dispatch.UNREAD
         ]
         found += [(state.queue_title, kept) for kept in ledger.stood]
+        if state.weekly is not None:
+            found += [(output_titles(config, (weekly_read.WORKFLOW,))[0], kept) for kept in state.weekly.stood]
         state.stood = found
 
     def outputs(self, state: RunState, config: settings.Settings, ledger_ok: bool) -> None:
@@ -793,7 +797,7 @@ class Cycle:
         weekly = state.weekly
         if weekly is None and not state.weekly_problem:
             skipped["results"] = skipped["weekly-read"] = state.weekly_why or "no Weekly Read is due"
-        elif weekly is not None and not weekly.due and not weekly.read.floor_problem:
+        elif weekly is not None and not weekly.due and not weekly.read.floor_problem and not weekly.stood:
             skipped["weekly-read"] = weekly.why
         heard, offered = gap(listening.WORKFLOW), gap(outreach.WORKFLOW)
         own = {
@@ -903,7 +907,8 @@ class Cycle:
         """Mark each package file the snapshot read that launcher code then could not use, as it could not be parsed
         or decoded, as a failed source, with the real reason and, for the sessions' briefs, the outputs whose own step
         cannot go on without it: a kit file for the post Drafts and, of the files the filming plan reads, for filming;
-        the brand rules for recruiting; and the channel plan for outreach. Once the run's rows are worked out,
+        the brand rules for recruiting; the channel plan for outreach; and read-the-results.md, whose floor the
+        Weekly Read memo is checked against. Once the run's rows are worked out,
         Cycle.outputs names in their place every output whose row names the file. A file whose read failed is a
         failed source already, and one file is one line however many steps could not use it."""
         found: dict[tuple[str, str], tuple[dict[str, None], dict[str, None]]] = {}  # file: (reasons, output keys)
@@ -929,6 +934,13 @@ class Cycle:
                 add(rules.product, rules.brand_rules, recruiting.context.rules_problem, beta.WORKFLOW)
         if state.outreach is not None and state.outreach.unusable:
             add(state.outreach.product, state.outreach.plan_path, state.outreach.unusable, "outreach-drafts")
+        if plan is not None and state.weekly is not None and state.weekly.read.rules_unusable:
+            add(
+                plan.product,
+                state.weekly.paths["read_the_results"],
+                state.weekly.read.rules_unusable,
+                weekly_read.WORKFLOW,
+            )
         for (product, path), (reasons, keys) in found.items():
             name = f"{product} package: `{path}`"
             under = name[:-1] if path.endswith("/") else name  # a folder's files are named under it
@@ -1061,10 +1073,13 @@ class Cycle:
         lists what to give is queued once for each read, while anything it asks is not given."""
         mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
         role = results.rules_path(registry)
+        rules_unusable = ""
         if role is not None:
             try:
                 state.rules_text = (mandu / role).read_text(encoding="utf-8")
-            except (OSError, UnicodeDecodeError):
+            except UnicodeDecodeError:
+                state.rules_text, rules_unusable = None, "it is not UTF-8 text"
+            except OSError:
                 state.rules_text = None
         read_day, why = results.due(config.window, self.now().astimezone().date())
         if read_day is None:
@@ -1081,9 +1096,17 @@ class Cycle:
             for name in ("calendar", "angles", "pairs")
             if name in context.kit.problems
         )
-        read = results.prepare(config.window, read_day, context.kit, kit_problem, state.rules_text)
         paths = {name: str(context.paths[name]) for name in ("calendar", "angles", "pairs")}
         paths["read_the_results"] = role or "read-the-results.md"
+        read = results.prepare(
+            config.window,
+            read_day,
+            context.kit,
+            kit_problem,
+            state.rules_text,
+            paths["read_the_results"],
+            rules_unusable,
+        )
         try:
             taken = results.take(self.store, read, state.run_id, self.now())
             state.weekly = weekly_read.plan(read, taken, context.kit, paths, self.store, ledger)
@@ -1123,7 +1146,8 @@ class Cycle:
         seen: dict[str, str],
     ) -> None:
         """Once the last session has ended: check the Weekly Read memo when it was due, and queue one decision item for
-        each of its lines; and file, once, the proposal that read-the-results.md say the floor counts views."""
+        each of its lines; and file, once, the proposal that read-the-results.md say the floor counts views, while its
+        floor line can be found for the proposal to change."""
         plan = state.weekly
         if plan is not None and plan.due:
             told = (
@@ -1143,6 +1167,8 @@ class Cycle:
                 state.weekly_outcome = outcome
                 state.published += outcome.published
         if state.posts is None or state.rules_text is None or self.lab_of_another(weekly_read.WORKFLOW):
+            return
+        if results.floor_from(state.rules_text) is None:
             return
         if results.views_counted(state.rules_text):
             state.floor_filing = (

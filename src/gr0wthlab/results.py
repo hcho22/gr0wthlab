@@ -214,6 +214,7 @@ class Read:
     problems: list[str] = field(default_factory=list)  # why something could not be asked, in plain words
     floor: int | None = None
     floor_problem: str = ""
+    rules_unusable: str = ""  # why read-the-results.md, read, could not be used
 
     @property
     def name(self) -> str:
@@ -303,19 +304,32 @@ def asks_for(window: Window, read: int, parsed: kit.Kit, problems: list[str]) ->
     return asks
 
 
-def prepare(window: Window, read: int, parsed: kit.Kit | None, kit_problem: str, rules_text: str | None) -> Read:
-    """The read due this run, with what it asks for. A kit that could not be read asks for nothing, and says why."""
+def prepare(
+    window: Window,
+    read: int,
+    parsed: kit.Kit | None,
+    kit_problem: str,
+    rules_text: str | None,
+    rules_path: str = "read-the-results.md",
+    rules_unusable: str = "",
+) -> Read:
+    """The read due this run, with what it asks for. A kit that could not be read asks for nothing, and says why.
+    read-the-results.md that was read and cannot be used, as it is not text or no longer says the floor as this read
+    finds it, is named with why, as a package file the run read and could not use."""
     found = Read(window.number, read, day_date(window, read), tuple(range(1, READS[read] + 1)))
     if parsed is None or kit_problem:
         found.problems.append(f"nothing could be asked: {kit_problem or 'the 14-day kit could not be read'}")
     else:
         found.asks = asks_for(window, read, parsed, found.problems)
-    if rules_text is None:
-        found.floor_problem = "`read-the-results.md` could not be read, so the floor is not known"
-    else:
+    if rules_text is not None and not rules_unusable:
         found.floor = floor_from(rules_text)
         if found.floor is None:
-            found.floor_problem = "`read-the-results.md` no longer says the floor in the words this read finds it by"
+            rules_unusable = "it no longer says the floor in the words this read finds it by"
+    if rules_unusable:
+        found.rules_unusable = rules_unusable
+        found.floor_problem = f"`{rules_path}` could not be used ({rules_unusable}), so the floor is not known"
+    elif found.floor is None:
+        found.floor_problem = f"`{rules_path}` could not be read, so the floor is not known"
     return found
 
 

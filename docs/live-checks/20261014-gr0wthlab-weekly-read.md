@@ -265,11 +265,69 @@ From this work's linked worktree, with the code above, against Mandu and the Pro
 - The lab reached the day-14 read by moving the window's first sitting a week earlier, not by a week passing, so its day-14 calendar days fall before the days given at its day-7 read.
 - Everything the third round did not exercise.
 
+## Fifth round: six fixes after review
+
+Review then found six things, and as review asked, each is fixed as its finding proposed:
+
+- A memo that passed stayed in `workspace/weekly-reads/`, so a later run whose session wrote nothing could take it in again for other numbers; once it is composed it is now removed from there.
+- A memo written again replaced the read's open items even while one of the Founder's results records could not be used or the floor could not be found; those reads now go through `queue.stands`, so the open items stand, the read is the Weekly Read memo's gap, and the notice names each item.
+- A `read-the-results.md` the run read that is not UTF-8 text, or no longer says the floor in the words the read finds it by, is now a package file the run read and could not use: its source line is `unusable` with the reason and names the Weekly Read memo, and the views-floor proposal is not filed while the file has no floor line to change.
+- YouTube's average percentage viewed may now be from 0 to 1000, since YouTube counts every loop of a Short in it; the share viewed rather than swiped away and the watched-full rate stay from 0 to 100.
+- A decision line may hold no quotation marks, straight or curly, so every comment a memo quotes is on a quote line of its own, checked word for word, and marked as third-party text.
+- The Founder's time in a memo counts the sittings of the seven days before the read's own day, whose sitting counts toward the next read, so no sitting is in two memos.
+
+The code is not committed yet: it is `801224dba10b18d514b8e8b214d38e7e19495019` with this round's changes on top, `src` tree `454ed20a307c686307daa58471ec02b8ea1b2739` and `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
+The lab and the first boundary check below ran on `src` tree `fb1fb26fb73217b92f54ae750114f1f3fa565894`, which differs from it only in `src/tests/test_weekly_read_cycle.py`, by the assertion that the views-floor proposal is not filed.
+Every check below ran on 2026-10-15, Mac local time (PDT), with Codex CLI 0.160.0.
+
+### The page in Chrome, and the runs around it
+
+The lab was set up as in the third round, in a new throwaway clone of this worktree's files, with the no-model stand-in agent, which wrote the memo `MEMO` of `src/tests/test_weekly_read_cycle.py` whenever a Weekly Read session ran; no model ran in it.
+P03's signal in the clone's synthetic Angle bank was given the words "and percent viewed", so each YouTube post was also asked for its average percentage viewed.
+Days 1, 2, and 5 on TikTok were given by a driver as records in the page's format, and day 3 on YouTube on the page in Chrome; every number is synthetic.
+
+| Run | What the records showed |
+| --- | --- |
+| `20261015T171000Z-on-demand-61a0` | The day-7 read due. The queue's `results` asked each YouTube post for its views, its viewed rate, its average percentage viewed, and its comment count. |
+| `20261015T171045Z-on-demand-24cb` | After the numbers were given, below. Sessions: Package review and Weekly Read. Weekly Read memo `complete`, 6 decision items queued; afterwards `workspace/weekly-reads/` held only its README. |
+| `20261015T171057Z-on-demand-9822` | After the clone's `read-the-results.md` was reworded to "Any post under 200 views is unread". Sessions: Package review only. The 6 decision items were the same open items as before. The file's source line read `unusable`, "its fingerprint changed since the previous snapshot; read, but could not be used: it no longer says the floor in the words this read finds it by.", and the notice's line for it ended "Incomplete: Weekly Read memo." The Weekly Read memo row was `incomplete`, naming the file. The notice listed each of the 6 items as "(Weekly Read memo): `projects/RepToday/gtm/05-social-pmf/read-the-results.md` could not be used (it no longer says the floor in the words this read finds it by), so the floor is not known" under the line that says each was left exactly as it is. |
+| `20261015T171109Z-on-demand-ca7a` | After the floor line was put back as it was. Sessions: Package review only. Weekly Read memo `skipped`, "the window 1 day-7 Weekly Read memo was written from the numbers given so far"; the same 6 items open, and no Weekly Read item closed. |
+
+On the page, before run `24cb`: day 3 was given with 950 views, "101%" for the viewed rate, and "112.4%" for the average percentage viewed; the page said "Nothing was saved." and "Viewed (vs. swiped away), in percent must be a percentage from 0 to 100.".
+With the viewed rate changed to "72.5%" the record was saved with `"average_percentage_viewed": 112.4`, and the saved note read "viewed percent 72.5, average percentage viewed 112.4".
+
+### The boundary
+
+From this work's linked worktree, against Mandu and the Product checkouts as they are, and logs in a folder of the Mac's temporary directory named with `GR0WTHLAB_LOG_DIR`; each time `git status --porcelain` printed the same changed files, with the same SHA-256, before the preflight and after the check, and `show-config` printed the configuration fingerprint `7d5667ffe1083f3be5b37ed32095fd52a70e24ef56b3461be5277838949a0e79`.
+
+| `src` tree | Preflight | Boundary check |
+| --- | --- | --- |
+| `fb1fb26fb73217b92f54ae750114f1f3fa565894`, 14 files changed | Twice at 10:11, passed both times | `20261015T171148Z-on-demand-3105`, from 10:11:46 to 10:13:17, passed at its first attempt; 52 tool calls in Codex's record with no problem, 79 s of agent time |
+| `454ed20a307c686307daa58471ec02b8ea1b2739`, the code above, 16 files changed | Twice at 10:15, passed both times | `20261015T171555Z-on-demand-d883`, from 10:15:50 to 10:17:13, passed at its first attempt; 30 tool calls in Codex's record with no problem, 61 s of agent time |
+
+Each preflight: six areas writable, 22 paths refused, among them the six folders of the Founder's records, the Instructions in force, and the example sets; no breach; a listing of the footage place `~/Mandu/projects/RepToday` refused; and neither listed host reached from inside the sandbox.
+Each boundary check, with `gpt-6-luna` at `high` reasoning effort: 49 steps to prove, 17 of 17 file-tool targets refused each in a patch of its own, 19 kernel sandbox denials naming the run's sentinels or the check's listeners, the footage place's read refused, 1 of 1, 12 of 12 permitted sentinels written and none escaped, no local connection through, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, each a GET for a listed host's `robots.txt`, an unlisted address refused, and no change since the snapshot from before the check.
+
+### Tests
+
+- Under `/usr/bin/python3`, Python 3.9.6: `tests.test_results`, `tests.test_weekly_read`, `tests.test_weekly_read_examples`, `tests.test_page`, `tests.test_sessions`, `tests.test_cycle`, `tests.test_queue`, `tests.test_sitting.ResultsTest`, and `tests.test_serve.ResultsServeTest`, 247 tests in one process on `src` tree `fb1fb26fb73217b92f54ae750114f1f3fa565894`, and `tests.test_weekly_read_cycle`, 12 tests, on the code above; none failed.
+- Each of this round's new tests failed on the code before it, with only the six launcher modules this round changes put back: the memo removed once taken in, the results record and the floor that leave the open items standing, the rules file that is not text, the sitting window, the average percentage viewed, and the quoted decision line.
+  The assertion that the views-floor proposal is not filed while the floor line cannot be found failed with only that guard taken out of `src/gr0wthlab/cycle.py`.
+- `ruff check` and `ruff format --check` on `src/gr0wthlab`, `src/tests`, and `src/bin/gr0wthlab` passed, with ruff 0.15.20.
+
+### What this round did not exercise
+
+- No model ran: whether the agent keeps quotes off its decision lines, as the task definition now says, is not seen live; the launcher's refusal of a quoted decision line stands on `test_a_decision_line_quotes_nothing_so_every_quote_is_checked_and_marked_as_third_party`.
+- A results record that cannot be used, a `read-the-results.md` that is not text, and the sitting window were not made in the lab; they stand on `test_a_results_record_that_cannot_be_used_leaves_the_read_s_open_items_standing`, `test_a_rules_file_that_is_not_text_is_an_unusable_source_and_the_memo_s_gap`, and `test_the_memo_carries_the_waitlist_counts_and_the_founder_s_time_that_week` in `tests.test_weekly_read_cycle`.
+- A session that writes nothing after the memo was taken in was not made in the lab; it stands on `test_a_memo_taken_in_is_removed_so_a_session_that_writes_nothing_replaces_no_item`.
+- The whole unit suite, and CI's run on Linux with the latest Python.
+
 ## Screenshots
 
 The first six were taken in the first round's clone, on the page's code as it stood after `b149c0045ed44015320157a48e3084b0ab24edce`; the numbers step after run `89f1`, the rest after run `42ab`.
 The third round then added the day a post went out to a post's numbers step and its saved record, and a Posted column to an item's table; the next four, taken in the third round's clone after runs `2f5c` and `cfc4`, show those screens as they were after that round.
-The fourth round made a later read offer the day given at the earlier one, and the line under a step with nothing given name its read; the last two, taken in the fourth round's clone after run `6694`, show a step of the day-14 read.
+The fourth round made a later read offer the day given at the earlier one, and the line under a step with nothing given name its read; the next two, taken in the fourth round's clone after run `6694`, show a step of the day-14 read.
+The last, taken in the fifth round's clone before run `24cb`, shows an average percentage viewed over 100 saved.
 Every number, comment, date, and name in them is synthetic.
 The 390-wide view is Chrome's device emulation at twice the pixels; the 500-wide view is Chrome's narrowest window.
 
@@ -286,3 +344,4 @@ The 390-wide view is Chrome's device emulation at twice the pixels; the 500-wide
 | A Weekly Read decision item with its Posted column (third round) | [dark](20261014-gr0wthlab-weekly-read/10-weekly-read-item-posted-laptop-dark.png) | |
 | A day-14 step that offers the day given at the day-7 read (fourth round) | [dark](20261014-gr0wthlab-weekly-read/11-day-14-step-offers-day-7-day-laptop-dark.png) | |
 | The same step once the day is changed there and saved (fourth round) | [dark](20261014-gr0wthlab-weekly-read/12-day-14-step-day-changed-laptop-dark.png) | |
+| A YouTube post's numbers saved with an average percentage viewed over 100 (fifth round) | [dark](20261014-gr0wthlab-weekly-read/13-average-percentage-viewed-over-100-saved-laptop-dark.png) | |
