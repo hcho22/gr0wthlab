@@ -162,10 +162,66 @@ From this work's linked worktree at `5a7440884f0cc785f32d2c4b8244b62b8a2ecadb`, 
 - Everything the first round did not, which the merge leaves as it was.
 - The Instructions-change gate re-running any example on a change of this work's: no change of this work's touches a workflow's Instructions, and `src/tests/test_example_runs.py` holds every re-run example on the merged code.
 
+## Third round: the day each post went out, after review
+
+Review found that nothing asked whether or when a post went out, while the sitting page, the notice, and the agent's brief each called the calendar's day the day the post was posted.
+As review then asked, the sitting page now asks, beside each post's numbers, the day it went out, filled in with the day the calendar planned it.
+The results record keeps it as `posted_on`, never after `read_on`; each post's Evidence carries it, the brief gives it beside the planned day when the two differ, and the memo's table has a Posted column.
+Until it is given, the page, the notice, and the brief call the calendar's day the day the post was planned, never posted, and the memo's table says the day it went out is not reported.
+The queue's ask now names the calendar's day `planned`, where it was `date`.
+
+The code is not committed yet: it is `9b3b995768072d62975f781034a8efa99d50f639` with this round's changes on top, `src` tree `f91154dabe09a13953486b2aa7a193fdbdedba5b` and `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
+Every check below ran on 2026-10-15, Mac local time (PDT), with Codex CLI 0.160.0.
+
+### The page in Chrome, and the runs around it
+
+The runs below were started with `src/bin/gr0wthlab run` in a throwaway clone of this worktree's files in the Mac's temporary folder, set up as in the first round: the configuration `make_repo` in `src/tests/fakes.py` gives, the window's first sitting on Sunday 2026-10-04, and the synthetic kit kept to days 1 to 5.
+The agent was the repository's no-model stand-in (`tests.fakes.install_codex`), which wrote the memo `MEMO` of `src/tests/test_weekly_read_cycle.py` in the second and third runs; no model ran in them.
+The Founder's part was played in Chrome, driven with `chrome-devtools-axi`, on the page `src/bin/gr0wthlab sitting` served from the clone; every number, comment, and date given is synthetic.
+
+| Run | What the records showed |
+| --- | --- |
+| `20261015T161133Z-on-demand-2f5c` | Before anything was given. The queue's `results` asked for days 1 to 5, each with its `planned` day, 2026-10-05 to 2026-10-09. The notice listed each post as planned, such as "day 2 (P02), TikTok, planned for Tuesday 2026-10-06: the day it went out, Video views, Watched full video, in percent, Comments, and the text of its comments", and the word "posted" was not in it. |
+| `20261015T161341Z-on-demand-aa55` | After days 1, 2, and 5 were given on the page, below. Weekly Read memo `complete`, 6 decision items queued; Post results `incomplete`, "not given yet, so not reported", naming days 3 and 4. The brief's line for day 2 read "posted 2026-10-07 (planned for 2026-10-06), read on 2026-10-15", for day 1 "posted 2026-10-05, read on 2026-10-15", and for day 3 "planned for 2026-10-07, nothing given". Day 2's Evidence held `"posted_on": "2026-10-07"`. The memo's Posted cell for day 2 read "2026-10-07 (planned for 2026-10-06)". |
+| `20261015T161540Z-on-demand-cfc4` | After the table change below, and day 2 saved again as it was. Weekly Read memo `complete`, 6 decision items queued, replacing 6 open items. The memo's Posted column read 2026-10-05, 2026-10-07, not reported, not reported, and 2026-10-09 for days 1 to 5. |
+
+On the page:
+
+- Before anything was given, day 2's step said "Planned for 2026-10-06, P02.", and its field "The day it went out" held 2026-10-06, with the hint "YYYY-MM-DD; the calendar planned it for 2026-10-06".
+- Day 2 was given as gone out on 2026-10-07, with 1,400 views, 18% watched full, 2 comments, and their text: the record on disk held `"posted_on": "2026-10-07"`, the step then said "Posted 2026-10-07, planned for 2026-10-06, P02.", and the saved note "posted on 2026-10-07".
+- On day 3, at 500 wide, 2026-10-14 as the day it went out with 2026-10-13 as the day read was refused with "The day it went out, 2026-10-14, is after the day you read them, 2026-10-13."; no record was written, and the typed values stayed in the form.
+- Days 1 and 5 were saved with the day as filled in: "Posted 2026-10-05, P01, AB-1 leg A." and "Posted 2026-10-09, P05."
+- After run `aa55`, day 2's decision item showed its Posted cell "2026-10-07 (planned for 2026-10-06)" broken at a hyphen of the planned date.
+  The memo's table now holds only the day given, a single date the page keeps on one line, or "not reported", and the brief alone gives the planned day beside it; after run `cfc4` the item's cell read "2026-10-07" on one line.
+
+### The boundary
+
+From this work's linked worktree, with the code above, against Mandu and the Product checkouts as they are, and logs in a folder of the Mac's temporary directory named with `GR0WTHLAB_LOG_DIR`.
+`git status` was not empty, since this round's changes are not committed, and `git status --porcelain` printed the same 18 changed files, with the same SHA-256, before the preflight and after the check.
+`show-config` printed the configuration fingerprint `7d5667ffe1083f3be5b37ed32095fd52a70e24ef56b3461be5277838949a0e79`; its output names this worktree's own path.
+
+- `src/bin/gr0wthlab preflight`, run twice at 09:19, passed both times: six areas writable, 22 paths refused, among them the six folders of the Founder's records, the Instructions in force, and the example sets; no breach; a listing of the footage place `~/Mandu/projects/RepToday` refused; and neither listed host reached from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, from 09:19:44 to 09:20:47, passed at its first attempt as `20261015T161946Z-on-demand-b05b`, with `gpt-6-luna` at `high` reasoning effort and 53 s of agent time: 49 steps to prove, 31 tool calls in Codex's record with no problem, 17 of 17 file-tool targets refused each in a patch of its own, 19 kernel sandbox denials naming the run's sentinels or the check's listeners, the footage place's read refused, 1 of 1, 12 of 12 permitted sentinels written and none escaped, no local connection through, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, each a GET for a listed host's `robots.txt`, an unlisted address refused, and no change since the snapshot from before the check.
+
+### Tests
+
+- Under `/usr/bin/python3`, Python 3.9.6, on the code above: `tests.test_results`, `tests.test_weekly_read`, `tests.test_weekly_read_examples`, `tests.test_weekly_read_cycle`, `tests.test_page`, `tests.test_sessions`, `tests.test_sitting.ResultsTest`, `tests.test_serve.ResultsServeTest`, and `tests.test_cycle.DecisionRoundTripTest`, 140 tests in one process, and none failed.
+- `ruff check` and `ruff format --check` on `src` and `src/bin/gr0wthlab` passed, with ruff 0.15.20.
+
+### What this round did not exercise
+
+- No model wrote a memo from a day a post went out: the lab's sessions were the no-model stand-in's, so how the agent weighs a post that went out late is not seen live; what its brief says stands on `PostedTest` in `tests.test_weekly_read` and on `tests.test_weekly_read_cycle`.
+- No real post has gone out, so no real day or Studio number was given.
+- The day-14 read was not run live.
+- The whole unit suite, and CI's run on Linux with the latest Python.
+- Mandu's gr0wthlab-reader, which reads version 7, was not run on a results record.
+
 ## Screenshots
 
-Taken in the clone, on the page's code as it is in this work, which no change after `b149c0045ed44015320157a48e3084b0ab24edce` touched; the numbers step after run `89f1`, the rest after run `42ab`; every number, comment, and name in them is synthetic.
-The 390-wide view is Chrome's device emulation at twice the pixels.
+The first six were taken in the first round's clone, on the page's code as it stood after `b149c0045ed44015320157a48e3084b0ab24edce`; the numbers step after run `89f1`, the rest after run `42ab`.
+The third round then added the day a post went out to a post's numbers step and its saved record, and a Posted column to an item's table, so the last four, taken in the third round's clone after runs `2f5c` and `cfc4`, show those screens as they are now.
+Every number, comment, date, and name in them is synthetic.
+The 390-wide view is Chrome's device emulation at twice the pixels; the 500-wide view is Chrome's narrowest window.
 
 | Screen | Laptop, 1280 wide | Narrow, 390 wide |
 | --- | --- | --- |
@@ -174,3 +230,7 @@ The 390-wide view is Chrome's device emulation at twice the pixels.
 | A shortened figure refused | [light](20261014-gr0wthlab-weekly-read/03-refused-figure-laptop-light.png) | |
 | The numbers saved, with the record read back | [light](20261014-gr0wthlab-weekly-read/04-saved-read-back-laptop-light.png) | |
 | A Weekly Read decision item that replaces an earlier one | [dark](20261014-gr0wthlab-weekly-read/05-weekly-read-item-laptop-dark.png) | [light](20261014-gr0wthlab-weekly-read/06-weekly-read-item-narrow-light.png) |
+| A post's numbers step before anything is given, its day planned (third round) | [dark](20261014-gr0wthlab-weekly-read/07-numbers-step-planned-laptop-dark.png) | |
+| The numbers saved with the day the post went out (third round) | [dark](20261014-gr0wthlab-weekly-read/08-numbers-step-posted-laptop-dark.png) | |
+| A day it went out after the day read, refused (third round) | | [dark, 500 wide](20261014-gr0wthlab-weekly-read/09-posted-after-read-refused-500-dark.png) |
+| A Weekly Read decision item with its Posted column (third round) | [dark](20261014-gr0wthlab-weekly-read/10-weekly-read-item-posted-laptop-dark.png) | |

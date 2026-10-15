@@ -5,7 +5,7 @@ import json
 import os
 import tempfile
 import unittest
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from gr0wthlab import exchange, founder, kit, results
@@ -28,7 +28,12 @@ def synthetic_kit() -> kit.Kit:
     return parsed
 
 
-def record(day, platform="tiktok", read=7, read_on="2026-10-25", texts=None, **numbers):
+def planned(day: int) -> str:
+    return (FIRST_SITTING + timedelta(days=day)).isoformat()
+
+
+def record(day, platform="tiktok", read=7, read_on="2026-10-25", texts=None, posted_on=None, **numbers):
+    """A results record as the sitting page writes it; the post went out on its calendar day unless another is given."""
     return {
         "exchange": exchange.EXCHANGE_VERSION,
         "window": 1,
@@ -37,6 +42,7 @@ def record(day, platform="tiktok", read=7, read_on="2026-10-25", texts=None, **n
         "day": day,
         "numbers": numbers,
         "comments": texts,
+        "posted_on": posted_on or planned(day),
         "read_on": read_on,
         "recorded_at": "2026-10-25T18:40:00-07:00",
     }
@@ -148,10 +154,28 @@ class AskTest(unittest.TestCase):
         title, body, _, _ = results.notice(read, {"angles": "a/angles.md", "calendar": "a/cadence.md"})
         self.assertEqual(title, "Give the numbers for the window 1 day-7 Weekly Read on the sitting page")
         self.assertIn("From TikTok Studio:", body)
-        self.assertIn("- day 1 (P01, AB-1 leg A), TikTok, posted Monday 2026-10-19: Video views, Watched full", body)
+        self.assertIn(
+            "- day 1 (P01, AB-1 leg A), TikTok, planned for Monday 2026-10-19: the day it went out, Video views,"
+            " Watched full",
+            body,
+        )
         self.assertIn("From YouTube Studio:", body)
-        self.assertIn("- day 3 (P03, AB-2 leg A), YouTube Shorts, posted Wednesday 2026-10-21: Views, Viewed", body)
+        self.assertIn(
+            "- day 3 (P03, AB-2 leg A), YouTube Shorts, planned for Wednesday 2026-10-21: the day it went out, Views,"
+            " Viewed",
+            body,
+        )
         self.assertIn(results.FLOOR_COUNTS, body)
+
+    def test_a_post_s_calendar_day_is_the_day_it_was_planned_never_posted(self):
+        """Nothing reads back what was posted, so before the Founder gives the day a post went out, its calendar day
+        is only ever the day it was planned: in the ask the page reads and in the notice."""
+        read = results.prepare(WINDOW, 7, synthetic_kit(), "", None)
+        self.assertEqual(read.as_json()["asks"][0]["planned"], "2026-10-19")
+        self.assertNotIn("date", read.as_json()["asks"][0])
+        _, body, _, _ = results.notice(read, {"angles": "a/angles.md", "calendar": "a/cadence.md"})
+        self.assertNotIn("posted", body.lower())
+        self.assertIn("give the day it went out beside its numbers", body)
         self.assertNotIn("YouTube Studio: Views", body.split("From YouTube Studio:")[0])
 
 
@@ -227,6 +251,18 @@ class RecordTest(unittest.TestCase):
         _, problems = self.parse(record(1, views=3, read_on="2026-10-26"))
         self.assertIn("read_on is after the day the record was made", problems)
 
+    def test_the_record_keeps_the_day_the_founder_says_the_post_went_out(self):
+        result, problems = self.parse(record(1, views=3, posted_on="2026-10-20"))
+        self.assertEqual((problems, result.posted_on), ([], "2026-10-20"))
+        for posted_on, expected in (
+            (None, "posted_on must be the YYYY-MM-DD date the Founder says the post went out"),
+            ("Monday", "posted_on must be the YYYY-MM-DD date the Founder says the post went out"),
+            ("2026-10-26", "posted_on is after read_on, the day the numbers were read"),
+        ):
+            with self.subTest(posted_on=posted_on):
+                _, problems = self.parse(dict(record(1, views=3), posted_on=posted_on))
+                self.assertIn(expected, problems)
+
 
 class TakeTest(unittest.TestCase):
     """The US-ME11 Validation Test's collection, on a synthetic export that misses one post."""
@@ -260,6 +296,7 @@ class TakeTest(unittest.TestCase):
         self.assertEqual(
             day1["platforms"]["tiktok"]["numbers"], {"views": 412, "watched_full_percent": 31.0, "comments": None}
         )
+        self.assertEqual(day1["platforms"]["tiktok"]["posted_on"], "2026-10-19")
         self.assertEqual(day1["platforms"]["tiktok"]["source"]["read_on"], "2026-10-25")
         self.assertEqual(
             day1["platforms"]["tiktok"]["source"]["record"], "founder/results/window-1-read-07-tiktok-day-01.json"
@@ -275,6 +312,7 @@ class TakeTest(unittest.TestCase):
         )
         self.assertEqual(day5["platforms"]["tiktok"]["not_reported"], ["views", "watched_full_percent", "comments"])
         self.assertIsNone(day5["platforms"]["tiktok"]["source"])
+        self.assertIsNone(day5["platforms"]["tiktok"]["posted_on"], "not reported, never taken to be not posted")
         self.assertNotIn(
             0,
             [

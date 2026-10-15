@@ -588,8 +588,10 @@ The run writes the ask into the Review Queue (`results` in `queue.json`) for the
 
 ### Giving the numbers
 
-On the sitting page, right after the run's summary, each post asked for has a step of its own: its day, Angle, and the platform's Studio, why each number is asked, a field for each number, one for its comments, and the day the Founder read them.
+On the sitting page, right after the run's summary, each post asked for has a step of its own: its day, Angle, and the platform's Studio, why each number is asked, a field for the day it went out, one for each number, one for its comments, and the day the Founder read them.
 
+- The day it went out is filled in with the day the calendar planned it; change it when the post went out on another day.
+  Until you give it, the page, the notice, and the agent's brief call the calendar's day the day the post was planned, never the day it was posted.
 - Give each number as the Studio shows it for the post: whole numbers in digits, with commas if you like, and percentages with or without the sign.
   A shortened figure such as 1.2K is refused, since it is not the number itself.
 - Leave a number blank when the Studio does not show it: it is recorded as not reported, never as zero.
@@ -622,7 +624,7 @@ The launcher checks the memo before anything is queued from it:
 - the flex slot goes only to an Angle whose line says it cleared its signal, never on rank alone, and a pair is resolved only when both legs reached the floor;
 - every number has its n beside it, every unread or at-risk Angle and every pair to repost says what would settle it at the next read, and every comment quoted is word for word one the Founder gave for that post.
 
-A memo that passes becomes the memo the Founder reads, `ledger/weekly-reads/window-<n>-read-<07|14>.md`: one line that says the floor counts each platform's views, one that says what the read cannot tell, the launcher's own table of every post's numbers with its n and "not reported" where nothing was given, whether each post is readable or unread, under the floor or with its views not given, and how many comments were given as text, the agent's lines with the comments they quote as third-party text, the Waitlist counts by Source and Fit with progress toward the opt-in bar, and the Founder's sitting time in the week before the read.
+A memo that passes becomes the memo the Founder reads, `ledger/weekly-reads/window-<n>-read-<07|14>.md`: one line that says the floor counts each platform's views, one that says what the read cannot tell, the launcher's own table of every post's numbers with its n and "not reported" where nothing was given, the day it went out as the Founder gave it, likewise "not reported" where he gave nothing for it, whether each post is readable or unread, under the floor or with its views not given, and how many comments were given as text, the agent's lines with the comments they quote as third-party text, the Waitlist counts by Source and Fit with progress toward the opt-in bar, and the Founder's sitting time in the week before the read.
 Each of its decision lines becomes its own Weekly Read decision item, which the Founder decides like any other.
 When the memo is written again, its items replace the read's open ones line for line, and an open item no line replaces is withdrawn; once the Founder has decided any item of a read, its memo stands as it is.
 A result that `read-the-results.md` says would change the product is listed under the memo's Product lines, and, where it warrants one, comes as a Dispatch request for the Founder to decide, never acted on.

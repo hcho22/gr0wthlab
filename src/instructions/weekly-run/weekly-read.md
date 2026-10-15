@@ -2,7 +2,7 @@
 
 This session has no working guidance of its own in `workspace/instructions/`: "Writing the memo" below is all of it.
 Before this session the launcher worked out which Weekly Read is due, and took in the numbers and comments the Founder gave for it on the sitting page, each post on the platform the calendar names as the one that judges it.
-The brief's Weekly Read section lists every post the read covers, with each number the Founder gave and its n, each number he did not give as not reported, the comments he gave as third-party text, the floor, and the results of the read before.
+The brief's Weekly Read section lists every post the read covers, with the day the Founder says it went out (where he gave nothing, only the day the calendar planned it, which is not a day it was posted), each number he gave and its n, each number he did not give as not reported, the comments he gave as third-party text, the floor, and the results of the read before.
 Once the last session has ended, the launcher checks your memo; only a memo that passes becomes the memo the Founder reads, and each of its decision lines becomes its own Weekly Read decision item.
 
 Steps:

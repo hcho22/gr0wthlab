@@ -425,10 +425,11 @@ def number_text(value: float | int | None, number: str) -> str:
 
 
 def result_rows(found: Plan, days: Sequence[int]) -> list[str]:
-    """The launcher's own table of the posts' numbers, from the Founder's records alone."""
+    """The launcher's own table of the posts' numbers, from the Founder's records alone: the day each post went out
+    is the one he gave, and not reported when he gave nothing for it."""
     rows = [
-        "| Day | Angle | Judged on | Numbers | Comment text given | Read on |",
-        "| --- | --- | --- | --- | --- | --- |",
+        "| Day | Angle | Judged on | Posted | Numbers | Comment text given | Read on |",
+        "| --- | --- | --- | --- | --- | --- | --- |",
     ]
     for day in days:
         ask = next((ask for ask in found.read.asks if ask.day == day), None)
@@ -446,8 +447,9 @@ def result_rows(found: Plan, days: Sequence[int]) -> list[str]:
             angle += f" ({ask.pair} leg {ask.leg})"
         state = found.floor_state(day) and f" ({found.floor_state(day)})"
         rows.append(
-            f"| {day} | {angle} | {results.PLATFORM_NAMES[ask.platform]}{state} | {numbers} |"
-            f" {comments} | {given.result.read_on if given else 'nothing given'} |"
+            f"| {day} | {angle} | {results.PLATFORM_NAMES[ask.platform]}{state} |"
+            f" {given.result.posted_on if given else 'not reported'} | {numbers} | {comments} |"
+            f" {given.result.read_on if given else 'nothing given'} |"
         )
     return rows
 
@@ -770,8 +772,14 @@ def brief_lines(found: Plan, workspace: Path, mandu: Path, check: str) -> list[s
             for number in ask.numbers
         )
         state = found.floor_state(ask.day) and f"; {found.floor_state(ask.day)}"
-        source = f", read on {given.result.read_on}" if given else ", nothing given"
-        lines.append(f"- {ask.label()}, posted {ask.on:%Y-%m-%d}{source}: {numbers}{state}.")
+        planned = ask.planned.isoformat()
+        if given is None:
+            posted = f"planned for {planned}, nothing given"
+        elif given.result.posted_on == planned:
+            posted = f"posted {planned}, read on {given.result.read_on}"
+        else:
+            posted = f"posted {given.result.posted_on} (planned for {planned}), read on {given.result.read_on}"
+        lines.append(f"- {ask.label()}, {posted}: {numbers}{state}.")
         if ask.why:
             lines.append(f"  Asked for: {ask.why}.")
         comments = given.result.comments if given else None
@@ -825,7 +833,7 @@ def restore(record: Mapping, ledger_root: Path) -> tuple[Plan, list[str]]:
             results.Ask(
                 str(ask["platform"]),
                 int(ask["day"]),
-                date.fromisoformat(str(ask["date"])),
+                date.fromisoformat(str(ask["planned"])),
                 ask.get("angle"),
                 ask.get("pair"),
                 ask.get("leg"),

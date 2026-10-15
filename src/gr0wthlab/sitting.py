@@ -9,7 +9,8 @@ founder.Writer. Each method that writes is one explicit act of the Founder's:
 - record_sitting: how long the sitting took, which the page measured and the Founder can correct; it is the one
   way to end a sitting from the page, which then stops;
 - record_result: the numbers and comments the Founder read for one post in TikTok Studio or YouTube Studio, for the
-  Weekly Read due, where a number left blank is recorded as not reported, never as zero;
+  Weekly Read due, with the day the post went out, where a number left blank is recorded as not reported, never as
+  zero;
 - record_sent: an approved message sent, a reply received, the wait before the one follow-up;
 - record_beta_build and set_recruiting: a Beta Build approved, recruiting stopped or reopened.
 
@@ -256,8 +257,10 @@ def asked_from(section: object) -> tuple[int, int, list[Asked]] | None:
     for ask in asks:
         if not isinstance(ask, dict) or ask.get("platform") not in exchange.PLATFORMS:
             continue
-        day, numbers = ask.get("day"), ask.get("numbers")
+        day, numbers, planned = ask.get("day"), ask.get("numbers"), ask.get("planned")
         if not isinstance(day, int) or not 1 <= day <= exchange.READ_DAYS[read] or not isinstance(numbers, list):
+            continue
+        if not isinstance(planned, str) or not exchange.valid_date(planned):
             continue
         shown = exchange.NUMBERS[ask["platform"]]
         if not all(
@@ -649,9 +652,9 @@ class Sitting:
         return self.write(founder.BETA_REPORTS, f"{product}-{self.day}", record, exchange.parse_beta_report, reasons)
 
     def record_result(self, key: str, given: Mapping[str, str]) -> Saved:
-        """The numbers and comments the Founder read for one post in a platform's Studio, for the Weekly Read due.
-        A number left blank is written as null, which is not reported and never zero. Giving them again writes the
-        record again, whole."""
+        """The numbers and comments the Founder read for one post in a platform's Studio, for the Weekly Read due,
+        and the day he says the post went out. A number left blank is written as null, which is not reported and never
+        zero. Giving them again writes the record again, whole."""
         found = next((asked for asked in self.look().asked if asked.key == key), None)
         if found is None:
             raise Refused(["the Weekly Read due does not ask for this post, so nothing was saved"])
@@ -662,7 +665,10 @@ class Sitting:
             for number, label in found.numbers
         }
         comments = comment_lines(given.get(COMMENT_TEXT, ""), reasons)
+        posted_on = a_day(given.get("posted_on", ""), "The day it went out", self.today(), True, reasons)
         read_on = a_day(given.get("read_on", ""), "The day you read them", self.today(), True, reasons)
+        if posted_on and read_on and posted_on > read_on:
+            reasons.append(f"The day it went out, {posted_on}, is after the day you read them, {read_on}")
         if not reasons and comments is None and all(value is None for value in numbers.values()):
             reasons.append(
                 "give at least one number or a comment; to give nothing for this post, leave it for later, and it is"
@@ -676,6 +682,7 @@ class Sitting:
             "day": found.day,
             "numbers": numbers,
             "comments": comments,
+            "posted_on": posted_on,
             "read_on": read_on,
             "recorded_at": self.now().isoformat(),
         }

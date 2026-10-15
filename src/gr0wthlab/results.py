@@ -7,12 +7,15 @@ post the read covers, on the platform the calendar names as the one whose metric
 the floor, the numbers the pre-registered signals and kill criteria of the read's posts on that platform name, since
 read-the-results.md ranks each post against the others in the bank on its own metric, and its comments, since comment
 content is a first-class result. It writes the ask into the Review Queue, where the sitting page finds it, and queues
-one notice that lists it. The Founder gives each post's numbers on the page, one post at a time (founder.RESULTS);
-the next run takes each record in as Evidence for that post, with the date he read the numbers as its source.
+one notice that lists it. The Founder gives each post's numbers on the page, one post at a time (founder.RESULTS),
+with the day it went out; the next run takes each record in as Evidence for that post, with the date he read the
+numbers as its source.
 
-A number he left blank is not reported, never zero, and nothing here estimates one. A post he gave nothing for is
-not reported, never taken to be not posted: nothing reads back what was posted. No follower count, and no number
-that no signal, kill criterion, or read rule names, is asked for or kept.
+A number he left blank is not reported, never zero, and nothing here estimates one. Nothing reads back what was
+posted, so the day a post went out is only ever the one he gives: until he gives it, the calendar's day is the day
+the post was planned, never the day it was posted, and a post he gave nothing for is not reported, never taken to be
+not posted. No follower count, and no number that no signal, kill criterion, or read rule names, is asked for or
+kept.
 
 The floor is the one number of `read-the-results.md` the launcher reads itself (floor_from), since it checks the memo
 against it; it counts each platform's views, the Founder's decision of 2026-10-14, and every memo says so.
@@ -168,7 +171,7 @@ class Ask:
 
     platform: str
     day: int
-    on: date
+    planned: date  # the calendar's day for the post; the day it went out is only ever the one the Founder gives
     angle: str | None
     pair: str | None
     leg: str | None
@@ -189,7 +192,7 @@ class Ask:
             "platform": self.platform,
             "studio": STUDIO[self.platform],
             "day": self.day,
-            "date": self.on.isoformat(),
+            "planned": self.planned.isoformat(),
             "angle": self.angle,
             "pair": self.pair,
             "leg": self.leg,
@@ -398,8 +401,9 @@ def take(store: Store, read: Read, run_id: str, now: datetime) -> Taken:
 
 
 def post_evidence(read: Read, number: int, asked: Sequence[Ask], taken: Taken) -> dict[str, object]:
-    """One post's Evidence for one read: each platform it was asked on or given for, each number given or not
-    reported, never zero, and the Founder's record with the date he read the numbers as the source."""
+    """One post's Evidence for one read: each platform it was asked on or given for, the day the Founder says it went
+    out there, each number given or not reported, never zero, and the Founder's record with the date he read the
+    numbers as the source."""
     platforms = {ask.platform: ask for ask in asked}
     for platform, day in taken.given:
         if day == number:
@@ -411,6 +415,7 @@ def post_evidence(read: Read, number: int, asked: Sequence[Ask], taken: Taken) -
         names += [name for name in (given.result.numbers if given else {}) if name not in names]
         shown[platform] = {
             "judges_this_post": ask is not None,
+            "posted_on": given.result.posted_on if given else None,
             "numbers": {name: given.value(name) if given else None for name in names},
             "not_reported": [name for name in names if not given or given.value(name) is None],
             "comments_given": len(given.result.comments) if given and given.result.comments is not None else None,
@@ -492,6 +497,7 @@ def notice(read: Read, paths: Mapping[str, str]) -> tuple[str, str, str, str]:
         f"The {read.name} covers days {read.covered[0]} to {read.covered[-1]}.",
         "Give each post's numbers on the sitting page, where it asks for them one post at a time, then start a run"
         " (`src/bin/gr0wthlab run`) so the Weekly Read takes them in.",
+        "Each post is listed by the day the calendar planned it; give the day it went out beside its numbers.",
         "Each post is asked for only on the platform the calendar names as the one that judges it, and only the"
         " numbers the pre-registered signals and kill criteria of the read's posts on that platform name, since each"
         " post is ranked against the others there, with its views for the floor and its comments.",
@@ -507,7 +513,10 @@ def notice(read: Read, paths: Mapping[str, str]) -> tuple[str, str, str, str]:
         lines.append("")
         for ask in asks:
             labels = ", ".join(LABELS[platform][number] for number in ask.numbers)
-            lines.append(f"- {ask.label()}, posted {ask.on:%A %Y-%m-%d}: {labels}, and the text of its comments.")
+            lines.append(
+                f"- {ask.label()}, planned for {ask.planned:%A %Y-%m-%d}: the day it went out, {labels}, and the text"
+                " of its comments."
+            )
         lines.append("")
     if read.problems:
         lines.append("What could not be asked:")

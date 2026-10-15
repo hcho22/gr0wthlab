@@ -252,14 +252,14 @@ class TakeTest(unittest.TestCase):
         self.assertIn(weekly_read.CANNOT_TELL, memo)
         # Each post's row has every number asked of its platform, its own Angle's and the ones it is ranked on.
         self.assertIn(
-            "| 5 | P05 | TikTok (readable) | Video views: 320 (n=1); Watched full video, in percent: 35% (n=1);"
-            " Comments: 4 (n=1) | 1 comment | 2026-10-25 |",
+            "| 5 | P05 | TikTok (readable) | 2026-10-23 | Video views: 320 (n=1); Watched full video, in percent: 35%"
+            " (n=1); Comments: 4 (n=1) | 1 comment | 2026-10-25 |",
             memo,
         )
         self.assertIn("in percent: 55% (n=1); Comments: 3 (n=1) | 3 comments | 2026-10-25 |", memo)
         self.assertIn(exchange.THIRD_PARTY, memo)
         # Day 3's comment text was not given, and day 1's views are under the floor: each row says which.
-        self.assertIn("| 3 | P03 (AB-2 leg A) | YouTube Shorts (readable) | Views: 900 (n=1);", memo)
+        self.assertIn("| 3 | P03 (AB-2 leg A) | YouTube Shorts (readable) | 2026-10-21 | Views: 900 (n=1);", memo)
         self.assertIn("in percent: 81% (n=1); Comments: 2 (n=1) | none given | 2026-10-25 |", memo)
         self.assertIn("| 1 | P01 (AB-1 leg A) | TikTok (unread: under the floor) |", memo)
 
@@ -315,6 +315,37 @@ class TakeTest(unittest.TestCase):
         self.assertEqual(
             found.why, "the Founder has decided items of the window 1 day-7 Weekly Read, so its memo stands as it is"
         )
+
+
+class PostedTest(unittest.TestCase):
+    """The day a post went out is the one the Founder gave on the sitting page; before he gives it, the brief calls the
+    calendar's day the day it was planned, never posted, and the memo says the day it went out is not reported."""
+
+    def setUp(self):
+        self.lab = Lab([record(1, views=412), record(2, views=900, posted_on="2026-10-21")])
+        self.addCleanup(self.lab.close)
+
+    def test_the_brief_gives_the_day_each_post_went_out(self):
+        brief = "\n".join(weekly_read.brief_lines(self.lab.plan(), Path("/w"), Path("/m"), ""))
+        self.assertIn("- day 1 (P01, AB-1 leg A), TikTok, posted 2026-10-19, read on 2026-10-25:", brief)
+        self.assertIn("- day 2 (P02), TikTok, posted 2026-10-21 (planned for 2026-10-20), read on 2026-10-25:", brief)
+        self.assertIn("- day 3 (P03, AB-2 leg A), YouTube Shorts, planned for 2026-10-21, nothing given:", brief)
+        self.assertIn("- day 4 (P04), YouTube Shorts, planned for 2026-10-22, nothing given:", brief)
+        self.assertEqual(brief.count(", posted "), 2, "only the two posts given a day are said to be posted")
+
+    def test_the_memo_s_table_gives_the_day_each_post_went_out(self):
+        rows = weekly_read.result_rows(self.lab.plan(), [1, 2, 3])
+        self.assertEqual(rows[0], "| Day | Angle | Judged on | Posted | Numbers | Comment text given | Read on |")
+        self.assertTrue(rows[2].startswith("| 1 | P01 (AB-1 leg A) | TikTok (readable) | 2026-10-19 | Video views:"))
+        self.assertTrue(rows[3].startswith("| 2 | P02 | TikTok (readable) | 2026-10-21 | Video views:"))
+        self.assertTrue(
+            rows[4].startswith(
+                "| 3 | P03 (AB-2 leg A) | YouTube Shorts (unread: views not given) | not reported | Views: not"
+                " reported;"
+            ),
+            rows[4],
+        )
+        self.assertNotIn("2026-10-22", "\n".join(weekly_read.result_rows(self.lab.plan(), [4])), "day 4's planned day")
 
 
 class NumberTest(unittest.TestCase):

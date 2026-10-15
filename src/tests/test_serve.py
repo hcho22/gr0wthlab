@@ -1041,22 +1041,37 @@ class ResultsServeTest(ServeTestCase):
         page = Seen(body)
         self.assertIn("Day 3 in YouTube Studio", page.said)
         self.assertIn("Numbers 3 of 5", page.said)
-        names = [attrs["name"] for attrs in page.named("input") if attrs.get("type") == "text"]
-        self.assertEqual(names, ["views", "viewed_percent", "comments", "read_on"])
+        inputs = {attrs["name"]: attrs.get("value") for attrs in page.named("input") if attrs.get("type") == "text"}
+        self.assertEqual(list(inputs), ["posted_on", "views", "viewed_percent", "comments", "read_on"])
+        self.assertEqual(inputs["posted_on"], "2026-10-07", "filled in with the day the calendar planned it")
+        self.assertIn("Planned for 2026-10-07, P03, AB-2 leg A.", page.said)
         self.assertEqual([attrs["name"] for attrs in page.named("textarea")], ["comment_text"])
         before = self.unwritten()
-        refused = self.post("/result/youtube-3", {"views": "950", "read_on": DAY}, Origin="http://evil.example")
+        refused = self.post(
+            "/result/youtube-3",
+            {"views": "950", "posted_on": "2026-10-07", "read_on": DAY},
+            Origin="http://evil.example",
+        )
         self.assertEqual(refused[0], 403)
         self.assertEqual(self.unwritten(), before)
         path, shown = self.follow(
             self.post(
-                "/result/youtube-3", {"views": "950", "viewed_percent": "72.5", "read_on": DAY, "comment_text": ""}
+                "/result/youtube-3",
+                {
+                    "views": "950",
+                    "viewed_percent": "72.5",
+                    "posted_on": "2026-10-08",
+                    "read_on": DAY,
+                    "comment_text": "",
+                },
             )
         )
         self.assertTrue(path.startswith("/result/youtube-3?saved=window-1-read-07-youtube-day-03"))
         self.assertIn("You gave these on " + DAY, shown.said)
+        self.assertIn("Posted 2026-10-08, planned for 2026-10-07, P03, AB-2 leg A.", shown.said)
         record = json.loads((self.exchange / "results/window-1-read-07-youtube-day-03.json").read_text())
         self.assertEqual(record["numbers"], {"views": 950, "viewed_percent": 72.5, "comments": None})
+        self.assertEqual(record["posted_on"], "2026-10-08")
         self.assertIn("saved founder/results/window-1-read-07-youtube-day-03.json", self.said.getvalue())
 
     def test_a_post_asked_for_its_comment_count_keeps_the_count_and_the_text_apart(self):
@@ -1074,6 +1089,7 @@ class ResultsServeTest(ServeTestCase):
                     "views": "1,400",
                     "comments": "2",
                     "comment_text": "one missed day and I quit\nSame here",
+                    "posted_on": "2026-10-06",
                     "read_on": DAY,
                 },
             )
@@ -1084,12 +1100,15 @@ class ResultsServeTest(ServeTestCase):
 
     def test_a_refused_figure_keeps_what_was_typed_and_says_why(self):
         self.serve()
-        status, _, body = self.post("/result/tiktok-1", {"views": "1.2K", "watched_full_percent": "31", "read_on": DAY})
+        status, _, body = self.post(
+            "/result/tiktok-1",
+            {"views": "1.2K", "watched_full_percent": "31", "posted_on": "2026-10-06", "read_on": DAY},
+        )
         self.assertEqual(status, 422)
         page = Seen(body)
         self.assertIn("Video views: give the exact number the Studio shows for the post", page.said)
         typed = {attrs["name"]: attrs.get("value") for attrs in page.named("input") if attrs.get("type") == "text"}
-        self.assertEqual(typed["views"], "1.2K")
+        self.assertEqual((typed["views"], typed["posted_on"]), ("1.2K", "2026-10-06"))
         self.assertFalse((self.exchange / "results/window-1-read-07-tiktok-day-01.json").exists())
 
 

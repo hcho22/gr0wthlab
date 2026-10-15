@@ -1338,9 +1338,11 @@ def give_results(
     read_on: str = "2026-10-18",
     texts=None,
     window: int = 1,
+    posted_on: str | None = None,
     **numbers,
 ) -> Path:
-    """The Founder's record of one post's numbers for a Weekly Read, as the sitting page writes it."""
+    """The Founder's record of one post's numbers for a Weekly Read, as the sitting page writes it; the post went out
+    on the day he read them unless another day is given."""
     from gr0wthlab import exchange
 
     record = {
@@ -1351,6 +1353,7 @@ def give_results(
         "day": day,
         "numbers": numbers,
         "comments": texts,
+        "posted_on": posted_on or read_on,
         "read_on": read_on,
         "recorded_at": f"{read_on}T18:30:00-07:00",
     }

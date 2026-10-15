@@ -375,21 +375,21 @@ class ViewTest(unittest.TestCase):
         sent = {"item": "20261011-message-creator-desk-reset", "sent_on": "2026-10-10", "replied_on": None}
         counts = {"product": "RepToday", "date": "2026-10-11", "invitations_sent": 8, "accepted": None}
         result = {"platform": "tiktok", "day": 2, "read": 7, "numbers": {"views": 1400, "comments": 2}}
-        result.update(comments=["one missed day and I quit", "Same here"], read_on="2026-10-14")
+        result.update(comments=["one missed day and I quit", "Same here"], posted_on="2026-10-06", read_on="2026-10-14")
         for kind, stem, record, words in (
             (
                 "results",
                 "window-1-read-07-tiktok-day-02",
                 result,
-                "Day 2 on TikTok, for the day-7 Weekly Read: views 1400, comments 2; the text of 2 comments; read on"
-                " 2026-10-14.",
+                "Day 2 on TikTok, for the day-7 Weekly Read: posted on 2026-10-06; views 1400, comments 2; the text of"
+                " 2 comments; read on 2026-10-14.",
             ),
             (
                 "results",
                 "window-1-read-07-tiktok-day-02",
                 dict(result, numbers={"views": 1400, "comments": None}, comments=None),
-                "Day 2 on TikTok, for the day-7 Weekly Read: views 1400, comments not reported; no comment text; read"
-                " on 2026-10-14.",
+                "Day 2 on TikTok, for the day-7 Weekly Read: posted on 2026-10-06; views 1400, comments not reported;"
+                " no comment text; read on 2026-10-14.",
             ),
             (
                 "sittings",

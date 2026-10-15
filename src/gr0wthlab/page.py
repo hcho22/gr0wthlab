@@ -236,7 +236,7 @@ def saved_words(saved: Saved) -> str:
         told = f"the text of {plural(len(comments), 'comment')}" if isinstance(comments, list) else "no comment text"
         return (
             f"Day {record.get('day')} on {PLATFORMS.get(str(record.get('platform')), record.get('platform'))}, for the"
-            f" day-{record.get('read')} Weekly Read:"
+            f" day-{record.get('read')} Weekly Read: posted on {record.get('posted_on')};"
             f" {given or 'no number'}; {told}; read on {record.get('read_on')}."
         )
     if saved.kind == founder.OUTREACH:
@@ -761,14 +761,17 @@ class Page:
         saved: Saved | None = None,
         last: tuple[Saved, Entry] | None = None,
     ) -> str:
-        """One post the Weekly Read due asks for: what to give and where it shows, then a field for each number and
-        one for the comments. Everything the queue's ask says is shown as text."""
+        """One post the Weekly Read due asks for: what to give and where it shows, then a field for the day it went
+        out, prefilled with the day the calendar planned it, one for each number, and one for the comments. Everything
+        the queue's ask says is shown as text."""
         step = (RESULT, asked.key)
         ask = asked.ask
         studio = str(ask.get("studio", ""))
         record = asked.record
+        planned = str(ask.get("planned", ""))
         if typed is None:
-            typed = {"read_on": record.read_on if record else state.day}
+            typed = {"posted_on": record.posted_on if record else planned}
+            typed["read_on"] = record.read_on if record else state.day
             if record is not None:
                 for number, _ in asked.numbers:
                     value = record.numbers.get(number)
@@ -777,6 +780,12 @@ class Page:
         angle = str(ask.get("angle") or "no Angle")
         if ask.get("pair"):
             angle += f", {ask['pair']} leg {ask.get('leg')}"
+        if record is None:
+            when = f"Planned for {planned}"
+        elif record.posted_on == planned:
+            when = f"Posted {record.posted_on}"
+        else:
+            when = f"Posted {record.posted_on}, planned for {planned}"
         given = (
             tag("p", f"You gave these on {record.read_on}; giving them again replaces them.", class_="meta")
             if record
@@ -796,7 +805,7 @@ class Page:
                 class_="eyebrow facts",
             ),
             tag("h1", f"Day {asked.day} in {studio}"),
-            tag("p", f"Posted {ask.get('date')}, {angle}."),
+            tag("p", f"{when}, {angle}."),
             tag("p", f"Asked for: {ask.get('why')}."),
             tag(
                 "p",
@@ -808,6 +817,15 @@ class Page:
             class_="sheet",
         )
         fields = [
+            self.small_field(
+                "posted_on",
+                "The day it went out",
+                typed.get("posted_on", ""),
+                f"YYYY-MM-DD; the calendar planned it for {planned}",
+                True,
+            )
+        ]
+        fields += [
             self.small_field(number, label, typed.get(number, ""), "As the Studio shows it, or leave it blank")
             for number, label in asked.numbers
         ]

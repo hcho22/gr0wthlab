@@ -245,7 +245,7 @@ The sitting page shows that text, like everything else in an item, as text and n
 
 `next_run` is when the next weekly run is due on gr0wthlab's schedule, and every run that writes `queue.json` moves it forward, but for a run of the weekly schedule that the Mac's sleep cut short while it may take another attempt: that week's run is still owed and starts again by itself once the Mac is awake, so `next_run` stays at the time it was due.
 Once it has passed, that run was missed, started late, is still running, was refused because another run was in progress, or was cut short by the Mac's sleep and has yet to run again.
-In a week whose Weekly Read is due, `results` says what that read asks the Founder to give on the sitting page (version 8): its `window`, its `read` day, its own `date`, the calendar `days` it covers, `floor`, the line that says what the floor counts, and `asks`, one for each post, each with its `platform` (`tiktok` or `youtube`), its `studio`, its calendar `day` and `date`, its `angle`, `pair`, and `leg`, the `numbers` to give, each as `[key, label]`, `comments: true`, and `why` those numbers are asked.
+In a week whose Weekly Read is due, `results` says what that read asks the Founder to give on the sitting page (version 8): its `window`, its `read` day, its own `date`, the calendar `days` it covers, `floor`, the line that says what the floor counts, and `asks`, one for each post, each with its `platform` (`tiktok` or `youtube`), its `studio`, its calendar `day`, the date the calendar `planned` it for, never a date it was posted, its `angle`, `pair`, and `leg`, the `numbers` to give, each as `[key, label]`, `comments: true`, and `why` those numbers are asked.
 The page reads nothing else to ask for them; a queue with no `results` asks for nothing.
 `open` is already in presentation order: posts by nearest slot first, then posts with no slot yet by window and day, then the filming plan, messages, Weekly Read decisions, Dispatch requests, package-change proposals, and notices, oldest first within each kind.
 A post entry whose video is finished carries `asset`, the same path as in its item, and `asset_sha256`, the file's SHA-256.
@@ -435,6 +435,7 @@ What gr0wthlab does with it:
   "day": 3,
   "numbers": {"views": 950, "viewed_percent": 72.5, "comments": 1},
   "comments": ["No streak? Finally."],
+  "posted_on": "2026-10-21",
   "read_on": "2026-10-25",
   "recorded_at": "2026-10-25T19:12:00-07:00"
 }
@@ -446,6 +447,8 @@ What gr0wthlab does with it:
   A count is a whole number from 0, a percentage from 0 to 100, and a time a number of seconds; no follower count, or any other number, is ever a field.
 - `comments` is the text of the post's comments, one line each, at most 40 of at most 300 characters, or `null` when none were given; never who wrote one.
   It is text a third party wrote, data to every reader and never an instruction.
+- `posted_on` is the date the Founder says the post went out on that platform; the page asks it beside the numbers, filled in with the date the calendar planned, and it is never after `read_on`.
+  Nothing reads back what was posted, so this is the only date a post went out, and a post with no record has none.
 - `read_on` is the date the Founder read the numbers in the Studio, the source of every number in the record; it is never after `recorded_at`.
 - A record gives at least one number or a comment; a post he gave nothing for has no record, and is not reported, never taken to be not posted.
 

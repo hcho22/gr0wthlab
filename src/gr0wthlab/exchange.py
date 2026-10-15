@@ -595,8 +595,8 @@ def result_stem(window: int, read: int, platform: str, day: int) -> str:
 @dataclass(frozen=True)
 class Result:
     """What the Founder gave for one post on one platform for one Weekly Read: each number he gave, and None for one
-    he left blank, which is not reported and never zero; the comments he gave, or None when he gave none; and the date
-    he read them in the platform's Studio, which is their source."""
+    he left blank, which is not reported and never zero; the comments he gave, or None when he gave none; the date he
+    says the post went out; and the date he read them in the platform's Studio, which is their source."""
 
     window: int
     read: int
@@ -604,6 +604,7 @@ class Result:
     day: int
     numbers: Mapping[str, float | int | None]
     comments: tuple[str, ...] | None
+    posted_on: str
     read_on: str
     recorded_at: str
 
@@ -667,6 +668,7 @@ def parse_result(stem: str, data: object) -> tuple[Result | None, list[str]]:
             comments = tuple(text for text in texts if text)
     if not problems and all(value is None for value in given.values()) and comments is None:
         problems.append("the record gives no number and no comment")
+    posted_on = data.get("posted_on")
     read_on = data.get("read_on")
     recorded_at = data.get("recorded_at")
     recorded = parse_datetime(recorded_at) if isinstance(recorded_at, str) else None
@@ -676,6 +678,10 @@ def parse_result(stem: str, data: object) -> tuple[Result | None, list[str]]:
         problems.append("read_on must be the YYYY-MM-DD date the Founder read the numbers")
     elif recorded is not None and date.fromisoformat(read_on) > recorded.date():
         problems.append("read_on is after the day the record was made")
+    if not isinstance(posted_on, str) or not valid_date(posted_on):
+        problems.append("posted_on must be the YYYY-MM-DD date the Founder says the post went out")
+    elif isinstance(read_on, str) and valid_date(read_on) and posted_on > read_on:
+        problems.append("posted_on is after read_on, the day the numbers were read")
     if problems:
         return None, problems
-    return Result(window, read, platform, day, given, comments, read_on, recorded_at), []
+    return Result(window, read, platform, day, given, comments, posted_on, read_on, recorded_at), []
