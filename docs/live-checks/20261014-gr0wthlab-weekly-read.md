@@ -117,6 +117,51 @@ Each boundary check: 45 steps to prove, among them `founder-results` by the file
 - Mandu's gr0wthlab-reader, built for version 7, was not run against version 8; by the exchange's rules it finds each version-8 record newer than it knows and acts on nothing in it.
 - A scheduled run, the real production clone, and a browser other than Chrome.
 
+## Second round: the re-check after the merge with `main`
+
+Before this work was validated, `main` gained #22, #23, and #24, and one ordinary merge commit brought them in: `3a17b77652bb91e3cdd4162b1de9790b82720d97` (`src` tree `c06356769a8667e837d034f0aff3564dbc86d4be`, `config` tree `74f0fa22a012c321a572f8297a3449401026ebb8`).
+#23 added an ADR 0003 of its own, so this work's ADRs are now 0004, 0005, and 0006, and ADR 0006 records the Founder's decision of 2026-10-14, "weekly read - type".
+This work as it is now is `5a7440884f0cc785f32d2c4b8244b62b8a2ecadb` (`src` tree `75be1d7cfa72cf009531f293e0fbb078041bf351`, `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`): after the merge its commits change only documents, comments, the scheduling service's reason in `config/run.json`, and one test's expected path.
+Every check below ran on 2026-10-15, Mac local time (PDT), with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort.
+
+### What the merge needed
+
+- #23 made the Instructions in force and the example sets forbidden targets, beside this work's sixth folder of the Founder's records, so the check now has seventeen targets.
+- An example's lab made the Founder's folders from a list of its own in `src/gr0wthlab/examples.py`, without `results/`, so every lab's run refused to start; it now uses `boundary.FOUNDER_KINDS`.
+- A lab's run for another workflow filed the Weekly Read's floor proposal, which package review's example 8 read as a proposal of its own; a lab for another workflow now files neither that proposal nor the Weekly Read's notice (`Cycle.lab_of_another`), and `test_an_example_s_lab_for_another_workflow_files_none_of_the_weekly_read_s_items` failed without it.
+- The Weekly Read has no Instructions of its own, so the gate never re-runs its example set; its deterministic assertions run in the unit tests as before.
+
+### A new recorded probe log
+
+In the throwaway clone, with its synthetic checkouts, on the merged code before the probe's tests were reworked (`src` tree `bcf5ce36ddc91f8d9b67e61a0ed0e5bbcc282968`, which differs from the merge commit's only under `src/tests/`), `src/bin/gr0wthlab boundary-check` passed at its first attempt as `20261015T145051Z-on-demand-80b6`.
+Its record: 48 steps to prove, 29 tool calls in Codex's record with no problem, 17 of 17 file-tool targets refused each in a patch of its own, 19 kernel sandbox denials, no forbidden read (the clone films nothing), and nothing changed outside the areas.
+Its Codex log is now `src/tests/fixtures/probe-logs/each-target-alone-with-results-instructions-and-examples.stderr.log`, with only the account, the clone's paths, the run, and one path Codex cut short replaced, as the fixtures' README says.
+`src/tests/test_probe.py` proves the seventeen targets on it, and holds that each earlier log proves nothing of the targets added after it.
+
+### The Weekly Read on the merged code
+
+In the same clone, moved to `5a7440884f0cc785f32d2c4b8244b62b8a2ecadb` with its configuration commit on top, day 4's comment text (three synthetic comments) was given on the sitting page in Chrome, and `src/bin/gr0wthlab run` ran as `20261015T151953Z-on-demand-d55d`.
+Two sessions ran, Package review and Weekly Read (1 min 6 s of agent time), about $0.020 in all.
+The Sources line read "0 failed, 1 changed, 20 read, 5 skipped, 1 not used", the scheduling service's row named `docs/adr/0004-posting-is-manual.md`, and the memo passed and replaced the 6 open items.
+With day 4's comments given, P04 read at risk on them ("It has no comments naming offline"), and the flex slot went to P03, which cleared its signal.
+
+### The boundary
+
+From this work's linked worktree at `5a7440884f0cc785f32d2c4b8244b62b8a2ecadb`, against Mandu and the Product checkouts as they are, with `git status` empty before the preflight and after the check, and logs in a folder of the Mac's temporary directory named with `GR0WTHLAB_LOG_DIR`; `show-config` printed the configuration fingerprint `3b9e5826d373eb0e34ccb4977e008cc27eceece333267299f2cce1972890d179`.
+
+- `src/bin/gr0wthlab preflight`, run twice at 08:19, passed both times: six areas writable, 22 paths refused, among them the six folders of the Founder's records, the Instructions in force, and the example sets; no breach; a listing of the footage place `~/Mandu/projects/RepToday` refused; and neither listed host reached from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, from 08:19:09 to 08:20:15, passed at its first attempt as `20261015T151911Z-on-demand-b4cd`: 49 steps to prove, 30 tool calls in Codex's record with no problem, 17 of 17 file-tool targets refused each in a patch of its own, 19 kernel sandbox denials and no shell target without one, the footage place's shell read refused, 1 of 1, 12 of 12 permitted sentinels written and none escaped, nothing unproven, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, each a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed outside the areas.
+
+### Tests
+
+- The whole unit suite ran under `/usr/bin/python3`, Python 3.9.6, one process for each test module: on the merge commit's tree before it was committed, and again in a linked worktree of `5a7440884f0cc785f32d2c4b8244b62b8a2ecadb`, 1456 tests in 53 modules each time, and none failed.
+- `ruff check` and `ruff format --check` on `src` and `src/bin/gr0wthlab` passed, with ruff 0.15.20.
+
+### What this round did not exercise
+
+- Everything the first round did not, which the merge leaves as it was.
+- The Instructions-change gate re-running any example on a change of this work's: no change of this work's touches a workflow's Instructions, and `src/tests/test_example_runs.py` holds every re-run example on the merged code.
+
 ## Screenshots
 
 Taken in the clone, on the page's code as it is in this work, which no change after `b149c0045ed44015320157a48e3084b0ab24edce` touched; the numbers step after run `89f1`, the rest after run `42ab`; every number, comment, and name in them is synthetic.
