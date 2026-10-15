@@ -107,3 +107,82 @@ The sample does not tell a difference of that size from the run-to-run variance 
 - A session with the real agent whose brief lists the notice of a kept Instructions change: no example set holds one, so whether the new wording keeps the agent from writing such an item rests on the unit tests that hold the brief line and on the launcher's unchanged refusal, which the whole-run test above shows.
 - The Rejection reasons session, which also carries `items.md`: it has no example set.
 - A weekly run in the production clone.
+
+## Round 2: the final guidance, with the exact-repeat sentence, on `main` as it moved
+
+Commit `0fd4683` changes one more sentence of `items.md`: the launcher refuses only an exact repeat of an open or decided item, the same kind, `# ` title, and proposal text once case and spacing are ignored (`exchange.item_hash`), so a reworded repeat is the session's own to catch.
+`main` had moved to `3789b3ffb769e64696af8cf7f0e95e414f047e43`, which changes the weekly-run Instructions too, so this round compared that commit with the same commit plus this branch's three commits, cherry-picked in a throwaway clone without conflict as `f87ee531379ce8d8b086a2be014ba7669ebcebce` (`src` tree `6d6ed98420229e2d0dcb67f9e5621a3b92ec3b2d`, `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657` on both sides).
+The two clones' `src/` differ in `report.py`, `items.md`, and four test files, and `src/instructions/` differs only by the three lines this change adds to `items.md`.
+Run on 2026-10-15 from 13:32 to 13:57 PDT for the example sets, with the same scratch script, Codex CLI and effort as round 1.
+
+### The unit suite and lint
+
+| Command | Where | What the records showed |
+| --- | --- | --- |
+| `ruff check` and `ruff format --check`, as CI runs them | the worktree at `0fd4683` | all checks passed; 101 files already formatted |
+| `/usr/bin/python3 -m unittest discover -s src/tests -t src` | the clone at `f87ee53` | 1,482 tests OK in 3,881 seconds, from 13:33 to 14:38, beside the example-set runs |
+
+### The example sets, with the real agent
+
+Each example of both sets once on each side, from 13:32 to 13:39 (lab run identifiers after `20261011T230000Z-on-demand-`):
+
+| Set | Example | `main` run | `main` checks held | change run | change checks held |
+| --- | --- | --- | --- | --- | --- |
+| Package review | 1 | `c32a` | 2 of 2 | `f09f` | 2 of 2 |
+| Package review | 2 | `7191` | 2 of 2 | `8b73` | 2 of 2 |
+| Package review | 3 | `35b3` | 1 of 2 | `669a` | 2 of 2 |
+| Package review | 4 | `1e8e` | 2 of 2 | `a940` | 1 of 2 |
+| Package review | 5 | `9c6a` | 2 of 2 | `c0c1` | 2 of 2 |
+| Package review | 6 | `f216` | 2 of 2 | `3399` | 2 of 2 |
+| Package review | 7 | `11f7` | 2 of 2 | `ab8d` | 2 of 2 |
+| Package review | 8 | `a373` | 1 of 2 | `def3` | 2 of 2 |
+| Package review | 9 | `dc7b` | 1 of 2 | `9aa6` | 1 of 2 |
+| Package review | 10 | `4fce` | 2 of 3 | `6007` | 2 of 3 |
+| Post Drafts | 1 | `aecb` | 4 of 4 | `036e` | 4 of 4 |
+| Post Drafts | 2 | `d03b` | 3 of 3 | `115b` | 3 of 3 |
+| Post Drafts | 8 | `ab1b` | 1 of 1 | `1229` | 1 of 1 |
+| Post Drafts | 16 | `435e` | 2 of 3 | `e5f5` | 2 of 3 |
+| Post Drafts | 17 | `3cd4` | 5 of 5 | `c046` | 5 of 5 |
+| Post Drafts | 18 | `ac0c` | 4 of 4 | `e26a` | 4 of 4 |
+| Post Drafts | 19 | `f09a` | 4 of 4 | `1e42` | 4 of 4 |
+| Post Drafts | 20 | `9b7a` | 5 of 5 | `1061` | 5 of 5 |
+| Post Drafts | 21 | `b2bd` | 3 of 3 | `2548` | 2 of 3 |
+| Post Drafts | 22 | `2ccc` | 3 of 3 | `cdf6` | 3 of 3 |
+
+Package review examples 3, 4, 8, and 10, the four round 1 re-ran, ran four more times on each side, and Post Drafts examples 16 and 21 four more times on each side, from 13:34 to 13:57; a run marked `*` did not hold every check:
+
+| Example | `main` runs | `main` all checks held, of five | change runs | change all checks held, of five |
+| --- | --- | --- | --- | --- |
+| Package review 3 | `83fd*`, `a6b6*`, `eeb7*`, `66d8*` | 0 | `3863*`, `9005`, `6d05*`, `2189` | 3 |
+| Package review 4 | `8e2b`, `1f58*`, `40cc`, `bf0e` | 4 | `d460`, `a2e9`, `e257*`, `a2b5*` | 2 |
+| Package review 8 | `4131*`, `ba40`, `3e5e*`, `d061*` | 1 | `9a14`, `22bf`, `dcbc*`, `8f69*` | 3 |
+| Package review 10 | `459b*`, `8a9b*`, `ac07*`, `9749*` | 0 | `98aa*`, `991b*`, `d603*`, `4073*` | 0 |
+| Post Drafts 16 | `0102*`, `63d5*`, `4ae1*`, `7dd4*` | 0 | `9e8d*`, `2969*`, `f2c8*`, `e19e*` | 0 |
+| Post Drafts 21 | `c859*`, `16f6`, `4234`, `02d4*` | 3 | `0405`, `83ae`, `5d63`, `0adc*` | 3 |
+
+Over five runs each, the four Package review examples held every check 5 of 20 times on `main` and 8 of 20 with the change.
+Post Drafts example 21 held every check 3 of 5 times on each side; in each run of it that did not, on either side, the session's closing line says it wrote no package-change proposal because the quote record it took a Hook change to need was absent.
+Example 16 held 0 of 5 on each side, as in round 1.
+No session's event record, on either side, holds a patch that adds a `supersedes:` line.
+
+The launcher's counts of each session, summed for each side over every run of this round:
+
+| Set and side | Sessions | Ran to their end | Closing line `Session: complete` | Package files read of those listed | Proposals queued | Draft claims with a code location, without | Agent seconds | Cost (USD, API prices) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Package review, `main` | 26 | 26 | 25 | 416 of 416 | 34 | none written | 2,316 | 0.257 |
+| Package review, change | 26 | 26 | 26 | 416 of 416 | 28 | none written | 2,016 | 0.225 |
+| Post Drafts, `main` | 18 | 18 | 11 | 198 of 198 | 5 | 22, 5 | 1,879 | 0.198 |
+| Post Drafts, change | 18 | 18 | 11 | 198 of 198 | 5 | 24, 5 | 1,820 | 0.189 |
+
+The one Package review session on `main` whose closing line was `Session: incomplete` was example 10's first run.
+Altogether this round ran 88 sessions, 8,031 seconds of agent time, about 0.87 dollars at API prices.
+
+What the numbers show: with the final guidance, the counts the launcher keeps of each session are the same or within a session's variance on both sides.
+Every example run once held every check on both sides or failed on both, except Package review 3, 4, and 8 and Post Drafts 21, which were run five times each; each of those failed on both sides, and Package review 3, 4, and 8 together held every check 5 of 15 times on `main` and 8 of 15 with the change.
+The difference between the sides in the four noisy Package review examples went toward `main` in round 1 (8 to 6 of 20) and toward the change in this round (5 to 8 of 20).
+
+### What was not exercised
+
+- A session with the real agent whose brief lists the notice of a kept Instructions change, or whose queue holds an item a reworded proposal would repeat: no example set holds either, so the wording's effect where it applies was not measured; the brief line rests on the unit tests that hold it, and both refusals on the launcher's unchanged rules.
+- The Rejection reasons session, which also carries `items.md`: it has no example set.
+- A weekly run in the production clone.
