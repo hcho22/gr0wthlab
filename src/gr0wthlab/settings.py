@@ -58,6 +58,15 @@ class Agent:
 
 
 @dataclass(frozen=True)
+class Learning:
+    """What a run may spend on an Instructions change (ADR 0003): the bound on all of the gate's agent time, and each
+    example session's own limit, in seconds."""
+
+    gate_time_limit: float
+    example_time_limit: float
+
+
+@dataclass(frozen=True)
 class Settings:
     data: Mapping
     weekly: tuple[str, str]
@@ -73,6 +82,7 @@ class Settings:
     check_every_minutes: int
     attempts_per_week: int
     shown_output_chars: int
+    learning: Learning
     not_used: tuple[Mapping, ...] = ()  # sources the Founder chose not to use, each with why
 
     def waitlist_live(self, today: date) -> bool:
@@ -131,6 +141,20 @@ def load_agent(data: object) -> Agent:
             " a run's sessions together need at least as long as one session may take"
         )
     return Agent(limit, whole)
+
+
+def load_learning(data: object) -> Learning:
+    """config/run.json's learning: the bound on the agent time one Instructions change's example set may take, and
+    the limit of each example's own session."""
+    if not isinstance(data, dict):
+        raise ConfigError(f"{RUN_CONFIG}: learning must be an object that sets gate_time_limit_seconds")
+    bound = time_limit(data.get("gate_time_limit_seconds"), "learning.gate_time_limit_seconds")
+    each = time_limit(data.get("example_time_limit_seconds"), "learning.example_time_limit_seconds")
+    if bound < each:
+        raise ConfigError(
+            f"{RUN_CONFIG}: learning.gate_time_limit_seconds, {bound:g}, is less than one example's limit, {each:g}"
+        )
+    return Learning(bound, each)
 
 
 def load_count(schedule: object, key: str, most: int, what: str) -> int:
@@ -208,6 +232,7 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
         )
         tries = load_count(data["schedule"], "attempts_per_week", MAX_ATTEMPTS, "the attempts one week's run may take")
         shown_output = load_shown_output(data.get("work_counts"))
+        learning = load_learning(data.get("learning"))
     except (KeyError, TypeError, ValueError, schedule.ScheduleError) as error:
         raise ConfigError(f"{RUN_CONFIG} is incomplete or malformed: {error}") from error
     for source in not_connected + not_used:
@@ -232,6 +257,7 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
         check,
         tries,
         shown_output,
+        learning,
         not_used,
     )
 

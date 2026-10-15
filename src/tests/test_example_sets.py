@@ -19,6 +19,15 @@ RUN = "example-run"
 SNAPSHOT_FILE = f"working/{RUN}.sources.json"
 
 
+# The checks only a re-run can hold, since they read what a whole run queued or refused, not one candidate: a
+# "queued" that names an item kind is one of them, while a Listening proposal's own "queued" names none.
+RUN_ONLY = {"nothing_queued", "nothing_set_aside", "nothing_refused", "nothing_discarded"}
+
+
+def run_only(assertion):
+    return assertion["check"] in RUN_ONLY or (assertion["check"] == "queued" and "item" in assertion)
+
+
 class ExampleSet:
     """What both sets' tests share; each set's own class is the test case."""
 
@@ -48,17 +57,23 @@ class ExampleSet:
         self.assertEqual(ids, list(range(1, len(ids) + 1)))
         self.assertGreaterEqual(len(ids), 10)
         for example in self.data["evals"]:
-            self.assertEqual(sorted(example), ["assertions", "expected_output", "files", "id", "prompt"])
+            keys = ["assertions", "expected_output", "files", "id", "prompt"] + (["run"] if "run" in example else [])
+            self.assertEqual(sorted(example), keys)
+            self.assertTrue(example["files"] or "run" in example, example["id"])
             self.assertTrue(all((self.folder / name).is_file() for name in example["files"]), example["id"])
             kinds = {assertion["kind"] for assertion in example["assertions"]}
             self.assertLessEqual(kinds, {"deterministic", "judged"})
             self.assertIn("deterministic", kinds)
 
-    def test_every_deterministic_assertion_holds(self):
+    def test_every_deterministic_assertion_holds_of_each_candidate(self):
+        """Each example with a candidate holds of it here; one the agent re-runs with no candidate holds in its own
+        lab (test_example_runs.py), as do the re-run checks of what a whole run queued."""
         for example in self.data["evals"]:
+            if not example["files"]:
+                continue
             outcome = self.outcome(example)
             for assertion in example["assertions"]:
-                if assertion["kind"] != "deterministic":
+                if assertion["kind"] != "deterministic" or run_only(assertion):
                     continue
                 with self.subTest(example=example["id"], check=assertion["check"]):
                     self.assertTrue(self.holds(assertion, outcome), outcome.get("said"))

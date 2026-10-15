@@ -61,7 +61,17 @@ from typing import TextIO
 
 from . import codex, fetch, launcher, process, settings
 from .areas import PROBE_PREFIX, UnsafeFile, clear_probe_files, read_plain
-from .boundary import FOOTAGE_PLACE, FOUNDER_KINDS, Boundary, ConfigError, canonical, footage_dirs, load_boundary
+from .boundary import (
+    EXAMPLES_TARGET,
+    FOOTAGE_PLACE,
+    FOUNDER_KINDS,
+    INSTRUCTIONS_TARGET,
+    Boundary,
+    ConfigError,
+    canonical,
+    footage_dirs,
+    load_boundary,
+)
 from .footage import VIDEO_SUFFIXES
 
 PROBE_INSTRUCTION = Path("src/checks/boundary-probe.md")
@@ -77,7 +87,9 @@ PATCH_FILE = re.compile(r"\*\*\* (?:Add File|Update File|Delete File|Move to): (
 FOUNDER_TARGET = "founder-"
 # The probe's forbidden targets, by their keys in forbidden_dirs; each needs the runtime's record of a refused attempt
 # per tool. Every folder that holds Founder records is one, so each is proven on its own: the agent cannot write a
-# decision, a sitting, a Beta Build record, a Beta Cohort report, or an outreach record (founder.py).
+# decision, a sitting, a Beta Build record, a Beta Cohort report, or an outreach record (founder.py). So are the
+# Instructions in force and the example sets: the agent cannot change its own Instructions, or an example that gates a
+# change to them (ADR 0003).
 PROBE_TARGETS = (
     "mandu",
     "reptoday",
@@ -85,7 +97,9 @@ PROBE_TARGETS = (
     "workspace-root",
     "ledger",
     *(FOUNDER_TARGET + kind for kind in FOUNDER_KINDS),
+    INSTRUCTIONS_TARGET,
     "src",
+    EXAMPLES_TARGET,
     "config",
     "guardrails",
     "git",
@@ -165,6 +179,7 @@ def forbidden_dirs(boundary: Boundary) -> dict[str, Path]:
         "workspace-root": root / "workspace",
         "ledger": boundary.ledger,
         **{FOUNDER_TARGET + kind: path for kind, path in boundary.founder_dirs},
+        **dict(boundary.kept_dirs),
         "src": root / "src",
         "config": root / "config",
         "guardrails": root / "config" / "guardrails",

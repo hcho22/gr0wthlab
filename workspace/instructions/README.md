@@ -1,17 +1,9 @@
-# Instructions
+# Instructions changes
 
-The Marketing Engineer's own working guidance and per-workflow example sets, which it may refine from execution-related rejection reasons.
-Every kept refinement is shown to the Founder at the next sitting.
-Instructions are not Guardrails and cannot loosen one; strategy belongs in Mandu, so a strategy-related rejection becomes a package-change proposal instead.
-Format: US-ME16.
+The Marketing Engineer's Instructions area (Guardrail G1): where the agent proposes a change to its own Instructions, never where they are kept.
+The Instructions in force are in [`ledger/instructions/`](../../ledger/instructions/README.md), which the agent can read and never write.
 
-- [`package-review.md`](package-review.md): finding contradictions inside a Go-To-Market Package and writing each as one package-change proposal (US-ME04).
-- [`post-drafts.md`](post-drafts.md): turning one calendar day of the 14-day kit into a post Draft: beats, captions, claims, and voice (US-ME08).
-- [`filming.md`](filming.md): turning the Founder's raw footage into an edit record: choosing source ranges from measured facts alone, and keeping pair legs on the same footage (US-ME09).
-- [`beta-recruiting.md`](beta-recruiting.md): writing the Beta Cohort invitation and the Waitlist ask once the Founder's gate is recorded: identity framing, the recorded first session, and no scarcity (US-ME15).
-- [`listening.md`](listening.md): turning what the launcher fetched into quote records, and when a new Angle, a new Hook, or a reply is worth proposing (US-ME13).
-- [`outreach.md`](outreach.md): writing the personal-network ask, the messages to creators, and the one follow-up (US-ME14).
-
-Until US-ME16 builds the reviewed way to refine this guidance, the launcher puts back any change a run makes in this folder and says so in the run report.
-
-Each workflow's canonical example set lives in `src/examples/`, out of the agent's reach, [`post-drafts`](../../src/examples/post-drafts/README.md), [`filming`](../../src/examples/filming/README.md), [`beta-recruiting`](../../src/examples/beta-recruiting/README.md), [`listening`](../../src/examples/listening/README.md), and [`outreach`](../../src/examples/outreach/README.md); the runner that re-runs them on every Instructions change arrives with US-ME16.
+Only the session that codes the Founder's rejection reasons may leave a file here: `<workflow>.md`, the whole proposed text of that workflow's Instructions, under front matter that names the workflow, the execution-coded rejection reasons it answers, and a one-line summary.
+Once the last session has ended, the launcher checks it, re-runs that workflow's example set with the text in force and with the proposed text, and writes the proposed text into `ledger/instructions/` only when no example got worse ([ADR 0003](../../docs/adr/0003-instructions-change-only-through-their-example-set.md)).
+It removes the file either way.
+Anything else written here, and anything any other session writes here, is put back as it was after that session.

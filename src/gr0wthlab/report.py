@@ -19,6 +19,7 @@ from . import (
     beta,
     exchange,
     filming,
+    instructions,
     learning,
     listening,
     outreach,
@@ -53,6 +54,11 @@ class SourceLine:
     status: str
     detail: str = ""
     needed_by: tuple[str, ...] = ()
+
+    @property
+    def failure(self) -> str:
+        """What became of a failed source, as the run report and the notice say it."""
+        return "could not be used" if self.status == package.UNUSABLE else "could not be read"
 
 
 @dataclass(frozen=True)
@@ -140,6 +146,7 @@ class RunState:
     learning: learning.Result | None = None
     learning_problem: str = ""  # why the rejection reasons were not read or coded, when they were not
     guidance: learning.Guidance | None = None  # the agent's Instructions as they were before it started
+    instructions: instructions.Outcome | None = None  # what this run did about the Instructions (ADR 0003)
     put_back: list[str] = field(default_factory=list)  # each change to them the launcher undid, and after which session
     # what a stopped boundary check had left in the areas, removed before the Instructions were remembered
     probe_files_removed: list[str] = field(default_factory=list)
@@ -167,7 +174,8 @@ class RunState:
         return lateness is not None and lateness > self.late_after
 
     def failed_sources(self) -> list[SourceLine]:
-        return [line for line in self.sources if line.status == package.FAILED]
+        """Every source that could not be read, and every one that was read and could not be used."""
+        return [line for line in self.sources if line.status in (package.FAILED, package.UNUSABLE)]
 
     def session(self, key: str) -> Session | None:
         """One workflow's session, or None when this run planned none, as before its sessions are planned."""
@@ -702,6 +710,9 @@ def render_brief(
         lines += [""] + outreach.brief_lines(state.outreach, context, mandu, check)
     if key == learning.WORKFLOW:
         lines += [""] + learning.brief_lines(state.reasons, workspace)
+        if state.instructions is not None:
+            offered, why = state.instructions.offer, state.instructions.offer_why
+            lines += [""] + instructions.brief_lines(offered, why, state.reasons, workspace, repo_root, check)
     if key == weekly_read.WORKFLOW and state.weekly is not None:
         lines += [""] + weekly_read.brief_lines(state.weekly, workspace, mandu, check)
     lines += ["", "## Where to write", ""]
@@ -909,6 +920,9 @@ def sessions_lines(state: RunState) -> list[str]:
         " of a run's sessions together."
     )
     lines.append(f"- {cost_line(state)}")
+    change = state.instructions.change if state.instructions is not None else None
+    if change is not None and change.gate is not None:
+        lines.append(f"- Beside these, the Instructions change's example set: {change.gate.cost_line()}")
     if ran:
         lines.append(f"- {work.claim_line(state.claims, whole_run=True)}.")
         lines.append(f"- {work.proposal_line(state.proposals, whole_run=True)}.")
@@ -1000,7 +1014,8 @@ def summary_lines(state: RunState) -> list[str]:
     outcome = state.post_outcome
     if outcome is not None:
         counts = outcome.counts()
-        lines.append(f"- Post Drafts: {', '.join(counts) or 'no calendar day was due'}.")
+        none = posts.no_day(state.posts) if state.posts else "no calendar day was due"
+        lines.append(f"- Post Drafts: {', '.join(counts) or none}.")
     elif state.posts_problem:
         lines.append(f"- Post Drafts: {state.posts_problem}")
     if state.filming is not None or state.filming_problem:
@@ -1018,6 +1033,7 @@ def summary_lines(state: RunState) -> list[str]:
             lines.append(f"- {title}: {tally.account()}.")
     if state.notice:
         lines.append(f"- Problems this run are listed in the notice `{state.notice}`.")
+    lines += [f"- {line}" for line in instructions.summary_lines(state.instructions)]
     lines += [f"- {session_summary(session)}" for session in state.ran]
     lines.append(f"- {cost_line(state)}")
     return [line for line in lines if line]
@@ -1066,6 +1082,8 @@ def render_report(state: RunState) -> str:
         state.outreach, state.outreach_result, state.outreach_filing, state.outreach_problem
     )
     lines += [""] + learning.report_lines(state.learning, state.put_back)
+    if state.instructions is not None:
+        lines += [""] + instructions.report_lines(state.instructions)
     lines += ["", "## Run state", ""]
     lines += [f"- {tally.workflow}: {tally.line()}" for tally in state.tallies]
     if state.state_notes:
@@ -1189,11 +1207,13 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     sections: list[tuple[int, str, str]] = []  # how many problems, the title, the text
     failed = state.failed_sources()
     if failed:
-        lines = ["These sources could not be read, so the work that needs them is incomplete this run:"]
+        said = {line.status for line in failed}
+        what = "could not be read or used" if len(said) > 1 else failed[0].failure
+        lines = [f"These sources {what}, so the work that needs them is incomplete this run:"]
         for line in failed:
             needs = ", ".join(line.needed_by) or "nothing else"
             lines.append(bullet(f"{line.name}: {line.detail} Incomplete: {needs}."))
-        sections.append((len(failed), f"{plural(len(failed), 'source')} could not be read on {day}", "\n".join(lines)))
+        sections.append((len(failed), f"{plural(len(failed), 'source')} {what} on {day}", "\n".join(lines)))
     unusable = state.unusable_to_report()
     to_replace = [record for record in unusable if state.open_item(record)]
     if to_replace:
@@ -1249,6 +1269,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
         listening.notice_section(state.listening, state.listening_result, day),
         outreach.notice_section(state.outreach, state.outreach_result, day, state.again),
         learning.notice_section(state.learning, day),
+        instructions.notice_section(state.instructions, day),
     ):
         if section:
             sections.append(section)

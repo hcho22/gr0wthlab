@@ -221,6 +221,13 @@ def unchecked(plan: Plan) -> list[str]:
     return reasons
 
 
+def no_day(plan: Plan) -> str:
+    """Why a plan holds no day, as a run's summary says it: the calendar could not be used, or none was due."""
+    if "calendar" in plan.context.kit.problems:
+        return "no day was prepared, as the calendar could not be used"
+    return "no calendar day was due"
+
+
 def slot_for(window: Window, number: int) -> str | None:
     if window.day_1 is None or window.slot is None:
         return None
@@ -251,8 +258,13 @@ def read_kit(mandu: Path, roles: Mapping[str, str]) -> tuple[kit.Kit, dict[str, 
                 data = (mandu / relative).read_bytes()
                 texts[role] = data.decode("utf-8")
             files[role] = (relative, hashlib.sha256(data).hexdigest())
-        except (OSError, UnicodeDecodeError, kit.KitError) as error:
-            parsed.problems[role] = getattr(error, "strerror", None) or str(error)
+        except UnicodeDecodeError:
+            parsed.problems[role] = "it is not UTF-8 text"
+        except kit.KitError as error:
+            parsed.problems[role] = str(error)
+        except OSError as error:
+            parsed.problems[role] = error.strerror or str(error)
+            parsed.unread.add(role)
     parsers = (
         ("calendar", "days", kit.parse_calendar),
         ("calendar", "asset_checks", kit.parse_asset_checks),
@@ -268,6 +280,7 @@ def read_kit(mandu: Path, roles: Mapping[str, str]) -> tuple[kit.Kit, dict[str, 
             except kit.KitError as error:
                 parsed.problems[role] = str(error)
     rules_problem = parsed.problems.pop("brand_rules", "")
+    parsed.unread.discard("brand_rules")
     rules_data: object = None
     if "brand_rules" in texts:
         try:
@@ -322,7 +335,7 @@ def context_plan(
     mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
     parsed, files, rules_data, rules_problem = read_kit(mandu, roles)
     rules = None
-    if rules_data is not None:
+    if not rules_problem:
         try:
             rules = lint.Rules(rules_data)
         except lint.RulesError as error:
@@ -390,7 +403,7 @@ def prepare(
     plan.waitlist_live = config.waitlist_live(today)
     plan.posted = posted_days(ledger, plan.product, window.number, list(parsed.days))
     if "calendar" in parsed.problems:
-        plan.reason = f"The calendar could not be read ({parsed.problems['calendar']}), so no day can be prepared."
+        plan.reason = f"The calendar could not be used ({parsed.problems['calendar']}), so no day can be prepared."
         return plan
     numbers, plan.reason = target_days(window, list(parsed.days), today, config.weekly[0])
     for number in numbers:
@@ -1264,7 +1277,9 @@ def report_lines(plan: Plan | None, outcome: Outcome | None, filing: str, proble
         lines.append(f"- Every check of every Draft: `{outcome.record}`.")
     days = {day_plan.day.day: day_plan.day for day_plan in plan.days}
     if not outcome.results:
-        return lines + ["", "No calendar day was due this run."]
+        # The plan's reason, which opens this section, says why when the calendar could not be used.
+        none = "No day was prepared" if "calendar" in plan.context.kit.problems else "No calendar day was due"
+        return lines + ["", f"{none} this run."]
     lines += ["", "| Day | Angle / pair leg | Result | Detail |", "| --- | --- | --- | --- |"]
     for result in outcome.results:
         label = leg_label(days[result.day]) if result.day in days else "-"

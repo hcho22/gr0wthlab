@@ -2,11 +2,12 @@
 Evidence per post, the memo the agent writes, its checks, and its decision items. Every number here is synthetic,
 and no run reads any platform: the Founder gives every number on the sitting page (ADR 0004)."""
 
+import io
 import json
 import unittest
 from datetime import timedelta
 
-from gr0wthlab import results
+from gr0wthlab import cycle, results
 from tests import fakes
 from tests.test_cycle import CycleTestCase
 
@@ -242,6 +243,19 @@ class WeeklyReadRunTest(CycleTestCase):
         self.assertIn(
             "a weekly-read-decision is queued only from its Draft in weekly-reads/, the Weekly Read memo,", reasons
         )
+
+    def test_an_example_s_lab_for_another_workflow_files_none_of_the_weekly_read_s_items(self):
+        """A lab's run (examples.py) starts one workflow's session: the Weekly Read's notice of what to give and the
+        floor proposal belong to the Weekly Read, so a lab for another workflow queues neither."""
+        path = self.mandu / "projects/RepToday/gtm/05-social-pmf/read-the-results.md"
+        path.write_text("- Any post under 200 impressions is unread, not failed.\n", encoding="utf-8")
+        runner = cycle.Cycle(self.repo, self.env, self.home, io.StringIO(), self.clock, lambda policy: None)
+        runner.only = "package-review"
+        runner.run("on-demand", None, ["run"])
+        origins = [entry.get("origin") for entry in self.queue()["open"]]
+        self.assertNotIn("results/window-1-read-07", origins)
+        self.assertNotIn("proposal/read-the-results-views-floor", origins)
+        self.assertEqual(self.queue()["results"]["read"], 7, "what the read asks is still worked out")
 
     def test_the_proposal_that_the_floor_counts_views_is_filed_once(self):
         path = self.mandu / "projects/RepToday/gtm/05-social-pmf/read-the-results.md"

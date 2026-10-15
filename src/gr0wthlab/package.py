@@ -24,6 +24,8 @@ READ = "read"
 CHANGED = "changed"
 FAILED = "failed"
 SKIPPED = "skipped"
+# A source the run read and could not use, as it could not be parsed or decoded: a failed source all the same.
+UNUSABLE = "unusable"
 
 
 @dataclass(frozen=True)

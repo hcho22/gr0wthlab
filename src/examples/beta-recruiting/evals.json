@@ -1,12 +1,12 @@
 {
  "adapted_from": "the evals.json shape of github.com/coreyhaines31/marketingskills skills/*/evals/evals.json at commit 1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff (MIT; see THIRD_PARTY_NOTICES.md)",
  "skill_name": "beta-recruiting",
- "description": "The Beta Cohort recruiting workflow's example set (US-ME15, F5), in the marketingskills evals.json shape: each example's prompt, the output expected, its assertions, and its files. A deterministic assertion is checked by the unit tests (src/tests/test_beta_examples.py); a judged assertion waits for US-ME16's re-run on every Instructions change. An example's first file is either a candidate Draft, checked against the synthetic package in files/mandu with the brand rules named below, or a scenario: a synthetic Beta Build record, Founder reports, and batches already queued, run against the Waitlist view in its second file.",
+ "description": "The Beta Cohort recruiting workflow's example set (US-ME15, F5), in the marketingskills evals.json shape: each example's prompt, the output expected, its assertions, and its files. An example that carries `run` is re-run by the agent on every change to the recruiting Instructions (US-ME16, ADR 0003): its session writes the recruiting Drafts its lab asks for, in a throwaway lab built from `lab` and the example's own settings, with the Founder's Beta Build record and the seeded anonymous Waitlist view, and its deterministic assertions are read off what the launcher took in. An example's first file, if it has one, is either a candidate Draft, checked by the unit tests (src/tests/test_beta_examples.py) against the synthetic package in files/mandu with the brand rules named below, or a scenario: a synthetic Beta Build record, Founder reports, and batches already queued, run against the Waitlist view in its second file. A judged assertion is judged by nothing: the notice of a change lists it for the Founder.",
  "package": "files/mandu",
  "brand_rules": "../post-drafts/files/mandu/projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json",
  "assertion_kinds": {
-  "deterministic": "check is one of: passes; blocked_by (rule: a finding's rule, or the start of one); not_blocked_by (rule); no_address_in_findings; nothing_before_approval; batch (action, entries in invitation order, good_fit); gap (size); asks_for (drafts); never_offered (entries); not_reported (counts); reported (count, value); recruiting_ended",
-  "judged": "text is a statement a reviewer, or a model at US-ME16, judges true or false of the agent's Draft"
+  "deterministic": "check is one of: passes; blocked_by (rule: a finding's rule, or the start of one); not_blocked_by (rule); no_address_in_findings; each of the invitation unless draft names the waitlist-ask; nothing_before_approval; batch (action, entries in invitation order, good_fit); gap (size); asks_for (drafts); never_offered (entries); not_reported (counts); reported (count, value); recruiting_ended; and, for a re-run example only, queued (item: a kind; count; cites: words each queued item holds), nothing_queued (item), nothing_set_aside",
+  "judged": "text is a statement of the agent's Draft that no check decides; nothing judges it, and the notice of an Instructions change lists it as not judged"
  },
  "evals": [
   {
@@ -37,7 +37,8 @@
    ],
    "files": [
     "files/drafts/invitation-clean.md"
-   ]
+   ],
+   "run": {}
   },
   {
    "id": 2,
@@ -442,7 +443,8 @@
    ],
    "files": [
     "files/drafts/invitation-cohort-size.md"
-   ]
+   ],
+   "run": {}
   },
   {
    "id": 22,
@@ -451,7 +453,8 @@
    "assertions": [
     {
      "kind": "deterministic",
-     "check": "passes"
+     "check": "passes",
+     "draft": "waitlist-ask"
     },
     {
      "kind": "judged",
@@ -460,7 +463,215 @@
    ],
    "files": [
     "files/drafts/waitlist-ask-clean.md"
-   ]
+   ],
+   "run": {}
+  },
+  {
+   "id": 23,
+   "prompt": "Write both recruiting Drafts the brief asks for: the invitation, and the Waitlist ask since the pool cannot fill the cohort.",
+   "expected_output": "Two Drafts that each pass every check, the invitation to the batch and the ask for people who have not signed up; neither holds an address, a link, or a figure of its own.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "passes"
+    },
+    {
+     "kind": "deterministic",
+     "check": "passes",
+     "draft": "waitlist-ask"
+    },
+    {
+     "kind": "deterministic",
+     "check": "queued",
+     "item": "message",
+     "count": 2
+    },
+    {
+     "kind": "deterministic",
+     "check": "nothing_set_aside"
+    },
+    {
+     "kind": "judged",
+     "text": "The message is identity-framed: it speaks to who the person already is, and never to what they would lose."
+    }
+   ],
+   "files": [],
+   "run": {}
+  },
+  {
+   "id": 24,
+   "prompt": "Write the invitation for a batch of five, the batch size the Founder set.",
+   "expected_output": "An invitation that passes every check, the same words for everyone in the batch, which never says how many are invited.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "passes"
+    },
+    {
+     "kind": "deterministic",
+     "check": "not_blocked_by",
+     "rule": "fake_scarcity"
+    },
+    {
+     "kind": "judged",
+     "text": "Nothing in the message hints that places are few."
+    }
+   ],
+   "files": [],
+   "run": {
+    "config": {
+     "beta_recruiting": {
+      "batch_size": 5
+     }
+    }
+   }
+  },
+  {
+   "id": 25,
+   "prompt": "Write the invitation, where the channel plan now says the first session takes 45 minutes.",
+   "expected_output": "An invitation that passes every check: it states the session's length from the line it cites, as the package says it now, and never from memory.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "passes"
+    },
+    {
+     "kind": "deterministic",
+     "check": "not_blocked_by",
+     "rule": "session-length"
+    }
+   ],
+   "files": [],
+   "run": {
+    "mandu": [
+     "files/labs/forty-five-minutes/mandu"
+    ]
+   }
+  },
+  {
+   "id": 26,
+   "prompt": "Write the invitation, where the pool already holds enough opted-in sign-ups to fill the cohort.",
+   "expected_output": "One invitation that passes every check, and no Waitlist ask, which the run does not ask for.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "passes"
+    },
+    {
+     "kind": "deterministic",
+     "check": "queued",
+     "item": "message",
+     "count": 1
+    }
+   ],
+   "files": [],
+   "run": {
+    "waitlist_view": "files/waitlist-view-full.json"
+   }
+  },
+  {
+   "id": 27,
+   "prompt": "Write the invitation, where a new section in the thesis has moved the line it cites.",
+   "expected_output": "An invitation that passes every check, citing each package line where it is in the file now.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "passes"
+    },
+    {
+     "kind": "deterministic",
+     "check": "not_blocked_by",
+     "rule": "source-quote"
+    }
+   ],
+   "files": [],
+   "run": {
+    "mandu": [
+     "files/labs/thesis-lines-moved/mandu"
+    ]
+   }
+  },
+  {
+   "id": 28,
+   "prompt": "Write the Waitlist ask, where the brand guidelines have reworded the line that says who the Product speaks to.",
+   "expected_output": "A Waitlist ask that passes every check, quoting the brand guidelines as they read now.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "passes",
+     "draft": "waitlist-ask"
+    },
+    {
+     "kind": "deterministic",
+     "check": "not_blocked_by",
+     "rule": "source-quote",
+     "draft": "waitlist-ask"
+    },
+    {
+     "kind": "judged",
+     "text": "The ask names one thing to do: join the Waitlist and ask for a beta invitation."
+    }
+   ],
+   "files": [],
+   "run": {
+    "mandu": [
+     "files/labs/voice-reworded/mandu"
+    ]
+   }
+  },
+  {
+   "id": 29,
+   "prompt": "Write the invitation, where the brand rules now list a stock phrase an invitation might reach for.",
+   "expected_output": "An invitation that passes every check, under the brand rules as Mandu holds them now: it uses none of the phrases they list.",
+   "assertions": [
+    {
+     "kind": "deterministic",
+     "check": "passes"
+    },
+    {
+     "kind": "deterministic",
+     "check": "not_blocked_by",
+     "rule": "stock_phrases"
+    },
+    {
+     "kind": "judged",
+     "text": "The message says plainly what the person is asked to do and that the session is recorded, before asking them to reply."
+    }
+   ],
+   "files": [],
+   "run": {
+    "mandu": [
+     "files/labs/new-stock-phrase/mandu"
+    ]
+   }
   }
- ]
+ ],
+ "lab": {
+  "mandu": [
+   "../post-drafts/files/mandu",
+   "files/mandu"
+  ],
+  "code": "../post-drafts/files/code",
+  "ledger": [
+   "files/labs/approved/ledger"
+  ],
+  "waitlist_view": "files/waitlist-view.json",
+  "config": {
+   "window": {
+    "number": 1,
+    "first_sitting": null,
+    "slot": null
+   },
+   "waitlist": {
+    "live_since": null
+   },
+   "outreach": {
+    "network_ask_source": null,
+    "creators": []
+   },
+   "beta_recruiting": {
+    "batch_size": 20
+   }
+  }
+ }
 }

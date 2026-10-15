@@ -4,8 +4,8 @@ code decides where the reason may go.
 The code list and its split live here, in launcher code (Guardrail G8), so no Instruction and no agent can move a
 code from one side to the other:
 
-- an execution code (tone, length, a factual slip, format) is about how a Draft was made, and may later refine the
-  Marketing Engineer's Instructions;
+- an execution code (tone, length, a factual slip, format) is about how a Draft was made, and may refine the Marketing
+  Engineer's Instructions;
 - a strategy code (Fit, an Angle, a claim, positioning) is about the Go-To-Market Package, so it becomes a
   package-change proposal and can never refine Instructions.
 
@@ -14,22 +14,26 @@ it and writes it into the decision's own Evidence in ledger/evidence/decisions/,
 stay as they were given. A launcher-owned learning ledger counts the codes for each workflow, always as "3 of 7" and
 never as a percentage.
 
-Until US-ME16 builds the refinement loop, no run may change workspace/instructions/ at all: the launcher keeps what
-the folder held before the first session started and puts it back after every session, so nothing a run read, a
-fetched post least of all, can rewrite the agent's own guidance, for the next session or the next run.
+An execution reason may lead to a change to its workflow's Instructions, and only through that workflow's example
+set (instructions.py, examples.py, ADR 0003). The sandbox reads the Instructions in force, in ledger/instructions/, and
+can never write them; only this session may leave a proposed change in the agent's Instructions area,
+workspace/instructions/. The launcher notes both before the first session starts and puts both back after every
+session, keeping only the proposals this session left, so nothing a run read, a fetched post least of all, can
+rewrite the agent's own guidance for the next session or the next run.
 """
 
 from __future__ import annotations
 
 import json
 import os
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 
 from . import evidence, exchange
 from .areas import Areas, Store, UnsafeFile, read_plain
+from .boundary import ConfigError
 from .exchange import plural
 from .queue import Ledger
 from .state import Tally, queued_item
@@ -52,6 +56,7 @@ MEANING = {
 TO_INSTRUCTIONS = "instructions"
 TO_PROPOSAL = "proposal"
 DECISIONS = ("evidence", "decisions")
+IN_FORCE = "instructions"  # the Instructions in force, in ledger/ (ADR 0003)
 FOLDER = ("evidence", "learning")
 LEDGER_FILE = (*FOLDER, "ledger.json")
 CODES_IN = ("learning",)  # under workspace/evidence/
@@ -93,6 +98,8 @@ def workflow_of(entry: Mapping[str, object]) -> str:
         return "listening" if purpose == "reply" else "outreach"
     if item_kind == "package-change-proposal":
         return "listening" if entry.get("listening") else "package-review"
+    if item_kind == "notice" and entry.get("instructions"):
+        return str(entry["instructions"])  # the notice of a change to that workflow's Instructions (ADR 0003)
     return {
         "filming-plan": "filming",
         "dispatch-request": "dispatch-requests",
@@ -113,10 +120,14 @@ class Reason:
     why: str = ""
     coded_by_run: str = ""
     proposal: str = ""  # the package-change proposal that answers a strategy reason, once one is queued
+    # What became of an execution reason as a change to its workflow's Instructions, once something did: the change
+    # tried and its outcome, or that none was proposed (instructions.answer). Empty while it may still lead to one.
+    instructions: Mapping[str, object] = field(default_factory=dict)
 
     def as_json(self) -> dict[str, object]:
         data: dict[str, object] = {
             "item": self.item,
+            "evidence": "/".join((*DECISIONS, f"{self.item}.json")),
             "workflow": self.workflow,
             "reason": self.words,
             "decided_at": self.decided_at,
@@ -126,6 +137,8 @@ class Reason:
             data.update(kind=kind(self.code), route=route(self.code), why=self.why, coded_by_run=self.coded_by_run)
         if self.code in STRATEGY:
             data["proposal"] = self.proposal or None
+        if self.code in EXECUTION:
+            data["instructions"] = dict(self.instructions) or None
         return data
 
 
@@ -146,6 +159,7 @@ def reasons(store: Store, ledger: Ledger) -> tuple[list[Reason], list[str]]:
             item = str(data["item"])
             coded = data.get("code") if isinstance(data.get("code"), dict) else {}
             code = str(coded.get("code") or "")
+            answer = data.get("instructions") if isinstance(data.get("instructions"), dict) else {}
             found.append(
                 Reason(
                     item,
@@ -155,6 +169,7 @@ def reasons(store: Store, ledger: Ledger) -> tuple[list[Reason], list[str]]:
                     code if code in CODES else "",
                     str(coded.get("why") or ""),
                     str(coded.get("coded_by_run") or ""),
+                    instructions=answer,
                 )
             )
         except (OSError, UnsafeFile, ValueError, KeyError, TypeError, AttributeError) as error:
@@ -279,10 +294,15 @@ def take(
     answered(store, ledger, products, result.reasons)
     if publish:
         areas.remove_empty_folders(folder)
-        path = store.path(*LEDGER_FILE)
-        store.write_json(path, ledger_record(result.reasons, run_id, now))
-        result.record = store.relative(path)
+        result.record = write_ledger(store, result.reasons, run_id, now)
     return result
+
+
+def write_ledger(store: Store, found: Sequence[Reason], run_id: str, now: datetime) -> str:
+    """Write the learning ledger from every reason as it stands, and return its path from ledger/."""
+    path = store.path(*LEDGER_FILE)
+    store.write_json(path, ledger_record(found, run_id, now))
+    return store.relative(path)
 
 
 def counts(found: Sequence[Reason]) -> dict[str, dict[str, object]]:
@@ -307,8 +327,9 @@ def ledger_record(found: Sequence[Reason], run_id: str, now: datetime) -> dict[s
         "updated_by_run": run_id,
         "updated_at": now.isoformat(),
         "note": "Each reason is the Founder's own words, kept in its decision's Evidence. A count reads as n of m"
-        " rejections of its workflow, never as a percentage. An execution code may later refine Instructions"
-        " (US-ME16); a strategy code becomes a package-change proposal and never does.",
+        " rejections of its workflow, never as a percentage. An execution code may refine Instructions, only"
+        " through its workflow's example set (ADR 0003); a strategy code becomes a package-change proposal and never"
+        " does.",
         "codes": {"execution": list(EXECUTION), "strategy": list(STRATEGY)},
         "workflows": counts(found),
         "reasons": [reason.as_json() for reason in found],
@@ -415,7 +436,7 @@ def report_lines(result: Result | None, put_back: Sequence[str]) -> list[str]:
             lines.append(f"- The learning ledger: `{result.record}`.")
     for item, code in result.coded:
         where = (
-            "it may later refine Instructions (US-ME16)"
+            "it may refine Instructions, through its workflow's example set"
             if may_refine_instructions(code)
             else "it becomes a package-change proposal and never changes Instructions"
         )
@@ -431,10 +452,13 @@ def report_lines(result: Result | None, put_back: Sequence[str]) -> list[str]:
         lines.append(f"- Proposed code set aside: `{name}`: {'; '.join(problems)}")
     lines += [f"- {problem}." for problem in result.problems]
     if put_back:
-        lines.append("- Instructions were changed during the run and put back:")
+        lines.append("- What sessions changed in the Instructions, and the launcher put back:")
         lines += [f"  - {line}" for line in put_back]
     else:
-        lines.append("- Instructions (`workspace/instructions/`) are as they were before the run.")
+        lines.append(
+            "- No session changed the Instructions in force (`ledger/instructions/`), or left anything in the"
+            " Instructions area (`workspace/instructions/`) but a proposed change."
+        )
     return lines
 
 
@@ -452,16 +476,34 @@ def notice_section(result: Result | None, day_text: str) -> tuple[int, str, str]
 
 @dataclass
 class Guidance:
-    """What workspace/instructions/ held before the agent started: each plain file's content, by its path there, and
-    the path of each entry that could not be read, which is not guarded."""
+    """What the agent's Instructions area, workspace/instructions/, and the Instructions in force, ledger/instructions/,
+    held before the first session started: each plain file's content, by its path from workspace/ or from ledger/,
+    and the path of each entry that could not be read, which is not guarded."""
 
     files: dict[str, bytes] = field(default_factory=dict)
     unread: set[str] = field(default_factory=set)
     problems: list[str] = field(default_factory=list)
+    in_force: dict[str, bytes] = field(default_factory=dict)
+    in_force_unread: set[str] = field(default_factory=set)
 
 
-def remember(areas: Areas) -> Guidance:
-    """Read every plain file of the agent's Instructions, before it starts."""
+def in_force_files(store: Store) -> dict[str, Path]:
+    """Every entry under ledger/instructions/, by its path from ledger/, without following a link."""
+    folder = store.path(IN_FORCE)
+    found: dict[str, Path] = {}
+    for root, subdirs, names in os.walk(str(folder)) if folder.is_dir() and not folder.is_symlink() else ():
+        for name in list(subdirs):
+            if Path(root, name).is_symlink():
+                names.append(name)
+                subdirs.remove(name)
+        for name in names:
+            found[store.relative(Path(root, name))] = Path(root, name)
+    return found
+
+
+def remember(areas: Areas, store: Store | None = None) -> Guidance:
+    """Read every plain file of the agent's Instructions area, and with store, of the Instructions in force, before
+    the first session starts."""
     guidance = Guidance()
     folder = areas.paths["instructions"]
     for path in list(areas.files(folder)):
@@ -471,12 +513,18 @@ def remember(areas: Areas) -> Guidance:
         except (UnsafeFile, OSError) as error:
             guidance.unread.add(name)
             guidance.problems.append(f"`{name}` could not be read before the run ({error}), so it is not guarded")
+    for name, path in sorted(in_force_files(store).items()) if store is not None else ():
+        try:
+            guidance.in_force[name] = read_plain(path)
+        except (UnsafeFile, OSError) as error:
+            guidance.in_force_unread.add(name)
+            guidance.problems.append(f"`{name}` could not be read before the run ({error}), so it is not guarded")
     return guidance
 
 
 def write_back(areas: Areas, path: Path, data: bytes) -> None:
-    """Write one file of the agent's Instructions as it was: only into a real folder, only as a new plain file, and
-    never through a link, whatever the agent left in its place."""
+    """Write one file of the agent's Instructions area as it was: only into a real folder, only as a new plain file,
+    and never through a link, whatever the agent left in its place."""
     folders = [folder for folder in reversed(path.parents) if folder not in areas.paths["instructions"].parents]
     for folder in folders[1:]:
         areas.ensure_folder(folder)
@@ -488,19 +536,24 @@ def write_back(areas: Areas, path: Path, data: bytes) -> None:
         handle.write(data)
 
 
-def put_back(guidance: Guidance, areas: Areas) -> list[str]:
-    """Undo every change the run made to the agent's Instructions, and say what was undone. No run may change its
-    Instructions until US-ME16 builds the reviewed way to; a strategy reason never may. An entry that could not be
-    read before the run is left exactly as it is."""
+def put_back(guidance: Guidance, areas: Areas, store: Store | None = None, keep: Collection[str] = ()) -> list[str]:
+    """Undo every change a session made to the agent's Instructions area, and with store, to the Instructions in
+    force, and say what was undone (ADR 0003). keep names the files of the area, by their path from workspace/, that
+    stay as the session left them: the proposed changes the rejection reasons' session may leave, which the launcher
+    takes in once the last session has ended. The sandbox cannot write the Instructions in force at all, so a change
+    there would be a breach of the boundary, and is put back like any other. An entry that could not be read before
+    the run is left exactly as it is."""
     lines = []
     folder = areas.paths["instructions"]
     now: dict[str, Path] = {areas.relative(path): path for path in list(areas.files(folder))}
     for name, path in sorted(now.items()):
-        if name not in guidance.files and name not in guidance.unread:
+        if name not in guidance.files and name not in guidance.unread and name not in keep:
             areas.remove(path)
             lines.append(f"`{name}` was added during the run and removed")
     areas.remove_empty_folders(folder)
     for name, data in sorted(guidance.files.items()):
+        if name in keep:
+            continue
         path = areas.workspace / name
         try:
             unchanged = name in now and read_plain(path) == data
@@ -515,4 +568,29 @@ def put_back(guidance: Guidance, areas: Areas) -> list[str]:
         except OSError as error:
             lines.append(f"`{name}` was {what} during the run and could not be put back ({error.strerror or error})")
     areas.remove_empty_folders(folder)
+    if store is None:
+        return lines
+    found = in_force_files(store)
+    for name, path in sorted(found.items()):
+        if name not in guidance.in_force and name not in guidance.in_force_unread:
+            try:
+                path.unlink()
+                lines.append(f"`ledger/{name}` was added during the run and removed")
+            except OSError as error:
+                lines.append(f"`ledger/{name}` was added during the run and could not be removed ({error})")
+    for name, data in sorted(guidance.in_force.items()):
+        try:
+            unchanged = name in found and read_plain(found[name]) == data
+        except (UnsafeFile, OSError):
+            unchanged = False
+        if unchanged:
+            continue
+        what = "changed" if name in found else "removed"
+        try:
+            if name in found and (found[name].is_symlink() or not found[name].is_file()):
+                found[name].unlink()
+            store.write_bytes(store.path(*Path(name).parts), data)
+            lines.append(f"`ledger/{name}` was {what} during the run and put back as it was")
+        except (OSError, ConfigError) as error:
+            lines.append(f"`ledger/{name}` was {what} during the run and could not be put back ({error})")
     return lines

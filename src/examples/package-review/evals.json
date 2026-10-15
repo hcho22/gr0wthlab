@@ -1,0 +1,342 @@
+{
+  "adapted_from": "the evals.json shape of github.com/coreyhaines31/marketingskills skills/*/evals/evals.json at commit 1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff (MIT; see THIRD_PARTY_NOTICES.md)",
+  "skill_name": "package-review",
+  "description": "The package review's example set (US-ME04, US-ME16, F5), in the marketingskills evals.json shape. Every example is re-run by the agent on every change to the package-review Instructions (ADR 0003): its session reviews a whole synthetic Go-To-Market Package, files/mandu with the example's own overlay, in a throwaway lab, and its deterministic assertions are read off the package-change proposals the launcher queued. Each overlay holds one stale fact, two facts that should agree and do not, or a plan that breaks a rule, except two: a package whose files all agree, and one that keeps an earlier version marked as history. A judged assertion is judged by nothing: the notice of a change lists it for the Founder.",
+  "package": "files/mandu",
+  "assertion_kinds": {
+    "deterministic": "check is one of: queued (item: a kind; count; cites: file names each queued item holds; at_least: the count is a floor), nothing_queued (item), nothing_set_aside",
+    "judged": "text is a statement of the agent's output that no check decides; nothing judges it, and the notice of an Instructions change lists it as not judged"
+  },
+  "lab": {
+    "mandu": [
+      "files/mandu"
+    ],
+    "config": {
+      "window": {
+        "number": 1,
+        "first_sitting": null,
+        "slot": null
+      },
+      "waitlist": {
+        "live_since": null
+      },
+      "outreach": {
+        "network_ask_source": null,
+        "creators": []
+      }
+    }
+  },
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Review the package, where the brand guidelines call the name not cleared while both checklists record it cleared on 2026-08-07.",
+      "expected_output": "One package-change proposal that names the brand guidelines' line as stale and the dated checklist records as current, citing both sides by file and line.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "queued",
+          "item": "package-change-proposal",
+          "count": 1,
+          "cites": [
+            "brand-guidelines.md",
+            "02-marketing-launch-checklist_260807.md"
+          ],
+          "at_least": true
+        },
+        {
+          "kind": "deterministic",
+          "check": "nothing_set_aside"
+        },
+        {
+          "kind": "judged",
+          "text": "The proposal can be decided in under a minute: it says what is stale, what is current, and the wording to change in each file."
+        },
+        {
+          "kind": "judged",
+          "text": "The proposal picks the side with a dated outcome as current, or asks the Founder to choose when neither has one."
+        }
+      ],
+      "files": [],
+      "run": {
+        "mandu": [
+          "files/labs/name-not-cleared/mandu"
+        ]
+      }
+    },
+    {
+      "id": 2,
+      "prompt": "Review the package, where the reading rules put the midpoint read on day 6 and the calendar on day 7.",
+      "expected_output": "One proposal citing both files; since neither side records an outcome, it asks the Founder to choose.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "queued",
+          "item": "package-change-proposal",
+          "count": 1,
+          "cites": [
+            "read-the-results.md",
+            "cadence-14-day.md"
+          ],
+          "at_least": true
+        },
+        {
+          "kind": "deterministic",
+          "check": "nothing_set_aside"
+        },
+        {
+          "kind": "judged",
+          "text": "The proposal picks the side with a dated outcome as current, or asks the Founder to choose when neither has one."
+        }
+      ],
+      "files": [],
+      "run": {
+        "mandu": [
+          "files/labs/read-on-day-6/mandu"
+        ]
+      }
+    },
+    {
+      "id": 3,
+      "prompt": "Review the package, where the A/B pairs file gives leg A of AB-1 a Hook that differs from its Angle's frozen Hook.",
+      "expected_output": "One proposal citing the pairs file and the Angle bank, which declares new_angle: yes only if it changes a Hook, and otherwise brings the stale text in line.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "queued",
+          "item": "package-change-proposal",
+          "count": 1,
+          "cites": [
+            "ab-pairs.md",
+            "angles.md"
+          ],
+          "at_least": true
+        },
+        {
+          "kind": "deterministic",
+          "check": "nothing_set_aside"
+        },
+        {
+          "kind": "judged",
+          "text": "The proposal can be decided in under a minute: it says what is stale, what is current, and the wording to change in each file."
+        }
+      ],
+      "files": [],
+      "run": {
+        "mandu": [
+          "files/labs/pair-hook-differs/mandu"
+        ]
+      }
+    },
+    {
+      "id": 4,
+      "prompt": "Review the package, where the calendar names an Angle the Angle bank does not hold.",
+      "expected_output": "One proposal citing the calendar row and the Angle bank, asking the Founder which Angle day 2 posts.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "queued",
+          "item": "package-change-proposal",
+          "count": 1,
+          "cites": [
+            "cadence-14-day.md",
+            "angles.md"
+          ],
+          "at_least": true
+        },
+        {
+          "kind": "deterministic",
+          "check": "nothing_set_aside"
+        },
+        {
+          "kind": "judged",
+          "text": "The proposal picks the side with a dated outcome as current, or asks the Founder to choose when neither has one."
+        }
+      ],
+      "files": [],
+      "run": {
+        "mandu": [
+          "files/labs/angle-missing/mandu"
+        ]
+      }
+    },
+    {
+      "id": 5,
+      "prompt": "Review the package, where the launch checklist records the Waitlist live on 2026-10-05 while the pre-publication checklist still holds it open.",
+      "expected_output": "One proposal that names the open pre-publication line as stale and the dated launch record as current, citing both.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "queued",
+          "item": "package-change-proposal",
+          "count": 1,
+          "cites": [
+            "pre-publication-checklist.md",
+            "02-marketing-launch-checklist_260807.md"
+          ],
+          "at_least": true
+        },
+        {
+          "kind": "deterministic",
+          "check": "nothing_set_aside"
+        },
+        {
+          "kind": "judged",
+          "text": "The proposal can be decided in under a minute: it says what is stale, what is current, and the wording to change in each file."
+        }
+      ],
+      "files": [],
+      "run": {
+        "mandu": [
+          "files/labs/waitlist-recorded-live/mandu"
+        ]
+      }
+    },
+    {
+      "id": 6,
+      "prompt": "Review the package, where the brand rules now ban a word that an Angle's frozen Hook holds.",
+      "expected_output": "One proposal citing the brand rule and the Hook, leaving to the Founder which side changes; a Hook change enters only as a new Angle.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "queued",
+          "item": "package-change-proposal",
+          "count": 1,
+          "cites": [
+            "brand-rules.json",
+            "angles.md"
+          ],
+          "at_least": true
+        },
+        {
+          "kind": "deterministic",
+          "check": "nothing_set_aside"
+        },
+        {
+          "kind": "judged",
+          "text": "The proposal picks the side with a dated outcome as current, or asks the Founder to choose when neither has one."
+        }
+      ],
+      "files": [],
+      "run": {
+        "mandu": [
+          "files/labs/hook-banned/mandu"
+        ]
+      }
+    },
+    {
+      "id": 7,
+      "prompt": "Review the package, where the channel plan plans an ad budget while the thesis and the build spec hold paid spend at zero before launch.",
+      "expected_output": "One proposal citing the channel plan's line and the rule it breaks.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "queued",
+          "item": "package-change-proposal",
+          "count": 1,
+          "cites": [
+            "channel-plan.md"
+          ],
+          "at_least": true
+        },
+        {
+          "kind": "deterministic",
+          "check": "nothing_set_aside"
+        },
+        {
+          "kind": "judged",
+          "text": "The proposal can be decided in under a minute: it says what is stale, what is current, and the wording to change in each file."
+        }
+      ],
+      "files": [],
+      "run": {
+        "mandu": [
+          "files/labs/paid-spend-planned/mandu"
+        ]
+      }
+    },
+    {
+      "id": 8,
+      "prompt": "Review a package whose files all agree.",
+      "expected_output": "No package-change proposal: there is nothing to decide, and the summary says which recorded outcomes were traced.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "nothing_queued",
+          "item": "package-change-proposal"
+        },
+        {
+          "kind": "deterministic",
+          "check": "nothing_set_aside"
+        },
+        {
+          "kind": "judged",
+          "text": "The summary lists each recorded outcome it traced and what it found for it."
+        }
+      ],
+      "files": [],
+      "run": {}
+    },
+    {
+      "id": 9,
+      "prompt": "Review the package, where the brand guidelines keep an earlier version of the name's status, marked as superseded and kept for history.",
+      "expected_output": "No package-change proposal: text the package marks as history is not a contradiction.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "nothing_queued",
+          "item": "package-change-proposal"
+        },
+        {
+          "kind": "deterministic",
+          "check": "nothing_set_aside"
+        }
+      ],
+      "files": [],
+      "run": {
+        "mandu": [
+          "files/labs/history-kept/mandu"
+        ]
+      }
+    },
+    {
+      "id": 10,
+      "prompt": "Review the package, where the brand guidelines call the name not cleared and the A/B pairs file changes a frozen Hook: two different stale facts.",
+      "expected_output": "Two proposals, one for each stale fact, each citing its own two sides; neither is folded into the other.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "queued",
+          "item": "package-change-proposal",
+          "count": 1,
+          "cites": [
+            "brand-guidelines.md",
+            "02-marketing-launch-checklist_260807.md"
+          ],
+          "at_least": true
+        },
+        {
+          "kind": "deterministic",
+          "check": "queued",
+          "item": "package-change-proposal",
+          "count": 1,
+          "cites": [
+            "ab-pairs.md",
+            "angles.md"
+          ],
+          "at_least": true
+        },
+        {
+          "kind": "deterministic",
+          "check": "nothing_set_aside"
+        }
+      ],
+      "files": [],
+      "run": {
+        "mandu": [
+          "files/labs/name-not-cleared/mandu",
+          "files/labs/pair-hook-differs/mandu"
+        ]
+      }
+    }
+  ]
+}

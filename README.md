@@ -26,7 +26,7 @@ The specification and decision records under `docs/` (the PRD, the [design decis
 | --- | --- | --- |
 | Founder | Every approval and every public act (posting, sending, confirming a publishing schedule), filming, and, in a read week, the TikTok Studio and YouTube Studio numbers of each post | - |
 | Marketing Engineer | Evidence, Drafts, Review Queue items, Weekly Read memos, run reports, and its own Instructions; its repository also serves the Founder's sitting page and keeps the Founder's decisions | Publish, send, spend, see email addresses, write to Mandu or a Product repository, write or change a decision of the Founder's, or change its own code or Guardrails |
-| Mandu | Each Product's Go-To-Market Package, applying approved package changes, handing approved Dispatch requests to firstmate, and showing the Founder the Marketing Engineer's status | Build the Marketing Engineer, record a decision of the Founder's, or write anything the Marketing Engineer reads but the Go-To-Market Package |
+| Mandu | Each Product's Go-To-Market Package, applying approved package changes and giving the Founder a ready-to-send message for each approved Dispatch request when the Founder asks, and showing the Founder the Marketing Engineer's status | Build the Marketing Engineer, record a decision of the Founder's, or write anything the Marketing Engineer reads but the Go-To-Market Package |
 | firstmate | Building and changing the Marketing Engineer's code and Guardrails through reviewed pull requests, and carrying out approved Dispatches | Act on a Dispatch the Founder has not approved |
 | Scheduling service | Not used: the Founder posts each approved post by hand, his choice of 2026-10-11 ([ADR 0003](docs/adr/0003-posting-is-manual.md)) | - |
 
@@ -37,7 +37,7 @@ The specification and decision records under `docs/` (the PRD, the [design decis
    On read weeks the Founder first gives each post's numbers on that page, read from TikTok Studio or YouTube Studio, then starts a run so the Weekly Read takes them in.
    The Founder then approves each Review Queue item or rejects it with a one-line reason, one item at a time; what the Founder clicks is what is saved.
 3. **Publish.** The Founder posts each approved post by hand at the fixed slot, and sends approved messages.
-4. **Learn.** The next run reads the decisions, keeps every rejection reason as Evidence, refines Instructions for execution reasons, and proposes package changes for strategy reasons.
+4. **Learn.** The next run reads the decisions, keeps every rejection reason as Evidence, refines Instructions for execution reasons only through each workflow's example set, and proposes package changes for strategy reasons; every kept Instructions change is a notice at the next sitting.
 
 ## Guardrails
 
@@ -64,8 +64,9 @@ The PRD's Guardrails section says what enforces each one.
 | [`workspace/review-queue/`](workspace/review-queue/) | Review Queue items the agent proposes, before the launcher checks them | Yes |
 | [`workspace/weekly-reads/`](workspace/weekly-reads/) | Weekly Read memos | Yes |
 | [`workspace/run-reports/`](workspace/run-reports/) | Notes the agent writes during a run | Yes |
-| [`workspace/instructions/`](workspace/instructions/) | The Marketing Engineer's Instructions | Yes |
+| [`workspace/instructions/`](workspace/instructions/) | A change to the Instructions the agent proposes, before the launcher re-runs its example set | Yes |
 | [`ledger/`](ledger/) | The launcher's records: the published Review Queue, the launcher's own Evidence, run reports, and run state; and, outside git, the finished videos it renders | No |
+| [`ledger/instructions/`](ledger/instructions/) | The Marketing Engineer's Instructions in force, changed only by a change its workflow's example set passed, or by a reviewed pull request ([ADR 0003](docs/adr/0003-instructions-change-only-through-their-example-set.md)) | No |
 | [`ledger/founder/`](ledger/founder/) | The Founder's own records: each decision, each sitting, the Beta Build record, the Beta Cohort counts, what was sent, and the numbers of each post for a Weekly Read; only the sitting page writes them | No |
 | [`src/`](src/) | Code | No |
 | [`config/`](config/) | Guardrail configuration, the Product registry, the run's settings, platform facts, and the network sources | No |

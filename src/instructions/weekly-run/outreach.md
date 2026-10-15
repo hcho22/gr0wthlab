@@ -1,6 +1,6 @@
 ## This session: outreach
 
-Your working guidance is `workspace/instructions/outreach.md`.
+Your working guidance is `ledger/instructions/outreach.md`.
 Before this session the launcher worked out which outreach messages may be offered this run, from the Founder's decisions and the Founder's own record of what was sent and answered.
 Once the last session has ended, it queues a message only from a Draft that passes every check; the Founder alone sends it.
 A reply to a thread is the Listening session's to draft, never this one's.

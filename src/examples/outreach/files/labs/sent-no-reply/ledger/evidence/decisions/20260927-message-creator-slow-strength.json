@@ -1,0 +1,15 @@
+{
+  "ask": "Approve message to Slow Strength: Early access, nothing asked",
+  "decided_at": "2026-09-27T19:40:00-07:00",
+  "decision": "approve",
+  "item": "20260927-message-creator-slow-strength",
+  "item_file": "review-queue/items/20260927-message-creator-slow-strength.md",
+  "kind": "message",
+  "note": null,
+  "reason": null,
+  "sitting": "2026-09-27",
+  "source": null,
+  "superseded_by": null,
+  "taken_in_at": "2026-10-04T23:00:00+00:00",
+  "taken_in_by_run": "20261004T230000Z-on-demand-0c2d"
+}

@@ -34,6 +34,8 @@ ITEMS = "items"
 SET_ASIDE = "set-aside"
 QUEUE_FILE = "queue.json"
 MAX_SLUG = 60
+# How a file in incoming/ that passed every check and could not be written to the queue is set aside.
+NOT_QUEUED = "could not be queued"
 # The kinds the launcher renders only from a Draft that passed its checks, each with the folders its Drafts are
 # written in. No file of these kinds is taken from incoming/, and no item written there supersedes one.
 FROM_DRAFT = {
@@ -96,12 +98,11 @@ def stands(current: Mapping[str, object] | None, unread: Sequence[str]) -> Stand
     Dispatch request whose reviewed text is unread, post Drafts without the calendar, outreach without the channel
     plan or the kit, replies without the kit, and the video of a day whose copy is approved and whose Draft is
     unread. There the output always reads incomplete in the run report with the real reason, and no item of the
-    step is touched or listed. The run's notice names the source only where its read failed as a source or was
-    recorded as a launcher problem, and in the line that says no video was cut for an approved day; a calendar or
-    channel plan that was read but could not be parsed or decoded is told in the run report, and the notice has no
-    line of its own for it. While the window's filming plan is open, though, that plan stands on a calendar that
-    fails this way, as on any kit file, so the notice's list of open items not checked again names the plan with
-    the kit file as its reason.
+    step is touched or listed. The run's notice names the source only where its read failed as a source, where it was
+    read and could not be used, as a calendar or channel plan that could not be parsed or decoded, or was recorded as
+    a launcher problem, and in the line that says no video was cut for an approved day. While the window's filming
+    plan is open, that plan also stands on a calendar that fails this way, as on any kit file, so the notice's list
+    of open items not checked again names the plan with the kit file as its reason.
     """
     if current is None or not unread:
         return None
@@ -295,7 +296,7 @@ class Ledger:
             try:
                 identifier = self.publish(store, item, slug_of(name), run_id, now)
             except (OSError, ConfigError) as error:
-                problem = f"could not be queued ({error})"
+                problem = f"{NOT_QUEUED} ({error})"
                 set_aside.append(self.set_aside(areas, path, name, [problem]))
                 continue
             areas.remove(path)
@@ -362,6 +363,11 @@ class Ledger:
             problems.append(
                 f"supersedes {target}, which the launcher filed from reviewed text; only a reviewed change to that"
                 " text replaces it"
+            )
+        elif replaced.get("instructions"):
+            problems.append(
+                f"supersedes {target}, the notice of a change to the Instructions, which only the Founder's decision"
+                " closes"
             )
         elif replaced.get("kind") in FROM_DRAFT:
             kind = replaced["kind"]

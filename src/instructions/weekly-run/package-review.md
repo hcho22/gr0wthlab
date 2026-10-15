@@ -1,6 +1,6 @@
 ## This session: the package review
 
-Your working guidance is `workspace/instructions/package-review.md`.
+Your working guidance is `ledger/instructions/package-review.md`.
 This session reviews the Go-To-Market Package for contradictions and proposes a change for each one; it writes no Draft, no edit record, no quote record, no message, and no rejection code.
 
 Steps:

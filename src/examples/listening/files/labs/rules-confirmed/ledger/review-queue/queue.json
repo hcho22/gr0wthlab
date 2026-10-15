@@ -1,0 +1,28 @@
+{
+  "closed": [
+    {
+      "ask": "Confirm r/fitness30plus's self-promotion rules before any reply Draft is offered",
+      "closed_at": "2026-10-04T23:00:00+00:00",
+      "closed_by_run": "20261011T000000Z-on-demand-0e3f",
+      "decided_at": "2026-10-04T19:40:00-07:00",
+      "evidence": "evidence/decisions/20261004-notice-rules-fitness30plus.json",
+      "file": "review-queue/items/20261004-notice-rules-fitness30plus.md",
+      "id": "20261004-notice-rules-fitness30plus",
+      "kind": "notice",
+      "origin": "listening-rules/fitness30plus",
+      "product": "RepToday",
+      "published_at": "2026-10-04T23:00:00+00:00",
+      "published_by_run": "20261004T230000Z-on-demand-0c2d",
+      "rules_sha256": "f76138ab3327b2017a4aa6ae56d3e1949a1237e8a6c8e3f26b712a4b829f1e18",
+      "status": "approved",
+      "subreddit": "fitness30plus"
+    }
+  ],
+  "exchange": 7,
+  "next_run": "2026-10-04T23:00:00+00:00",
+  "open": [],
+  "paths": "Every path here is relative to the ledger/ directory that holds this file's folder.",
+  "run_report": "run-reports/x.md",
+  "updated_at": "2026-10-04T23:00:00+00:00",
+  "updated_by_run": "20261011T000000Z-on-demand-0e3f"
+}
