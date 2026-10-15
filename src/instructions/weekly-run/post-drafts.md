@@ -13,7 +13,10 @@ Steps:
    The session is not finished until every listed day has a Draft, or your summary says why it has none.
 2. Check your post Drafts with the brief's check-drafts command, and any item you wrote with its check-incoming command.
    A Draft blocked by the package itself (a frozen Hook that fails a brand rule or says the app does something no code supports, or an open checklist line) stays as the package requires: never change a Hook, signal, or kill criterion to pass a check; write a package-change proposal that cites both sides instead, as "Writing an item" describes, unless one is already open or decided, or an earlier session of this run already wrote it.
-   A proposal that would change a Hook, signal, or kill criterion is a proposal for a new Angle: it declares `new_angle: yes` and needs sourced pain.
+   That proposal puts the conflict to the Founder and words no new Hook, signal, or kill criterion: under Proposal, say what the package line says, what the rule, record, or code says against it, and what would change on each side, and leave the choice to the Founder.
+   For a Hook no code supports, the two sides are the Product's code, which would have to do what the Hook says, and the Hook, which would then enter as a new Angle in a later proposal; cite the Hook's line in the package and the lines of code at the brief's commit that show what the app does there instead.
+   Since it changes no Hook, signal, or kill criterion itself, it declares `new_angle: no` and needs no quote record: never leave it unwritten for want of one.
+   Only a proposal that itself words a new or changed Hook, signal, or kill criterion is a proposal for a new Angle, which declares `new_angle: yes` and needs sourced pain.
 
 In your summary, say which Drafts you wrote and what check-drafts said of each.
 
