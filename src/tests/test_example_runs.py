@@ -7,13 +7,14 @@ test runs each set's every re-run example with the stand-in (fakes.install_codex
 writes there, and fails on any assertion that does not hold or any example GOOD says nothing of.
 """
 
+import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
-from gr0wthlab import cycle, examples, posts
+from gr0wthlab import codebase, cycle, examples, posts
 from gr0wthlab.queue import Ledger
 from tests import fakes
 
@@ -274,6 +275,20 @@ class ExampleRunTest(unittest.TestCase):
         lab = examples.build(fakes.REPO, example_set, example_set.examples[0], "text", root, env, logs, 600)
         self.assertEqual({key: lab.env.get(key) for key in tools}, tools)
         self.assertEqual(lab.env["GR0WTHLAB_LOG_DIR"], str(logs))
+
+    def test_a_lab_s_claims_are_checked_on_the_registry_s_branch_whatever_branch_this_machine_s_git_starts_on(self):
+        (self.root / "master").mkdir()
+        env = fakes.git_env(self.root / "master", default_branch="master")
+        example_set = examples.load(fakes.REPO, "post-drafts")
+        root, logs = self.root / "labs" / "branch", self.root / "logs"
+        with mock.patch.dict(os.environ, env):
+            lab = examples.build(fakes.REPO, example_set, example_set.examples[0], "text", root, env, logs, 600)
+        registry = json.loads((lab.repo / "config/products.json").read_text(encoding="utf-8"))
+        branch = next(item for item in registry["products"] if item["name"] == "RepToday")["repository"]["branch"]
+        self.assertEqual(branch, "main")
+        code = codebase.open_code("RepToday", lab.product, branch, lab.env)
+        claim = ("Engine/ConsistencyScore.swift:6-7", "value = max(floorValue, value - missPenalty)")
+        self.assertIsNone(code.verify(*claim), "a claim from the set's own Drafts resolves in the lab's code")
 
     def test_a_lab_s_workspace_readmes_are_the_committed_ones_never_what_a_session_left(self):
         repo = fakes.make_repo(self.root / "left-readmes", self.env)

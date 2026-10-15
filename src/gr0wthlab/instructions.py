@@ -259,14 +259,18 @@ def package_lines(mandu: Path, roots: Sequence[Path]) -> dict[str, str]:
     that decodes, since the agent could copy those."""
     found: dict[str, str] = {}
     for root in roots:
-        if root.is_dir() and not root.is_symlink():
+        try:
+            walked = root.is_dir() and not root.is_symlink()
+        except OSError:
+            continue
+        if walked:
             files = sorted(Path(folder) / name for folder, _, names in os.walk(str(root)) for name in names)
         else:
             files = [root]
         for path in files:
-            if path.is_symlink() or not path.is_file():
-                continue
             try:
+                if path.is_symlink() or not path.is_file():
+                    continue
                 with path.open("rb") as handle:
                     data = handle.read(TEXT_PROBE)
                     if b"\0" in data:

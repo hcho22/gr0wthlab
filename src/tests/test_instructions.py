@@ -143,6 +143,20 @@ class CheckTest(WorkCycleTestCase):
         package = instructions.package_lines(mandu, [mandu / plan, mandu / "projects/RepToday/missing.md"])
         self.assertEqual(package, {"send one message to each creator, never two.": plan})
 
+    @unittest.skipIf(os.geteuid() == 0, "root can read any file")
+    def test_a_package_path_in_a_folder_that_cannot_be_searched_adds_nothing_and_stops_nothing(self):
+        mandu = Path(self.root) / "unsearchable-mandu"
+        kept = "projects/RepToday/gtm/05-social-pmf/angles.md"
+        listed, hidden = "projects/RepToday/gtm/06-channels/channel-plan.md", "projects/Other/gtm/plan.md"
+        for name, text in ((kept, "Airplane mode proves on-device building."), (listed, LONG), (hidden, LONG)):
+            (mandu / name).parent.mkdir(parents=True)
+            (mandu / name).write_text(text + "\n", encoding="utf-8")
+        for folder in ("projects/RepToday/gtm/06-channels", "projects/Other"):
+            (mandu / folder).chmod(0o600)
+        roots = [mandu / "projects/RepToday/gtm", mandu / "projects/Other/gtm", mandu / hidden]
+        package = instructions.package_lines(mandu, roots)
+        self.assertEqual(package, {"airplane mode proves on-device building.": kept})
+
     def test_the_guard_reads_every_text_file_the_sandbox_may_read_of_the_package_and_no_other(self):
         mandu = Path(self.root) / "guard-mandu"
         drafts = "projects/RepToday/gtm/05-social-pmf/week-1-drafts.md"

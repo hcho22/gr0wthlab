@@ -528,7 +528,10 @@ def build(
         overlay(fixture(example_set, code), product)
     else:
         (product / "README.md").write_text("A synthetic Product checkout.\n", encoding="utf-8")
-    git(product, "init", "--quiet")
+    # Claims are checked on the branch the registry names, never on whatever branch this machine's git starts with.
+    entry = next(item for item in registry["products"] if item["name"] == "RepToday")
+    branch = str((entry.get("repository") or {}).get("branch") or "main")
+    git(product, "init", "--quiet", f"--initial-branch={branch}")
     git(product, "add", "--all")
     git(product, "commit", "--quiet", "-m", "code")
     (root / "Immerse").mkdir()
