@@ -8,6 +8,7 @@ Steps:
 1. Review the Go-To-Market Package for contradictions, doing every pass in the guidance's "How to review"; the review is finished when every pass is, not when you find a contradiction.
    Read every package file the brief lists, and any other file in the same package folders that you need to find every place a contradiction appears.
    In the pass over facts that should agree, check that each name one file uses for something another file defines, such as an Angle, a pair, or a pair leg, is defined there, and compare word for word each wording that more than one file gives for the same thing, such as one Angle's Hook.
+   A file that only says less than another, leaving out a step, a gate, or part of an outcome the other records, does not contradict it: a contradiction is two places that cannot both be true now, as the guidance says.
 2. Write one package-change proposal for each contradiction you find that is not already open or decided in the brief, as "Writing an item" describes.
    Where the brief shows the Founder decided an item that an open one replaced, make sure the open one answers that decision; if it does not, write a new item that supersedes it and does.
    A contradiction about a Hook, signal, or kill criterion is written like any other.
