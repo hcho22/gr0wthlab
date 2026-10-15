@@ -265,6 +265,15 @@ class ExampleRunTest(unittest.TestCase):
         self.assertEqual(list((lab / "src/examples").iterdir()), [lab / "src/examples/README.md"])
         self.assertEqual(list((lab / "ledger/run-reports").glob("*.requests.json")), [], "no source was read")
 
+    def test_a_lab_runs_with_the_video_tooling_this_mac_names_and_none_of_its_other_settings(self):
+        example_set = examples.load(fakes.REPO, "post-drafts")
+        tools = {"GR0WTHLAB_FFMPEG_BIN": "/opt/tools/ffmpeg", "GR0WTHLAB_FFPROBE_BIN": "/opt/tools/ffprobe"}
+        env = dict(self.env, GR0WTHLAB_LOG_DIR=str(self.root / "elsewhere"), **tools)
+        root, logs = self.root / "labs" / "tooling", self.root / "logs"
+        lab = examples.build(fakes.REPO, example_set, example_set.examples[0], "text", root, env, logs, 600)
+        self.assertEqual({key: lab.env.get(key) for key in tools}, tools)
+        self.assertEqual(lab.env["GR0WTHLAB_LOG_DIR"], str(logs))
+
     def test_a_lab_that_cannot_be_built_or_whose_run_stops_reads_as_not_run_with_why(self):
         # Either is that example's trouble alone: the gate reads it as not compared, and the weekly run goes on.
         example = examples.load(fakes.REPO, "post-drafts").examples[0]

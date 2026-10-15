@@ -1266,7 +1266,9 @@ class Cycle:
                 )
                 state.problems += problems
                 if state.instructions is not None:
-                    chosen, why = instructions.offer(state.reasons, ledger, self.store, canonical(self.repo_root))
+                    chosen, why = instructions.offer(
+                        state.reasons, ledger, self.store, canonical(self.repo_root), self.env
+                    )
                     state.instructions.offer, state.instructions.offer_why = chosen, why
             offered = state.instructions.offer if state.instructions is not None else None
             record = {
@@ -1277,9 +1279,6 @@ class Cycle:
                     "workflow": offered.workflow if offered else None,
                     "reasons": list(offered.reasons) if offered else [],
                     "why": state.instructions.offer_why if state.instructions is not None else "",
-                    "package_files": [
-                        file.path for result in state.snapshot for file in result.files if file.status != package.FAILED
-                    ],
                 },
             }
             self.store.write_json(self.store.path(RUN_REPORTS, f"{state.run_id}.work-plan.json"), record)
@@ -1351,6 +1350,7 @@ class Cycle:
         self,
         state: RunState,
         config: settings.Settings,
+        boundary: Boundary,
         areas: Areas,
         ledger: Ledger,
         ledger_ok: bool,
@@ -1360,16 +1360,17 @@ class Cycle:
     ) -> None:
         """Once the codes are taken in: take the proposed Instructions change the rejection reasons' session left,
         re-run its workflow's example set with the text in force and with the proposed text, and keep it only if no
-        example did worse (ADR 0003). A kept change is written into ledger/instructions/ and queued as a notice for
-        the next sitting; the record of every change tried, kept or not, is kept in ledger/evidence/instructions/.
+        example did worse (ADR 0003). A kept change's record is written first, so its notice can always undo it, then
+        its text into ledger/instructions/ and its notice for the next sitting; the record of every change tried, kept
+        or not, is kept in ledger/evidence/instructions/.
         A reason the change cites is answered with its outcome, unless the gate could not judge the change, and an
         offered execution reason a finished session proposed no change for is answered as such."""
         outcome = state.instructions
         if outcome is None:
             return
         found = state.learning.reasons if state.learning is not None else state.reasons
-        read = [file.path for result in state.snapshot for file in result.files if file.status != package.FAILED]
-        lines = instructions.package_lines(Path(state.mandu), read) if state.mandu else {}
+        mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
+        lines = instructions.package_lines(mandu, boundary.package_paths)
         outcome.taken = instructions.take(areas, self.store, outcome.offer, outcome.offer_why, found, lines)
         session = state.session(learning.WORKFLOW)
         finished = session is not None and session.finished
@@ -1422,6 +1423,7 @@ class Cycle:
             extra = {"instructions": proposal.workflow, "change": identifier}
             slug = f"instructions-{proposal.workflow}"
             try:
+                instructions.record(self.store, change, run_id, now)
                 instructions.apply(self.store, change)
                 try:
                     change.notice = ledger.publish(self.store, item, slug, run_id, now, extra)
@@ -1430,7 +1432,9 @@ class Cycle:
                     raise
             except (OSError, ConfigError) as error:
                 change.gate.outcome = instructions.NOT_COMPARED
-                change.gate.why = f"its example set passed it, and it could not be written with its notice ({error})"
+                change.gate.why = (
+                    f"its example set passed it, and it could not be written with its record and notice ({error})"
+                )
             else:
                 state.published.append(change.notice)
                 seen.setdefault(exchange.item_hash(item), change.notice)
@@ -2072,7 +2076,7 @@ class Cycle:
         elif state.posts is not None:
             state.posts_problem = "not taken in: the Review Queue could not be read"
         self.take_work(state, areas, ledger, ledger_ok, products, run_id, now, seen)
-        self.learn(state, config, areas, ledger, ledger_ok, run_id, now, seen)
+        self.learn(state, config, boundary, areas, ledger, ledger_ok, run_id, now, seen)
         if state.instructions is not None and state.learning is not None and state.learning.record:
             # The learning ledger was written when the codes were taken in; write it again with what the Instructions
             # change made of each reason, so this run's records agree.

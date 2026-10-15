@@ -115,7 +115,8 @@ class CheckTest(WorkCycleTestCase):
 
     def test_a_change_that_copies_package_text_is_refused(self):
         angles = "projects/RepToday/gtm/05-social-pmf/angles.md"
-        package = instructions.package_lines(fakes.EXAMPLES / "files/mandu", [angles])
+        mandu = fakes.EXAMPLES / "files/mandu"
+        package = instructions.package_lines(mandu, [mandu / angles])
         self.assertEqual(package["airplane mode proves on-device building"], angles, "a table cell is a passage")
         copied, _ = self.proposal(text=self.in_force + "- Remember: airplane mode proves on-device building.\n")
         added = len(self.in_force.splitlines()) + 1
@@ -132,8 +133,36 @@ class CheckTest(WorkCycleTestCase):
         plan = "projects/RepToday/gtm/06-channels/channel-plan.md"
         (mandu / plan).parent.mkdir(parents=True)
         (mandu / plan).write_bytes(b"\xff\xfe broken line\nSend one message to each creator, never two.\n")
-        package = instructions.package_lines(mandu, [plan, "projects/RepToday/missing.md"])
+        package = instructions.package_lines(mandu, [mandu / plan, mandu / "projects/RepToday/missing.md"])
         self.assertEqual(package, {"send one message to each creator, never two.": plan})
+
+    def test_the_guard_reads_every_text_file_the_sandbox_may_read_of_the_package_and_no_other(self):
+        mandu = Path(self.root) / "guard-mandu"
+        drafts = "projects/RepToday/gtm/05-social-pmf/week-1-drafts.md"
+        checklist = "projects/RepToday/02-marketing-launch-checklist_260807.md"
+        for name, text in (
+            (drafts, "Day 1: your routine fits in a coffee break.\n"),
+            (checklist, "- Book the launch-day slot with the press list.\n"),
+            ("projects/RepToday/notes.md", "A note beside the package, which no grant covers.\n"),
+        ):
+            (mandu / name).parent.mkdir(parents=True, exist_ok=True)
+            (mandu / name).write_text(text, encoding="utf-8")
+        picture = mandu / "projects/RepToday/gtm/04-video/frame.png"
+        picture.parent.mkdir(parents=True)
+        picture.write_bytes(b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR and a long run of bytes that is no text\n")
+        outside = Path(self.root) / "outside.md"
+        outside.write_text("A line that lies outside every package path.\n", encoding="utf-8")
+        (mandu / "projects/RepToday/gtm/link.md").symlink_to(outside)
+        registry = json.loads((fakes.REPO / "config/products.json").read_text(encoding="utf-8"))
+        package = instructions.package_lines(mandu, boundary.package_paths(registry, mandu))
+        self.assertEqual(
+            package,
+            {
+                "day 1: your routine fits in a coffee break.": drafts,
+                "book the launch-day slot with the press list.": checklist,
+            },
+            "a file the snapshot never reads is guarded; a picture, a link, and a file outside the grants are not",
+        )
 
     def test_a_file_without_its_front_matter_is_no_proposal(self):
         self.assertEqual(
@@ -152,7 +181,7 @@ class OfferTest(WorkCycleTestCase):
         shutil.copytree(str(fakes.REPO / "src/examples/post-drafts"), str(self.repo / "src/examples/post-drafts"))
 
     def offer(self, found, ledger=None):
-        return instructions.offer(found, ledger or Ledger(), self.store, self.repo)
+        return instructions.offer(found, ledger or Ledger(), self.store, self.repo, self.env)
 
     def test_the_oldest_waiting_reason_s_workflow_goes_first_with_all_its_waiting_reasons(self):
         found = [
@@ -437,6 +466,107 @@ class LoopTest(WorkCycleTestCase):
         self.assertIn(
             "| Instructions changes | incomplete | change `20261018-post-drafts` could not be judged:", report
         )
+
+    def test_a_workflow_whose_example_set_cannot_run_here_is_held_and_the_next_oldest_reason_s_is_offered(self):
+        # The filming set makes its footage with ffmpeg, which this Mac cannot use; its reason is the oldest.
+        shutil.copytree(str(fakes.REPO / "src/examples/filming"), str(self.repo / "src/examples/filming"))
+        self.env["GR0WTHLAB_FFMPEG_BIN"] = str(self.root / "no-ffmpeg")
+        plan = "20261004-filming-plan-w1"
+        decision = {
+            "item": plan,
+            "kind": "filming-plan",
+            "decision": "reject",
+            "reason": "The shot list asks for more takes than one sitting allows.",
+            "decided_at": "2026-10-04T19:00:00-07:00",
+            "code": {"code": "format", "why": "The plan's shape was off.", "coded_by_run": "earlier"},
+        }
+        kept = self.ledger() / f"evidence/decisions/{plan}.json"
+        kept.parent.mkdir(parents=True, exist_ok=True)
+        kept.write_text(json.dumps(decision), encoding="utf-8")
+        filming_before = (self.ledger() / "instructions/filming.md").read_bytes()
+        proposed = self.in_force + ADDED + "\n"
+
+        self.learn(proposed)
+
+        self.assertEqual(self.instructions_text(), proposed, "the Post Drafts change went ahead")
+        self.assertEqual((self.ledger() / "instructions/filming.md").read_bytes(), filming_before)
+        self.assertNotIn("instructions", self.read(f"evidence/decisions/{plan}.json"), "its reason still waits")
+        learned = self.section("Instructions")
+        self.assertIn("- Offered: a change to the Post Drafts Instructions, from its workflow's reasons", learned)
+        self.assertIn(
+            "- Held, though its reasons came first: no example set can gate a change to the Filming Instructions: the"
+            " video tooling that makes its footage cannot be used on this Mac (ffmpeg is not an executable at"
+            f" `{self.root / 'no-ffmpeg'}`).",
+            learned,
+        )
+
+    def test_a_kept_change_whose_record_cannot_be_written_is_not_applied_and_its_reasons_are_offered_again(self):
+        written = instructions.record
+
+        def record(store, change, run_id, now):
+            if change.outcome == instructions.KEPT:
+                raise OSError("the disk is full")
+            return written(store, change, run_id, now)
+
+        with mock.patch.object(instructions, "record", record):
+            report = self.learn(self.in_force + ADDED + "\n")
+
+        self.assertEqual(self.instructions_text(), self.in_force, "nothing changes before its record exists")
+        self.assertEqual([entry for entry in self.items("notice") if entry.get("instructions")], [])
+        change = json.loads(self.change_records()[0].read_text(encoding="utf-8"))
+        self.assertEqual(change["outcome"], "not compared")
+        self.assertIn("could not be written with its record and notice (the disk is full)", change["why"])
+        self.assertNotIn("instructions", self.read(f"evidence/decisions/{DAY_1}.json"), "offered again")
+        self.assertIn(
+            "| Instructions changes | incomplete | change `20261018-post-drafts` could not be judged:", report
+        )
+
+    def test_a_kept_change_whose_notice_cannot_be_queued_keeps_no_text_and_its_reasons_are_offered_again(self):
+        published = Ledger.publish
+
+        def publish(ledger, store, item, slug, *args, **kwargs):
+            if slug.startswith("instructions-"):
+                raise OSError("the queue could not be written")
+            return published(ledger, store, item, slug, *args, **kwargs)
+
+        with mock.patch.object(Ledger, "publish", publish):
+            self.learn(self.in_force + ADDED + "\n")
+
+        self.assertEqual(self.instructions_text(), self.in_force, "put back once its notice could not be queued")
+        change = json.loads(self.change_records()[0].read_text(encoding="utf-8"))
+        self.assertEqual(change["outcome"], "not compared")
+        self.assertEqual((change["before"]["path"], change["proposed"]["path"]), (None, None))
+        self.assertFalse((self.ledger() / "evidence/instructions/20261018-post-drafts").exists())
+        self.assertNotIn(ADDED, self.records_text(), "the record written before it was applied keeps no text now")
+        self.assertNotIn("instructions", self.read(f"evidence/decisions/{DAY_1}.json"), "offered again")
+
+    def test_a_change_that_copies_any_package_file_the_sandbox_reads_is_refused_by_check_work_and_the_launcher(self):
+        # The snapshot never reads this file, and the sandbox can: it lies under the package's own path.
+        drafts = "projects/RepToday/gtm/05-social-pmf/week-1-drafts.md"
+        caption = "Two minutes between meetings still counts as a workout."
+        (self.mandu / drafts).write_text(f"# Week 1 drafts\n\n- {caption}\n", encoding="utf-8")
+        proposed = self.in_force + f"- Model each caption on this one: {caption}\n"
+        behavior = {
+            "write": self.answer(),
+            "sessions": {
+                "learning": {"write": self.learning_writes(proposed)},
+                "post-drafts": {"write": self.drafts},
+            },
+        }
+        fakes.behave(self.codex_dir, behavior)
+        seen = dict((session, (code, out)) for session, code, out in self.go_with_checks(weeks=1, part=True))
+
+        refused = (
+            f"line {len(self.in_force.splitlines()) + 1} of the proposed text holds text of the Go-To-Market Package"
+            f" file `{drafts}`"
+        )
+        code, out = seen["learning"]
+        self.assertEqual(code, 1)
+        self.assertIn(f"PROBLEM Instructions change post-drafts.md\n  - {refused}", out)
+        self.assertIn(f"- Proposed change refused: `post-drafts.md`: {refused}.", self.section("Instructions"))
+        self.assertEqual(self.instructions_text(), self.in_force)
+        self.assertEqual(self.change_records(), [])
+        self.assertNotIn(caption, self.records_text(), "no package text enters gr0wthlab")
 
     def test_another_session_cannot_leave_a_proposed_change(self):
         self.learn()

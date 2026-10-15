@@ -19,6 +19,7 @@ from __future__ import annotations
 import difflib
 import hashlib
 import json
+import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -42,6 +43,8 @@ MAX_SUMMARY = 300
 # A passage of a package file at least this long, a line or a table cell, found in a line a change adds, is package
 # content, which never enters gr0wthlab (ADR 0001).
 PACKAGE_LINE = 24
+# A package file with a NUL byte this near its start is no text, as git judges it, and holds no line to copy.
+TEXT_PROBE = 8000
 # How many changed lines the notice shows, and how much of each.
 SHOWN_LINES = 40
 SHOWN_CHARACTERS = 200
@@ -104,32 +107,37 @@ class Offer:
         return [reason for reason in found if reason.item in self.reasons and reason.code in learning.EXECUTION]
 
 
-def offer(found: Sequence[learning.Reason], ledger: Ledger, store: Store, repo_root: Path) -> tuple[Offer | None, str]:
+def offer(
+    found: Sequence[learning.Reason], ledger: Ledger, store: Store, repo_root: Path, env: Mapping[str, str]
+) -> tuple[Offer | None, str]:
     """The workflow of the oldest reason that may lead to a change, unless a kept change's notice to it is undecided,
-    it has no Instructions in force, or no example set that can gate a change, with all its reasons that may; or None
-    and why no change is offered."""
+    it has no Instructions in force, or no example set that can gate a change on this Mac, with all its reasons that
+    may, and why each workflow of an older reason was held; or None and why no change is offered."""
     waiting = sorted((reason for reason in found if answerable(reason)), key=lambda r: (r.decided_at, r.item))
     if not waiting:
         return None, "no rejection reason may lead to one"
-    held: list[str] = []
+    held: dict[str, str] = {}
     for reason in waiting:
         workflow = reason.workflow
+        if workflow in held:
+            continue
         notice = open_notice(ledger, workflow)
         if notice:
-            held.append(f"the {title(workflow)} Instructions wait on the notice `{notice}` of their last change")
+            held[workflow] = f"the {title(workflow)} Instructions wait on the notice `{notice}` of their last change"
             continue
         try:
             read_text(file_of(store, workflow))
         except (OSError, UnsafeFile, UnicodeDecodeError) as error:
-            held.append(f"`{relative(workflow)}` could not be read ({error})")
+            held[workflow] = f"`{relative(workflow)}` could not be read ({error})"
             continue
         try:
-            examples.load(repo_root, workflow)
+            examples.usable(repo_root, workflow, env)
         except examples.SetError as error:
-            held.append(f"no example set can gate a change to the {title(workflow)} Instructions: {error}")
+            held[workflow] = f"no example set can gate a change to the {title(workflow)} Instructions: {error}"
             continue
-        return Offer(workflow, tuple(other.item for other in waiting if other.workflow == workflow)), ""
-    return None, "; ".join(dict.fromkeys(held))
+        reasons = tuple(other.item for other in waiting if other.workflow == workflow)
+        return Offer(workflow, reasons), "; ".join(held.values())
+    return None, "; ".join(held.values())
 
 
 def brief_lines(
@@ -233,20 +241,34 @@ def passages(line: str) -> list[str]:
     return found
 
 
-def package_lines(mandu: Path, paths: Sequence[str]) -> dict[str, str]:
-    """Every passage of at least PACKAGE_LINE characters in the package files a run read, with the file it is in,
-    from the Mandu checkout: each line, or each cell of a table row, in lowercase with its spacing made single. A file
-    that cannot be read now adds none; one that is not valid text, which the run counts as a failed source, still adds
-    every line that decodes, since the agent could copy those."""
+def package_lines(mandu: Path, roots: Sequence[Path]) -> dict[str, str]:
+    """Every passage of at least PACKAGE_LINE characters in every file the sandbox may read of Mandu, each file in or
+    under the package paths the Product registry names (boundary.package_paths), with the file it is in, from the
+    Mandu checkout: each line, or each cell of a table row, in lowercase with its spacing made single. A link adds
+    none, since what the sandbox reads through one it reads where it leads, and neither does a file that is not text
+    or cannot be read now; one that is not valid UTF-8, which the run counts as a failed source, still adds every line
+    that decodes, since the agent could copy those."""
     found: dict[str, str] = {}
-    for relative_path in paths:
-        try:
-            text = (mandu / relative_path).read_text(encoding="utf-8", errors="replace")
-        except OSError:
-            continue
-        for line in text.splitlines():
-            for passage in passages(line):
-                found.setdefault(passage, relative_path)
+    for root in roots:
+        if root.is_dir() and not root.is_symlink():
+            files = sorted(Path(folder) / name for folder, _, names in os.walk(str(root)) for name in names)
+        else:
+            files = [root]
+        for path in files:
+            if path.is_symlink() or not path.is_file():
+                continue
+            try:
+                with path.open("rb") as handle:
+                    data = handle.read(TEXT_PROBE)
+                    if b"\0" in data:
+                        continue
+                    data += handle.read()
+            except OSError:
+                continue
+            name = path.relative_to(mandu).as_posix()
+            for line in data.decode("utf-8", errors="replace").splitlines():
+                for passage in passages(line):
+                    found.setdefault(passage, name)
     return found
 
 
@@ -422,16 +444,20 @@ def changed_lines(before: str, after: str) -> list[tuple[str, int, str]]:
 
 
 def record(store: Store, change: Change, run_id: str, now: datetime) -> str:
-    """Write the change's record. A kept change keeps the text in force before it and the text proposed beside it, and
-    the agent's summary; a change not kept is refused, so it leaves none of the agent's text, only each changed line by
-    its number, the two texts' fingerprints, and the launcher's reasons (docs/operations.md, where the agent's own words
-    are kept)."""
+    """Write the change's record, again whenever its outcome or notice changes. A kept change keeps the text in force
+    before it and the text proposed beside it, and the agent's summary; a change not kept is refused, so it leaves
+    none of the agent's text, only each changed line by its number, the two texts' fingerprints, and the launcher's
+    reasons (docs/operations.md, where the agent's own words are kept)."""
     kept = change.outcome == KEPT
     folder = (*RECORDS, change.id)
     texts = {"before": change.before, "proposed": change.proposal.text}
-    if kept:
-        for name, text in texts.items():
+    for name, text in texts.items():
+        if kept:
             store.write_text(store.path(*folder, f"{name}.md"), text)
+        else:
+            store.path(*folder, f"{name}.md").unlink(missing_ok=True)
+    if not kept and store.path(*folder).is_dir():
+        store.path(*folder).rmdir()
     path = store.path(*RECORDS, f"{change.id}.json")
     data = {
         "id": change.id,
@@ -604,7 +630,7 @@ class Outcome:
     undo."""
 
     offer: Offer | None = None
-    offer_why: str = ""
+    offer_why: str = ""  # why no change is offered, or why each workflow of an older reason was held
     taken: Taken | None = None
     change: Change | None = None
     undone: list[Undo] = field(default_factory=list)
@@ -646,6 +672,8 @@ def report_lines(outcome: Outcome | None) -> list[str]:
             f" {', '.join(f'`{item}`' for item in outcome.offer.reasons)}, carries an execution code, so none could"
             " lead to one."
         )
+    if outcome.offer is not None and outcome.offer_why:
+        lines.append(f"- Held, though its reasons came first: {outcome.offer_why}.")
     if outcome.answered:
         lines.append(
             f"- No change was proposed for {', '.join(f'`{item}`' for item in outcome.answered)}, so"

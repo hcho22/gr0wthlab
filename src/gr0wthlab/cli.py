@@ -545,7 +545,7 @@ def check_work(run_id: str, out=sys.stdout, part: str | None = None) -> int:
             else None
         )
         mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
-        lines = instructions.package_lines(mandu, offered.get("package_files") or ())
+        lines = instructions.package_lines(mandu, boundary.package_paths)
         found = instructions.take(
             areas, store, chosen, str(offered.get("why") or ""), coded.reasons, lines, publish=False
         )

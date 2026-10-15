@@ -218,14 +218,15 @@ The agent's Instructions are its own working guidance for each workflow, one fil
 They change from an execution-coded rejection reason only through that workflow's example set, as [ADR 0003](adr/0003-instructions-change-only-through-their-example-set.md) decided, and from nothing else but a reviewed pull request.
 
 1. **What is offered.**
-   Before the first session, the launcher picks the workflow of the oldest rejection reason that may still lead to a change: one coded as execution, or not coded yet, of a workflow with Instructions and an example set, that nothing has answered.
-   A workflow whose last kept change's notice the Founder has not decided yet is passed over until it is decided.
+   Before the first session, the launcher picks the workflow of the oldest rejection reason that may still lead to a change: one coded as execution, or not coded yet, of a workflow with Instructions and an example set that can run on this Mac, that nothing has answered.
+   A workflow whose last kept change's notice the Founder has not decided yet is passed over until it is decided, and so is one whose example set cannot run here, as the filming set on a Mac without the video tooling: its reasons wait, and the workflow of the next oldest reason is offered instead.
+   The run report's Instructions section says in one line which workflow was held and why.
    The Rejection reasons session's brief lists that workflow's reasons; a run offers one workflow and tries at most one change.
 2. **What the agent writes.**
    It may write one file, `workspace/instructions/<workflow>.md`: front matter with `workflow:`, the `reasons:` it answers, and a one-line `summary:`, then the whole proposed text.
    `check-work --part learning` checks it as the launcher will.
 3. **What the launcher refuses.**
-   A proposal for another workflow, one that cites a reason that is not offered or not coded as execution (a strategy reason never is), a summary longer than one line of 300 characters, a text that is the one in force, longer than 32,000 characters, drops a comment line of the text in force, holds what looks like an email address, or adds a line holding a passage of at least 24 characters of a Go-To-Market Package file.
+   A proposal for another workflow, one that cites a reason that is not offered or not coded as execution (a strategy reason never is), a summary longer than one line of 300 characters, a text that is the one in force, longer than 32,000 characters, drops a comment line of the text in force, holds what looks like an email address, or adds a line holding a passage of at least 24 characters of any text file the sandbox may read of a Go-To-Market Package, under every path the Product registry names for it.
    A refused proposal is removed and named with its reasons in the run report and the notice, and its reasons are offered again.
 4. **The example set.**
    The launcher runs each example of the workflow's set in `src/examples/<workflow>/evals.json` that carries `run`, one at a time, once with the Instructions in force and once with the proposed text.

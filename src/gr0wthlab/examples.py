@@ -115,6 +115,22 @@ def load(repo_root: Path, workflow: str) -> ExampleSet:
     return ExampleSet(workflow, folder, data, tuple(found))
 
 
+def usable(repo_root: Path, workflow: str, env: Mapping[str, str]) -> ExampleSet:
+    """A workflow's example set that can run on this Mac: one with an example that names footage needs the video
+    tooling that makes it."""
+    example_set = load(repo_root, workflow)
+    if any(setting(example_set, example, "footage") for example in example_set.examples):
+        footage_tooling(env)
+    return example_set
+
+
+def footage_tooling(env: Mapping[str, str]) -> video.Tooling:
+    tooling = video.find(env)
+    if not tooling.ok:
+        raise SetError(f"the video tooling that makes its footage cannot be used on this Mac ({tooling.problem})")
+    return tooling
+
+
 # One check, one run of an example, one example on both sides.
 
 
@@ -535,7 +551,7 @@ def build(
     pages = json.loads(fixture(example_set, pages_file).read_text(encoding="utf-8")) if pages_file else {}
     at = datetime.fromisoformat(str(setting(example_set, example, "at", DEFAULT_AT)))
     lab_env = {key: value for key, value in env.items() if not key.startswith("GR0WTHLAB_")}
-    for key in ("GR0WTHLAB_CODEX_BIN",):
+    for key in ("GR0WTHLAB_CODEX_BIN", video.FFMPEG_ENV, video.FFPROBE_ENV):
         if env.get(key):
             lab_env[key] = env[key]
     lab_env.update(
@@ -558,9 +574,7 @@ def make_footage(example_set: ExampleSet, example: Example, place: Path, cache: 
     names = setting(example_set, example, "footage", []) or []
     if not names:
         return
-    tooling = video.find(env)
-    if not tooling.ok:
-        raise SetError(f"its footage cannot be made: the video tooling cannot be used ({tooling.problem})")
+    tooling = footage_tooling(env)
     inventory = json.loads(fixture(example_set, example_set.data["footage"]).read_text(encoding="utf-8"))
     clips = {str(clip["name"]): clip["facts"] for clip in inventory["clips"]}
     for name in names:
@@ -696,7 +710,7 @@ def gate(
     decide it. Each lab is removed once its checks are read; its run's log stays in the log folder."""
     result = Gate(workflow, bound=bound)
     try:
-        example_set = load(repo_root, workflow)
+        example_set = usable(repo_root, workflow, env)
     except SetError as error:
         result.why = str(error)
         return result
