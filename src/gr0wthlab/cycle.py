@@ -1270,6 +1270,8 @@ class Cycle:
                         state.reasons, ledger, self.store, canonical(self.repo_root), self.env
                     )
                     state.instructions.offer, state.instructions.offer_why = chosen, why
+            elif state.instructions is not None:
+                state.instructions.offer_why = "the Review Queue could not be read"
             offered = state.instructions.offer if state.instructions is not None else None
             record = {
                 "run": state.run_id,
@@ -1363,8 +1365,9 @@ class Cycle:
         example did worse (ADR 0003). A kept change's record is written first, so its notice can always undo it, then
         its text into ledger/instructions/ and its notice for the next sitting; the record of every change tried, kept
         or not, is kept in ledger/evidence/instructions/.
-        A reason the change cites is answered with its outcome, unless the gate could not judge the change, and an
-        offered execution reason a finished session proposed no change for is answered as such."""
+        A reason the change cites is answered with its outcome, unless the gate could not judge the change, as when
+        it stopped, which never stops the run, and an offered execution reason a finished session proposed no change
+        for is answered as such."""
         outcome = state.instructions
         if outcome is None:
             return
@@ -1401,19 +1404,23 @@ class Cycle:
         outcome.change = change
         log_dir = launcher.default_log_dir(self.env, self.home) / "examples"
         self.say(f"re-running the {proposal.workflow} example set for the proposed Instructions change {identifier}")
-        change.gate = examples.gate(
-            canonical(self.repo_root),
-            proposal.workflow,
-            before,
-            proposal.text,
-            identifier,
-            self.env,
-            self.home,
-            log_dir,
-            config.learning.gate_time_limit,
-            config.learning.example_time_limit,
-            self.store.path(*examples.LABS),
-        )
+        try:
+            change.gate = examples.gate(
+                canonical(self.repo_root),
+                proposal.workflow,
+                before,
+                proposal.text,
+                identifier,
+                self.env,
+                self.home,
+                log_dir,
+                config.learning.gate_time_limit,
+                config.learning.example_time_limit,
+                self.store.path(*examples.LABS),
+            )
+        except Exception as error:
+            why = f"its example set stopped ({type(error).__name__}: {error})"
+            change.gate = examples.Gate(proposal.workflow, why=why, bound=config.learning.gate_time_limit)
         self.say(f"Instructions change {identifier}: {change.outcome}: {change.why}")
         change.record = self.store.relative(self.store.path(*instructions.RECORDS, f"{identifier}.json"))
         if change.outcome == instructions.KEPT:
@@ -1422,19 +1429,27 @@ class Cycle:
             item = exchange.Item({"kind": "notice"}, title, body, touches, evidence_lines)
             extra = {"instructions": proposal.workflow, "change": identifier}
             slug = f"instructions-{proposal.workflow}"
+            applied = False
             try:
                 instructions.record(self.store, change, run_id, now)
                 instructions.apply(self.store, change)
-                try:
-                    change.notice = ledger.publish(self.store, item, slug, run_id, now, extra)
-                except (OSError, ConfigError):
-                    self.store.write_text(instructions.file_of(self.store, proposal.workflow), before)
-                    raise
+                applied = True
+                change.notice = ledger.publish(self.store, item, slug, run_id, now, extra)
             except (OSError, ConfigError) as error:
-                change.gate.outcome = instructions.NOT_COMPARED
-                change.gate.why = (
-                    f"its example set passed it, and it could not be written with its record and notice ({error})"
-                )
+                try:
+                    if applied:
+                        self.store.write_text(instructions.file_of(self.store, proposal.workflow), before)
+                except OSError as failed:
+                    outcome.problems.append(
+                        f"change `{identifier}` stays in force with no notice: its notice could not be queued"
+                        f" ({error}), and `{instructions.relative(proposal.workflow)}` could not be put back"
+                        f" ({failed}); its record `{change.record}` keeps the text before it"
+                    )
+                else:
+                    change.gate.outcome = instructions.NOT_COMPARED
+                    change.gate.why = (
+                        f"its example set passed it, and it could not be written with its record and notice ({error})"
+                    )
             else:
                 state.published.append(change.notice)
                 seen.setdefault(exchange.item_hash(item), change.notice)

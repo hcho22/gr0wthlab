@@ -690,7 +690,8 @@ def report_lines(outcome: Outcome | None) -> list[str]:
             f" {change.why}."
         )
         if change.outcome == KEPT:
-            lines.append(f"  The notice `{change.notice}` shows it at the next sitting.")
+            if change.notice:
+                lines.append(f"  The notice `{change.notice}` shows it at the next sitting.")
         elif change.outcome == NOT_KEPT:
             lines.append("  The Instructions are as they were; the reasons it cites are not offered again.")
         else:

@@ -13,7 +13,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from gr0wthlab import cycle, examples
+from gr0wthlab import cycle, examples, posts
+from gr0wthlab.queue import Ledger
 from tests import fakes
 
 POSTS = fakes.EXAMPLES
@@ -273,6 +274,36 @@ class ExampleRunTest(unittest.TestCase):
         lab = examples.build(fakes.REPO, example_set, example_set.examples[0], "text", root, env, logs, 600)
         self.assertEqual({key: lab.env.get(key) for key in tools}, tools)
         self.assertEqual(lab.env["GR0WTHLAB_LOG_DIR"], str(logs))
+
+    def test_a_lab_s_workspace_readmes_are_the_committed_ones_never_what_a_session_left(self):
+        repo = fakes.make_repo(self.root / "left-readmes", self.env)
+        secret = self.root / "secret.txt"
+        secret.write_text("a credential outside every grant\n", encoding="utf-8")
+        drafts = repo / "workspace/drafts/README.md"
+        drafts.unlink()
+        drafts.symlink_to(secret)
+        (repo / "workspace/evidence/README.md").write_text("Write nothing at all.\n", encoding="utf-8")
+        example_set = examples.load(fakes.REPO, "post-drafts")
+        root, logs = self.root / "labs" / "readmes", self.root / "logs"
+        lab = examples.build(repo, example_set, example_set.examples[0], "text", root, self.env, logs, 600)
+        workspace = lab.repo / "workspace"
+        self.assertFalse((workspace / "drafts/README.md").is_symlink())
+        self.assertEqual((workspace / "drafts/README.md").read_text(encoding="utf-8"), "# drafts\n")
+        self.assertEqual((workspace / "evidence/README.md").read_text(encoding="utf-8"), "# evidence\n")
+
+    def test_a_lab_whose_launcher_cannot_take_the_work_in_reads_as_not_run_never_as_the_agent_s_result(self):
+        example = examples.load(fakes.REPO, "post-drafts").examples[0]
+        with mock.patch.object(posts, "take", side_effect=OSError("the disk is full")):
+            run = self.run_example("post-drafts", example)
+        self.assertEqual((run.status, run.checks), ("not run", []))
+        self.assertEqual(run.why, "its session's work was not taken in: the disk is full")
+        with mock.patch.object(Ledger, "take_incoming", side_effect=OSError("the disk is full")):
+            run = self.run_example("post-drafts", example)
+        self.assertEqual((run.status, run.checks), ("not run", []))
+        self.assertEqual(
+            run.why,
+            f"its lab's run stopped before it finished, with exit status {cycle.EXIT_STOPPED}; its log says why",
+        )
 
     def test_a_lab_that_cannot_be_built_or_whose_run_stops_reads_as_not_run_with_why(self):
         # Either is that example's trouble alone: the gate reads it as not compared, and the weekly run goes on.

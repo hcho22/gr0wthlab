@@ -358,6 +358,11 @@ class Ledger:
                 f"supersedes {target}, which the launcher filed from reviewed text; only a reviewed change to that"
                 " text replaces it"
             )
+        elif replaced.get("instructions"):
+            problems.append(
+                f"supersedes {target}, the notice of a change to the Instructions, which only the Founder's decision"
+                " closes"
+            )
         elif replaced.get("kind") in FROM_DRAFT:
             kind = replaced["kind"]
             problems.append(

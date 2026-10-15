@@ -632,6 +632,7 @@ class DecisionRoundTripTest(CycleTestCase):
             report,
         )
         self.assertNotIn("Could not use", report)
+        self.assertIn("- No change to any Instructions was offered: the Review Queue could not be read.", report)
         self.assertFalse((self.ledger() / f"evidence/decisions/{item}.json").exists())
         self.assertIn("| Sittings | changed | 1 record, 1 new |", report)
         self.assertTrue((self.ledger() / f"evidence/sittings/{day}.json").is_file())

@@ -246,7 +246,8 @@ They change from an execution-coded rejection reason only through that workflow'
    A kept change is written to `ledger/instructions/<workflow>.md` and queued as one notice, "Notice: the <workflow> Instructions changed", with the Founder's words of each reason, the agent's code and line for each, its summary, the change line by line, and every example's result on each side.
    Every change tried is recorded in `ledger/evidence/instructions/<change id>.json`; each cited reason's decision Evidence records what became of it, so it is not offered again.
    A kept change keeps the text before it and the text it wrote beside its record, in `ledger/evidence/instructions/<change id>/`; one not kept keeps none of the agent's text ([where the agent's own words are kept](#where-the-agents-own-words-are-kept)).
-   A change the example set could not judge, because the bound ran out or an example's session did not run to its end, is not kept, and its reasons are offered again.
+   A change the example set could not judge, because the bound ran out, an example's session did not run to its end, its lab's launcher could not take that session's work in, or the example set stopped, is not kept, and its reasons are offered again.
+   A kept change's record is written before its text, so its notice can always undo it; and its notice is closed only by the Founder's decision, never by an item in `incoming/` that names it in `supersedes`.
    The run report's Instructions section has all of it, and the Outputs table an `Instructions changes` row, incomplete when a proposal was refused or a change could not be judged.
    The example set's sessions are not among the run's own sessions; the report counts their sessions, agent time, and approximate cost on a line of their own.
 8. **The Founder's answer.**

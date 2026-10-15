@@ -540,6 +540,63 @@ class LoopTest(WorkCycleTestCase):
         self.assertNotIn(ADDED, self.records_text(), "the record written before it was applied keeps no text now")
         self.assertNotIn("instructions", self.read(f"evidence/decisions/{DAY_1}.json"), "offered again")
 
+    def test_a_kept_change_that_cannot_be_put_back_keeps_its_texts_and_the_report_says_it_stays_in_force(self):
+        published, written = Ledger.publish, Store.write_text
+        in_force = self.ledger() / "instructions/post-drafts.md"
+
+        def publish(ledger, store, item, slug, *args, **kwargs):
+            if slug.startswith("instructions-"):
+                raise OSError("the queue could not be written")
+            return published(ledger, store, item, slug, *args, **kwargs)
+
+        def write_text(store, path, text):
+            if Path(path) == in_force and text == self.in_force:
+                raise OSError("the disk is full")
+            return written(store, path, text)
+
+        proposed = self.in_force + ADDED + "\n"
+        with mock.patch.object(Ledger, "publish", publish), mock.patch.object(Store, "write_text", write_text):
+            self.learn(proposed)
+
+        self.assertEqual(self.instructions_text(), proposed)
+        change = json.loads(self.change_records()[0].read_text(encoding="utf-8"))
+        self.assertEqual((change["outcome"], change["notice"]), ("kept", None))
+        before = self.ledger() / change["before"]["path"]
+        self.assertEqual(before.read_text(encoding="utf-8"), self.in_force, "the text before it is kept")
+        learned = self.section("Instructions")
+        self.assertIn(
+            "- change `20261018-post-drafts` stays in force with no notice: its notice could not be queued (the queue"
+            " could not be written), and `ledger/instructions/post-drafts.md` could not be put back (the disk is"
+            " full); its record `evidence/instructions/20261018-post-drafts.json` keeps the text before it.",
+            learned,
+        )
+        self.assertNotIn("The notice `None`", learned)
+
+    def test_a_gate_that_stops_leaves_the_change_not_compared_and_the_run_ends_with_its_report(self):
+        with mock.patch.object(examples, "run_example", side_effect=OSError("the log folder is full")):
+            report = self.learn(self.in_force + ADDED + "\n")
+        self.assertEqual(self.instructions_text(), self.in_force)
+        change = json.loads(self.change_records()[0].read_text(encoding="utf-8"))
+        self.assertEqual(change["outcome"], "not compared")
+        self.assertEqual(change["why"], "its example set stopped (OSError: the log folder is full)")
+        self.assertNotIn("instructions", self.read(f"evidence/decisions/{DAY_1}.json"), "offered again")
+        self.assertIn(
+            "| Instructions changes | incomplete | change `20261018-post-drafts` could not be judged:", report
+        )
+
+    def test_no_item_of_the_agent_s_can_supersede_a_kept_change_s_notice(self):
+        self.learn(self.in_force + ADDED + "\n")
+        notice = next(entry["id"] for entry in self.items("notice") if entry.get("instructions"))
+        replace = fakes.proposal("notice", f"supersedes: {notice}\n", "say the change another way")
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/replace-notice.md": replace}})
+        report = self.go(weeks=2)
+        self.assertIn(notice, [entry["id"] for entry in self.items("notice")], "the notice stays open")
+        self.assertIn(
+            f"- Set aside, not queued: `replace-notice.md`: supersedes {notice}, the notice of a change to the"
+            " Instructions, which only the Founder's decision closes",
+            report,
+        )
+
     def test_a_change_that_copies_any_package_file_the_sandbox_reads_is_refused_by_check_work_and_the_launcher(self):
         # The snapshot never reads this file, and the sandbox can: it lies under the package's own path.
         drafts = "projects/RepToday/gtm/05-social-pmf/week-1-drafts.md"

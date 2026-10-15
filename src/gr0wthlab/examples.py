@@ -422,10 +422,11 @@ class Lab:
     pages: dict[str, str] = field(default_factory=dict)
 
 
-def git(repo: Path, *args: str) -> None:
+def git(repo: Path, *args: str) -> str:
     done = process.run(["git", "-C", str(repo), *LAB_GIT, *args], process.QUICK)
     if done.timed_out or done.returncode != 0:
         raise SetError(f"git {args[0]} failed in the lab: {' '.join(done.stderr.split())[:300] or 'no output'}")
+    return done.stdout
 
 
 def overlay(source: Path, target: Path) -> None:
@@ -465,7 +466,8 @@ def build(
     limit: float,
 ) -> Lab:
     """A throwaway lab for one example: a repository like the real one with the Instructions under test, and its own
-    synthetic Mandu and Product checkout beside it."""
+    synthetic Mandu and Product checkout beside it. Its workspace READMEs are as the last commit holds them, never as
+    a session left the checkout's."""
     workflow = example_set.workflow
     if root.exists():
         shutil.rmtree(str(root))
@@ -498,7 +500,8 @@ def build(
     (ledger / "README.md").write_text("# ledger\n\nA lab's records.\n", encoding="utf-8")
     for area in AREAS:
         (workspace / area).mkdir(parents=True)
-        shutil.copy(str(repo_root / "workspace" / area / "README.md"), str(workspace / area / "README.md"))
+        readme = git(repo_root, "show", f"HEAD:workspace/{area}/README.md")
+        (workspace / area / "README.md").write_text(readme, encoding="utf-8")
     for key, target in (("ledger", ledger), ("workspace", workspace)):
         for relative in layers(example_set, example, key):
             overlay(fixture(example_set, relative), target)
@@ -643,7 +646,8 @@ def run_example(
     limit: float,
 ) -> Run:
     """Run one example in a lab of its own, with the given Instructions text, and read its checks off what the lab's
-    run took in."""
+    run took in. A lab whose launcher could not take the session's work in, or whose run stopped, says nothing of the
+    Instructions, so the example is not run."""
     from . import cycle
 
     try:
@@ -658,7 +662,7 @@ def run_example(
     out = io.StringIO()
     runner = cycle.Cycle(lab.repo, lab.env, home, out, lambda: lab.at, reader, only=example_set.workflow)
     try:
-        runner.run("on-demand", None, ["run"])
+        code = runner.run("on-demand", None, ["run"])
     except Exception as error:
         # Whatever stops a lab's run is that example's trouble, never the weekly run's: the run still ends with its
         # report, and the example reads as not compared.
@@ -679,6 +683,13 @@ def run_example(
     if not session.finished:
         result.why = f"its session did not run to its end: {session.gap()}"
         return result
+    problem = take_in_problem(state, example_set.workflow)
+    if problem:
+        result.why = f"its session's work was {problem}"
+        return result
+    if code:
+        result.why = f"its lab's run stopped before it finished, with exit status {code}; its log says why"
+        return result
     result.status = RAN
     evaluate = EVALUATORS.get(example_set.workflow)
     for assertion in example.checks:
@@ -691,6 +702,18 @@ def run_example(
             held, detail = False, f"the check could not be read ({type(error).__name__}: {error})"
         result.checks.append(Check(assertion, held, detail))
     return result
+
+
+def take_in_problem(state, workflow: str) -> str:
+    """Why a lab's launcher could not take its session's work in, or "": the filming session's edit records are taken
+    in with the post Drafts."""
+    return {
+        "post-drafts": state.posts_problem,
+        "filming": state.posts_problem,
+        "beta-recruiting": state.beta_problem,
+        "listening": state.listening_problem,
+        "outreach": state.outreach_problem,
+    }.get(workflow, "")
 
 
 def gate(
