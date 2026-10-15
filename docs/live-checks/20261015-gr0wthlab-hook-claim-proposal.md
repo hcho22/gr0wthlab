@@ -145,6 +145,24 @@ Each ran in a clone of its own under `<lab>`, while other work also ran on the M
 | `/usr/bin/python3 -m unittest discover -s src/tests -t src` | a clone of this change with the record, whose tree is `805546b6ce2bdc270cc45a559d40609963cdf944` | 1,388 tests OK in 3,777 seconds |
 | `ruff check src src/bin/gr0wthlab` and `ruff format --check src src/bin/gr0wthlab`, ruff 0.15.20 as CI installs it | this change's worktree | all checks passed; 101 files already formatted |
 
+## Round 5: example 16 on the merged head
+
+`main` moved two changes while this branch waited, the Dispatch wording fix (#24) and the Weekly Read (#25).
+Merge commit `6155b45e8ba3dc8ea19db71ad3bd2ce7c385d77b` (`src` tree `15b9406344669caa785e24ac58ba678cbed46501`, `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`) brought in `main` at `3789b3f`.
+The merge changed three things a Post Drafts session reads: `src/instructions/weekly-run/common.md` and `items.md` now name the Weekly Read decision item and a Dispatch request where a session says so, and the example set's kit gained `projects/RepToday/gtm/05-social-pmf/read-the-results.md`.
+`post-drafts.md`, `ledger/instructions/post-drafts.md`, and example 16's own entry and Draft file did not change.
+
+Example 16 ran three more times on that commit, from a clone under `<lab>`, the same way as round 2, from 12:12 to 12:13.
+
+| Run | Assertions held | Agent time | Cost |
+| --- | --- | --- | --- |
+| `20261011T230000Z-on-demand-c74e` | 3 of 3 | 76 s | about $0.010 |
+| `20261011T230000Z-on-demand-b6dd` | 3 of 3 | 71 s | about $0.008 |
+| `20261011T230000Z-on-demand-6df7` | 3 of 3 | 78 s | about $0.011 |
+
+Each queued proposal declares `new_angle: no` and cites the Hook at `projects/RepToday/gtm/05-social-pmf/angles.md` line 8 and lines of the RepToday code (`Engine/ConsistencyScore.swift` in two, `App/ReadyScreen.swift` in one).
+The rest of the example set and the weekly lab runs were not run again on this commit; they stand on rounds 2 and 3.
+
 ## What was not exercised
 
 - Immerse: the example set and the labs are RepToday's; the task definition is shared, so the change applies to Immerse's weekly runs alike, and nothing here ran one.
