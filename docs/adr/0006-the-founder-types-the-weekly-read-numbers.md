@@ -3,8 +3,8 @@
 In a read week the Founder types each number the Weekly Read asks for into the sitting page, as TikTok Studio or YouTube Studio shows it, and pastes the comments as text.
 The page takes no screenshot and no file, and keeps none.
 
-Chosen by the change that built the Weekly Read (US-ME11, US-ME12), on 2026-10-14.
-The Founder has not decided it: the brief asked for a place on the sitting page to give the TikTok export as screenshots or a file, as US-ME11 does, and this record is for him to confirm or overturn.
+Decided by the Founder on 2026-10-14, in his words: "weekly read - type."
+The change that built the Weekly Read (US-ME11, US-ME12) proposed it, where US-ME11 had planned a place on the sitting page to give the TikTok export as screenshots or a file.
 
 ## Why
 
@@ -28,6 +28,9 @@ The Founder has not decided it: the brief asked for a place on the sitting page 
 
 ## Considered Options
 
-- **Screenshots, kept and read by the agent**: rejected for commenters' names in a public repository and for an agent's transcription standing as the Founder's record.
-- **A Studio download, read by the launcher**: not built, since no download's format was known; it could follow as above.
-- **Each number typed, and the comments pasted as text**: chosen.
+The Founder was given these on 2026-10-14.
+
+- **Type each post's Studio numbers and paste its comments on the sitting page, keeping only the numbers.**
+  Chosen ("weekly read - type").
+- **Upload screenshots or an export file**: less typing, but a screenshot cannot be read without sending it to the AI provider, both show commenters' names and follower counts that are not to be kept, and TikTok's export does not hold every number per post.
+  Not chosen.
