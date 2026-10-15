@@ -11,7 +11,7 @@ Founder's numbers (results.py):
 - an Angle none of whose posts reached the floor on the platform that judges it is "insufficient data", never a pass
   or a fail; the floor is read-the-results.md's own figure, counted in views (results.FLOOR_COUNTS);
 - the flex slot goes only to an Angle whose line says it cleared its signal, never to one that merely ranked first;
-- a pair is resolved only when both legs reached the floor;
+- a pair is resolved only when both legs reached the floor, and its line names the leg whose Hook leads;
 - every number the agent writes has its n beside it, every unread or at-risk Angle and every pair to repost says what
   would settle it at the next read, and every comment quoted is on a quote line of its own and found word for word in
   what the Founder gave; a decision line quotes nothing.
@@ -64,7 +64,9 @@ MAX_MEMO = 20000
 ANGLE, PAIR, FLEX, PRODUCT = "Angles", "Pairs", "Flex slot", "Product"
 DECISION = r" Decision: (keep|kill|change|test)"
 ANGLE_LINE = re.compile(r"- (P\d+) \((days? [0-9][0-9, and]*)\): (" + "|".join(ANGLE_RESULTS) + r")\. (.+)" + DECISION)
-PAIR_LINE = re.compile(r"- (AB-\d+) \((days? [0-9][0-9, and]*)\): (resolved|repost)\. (.+)" + DECISION)
+PAIR_LINE = re.compile(
+    r"- (AB-\d+) \((days? [0-9][0-9, and]*)\): (resolved, leg ([AB]) leads|repost)\. (.+)" + DECISION
+)
 FLEX_LINE = re.compile(r"- Flex slot: (earned by (P\d+)|not earned)\. (.+)" + DECISION)
 PRODUCT_LINE = re.compile(r"- (.+)" + DECISION)
 QUOTE_LINE = re.compile(r"  > day (\d+): \"(.+)\"")
@@ -109,6 +111,7 @@ class Line:
     text: str  # the line as the agent wrote it
     quotes: tuple[tuple[int, str], ...] = ()  # each comment quoted under it, with its day
     earned_by: str | None = None
+    leads: str | None = None  # the leg whose Hook leads, for a resolved pair
 
     @property
     def ask(self) -> str:
@@ -116,7 +119,19 @@ class Line:
             return f"flex slot {self.result}: {self.decision}"
         if self.section == PRODUCT:
             return f"a result that bears on the product: {self.decision}"
+        if self.leads:
+            return f"{self.key}, {self.result}, leg {self.leads} leads: {self.decision}"
         return f"{self.key}, {self.result}: {self.decision}"
+
+    def as_json(self) -> dict[str, object]:
+        """What the line's queue entry keeps of it, so a later run knows what its approval owes the package
+        (weekly_changes.py) without reading the item again."""
+        found: dict[str, object] = {"section": self.section, "result": self.result, "decision": self.decision}
+        if self.earned_by:
+            found["earned_by"] = self.earned_by
+        if self.leads:
+            found["leads"] = self.leads
+        return found
 
 
 @dataclass
@@ -367,10 +382,12 @@ def parse(text: str, found: Plan) -> tuple[list[Line], list[str]]:
             match = PAIR_LINE.fullmatch(line)
             if not match:
                 problems.append(
-                    f"{where} does not read `- AB-<n> (days <n> and <n>): <resolved|repost>. <why> Decision: ...`"
+                    f"{where} does not read `- AB-<n> (days <n> and <n>): resolved, leg <A|B> leads. <why> Decision:"
+                    " ...`, or the same with `repost.` for `resolved, leg <A|B> leads.`"
                 )
                 continue
-            parsed.append(Line(PAIR, match.group(1), match.group(3), match.group(5), line))
+            result = RESOLVED if match.group(4) else REPOST
+            parsed.append(Line(PAIR, match.group(1), result, match.group(6), line, leads=match.group(4)))
             days = [int(day) for day in re.findall(r"\d+", match.group(2))]
             legs = found.pairs().get(match.group(1))
             if legs is not None and sorted(days) != sorted(legs):
@@ -564,6 +581,25 @@ def compose(
     return "\n".join(out) + "\n"
 
 
+def then_proposal(what: str, more: str = "") -> str:
+    """The Touches of a decision whose approval changes the package: by itself it changes no package file, since Mandu
+    applies only an approved package-change proposal, so the next run files one with the exact edit (weekly_changes)."""
+    return (
+        "- Nothing yet: approving it has the next run file a package-change proposal with the exact edit that"
+        f" {what}, for you to approve before Mandu changes the file." + (f" {more}" if more else "")
+    )
+
+
+def flex_angle(found: Plan, line: Line) -> str:
+    """The Angle an approved flex line puts in the flex slot: the one that earned it, or else the one Angle the
+    calendar's flex row names for when none does, as far as the kit read before the sessions shows."""
+    if line.earned_by:
+        return line.earned_by
+    days = [day for day in (found.kit.days.values() if found.kit else ()) if day.angle is None]
+    named = sorted(set(re.findall(r"\bP\d+\b", days[0].cell))) if len(days) == 1 else []
+    return named[0] if len(named) == 1 else "the Angle its row names for when none earns it"
+
+
 def item_for(found: Plan, line: Line, memo_path: str, product: str) -> exchange.Item:
     """One decision line as its own Weekly Read decision item."""
     read = found.read
@@ -574,16 +610,28 @@ def item_for(found: Plan, line: Line, memo_path: str, product: str) -> exchange.
     if days:
         body += result_rows(found, days) + [""]
     body += [results.FLOOR_COUNTS, "", CANNOT_TELL]
-    if line.section == ANGLE and line.decision in ("kill", "change"):
-        touches = (
-            f"- {line.key}'s row in `{found.paths.get('angles', 'angles.md')}`, which Mandu changes if you approve"
+    angles = found.paths.get("angles", "angles.md")
+    if line.section == ANGLE and line.decision == "kill":
+        touches = then_proposal(f"marks {line.key} killed in `{found.paths.get('creative_log', 'creative-log.json')}`")
+    elif line.section == ANGLE and line.decision == "change":
+        touches = then_proposal(
+            f"adds a new Angle to `{angles}` in {line.key}'s place",
+            f"The Weekly Read session writes the new Angle's words at that run, and {line.key}'s row stays as it is.",
         )
     elif line.section == ANGLE:
-        touches = f"- Nothing: approving keeps {line.key}'s row in `{found.paths.get('angles', 'angles.md')}` as it is"
+        touches = f"- Nothing: approving keeps {line.key}'s row in `{angles}` as it is"
+    elif line.section == PAIR and line.leads:
+        touches = then_proposal(
+            f"records in `{found.paths.get('pairs', 'ab-pairs.md')}` that {line.key} resolved with leg {line.leads}'s"
+            " Hook leading"
+        )
     elif line.section == PAIR:
-        touches = f"- {line.key} in `{found.paths.get('pairs', 'ab-pairs.md')}`"
+        touches = f"- Nothing: approving changes no package file, and {line.key} is not declared resolved"
     elif line.section == FLEX:
-        touches = f"- Day 14 of the calendar, `{found.paths.get('calendar', 'cadence-14-day.md')}`"
+        touches = then_proposal(
+            f"puts {flex_angle(found, line)} in the flex slot of the calendar,"
+            f" `{found.paths.get('calendar', 'cadence-14-day.md')}`"
+        )
     else:
         touches = "- Nothing is changed by this item; a product change would come to you as a Dispatch request"
     evidence = [f"- The memo: `{memo_path}`"]
@@ -683,7 +731,8 @@ def take(
             item = exchange.Item(
                 dict(item.fields, supersedes=str(earlier["id"])), item.ask, item.body, item.touches, item.evidence
             )
-        identifier = ledger.publish(store, item, slugs[line.key], run_id, now, extra={"line_key": line.key})
+        extra = {"line_key": line.key, "line": line.as_json(), "read_date": found.read.on.isoformat()}
+        identifier = ledger.publish(store, item, slugs[line.key], run_id, now, extra=extra)
         if earlier is not None:
             ledger.close(earlier, SUPERSEDED, run_id, now, superseded_by=identifier)
             outcome.replaced.append(str(earlier["id"]))

@@ -31,6 +31,7 @@ from . import (
     sessions,
     settings,
     sources,
+    weekly_changes,
     weekly_read,
 )
 from . import state as run_state
@@ -535,8 +536,10 @@ def check_work(run_id: str, out=sys.stdout, part: str | None = None) -> int:
         plan, notes = weekly_read.restore(record["weekly_read"], LEDGER_DIR)
         for note in notes:
             print(f"{note[0].upper()}{note[1:]}.", file=out)
-        text, why = weekly_read.read_memo(areas, plan)
-        if text is None:
+        text, why = weekly_read.read_memo(areas, plan) if plan.due else (None, "")
+        if not plan.due:
+            print(f"No memo is due this run: {plan.why}.", file=out)
+        elif text is None:
             say(False, f"PROBLEM memo: {why}")
         else:
             lines, problems = weekly_read.check(text, plan)
@@ -544,6 +547,19 @@ def check_work(run_id: str, out=sys.stdout, part: str | None = None) -> int:
                 say(False, f"PROBLEM memo `weekly-reads/{plan.memo}`", problems)
             else:
                 say(True, f"OK memo `weekly-reads/{plan.memo}`: {exchange.plural(len(lines), 'decision line')}")
+    if (record.get("weekly_changes") or {}).get("words") and weekly_read.WORKFLOW in wanted:
+        mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
+        plan, notes = weekly_changes.restore(record["weekly_changes"], mandu)
+        for note in notes:
+            print(f"{note[0].upper()}{note[1:]}.", file=out)
+        outcome = weekly_changes.take(plan, areas, store, ledger, products, run_id, now, dict(seen), publish=False)
+        for found in plan.owed:
+            if found.filed:
+                say(True, f"OK new Angle {found.angle} for `{found.item}`: its proposal can be filed")
+            elif found.problem and not any(name == f"{found.item}.md" for name, _ in outcome.set_aside):
+                say(False, f"PROBLEM new Angle {found.angle} for `{found.item}`: {found.problem}")
+        for name, problems in outcome.set_aside:
+            say(False, f"PROBLEM new Angle `weekly-reads/{weekly_changes.FOLDER}/{name}`", problems)
     if learning.WORKFLOW in wanted:
         coded = learning.take(areas, store, ledger, products, run_id, now, publish=False)
         for item, code in coded.coded:
