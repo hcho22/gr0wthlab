@@ -574,9 +574,13 @@ def context(rules: Rules, boundary: Boundary) -> Context:
     brand_rules, problem = None, ""
     try:
         brand_rules = lint.Rules(json.loads((mandu / rules.brand_rules).read_text(encoding="utf-8")))
-    except (OSError, UnicodeDecodeError) as error:
-        problem = getattr(error, "strerror", None) or str(error)
-    except ValueError as error:  # not JSON, or not the rules lint.Rules reads
+    except OSError as error:
+        problem = error.strerror or str(error)
+    except UnicodeDecodeError:
+        problem = "it is not UTF-8 text"
+    except json.JSONDecodeError as error:
+        problem = f"not JSON: {error}"
+    except ValueError as error:  # not the rules lint.Rules reads
         problem = str(error)
     return Context(rules.product, mandu, rules.citable, rules.k8, brand_rules, problem)
 
@@ -1228,7 +1232,7 @@ def brief_lines(plan: Plan, repo_root: Path) -> list[str]:
         f" {plan.gate.record.approved_on}), so its Beta Cohort is being recruited from the Waitlist.",
         "The launcher chooses who is invited, from the view you cannot read, and attaches them to the item. You write"
         ' only the message, the same words for everyone, as the task definition\'s "Writing a recruiting Draft" and'
-        " `workspace/instructions/beta-recruiting.md` describe.",
+        " `ledger/instructions/beta-recruiting.md` describe.",
         "",
         "| Draft | Write it as | In the Review Queue |",
         "| --- | --- | --- |",

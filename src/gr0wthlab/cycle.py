@@ -1,32 +1,34 @@
 """One Marketing Engineer run, scheduled or on demand, from the pre-run sync to the saved records.
 
-Order: bring the production clone up to origin's main; snapshot the Go-To-Market Package; take in the Founder's
-decisions from ledger/founder/, which only `gr0wthlab sitting` writes (founder.py) and from which every Founder record
-below is read; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch requests
-that need filing; plan the post Drafts from the 14-day kit (posts.prepare); file the filming plan and list and measure
-the footage (filming.prepare); read the Founder's Beta Build record and, only once it exists, plan the Beta
+Order: in the production clone, while it saves its records, refuse to start while GitHub says the repository they are
+pushed to is public (visibility.py), then bring it up to origin's main; snapshot the Go-To-Market Package; take in the
+Founder's decisions from ledger/founder/, which only `gr0wthlab sitting` writes (founder.py) and from which every
+Founder record below is read; read the Waitlist's anonymous view, keeping only its counts; file the reviewed Dispatch
+requests that need filing; plan the post Drafts from the 14-day kit (posts.prepare); file the filming plan and list and
+measure the footage (filming.prepare); read the Founder's Beta Build record and, only once it exists, plan the Beta
 Cohort's next invitation batch (beta.prepare); read the fixed list of network sources into one snapshot (fetch.Client,
-the launcher's only way onto the network), which is working data removed when the run ends, and plan Listening from it
-and outreach from the Founder's records; decide which workflows have work for the agent, and for each of those, one
-after another in a fixed order, write its brief and run one agent session inside the sandbox, which has no network
-(sessions.py, launcher.run), and after each session put back any change it made to the agent's Instructions, so no
-session works from Instructions another changed; once the last session has ended, queue the items the sessions
-wrote to workspace/review-queue/incoming/ that pass the format, a post for
-each Draft that passes every check, with the video cut from its edit record when it has one (posts.take), the
-recruiting Drafts that pass theirs (beta.take), the quotes, proposals, and messages that pass theirs (listening.take,
-outreach.take), the code proposed for each rejection reason (learning.take), and the reviewed proposals that need
-filing; count what each session did, for the report to show beside that session's own word (work.py); write the Review
-Queue and the run report; commit and push workspace/ and ledger/. Every step but the sessions is deterministic code
-outside the sandbox. The launcher's records live in ledger/, which an agent can read and never write, so nothing it
-does can change them; in workspace/ the launcher only restores its owner's access to entries a session left without
-it, removes what a stopped boundary check left at the top of the areas, before the first records step can commit it,
-reads the Drafts and the edit records, reads the items in incoming/ before each session starts and once it has
-ended, removes a recruiting Draft that holds what looks like an email address, reads and removes the items, quote
-records, proposals, and codes it takes in, and after each session puts the agent's Instructions back as they were.
-Nothing is taken in
-while a session can still write: one take-in, after the last session, keeps every take-in rule what it was when a run
-had one session. One run at a time per checkout holds the run lock in its ledger/ from the sync to the saved records;
-a run started meanwhile refuses to start, and the next report says so.
+the launcher's only way onto the network besides the production clone's git and gh steps), which is working data removed
+when the run ends, and plan Listening from it and outreach from the Founder's records; decide which workflows have work
+for the agent, and for each of those, one after another in a fixed order, write its brief and run one agent session
+inside the sandbox, which has no network (sessions.py, launcher.run), and after each session put back any change it made
+to the agent's Instructions, so no session works from Instructions another changed; once the last session has ended,
+queue the items the sessions wrote to workspace/review-queue/incoming/ that pass the format, a post for each Draft that
+passes every check, with the video cut from its edit record when it has one (posts.take), the recruiting Drafts that
+pass theirs (beta.take), the quotes, proposals, and messages that pass theirs (listening.take, outreach.take), the code
+proposed for each rejection reason (learning.take), and the reviewed proposals that need filing; count what each session
+did, for the report to show beside that session's own word (work.py); in the production clone, while it saves its
+records, ask GitHub again whether the repository is private, and on any other answer say in the notice and the run
+report that the records stay local; write the Review Queue and the run report; commit workspace/ and ledger/, and push
+them only if GitHub said then, and says again just before each push, that the repository is private. Every step but the
+sessions is deterministic code outside the sandbox. The launcher's records live in ledger/, which an agent can read and
+never write, so nothing it does can change them; in workspace/ the launcher only restores its owner's access to entries
+a session left without it, removes what a stopped boundary check left at the top of the areas, before the first records
+step can commit it, reads the Drafts and the edit records, reads the items in incoming/ before each session starts and
+once it has ended, removes a recruiting Draft that holds what looks like an email address, reads and removes the items,
+quote records, proposals, and codes it takes in, and after each session puts the agent's Instructions back as they were.
+Nothing is taken in while a session can still write: one take-in, after the last session, keeps every take-in rule what
+it was when a run had one session. One run at a time per checkout holds the run lock in its ledger/ from the sync to the
+saved records; a run started meanwhile refuses to start, and the next report says so.
 
 One session's trouble stays its own workflow's: a session that does not start, is stopped at its time limit, or ends
 with an error leaves the sessions after it to run, and marks only its own workflow's outputs incomplete. Every session
@@ -59,11 +61,13 @@ from . import (
     beta,
     dispatch,
     evidence,
+    examples,
     exchange,
     fetch,
     filming,
     footage,
     founder,
+    instructions,
     launcher,
     learning,
     listening,
@@ -78,12 +82,13 @@ from . import (
     sessions,
     settings,
     sources,
+    visibility,
     waitlist,
     work,
 )
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, clear_probe_files, read_plain
-from .boundary import FOUNDER, LEDGER, Boundary, ConfigError, canonical, load_boundary, load_json
+from .boundary import FOUNDER, LEDGER, Boundary, ConfigError, canonical, check_kept_dirs, load_boundary, load_json
 from .queue import INCOMING, OPEN, QUEUE_FILE, REVIEW_QUEUE, SET_ASIDE, SUPERSEDED, Ledger, QueueError, Stands
 from .report import COMPLETE, INCOMPLETE, NOT_BUILT, SKIPPED, RunState, SourceLine, Unusable
 from .sessions import Session
@@ -171,6 +176,20 @@ def named_item(record: Unusable) -> Unusable:
 # The run.
 
 
+def learned_from(path: Path, digest: str) -> dict[str, object]:
+    """What a run learned of a decision already taken in from the same record, as when a Review Queue that could not
+    be written has the next run take it in again: its rejection reason's code and what became of it as a change to
+    the Instructions, so no reason is offered twice."""
+    try:
+        earlier = json.loads(read_plain(path).decode("utf-8"))
+    except (OSError, UnsafeFile, ValueError):
+        return {}
+    source = earlier.get("source") if isinstance(earlier, dict) else None
+    if not isinstance(source, dict) or source.get("sha256") != digest:
+        return {}
+    return {key: earlier[key] for key in ("code", "instructions") if key in earlier}
+
+
 class Cycle:
     def __init__(
         self,
@@ -181,6 +200,8 @@ class Cycle:
         clock: Callable[[], datetime],
         client: Callable[[fetch.Policy], fetch.Client] | None = None,
         clocks: process.Clock = process.CLOCK,
+        github: Callable[[Path, str, Mapping[str, str]], visibility.Answer] | None = None,
+        only: str | None = None,
     ):
         self.repo_root = repo_root
         self.env = env
@@ -189,6 +210,7 @@ class Cycle:
         self.clock = clock
         self.client = client or fetch.Client  # the real network, through fetch.send, unless a test gives another
         self.clocks = clocks
+        self.github = github or visibility.ask  # GitHub itself, through gh, unless a test gives another
         self.store = Store(canonical(repo_root) / LEDGER)
         self.started: datetime | None = None
         self.run_id: str | None = None
@@ -197,6 +219,10 @@ class Cycle:
         self.noted = False  # how this run ended is in the record of the run due at its time
         self.since: Callable[[], tuple[float, float]] | None = None  # the clocks' reading from this start's beginning
         self.before = (0.0, 0.0)  # what this start had taken when it restarted on new code, as taken() gives it
+        # The one workflow a lab's run starts a session for, when this run is an example's (examples.py); a lab's run
+        # never tries an Instructions change of its own.
+        self.only = only
+        self.state: RunState | None = None  # this run's state once it has one, for an example's checks to read
 
     def say(self, message: str) -> None:
         print(f"gr0wthlab: {message}", file=self.out)
@@ -320,24 +346,24 @@ class Cycle:
                 continue
             decision, entry = outcome.decision, outcome.entry
             source, digest = digests[decision.item]
-            self.store.write_json(
-                self.store.path(*founder.TAKEN_IN, f"{decision.item}.json"),
-                {
-                    "item": decision.item,
-                    "kind": entry["kind"],
-                    "ask": entry["ask"],
-                    "item_file": entry["file"],
-                    "decision": decision.decision,
-                    "reason": decision.reason,
-                    "note": decision.note,
-                    "decided_at": decision.decided_at,
-                    "sitting": decision.sitting,
-                    "superseded_by": entry.get("superseded_by"),
-                    "source": {"path": source, "sha256": digest},
-                    "taken_in_by_run": state.run_id,
-                    "taken_in_at": now.isoformat(),
-                },
-            )
+            path = self.store.path(*founder.TAKEN_IN, f"{decision.item}.json")
+            record = {
+                "item": decision.item,
+                "kind": entry["kind"],
+                "ask": entry["ask"],
+                "item_file": entry["file"],
+                "decision": decision.decision,
+                "reason": decision.reason,
+                "note": decision.note,
+                "decided_at": decision.decided_at,
+                "sitting": decision.sitting,
+                "superseded_by": entry.get("superseded_by"),
+                "source": {"path": source, "sha256": digest},
+                "taken_in_by_run": state.run_id,
+                "taken_in_at": now.isoformat(),
+            }
+            record.update(learned_from(path, digest))
+            self.store.write_json(path, record)
             entry["evidence"] = f"evidence/decisions/{decision.item}.json"
             for key in ("reason", "note"):
                 if getattr(decision, key):
@@ -578,7 +604,7 @@ class Cycle:
     def post_tally(self, state: RunState) -> run_state.Tally:
         """What the post-Draft workflow checked and acted on: each Draft taken in, each item queued or withdrawn, and
         the brand-rules proposal when this run filed it, whether or not any Draft was taken in."""
-        outcome = state.post_outcome
+        plan, outcome = state.posts, state.post_outcome
         gaps = self.post_gaps(state)
         if outcome is None:
             checked, acted = 0, 0
@@ -586,7 +612,9 @@ class Cycle:
         else:
             checked = len(outcome.results)
             acted = len(outcome.published) + len(outcome.withdrawn)
-            note = f"{report.plural(checked, 'day')}: {', '.join(outcome.counts()) or 'none due'}"
+            unusable = plan is not None and "calendar" in plan.context.kit.problems
+            none = "none prepared, as the calendar could not be used" if unusable else "none due"
+            note = f"{report.plural(checked, 'day')}: {', '.join(outcome.counts()) or none}"
             if outcome.withdrawn:
                 note += f"; {len(outcome.withdrawn)} withdrawn"
         if state.filed:
@@ -644,6 +672,39 @@ class Cycle:
             gaps.append(gap)
         return gaps
 
+    def unusable_files(self, state: RunState) -> dict[str, tuple[set[str], set[str]]]:
+        """Each package file the run read and could not use, by its source line's name: what in a gap names it, its
+        path or, for the brand rules, what every step says of them; and each gap that says no more than that line,
+        with its reason, says, which a row the line leads leaves out: that the file could not be used, and the filming
+        plan's reason when every kit file it names is such a file. A gap that says more, such as that no outreach
+        message was prepared, stays, and the tally, and with it the run's own line, keeps every gap."""
+        unusable = {line.name for line in state.sources if line.status == package.UNUSABLE}
+        rules_lost = "brand-rules.json could not be used"
+        found: dict[str, tuple[set[str], set[str]]] = {}
+
+        def add(product: str, path: str, rules: bool = False) -> None:
+            name = f"{product} package: `{path}`"
+            if name in unusable:
+                names, said = found.setdefault(name, (set(), set()))
+                names.update([f"`{path}`", *[rules_lost] * rules])
+                said.update([f"`{path}` could not be used", *[rules_lost] * rules])
+
+        plan = state.posts
+        if plan is not None:
+            for role, path in plan.context.paths.items():
+                add(plan.product, path, role == "brand_rules")
+        if state.beta is not None and state.beta.active:
+            add(state.beta.rules.product, state.beta.rules.brand_rules, True)
+        if state.outreach is not None:
+            add(state.outreach.product, state.outreach.plan_path)
+        if plan is not None and state.filming is not None:
+            paths, problems = plan.context.paths, plan.context.kit.problems
+            kit = [f"{plan.product} package: `{paths[role]}`" for role in filming.ROLES if role in problems]
+            if kit and all(name in found for name in kit):
+                for name in kit:
+                    found[name][1].add(state.filming.problem)
+        return found
+
     def queue_gaps(self, state: RunState) -> list[str]:
         """Why the Review Queue is incomplete this run though the ledger was read: an item file could not be, so a
         reviewed Dispatch request, or an item the agent wrote, could not be compared with the item it would replace,
@@ -680,10 +741,13 @@ class Cycle:
 
     def outputs(self, state: RunState, config: settings.Settings, ledger_ok: bool) -> None:
         """Each output's status: a built output is incomplete when a failed source it needs names it, or when its own
-        step fell short. A step that needed a session names that session's falling short among its gaps, and the
-        outputs whose rows hold that gap are the ones the run's notice names for the session; the rows are therefore
-        worked out before that notice is written, and again once the Review Queue holds it. One session's gap is
-        never put in another workflow's row, and a session that fell short always has its gap in its own."""
+        step fell short; a gap of its own that says no more than such a source is left out of its row. A package file
+        the run read and could not use is needed by exactly the outputs whose own gaps name it, never the package
+        snapshot or review, so the notice's line for it names the rows the report shows incomplete for it. A step
+        that needed a session names that session's falling short among its gaps, and the outputs whose rows hold that
+        gap are the ones the run's notice names for the session; the rows are therefore worked out before that notice
+        is written, and again once the Review Queue holds it. One session's gap is never put in another workflow's row,
+        and a session that fell short always has its gap in its own."""
         failed = state.failed_sources()
         gap = state.agent_gap
         decisions = next((line.detail for line in state.sources if line.name == "Founder decisions"), "")
@@ -734,7 +798,19 @@ class Cycle:
                 learning.gaps(state.learning, state.learning_problem, gap(learning.WORKFLOW)),
                 learning.tally(state.learning, state.learning_problem, gap(learning.WORKFLOW)).note,
             ),
+            "instructions-changes": (instructions.gaps(state.instructions), instructions.status(state.instructions)),
         }
+        shown = {
+            key: own.get(key, ([], ""))[0]
+            for key, output in config.outputs.items()
+            if output.get("built") and key not in skipped and key not in ("package-snapshot", "package-review")
+        }
+        files = self.unusable_files(state)
+        for line in failed:
+            if line.name in files:
+                names = files[line.name][0]
+                named = [key for key, gaps in shown.items() if any(part in gap for gap in gaps for part in names)]
+                line.needed_by = output_titles(config, tuple(named))
         rows = []
         held: dict[str, list[str]] = {session.key: [] for session in state.sessions}
         for key, output in config.outputs.items():
@@ -749,7 +825,9 @@ class Cycle:
             for session in state.sessions:
                 if session.workflow.output == key and session.gap() and session.gap() in gaps:
                     held[session.key].append(title)
-            gaps = [f"{line.name} could not be read" for line in failed if title in line.needed_by] + gaps
+            leading = [line for line in failed if title in line.needed_by]
+            told = {said for line in leading if line.name in files for said in files[line.name][1]}
+            gaps = [f"{line.name} {line.failure}" for line in leading] + [gap for gap in gaps if gap not in told]
             rows.append([title, INCOMPLETE if gaps else COMPLETE, "; ".join(gaps) or done])
         state.outputs = rows
         for session in state.sessions:
@@ -779,6 +857,51 @@ class Cycle:
         else:
             detail = f"`{code.branch}` at `{code.short}`, read at that commit for claim checks"
             state.sources.append(SourceLine(f"{code.name} repository", package.READ, detail, needs))
+
+    def unusable_sources(self, state: RunState, config: settings.Settings) -> None:
+        """Mark each package file the snapshot read that launcher code then could not use, as it could not be parsed
+        or decoded, as a failed source, with the real reason and, for the sessions' briefs, the outputs whose own step
+        cannot go on without it: a kit file for the post Drafts and, of the files the filming plan reads, for filming;
+        the brand rules for recruiting; and the channel plan for outreach. Once the run's rows are worked out,
+        Cycle.outputs names in their place every output whose row names the file. A file whose read failed is a
+        failed source already, and one file is one line however many steps could not use it."""
+        found: dict[tuple[str, str], tuple[dict[str, None], dict[str, None]]] = {}  # file: (reasons, output keys)
+
+        def add(product: str, path: str, reason: str, *keys: str) -> None:
+            reasons, outputs = found.setdefault((product, path), ({}, {}))
+            reasons[reason.rstrip(".")] = None
+            outputs.update(dict.fromkeys(keys))
+
+        plan = state.posts
+        if plan is not None:
+            paths = plan.context.paths
+            for role, problem in plan.context.kit.problems.items():
+                if role in paths:
+                    filmed = state.filming is not None and role in filming.ROLES
+                    add(plan.product, paths[role], problem, "post-drafts", *["filming-plan"] * filmed)
+            if plan.context.rules is None and plan.context.rules_problem and "brand_rules" in paths:
+                add(plan.product, paths["brand_rules"], plan.context.rules_problem, "post-drafts")
+        recruiting = state.beta
+        if recruiting is not None and recruiting.active and recruiting.context is not None:
+            if recruiting.context.rules is None and recruiting.context.rules_problem:
+                rules = recruiting.rules
+                add(rules.product, rules.brand_rules, recruiting.context.rules_problem, beta.WORKFLOW)
+        if state.outreach is not None and state.outreach.unusable:
+            add(state.outreach.product, state.outreach.plan_path, state.outreach.unusable, "outreach-drafts")
+        for (product, path), (reasons, keys) in found.items():
+            name = f"{product} package: `{path}`"
+            under = name[:-1] if path.endswith("/") else name  # a folder's files are named under it
+            covered = [line for line in state.sources if line.name.startswith(under)]
+            if not covered or any(line.status == package.FAILED for line in covered):
+                continue  # not read by the snapshot, or its read failed: either way not a file read and unusable
+            line = next((line for line in covered if line.name == name), None)
+            if line is None:  # a folder whose files were each read, and which could not be used as a whole
+                line = SourceLine(name, package.UNUSABLE, "")
+                state.sources.append(line)
+            told = f"{line.detail.rstrip('.')}; read, but" if line.detail else "Read, but"
+            line.status = package.UNUSABLE
+            line.detail = f"{told} could not be used: {'; '.join(reasons)}."
+            line.needed_by = output_titles(config, tuple(keys))
 
     def prepare_filming(
         self,
@@ -1156,10 +1279,23 @@ class Cycle:
                     self.store, ledger, [str(p["name"]) for p in registry.get("products", [])], state.reasons
                 )
                 state.problems += problems
+                if state.instructions is not None:
+                    chosen, why = instructions.offer(
+                        state.reasons, ledger, self.store, canonical(self.repo_root), self.env
+                    )
+                    state.instructions.offer, state.instructions.offer_why = chosen, why
+            elif state.instructions is not None:
+                state.instructions.offer_why = "the Review Queue could not be read"
+            offered = state.instructions.offer if state.instructions is not None else None
             record = {
                 "run": state.run_id,
                 "listening": listening.plan_record(state.listening) if state.listening else None,
                 "outreach": outreach.plan_record(state.outreach, areas) if state.outreach else None,
+                "instructions": {
+                    "workflow": offered.workflow if offered else None,
+                    "reasons": list(offered.reasons) if offered else [],
+                    "why": state.instructions.offer_why if state.instructions is not None else "",
+                },
             }
             self.store.write_json(self.store.path(RUN_REPORTS, f"{state.run_id}.work-plan.json"), record)
         except (OSError, ConfigError) as error:
@@ -1225,6 +1361,123 @@ class Cycle:
         except (OSError, ConfigError, ValueError) as error:
             state.learning_problem = f"the rejection reasons could not be coded ({error})"
             state.problems.append(state.learning_problem)
+
+    def learn(
+        self,
+        state: RunState,
+        config: settings.Settings,
+        boundary: Boundary,
+        areas: Areas,
+        ledger: Ledger,
+        ledger_ok: bool,
+        run_id: str,
+        now: datetime,
+        seen: dict[str, str],
+    ) -> None:
+        """Once the codes are taken in: take the proposed Instructions change the rejection reasons' session left,
+        re-run its workflow's example set with the text in force and with the proposed text, and keep it only if no
+        example did worse (ADR 0003). A kept change's record is written first, so its notice can always undo it, then
+        its text into ledger/instructions/ and its notice for the next sitting; the record of every change tried, kept
+        or not, is kept in ledger/evidence/instructions/.
+        A reason the change cites is answered with its outcome, unless the gate could not judge the change, as when
+        it stopped, which never stops the run, and an offered execution reason a finished session proposed no change
+        for is answered as such."""
+        outcome = state.instructions
+        if outcome is None:
+            return
+        found = state.learning.reasons if state.learning is not None else state.reasons
+        mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
+        lines = instructions.package_lines(mandu, boundary.package_paths)
+        outcome.taken = instructions.take(areas, self.store, outcome.offer, outcome.offer_why, found, lines)
+        session = state.session(learning.WORKFLOW)
+        finished = session is not None and session.finished
+        proposal = outcome.taken.proposal
+        cited = set(proposal.reasons) if proposal else set()
+        outcome.coded = [reason.item for reason in outcome.offer.coded(found)] if outcome.offer else []
+        if outcome.offer is not None and finished and not outcome.taken.refused:
+            outcome.answered = [reason.item for reason in outcome.offer.coded(found) if reason.item not in cited]
+            outcome.problems += instructions.answer(
+                self.store, outcome.answered, instructions.NONE_PROPOSED, None, run_id, now, found
+            )
+        if proposal is None:
+            return
+        if not ledger_ok:
+            outcome.problems.append(
+                f"the proposed change to the {instructions.title(proposal.workflow)} Instructions was not tried, as"
+                " the Review Queue could not be read to show a kept change; its reasons are offered again"
+            )
+            return
+        by_item = {reason.item: reason for reason in found}
+        try:
+            before = instructions.read_text(instructions.file_of(self.store, proposal.workflow))
+        except (OSError, UnsafeFile, UnicodeDecodeError) as error:
+            outcome.problems.append(f"`{instructions.relative(proposal.workflow)}` could not be read ({error})")
+            return
+        identifier = instructions.change_id(self.store, now.astimezone(), proposal.workflow)
+        change = instructions.Change(identifier, proposal, [by_item[item] for item in proposal.reasons], before)
+        outcome.change = change
+        log_dir = launcher.default_log_dir(self.env, self.home) / "examples"
+        self.say(f"re-running the {proposal.workflow} example set for the proposed Instructions change {identifier}")
+        try:
+            change.gate = examples.gate(
+                canonical(self.repo_root),
+                proposal.workflow,
+                before,
+                proposal.text,
+                identifier,
+                self.env,
+                self.home,
+                log_dir,
+                config.learning.gate_time_limit,
+                config.learning.example_time_limit,
+                self.store.path(*examples.LABS),
+            )
+        except Exception as error:
+            why = f"its example set stopped ({type(error).__name__}: {error})"
+            change.gate = examples.Gate(proposal.workflow, why=why, bound=config.learning.gate_time_limit)
+        self.say(f"Instructions change {identifier}: {change.outcome}: {change.why}")
+        change.record = self.store.relative(self.store.path(*instructions.RECORDS, f"{identifier}.json"))
+        if change.outcome == instructions.KEPT:
+            report_path = self.store.relative(self.store.path(RUN_REPORTS, f"{run_id}.md"))
+            title, body, touches, evidence_lines = instructions.notice(change, report_path)
+            item = change.item = exchange.Item({"kind": "notice"}, title, body, touches, evidence_lines)
+            applied = False
+            try:
+                instructions.record(self.store, change, run_id, now)
+                instructions.apply(self.store, change)
+                applied = True
+                change.notice = instructions.file_notice(
+                    self.store, ledger, proposal.workflow, identifier, item, run_id, now
+                )
+            except (OSError, ConfigError) as error:
+                try:
+                    if applied:
+                        self.store.write_text(instructions.file_of(self.store, proposal.workflow), before)
+                except OSError as failed:
+                    outcome.unshown.append(
+                        (
+                            identifier,
+                            f"its notice could not be queued ({error}), and"
+                            f" `{instructions.relative(proposal.workflow)}` could not be put back ({failed}); its"
+                            f" record `{change.record}` keeps the text before it",
+                        )
+                    )
+                else:
+                    change.gate.outcome = instructions.NOT_COMPARED
+                    change.gate.why = (
+                        f"its example set passed it, and it could not be written with its record and notice ({error})"
+                    )
+            else:
+                state.published.append(change.notice)
+                seen.setdefault(exchange.item_hash(item), change.notice)
+        try:
+            instructions.record(self.store, change, run_id, now)
+        except OSError as error:
+            outcome.problems.append(f"the record of change `{identifier}` could not be written ({error})")
+        if change.outcome != instructions.NOT_COMPARED:
+            outcome.problems += instructions.answer(
+                self.store, list(proposal.reasons), change.outcome, identifier, run_id, now, found
+            )
 
     def file_outreach_lists(self, state: RunState, context, ledger: Ledger, products, run_id, now, seen) -> None:
         """File the loss-framing and sponsorship lists proposal unless it ever was, or Mandu's file holds them."""
@@ -1326,6 +1579,8 @@ class Cycle:
             if plan is None:
                 problem = state.posts_problem
                 return f"the post Drafts were {problem}" if problem else "no active Product has a 14-day kit"
+            if "calendar" in plan.context.kit.problems:
+                return "the calendar could not be used"
             if not plan.days:
                 return "no calendar day is due this run"
             waiting = any(not day_plan.approved for day_plan in plan.days)
@@ -1366,7 +1621,10 @@ class Cycle:
                 return plan.problem
             return "" if plan.due() else "no outreach message is due this run"
         waiting = learning.uncoded(state.reasons) or learning.owed(state.reasons)
-        return "" if waiting else "no rejection reason needs a code or a proposal"
+        offered = state.instructions.offer if state.instructions is not None else None
+        if waiting or (offered is not None and offered.coded(state.reasons)):
+            return ""
+        return "no rejection reason needs a code, a proposal, or an Instructions change"
 
     def plan_sessions(self, state: RunState, config: settings.Settings) -> None:
         """Decide once, before the first session starts, which workflows have work for the agent this run, in the
@@ -1375,6 +1633,8 @@ class Cycle:
         state.sessions = []
         for found in sessions.WORKFLOWS:
             why = self.nothing_due(state, found.key)
+            if self.only and found.key != self.only and not why:
+                why = f"this lab runs the {sessions.workflow(self.only).title} session only"
             state.sessions.append(Session(found, not why, why, config.agent.time_limit))
 
     def waiting_items(self, areas: Areas) -> list[tuple[str, str]]:
@@ -1495,9 +1755,17 @@ class Cycle:
                 state.problems.append(left_running)
             # Before the next session reads workspace/, and before anything is counted or taken in from it.
             state.problems += [problem for problem in records.restore_access(root) if problem not in state.problems]
-            undone = [f"after the {session.title} session: {line}" for line in learning.put_back(state.guidance, areas)]
+            # Only the rejection reasons' session may leave a proposed change, which is taken in once the last
+            # session has ended; everything else any session changed in the Instructions is put back.
+            keep = instructions.proposal_names(areas) if session.key == learning.WORKFLOW else ()
+            undone = learning.put_back(state.guidance, areas, self.store, keep)
+            undone = [f"after the {session.title} session: {line}" for line in undone]
             state.put_back += undone
-            state.problems += [f"{line}; no run may change its own Instructions yet" for line in undone]
+            state.problems += [
+                f"{line}; only the rejection reasons' session may propose an Instructions change, and only the"
+                " launcher changes the Instructions in force"
+                for line in undone
+            ]
             if session.started:
                 after = (
                     self.counted(state, WRITTEN, lambda: work.standing(state.posts, areas, products))
@@ -1525,6 +1793,10 @@ class Cycle:
             return EXIT_STOPPED
         code = short[0].exit_code
         return code if isinstance(code, int) and not isinstance(code, bool) and code else 1
+
+    def private(self, config: settings.Settings) -> visibility.Answer:
+        """GitHub's answer on whether the repository the production clone pushes its records to is private."""
+        return self.github(self.repo_root, config.records.remote, self.env)
 
     def leave_note(self, run_id: str, line: str) -> None:
         """A one-line note in ledger/notes/, which the next run's report shows."""
@@ -1680,11 +1952,18 @@ class Cycle:
             # Before the pre-run records step, which would commit a missing folder's removal and leave git nothing
             # to restore it from. That step changes no file, and a sync that moves main starts this process again.
             founder.check(self.store.root)
+            check_kept_dirs(canonical(self.repo_root))
         except ConfigError as error:
             self.say(f"refusing to start: {error}")
             return launcher.EXIT_CONFIG
 
         production = canonical(self.repo_root) == config.records.production_clone
+        if production and config.records.save_after_run:
+            # Before anything else a run does: from the first real run on, its records are pushed to that repository.
+            answer = self.private(config)
+            if answer.status == visibility.PUBLIC:
+                self.say(f"refusing to start: {answer.refusal}")
+                return EXIT_RECORDS
         if pre:
             sync = pre["sync"]
         elif not production:
@@ -1718,6 +1997,7 @@ class Cycle:
 
         run_id = self.run_id = launcher.new_run_id(trigger, started)
         state = RunState(run_id, trigger, started, str(sessions.FOLDER), sync=sync)
+        self.state = state
         state.problems += list(sync.get("repaired", []))
         state.late_after = timedelta(minutes=config.late_after_minutes)
         state.titles = {key: str(output.get("title", key)) for key, output in config.outputs.items()}
@@ -1753,6 +2033,10 @@ class Cycle:
             state.problems.append(f"{error}; the Review Queue was left untouched this run")
         states = self.load_state(state, run_id)
         self.take_decisions(state, config, ledger, ledger_ok, states.review_queue)
+        if not self.only:
+            state.instructions = instructions.Outcome()
+            # Before any session reads them: a change whose notice the Founder rejected is undone first.
+            state.instructions.undone = instructions.undo(self.store, state.decisions, run_id, self.now())
         sittings = self.sitting_runs(state)
         hashes, unreadable = run_state.item_hashes(self.store.root, ledger.entries, products, states.review_queue)
         state.problems += unreadable
@@ -1764,6 +2048,8 @@ class Cycle:
         seen: dict[str, str] = {}
         for identifier, fingerprint in hashes.items():
             seen.setdefault(fingerprint, identifier)
+        if ledger_ok and state.instructions is not None:
+            state.published += instructions.refile(state.instructions, self.store, ledger, seen, run_id, self.now())
         for source in config.not_connected:
             state.sources.append(
                 SourceLine(
@@ -1790,12 +2076,18 @@ class Cycle:
         )
         areas.ensure_folder(areas.path("review_queue", INCOMING))
         self.prepare_work(state, config, registry, boundary, areas, ledger if ledger_ok else None, states, network)
+        self.unusable_sources(state, config)
         # A stopped boundary check's script sits among the agent's Instructions, so every run removes what such a check
         # left before it remembers them: the guard would put back after the agent whatever it had remembered.
         state.probe_files_removed = clear_probe_files(boundary)
         if state.probe_files_removed:
             self.say(f"removed boundary probe files left in the areas: {', '.join(state.probe_files_removed)}")
-        state.guidance = learning.remember(areas)
+        stale = instructions.clear_stale(areas)
+        state.problems += [
+            f"`{name}`, a proposed Instructions change an earlier run left, was removed before the first session"
+            for name in stale
+        ]
+        state.guidance = learning.remember(areas, self.store)
         state.problems += state.guidance.problems
         self.plan_sessions(state, config)
         readings = self.run_sessions(state, config, definitions, areas, products)
@@ -1818,6 +2110,14 @@ class Cycle:
         elif state.posts is not None:
             state.posts_problem = "not taken in: the Review Queue could not be read"
         self.take_work(state, areas, ledger, ledger_ok, products, run_id, now, seen)
+        self.learn(state, config, boundary, areas, ledger, ledger_ok, run_id, now, seen)
+        if state.instructions is not None and state.learning is not None and state.learning.record:
+            # The learning ledger was written when the codes were taken in; write it again with what the Instructions
+            # change made of each reason, so this run's records agree.
+            try:
+                learning.write_ledger(self.store, state.learning.reasons, run_id, now)
+            except OSError as error:
+                state.instructions.problems.append(f"`{state.learning.record}` could not be written again ({error})")
         self.count_work(state, config, log_dir, readings, ledger_ok)
         report_path = self.store.path(RUN_REPORTS, f"{run_id}.md")
         state.problems += areas.problems
@@ -1841,6 +2141,12 @@ class Cycle:
         state.queue_after = ledger.ordered()
         self.left_standing(state, config, ledger)
         self.outputs(state, config, ledger_ok)
+        pushable = self.private(config) if production and config.records.save_after_run else None
+        if pushable is not None and not pushable.private:
+            state.problems.append(
+                f"this run's records were kept local, not pushed: {pushable.refusal}; a later run pushes them once"
+                " GitHub says the repository is private"
+            )
         notice = report.problems_notice(state, self.store.relative(report_path))
         if notice and ledger_ok:
             state.notice = self.queue_notice(
@@ -1867,6 +2173,9 @@ class Cycle:
                 state.problems.append(
                     f"the Review Queue could not be written, so the sitting page shows the last one ({error})"
                 )
+                if state.instructions is not None:
+                    state.instructions.queue_lost(f"the Review Queue could not be written ({error})")
+                    self.outputs(state, config, ledger_ok)
             state.queue_after = ledger.ordered()
             try:
                 self.save_state(state, ledger, states, products, now)
@@ -1888,7 +2197,7 @@ class Cycle:
 
         self.note_ending(state, config)
         saved = None
-        if production and config.records.save_after_run:
+        if pushable is not None:
             result = records.save(
                 self.repo_root,
                 config.records.remote,
@@ -1896,9 +2205,12 @@ class Cycle:
                 run_id,
                 self.env,
                 config.records.max_file_bytes,
+                lambda: self.private(config) if pushable.private else pushable,
             )
             saved = result.as_json()
             self.say(f"records: {result.status}: {result.detail}")
+            if result.status == records.WITHHELD and pushable.private:
+                self.leave_note(run_id, f"Run {run_id}'s records were committed and {result.detail}.")
         code = self.exit_code(state)
         self.log(log_dir, sync, saved, report_path, state, code)
         return code

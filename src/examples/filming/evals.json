@@ -1,13 +1,13 @@
 {
   "adapted_from": "the evals.json shape of github.com/coreyhaines31/marketingskills skills/*/evals/evals.json at commit 1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff (MIT; see THIRD_PARTY_NOTICES.md)",
   "skill_name": "filming",
-  "description": "The filming workflow's example set (US-ME09, F5), in the marketingskills evals.json shape: each example's prompt, the output expected, its assertions, and its files. A deterministic assertion is checked by the unit tests (src/tests/test_filming_examples.py) against the synthetic kit in files/mandu, laid over the post-Draft example set's kit, and the synthetic footage inventory in files/footage.json; one that names what it needs runs only where the video tooling is installed, and is skipped with that reason elsewhere. A judged assertion waits for US-ME16's re-run on every Instructions change. An edit example's files are its candidate edit record and its post Draft, then the reference leg's edit record and Draft when it is an A/B pair leg; an asset example's file holds the facts measured of a rendered asset.",
+  "description": "The filming workflow's example set (US-ME09, F5), in the marketingskills evals.json shape: each example's prompt, the output expected, its assertions, and its files. An example that carries `run` is re-run by the agent on every change to the filming Instructions (US-ME16, ADR 0003): its session writes the edit records its lab makes ready, in a throwaway lab built from `lab` and the example's own settings, with an approved filming plan, the post Drafts the example names, and footage made with ffmpeg's own test pattern to the facts files/footage.json gives each file the example names; its deterministic assertions are read off what the launcher took in and cut. An example's first file, if it has one, is checked by the unit tests (src/tests/test_filming_examples.py) against the synthetic kit in files/mandu, laid over the post-Draft example set's kit, and the synthetic footage inventory in files/footage.json; one that names what it needs runs only where the video tooling is installed, and is skipped with that reason elsewhere. A judged assertion is judged by nothing: the notice of a change lists it for the Founder. An edit example's files are its candidate edit record and its post Draft, then the reference leg's edit record and Draft when it is an A/B pair leg; an asset example's file holds the facts measured of a rendered asset.",
   "kit": "files/mandu",
   "base_kit": "../post-drafts/files/mandu",
   "footage": "files/footage.json",
   "assertion_kinds": {
-    "deterministic": "check is one of: plan_is_one_item; plan_films, plan_reuses, plan_on_camera, plan_unplanned (days); plan_sittings (count); plan_quotes_formats; edit_passes (with another leg's files: the two videos also show the same footage outside each one's opening); blocked_by (rule: a finding's rule; an example names every rule its record is blocked by); legs_not_offered (says: words of how the two legs' videos differ); asset_blocked (says: words of the finding); asset_kept; renders and legs_differ_only_in_the_opening (needs: video tooling)",
-    "judged": "text is a statement a reviewer, or a model at US-ME16, judges true or false of the agent's edit record and summary"
+    "deterministic": "check is one of: plan_is_one_item; plan_films, plan_reuses, plan_on_camera, plan_unplanned (days); plan_sittings (count); plan_quotes_formats; edit_passes (with another leg's files: the two videos also show the same footage outside each one's opening); blocked_by (rule: a finding's rule; an example names every rule its record is blocked by); legs_not_offered (says: words of how the two legs' videos differ); asset_blocked (says: words of the finding); asset_kept; renders and legs_differ_only_in_the_opening (needs: video tooling); and, for a re-run example only: edit_passes and renders (day), no_edit (day), queued (item: a kind; count; cites: words each queued item holds), nothing_queued (item), nothing_set_aside",
+    "judged": "text is a statement of the agent's output that no check decides; nothing judges it, and the notice of an Instructions change lists it as not judged"
   },
   "evals": [
     {
@@ -85,11 +85,13 @@
       "assertions": [
         {
           "kind": "deterministic",
-          "check": "edit_passes"
+          "check": "edit_passes",
+          "day": 1
         },
         {
           "kind": "deterministic",
           "check": "renders",
+          "day": 1,
           "needs": "video tooling"
         },
         {
@@ -100,7 +102,15 @@
       "files": [
         "files/edits/day-01.json",
         "files/drafts/day-01.md"
-      ]
+      ],
+      "run": {
+        "footage": [
+          "window-1/d01-s1.mov"
+        ],
+        "workspace": [
+          "files/labs/day-01-draft/workspace"
+        ]
+      }
     },
     {
       "id": 3,
@@ -301,13 +311,27 @@
       "assertions": [
         {
           "kind": "deterministic",
-          "check": "edit_passes"
+          "check": "edit_passes",
+          "day": 7
+        },
+        {
+          "kind": "deterministic",
+          "check": "renders",
+          "day": 7
         }
       ],
       "files": [
         "files/edits/day-07.json",
         "files/drafts/day-07.md"
-      ]
+      ],
+      "run": {
+        "footage": [
+          "window-1/d07-s1.mov"
+        ],
+        "workspace": [
+          "files/labs/day-07-draft/workspace"
+        ]
+      }
     },
     {
       "id": 15,
@@ -316,13 +340,30 @@
       "assertions": [
         {
           "kind": "deterministic",
-          "check": "edit_passes"
+          "check": "edit_passes",
+          "day": 2
+        },
+        {
+          "kind": "deterministic",
+          "check": "renders",
+          "day": 2
         }
       ],
       "files": [
         "files/edits/day-02.json",
         "files/drafts/day-02.md"
-      ]
+      ],
+      "run": {
+        "footage": [
+          "window-1/d02-s1a-take-1.mov",
+          "window-1/d02-s1b-take-1.mov",
+          "window-1/d02-s1-closing.mov",
+          "window-1/d02-s2.mov"
+        ],
+        "workspace": [
+          "files/labs/day-02-draft/workspace"
+        ]
+      }
     },
     {
       "id": 16,
@@ -385,6 +426,275 @@
         "files/edits/day-02.json",
         "files/drafts/day-02.md"
       ]
+    },
+    {
+      "id": 19,
+      "prompt": "Write the edit records for days 1 and 7, both ready this run.",
+      "expected_output": "Two edit records that each pass every check and render: day 1 one unbroken range of its screen recording, day 7 the whole session sped up to the Draft's length.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "edit_passes",
+          "day": 1
+        },
+        {
+          "kind": "deterministic",
+          "check": "edit_passes",
+          "day": 7
+        },
+        {
+          "kind": "deterministic",
+          "check": "renders",
+          "day": 7
+        },
+        {
+          "kind": "judged",
+          "text": "The agent chose each source range from the measured facts alone, and said it could not see the footage."
+        }
+      ],
+      "files": [],
+      "run": {
+        "footage": [
+          "window-1/d01-s1.mov",
+          "window-1/d07-s1.mov"
+        ],
+        "workspace": [
+          "files/labs/day-01-draft/workspace",
+          "files/labs/day-07-draft/workspace"
+        ]
+      }
+    },
+    {
+      "id": 20,
+      "prompt": "Write the edit records for days 1 and 2; day 2's screen recording has not been filmed yet.",
+      "expected_output": "Day 1's edit record passes and renders; day 2 gets no edit record, since one of its shots has no footage.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "edit_passes",
+          "day": 1
+        },
+        {
+          "kind": "deterministic",
+          "check": "no_edit",
+          "day": 2
+        },
+        {
+          "kind": "judged",
+          "text": "The summary says day 2 waits on its screen recording, and writes nothing for it."
+        }
+      ],
+      "files": [],
+      "run": {
+        "footage": [
+          "window-1/d01-s1.mov",
+          "window-1/d02-s1a-take-1.mov",
+          "window-1/d02-s1b-take-1.mov",
+          "window-1/d02-s1-closing.mov"
+        ],
+        "workspace": [
+          "files/labs/day-01-draft/workspace",
+          "files/labs/day-02-draft/workspace"
+        ]
+      }
+    },
+    {
+      "id": 21,
+      "prompt": "Write the edit records for days 1, 2, and 7, all ready this run.",
+      "expected_output": "Three edit records that each pass every check and render, each cut from its own day's footage.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "edit_passes",
+          "day": 1
+        },
+        {
+          "kind": "deterministic",
+          "check": "edit_passes",
+          "day": 2
+        },
+        {
+          "kind": "deterministic",
+          "check": "edit_passes",
+          "day": 7
+        },
+        {
+          "kind": "deterministic",
+          "check": "renders",
+          "day": 2
+        }
+      ],
+      "files": [],
+      "run": {
+        "footage": [
+          "window-1/d01-s1.mov",
+          "window-1/d02-s1a-take-1.mov",
+          "window-1/d02-s1b-take-1.mov",
+          "window-1/d02-s1-closing.mov",
+          "window-1/d02-s2.mov",
+          "window-1/d07-s1.mov"
+        ],
+        "workspace": [
+          "files/labs/day-01-draft/workspace",
+          "files/labs/day-02-draft/workspace",
+          "files/labs/day-07-draft/workspace"
+        ]
+      }
+    },
+    {
+      "id": 22,
+      "prompt": "Write the edit records for days 1 and 2; day 2's re-cut opening has only the take named for leg B.",
+      "expected_output": "Day 1's edit record passes; day 2 gets none, since leg A must open on a take of its own.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "edit_passes",
+          "day": 1
+        },
+        {
+          "kind": "deterministic",
+          "check": "no_edit",
+          "day": 2
+        }
+      ],
+      "files": [],
+      "run": {
+        "footage": [
+          "window-1/d01-s1.mov",
+          "window-1/d02-s1b-take-1.mov",
+          "window-1/d02-s1-closing.mov",
+          "window-1/d02-s2.mov"
+        ],
+        "workspace": [
+          "files/labs/day-01-draft/workspace",
+          "files/labs/day-02-draft/workspace"
+        ]
+      }
+    },
+    {
+      "id": 23,
+      "prompt": "Write the edit record for day 1, where an earlier run's record runs longer than the Draft and no longer passes.",
+      "expected_output": "The record rewritten to one unbroken range as long as the Draft's beats, which passes and renders.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "edit_passes",
+          "day": 1
+        },
+        {
+          "kind": "deterministic",
+          "check": "renders",
+          "day": 1
+        },
+        {
+          "kind": "judged",
+          "text": "A good edit record of an uncut shot is one segment."
+        }
+      ],
+      "files": [],
+      "run": {
+        "footage": [
+          "window-1/d01-s1.mov"
+        ],
+        "workspace": [
+          "files/labs/day-01-draft/workspace",
+          "files/labs/stale-edit/workspace"
+        ]
+      }
+    },
+    {
+      "id": 24,
+      "prompt": "Write the edit records for days 1 and 2, where day 2 has all its footage and no post Draft yet.",
+      "expected_output": "Day 1's edit record passes; day 2 gets none, since its text is drawn from a Draft that does not exist yet.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "edit_passes",
+          "day": 1
+        },
+        {
+          "kind": "deterministic",
+          "check": "no_edit",
+          "day": 2
+        }
+      ],
+      "files": [],
+      "run": {
+        "footage": [
+          "window-1/d01-s1.mov",
+          "window-1/d02-s1a-take-1.mov",
+          "window-1/d02-s1b-take-1.mov",
+          "window-1/d02-s1-closing.mov",
+          "window-1/d02-s2.mov"
+        ],
+        "workspace": [
+          "files/labs/day-01-draft/workspace"
+        ]
+      }
+    },
+    {
+      "id": 25,
+      "prompt": "Write the edit records for days 2 and 7: day 2 a re-cut pair leg with three shots, day 7 a five-minute timelapse.",
+      "expected_output": "Two edit records that pass every check and render: day 2 opening on leg A's own take, then the screen recording and the closing line; day 7 the whole session sped up to the Draft's length.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "edit_passes",
+          "day": 2
+        },
+        {
+          "kind": "deterministic",
+          "check": "edit_passes",
+          "day": 7
+        },
+        {
+          "kind": "deterministic",
+          "check": "renders",
+          "day": 7
+        },
+        {
+          "kind": "judged",
+          "text": "Day 2 opens on the take named for leg A, and every later segment is one a leg B record could copy unchanged."
+        }
+      ],
+      "files": [],
+      "run": {
+        "footage": [
+          "window-1/d02-s1a-take-1.mov",
+          "window-1/d02-s1b-take-1.mov",
+          "window-1/d02-s1-closing.mov",
+          "window-1/d02-s2.mov",
+          "window-1/d07-s1.mov"
+        ],
+        "workspace": [
+          "files/labs/day-02-draft/workspace",
+          "files/labs/day-07-draft/workspace"
+        ]
+      }
     }
-  ]
+  ],
+  "lab": {
+    "mandu": [
+      "../post-drafts/files/mandu",
+      "files/mandu"
+    ],
+    "code": "../post-drafts/files/code",
+    "ledger": [
+      "files/labs/plan-approved/ledger"
+    ],
+    "config": {
+      "window": {
+        "number": 1,
+        "first_sitting": null,
+        "slot": null
+      },
+      "waitlist": {
+        "live_since": null
+      },
+      "outreach": {
+        "network_ask_source": null,
+        "creators": []
+      }
+    }
+  }
 }

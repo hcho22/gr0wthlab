@@ -1,0 +1,74 @@
+{
+  "closed": [
+    {
+      "ask": "Approve the filming plan for RepToday window 1: 10 assets in 3 sittings",
+      "closed_at": "2026-10-05T23:00:00+00:00",
+      "closed_by_run": "20261005T230000Z-on-demand-3a19",
+      "decided_at": "2026-10-04T19:40:00-07:00",
+      "evidence": "evidence/decisions/20261004-filming-plan-w1.json",
+      "file": "review-queue/items/20261004-filming-plan-w1.md",
+      "filming_jobs": {
+        "d01": "37c3c5019b481b0656d70fac98bdec61532009229873226dad514a9070b1e9e8",
+        "d02": "456945fddf03cae0d4725420959e992546c8c18f38192a01387a1c071f44ccc4",
+        "d03": "ddb92c2559325c66be960b8b6ad746f70e563ad7d9c0d8f2accab03f493c71b2",
+        "d04": "74655853c470c7d39b97e3ce2c2ac4954f5267281dcdfe6d703e7f0f95763d06",
+        "d05": "977393dc273b3181a8f8c8aefc6d8548fd92fc58c6c35a4d8371d5286143df1d",
+        "d06": "9a57b31e19b69fdf4bc6bbbb8414becb7fdaf667979884dab3f906b45c4c4b35",
+        "d07": "27875f4c29ea51c4530e2930e1a7d4584778cfaaa8e202cde6ea228b3580ccc7",
+        "d11": "8b940dfe6a054815085461c7421ed0dba2cf9f41a029bce61bf7f57da784ccc4",
+        "d12": "6a1eabb654b77907415c21d5b96cda91670e0b65dd417c03f93527d910205be6",
+        "d13": "d178c62ddcfa77215aedb9964b767f875ca4e4dda09356f9d6b5db810ea5341e"
+      },
+      "filming_sha256": "af467bc793212a968e5fa5b299ae9622bc270a99e5d1256c6c1b246a36861f38",
+      "id": "20261004-filming-plan-w1",
+      "kind": "filming-plan",
+      "origin": "filming-plan/RepToday/window-1",
+      "product": "RepToday",
+      "published_at": "2026-10-04T23:00:00+00:00",
+      "published_by_run": "20261004T230000Z-on-demand-d0cc",
+      "status": "approved"
+    }
+  ],
+  "exchange": 7,
+  "next_run": "2026-10-11T16:00:00-07:00",
+  "open": [
+    {
+      "ask": "Approve Dispatch: build RepToday's Waitlist on reptoday.app, the last Gate 0 item",
+      "carried_over": true,
+      "carried_over_from": "2026-10-04",
+      "file": "review-queue/items/20261004-reptoday-waitlist.md",
+      "id": "20261004-reptoday-waitlist",
+      "kind": "dispatch-request",
+      "origin": "dispatch/reptoday-waitlist",
+      "product": "RepToday",
+      "published_at": "2026-10-04T23:00:00+00:00",
+      "published_by_run": "20261004T230000Z-on-demand-d0cc",
+      "status": "open"
+    },
+    {
+      "ask": "Notice: 7 post Drafts not offered on 2026-10-04",
+      "carried_over": true,
+      "carried_over_from": "2026-10-04",
+      "file": "review-queue/items/20261004-notice-run-problems.md",
+      "id": "20261004-notice-run-problems",
+      "kind": "notice",
+      "published_at": "2026-10-04T23:00:00+00:00",
+      "published_by_run": "20261004T230000Z-on-demand-d0cc",
+      "status": "open"
+    },
+    {
+      "ask": "Notice: 7 post Drafts not offered on 2026-10-05",
+      "carried_over": false,
+      "file": "review-queue/items/20261005-notice-run-problems.md",
+      "id": "20261005-notice-run-problems",
+      "kind": "notice",
+      "published_at": "2026-10-05T23:00:00+00:00",
+      "published_by_run": "20261005T230000Z-on-demand-3a19",
+      "status": "open"
+    }
+  ],
+  "paths": "Every path here is relative to the ledger/ directory that holds this file's folder.",
+  "run_report": "run-reports/20261005T230000Z-on-demand-3a19.md",
+  "updated_at": "2026-10-05T23:00:00+00:00",
+  "updated_by_run": "20261005T230000Z-on-demand-3a19"
+}

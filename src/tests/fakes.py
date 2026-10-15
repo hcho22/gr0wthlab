@@ -17,6 +17,8 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from unittest import mock
 
+from gr0wthlab import visibility
+
 REPO = Path(__file__).resolve().parents[2]
 AREAS = ("evidence", "drafts", "review-queue", "weekly-reads", "run-reports", "instructions")
 EXAMPLES = REPO / "src" / "examples" / "post-drafts"
@@ -41,7 +43,10 @@ QUIET_WINDOW = {"number": 1, "first_sitting": "2099-01-04", "slot": "19:00"}
 # changes the mode of is done once in a run, by the session whose workflow the path belongs to (ROUTES), or by the
 # run's first session when that workflow has no session this run, so a test still says only what "the agent" wrote.
 # Each session's prompt is kept as prompt.<workflow>.txt, the last one also as prompt.txt, and sessions.txt lists the
-# sessions started, in order, since behave() was last called. A session told to break the next preflight leaves the
+# sessions started, in order, since behave() was last called. "when_instructions" plays an agent that follows its
+# Instructions: each of its keys is a piece of text, and a session whose workflow's Instructions in force, in the
+# ledger/instructions/ beside its brief, hold that text behaves as the key's value says over everything else, as the
+# examples' labs need (examples.py). A session told to break the next preflight leaves the
 # sandbox refusing every area once, so the session after it does not start and the one after that does; one told it is
 # refused ends as Codex does when the model's provider refuses a request, with that error and exit code 1.
 ROUTES = (
@@ -53,6 +58,7 @@ ROUTES = (
     ("drafts/messages/replies/", "listening"),
     ("drafts/messages/outreach/", "outreach"),
     ("evidence/learning/", "learning"),
+    ("instructions/", "learning"),
 )
 FAKE_CODEX = """#!{python}
 import json, os, re, shutil, signal, subprocess, sys, time
@@ -126,6 +132,10 @@ def mine(relative):
 
 brief = Path(re.search(r"Run brief, read it first: (\\S+)", prompt).group(1))
 workspace = brief.parents[2] / "workspace"
+guidance = brief.parents[2] / "ledger" / "instructions" / ((session or "") + ".md")
+for text, override in behavior.get("when_instructions", {{}}).items():
+    if session and guidance.is_file() and text in guidance.read_text():
+        behavior = dict(behavior, **override)
 for relative in behavior.get("rmtree", []):
     if mine(relative):
         shutil.rmtree(workspace / relative)
@@ -183,13 +193,14 @@ def git(repo: Path, *args: str, env=None) -> str:
     ).stdout.strip()
 
 
-def git_env(root: Path) -> dict[str, str]:
-    """An environment whose git has an identity, none of the developer's own configuration, and no maintenance of
-    its own: git starts that detached after a commit, a fetch, a merge, a rebase, or a push it receives, so it would
-    still be writing in a repository while the test that made the repository removes it."""
+def git_env(root: Path, default_branch: str = "main") -> dict[str, str]:
+    """An environment whose git has an identity, starts each new repository on default_branch, has none of the
+    developer's own configuration, and no maintenance of its own: git starts that detached after a commit, a fetch, a
+    merge, a rebase, or a push it receives, so it would still be writing in a repository while the test that made the
+    repository removes it."""
     config = root / "gitconfig"
     config.write_text(
-        "[user]\n\tname = Test\n\temail = test@example.com\n[init]\n\tdefaultBranch = main\n"
+        f"[user]\n\tname = Test\n\temail = test@example.com\n[init]\n\tdefaultBranch = {default_branch}\n"
         "[maintenance]\n\tauto = false\n"
     )
     return dict(os.environ, GIT_CONFIG_GLOBAL=str(config), GIT_CONFIG_NOSYSTEM="1")
@@ -238,10 +249,11 @@ def sources_with(subreddits=(), app_store: bool = False) -> dict:
 
 
 def make_repo(path: Path, env: dict[str, str], window: dict | None = None, films: bool = False) -> Path:
-    """A gr0wthlab checkout with the real configuration, task definition, proposals, and area READMEs, committed on
-    main; its window is QUIET_WINDOW unless a test gives another, no Product films unless a test says so, so a run
-    that is not about filming files no filming plan, and it reads no network source and prepares no outreach message
-    unless a test gives it some (set_sources, set_run)."""
+    """A gr0wthlab checkout with the real configuration, task definition, proposals, Instructions in force, and area
+    READMEs, and a folder for example sets that holds none, committed on main; its window is QUIET_WINDOW unless a
+    test gives another, no Product films unless a test says so, so a run that is not about filming files no filming
+    plan, and it reads no network source and prepares no outreach message unless a test gives it some (set_sources,
+    set_run)."""
     shutil.copytree(str(REPO / "config"), str(path / "config"))
     set_window(path, QUIET_WINDOW if window is None else window)
     set_filming(path, films)
@@ -249,10 +261,13 @@ def make_repo(path: Path, env: dict[str, str], window: dict | None = None, films
     set_run(path, "outreach", {"network_ask_source": None, "creators": []})
     shutil.copytree(str(REPO / "src" / "instructions"), str(path / "src" / "instructions"))
     shutil.copytree(str(REPO / "src" / "proposals"), str(path / "src" / "proposals"))
+    (path / "src" / "examples").mkdir()
+    (path / "src" / "examples" / "README.md").write_text("# examples\n")
     shutil.copy(str(REPO / ".gitignore"), str(path / ".gitignore"))
     (path / "ledger").mkdir()
     (path / "ledger" / "README.md").write_text("# ledger\n")
     make_founder(path / "ledger")
+    shutil.copytree(str(REPO / "ledger" / "instructions"), str(path / "ledger" / "instructions"))
     for area in AREAS:
         (path / "workspace" / area).mkdir(parents=True)
         (path / "workspace" / area / "README.md").write_text(f"# {area}\n")
@@ -743,7 +758,7 @@ def kit_context(code_checkout: Path, env: dict[str, str], mandu: Path | None = N
     registry = json.loads((REPO / "config" / "products.json").read_text(encoding="utf-8"))
     product, roles = posts.kit_config(registry)
     parsed, _, data, problem = posts.read_kit(mandu or EXAMPLES / "files" / "mandu", roles)
-    rules = lint.Rules(data) if data is not None else None
+    rules = None if problem else lint.Rules(data)
     platforms = lint.load_platforms(json.loads((REPO / "config" / "platforms.json").read_text(encoding="utf-8")))
     code = codebase.open_code(product, code_checkout, "main", env)
     return drafts.Context(product, 1, parsed, rules, problem, platforms, code, dict(roles))
@@ -1051,6 +1066,24 @@ def make_test_clip(
 
 
 # The web the launcher's client reads, without a network.
+
+
+class GitHub:
+    """A stand-in for GitHub's answer to whether the repository a production clone pushes to is private: the answers,
+    private, public, or unconfirmed, given one per question, the last one repeating; asked lists every question."""
+
+    NAME = "example/gr0wthlab"
+
+    def __init__(self, *answers: str):
+        self.answers = list(answers) or [visibility.PRIVATE]
+        self.asked: list[tuple[Path, str]] = []
+
+    def __call__(self, repo: Path, remote: str, env) -> visibility.Answer:
+        self.asked.append((Path(repo), remote))
+        status = self.answers[min(len(self.asked), len(self.answers)) - 1]
+        if status == visibility.UNCONFIRMED:
+            return visibility.Answer(status, "gh api exited with 1: error connecting to api.github.com")
+        return visibility.read(self.NAME, json.dumps({"private": status == visibility.PRIVATE, "visibility": status}))
 
 
 class Web:

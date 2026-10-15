@@ -1,0 +1,31 @@
+{
+  "closed": [
+    {
+      "ask": "Approve message to Slow Strength: Early access, nothing asked",
+      "closed_at": "2026-09-27T23:00:00+00:00",
+      "closed_by_run": "20261004T230000Z-on-demand-0c2d",
+      "decided_at": "2026-09-27T19:40:00-07:00",
+      "draft": "drafts/messages/outreach/creator-slow-strength.md",
+      "draft_sha256": "e02b265d8373187996c76dc45bbeccc78b44d91d42a9f91dc69e6ead14ccfdbe",
+      "evidence": "evidence/decisions/20260927-message-creator-slow-strength.json",
+      "file": "review-queue/items/20260927-message-creator-slow-strength.md",
+      "id": "20260927-message-creator-slow-strength",
+      "kind": "message",
+      "message": {
+        "purpose": "creator",
+        "to": "slow-strength"
+      },
+      "product": "RepToday",
+      "published_at": "2026-09-27T23:00:00+00:00",
+      "published_by_run": "20260927T230000Z-on-demand-0a1b",
+      "status": "approved"
+    }
+  ],
+  "exchange": 7,
+  "next_run": "2026-09-27T23:00:00+00:00",
+  "open": [],
+  "paths": "Every path here is relative to the ledger/ directory that holds this file's folder.",
+  "run_report": "run-reports/x.md",
+  "updated_at": "2026-09-27T23:00:00+00:00",
+  "updated_by_run": "20261004T230000Z-on-demand-0c2d"
+}

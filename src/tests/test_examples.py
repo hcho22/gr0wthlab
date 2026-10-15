@@ -12,6 +12,12 @@ from tests import fakes
 
 EVALS = fakes.EXAMPLES / "evals.json"
 LINT_RULES = set(lint.KNOWN_RULES) | {"need-marker", "hashtags"}
+# The checks only a re-run can hold, since they read what a whole run queued, not one candidate Draft.
+RUN_ONLY = {"queued", "nothing_queued", "nothing_set_aside"}
+
+
+def run_only(assertion):
+    return assertion["check"] in RUN_ONLY
 
 
 class ExampleSetTest(unittest.TestCase):
@@ -38,8 +44,12 @@ class ExampleSetTest(unittest.TestCase):
         ids = [example["id"] for example in self.data["evals"]]
         self.assertEqual(ids, list(range(1, len(ids) + 1)))
         self.assertGreaterEqual(len(ids), 10)
+        rerun = [example for example in self.data["evals"] if "run" in example]
+        self.assertGreaterEqual(len(rerun), 10, "about ten examples the agent re-runs on every Instructions change")
         for example in self.data["evals"]:
-            self.assertEqual(sorted(example), ["assertions", "expected_output", "files", "id", "prompt"])
+            keys = ["assertions", "expected_output", "files", "id", "prompt"] + (["run"] if "run" in example else [])
+            self.assertEqual(sorted(example), keys)
+            self.assertTrue(example["files"] or "run" in example, example["id"])
             self.assertTrue(all((fakes.EXAMPLES / name).is_file() for name in example["files"]), example["id"])
             kinds = {assertion["kind"] for assertion in example["assertions"]}
             self.assertLessEqual(kinds, {"deterministic", "judged"})
@@ -54,11 +64,13 @@ class ExampleSetTest(unittest.TestCase):
             self.assertTrue(any(case in rule for rule in blocked), case)
         self.assertTrue(any("pre-publication-checklist.md" in rule for rule in blocked))
 
-    def test_every_deterministic_assertion_holds(self):
+    def test_every_deterministic_assertion_holds_of_each_candidate(self):
         for example in self.data["evals"]:
+            if not example["files"]:
+                continue
             draft, verdict = self.verdict(example)
             for assertion in example["assertions"]:
-                if assertion["kind"] != "deterministic":
+                if assertion["kind"] != "deterministic" or run_only(assertion):
                     continue
                 with self.subTest(example=example["id"], check=assertion["check"], rule=assertion.get("rule")):
                     self.assertTrue(

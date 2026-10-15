@@ -16,6 +16,13 @@ TOOLING, CANVAS, WHY_NOT = fakes.real_video_tools()
 # The five cases every filming example set must cover: these by the rule that blocks each, a rendered asset that is
 # not 9:16 by the words of its finding, and a leg whose video differs from its other leg's by the check of the two.
 MUST_BLOCK = ("no-cut", "missing-shot", "footage-place")
+# The checks only a re-run can hold, since they read what a whole run took in and cut, not one candidate record.
+# A re-run example's renders reads its lab's own cut; a candidate's rendering is the test below.
+RUN_ONLY = {"no_edit", "renders", "nothing_queued", "nothing_set_aside"}
+
+
+def run_only(assertion):
+    return assertion["check"] in RUN_ONLY or (assertion["check"] == "queued" and "item" in assertion)
 
 
 class FilmingExampleSetTest(unittest.TestCase):
@@ -89,7 +96,9 @@ class FilmingExampleSetTest(unittest.TestCase):
         self.assertEqual(ids, list(range(1, len(ids) + 1)))
         self.assertGreaterEqual(len(ids), 10)
         for example in self.data["evals"]:
-            self.assertEqual(sorted(example), ["assertions", "expected_output", "files", "id", "prompt"])
+            keys = ["assertions", "expected_output", "files", "id", "prompt"] + (["run"] if "run" in example else [])
+            self.assertEqual(sorted(example), keys)
+            self.assertTrue(example["files"] or "run" in example, example["id"])
             self.assertTrue(all((fakes.FILMING / name).is_file() for name in example["files"]), example["id"])
             kinds = {assertion["kind"] for assertion in example["assertions"]}
             self.assertLessEqual(kinds, {"deterministic", "judged"})
@@ -107,10 +116,14 @@ class FilmingExampleSetTest(unittest.TestCase):
         media = [name for name in tracked if name.lower().endswith((".mov", ".mp4", ".m4v"))]
         self.assertEqual(media, [])
 
-    def test_every_deterministic_assertion_that_needs_no_tooling_holds(self):
+    def test_every_deterministic_assertion_that_needs_no_tooling_holds_of_each_candidate(self):
+        """An example the agent re-runs with no candidate holds in its own lab instead (test_example_runs.py), as do
+        the re-run checks of what a whole run cut."""
         for example in self.data["evals"]:
+            if not example["files"]:
+                continue
             for assertion in example["assertions"]:
-                if assertion["kind"] != "deterministic" or assertion.get("needs"):
+                if assertion["kind"] != "deterministic" or assertion.get("needs") or run_only(assertion):
                     continue
                 with self.subTest(example=example["id"], check=assertion["check"], rule=assertion.get("rule")):
                     self.assertTrue(*self.holds(assertion, example))

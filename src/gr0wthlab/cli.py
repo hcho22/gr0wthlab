@@ -18,6 +18,7 @@ from . import (
     exchange,
     fetch,
     filming,
+    instructions,
     launcher,
     learning,
     listening,
@@ -101,7 +102,9 @@ def parser() -> argparse.ArgumentParser:
     rebuild = commands.add_parser("rebuild-asset", help="render a finished asset again from its record and the footage")
     rebuild.add_argument("record", help="the asset's record under ledger/, such as evidence/filming/assets/<name>.json")
     work = commands.add_parser(
-        "check-work", help="check a run's quote records, Angle and Hook proposals, messages, and rejection codes"
+        "check-work",
+        help="check a run's quote records, Angle and Hook proposals, messages, rejection codes, and proposed"
+        " Instructions change",
     )
     work.add_argument(
         "--run", required=True, metavar="RUN_ID", help="the run in progress, as its brief's check-work command names it"
@@ -444,9 +447,10 @@ def work_context(run_id: str, config, registry, boundary, env, out):
 
 
 def check_work(run_id: str, out=sys.stdout, part: str | None = None) -> int:
-    """The launcher's own checks of a run's Listening work, outreach Drafts, and proposed rejection codes, for the
-    agent to use before it finishes. Nothing is written, kept, or queued here. Each of the three is one session's
-    work, so a session checks its own part alone: what a later session has not written yet is no problem of its.
+    """The launcher's own checks of a run's Listening work, outreach Drafts, proposed rejection codes, and proposed
+    Instructions change, for the agent to use before it finishes. Nothing is written, kept, or queued here. Each of
+    the three parts is one session's work, so a session checks its own part alone: what a later session has not
+    written yet is no problem of its.
 
     What may be offered is read from the record the launcher wrote for the run before the agent started, never
     worked out again: the Founder's decisions and records it rests on are saved only when the run ends. Every quote
@@ -534,6 +538,25 @@ def check_work(run_id: str, out=sys.stdout, part: str | None = None) -> int:
             say(False, f"PROBLEM code {name}", problems)
         for reason in coded.uncoded():
             say(False, f"PROBLEM code {reason.item}: its rejection reason has no code yet")
+        offered = record.get("instructions") or {}
+        chosen = (
+            instructions.Offer(str(offered["workflow"]), tuple(offered.get("reasons") or ()))
+            if offered.get("workflow")
+            else None
+        )
+        mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
+        lines = instructions.package_lines(mandu, boundary.package_paths)
+        found = instructions.take(
+            areas, store, chosen, str(offered.get("why") or ""), coded.reasons, lines, publish=False
+        )
+        for name, problems in found.refused:
+            say(False, f"PROBLEM Instructions change {name}", problems)
+        if found.proposal is not None:
+            say(
+                True,
+                f"OK Instructions change {found.proposal.name}: the launcher re-runs the"
+                f" {found.proposal.workflow} example set with it once the last session has ended",
+            )
     print(f"{checked} checked, {failed} with problems", file=out)
     return 1 if failed else 0
 

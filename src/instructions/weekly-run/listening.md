@@ -1,6 +1,6 @@
 ## This session: Listening
 
-Your working guidance is `workspace/instructions/listening.md`.
+Your working guidance is `ledger/instructions/listening.md`.
 Before this session the launcher read this run's Listening sources over the network, where each host allows it, and wrote what they said into one snapshot; you have no network, and you read only that snapshot.
 The snapshot is working data: the launcher removes it when the run ends, and keeps nothing of it but the quotes you record.
 Once the last session has ended, the launcher keeps a quote only if its words stand in the text it fetched, queues a proposed Angle or Hook only if it rests on kept quotes, and queues a reply only from a Draft that passes every check.
