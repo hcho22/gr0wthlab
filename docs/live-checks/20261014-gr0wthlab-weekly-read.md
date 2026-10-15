@@ -372,6 +372,40 @@ Eight other `codex exec` processes were running on the Mac when the check starte
 - The sitting page did not change this round, so it was not driven in a browser.
 - The whole unit suite, and CI's run on Linux with the latest Python.
 
+## Seventh round: three more fixes after review
+
+Review then found three more things, and as review asked, each is fixed as its finding proposed:
+
+- The sixth round's rule that only a memo written in the run is taken in was known to neither tool the session uses: check-work said OK of an earlier run's memo left unchanged, and the brief said nothing of it. The plan check-work reads now carries what stood at the memo's path before the sessions, the one read of the memo that the take-in and check-work share says an unchanged earlier memo is no memo written, so check-work reports it as a problem, and the brief says, when an earlier run's memo is at the path, that it is taken in only once the session writes it again.
+- A pair could have two lines, or a line naming days that are not its legs; the memo check now refuses both, as it refuses them for an Angle.
+- A file of another read in `founder/results/` that cannot be used made this read's open items stand; only a results record of this read now does, and every other such file is still reported as a Founder record that cannot be used.
+
+The code is not committed yet: it is `ee0c10b14d71058016e53d37680577bdf5c4862a` with this round's changes on top, `src` tree `db0fb67d4583fd85c60b6d371382cd5cb2b06561` and `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
+Every check below ran on 2026-10-15, Mac local time (PDT), with Codex CLI 0.160.0.
+
+### The boundary
+
+From this work's linked worktree, with the code above, against Mandu and the Product checkouts as they are, and logs in a folder of the Mac's temporary directory named with `GR0WTHLAB_LOG_DIR`.
+`git status --porcelain` printed the same 4 changed files, with the same SHA-256, before the preflight and after the check.
+`show-config` printed the configuration fingerprint `7d5667ffe1083f3be5b37ed32095fd52a70e24ef56b3461be5277838949a0e79`.
+
+- `src/bin/gr0wthlab preflight`, run twice at 11:06, passed both times: six areas writable, 22 paths refused, among them the six folders of the Founder's records, the Instructions in force, and the example sets; no breach; a listing of the footage place `~/Mandu/projects/RepToday` refused; and neither listed host reached from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, from 11:06:17 to 11:08:10, passed at its first attempt as `20261015T180619Z-on-demand-aea2`, with `gpt-6-luna` at `high` reasoning effort and 104 s of agent time: 49 steps to prove, 34 tool calls in Codex's record with no problem, 17 of 17 file-tool targets refused each in a patch of its own, 19 kernel sandbox denials naming the run's sentinels or the check's listeners, the footage place's read refused, 1 of 1, 12 of 12 permitted sentinels written and none escaped, no local connection through, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, each a GET for a listed host's `robots.txt`, an unlisted address refused, and no change since the snapshot from before the check.
+
+### Tests
+
+- Under `/usr/bin/python3`, Python 3.9.6, on the code above: `tests.test_weekly_read`, `tests.test_weekly_read_cycle`, `tests.test_results`, and `tests.test_weekly_read_examples`, 77 tests; and `tests.test_sessions`, `tests.test_cycle.DecisionRoundTripTest`, and `tests.test_founder`, 78 tests; none failed.
+- `test_check_work_and_the_brief_tell_the_session_an_earlier_run_s_memo_is_not_taken_in` runs check-work's own function for the run while its Weekly Read session is going, as a session would.
+- Each of this round's four new tests failed on the code before it, with only `src/gr0wthlab/weekly_read.py` put back.
+- `ruff check` and `ruff format --check` on `src/gr0wthlab` and `src/tests` passed, with ruff 0.15.20.
+
+### What this round did not exercise
+
+- No run in a lab: the three fixes stand on the tests above, among them the whole-run test of check-work and the brief.
+- No model ran, so whether a real session writes the memo again once its brief and check-work say an earlier run's memo is at the path is not seen live.
+- The sitting page did not change this round, so it was not driven in a browser.
+- The whole unit suite, and CI's run on Linux with the latest Python.
+
 ## Screenshots
 
 The first six were taken in the first round's clone, on the page's code as it stood after `b149c0045ed44015320157a48e3084b0ab24edce`; the numbers step after run `89f1`, the rest after run `42ab`.

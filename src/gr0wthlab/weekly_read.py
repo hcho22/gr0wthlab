@@ -39,7 +39,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from . import exchange, kit, results
+from . import exchange, founder, kit, results
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .queue import APPROVED, OPEN, REJECTED, SUPERSEDED, Ledger, Stands, stands
 
@@ -259,7 +259,8 @@ def plan(
     found.open_items = [entry for entry in items if entry["status"] == OPEN]
     decided = [entry for entry in items if entry["status"] in (APPROVED, REJECTED) or entry.get("decided")]
     record, record_problem = kept(store, read.window, read.read, bool(found.open_items))
-    unread = [f"`{name}` cannot be used: {'; '.join(why)}" for name, why, _ in taken.unusable]
+    ours = founder.named(founder.RESULTS, read.stem() + "-")
+    unread = [f"`{name}` cannot be used: {'; '.join(why)}" for name, why, _ in taken.unusable if name.startswith(ours)]
     unread += [read.floor_problem] if read.floor_problem else []
     unread += [record_problem] if record_problem and found.open_items else []
     unread += [found.earlier_problem] if found.earlier_problem else []
@@ -370,6 +371,10 @@ def parse(text: str, found: Plan) -> tuple[list[Line], list[str]]:
                 )
                 continue
             parsed.append(Line(PAIR, match.group(1), match.group(3), match.group(5), line))
+            days = [int(day) for day in re.findall(r"\d+", match.group(2))]
+            legs = found.pairs().get(match.group(1))
+            if legs is not None and sorted(days) != sorted(legs):
+                problems.append(f"{where} ({match.group(1)}) must name {days_text(legs)}, its legs in this read")
         elif section == FLEX:
             match = FLEX_LINE.fullmatch(line)
             if not match:
@@ -405,6 +410,10 @@ def check(text: str, found: Plan) -> tuple[list[Line], list[str]]:
             problems.append(f"{angle} needs exactly one line under Angles; it has {len(by_angle.get(angle, []))}")
     for angle in sorted(set(by_angle) - set(angles)):
         problems.append(f"{angle} has no post this read covers, so it has no line here")
+    pair_lines = [line.key for line in lines if line.section == PAIR]
+    for pair in sorted(set(pair_lines)):
+        if pair_lines.count(pair) > 1:
+            problems.append(f"{pair} needs exactly one line under Pairs; it has {pair_lines.count(pair)}")
     for line in lines:
         name = line.key if line.section != PRODUCT else f"Product line {line.key.split('-')[1]}"
         if read.read == min(results.READS) and (line.decision == "kill" or line.result == MET_KILL):
@@ -598,9 +607,17 @@ class Outcome:
 
 
 def read_memo(areas: Areas, found: Plan) -> tuple[str | None, str]:
+    """The memo at its path in workspace/, read without following links, when this run wrote it; else None, with why.
+    A memo an earlier run left there unchanged is no memo written, for the launcher's take-in and for check-work
+    alike, since only a memo the Weekly Read session writes in a run is taken in that run."""
     path = areas.path("weekly_reads", found.memo)
     if not path.exists() and not path.is_symlink():
         return None, f"no memo was written at `weekly-reads/{found.memo}`"
+    if found.before is not None and stamp(areas, found.memo) == found.before:
+        return None, (
+            f"no memo was written at `weekly-reads/{found.memo}` this run; the one there is an earlier run's, and is"
+            " taken in only once a Weekly Read session writes it again"
+        )
     try:
         return read_plain(path).decode("utf-8"), ""
     except (OSError, UnsafeFile) as error:
@@ -628,12 +645,6 @@ def take(
     text, why = read_memo(areas, found)
     if text is None:
         outcome.unread = why
-        return outcome
-    if found.before is not None and stamp(areas, found.memo) == found.before:
-        outcome.unread = (
-            f"no memo was written at `weekly-reads/{found.memo}` this run; the one there is an earlier run's, and stays"
-            " as it is"
-        )
         return outcome
     outcome.lines, outcome.problems = check(text, found)
     if outcome.problems:
@@ -808,6 +819,14 @@ def brief_lines(found: Plan, workspace: Path, mandu: Path, check: str) -> list[s
         f" {read.covered[-1]}.",
         f"Write the memo at `{workspace / FOLDER / found.memo}`, as your task definition describes"
         + (f", and check it with `{check}`." if check else "."),
+        *(
+            [
+                "A memo an earlier run left is already at that path: it is taken in only once this session writes it"
+                " again, whatever it says."
+            ]
+            if found.before is not None
+            else []
+        ),
         f"{results.FLOOR_COUNTS}"
         + (f" The floor is {read.floor} views on the platform that judges a post." if read.floor is not None else ""),
         "Each number below is one post's, as the Founder gave it from the platform's Studio on the date shown, so its"
@@ -874,8 +893,8 @@ def brief_lines(found: Plan, workspace: Path, mandu: Path, check: str) -> list[s
 
 def plan_record(found: Plan) -> dict[str, object]:
     """What the launcher worked out before the sessions, for check-work to check the memo against: the read and its
-    asks, the floor, the read before's results, and each record the Founder gave, by its path and fingerprint, never
-    its text."""
+    asks, the floor, the read before's results, each record the Founder gave, by its path and fingerprint, never its
+    text, and what stood at the memo's path before the sessions."""
     read = found.read
     return {
         "read": read.as_json(),
@@ -886,6 +905,7 @@ def plan_record(found: Plan) -> dict[str, object]:
         "previous": dict(found.previous),
         "why": found.why,
         "fingerprint": found.fingerprint,
+        "before": list(found.before) if found.before is not None else None,
         "given": {
             f"{platform}-{day}": {"record": given.path, "sha256": given.sha256}
             for (platform, day), given in sorted(found.taken.given.items())
@@ -939,4 +959,5 @@ def restore(record: Mapping, ledger_root: Path) -> tuple[Plan, list[str]]:
     taken.evidence = {int(day): str(path) for day, path in (record.get("evidence") or {}).items()}
     found = Plan(read, taken, None, record.get("paths") or {}, str(record.get("fingerprint", "")), str(record["why"]))
     found.previous = dict(record.get("previous") or {})
+    found.before = tuple(record["before"]) if record.get("before") else None
     return found, notes

@@ -4,11 +4,13 @@ and no run reads any platform: the Founder gives every number on the sitting pag
 
 import io
 import json
+import os
 import re
 import unittest
 from datetime import timedelta
+from unittest import mock
 
-from gr0wthlab import cycle, results
+from gr0wthlab import cli, cycle, results
 from tests import fakes
 from tests.test_cycle import CycleTestCase
 
@@ -233,7 +235,7 @@ class WeeklyReadRunTest(CycleTestCase):
         self.assertEqual(path.read_bytes(), left, "it stays as a Draft waiting for a fix")
         self.assertIn(
             "| Weekly Read memo | incomplete | no memo was written at `weekly-reads/window-1-read-07.md` this run; the"
-            " one there is an earlier run's, and stays as it is |",
+            " one there is an earlier run's, and is taken in only once a Weekly Read session writes it again |",
             self.report(),
         )
         # The session writing it again, word for word, is a memo written this run.
@@ -241,6 +243,43 @@ class WeeklyReadRunTest(CycleTestCase):
         code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=2))
         self.assertEqual(code, 0, out)
         self.assertEqual(len(self.items()), 6)
+
+    def test_check_work_and_the_brief_tell_the_session_an_earlier_run_s_memo_is_not_taken_in(self):
+        self.give_tiktok()
+        cleared = MEMO.replace(
+            "- P03 (day 3): insufficient data. YouTube's numbers for day 3 were not given."
+            " What would settle it: day 3's YouTube Studio numbers at the next read. Decision: test",
+            "- P03 (day 3): cleared its signal. A viewed rate of 72.5% (n=1) is in the top half. Decision: keep",
+        )
+        fakes.behave(self.codex_dir, {"write": {"weekly-reads/window-1-read-07.md": cleared}})
+        self.run_cycle()
+        self.assertNotIn("A memo an earlier run left", self.brief(session="weekly-read"))
+        fakes.give_results(self.exchange, 3, "youtube", read_on=TODAY.isoformat(), views=950, viewed_percent=72.5)
+        fakes.behave(self.codex_dir, {})
+        launch, said = cycle.launcher.run, []
+
+        def agent(*args, **kwargs):
+            result = launch(*args, **kwargs)
+            if kwargs["session"] == "weekly-read":
+                out = io.StringIO()
+                with (
+                    mock.patch.object(cli, "REPO_ROOT", self.repo),
+                    mock.patch.object(cli, "LEDGER_DIR", self.repo / "ledger"),
+                    mock.patch.dict(os.environ, self.env),
+                ):
+                    said.append((cli.check_work(kwargs["run_id"], out, part="weekly-read"), out.getvalue()))
+            return result
+
+        with mock.patch.object(cycle.launcher, "run", agent):
+            code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))
+        self.assertEqual(code, 0, out)
+        ((checked, text),) = said
+        self.assertNotEqual(checked, 0, text)
+        self.assertIn("PROBLEM memo: no memo was written at `weekly-reads/window-1-read-07.md` this run;", text)
+        self.assertIn(
+            "A memo an earlier run left is already at that path: it is taken in only once this session writes it again",
+            self.brief(session="weekly-read"),
+        )
 
     def test_a_memo_record_that_cannot_be_read_leaves_the_read_s_open_items_standing(self):
         self.give_tiktok()

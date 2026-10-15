@@ -252,6 +252,50 @@ class Day14Test(unittest.TestCase):
             "`evidence/weekly-reads/window-1-read-07.json` is missing, though the memo it records was composed",
         )
 
+    def verdicts_and_pairs(self):
+        verdicts = {
+            angle: ("cleared its signal", "keep") for angle in ("P01", "P02", "P03", "P04", "P05", "P06", "P07")
+        }
+        pairs = [
+            "- AB-1 (days 1 and 8): resolved. Leg A ranked well above leg B. Decision: keep",
+            "- AB-2 (days 3 and 10): resolved. Leg B ranked well above leg A. Decision: keep",
+        ]
+        return self.lines(verdicts), pairs
+
+    def test_a_pair_has_exactly_one_line_naming_its_legs(self):
+        lab = self.lab({day: 500 for day in range(1, 14)})
+        lines, pairs = self.verdicts_and_pairs()
+        found = lab.plan()
+        self.assertEqual(weekly_read.check(self.memo(lines, pairs), found)[1], [])
+        self.assertEqual(
+            weekly_read.check(self.memo(lines, [*pairs, pairs[0]]), found)[1],
+            ["AB-1 needs exactly one line under Pairs; it has 2"],
+        )
+        wrong = [pairs[0].replace("(days 1 and 8)", "(days 1 and 9)"), pairs[1]]
+        self.assertEqual(
+            weekly_read.check(self.memo(lines, wrong), found)[1],
+            ["Pairs line 1 (AB-1) must name days 1 and 8, its legs in this read"],
+        )
+
+    def test_a_file_of_another_read_that_cannot_be_used_holds_none_of_this_read_s_items(self):
+        lab = self.lab({day: 500 for day in range(1, 14)})
+        lines, pairs = self.verdicts_and_pairs()
+        _, outcome = lab.take(self.memo(lines, pairs))
+        folder = founder.folders(lab.ledger_root)[founder.RESULTS]
+        (folder / "window-1-read-07-tiktok-day-01.json").symlink_to(folder / "elsewhere.json")
+        corrected = record(1, read=14, read_on="2026-11-01", views=650)
+        corrected["recorded_at"] = "2026-11-01T18:00:00-07:00"
+        fakes.write_record(folder, "window-1-read-14-tiktok-day-01.json", corrected)
+        found = lab.plan()
+        self.assertEqual((found.stood, found.due), ([], True), "a corrected day-14 number writes the memo again")
+        self.assertIn(
+            "founder/results/window-1-read-07-tiktok-day-01.json", [name for name, _, _ in found.taken.unusable]
+        )
+        (folder / "window-1-read-14-tiktok-day-01.json").unlink()
+        (folder / "window-1-read-14-tiktok-day-01.json").symlink_to(folder / "elsewhere.json")
+        found = lab.plan()
+        self.assertEqual(sorted(standing.item for standing in found.stood), sorted(outcome.published))
+
     def test_a_pair_resolves_only_when_both_legs_were_readable(self):
         views = {day: 500 for day in range(1, 14)}
         views[8] = 120
@@ -355,6 +399,31 @@ class TakeTest(unittest.TestCase):
         unread = take().unread
         self.assertTrue(unread.startswith("`weekly-reads/window-1-read-07.md` could not be read ("), unread)
         self.assertEqual(self.lab.ledger.entries, {})
+
+    def test_a_memo_an_earlier_run_left_is_known_to_check_work_and_the_brief(self):
+        self.lab.write(GOOD_DAY_7)
+        found = self.lab.plan()
+        self.assertNotIn(
+            "A memo an earlier run left", "\n".join(weekly_read.brief_lines(found, Path("/w"), Path("/m"), ""))
+        )
+        found.before = weekly_read.stamp(self.lab.areas, found.memo)
+        brief = "\n".join(weekly_read.brief_lines(found, Path("/w"), Path("/m"), ""))
+        self.assertIn(
+            "A memo an earlier run left is already at that path: it is taken in only once this session writes it again,"
+            " whatever it says.",
+            brief,
+        )
+        restored, _ = weekly_read.restore(json.loads(json.dumps(weekly_read.plan_record(found))), self.lab.ledger_root)
+        self.assertEqual(
+            weekly_read.read_memo(self.lab.areas, restored),
+            (
+                None,
+                "no memo was written at `weekly-reads/window-1-read-07.md` this run; the one there is an earlier run's,"
+                " and is taken in only once a Weekly Read session writes it again",
+            ),
+        )
+        self.lab.write(GOOD_DAY_7 + "\n")
+        self.assertEqual(weekly_read.read_memo(self.lab.areas, restored), (GOOD_DAY_7 + "\n", ""))
 
     def test_a_memo_written_again_replaces_the_read_s_open_items_line_for_line(self):
         _, first = self.lab.take(GOOD_DAY_7)
