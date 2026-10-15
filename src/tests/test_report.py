@@ -258,6 +258,30 @@ class NoticeTest(unittest.TestCase):
         self.assertTrue(text.startswith("# Run report: R\n\n## Summary\n"))
 
 
+class ItemLinesTest(unittest.TestCase):
+    def test_the_brief_says_no_item_supersedes_a_launcher_item_a_post_a_message_or_an_instructions_notice(self):
+        state = RunState("R", "on-demand", local(2026, 10, 18, 16), "i.md")
+        state.queue_before = [
+            {"id": "w", "kind": "dispatch-request", "origin": "waitlist", "ask": "Approve Dispatch: build it"},
+            {"id": "n", "kind": "notice", "instructions": "post-drafts", "ask": "Notice: the Instructions changed"},
+            {"id": "p", "kind": "package-change-proposal", "file": "items/p.md", "ask": "Approve change: fix it"},
+        ]
+        lines = report.item_lines(state, [], Path("ledger"))
+        self.assertIn(
+            "An item filed by the launcher changes only through a reviewed change to its source text, a post or a"
+            " message only through its Draft, and the notice of a change to the Instructions only through the"
+            " Founder's decision, which alone closes it, so an item that supersedes any of them is refused.",
+            lines,
+        )
+        self.assertIn("- `w` (dispatch-request, filed by the launcher): Approve Dispatch: build it", lines)
+        self.assertIn(
+            "- `n` (notice, the notice of a change to the Instructions, which only the Founder's decision closes):"
+            " Notice: the Instructions changed",
+            lines,
+        )
+        self.assertIn("- `p` (package-change-proposal, `ledger/items/p.md`): Approve change: fix it", lines)
+
+
 class NextDueTest(unittest.TestCase):
     def test_the_next_weekly_time_after_a_run_with_its_offset(self):
         weekly = ("sunday", "16:00")

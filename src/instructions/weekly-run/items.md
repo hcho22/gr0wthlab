@@ -49,6 +49,7 @@ Rules for items:
 - Do not queue an item that is already open; to replace one, write a new item with `supersedes: <id>` in its front matter.
   An item the brief marks as filed by the launcher, such as a Dispatch request, cannot be superseded: only a reviewed change to its source text replaces it.
   A post or a message cannot be superseded either: each changes only through its Draft.
+  Nor can the notice of a change to the Instructions, which the brief marks so: only the Founder's decision closes it.
 - The brief lists the items earlier sessions of this run left in the incoming folder, which are not queued yet.
   Read each one that touches a file your work uses, write nothing that asks the same, and leave those files as they are.
 - Do not propose again what the Founder already rejected unless new Evidence answers the reason.
