@@ -15,8 +15,9 @@ Codex CLI 0.160.0 with `gpt-6-luna` at `high` reasoning effort throughout, as ea
 
 ## What nothing here touched
 
-The change is text the agent reads and nothing else: no launcher code, no `config/`, no permission profile, no example set.
-So neither `src/bin/gr0wthlab preflight` nor `src/bin/gr0wthlab boundary-check` was run for it.
+Up to round 5 the change is text the agent reads and nothing else: no launcher code, no `config/`, no permission profile, no example set.
+Round 6 adds launcher code that writes what a session's brief says of the Review Queue (`report.item_lines`), and nothing that starts, bounds, or grants a session anything.
+So neither `src/bin/gr0wthlab preflight` nor `src/bin/gr0wthlab boundary-check` was run on its own for it; in round 6, the preflight a run makes before each session printed that it refused 21 paths and allowed 6 areas before all 64 sessions.
 Every live run here was a lab run: its own synthetic Mandu, RepToday, and Immerse, built by `examples.build` from the Post Drafts example set's kit and code, and pointed to by the lab's `GR0WTHLAB_*` settings, so no run read or wrote the real checkouts.
 `git status` in both clones was empty after the last run.
 
@@ -163,10 +164,53 @@ Example 16 ran three more times on that commit, from a clone under `<lab>`, the 
 Each queued proposal declares `new_angle: no` and cites the Hook at `projects/RepToday/gtm/05-social-pmf/angles.md` line 8 and lines of the RepToday code (`Engine/ConsistencyScore.swift` in two, `App/ReadyScreen.swift` in one).
 The rest of the example set and the weekly lab runs were not run again on this commit; they stand on rounds 2 and 3.
 
+## Round 6: a second weekly run while the proposal is open
+
+The gate's test of `c951a73` ran two weekly runs one after the other in 8 fresh labs, leaving the first run's Hook proposal open, and in 1 of the 8 the second run queued a reworded copy of it beside the open one.
+In that lab the first session had given the proposal the identifier `20261015-score-dip-hook-code-conflict` and the title "Resolve the score-dip Hook and shipped behavior conflict", which name P03's subject, though its text is about P02's Hook.
+The brief listed each open item by identifier and title alone, and the launcher refuses an item only when its kind, title, and text match a queued one's (`exchange.item_hash`), so nothing caught the copy.
+This record had said, under "What was not exercised", that the launcher's refusal would; it covers only a copy that keeps the wording.
+
+The fix is in the brief: each open and decided package-change proposal is listed with its item file, and a session that may write items is told that a title may not name all a proposal asks, and to read each one's file before it writes a proposal (`report.item_lines`).
+`test_a_session_is_told_the_file_of_each_proposal_whatever_its_title_names` in `src/tests/test_cycle.py` holds that the brief names each file, and fails on the brief before the fix.
+
+Each lab was built like round 3's, from the Post Drafts example set by `examples.build`, with calendar days 1 to 3, and ran two on-demand runs through `src/bin/gr0wthlab run` at the Mac's clock.
+Between the two runs, a script put the failed lab's proposal in place of the P02 proposal the first run had queued, word for word: its title, Proposal, Touches, and Evidence, under the first run's front matter.
+In batch 2 it also gave it the failed lab's identifier.
+Each side ran from a clone of its own under `<tmp>`: `c951a73` (`src` tree `15b9406344669caa785e24ac58ba678cbed46501`), and `c951a73` with the fix (`src` tree `df6767a1b871cca1d946fb82b3d6e227bce12856`); both have `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
+Batch 1 ran from 12:48 to 12:57, and batch 2 from 12:58 to 13:04, its eight labs side by side.
+
+| Batch | Lab | Side | First run | Second run | Second run's Post Drafts session opened the proposal's file | P02 Hook proposals the second run queued |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | h1 | `c951a73` | `0bc6` | `0711` | no | 0 |
+| 1 | h2 | `c951a73` | `5f42` | `b7cf` | yes | 0 |
+| 1 | h3 | `c951a73` | `45e1` | `098e` | no | 1, `20261015-founder-comeback-hook-code-mismatch` |
+| 1 | h4 | `c951a73` | `a470` | `1862` | no | 0 |
+| 1 | f1 | with the fix | `0ffc` | `2278` | yes | 0 |
+| 1 | f2 | with the fix | `19fb` | `4e28` | yes | 0 |
+| 1 | f3 | with the fix | `a569` | `5e56` | yes | 0 |
+| 1 | f4 | with the fix | `b559` | `ebc0` | yes | 0 |
+| 2 | h5 | `c951a73` | `9350` | `0f63` | no | 1, `20261015-founder-comeback-hook-code-conflict` |
+| 2 | h6 | `c951a73` | `2655` | `85d2` | yes | 0 |
+| 2 | h7 | `c951a73` | `6439` | `634f` | no | 1, `20261015-founder-comeback-hook-code-conflict` |
+| 2 | h8 | `c951a73` | `054d` | `e544` | no | 1, `20261015-p02-welcome-back-code-conflict` |
+| 2 | f5 | with the fix | `abb6` | `31a1` | yes | 0 |
+| 2 | f6 | with the fix | `5c7e` | `02bb` | yes | 0 |
+| 2 | f7 | with the fix | `afec` | `77f5` | yes | 0 |
+| 2 | f8 | with the fix | `32b5` | `186d` | yes | 0 |
+
+Each run is the run identifier ending in the four characters shown.
+With the failed lab's title alone, `c951a73` asked again in 1 of 4 labs and the fix in none; with its identifier as well, `c951a73` asked again in 3 of 4 and the fix in none.
+With the fix, every second run's Post Drafts session opened the proposal's file before it decided, and each said the open proposal covered day 2's Hook; on `c951a73`, 2 of 8 did, and neither of those asked again.
+Each repeat declared `new_angle: no` and cited P02's Hook at `angles.md` line 8, as the open proposal did.
+Every session of the 32 runs ended with exit code 0 and closed `Session: complete`.
+
+From `src/`, `tests.test_sessions` and `tests.test_work` (68 tests) and the `DecisionRoundTripTest`, `CarryOverTest`, and `TakeInTest` classes of `tests.test_cycle` (19 tests) passed with the fix; the whole suite and ruff were not run for this round.
+
 ## What was not exercised
 
 - Immerse: the example set and the labs are RepToday's; the task definition is shared, so the change applies to Immerse's weekly runs alike, and nothing here ran one.
 - A production run: nothing here ran in the production clone or read the real Mandu or RepToday.
 - The learning loop's gate itself: no rejection reason was given, so no lab run tried an Instructions change; round 2 calls the function the gate calls, once per side, without the gate's repeat rule.
-- A second weekly run in the same lab, where the proposal is open: whether the session writes it again stands on the task definition's unchanged "unless one is already open or decided" and on the launcher refusing an item that asks the same as an open one, which the unit tests hold.
+- A decided proposal under a title that names another subject: round 6 left each proposal open, and the brief names a decided one's file the same way.
 - Example 16's judged statements are judged by nothing; what the proposals say is quoted above.
