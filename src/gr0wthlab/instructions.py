@@ -27,6 +27,7 @@ from pathlib import Path
 
 from . import evidence, examples, exchange, learning, sessions
 from .areas import Areas, Store, UnsafeFile, read_plain
+from .boundary import ConfigError
 from .exchange import plural
 from .queue import Ledger
 from .waitlist import looks_like_address
@@ -110,12 +111,14 @@ class Offer:
 def offer(
     found: Sequence[learning.Reason], ledger: Ledger, store: Store, repo_root: Path, env: Mapping[str, str]
 ) -> tuple[Offer | None, str]:
-    """The workflow of the oldest reason that may lead to a change, unless a kept change's notice to it is undecided,
-    it has no Instructions in force, or no example set that can gate a change on this Mac, with all its reasons that
-    may, and why each workflow of an older reason was held; or None and why no change is offered."""
+    """The workflow of the oldest reason that may lead to a change, unless a kept change's notice to it is undecided
+    or could not be filed, it has no Instructions in force, or no example set that can gate a change on this Mac,
+    with all its reasons that may, and why each workflow of an older reason was held; or None and why no change is
+    offered."""
     waiting = sorted((reason for reason in found if answerable(reason)), key=lambda r: (r.decided_at, r.item))
     if not waiting:
         return None, "no rejection reason may lead to one"
+    lost = {str(data["workflow"]): str(data["id"]) for _, data in unshown(store, ledger)[0]}
     held: dict[str, str] = {}
     for reason in waiting:
         workflow = reason.workflow
@@ -124,6 +127,12 @@ def offer(
         notice = open_notice(ledger, workflow)
         if notice:
             held[workflow] = f"the {title(workflow)} Instructions wait on the notice `{notice}` of their last change"
+            continue
+        if workflow in lost:
+            held[workflow] = (
+                f"the {title(workflow)} Instructions wait on the notice of their last change `{lost[workflow]}`,"
+                " which the next run files again"
+            )
             continue
         try:
             read_text(file_of(store, workflow))
@@ -409,6 +418,7 @@ class Change:
     gate: examples.Gate | None = None
     notice: str | None = None
     record: str | None = None
+    item: exchange.Item | None = None  # its notice, as filed
 
     @property
     def workflow(self) -> str:
@@ -447,10 +457,10 @@ def changed_lines(before: str, after: str) -> list[tuple[str, int, str]]:
 
 def record(store: Store, change: Change, run_id: str, now: datetime) -> str:
     """Write the change's record, again whenever its outcome or notice changes. A kept change keeps the text in force
-    before it and the text proposed beside it, and the agent's summary; a change not kept is refused, so it leaves
-    none of the agent's text, only each changed line by its number, the two texts' fingerprints, and the launcher's
-    reasons (docs/operations.md, where the agent's own words are kept)."""
-    kept = change.outcome == KEPT
+    before it and the text proposed beside it, the agent's summary, and its notice as filed; a change not kept is
+    refused, so it leaves none of the agent's text, only each changed line by its number, the two texts'
+    fingerprints, and the launcher's reasons (docs/operations.md, where the agent's own words are kept)."""
+    kept, item = change.outcome == KEPT, change.item
     folder = (*RECORDS, change.id)
     texts = {"before": change.before, "proposed": change.proposal.text}
     for name, text in texts.items():
@@ -491,10 +501,68 @@ def record(store: Store, change: Change, run_id: str, now: datetime) -> str:
         "why": change.why,
         "gate": change.gate.as_json() if change.gate else None,
         "notice": change.notice,
+        "notice_item": (
+            {"ask": item.ask, "body": item.body, "touches": item.touches, "evidence": item.evidence}
+            if kept and item
+            else None
+        ),
     }
     store.write_json(path, data)
     change.record = store.relative(path)
     return change.record
+
+
+def file_notice(
+    store: Store, ledger: Ledger, workflow: str, change: str, item: exchange.Item, run_id: str, now: datetime
+) -> str:
+    """Queue the notice of a kept change to a workflow's Instructions."""
+    extra = {"instructions": workflow, "change": change}
+    return ledger.publish(store, item, f"instructions-{workflow}", run_id, now, extra)
+
+
+def unshown(store: Store, ledger: Ledger) -> tuple[list[tuple[Path, dict]], list[str]]:
+    """The record of each kept change still in force that the Founder has not decided and that no notice in the
+    Review Queue names, as when its notice could not be queued or the queue holding it could not be written; and
+    each record that could not be read to tell."""
+    named = {str(entry.get("change")) for entry in ledger.entries.values() if entry.get("instructions")}
+    folder = store.path(*RECORDS)
+    found, problems = [], []
+    for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
+        try:
+            data = json.loads(read_text(path))
+            if data.get("outcome") != KEPT or data.get("decided") or str(data["id"]) in named:
+                continue
+            if sha256(read_text(file_of(store, str(data["workflow"])))) == data["proposed"]["sha256"]:
+                found.append((path, data))
+        except (OSError, UnsafeFile, ValueError, KeyError, TypeError) as error:
+            problems.append(f"`{store.relative(path)}` could not be read to tell if its notice is queued ({error})")
+    return found, problems
+
+
+def refile(
+    outcome: Outcome, store: Store, ledger: Ledger, seen: dict[str, str], run_id: str, now: datetime
+) -> list[str]:
+    """File again the notice of each kept change in force that no notice in the Review Queue names, as the run that
+    kept it filed it, so the Founder can still decide it and a Reject still undoes it; return each notice filed."""
+    found, problems = unshown(store, ledger)
+    outcome.problems += problems
+    filed = []
+    for path, data in found:
+        identifier, workflow = str(data["id"]), str(data["workflow"])
+        try:
+            item = exchange.Item({"kind": "notice"}, **data["notice_item"])
+            data["notice"] = file_notice(store, ledger, workflow, identifier, item, run_id, now)
+        except (OSError, ConfigError, KeyError, TypeError) as error:
+            outcome.unshown.append((identifier, f"its notice could not be filed again ({error})"))
+            continue
+        outcome.refiled.append((identifier, data["notice"]))
+        filed.append(data["notice"])
+        seen.setdefault(exchange.item_hash(item), data["notice"])
+        try:
+            store.write_json(path, data)
+        except OSError as error:
+            outcome.problems.append(f"`{store.relative(path)}` could not record its notice again ({error})")
+    return filed
 
 
 def apply(store: Store, change: Change) -> None:
@@ -638,7 +706,18 @@ class Outcome:
     undone: list[Undo] = field(default_factory=list)
     answered: list[str] = field(default_factory=list)  # reasons answered with no change proposed
     coded: list[str] = field(default_factory=list)  # the offered reasons that carry an execution code once taken in
+    refiled: list[tuple[str, str]] = field(default_factory=list)  # each change whose notice was filed again, with it
+    unshown: list[tuple[str, str]] = field(default_factory=list)  # each change in force without its notice, and why
     problems: list[str] = field(default_factory=list)
+
+    def queue_lost(self, why: str) -> None:
+        """The Review Queue could not be written, so no notice of a kept change this run filed is in it."""
+        lost = [change for change, _ in self.refiled]
+        if self.change is not None and self.change.notice:
+            lost.append(self.change.id)
+            self.change.notice = None
+        self.refiled = []
+        self.unshown += [(change, why) for change in lost]
 
 
 def report_lines(outcome: Outcome | None) -> list[str]:
@@ -702,8 +781,20 @@ def report_lines(outcome: Outcome | None) -> list[str]:
             lines.append(f"  {change.gate.cost_line()}")
         if change.record:
             lines.append(f"  The record: `{change.record}`.")
+    lines += [
+        f"- The notice of change `{change}`, in force without it, was filed again: `{notice}`."
+        for change, notice in outcome.refiled
+    ]
+    lines += [f"- {line}." for line in unshown_lines(outcome)]
     lines += [f"- {problem}." for problem in outcome.problems]
     return lines
+
+
+def unshown_lines(outcome: Outcome) -> list[str]:
+    return [
+        f"change `{change}` is in force without its notice, which the next run files again: {why}"
+        for change, why in outcome.unshown
+    ]
 
 
 def summary_lines(outcome: Outcome | None) -> list[str]:
@@ -719,7 +810,7 @@ def summary_lines(outcome: Outcome | None) -> list[str]:
     if change is not None:
         said = f"change `{change.id}` to the {title(change.workflow)} Instructions {change.outcome}"
         lines.append(f"Instructions: {said}: {change.why}.")
-    return lines
+    return lines + [f"Instructions: {line}." for line in unshown_lines(outcome)]
 
 
 def status(outcome: Outcome | None) -> str:
@@ -749,11 +840,12 @@ def gaps(outcome: Outcome | None) -> list[str]:
     for undo_ in outcome.undone:
         if not undo_.done:
             found.append(f"change `{undo_.change}`{' was not undone' if undo_.rejected else ''}: {undo_.why}")
-    return found + list(outcome.problems)
+    return found + unshown_lines(outcome) + list(outcome.problems)
 
 
 def notice_section(outcome: Outcome | None, day_text: str) -> tuple[int, str, str] | None:
-    """The part of the run's problems notice for proposed changes refused and undos not made."""
+    """The part of the run's problems notice for proposed changes refused, undos not made, and kept changes in force
+    without their notice."""
     if outcome is None:
         return None
     lines = []
@@ -762,6 +854,7 @@ def notice_section(outcome: Outcome | None, day_text: str) -> tuple[int, str, st
     for undo_ in outcome.undone:
         if not undo_.done and undo_.rejected:
             lines.append(f"- Change `{undo_.change}` was not undone though you rejected its notice: {undo_.why}")
+    lines += [f"- {line[0].upper()}{line[1:]}" for line in unshown_lines(outcome)]
     if not lines:
         return None
     count = len(lines)

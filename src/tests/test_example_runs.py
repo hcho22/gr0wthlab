@@ -332,6 +332,18 @@ class ExampleRunTest(unittest.TestCase):
             run.why, "its session's work was not taken in: `name-status.md` could not be queued (the disk is full)"
         )
 
+    def test_a_lab_s_log_that_cannot_be_written_never_decides_the_example(self):
+        example_set = examples.load(fakes.REPO, "post-drafts")
+        example = example_set.examples[0]
+        fakes.behave(self.codex_dir, {"write": GOOD[("post-drafts", example.id)]})
+        text = (fakes.REPO / "ledger/instructions/post-drafts.md").read_text(encoding="utf-8")
+        logs, root = self.root / "unwritable-log", self.root / "labs" / "log"
+        (logs / f"{root.name}.out.log").mkdir(parents=True)
+        run = examples.run_example(
+            fakes.REPO, example_set, example, examples.IN_FORCE, text, root, self.env, self.home, logs, 600
+        )
+        self.assertEqual(run.status, examples.RAN, run.why)
+
     def test_a_lab_that_cannot_be_built_or_whose_run_stops_reads_as_not_run_with_why(self):
         # Either is that example's trouble alone: the gate reads it as not compared, and the weekly run goes on.
         example = examples.load(fakes.REPO, "post-drafts").examples[0]

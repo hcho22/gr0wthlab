@@ -248,6 +248,7 @@ They change from an execution-coded rejection reason only through that workflow'
    A kept change keeps the text before it and the text it wrote beside its record, in `ledger/evidence/instructions/<change id>/`; one not kept keeps none of the agent's text ([where the agent's own words are kept](#where-the-agents-own-words-are-kept)).
    A change the example set could not judge, because the bound ran out, an example's session did not run to its end, its lab's launcher could not take that session's work in, one of its checks could not be read, or the example set stopped, is not kept, and its reasons are offered again.
    A kept change's record is written before its text, so its notice can always undo it; and its notice is closed only by the Founder's decision, never by an item in `incoming/` that names it in `supersedes`.
+   A kept change in force whose notice the Review Queue does not hold, because the notice could not be queued or the queue could not be written, is said so in that run's summary and problems notice, and the next run files the notice again from its record, before the first session, exactly as it was; until the Founder decides it, no other change to that workflow's Instructions is tried.
    The run report's Instructions section has all of it, and the Outputs table an `Instructions changes` row, incomplete when a proposal was refused or a change could not be judged.
    The example set's sessions are not among the run's own sessions; the report counts their sessions, agent time, and approximate cost on a line of their own.
 8. **The Founder's answer.**
@@ -296,7 +297,7 @@ They are kept in the set-aside record, in each run's Listening Evidence (`ledger
 These also keep the agent's words, and none of them is a refusal:
 
 - What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, and the line that says why a rejection code fits.
-  So does a kept Instructions change: its text is the Instructions in force (`ledger/instructions/<workflow>.md`), its record keeps that text, the text before it, and the agent's summary, and its notice shows the summary and each changed line.
+  So does a kept Instructions change: its text is the Instructions in force (`ledger/instructions/<workflow>.md`), its record keeps that text, the text before it, the agent's summary, and its notice as filed, and its notice shows the summary and each changed line.
 - Any other file the agent leaves in `workspace/` that the launcher neither takes in nor puts back is committed as written.
   An edit record waiting for a fix is one: its `shot` and `source` values can hold any text, and it stays committed as written.
   The reasons its checks give can quote those two values whole, and are kept in the run's filming Evidence (`ledger/evidence/filming/<run id>.json`), in the day's post verdict in the post Drafts Evidence, and in the run report and notice.

@@ -1426,24 +1426,27 @@ class Cycle:
         if change.outcome == instructions.KEPT:
             report_path = self.store.relative(self.store.path(RUN_REPORTS, f"{run_id}.md"))
             title, body, touches, evidence_lines = instructions.notice(change, report_path)
-            item = exchange.Item({"kind": "notice"}, title, body, touches, evidence_lines)
-            extra = {"instructions": proposal.workflow, "change": identifier}
-            slug = f"instructions-{proposal.workflow}"
+            item = change.item = exchange.Item({"kind": "notice"}, title, body, touches, evidence_lines)
             applied = False
             try:
                 instructions.record(self.store, change, run_id, now)
                 instructions.apply(self.store, change)
                 applied = True
-                change.notice = ledger.publish(self.store, item, slug, run_id, now, extra)
+                change.notice = instructions.file_notice(
+                    self.store, ledger, proposal.workflow, identifier, item, run_id, now
+                )
             except (OSError, ConfigError) as error:
                 try:
                     if applied:
                         self.store.write_text(instructions.file_of(self.store, proposal.workflow), before)
                 except OSError as failed:
-                    outcome.problems.append(
-                        f"change `{identifier}` stays in force with no notice: its notice could not be queued"
-                        f" ({error}), and `{instructions.relative(proposal.workflow)}` could not be put back"
-                        f" ({failed}); its record `{change.record}` keeps the text before it"
+                    outcome.unshown.append(
+                        (
+                            identifier,
+                            f"its notice could not be queued ({error}), and"
+                            f" `{instructions.relative(proposal.workflow)}` could not be put back ({failed}); its"
+                            f" record `{change.record}` keeps the text before it",
+                        )
                     )
                 else:
                     change.gate.outcome = instructions.NOT_COMPARED
@@ -2031,6 +2034,8 @@ class Cycle:
         seen: dict[str, str] = {}
         for identifier, fingerprint in hashes.items():
             seen.setdefault(fingerprint, identifier)
+        if ledger_ok and state.instructions is not None:
+            state.published += instructions.refile(state.instructions, self.store, ledger, seen, run_id, self.now())
         for source in config.not_connected:
             state.sources.append(
                 SourceLine(
@@ -2154,6 +2159,8 @@ class Cycle:
                 state.problems.append(
                     f"the Review Queue could not be written, so the sitting page shows the last one ({error})"
                 )
+                if state.instructions is not None:
+                    state.instructions.queue_lost(f"the Review Queue could not be written ({error})")
             state.queue_after = ledger.ordered()
             try:
                 self.save_state(state, ledger, states, products, now)

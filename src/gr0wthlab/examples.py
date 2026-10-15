@@ -668,8 +668,11 @@ def run_example(
         # report, and the example reads as not compared.
         return Run(side, "not run", f"its lab's run stopped ({type(error).__name__}: {error})")
     finally:
-        log_dir.mkdir(parents=True, exist_ok=True)
-        (log_dir / f"{root.name}.out.log").write_text(out.getvalue(), encoding="utf-8")
+        try:
+            log_dir.mkdir(parents=True, exist_ok=True)
+            (log_dir / f"{root.name}.out.log").write_text(out.getvalue(), encoding="utf-8")
+        except OSError:
+            pass
     state = runner.state
     if state is None:
         return Run(side, "not run", "its lab's run did not start")

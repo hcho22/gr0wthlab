@@ -547,7 +547,7 @@ class LoopTest(WorkCycleTestCase):
         self.assertNotIn(ADDED, self.records_text(), "the record written before it was applied keeps no text now")
         self.assertNotIn("instructions", self.read(f"evidence/decisions/{DAY_1}.json"), "offered again")
 
-    def test_a_kept_change_that_cannot_be_put_back_keeps_its_texts_and_the_report_says_it_stays_in_force(self):
+    def test_a_kept_change_whose_notice_and_put_back_fail_has_its_notice_filed_again_by_the_next_run(self):
         published, written = Ledger.publish, Store.write_text
         in_force = self.ledger() / "instructions/post-drafts.md"
 
@@ -570,14 +570,89 @@ class LoopTest(WorkCycleTestCase):
         self.assertEqual((change["outcome"], change["notice"]), ("kept", None))
         before = self.ledger() / change["before"]["path"]
         self.assertEqual(before.read_text(encoding="utf-8"), self.in_force, "the text before it is kept")
+        unshown = (
+            "change `20261018-post-drafts` is in force without its notice, which the next run files again: its"
+            " notice could not be queued (the queue could not be written), and `ledger/instructions/post-drafts.md`"
+            " could not be put back (the disk is full); its record `evidence/instructions/20261018-post-drafts.json`"
+            " keeps the text before it"
+        )
+        self.assertIn(f"- {unshown}.", self.section("Instructions"))
+        self.assertIn(f"- Instructions: {unshown}.", self.section("Summary"))
+        self.assertIn(f"- C{unshown[1:]}", self.notices(), "the run's problems notice says it")
+        self.assertNotIn("The notice `None`", self.section("Instructions"))
+        self.assert_filed_again_once_held_and_undone(proposed, weeks=2)
+
+    def test_a_kept_change_whose_queue_cannot_be_written_has_its_notice_filed_again_by_the_next_run(self):
+        written = Store.write_json
+        queue = self.ledger() / "review-queue/queue.json"
+
+        def write_json(store, path, data):
+            if Path(path) == queue:
+                raise OSError("the disk is full")
+            return written(store, path, data)
+
+        proposed = self.in_force + ADDED + "\n"
+        with mock.patch.object(Store, "write_json", write_json):
+            self.learn(proposed)
+
+        self.assertEqual(self.instructions_text(), proposed)
+        unshown = (
+            "change `20261018-post-drafts` is in force without its notice, which the next run files again: the"
+            " Review Queue could not be written (the disk is full)"
+        )
+        self.assertIn(f"- Instructions: {unshown}.", self.section("Summary"))
+        self.assertIn(f"- {unshown}.", self.section("Instructions"))
+        self.assertNotIn("shows it at the next sitting", self.section("Instructions"))
+        self.assert_filed_again_once_held_and_undone(proposed, weeks=2)
+
+    def assert_filed_again_once_held_and_undone(self, proposed, weeks):
+        """The next run files the change's notice once, from its record, and holds its workflow while the notice is
+        undecided, though an execution reason of the workflow waits; a Reject then undoes the change."""
+        waiting = "20261019-post-w2-day-02"
+        decision = {
+            "item": waiting,
+            "kind": "post",
+            "decision": "reject",
+            "reason": "The opening line reads stiff.",
+            "decided_at": "2026-10-19T19:00:00-07:00",
+            "code": {"code": "tone", "why": "The voice was off.", "coded_by_run": "earlier"},
+        }
+        (self.ledger() / f"evidence/decisions/{waiting}.json").write_text(json.dumps(decision), encoding="utf-8")
+        fakes.behave(self.codex_dir, {})
+        self.go(weeks=weeks)
+        notices = [entry for entry in self.items("notice") if entry.get("change") == "20261018-post-drafts"]
+        self.assertEqual(len(notices), 1, "filed again once")
+        notice = notices[0]["id"]
+        self.assertEqual(json.loads(self.change_records()[0].read_text(encoding="utf-8"))["notice"], notice)
+        self.assertIn("# Notice: the Post Drafts Instructions changed", self.item_text(notice))
+        self.assertIn(f'- Your reason for rejecting `{DAY_1}`: "{LONG}"', self.item_text(notice))
         learned = self.section("Instructions")
         self.assertIn(
-            "- change `20261018-post-drafts` stays in force with no notice: its notice could not be queued (the queue"
-            " could not be written), and `ledger/instructions/post-drafts.md` could not be put back (the disk is"
-            " full); its record `evidence/instructions/20261018-post-drafts.json` keeps the text before it.",
+            f"- The notice of change `20261018-post-drafts`, in force without it, was filed again: `{notice}`.",
             learned,
         )
-        self.assertNotIn("The notice `None`", learned)
+        self.assertIn(
+            f"- No change to any Instructions was offered: the Post Drafts Instructions wait on the notice `{notice}`"
+            " of their last change.",
+            learned,
+        )
+        self.assertEqual(self.instructions_text(), proposed)
+
+        fakes.behave(self.codex_dir, {})
+        self.go(weeks=weeks + 1)
+        self.assertEqual(self.instructions_text(), proposed, "nothing else changes while the notice waits")
+        queue = self.queue()
+        named = [entry for entry in queue["open"] + queue["closed"] if entry.get("change") == "20261018-post-drafts"]
+        self.assertEqual([entry["id"] for entry in named], [notice], "never filed again while it is queued")
+
+        self.decide(notice, "reject", reason="I prefer the captions as they were.")
+        fakes.behave(self.codex_dir, {})
+        self.go(weeks=weeks + 2)
+        self.assertEqual(self.instructions_text(), self.in_force, "a Reject undoes it")
+        self.assertEqual(
+            json.loads(self.change_records()[0].read_text(encoding="utf-8"))["undone"]["reason"],
+            "I prefer the captions as they were.",
+        )
 
     def test_a_gate_that_stops_leaves_the_change_not_compared_and_the_run_ends_with_its_report(self):
         with mock.patch.object(examples, "run_example", side_effect=OSError("the log folder is full")):
