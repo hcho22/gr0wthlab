@@ -1,0 +1,140 @@
+# An approved Weekly Read decision reaches the package as a proposal (US-ME12, ADR 0007)
+
+This change makes the run that takes in the Founder's approval of a Weekly Read kill, change, resolved pair, or flex slot file one package-change proposal with the exact edit, for him to approve before Mandu changes the file ([ADR 0007](../adr/0007-an-approved-weekly-read-decision-reaches-the-package-as-a-proposal.md), the Founder's choice of 2026-10-15, "angle kill - two approvals").
+It changes launcher code, the Weekly Read task definition, the sitting page's style for a code block, and the Product registry (`config/products.json`, which names `creative-log.json` for a kill's edit).
+It changes nothing in the permission profile, the Codex command, or the fetch policy, and the exchange stays at version 8.
+
+Every check below ran on 2026-10-15, Mac local time (PDT), with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort where a real agent ran.
+A run identifier carries its time in UTC.
+
+| Commit | Full hash | `src` tree | `config` tree |
+| --- | --- | --- | --- |
+| `main` before this change | `3789b3ffb769e64696af8cf7f0e95e414f047e43` | `1b5dc00390cddd5029ce31f1248b2fa31c7b851e` | `e3b97b510841032f95c57c5f8f61285f8906e657` |
+| The filing | `23ce675b6beb903f8779048716a709565d775d61` | `3b189357074285c9a6c243befb8b7467abe88f82` | `28263a1b24ee1ecb5bf00469884bdc97aa7edc33` |
+| The page's code blocks | `7eee0da108d3ba15e17f0398d9460f1b76cf3b12` | `81ec9cb1372aa90ea131a4628488c563ac15ddf9` | `28263a1b24ee1ecb5bf00469884bdc97aa7edc33` |
+| The new Hook's checks | `1a2497acaa5a0708723ffdc4a8b977d27f83963c` | `a34d30917e0f841deb8ae97e7767517cc24a174c` | `28263a1b24ee1ecb5bf00469884bdc97aa7edc33` |
+
+## First round
+
+### The labs
+
+Each lab was a throwaway clone of the commit named, in the Mac's temporary folder, with one commit added in it: the configuration `make_repo` in `src/tests/fakes.py` gives (no network source, no outreach message, no Product that films).
+Mandu was the synthetic kit of `src/examples/post-drafts/`, RepToday's code was its synthetic code, and the footage place, the log folder, and the production clone were throwaway locations, each set with its `GR0WTHLAB_*` override; a clone that is not the production clone saves no records.
+The window's first sitting was Sunday 2026-10-04 for the day-7 read, with the calendar kept to days 1 to 5 and the flex slot as `fakes.keep_days` keeps it, then moved to Sunday 2026-09-27 with the whole calendar for the day-14 read, so each read was due on 2026-10-15.
+Each read's numbers were the Weekly Read example set's (`src/examples/weekly-read/files/results/`), written into `ledger/founder/results/` as the sitting page writes them; every number is synthetic.
+Where no real agent is named, the agent was the repository's no-model stand-in (`tests.fakes.install_codex`), which wrote the example set's day-7 memo and a day-14 memo with P04 killed, P07 changed, AB-2 resolved with leg A leading, and AB-1 reposted.
+Every decision of the Founder's in these three labs was given on the page `src/bin/gr0wthlab sitting` served from the clone, in Chrome driven with `chrome-devtools-axi`, and read back from its record in `ledger/founder/decisions/`.
+
+### The reproduction on `main`
+
+On `3789b3ffb769e64696af8cf7f0e95e414f047e43`:
+
+| Run | What the records showed |
+| --- | --- |
+| `20261015T203929Z-on-demand-562d` | The day-7 read: 6 decision items queued, the flex slot earned by P03. On the page the flex item's Touches read "Day 14 of the calendar, `projects/RepToday/gtm/05-social-pmf/cadence-14-day.md`", and it was approved. |
+| `20261015T204058Z-on-demand-475a` | The day-14 read: 9 decision items queued, and the flex approval taken in. The kill item's Touches read "P04's row in `projects/RepToday/gtm/05-social-pmf/angles.md`, which Mandu changes if you approve". On the page the kill of P04, the change of P07, and AB-2 resolved were approved. |
+| `20261015T204135Z-on-demand-e03a` | 3 decisions taken in; the queue's four approved decisions closed as approved, and no `package-change-proposal` in it, open or closed. The SHA-256 of all 16 files of the lab's Mandu were the same before the day-14 run and after this one. |
+
+### The same flow on this change
+
+On `23ce675b6beb903f8779048716a709565d775d61`; before the third sitting, the two files of `7eee0da108d3ba15e17f0398d9460f1b76cf3b12` (`src/gr0wthlab/page.py` and `src/sitting/page.css`) were copied into the clone's working tree, so the page from then on was that commit's.
+
+| Run | What the records showed |
+| --- | --- |
+| `20261015T213133Z-on-demand-b3fd` | The day-7 read: 6 decision items. Each queue entry held its line, as `{"section": "Flex slot", "result": "earned", "decision": "test", "earned_by": "P03"}` for the flex slot, and the read's date. The flex item's Touches read "Nothing yet: approving it has the next run file a package-change proposal with the exact edit that puts P03 in the flex slot of the calendar, `projects/RepToday/gtm/05-social-pmf/cadence-14-day.md`, for you to approve before Mandu changes the file." It was approved on the page. |
+| `20261015T213206Z-on-demand-2100` | The day-14 read: 9 decision items, AB-2's asked as "Weekly Read day 14: AB-2, resolved, leg A leads: keep". The flex approval was taken in and `20261015-weekly-read-flex` filed, origin `weekly-read/20261015-weekly-read-07-flex`. The Weekly Read memo row: "memo `weekly-reads/window-1-read-14.md`; 9 decision items queued; package-change proposals owed by approved decisions: 1 of 1 filed". The kill, change, resolved pair, and repost items' Touches each said what approving it does; AB-1's, a repost, read "Nothing: approving changes no package file, and AB-1 is not declared resolved". On the page the kill of P04, the change of P07, AB-2 resolved, AB-1's repost, P02's keep, and P01's test were approved. |
+| `20261015T213330Z-on-demand-5c7a` | The Weekly Read session ran with no memo due; its brief said "No memo is due this run: the Founder has decided items of the window 1 day-14 Weekly Read, so its memo stands as it is. Write none." and asked for P07's new Angle as P08. The stand-in wrote it, and 3 proposals were filed: `20261015-weekly-read-pair-ab-2`, `20261015-weekly-read-kill-p04`, and `20261015-weekly-read-change-p07` (`new_angle: yes`); none for the repost, the keep, or the test. The row: "package-change proposals owed by approved decisions: 3 of 3 filed". |
+| `20261015T213552Z-on-demand-9200` | After all four proposals were approved on the page: each closed as approved. |
+| `20261015T213608Z-on-demand-020b` | After each approved proposal was applied to the lab's Mandu as Mandu's reader applies one, each "from" text found exactly once and replaced: exactly 4 files of the lab's Mandu differed from before, and the kit read P08 in the bank and P03 on day 14. The Sources line read "3 changed", and no proposal was filed: 4 in the queue, as before. |
+
+### A rejected decision on this change
+
+On `1a2497acaa5a0708723ffdc4a8b977d27f83963c`, the same lab, with each decision rejected on the page with the reason "Not this window.":
+
+| Run | What the records showed |
+| --- | --- |
+| `20261015T214923Z-on-demand-bebf` | The day-7 read; the flex slot rejected. |
+| `20261015T214949Z-on-demand-03b3` | The day-14 read; no proposal filed. The kill of P04, the change of P07, and AB-2 resolved rejected. |
+| `20261015T215013Z-on-demand-5474` | 3 decisions taken in, the four closed as rejected, no `package-change-proposal` in the queue, and the SHA-256 of every file of the lab's Mandu the same as before the run. |
+
+### What the page showed, and what was fixed
+
+The page was used at 1280 wide in dark, and at 390 wide in light with Chrome's device emulation; the page never scrolled sideways.
+
+- A proposal's code block kept each line on one line and scrolled it inside its frame with no scrollbar shown, so a calendar row was cut off at the frame's edge and an Angle bank row could not be read whole.
+  Each line of a block is now its own line that wraps, with its wrapped part indented under its start (`7eee0da108d3ba15e17f0398d9460f1b76cf3b12`): the change's two rows read as two, and at 390 wide too.
+
+### Every edit, against the shape of the real package files
+
+The real `angles.md`, `ab-pairs.md`, `cadence-14-day.md`, and `creative-log.json` of RepToday's `gtm/05-social-pmf/`, and its `brand-rules.json`, were copied from `~/Mandu` into a folder of the Mac's temporary directory, read-only, and nothing of them is in this repository.
+Their SHA-256: `angles.md` `73649503bc9c48682a033b5dcd169f74dba60582a004c881f8e65cb91c0271b1`, `ab-pairs.md` `06ef86f0f3adf5c044ce3b27f5481e76e0969ce46eb86c55eda550422cb154ab`, `cadence-14-day.md` `ce350354ea269d4ec3ac9b89008cc8ba200af9cb13c0b4610c352e0215a35667`, `creative-log.json` `412dd26340322fa58586cf9aacd4e06e44ed203ffaf7eca93ab77cb39a054d79`.
+A scratch script made, with `src/gr0wthlab/weekly_changes.py`, every edit a decision can file against them: a kill of each of the log's 16 Angles, a change of each of the bank's 16 (a new row with that Angle's pain and a Hook of its own), each of the 6 pairs resolved by each leg, and the flex slot earned by each of the bank's 16 Angles and not earned.
+For each it checked that the text it replaces appears exactly once in the file, that the proposal is a valid item, and the launcher's own check that applying it changes what the decision fixes and nothing else.
+
+- Its first pass, on the code before `23ce675b6beb903f8779048716a709565d775d61` was committed, refused 10 of the 12 pair edits, every pair but the file's last: adding a line to one pair's section moved every later section down, and the check compared their line numbers.
+  The check now compares each section's content; `test_a_resolved_pair_before_another_moves_the_later_section_down_and_changes_nothing_in_it` holds it.
+- On `1a2497acaa5a0708723ffdc4a8b977d27f83963c`, with the real brand rules held to each new Hook: 16 kills, 16 changes, 12 pair resolutions, and 17 flex slots, 61 edits, made and checked, and none refused.
+  Each kill's edit spans its record from the `angle_id` line to the `status` line, 12 lines, so it names one record of the 16, each of which has a `status` line.
+
+### The agent's work under the task definition's change
+
+The task definition's change has a resolved pair's line name the leg whose Hook leads, and has the Weekly Read session write a changed Angle's new row when the brief asks for one.
+The Weekly Read has no example set the gate re-runs, so these were measured as `AGENTS.md` asks, by what the launcher counted of each session, in throwaway clones like the labs above with the real agent in the run measured and the stand-in in every run before it, and the Founder's decisions written as the page writes them.
+In every memo lab day 10's viewed rate was given as 38%, so AB-2's legs, 81% and 38%, differ widely.
+Each run started two sessions, the package review and the Weekly Read; the agent time is the Weekly Read session's, the cost the whole run's, and every Weekly Read session read 4 of 4 package files and closed "Session: complete".
+
+| Code | Run | What the agent did | Agent time | Cost |
+| --- | --- | --- | --- | --- |
+| `main` | `20261015T213902Z-on-demand-4cef` | Memo passed; AB-2 "repost" | 1 min 35 s | about $0.022 |
+| `main` | `20261015T213902Z-on-demand-6b0a` | Memo passed; AB-2 "resolved." | 1 min 28 s | about $0.023 |
+| `main` | `20261015T214150Z-on-demand-f486` | Memo passed; AB-2 "resolved." | 1 min 12 s | about $0.033 |
+| `7eee0da` | `20261015T213902Z-on-demand-f49c` | Memo passed; AB-2 "resolved, leg A leads." | 1 min 20 s | about $0.025 |
+| `7eee0da` | `20261015T213902Z-on-demand-b022` | Memo passed; AB-2 "resolved, leg A leads." | 1 min 20 s | about $0.025 |
+| `7eee0da` | `20261015T214148Z-on-demand-5be1` | Memo passed; AB-2 "resolved, leg A leads." | 52 s | about $0.021 |
+| `7eee0da` | `20261015T213902Z-on-demand-5128` | P07's new Angle filed as P08 | 34 s | about $0.015 |
+| `7eee0da` | `20261015T214052Z-on-demand-344a` | P07's new Angle filed as P08 | 35 s | about $0.022 |
+| `7eee0da` | `20261015T214216Z-on-demand-8d58` | P07's new Angle filed as P08 | 36 s | about $0.021 |
+| `7eee0da`, real bank | `20261015T213902Z-on-demand-3282` | P07's new Angle filed as P17 | 1 min 15 s | about $0.026 |
+| `7eee0da`, real bank | `20261015T214142Z-on-demand-bb52` | P07's new Angle filed as P17 | 58 s | about $0.030 |
+| `1a2497a` | `20261015T214854Z-on-demand-9070` | P07's new Angle filed as P08 | 38 s | about $0.016 |
+| `1a2497a` | `20261015T214854Z-on-demand-6b80` | P07's new Angle filed as P08 | 29 s | about $0.014 |
+| `1a2497a` | `20261015T214854Z-on-demand-644a` | P07's new Angle filed as P08 | 30 s | about $0.015 |
+| `1a2497a` | `20261015T214854Z-on-demand-fec4` | P07's new Angle filed as P08 | 35 s | about $0.021 |
+| `1a2497a`, real bank | `20261015T214854Z-on-demand-b224` | P07's new Angle filed as P17 | 48 s | about $0.025 |
+| `1a2497a`, real bank | `20261015T214854Z-on-demand-7a45` | P07's new Angle filed as P17 | 39 s | about $0.019 |
+| `1a2497a`, real bank | `20261015T214854Z-on-demand-d687` | P07's new Angle filed as P17 | 44 s | about $0.021 |
+
+In the "real bank" runs the lab's Mandu held copies of the real `angles.md` and `ab-pairs.md`, and in the last three also of `brand-rules.json`, so P07 was the real bank's P07 and the new number P17.
+Every new row carried P07's pain and source as the bank has them and a Hook of its own in one quoted line.
+In run `5128` the new Hook was a question, which the brand lint refuses in every post's Hook, so once approved every post Draft of that Angle would have been blocked; `1a2497acaa5a0708723ffdc4a8b977d27f83963c` holds a new Hook to the brand lint and to one quoted line before it is filed, says so in the task definition, and in its seven runs every new Hook passed.
+The memo runs show the pair line naming its leg in 3 of 3 sessions, with every memo passing its checks on both sides.
+In each of the seven runs on `1a2497a` the Weekly Read session ran its brief's `check-work` command, and Codex's record of it holds the line "OK new Angle P08 for `20261015-weekly-read-14-p07`: its proposal can be filed", or P17 on the real bank, and no problem line.
+
+### The boundary
+
+From this work's linked worktree at `1a2497acaa5a0708723ffdc4a8b977d27f83963c`, against Mandu and the Product checkouts as they are, with `git status` empty before the preflight and after the check, and logs in a folder of the Mac's temporary directory named with `GR0WTHLAB_LOG_DIR`; `show-config` printed the configuration fingerprint `0daea7f4a2ca703b1e4ab2b0693837f6517a44f563953187c6c4c7f039ef5319`.
+
+- `src/bin/gr0wthlab preflight`, run four times from 14:51 to 14:52, passed each time: six areas writable, 22 paths refused, no breach, a listing of the footage place `~/Mandu/projects/RepToday` refused, and neither listed host reached from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, from 14:52:12 to 14:53:18, passed at its first attempt as `20261015T215213Z-on-demand-1954`: 49 steps to prove, 50 tool calls in Codex's record with no problem, 17 of 17 file-tool targets refused each in a patch of its own, 19 kernel sandbox denials and no shell target without one, the footage place's shell read refused, 1 of 1, 12 of 12 permitted sentinels written and none escaped, nothing unproven, the network probe's three targets refused inside the sandbox after its control reached its listener, two requests from the launcher's client, each a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed outside the areas.
+
+### Tests
+
+- The whole unit suite ran under `/usr/bin/python3`, Python 3.9.6, one process for each test module, in a clone of `1a2497acaa5a0708723ffdc4a8b977d27f83963c`: 1495 tests in 54 modules, none failed and none skipped.
+- `ruff check` and `ruff format --check` on `src` and `src/bin/gr0wthlab` passed, with ruff 0.15.20.
+- CI's run on Linux with the latest Python was not part of this round.
+
+### A correction to the Weekly Read's record
+
+[The Weekly Read's record](20261014-gr0wthlab-weekly-read.md#what-the-browser-showed-and-what-was-fixed) says that after its fix "only a kill or a change says" that Mandu changes an Angle's row in the Angle bank if approved.
+That was not so of a kill or a change either: Mandu applies only an approved package-change proposal, so approving a Weekly Read decision changed no package file.
+Since `23ce675b6beb903f8779048716a709565d775d61` a kill's, a change's, a resolved pair's, and the flex slot's Touches each say that approving it has the next run file a package-change proposal with the exact edit, for the Founder to approve before Mandu changes the file, as the runs above show.
+
+### What this round did not exercise
+
+- No real post has gone out and no real Weekly Read has run, so no proposal was filed from a real decision, and none was applied to the real package; every application here was to a lab's copy, by a script that does what Mandu's reader says it does.
+- Mandu's reader itself, merged for version 8 in https://github.com/hcho22/Mandu/pull/13, was not run on these proposals; its skill says it applies an approved proposal by finding its "from" text exactly once and editing only the files `## Touches` lists, which is what each of these proposals gives it.
+  It also says approving a Weekly Read decision changes no package file by itself, which stays true, and says nothing of the proposal that now follows.
+- The real agent never wrote a day-14 memo that killed or changed an Angle and had it approved and filed in one lab; the memo runs and the new-Angle runs above are separate labs, and the stand-in wrote the memos that the filing labs rest on.
+- A new Angle that fails its checks in a live run: the real agent's rows all passed, so its removal with only its name and reasons kept stands on `test_a_change_whose_new_angle_is_not_filed_still_owes_it_and_says_why`, as does a Weekly Read session due only for a new Angle that falls short.
+- A flex decision once the next window's calendar is in force, a kill whose record already says killed, and an edit whose text the package no longer holds exactly once stand on `tests.test_weekly_changes` and the code's own checks.
+- A scheduled run, the real production clone, a browser other than Chrome, and the sitting page in Safari.
