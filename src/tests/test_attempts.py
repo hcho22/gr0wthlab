@@ -49,7 +49,8 @@ ONCE = "2026-10-13T09:05"
 UNCONFIRMED = {"summary": "Read the first half of the package.\n"}
 # The report's line on a run's sessions when only the package review had work due, as in most of these runs.
 NOTHING_ELSE = (
-    "nothing was due for Post Drafts, Filming, Beta Cohort recruiting, Listening, Outreach, Rejection reasons."
+    "nothing was due for Weekly Read, Post Drafts, Filming, Beta Cohort recruiting, Listening, Outreach, Rejection"
+    " reasons."
 )
 ONLY_THE_REVIEW = f"- Sessions: 1 ran (Package review); {NOTHING_ELSE}\n"
 ASLEEP_IN_A_SESSION = (

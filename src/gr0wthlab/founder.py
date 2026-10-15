@@ -9,9 +9,9 @@ only place that enforces it:
    it to. The weekly run, the agent, and every other command only read: the launcher's own Store refuses every path in
    this area (areas.Store.path), and src/tests/test_founder.py and test_probe.py hold the first half by running a
    whole run, each check command, and the boundary check with the Writer replaced by a refusal.
-2. A Founder record is a plain file with one link, directly inside one of the five folders named in KINDS, each a real
+2. A Founder record is a plain file with one link, directly inside one of the six folders named in KINDS, each a real
    folder under a real ledger/founder/. Nothing under workspace/ is ever read as one, whatever its name, location, or
-   content: read() opens no path outside those five folders and follows no link, so a link in a record's place, a file
+   content: read() opens no path outside those six folders and follows no link, so a link in a record's place, a file
    that is also linked from somewhere else, and a record folder that is itself a link are all refused. check() stops a
    run, a boundary check, and a sitting before they start when a folder is missing or is not a real folder.
 3. The sandboxed agent can read the records and can never write them. The area is inside ledger/, which is no writable
@@ -46,10 +46,10 @@ from .areas import UnsafeFile, read_plain, write_whole
 from .boundary import FOUNDER, FOUNDER_KINDS, ConfigError
 from .waitlist import looks_like_address
 
-# The five kinds of record, each in the folder of ledger/founder/ named for it. Every one of these folders is a
+# The six kinds of record, each in the folder of ledger/founder/ named for it. Every one of these folders is a
 # forbidden target of the preflight before every session and of the boundary check.
 KINDS = FOUNDER_KINDS
-DECISIONS, SITTINGS, BETA_BUILDS, BETA_REPORTS, OUTREACH = KINDS
+DECISIONS, SITTINGS, BETA_BUILDS, BETA_REPORTS, OUTREACH, RESULTS = KINDS
 # Where a run keeps the Evidence of each decision it took in, under ledger/; the file's existence is the taking in.
 TAKEN_IN = ("evidence", "decisions")
 # The lock the page and a run share, beside the run lock in ledger/; never committed.
@@ -77,12 +77,12 @@ def root(ledger: Path) -> Path:
 
 
 def folders(ledger: Path) -> dict[str, Path]:
-    """The five record folders, by kind."""
+    """The six record folders, by kind."""
     return {kind: ledger / FOUNDER / kind for kind in KINDS}
 
 
 def check(ledger: Path) -> None:
-    """Fail closed: ledger/founder/ and each of its five folders is a real folder, reached through no link.
+    """Fail closed: ledger/founder/ and each of its six folders is a real folder, reached through no link.
 
     A folder that is missing cannot be proven refused, and one that is a link could lead anywhere, into workspace/
     included, so either stops whatever was about to start.
@@ -213,7 +213,7 @@ class Writer:
     """The only writer of the Founder's records.
 
     Only sitting.py makes one, for the Founder-side command, and each write is one explicit act of the Founder's on its
-    page. It writes each record whole, through a temporary file in the same folder, and only into one of the five real
+    page. It writes each record whole, through a temporary file in the same folder, and only into one of the six real
     folders; it never follows a link and never writes anywhere else.
     """
 

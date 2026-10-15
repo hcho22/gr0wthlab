@@ -243,11 +243,17 @@ class NoticeTest(unittest.TestCase):
 
     def test_the_report_lists_every_source_and_output(self):
         state = self.state()
-        state.sources = [SourceLine("YouTube results", report.SKIPPED, "not connected until US-ME11")]
-        state.outputs = [["Weekly Read memo", report.NOT_BUILT, "US-ME12"]]
+        state.sources = [
+            SourceLine(
+                "Immerse Listening confirmation on the sitting page", report.SKIPPED, "not connected until US-ME18"
+            )
+        ]
+        state.outputs = [["Scheduling-service drafts", report.NOT_BUILT, "US-ME10"]]
         text = report.render_report(state)
-        self.assertIn("| YouTube results | skipped | not connected until US-ME11 |", text)
-        self.assertIn("| Weekly Read memo | not built yet | US-ME12 |", text)
+        self.assertIn(
+            "| Immerse Listening confirmation on the sitting page | skipped | not connected until US-ME18 |", text
+        )
+        self.assertIn("| Scheduling-service drafts | not built yet | US-ME10 |", text)
         self.assertIn("1 skipped", text)
         self.assertTrue(text.startswith("# Run report: R\n\n## Summary\n"))
 

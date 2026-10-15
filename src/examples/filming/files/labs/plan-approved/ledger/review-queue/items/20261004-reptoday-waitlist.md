@@ -10,7 +10,7 @@ product: RepToday
 ## Request
 
 Build RepToday's Waitlist: a sign-up on `reptoday.app` that records where each person came from and how well they fit, and a copy of the sign-ups without email addresses for the Marketing Engineer to count.
-Once you approve, Mandu hands this request to firstmate, which builds it in RepToday through RepToday's normal reviewed path; the Marketing Engineer never changes RepToday.
+Once you approve and ask Mandu for it, Mandu gives you a ready message to pass to firstmate, which builds it in RepToday through RepToday's normal reviewed path; the Marketing Engineer never changes RepToday.
 Every quoted wording is for your approval, and an approval note can change any of it.
 
 ### The sign-up

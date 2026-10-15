@@ -45,7 +45,7 @@ Every package-change proposal declares `new_angle`, and the Founder sees what yo
 
 Rules for items:
 
-- Write only new item files in the incoming folder, and only package-change proposals.
+- Write only new item files in the incoming folder, and only package-change proposals, or a Dispatch request where "This session" says so.
 - Do not queue an item that is already open; to replace one, write a new item with `supersedes: <id>` in its front matter.
   An item the brief marks as filed by the launcher, such as a Dispatch request, cannot be superseded: only a reviewed change to its source text replaces it.
   A post or a message cannot be superseded either: each changes only through its Draft.

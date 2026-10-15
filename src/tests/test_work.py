@@ -532,8 +532,8 @@ class RunCountsTest(CycleTestCase):
         totals = self.totals()
         self.assertEqual(
             totals[0],
-            "Sessions: 2 ran of the 2 with work due; nothing was due for Filming, Beta Cohort recruiting, Listening,"
-            " Outreach, Rejection reasons.",
+            "Sessions: 2 ran of the 2 with work due; nothing was due for Weekly Read, Filming, Beta Cohort recruiting,"
+            " Listening, Outreach, Rejection reasons.",
         )
         self.assertRegex(totals[1], r"^Agent time: \d+ s of the 60 min that bounds all of a run's sessions together\.$")
         self.assertRegex(totals[2], r"^Approximate cost: about \$0\.01[67] at API prices, for 400,000 input tokens")

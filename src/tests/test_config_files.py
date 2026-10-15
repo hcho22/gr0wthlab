@@ -87,7 +87,7 @@ class RunConfigTest(unittest.TestCase):
         self.assertNotIn("exchange", mandu)
 
     def test_the_repository_holds_every_folder_of_the_founders_records(self):
-        """A fresh clone must have the five folders, since a run refuses to start without them."""
+        """A fresh clone must have the six folders, since a run refuses to start without them."""
         from gr0wthlab import founder
 
         founder.check(REPO / "ledger")

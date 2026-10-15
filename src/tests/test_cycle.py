@@ -132,6 +132,20 @@ class CycleTestCase(unittest.TestCase):
         }
         (folder / f"{item}.json").write_text(json.dumps(record), encoding="utf-8")
 
+    def one_weekly_read_item(self) -> str:
+        """A run on the day-14 Weekly Read of a window whose calendar holds day 1 alone, with the Founder's numbers for
+        that post and the memo the agent writes: it queues exactly one Weekly Read decision item, the one way such an
+        item is ever queued. The window, the calendar, and what the agent writes are then the caller's to set."""
+        today = fakes.SUNDAY_RUN.astimezone().date()
+        fakes.set_window(self.repo, {"first_sitting": (today - timedelta(days=14)).isoformat(), "slot": "19:00"})
+        fakes.keep_days(self.mandu, 1)
+        fakes.give_results(self.exchange, 1, read=14, read_on=today.isoformat(), views=412, watched_full_percent=31.0)
+        fakes.behave(self.codex_dir, {"write": {"weekly-reads/window-1-read-14.md": fakes.WEEKLY_MEMO_DAY_14}})
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        (entry,) = [entry for entry in self.queue()["open"] if entry["kind"] == "weekly-read-decision"]
+        return str(entry["id"])
+
     def sit(self, day=None):
         """The Founder's record of a sitting, by default on the Mac's local date of the first run."""
         day = day or fakes.SUNDAY_RUN.astimezone().strftime("%Y-%m-%d")
@@ -226,7 +240,16 @@ class FirstRunTest(CycleTestCase):
         self.assertIn("| RepToday package: `projects/RepToday/gtm/05-social-pmf/angles.md` | read |", report)
         self.assertIn("| Founder decisions | read | 0 records, 0 new since the previous run |", report)
         self.assertIn("| Sittings | read | 0 records, 0 new |", report)
-        self.assertIn("| YouTube results | skipped | not connected until US-ME11 |", report)
+        # Posting is manual, so the scheduling service is not used by the Founder's choice, never a source that failed.
+        self.assertIn(
+            "| Scheduling service | not used | posting is manual, the Founder's choice of 2026-10-11"
+            " (docs/adr/0004-posting-is-manual.md) |",
+            report,
+        )
+        self.assertIn("| Scheduling-service drafts | not used | posting is manual,", report)
+        self.assertRegex(report, r"- Sources: 0 failed, \d+ changed, \d+ read, \d+ skipped, 1 not used\.")
+        self.assertIn("| Weekly Read numbers (sitting page) | skipped | no Weekly Read is due:", report)
+        self.assertNotIn("YouTube results", report)
         self.assertIn("First snapshot", report)
         self.assertRegex(report, r"Approximate cost: about \$0\.00[89] at API prices, for 200,000 input tokens")
         self.assertIn("> Checked the package.", report)
@@ -357,11 +380,11 @@ class DecisionRoundTripTest(CycleTestCase):
     KINDS = {
         "package-change-proposal": ("name-status-stale", ""),
         "dispatch-request": ("waitlist", ""),
-        "weekly-read-decision": ("angle-keep", ""),
         "notice": ("example-notice", ""),
     }
 
     def test_one_item_of_each_kind_two_approved_two_rejected_two_undecided(self):
+        self.one_weekly_read_item()  # queued only from a Weekly Read memo that passed its checks
         writes = {
             f"review-queue/incoming/{slug}.md": fakes.proposal(kind, extra, title=slug)
             for kind, (slug, extra) in self.KINDS.items()

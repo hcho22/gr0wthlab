@@ -76,9 +76,9 @@
     "waitlist-counts": {"title": "Waitlist counts", "story": "US-ME06", "built": true},
     "post-drafts": {"title": "Post Drafts", "story": "US-ME08", "built": true},
     "filming-plan": {"title": "Filming plan and edits", "story": "US-ME09", "built": true},
-    "scheduler-drafts": {"title": "Scheduling-service drafts", "story": "US-ME10", "built": false},
-    "results": {"title": "Post results", "story": "US-ME11", "built": false},
-    "weekly-read": {"title": "Weekly Read memo", "story": "US-ME12", "built": false},
+    "scheduler-drafts": {"title": "Scheduling-service drafts", "story": "US-ME10", "built": false, "not_used": "posting is manual, the Founder's choice of 2026-10-11 (docs/adr/0004-posting-is-manual.md)"},
+    "results": {"title": "Post results", "story": "US-ME11", "built": true},
+    "weekly-read": {"title": "Weekly Read memo", "story": "US-ME12", "built": true},
     "listening": {"title": "Listening Evidence", "story": "US-ME13", "built": true},
     "outreach-drafts": {"title": "Outreach Drafts", "story": "US-ME14", "built": true},
     "rejection-codes": {"title": "Rejection reasons coded", "story": "US-ME16 (F4)", "built": true},
@@ -86,9 +86,9 @@
     "beta-recruiting": {"title": "Beta Cohort recruiting", "story": "US-ME15", "built": true}
   },
   "sources_not_connected": [
-    {"name": "Scheduling service", "story": "US-ME10", "needed_by": ["scheduler-drafts"]},
-    {"name": "YouTube results", "story": "US-ME11", "needed_by": ["results", "weekly-read"]},
-    {"name": "TikTok export on the sitting page", "story": "US-ME11", "needed_by": ["results", "weekly-read"]},
     {"name": "Immerse Listening confirmation on the sitting page", "story": "US-ME18", "needed_by": []}
+  ],
+  "sources_not_used": [
+    {"name": "Scheduling service", "story": "US-ME10", "why": "posting is manual, the Founder's choice of 2026-10-11 (docs/adr/0004-posting-is-manual.md)", "needed_by": ["scheduler-drafts"]}
   ]
 }
