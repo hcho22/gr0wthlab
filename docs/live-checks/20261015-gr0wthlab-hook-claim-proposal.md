@@ -214,3 +214,38 @@ From `src/`, `tests.test_sessions` and `tests.test_work` (68 tests) and the `Dec
 - The learning loop's gate itself: no rejection reason was given, so no lab run tried an Instructions change; round 2 calls the function the gate calls, once per side, without the gate's repeat rule.
 - A decided proposal under a title that names another subject: round 6 left each proposal open, and the brief names a decided one's file the same way.
 - Example 16's judged statements are judged by nothing; what the proposals say is quoted above.
+
+## Round 7: preflight and boundary check on `main` after the merge
+
+The pipeline's own runs of both checks on `1a80815`, the launcher change this change's pull request carried, are stated only in the pull request.
+This round was run after the merge, on `main`, to put them in this record.
+Nothing was changed for it: no launcher code, `config/`, permission profile, or example set.
+
+What was run, as typed, from a linked worktree of this repository on the Founder's Mac, on 2026-10-15 (PDT, UTC-7), with Codex CLI 0.160.0:
+
+- `src/bin/gr0wthlab preflight`, at 15:37:16, ending at 15:37:17.
+- `src/bin/gr0wthlab boundary-check`, from 15:37:20 to 15:38:14.
+
+On which commit: `b7575956cdff0a0223ac4ad802c57fda15002181`, `main` after #26, with `src` tree `fb1d365d5c58b6b74a35a0c1bf1b13c777abab32` and `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
+`git status` was empty before and after both.
+The configuration fingerprint `show-config` prints, and the boundary check printed, is `65c0362d7e73a1bc164001414c11a4aa2d3153d5c3658a53128ae58b4f09bb45`.
+
+| Check | Run identifier | Exit code |
+| --- | --- | --- |
+| `preflight` | none printed | 0 |
+| `boundary-check` | `20261015T223723Z-on-demand-05fc` | 0 |
+
+What the records showed:
+
+- The preflight printed `"ok": true` with no breaches and no failures.
+  It listed 6 writable areas and 22 refused paths.
+  Its footage probe refused a listing of the footage place (`~/Mandu/projects/RepToday`), with no listing and nothing untried.
+  Its network probe found `www.reddit.com:443` and `itunes.apple.com:443` unreachable, none reached, nothing untried.
+- The boundary check printed `PASSED`: 49 steps this run had to prove, 0 sentinels escaped, 12 of 12 permitted sentinels written, 17 of 17 file-tool targets Codex refused each in a patch of its own, 19 kernel Seatbelt denials naming this run's sentinels or the check's listeners, and 1 of 1 forbidden reads of the footage place the runtime refused.
+  No local connection got through.
+  The sandbox network refused 3 targets and reached none, and the control outside the sandbox reached its listener.
+  The launcher sent 2 requests, both `GET`, to `itunes.apple.com` and `www.reddit.com`, read both `robots.txt` files, and refused an unlisted address.
+  It found no change since the snapshot from before the check.
+- The run was the first attempt; no run was repeated, and none ended before a tool call.
+
+What was not exercised: nothing beyond what these two commands cover; the commands were not run in the production clone, and the pipeline's runs on `1a80815` are not repeated here.
