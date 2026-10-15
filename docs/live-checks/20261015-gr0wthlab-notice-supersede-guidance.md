@@ -186,3 +186,77 @@ The difference between the sides in the four noisy Package review examples went 
 - A session with the real agent whose brief lists the notice of a kept Instructions change, or whose queue holds an item a reworded proposal would repeat: no example set holds either, so the wording's effect where it applies was not measured; the brief line rests on the unit tests that hold it, and both refusals on the launcher's unchanged rules.
 - The Rejection reasons session, which also carries `items.md`: it has no example set.
 - A weekly run in the production clone.
+
+## Round 3: on the merged head
+
+`main` moved to `b7575956cdff0a0223ac4ad802c57fda15002181`, the Hook claim fix, which changed `post-drafts.md` and the brief's Review Queue lines (each package-change proposal listed with its item file, and a line asking the session to read each before writing one).
+Merge commit `662a3906b460d6179a53947ab3aae6d2483c1a27` brought it in (`src` tree `3176d06863f3f313189d5db08377d27697efbce7`, `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`).
+`report.item_lines` was the one conflict: the merged head keeps this change's header and its mark on an Instructions notice, and `main`'s item file on each proposal's line.
+The `items.md` sentences of this change say nothing the brief's new line says: the brief tells the session to read each proposal's file, and `items.md` that the launcher refuses only an exact repeat.
+The text sessions of both example sets read changed with the merge, so both sets ran again, `main` at `b757595` on one side and the merged head on the other, whose `src/instructions/` differ only by this change's three lines in `items.md`.
+Run on 2026-10-15 from 15:37 to 16:23 PDT, with the same scratch script, Codex CLI and effort as round 1; `git status` was empty in the worktree before and after.
+
+### The unit suite and lint
+
+| Command | Where | What the records showed |
+| --- | --- | --- |
+| `ruff check` and `ruff format --check`, as CI runs them | the worktree at `662a390` | all checks passed; 107 files already formatted |
+| `/usr/bin/python3 -m unittest discover -s src/tests -t src` | a clone at `662a390` | 1,483 tests OK in 2,719 seconds, from 15:37 to 16:23, beside the example-set runs |
+
+### The example sets, with the real agent
+
+Each example of both sets once on each side, from 15:37 to 15:43 (lab run identifiers after `20261011T230000Z-on-demand-`):
+
+| Set | Example | `main` run | `main` checks held | merged head run | merged head checks held |
+| --- | --- | --- | --- | --- | --- |
+| Package review | 1 | `ec7a` | 2 of 2 | `d9aa` | 2 of 2 |
+| Package review | 2 | `2b2a` | 2 of 2 | `173c` | 2 of 2 |
+| Package review | 3 | `1e05` | 1 of 2 | `a6bf` | 1 of 2 |
+| Package review | 4 | `a3a2` | 2 of 2 | `251c` | 2 of 2 |
+| Package review | 5 | `c0b4` | 2 of 2 | `2ecf` | 2 of 2 |
+| Package review | 6 | `da1d` | 2 of 2 | `c174` | 2 of 2 |
+| Package review | 7 | `0e21` | 2 of 2 | `129f` | 2 of 2 |
+| Package review | 8 | `be31` | 2 of 2 | `b182` | 1 of 2 |
+| Package review | 9 | `5962` | 2 of 2 | `c0fa` | 1 of 2 |
+| Package review | 10 | `4b02` | 2 of 3 | `b0dd` | 2 of 3 |
+| Post Drafts | 1 | `3e53` | 4 of 4 | `adfb` | 4 of 4 |
+| Post Drafts | 2 | `e385` | 3 of 3 | `51e6` | 3 of 3 |
+| Post Drafts | 8 | `30b9` | 1 of 1 | `693c` | 1 of 1 |
+| Post Drafts | 16 | `f6c7` | 3 of 3 | `b3a8` | 3 of 3 |
+| Post Drafts | 17 | `1da4` | 5 of 5 | `a5c5` | 5 of 5 |
+| Post Drafts | 18 | `4646` | 4 of 4 | `3a62` | 4 of 4 |
+| Post Drafts | 19 | `e586` | 4 of 4 | `ba9a` | 4 of 4 |
+| Post Drafts | 20 | `05de` | 5 of 5 | `9846` | 5 of 5 |
+| Post Drafts | 21 | `7013` | 3 of 3 | `44e0` | 3 of 3 |
+| Post Drafts | 22 | `3233` | 3 of 3 | `b5a0` | 3 of 3 |
+
+Package review examples 3, 4, 8, and 10 and Post Drafts examples 16 and 21, the ones earlier rounds re-ran, ran twice more on each side; a run marked `*` did not hold every check:
+
+| Example | `main` runs | `main` all checks held, of three | merged head runs | merged head all checks held, of three |
+| --- | --- | --- | --- | --- |
+| Package review 3 | `76ee*`, `eb4b*` | 0 | `c6ba`, `0852*` | 1 |
+| Package review 4 | `7c69`, `a48e*` | 2 | `930f`, `e03e*` | 2 |
+| Package review 8 | `6e9e*`, `dab1` | 2 | `e108`, `5646*` | 1 |
+| Package review 10 | `0f7a*`, `8567*` | 0 | `f2f9*`, `26f7` | 1 |
+| Post Drafts 16 | `34e6`, `c35f` | 3 | `eb88`, `b8f7` | 3 |
+| Post Drafts 21 | `56d8`, `e3c9` | 3 | `c89a`, `3c85` | 3 |
+
+The four Package review examples held every check 4 of 12 times on `main` and 5 of 12 on the merged head.
+Package review example 9 failed once on the merged head, by queuing one proposal where none is expected; that session's last message names a proposal about the brand voice's rule against loss framing and P02's Hook, the proposal that each failed run of example 8 queued on both sides in round 1, and example 9 failed the same check on both sides in round 2.
+Every Post Drafts run on both sides held every check, examples 16 and 21 included.
+No session's event record, on either side, holds a patch that adds a `supersedes:` line.
+
+The launcher's counts of each session, summed for each side over every run of this round:
+
+| Set and side | Sessions | Ran to their end | Closing line `Session: complete` | Package files read of those listed | Proposals queued | Draft claims with a code location, without | Agent seconds | Cost (USD, API prices) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Package review, `main` | 18 | 18 | 17 | 288 of 288 | 20 | none written | 1,338 | 0.174 |
+| Package review, merged head | 18 | 18 | 18 | 288 of 288 | 20 | none written | 1,351 | 0.163 |
+| Post Drafts, `main` | 14 | 14 | 14 | 152 of 154 | 8 | 18, 3 | 1,374 | 0.167 |
+| Post Drafts, merged head | 14 | 14 | 14 | 154 of 154 | 8 | 19, 3 | 1,379 | 0.160 |
+
+The one session whose closing line was `Session: incomplete` was `main`'s example 10 run `0f7a`.
+Altogether this round ran 64 sessions, 5,443 seconds of agent time, about 0.66 dollars at API prices.
+
+What the numbers show: on the merged head the counts the launcher keeps of each session are the same or within a session's variance as on `main`, both sets held the same number of examples in full (10 of 18 Package review runs and 14 of 14 Post Drafts runs on each side), and the examples that failed did so on both sides across the three rounds.
+What round 2 says was not exercised holds for this round too.
