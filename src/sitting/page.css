@@ -377,10 +377,22 @@ main > .refused {
 .doc-code {
   margin: 0 0 12px;
   padding: 12px 14px;
-  overflow-x: auto;
   border-radius: 6px;
   background: var(--tint);
-  white-space: pre;
+  /* Every character of a block is in view, as an exact edit's text must be: a long line wraps, never scrolls. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* A wrapped line goes on indented under its start, so where each line of the block begins stays plain. */
+.doc-codeline {
+  display: block;
+  padding-left: 2ch;
+  text-indent: -2ch;
+}
+
+.doc-codeline:empty::after {
+  content: "\200b";
 }
 
 .doc-table {

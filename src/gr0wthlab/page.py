@@ -111,7 +111,8 @@ def document(source: str) -> H:
                 body.append(lines[index])
                 index += 1
             index += 1
-            blocks.append(tag("pre", "\n".join(body), class_="doc-code"))
+            # Each line its own, so a long line that wraps reads as one line, never as the next.
+            blocks.append(tag("pre", *(tag("span", part, class_="doc-codeline") for part in body), class_="doc-code"))
         elif stripped.startswith("|") and index + 1 < len(lines) and TABLE_RULE.fullmatch(lines[index + 1].strip()):
             head = cells(line)
             index += 2
