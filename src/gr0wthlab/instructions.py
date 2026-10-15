@@ -543,9 +543,7 @@ def refile(
     outcome: Outcome, store: Store, ledger: Ledger, seen: dict[str, str], run_id: str, now: datetime
 ) -> list[str]:
     """File again the notice of each kept change in force that no notice in the Review Queue names, as the run that
-    kept it filed it, so the Founder can still decide it and a Reject still undoes it, and answer again each reason
-    it cites, whose decision Evidence a lost queue has the decision taken in again without; return each notice
-    filed."""
+    kept it filed it, so the Founder can still decide it and a Reject still undoes it; return each notice filed."""
     found, problems = unshown(store, ledger)
     outcome.problems += problems
     filed = []
@@ -564,8 +562,6 @@ def refile(
             store.write_json(path, data)
         except OSError as error:
             outcome.problems.append(f"`{store.relative(path)}` could not record its notice again ({error})")
-        cited = [str(reason["item"]) for reason in data.get("reasons") or ()]
-        outcome.problems += answer(store, cited, KEPT, identifier, run_id, now)
     return filed
 
 

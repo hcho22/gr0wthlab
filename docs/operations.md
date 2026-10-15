@@ -249,7 +249,8 @@ They change from an execution-coded rejection reason only through that workflow'
    A change the example set could not judge, because the bound ran out, an example's session did not run to its end, its lab's launcher could not take that session's work in, one of its checks could not be read, or the example set stopped, is not kept, and its reasons are offered again.
    A kept change's record is written before its text, so its notice can always undo it; and its notice is closed only by the Founder's decision, never by an item in `incoming/` that names it in `supersedes`.
    A kept change in force whose notice the Review Queue does not hold is said so in that run's report: a notice that could not be queued in its Summary, its Instructions section, and the run's problems notice, and a queue that could not be written, which loses that problems notice too, in its Summary and Instructions section.
-   The next run files the notice again from its record, before the first session, exactly as it was, and answers again each reason the change cites; until the Founder decides it, no other change to that workflow's Instructions is tried.
+   The next run files the notice again from its record, before the first session, exactly as it was; until the Founder decides it, no other change to that workflow's Instructions is tried.
+   A decision such a run takes in again from the same record keeps the code its reason was given and what became of the reason as a change to the Instructions, so no reason is offered twice.
    The run report's Instructions section has all of it, and the Outputs table an `Instructions changes` row, incomplete when a proposal was refused or a change could not be judged.
    The example set's sessions are not among the run's own sessions; the report counts their sessions, agent time, and approximate cost on a line of their own.
 8. **The Founder's answer.**

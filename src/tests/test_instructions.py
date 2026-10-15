@@ -606,6 +606,33 @@ class LoopTest(WorkCycleTestCase):
         self.assertNotIn("shows it at the next sitting", self.section("Instructions"))
         self.assert_filed_again_once_held_and_undone(proposed, weeks=2)
 
+    def test_a_reason_a_change_not_kept_answered_is_not_offered_again_after_its_queue_was_lost(self):
+        worse = {
+            path: text.replace("This is the history view", "Crush it: this is the history view")
+            for path, text in self.drafts.items()
+        }
+        written = Store.write_json
+        queue = self.ledger() / "review-queue/queue.json"
+
+        def write_json(store, path, data):
+            if Path(path) == queue:
+                raise OSError("the disk is full")
+            return written(store, path, data)
+
+        with mock.patch.object(Store, "write_json", write_json):
+            self.learn(self.in_force + WORSE + "\n", worse_drafts=worse)
+        self.assertEqual(self.read(f"evidence/decisions/{DAY_1}.json")["instructions"]["outcome"], "not kept")
+        self.assertIn(DAY_1, [entry["id"] for entry in self.items("post")], "the lost queue still shows it open")
+
+        fakes.behave(self.codex_dir, {})
+        self.go(weeks=2)
+        kept = self.read(f"evidence/decisions/{DAY_1}.json")
+        self.assertEqual((kept["code"]["code"], kept["instructions"]["outcome"]), ("length", "not kept"))
+        self.assertIn(
+            "- No change to any Instructions was offered: no rejection reason may lead to one.",
+            self.section("Instructions"),
+        )
+
     def test_a_reject_taken_in_again_after_its_undo_s_queue_was_lost_stands_as_undone(self):
         self.learn(self.in_force + ADDED + "\n")
         notice = next(entry["id"] for entry in self.items("notice") if entry.get("instructions"))

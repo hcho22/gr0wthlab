@@ -176,6 +176,20 @@ def named_item(record: Unusable) -> Unusable:
 # The run.
 
 
+def learned_from(path: Path, digest: str) -> dict[str, object]:
+    """What a run learned of a decision already taken in from the same record, as when a Review Queue that could not
+    be written has the next run take it in again: its rejection reason's code and what became of it as a change to
+    the Instructions, so no reason is offered twice."""
+    try:
+        earlier = json.loads(read_plain(path).decode("utf-8"))
+    except (OSError, UnsafeFile, ValueError):
+        return {}
+    source = earlier.get("source") if isinstance(earlier, dict) else None
+    if not isinstance(source, dict) or source.get("sha256") != digest:
+        return {}
+    return {key: earlier[key] for key in ("code", "instructions") if key in earlier}
+
+
 class Cycle:
     def __init__(
         self,
@@ -332,24 +346,24 @@ class Cycle:
                 continue
             decision, entry = outcome.decision, outcome.entry
             source, digest = digests[decision.item]
-            self.store.write_json(
-                self.store.path(*founder.TAKEN_IN, f"{decision.item}.json"),
-                {
-                    "item": decision.item,
-                    "kind": entry["kind"],
-                    "ask": entry["ask"],
-                    "item_file": entry["file"],
-                    "decision": decision.decision,
-                    "reason": decision.reason,
-                    "note": decision.note,
-                    "decided_at": decision.decided_at,
-                    "sitting": decision.sitting,
-                    "superseded_by": entry.get("superseded_by"),
-                    "source": {"path": source, "sha256": digest},
-                    "taken_in_by_run": state.run_id,
-                    "taken_in_at": now.isoformat(),
-                },
-            )
+            path = self.store.path(*founder.TAKEN_IN, f"{decision.item}.json")
+            record = {
+                "item": decision.item,
+                "kind": entry["kind"],
+                "ask": entry["ask"],
+                "item_file": entry["file"],
+                "decision": decision.decision,
+                "reason": decision.reason,
+                "note": decision.note,
+                "decided_at": decision.decided_at,
+                "sitting": decision.sitting,
+                "superseded_by": entry.get("superseded_by"),
+                "source": {"path": source, "sha256": digest},
+                "taken_in_by_run": state.run_id,
+                "taken_in_at": now.isoformat(),
+            }
+            record.update(learned_from(path, digest))
+            self.store.write_json(path, record)
             entry["evidence"] = f"evidence/decisions/{decision.item}.json"
             for key in ("reason", "note"):
                 if getattr(decision, key):
