@@ -21,6 +21,8 @@ Everything is in gr0wthlab's production clone, under `~/gr0wthlab/ledger/` on th
 | Each item | A run | `review-queue/items/<id>.md` |
 | Each run report | A run | `run-reports/<run id>.md` |
 | Each finished video | A run | `assets/window-<n>/day-<nn>-<recipe>.mp4` |
+| The Instructions in force | A run, only for a change its workflow's example set passed | `instructions/<workflow>.md` |
+| Each Instructions change a run tried | A run | `evidence/instructions/<change id>.json` |
 | Decisions | The Founder, on the sitting page | `founder/decisions/<id>.json` |
 | Sittings | The Founder, on the sitting page | `founder/sittings/<YYYY-MM-DD>.json` |
 | The Beta Build record | The Founder, on the sitting page | `founder/beta-builds/<Product>.json` |
@@ -246,6 +248,8 @@ It is history: the sitting page never presents it, and Mandu acts on an approval
 A superseded item that the Founder decided all the same carries that decision as `decided`.
 An open post whose Draft stops passing gr0wthlab's checks, for example after a package change, leaves `open` the same way, with `"withdrawn": true` and `superseded_by` naming the notice that says why; a decision on it is kept like any decision on a superseded item.
 So does an open Beta Cohort invitation or Waitlist ask that no longer stands.
+The notice of a kept change to the Marketing Engineer's Instructions carries `instructions`, the workflow whose Instructions changed, and `change`, the identifier of its record in `evidence/instructions/`.
+Rejecting that notice undoes the change at gr0wthlab's next run ([ADR 0003](adr/0003-instructions-change-only-through-their-example-set.md)); Mandu acts on nothing about it either way.
 gr0wthlab may add fields; ignore any you do not use.
 
 ## The Founder's records (the sitting page writes)

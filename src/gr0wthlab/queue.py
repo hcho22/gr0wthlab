@@ -34,6 +34,8 @@ ITEMS = "items"
 SET_ASIDE = "set-aside"
 QUEUE_FILE = "queue.json"
 MAX_SLUG = 60
+# How a file in incoming/ that passed every check and could not be written to the queue is set aside.
+NOT_QUEUED = "could not be queued"
 # The kinds the launcher renders only from a Draft that passed its checks, each with the folders its Drafts are
 # written in. No file of these kinds is taken from incoming/, and no item written there supersedes one.
 FROM_DRAFT = {"post": "drafts/posts/", "message": "drafts/messages/ or drafts/beta-recruiting/"}
@@ -290,7 +292,7 @@ class Ledger:
             try:
                 identifier = self.publish(store, item, slug_of(name), run_id, now)
             except (OSError, ConfigError) as error:
-                problem = f"could not be queued ({error})"
+                problem = f"{NOT_QUEUED} ({error})"
                 set_aside.append(self.set_aside(areas, path, name, [problem]))
                 continue
             areas.remove(path)
@@ -357,6 +359,11 @@ class Ledger:
             problems.append(
                 f"supersedes {target}, which the launcher filed from reviewed text; only a reviewed change to that"
                 " text replaces it"
+            )
+        elif replaced.get("instructions"):
+            problems.append(
+                f"supersedes {target}, the notice of a change to the Instructions, which only the Founder's decision"
+                " closes"
             )
         elif replaced.get("kind") in FROM_DRAFT:
             kind = replaced["kind"]

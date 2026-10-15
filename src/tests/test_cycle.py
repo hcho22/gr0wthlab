@@ -632,6 +632,7 @@ class DecisionRoundTripTest(CycleTestCase):
             report,
         )
         self.assertNotIn("Could not use", report)
+        self.assertIn("- No change to any Instructions was offered: the Review Queue could not be read.", report)
         self.assertFalse((self.ledger() / f"evidence/decisions/{item}.json").exists())
         self.assertIn("| Sittings | changed | 1 record, 1 new |", report)
         self.assertTrue((self.ledger() / f"evidence/sittings/{day}.json").is_file())
@@ -981,7 +982,8 @@ class FailuresTest(CycleTestCase):
         self.assertEqual((self.workspace() / "instructions/README.md").read_text(encoding="utf-8"), "# instructions\n")
         self.assertIn(
             "- after the Package review session: `instructions/README.md` was changed during the run and put back as"
-            " it was; no run may change its own Instructions yet\n",
+            " it was; only the rejection reasons' session may propose an Instructions change, and only the launcher"
+            " changes the Instructions in force\n",
             problems,
         )
         queue = self.queue()

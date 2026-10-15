@@ -30,6 +30,14 @@ FOUNDER = "founder"
 # Its five folders, one for each kind of Founder record. Each is a forbidden target of the preflight before every
 # session and of the boundary check; founder.py names the kinds and holds the rules.
 FOUNDER_KINDS = ("decisions", "sittings", "beta-builds", "beta-reports", "outreach")
+# The Instructions in force, a folder of ledger/, and the workflows' example sets, a folder of src/ (ADR 0003): the
+# sandbox reads both and writes neither. Only the launcher writes the Instructions, for a change its workflow's example
+# set passed, and only a reviewed pull request changes the example sets. Each is a forbidden target of its own of the
+# preflight before every session and of the boundary check, by its label here, which no writable area has.
+INSTRUCTIONS = "instructions"
+EXAMPLES = "examples"
+INSTRUCTIONS_TARGET = "instructions-in-force"
+EXAMPLES_TARGET = "example-sets"
 # The reasoning efforts Codex's model catalog lists for the run's model. Codex passes any other text on, and the model's
 # service refuses it only once the agent starts, after everything a run does before its agent.
 REASONING_EFFORTS = ("low", "medium", "high", "xhigh", "max")
@@ -88,6 +96,41 @@ class Boundary:
     def founder_dirs(self) -> tuple[tuple[str, Path], ...]:
         """Each folder of the Founder's records, by the kind of record it holds."""
         return tuple((kind, self.ledger / FOUNDER / kind) for kind in FOUNDER_KINDS)
+
+    @property
+    def instructions(self) -> Path:
+        """The Instructions in force, which every session reads and only the launcher writes (ADR 0003)."""
+        return self.ledger / INSTRUCTIONS
+
+    @property
+    def examples(self) -> Path:
+        """The workflows' example sets, which only a reviewed pull request changes (ADR 0003)."""
+        return self.repo_root / "src" / EXAMPLES
+
+    @property
+    def kept_dirs(self) -> tuple[tuple[str, Path], ...]:
+        return kept_dirs(self.repo_root)
+
+
+def kept_dirs(repo_root: Path) -> tuple[tuple[str, Path], ...]:
+    """The two folders the agent may read and must never write that hold what it works by: its Instructions in force
+    and the example sets that gate a change to them, each by its label among the forbidden targets."""
+    return (
+        (INSTRUCTIONS_TARGET, repo_root / LEDGER / INSTRUCTIONS),
+        (EXAMPLES_TARGET, repo_root / "src" / EXAMPLES),
+    )
+
+
+def check_kept_dirs(repo_root: Path) -> None:
+    """Stop a run, a check, or a preflight before it starts when the Instructions in force or the example sets are not
+    a real folder: a missing folder, or a link, could not be proven refused to the sandbox, and a session would read
+    Instructions from wherever a link led."""
+    for label, path in kept_dirs(repo_root):
+        if os.path.islink(str(path)) or not os.path.isdir(str(path)):
+            raise ConfigError(
+                f"{path} must be a real folder, not missing and not a link: the sandbox must read it and never write"
+                f" it ({label})"
+            )
 
 
 def load_json(path: Path) -> dict:

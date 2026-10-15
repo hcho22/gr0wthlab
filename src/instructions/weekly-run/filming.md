@@ -1,6 +1,6 @@
 ## This session: filming
 
-Your working guidance is `workspace/instructions/filming.md`.
+Your working guidance is `ledger/instructions/filming.md`.
 Before this session the launcher read each asset's shot list from the kit, filed the filming plan the Founder approves before filming, when it needs filing, and listed the window's footage folder in the footage place and measured every file in it.
 A footage folder is outside what you can read, and you could not watch a video if you opened one: the brief names each file with its length, size, frame rate, and whether it has sound.
 Once the last session has ended, the launcher checks every edit record, renders each that passes into the day's finished video with the text of the day's post Draft drawn over it, measures the result, and shows it in the day's post.

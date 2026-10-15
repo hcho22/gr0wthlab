@@ -19,6 +19,7 @@ from . import (
     beta,
     exchange,
     filming,
+    instructions,
     learning,
     listening,
     outreach,
@@ -143,6 +144,7 @@ class RunState:
     learning: learning.Result | None = None
     learning_problem: str = ""  # why the rejection reasons were not read or coded, when they were not
     guidance: learning.Guidance | None = None  # the agent's Instructions as they were before it started
+    instructions: instructions.Outcome | None = None  # what this run did about the Instructions (ADR 0003)
     put_back: list[str] = field(default_factory=list)  # each change to them the launcher undid, and after which session
     # what a stopped boundary check had left in the areas, removed before the Instructions were remembered
     probe_files_removed: list[str] = field(default_factory=list)
@@ -699,6 +701,9 @@ def render_brief(
         lines += [""] + outreach.brief_lines(state.outreach, context, mandu, check)
     if key == learning.WORKFLOW:
         lines += [""] + learning.brief_lines(state.reasons, workspace)
+        if state.instructions is not None:
+            offered, why = state.instructions.offer, state.instructions.offer_why
+            lines += [""] + instructions.brief_lines(offered, why, state.reasons, workspace, repo_root, check)
     lines += ["", "## Where to write", ""]
     if session.workflow.writes_items:
         lines += [
@@ -904,6 +909,9 @@ def sessions_lines(state: RunState) -> list[str]:
         " of a run's sessions together."
     )
     lines.append(f"- {cost_line(state)}")
+    change = state.instructions.change if state.instructions is not None else None
+    if change is not None and change.gate is not None:
+        lines.append(f"- Beside these, the Instructions change's example set: {change.gate.cost_line()}")
     if ran:
         lines.append(f"- {work.claim_line(state.claims, whole_run=True)}.")
         lines.append(f"- {work.proposal_line(state.proposals, whole_run=True)}.")
@@ -1012,6 +1020,7 @@ def summary_lines(state: RunState) -> list[str]:
             lines.append(f"- {title}: {tally.account()}.")
     if state.notice:
         lines.append(f"- Problems this run are listed in the notice `{state.notice}`.")
+    lines += [f"- {line}" for line in instructions.summary_lines(state.instructions)]
     lines += [f"- {session_summary(session)}" for session in state.ran]
     lines.append(f"- {cost_line(state)}")
     return [line for line in lines if line]
@@ -1052,6 +1061,8 @@ def render_report(state: RunState) -> str:
         state.outreach, state.outreach_result, state.outreach_filing, state.outreach_problem
     )
     lines += [""] + learning.report_lines(state.learning, state.put_back)
+    if state.instructions is not None:
+        lines += [""] + instructions.report_lines(state.instructions)
     lines += ["", "## Run state", ""]
     lines += [f"- {tally.workflow}: {tally.line()}" for tally in state.tallies]
     if state.state_notes:
@@ -1236,6 +1247,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
         listening.notice_section(state.listening, state.listening_result, day),
         outreach.notice_section(state.outreach, state.outreach_result, day, state.again),
         learning.notice_section(state.learning, day),
+        instructions.notice_section(state.instructions, day),
     ):
         if section:
             sections.append(section)

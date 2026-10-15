@@ -11,6 +11,15 @@ from gr0wthlab import beta, beta_drafts, lint, package
 from tests import fakes
 
 EXAMPLES = fakes.BETA_EXAMPLES
+# The checks only a re-run can hold, since they read what a whole run queued or refused, not one candidate: a
+# "queued" that names an item kind is one of them, while a Listening proposal's own "queued" names none.
+RUN_ONLY = {"nothing_queued", "nothing_set_aside", "nothing_refused", "nothing_discarded"}
+
+
+def run_only(assertion):
+    return assertion["check"] in RUN_ONLY or (assertion["check"] == "queued" and "item" in assertion)
+
+
 ADDRESS_PARTS = ("@", "example.com", "founder@")
 
 
@@ -35,7 +44,9 @@ class BetaExampleSetTest(unittest.TestCase):
         self.assertGreaterEqual(len(ids), 10)
         checks = set()
         for example in self.data["evals"]:
-            self.assertEqual(sorted(example), ["assertions", "expected_output", "files", "id", "prompt"])
+            keys = ["assertions", "expected_output", "files", "id", "prompt"] + (["run"] if "run" in example else [])
+            self.assertEqual(sorted(example), keys)
+            self.assertTrue(example["files"] or "run" in example, example["id"])
             self.assertTrue(all((EXAMPLES / name).is_file() for name in example["files"]), example["id"])
             kinds = {assertion["kind"] for assertion in example["assertions"]}
             self.assertLessEqual(kinds, {"deterministic", "judged"})
@@ -66,12 +77,16 @@ class BetaExampleSetTest(unittest.TestCase):
             if path.is_file() and "invitation-address" not in path.name:
                 self.assertNotIn("@", path.read_text(encoding="utf-8"), path)
 
-    def test_every_deterministic_assertion_holds(self):
+    def test_every_deterministic_assertion_holds_of_each_candidate_and_scenario(self):
+        """An example the agent re-runs with no candidate holds in its own lab instead (test_example_runs.py), as do
+        the re-run checks of what a whole run queued."""
         for example in self.data["evals"]:
+            if not example["files"]:
+                continue
             first = example["files"][0]
             subject = self.scenario(example) if first.startswith("files/scenarios/") else self.draft(first)
             for assertion in example["assertions"]:
-                if assertion["kind"] != "deterministic":
+                if assertion["kind"] != "deterministic" or run_only(assertion):
                     continue
                 with self.subTest(example=example["id"], check=assertion["check"], rule=assertion.get("rule")):
                     self.assertTrue(self.holds(assertion, *subject), subject)

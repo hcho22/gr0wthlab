@@ -1232,7 +1232,7 @@ def brief_lines(plan: Plan, repo_root: Path) -> list[str]:
         f" {plan.gate.record.approved_on}), so its Beta Cohort is being recruited from the Waitlist.",
         "The launcher chooses who is invited, from the view you cannot read, and attaches them to the item. You write"
         ' only the message, the same words for everyone, as the task definition\'s "Writing a recruiting Draft" and'
-        " `workspace/instructions/beta-recruiting.md` describe.",
+        " `ledger/instructions/beta-recruiting.md` describe.",
         "",
         "| Draft | Write it as | In the Review Queue |",
         "| --- | --- | --- |",
