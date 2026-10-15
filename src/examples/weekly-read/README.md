@@ -7,4 +7,5 @@ It lives in `src/`, out of the agent's reach, and changes only through a reviewe
   Every number is invented, and no post, channel, or comment in them is real.
 - `files/memos/` holds candidate memos: one that passes for each read, and one for each rule the launcher holds a memo to, broken.
 - The calendar, Angle bank, and pairs the memos are checked against are the synthetic kit of [`post-drafts`](../post-drafts/README.md), with its synthetic `read-the-results.md`.
-- The deterministic assertions run in the unit tests (`src/tests/test_weekly_read_examples.py`); the judged ones wait for US-ME16.
+- The deterministic assertions run in the unit tests (`src/tests/test_weekly_read_examples.py`); a judged assertion is judged by nothing.
+  No example carries `run`: the Weekly Read has no Instructions of its own, so no Instructions change re-runs this set.

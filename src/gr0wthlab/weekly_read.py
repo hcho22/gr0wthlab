@@ -24,8 +24,8 @@ wrote is removed from workspace/, so it is never taken in again for other number
 in this run is taken in: one an earlier run left there unchanged is no memo written, and stays as it is.
 
 A memo written again replaces the read's open items, so it is written only from records the launcher could read: while
-a results record cannot be used, the floor cannot be found, or the launcher's record of this read's memo, or at day 14
-of the day-7 read's, cannot be read, the read's open items stand (queue.stands) and that read is the gap.
+a results record of this read cannot be used, the floor cannot be found, or the launcher's record of this read's memo,
+or at day 14 of the day-7 read's, cannot be read, the read's open items stand (queue.stands) and that read is the gap.
 """
 
 from __future__ import annotations
@@ -242,10 +242,10 @@ def plan(
 ) -> Plan:
     """Whether the read's memo is due this run: the Founder has given numbers for it, the memo was not yet written
     from exactly those, and he has decided none of its items. The memo is written again when he gives more numbers
-    or corrects one while its items are all still open, but never while one of his results records cannot be used,
-    the floor cannot be found, or the launcher's record of this read's memo, or at day 14 of the day-7 read's, cannot
-    be read: a memo written then would replace the open items on less than was given, so they stand and that read is
-    the gap."""
+    or corrects one while its items are all still open, but never while one of his results records for this read
+    cannot be used, the floor cannot be found, or the launcher's record of this read's memo, or at day 14 of the day-7
+    read's, cannot be read: a memo written then would replace the open items on less than was given, so they stand and
+    that read is the gap."""
     found = Plan(read, taken, parsed, paths, fingerprint(read, taken))
     first = min(results.READS)
     if read.read != first:
