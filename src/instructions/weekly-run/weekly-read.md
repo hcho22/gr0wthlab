@@ -73,6 +73,7 @@ For each such decision the brief lists, write the new Angle at the path it names
 - Its pain and source cell is the changed Angle's, character for character: the new Angle rests on the same sourced pain.
 - Change what the decision's line and its numbers say did not work, and keep the rest as the changed Angle has it.
   Its Hook is new: a Hook belongs to exactly one Angle, so it repeats no Hook of the Angle bank or of the A/B pairs.
+  Write the Hook as one line in double quotes, the words every post of the new Angle opens on, and hold it to the brand rules file the brief names, as every post's Hook is: the check-work command reports a Hook that breaks one.
   Write its success signal and kill criterion in the bank's own terms, each on a number the Weekly Read asks for on that platform.
 - Its Platform cell names TikTok or YouTube Shorts, the platform whose numbers judge it.
 - Follow the rules the Angle bank's own preamble gives every row and every Hook.

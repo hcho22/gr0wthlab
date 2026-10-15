@@ -40,7 +40,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from . import exchange, kit, results, weekly_read
+from . import exchange, kit, lint, results, weekly_read
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .queue import APPROVED, Ledger
 from .waitlist import looks_like_address
@@ -186,14 +186,21 @@ def roles(registry: Mapping) -> tuple[str, dict[str, str]] | None:
         package = product.get("go_to_market_package") or {}
         drafts, read = package.get("post_drafts") or {}, package.get("weekly_read") or {}
         if product.get("status") == "active" and drafts:
-            paths = {name: str(drafts[name]) for name in ("calendar", "angles", "pairs") if drafts.get(name)}
+            paths = {
+                name: str(drafts[name]) for name in ("calendar", "angles", "pairs", "brand_rules") if drafts.get(name)
+            }
             if isinstance(read.get(CREATIVE_LOG), str):
                 paths[CREATIVE_LOG] = read[CREATIVE_LOG]
             return str(product["name"]), paths
     return None
 
 
-NEEDS = {KILL: (CREATIVE_LOG,), CHANGE: ("angles", "pairs"), PAIR: ("pairs",), FLEX: ("calendar", "angles")}
+NEEDS = {
+    KILL: (CREATIVE_LOG,),
+    CHANGE: ("angles", "pairs", "brand_rules"),
+    PAIR: ("pairs",),
+    FLEX: ("calendar", "angles"),
+}
 # What a proposal cites when it can be read, and does without otherwise: the calendar's own kill rule.
 CITES = {KILL: ("calendar",)}
 
@@ -238,6 +245,8 @@ def prepare(ledger: Ledger, mandu: Path, registry: Mapping, window: int) -> Plan
         for entry in ledger.entries.values()
         if isinstance(entry.get("weekly_change"), dict) and entry["weekly_change"].get("angle")
     ]
+    if "brand_rules" in plan.texts and brand_rules(plan.texts["brand_rules"]) is None:
+        unread["brand_rules"] = f"`{paths['brand_rules']}` could not be used as the brand rules"
     bank: dict[str, kit.Angle] = {}
     if "angles" in plan.texts:
         try:
@@ -369,9 +378,25 @@ def compose_kill(path: str, text: str, angle: str, reads: Sequence[str]) -> tupl
     return edit, "", ""
 
 
-def check_row(text: str, bank_text: str, old: str, number: str, hooks: Sequence[str]) -> tuple[list[str], list[str]]:
+def brand_rules(text: str) -> lint.Rules | None:
+    try:
+        return lint.Rules(json.loads(text))
+    except (ValueError, lint.RulesError):
+        return None
+
+
+def check_row(
+    text: str,
+    bank_text: str,
+    old: str,
+    number: str,
+    hooks: Sequence[str],
+    rules: lint.Rules | None = None,
+    rules_path: str = "brand-rules.json",
+) -> tuple[list[str], list[str]]:
     """The new Angle the Weekly Read session wrote for a change, as the cells of one row of the Angle bank, and every
-    problem with it, each in the launcher's own words and never repeating what the file says."""
+    problem with it, each in the launcher's own words and never repeating what the file says. Its Hook is one quoted
+    line that passes the brand lint, since every post of the Angle opens on it and is held to that lint."""
     rows = [line.strip() for line in text.split("\n") if line.strip()]
     if len(rows) != 1 or not rows[0].startswith("|") or not rows[0].endswith("|"):
         return [], ["the file holds exactly one line: the new Angle's row of the Angle bank, from | to |"]
@@ -400,7 +425,14 @@ def check_row(text: str, bank_text: str, old: str, number: str, hooks: Sequence[
             f"its pain and source cell must be {old}'s exactly as the Angle bank has it: the new Angle carries the same"
             " sourced pain"
         )
-    hook = folded(kit.cell(cells, header, "Hook"))
+    hook_cell = kit.cell(cells, header, "Hook")
+    frozen = kit.one_quote(hook_cell)
+    if hook_cell and frozen is None:
+        problems.append("its Hook cell must be one quoted line, the words every post of the new Angle opens on")
+    if frozen and rules is not None:
+        broken = sorted({found.rule for found in rules.check_one(lint.Copy("Hook", frozen, hook=True)) if found.blocks})
+        problems += [f"its Hook breaks the brand rule `{rule}` of `{rules_path}`" for rule in broken]
+    hook = folded(hook_cell)
     if hook and hook in {folded(found) for found in hooks}:
         problems.append(
             "its Hook is one the Angle bank or the A/B pairs already hold; a Hook belongs to exactly one Angle, so the"
@@ -768,7 +800,11 @@ def take_change(
         pairs = kit.parse_pairs(plan.texts["pairs"])
     except kit.KitError:
         pairs = {}
-    cells, problems = check_row(text, bank_text, found.key, found.angle, known_hooks(bank, pairs))
+    rules = brand_rules(plan.texts.get("brand_rules", ""))
+    hooks = known_hooks(bank, pairs)
+    cells, problems = check_row(
+        text, bank_text, found.key, found.angle, hooks, rules, plan.paths.get("brand_rules", "")
+    )
     edit = None
     if not problems:
         edit, problem = compose_change(plan.paths["angles"], bank_text, cells)
@@ -855,7 +891,8 @@ def brief_lines(plan: Plan, workspace: Path, mandu: Path, ledger: Path, check: s
         "The Founder approved these change decisions.",
         "A changed Hook, signal, or kill criterion enters only as a new Angle (FR-7), so write each new Angle as one"
         ' row of the Angle bank, as "Writing a new Angle" in your task definition describes.',
-        f"The Angle bank: `{mandu / plan.paths['angles']}`; the A/B pairs: `{mandu / plan.paths['pairs']}`.",
+        f"The Angle bank: `{mandu / plan.paths['angles']}`; the A/B pairs: `{mandu / plan.paths['pairs']}`; the brand"
+        f" rules every post's Hook is held to: `{mandu / plan.paths['brand_rules']}`.",
         "",
     ]
     bank = kit.parse_angles(plan.texts["angles"])
@@ -888,7 +925,7 @@ def restore(record: Mapping, mandu: Path) -> tuple[Plan, list[str]]:
     """The plan as the launcher recorded it, with the Angle bank and the A/B pairs read again."""
     plan = Plan(str(record.get("product", "")), int(record.get("window") or 0), dict(record.get("paths") or {}))
     notes = []
-    for role in ("angles", "pairs"):
+    for role in ("angles", "pairs", "brand_rules"):
         if role not in plan.paths:
             continue
         text, why = read_text(mandu, plan.paths[role])

@@ -21,6 +21,7 @@ ANGLES, PAIRS, CALENDAR, LOG = (
     f"{GTM}/cadence-14-day.md",
     f"{GTM}/creative-log.json",
 )
+RULES = "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json"
 EXAMPLES = fakes.REPO / "src" / "examples" / "weekly-read" / "files"
 DAY_7_MEMO = (EXAMPLES / "memos" / "day-07-good.md").read_text(encoding="utf-8")
 # The example set's day-14 numbers, read as the Founder gave them: P04 met its kill criterion at the day-14 read, as
@@ -137,7 +138,8 @@ class EditTest(unittest.TestCase):
     def check(self, row, number="P08", old="P07"):
         bank_text, pairs_text = self.text(ANGLES), self.text(PAIRS)
         hooks = weekly_changes.known_hooks(kit.parse_angles(bank_text), kit.parse_pairs(pairs_text))
-        return weekly_changes.check_row(row, bank_text, old, number, hooks)
+        rules = weekly_changes.brand_rules(self.text(RULES))
+        return weekly_changes.check_row(row, bank_text, old, number, hooks, rules, RULES)
 
     def test_a_change_adds_its_new_angle_after_the_bank_s_last_row(self):
         cells, problems = self.check(f"\n{NEW_ANGLE}\n")
@@ -173,6 +175,11 @@ class EditTest(unittest.TestCase):
             " | to |",
             NEW_ANGLE.replace("A timer", "Write to someone@example.com: a timer"): "the row holds something that looks"
             " like an email address",
+            NEW_ANGLE.replace(
+                '"Watch the timer stop at five."', '"Only ten minutes to spare today?"'
+            ): f"its Hook breaks the brand rule `hook_must_not_be_question` of `{RULES}`",
+            NEW_ANGLE.replace('"Watch the timer stop at five."', 'The timer: "stop at five."'): "its Hook cell must be"
+            " one quoted line, the words every post of the new Angle opens on",
         }
         for row, problem in cases.items():
             with self.subTest(problem=problem):
