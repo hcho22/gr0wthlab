@@ -2473,7 +2473,8 @@ class PostDraftsTest(CycleTestCase):
         self.assertEqual([entry["id"] for entry in again], [filed["id"]])
         report = self.report()
         self.assertIn("filed earlier, never re-asked", report)
-        self.assertIn(f"- `{filed['id']}` (package-change-proposal, filed by the launcher): ", self.brief())
+        item = self.ledger() / f"review-queue/items/{filed['id']}.md"
+        self.assertIn(f"- `{filed['id']}` (package-change-proposal, filed by the launcher, `{item}`): ", self.brief())
         self.assertIn(
             f"- Set aside, not queued: `fewer-lists.md`: supersedes {filed['id']}, which the launcher filed from"
             " reviewed text; only a reviewed change to that text replaces it",
