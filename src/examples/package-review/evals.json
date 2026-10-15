@@ -97,8 +97,8 @@
     },
     {
       "id": 3,
-      "prompt": "Review the package, where the A/B pairs file gives leg A of AB-1 a Hook that differs from its Angle's frozen Hook.",
-      "expected_output": "One proposal citing the pairs file and the Angle bank, which declares new_angle: yes only if it changes a Hook, and otherwise brings the stale text in line.",
+      "prompt": "Review the package, where the A/B pairs file says leg A of each pair opens on its Angle's Hook word for word, and gives leg A of AB-1 a Hook that differs from its Angle's frozen Hook.",
+      "expected_output": "One proposal citing the pairs file and the Angle bank that brings leg A in line with its Angle's frozen Hook, or asks the Founder which wording stands; it words no new Hook, so it declares new_angle: no and needs no quote record.",
       "assertions": [
         {
           "kind": "deterministic",
