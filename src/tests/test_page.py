@@ -173,8 +173,12 @@ class DocumentTest(unittest.TestCase):
         )
         self.assertIn('<p class="doc-label">Video</p>', made)
         self.assertIn("<th>Beat</th><th>Time</th>", made)
-        self.assertIn("<td>1 (hook)</td><td>0-3s</td>", made)
-        self.assertIn("<td>2</td><td>a | b</td>", made)
+        # A cell of one short word, a figure or a date, is kept on one line; a cell of words wraps as it must.
+        self.assertIn('<td>1 (hook)</td><td class="doc-word">0-3s</td>', made)
+        self.assertIn('<td class="doc-word">2</td><td>a | b</td>', made)
+        self.assertEqual(page.word("2026-10-14"), "doc-word")
+        self.assertIsNone(page.word("not reported"))
+        self.assertIsNone(page.word("weekly-reads/window-1-read-07.md"), "a long path still wraps on a phone")
         self.assertIn('<span class="doc-line">Caption:</span><div class="doc"><blockquote class="doc-quote">', made)
         self.assertIn("Open it and the session is waiting.\nIn one take.</blockquote>", made)
         self.assertIn('<span class="doc-line">Hashtags: #buildinpublic</span>', made)
@@ -370,7 +374,23 @@ class ViewTest(unittest.TestCase):
         build = {"product": "RepToday", "approved_on": "2026-10-09", "build": "1.0 (42)", "recruiting": "open"}
         sent = {"item": "20261011-message-creator-desk-reset", "sent_on": "2026-10-10", "replied_on": None}
         counts = {"product": "RepToday", "date": "2026-10-11", "invitations_sent": 8, "accepted": None}
+        result = {"platform": "tiktok", "day": 2, "read": 7, "numbers": {"views": 1400, "comments": 2}}
+        result.update(comments=["one missed day and I quit", "Same here"], posted_on="2026-10-06", read_on="2026-10-14")
         for kind, stem, record, words in (
+            (
+                "results",
+                "window-1-read-07-tiktok-day-02",
+                result,
+                "Day 2 on TikTok, for the day-7 Weekly Read: posted on 2026-10-06; views 1400, comments 2; the text of"
+                " 2 comments; read on 2026-10-14.",
+            ),
+            (
+                "results",
+                "window-1-read-07-tiktok-day-02",
+                dict(result, numbers={"views": 1400, "comments": None}, comments=None),
+                "Day 2 on TikTok, for the day-7 Weekly Read: posted on 2026-10-06; views 1400, comments not reported;"
+                " no comment text; read on 2026-10-14.",
+            ),
             (
                 "sittings",
                 "2026-10-11",

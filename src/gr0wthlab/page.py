@@ -23,7 +23,7 @@ from urllib.parse import quote
 
 from . import exchange, founder, sitting
 from .exchange import plural
-from .sitting import COUNT_LABELS, COUNTS, END, ITEM, START, Entry, Message, Recruiting, Saved, View
+from .sitting import COUNT_LABELS, COUNTS, END, ITEM, RESULT, START, Asked, Entry, Message, Recruiting, Saved, View
 
 VOID = ("br", "hr", "input", "link", "meta", "source")
 KIND_NAMES = {
@@ -35,6 +35,7 @@ KIND_NAMES = {
     "package-change-proposal": "Package-change proposal",
     "notice": "Notice",
 }
+PLATFORMS = {exchange.TIKTOK: "TikTok", exchange.YOUTUBE: "YouTube Shorts"}
 TALLY = "checked="  # how state.Tally.line, the first line of a run report's Summary, begins
 TABLE_RULE = re.compile(r"\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?")
 # A line that opens with one bold label, as the launcher writes "**Hook**, frozen in ...": the label, then the rest.
@@ -68,7 +69,9 @@ def tag(name: str, /, *children: object, **attributes: object) -> H:
     return H(opening) if name in VOID else H(opening + join(children) + f"</{name}>")
 
 
-# An item's text, laid out by its lines.
+# An item's text, laid out by its lines. A table cell of one word up to this long is kept on one line.
+
+WORD = 16
 
 
 def cells(line: str) -> list[str]:
@@ -76,6 +79,12 @@ def cells(line: str) -> list[str]:
     row = row[1:] if row.startswith("|") else row
     row = row[:-1] if row.endswith("|") and not row.endswith("\\|") else row
     return [cell.replace("\\|", "|").strip() for cell in re.split(r"(?<!\\)\|", row)]
+
+
+def word(cell: str) -> str | None:
+    """The class of a table cell that is one short word, such as a date or a figure, which is never broken across
+    lines."""
+    return "doc-word" if cell and len(cell) <= WORD and not any(char.isspace() for char in cell) else None
 
 
 def document(source: str) -> H:
@@ -116,7 +125,9 @@ def document(source: str) -> H:
                     tag(
                         "table",
                         tag("thead", tag("tr", *(tag("th", cell) for cell in head))),
-                        tag("tbody", *(tag("tr", *(tag("td", cell) for cell in row)) for row in rows)),
+                        tag(
+                            "tbody", *(tag("tr", *(tag("td", cell, class_=word(cell)) for cell in row)) for row in rows)
+                        ),
                     ),
                     class_="doc-table wide" if len(head) > 3 else "doc-table",
                 )
@@ -216,6 +227,18 @@ def saved_words(saved: Saved) -> str:
         if record.get("recruiting") == exchange.RECRUITING_OPEN:
             return f"{approved}; recruiting is open."
         return f"{approved}; recruiting stopped on {record.get('stopped_on')}."
+    if saved.kind == founder.RESULTS:
+        numbers = record.get("numbers") if isinstance(record.get("numbers"), dict) else {}
+        given = ", ".join(
+            f"{name.replace('_', ' ')} {'not reported' if value is None else value}" for name, value in numbers.items()
+        )
+        comments = record.get("comments")
+        told = f"the text of {plural(len(comments), 'comment')}" if isinstance(comments, list) else "no comment text"
+        return (
+            f"Day {record.get('day')} on {PLATFORMS.get(str(record.get('platform')), record.get('platform'))}, for the"
+            f" day-{record.get('read')} Weekly Read: posted on {record.get('posted_on')};"
+            f" {given or 'no number'}; {told}; read on {record.get('read_on')}."
+        )
     if saved.kind == founder.OUTREACH:
         reply = f"a reply came on {record.get('replied_on')}" if record.get("replied_on") else "no reply recorded"
         wait = record.get("follow_up_wait_days")
@@ -224,9 +247,21 @@ def saved_words(saved: Saved) -> str:
     return ""
 
 
-def saved_lines(saved: Saved) -> list[tuple[str, str]]:
-    """Every field of a record as it was read back from its file, so the Founder sees exactly what was saved."""
-    return [(key, "not given" if value is None else str(value)) for key, value in saved.record.items()]
+def saved_lines(saved: Saved) -> list[tuple[str, str | list[str]]]:
+    """Every field of a record as it was read back from its file, so the Founder sees exactly what was saved: a field
+    that holds numbers by name shows each one, and a list shows each of its lines."""
+    lines: list[tuple[str, str | list[str]]] = []
+    for key, value in saved.record.items():
+        if value is None:
+            lines.append((key, "not given"))
+        elif isinstance(value, dict):
+            shown = "; ".join(f"{name}: {'not reported' if inner is None else inner}" for name, inner in value.items())
+            lines.append((key, shown or "none"))
+        elif isinstance(value, list):
+            lines.append((key, [str(item) for item in value]))
+        else:
+            lines.append((key, str(value)))
+    return lines
 
 
 class Page:
@@ -247,6 +282,8 @@ class Page:
             return self.url("item", key, **query)
         if kind == COUNTS:
             return self.url("counts", key, **query)
+        if kind == RESULT:
+            return self.url("result", key, **query)
         return self.url("end", **query) if kind == END else self.url(**query)
 
     def form(self, action: str, *children: object, **attributes: object) -> H:
@@ -331,7 +368,14 @@ class Page:
         """A record as it was read back from its file: every field of it, under what it says in words."""
         if saved is None:
             return None
-        rows = [tag("div", tag("dt", key), tag("dd", value)) for key, value in saved_lines(saved)]
+        rows = [
+            tag(
+                "div",
+                tag("dt", key),
+                tag("dd", *(tag("div", line) for line in value) if isinstance(value, list) else value),
+            )
+            for key, value in saved_lines(saved)
+        ]
         return tag(
             "div",
             tag("p", tag("strong", f"{title}. "), words or saved_words(saved)),
@@ -461,7 +505,21 @@ class Page:
             done = len(view.entries) - len(undecided)
             if done:
                 ask.append(tag("p", f"{done} already decided and waiting for the next run."))
-        first = next((step for step in view.steps() if step[0] == ITEM and not view.find(step[1]).decided), None)
+        owed = [asked for asked in view.asked if asked.record is None]
+        if view.asked:
+            studios = " and ".join(dict.fromkeys(str(asked.ask.get("studio", "")) for asked in view.asked))
+            posts = f"{len(view.asked)} posts'" if len(view.asked) > 1 else "1 post's"
+            if owed:
+                said = f"First, the Weekly Read asks for {posts} numbers from {studios}; {len(view.asked) - len(owed)}"
+                said += " given so far."
+                ask.insert(0, tag("p", said))
+            else:
+                first_post = self.step_url((RESULT, view.asked[0].key))
+                said = f"You gave the Weekly Read {posts} numbers from {studios}. "
+                ask.insert(0, tag("p", said, tag("a", "See or change them", href=first_post), "."))
+        first = next(((RESULT, asked.key) for asked in owed), None) or next(
+            (step for step in view.steps() if step[0] == ITEM and not view.find(step[1]).decided), None
+        )
         target = first or view.after((START, ""))
         answer = tag(
             "aside",
@@ -496,7 +554,9 @@ class Page:
         steps = view.steps()
         index = steps.index(step)
         items = [found for found in steps if found[0] == ITEM]
+        posts = [found for found in steps if found[0] == RESULT]
         where = f"Item {items.index(step) + 1} of {len(items)}" if step in items else ""
+        where = f"Numbers {posts.index(step) + 1} of {len(posts)}" if step in posts else where
         return tag(
             "div",
             tag("a", "Back", href=self.step_url(view.before(step)), class_="step") if index else None,
@@ -690,6 +750,139 @@ class Page:
             parts.append(tag("a", "Keep what is saved", href=self.url("item", entry.id), class_="quiet-link"))
         parts.append(tag("p", sitting.NO_PERSON, class_="hint rule"))
         return parts
+
+    def result(
+        self,
+        view: View,
+        asked: Asked,
+        state: sitting.Sitting,
+        reasons: Sequence[str] = (),
+        typed: Mapping[str, str] | None = None,
+        saved: Saved | None = None,
+        last: tuple[Saved, Entry] | None = None,
+    ) -> str:
+        """One post the Weekly Read due asks for: what to give and where it shows, then a field for the day it went
+        out, prefilled with the day given for this read, else the day given for the same post at the window's earlier
+        read, else the day the calendar planned it; one for each number, and one for the comments. Everything the
+        queue's ask says is shown as text."""
+        step = (RESULT, asked.key)
+        ask = asked.ask
+        studio = str(ask.get("studio", ""))
+        record = asked.record
+        planned = str(ask.get("planned", ""))
+        posted = record or asked.earlier
+        if typed is None:
+            typed = {"posted_on": posted.posted_on if posted else planned}
+            typed["read_on"] = record.read_on if record else state.day
+            if record is not None:
+                for number, _ in asked.numbers:
+                    value = record.numbers.get(number)
+                    typed[number] = "" if value is None else (f"{value:g}" if isinstance(value, float) else str(value))
+                typed[sitting.COMMENT_TEXT] = "\n".join(record.comments or ())
+        angle = str(ask.get("angle") or "no Angle")
+        if ask.get("pair"):
+            angle += f", {ask['pair']} leg {ask.get('leg')}"
+        if posted is None:
+            when = f"Planned for {planned}"
+        else:
+            when = f"Posted {posted.posted_on}"
+            if record is None:
+                when += f", as you gave it for the day-{posted.read} read"
+            if posted.posted_on != planned:
+                when += f", planned for {planned}"
+        given = (
+            tag("p", f"You gave these on {record.read_on}; giving them again replaces them.", class_="meta")
+            if record
+            else tag("p", f"Nothing is given for this post for the day-{asked.read} read yet.", class_="meta")
+        )
+        problem = (
+            tag("p", f"The record in its place cannot be used: {asked.record_problem}.", class_="note warn")
+            if asked.record_problem
+            else None
+        )
+        sheet = tag(
+            "section",
+            tag(
+                "p",
+                tag("span", "Weekly Read numbers", class_="kind"),
+                tag("span", f"day {asked.read} read, window {asked.window}"),
+                class_="eyebrow facts",
+            ),
+            tag("h1", f"Day {asked.day} in {studio}"),
+            tag("p", f"{when}, {angle}."),
+            tag("p", f"Asked for: {ask.get('why')}."),
+            tag(
+                "p",
+                f"Open the post in {studio} and give each number as it shows it. Leave a number blank when it is not"
+                " shown: it is recorded as not reported, never as zero.",
+            ),
+            given,
+            problem,
+            class_="sheet",
+        )
+        fields = [
+            self.small_field(
+                "posted_on",
+                "The day it went out",
+                typed.get("posted_on", ""),
+                f"YYYY-MM-DD; the calendar planned it for {planned}",
+                True,
+            )
+        ]
+        fields += [
+            self.small_field(number, label, typed.get(number, ""), "As the Studio shows it, or leave it blank")
+            for number, label in asked.numbers
+        ]
+        answer = tag(
+            "aside",
+            self.position(view, step) if step in view.steps() else None,
+            *self.before(last),
+            self.record(saved),
+            self.refusal(reasons),
+            tag("h2", "What it shows"),
+            self.form(
+                self.url("result", asked.key),
+                *fields,
+                tag(
+                    "label",
+                    tag("span", "What the comments say", class_="field-name"),
+                    tag(
+                        "textarea",
+                        typed.get(sitting.COMMENT_TEXT, ""),
+                        name=sitting.COMMENT_TEXT,
+                        rows=5,
+                        spellcheck="false",
+                    ),
+                    tag("span", sitting.COMMENTS_HINT, class_="hint"),
+                    class_="field",
+                ),
+                self.small_field("read_on", "The day you read them", typed.get("read_on", ""), "YYYY-MM-DD", True),
+                tag("button", "Save these numbers", type="submit", class_="button primary"),
+                class_="choice",
+            ),
+            tag(
+                "p",
+                "Once you have given them, start a run, ",
+                tag("code", "src/bin/gr0wthlab run"),
+                ", so the Weekly Read takes them in; its decisions then come to this page.",
+                class_="hint",
+            ),
+            tag(
+                "a",
+                "Next" if saved or record else "Leave it for later",
+                href=self.step_url(view.after(step)),
+                class_="button quiet",
+            ),
+            class_="answer",
+        )
+        return self.frame(
+            f"Day {asked.day} in {studio}",
+            view,
+            state,
+            RESULT,
+            self.notes(view),
+            tag("div", sheet, answer, class_="walk"),
+        )
 
     def counts(
         self,

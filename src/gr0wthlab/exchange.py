@@ -1,5 +1,6 @@
 """The formats in docs/mandu-exchange.md: the Review Queue items a run writes, and the Founder's decision, sitting,
-Beta Build, Beta Cohort report, and outreach records, which the sitting page writes and a run reads (founder.py).
+Beta Build, Beta Cohort report, outreach, and results records, which the sitting page writes and a run reads
+(founder.py).
 
 Everything here is pure parsing and rendering, so the agent's own check (check-incoming) and the launcher's
 post-run validation apply exactly the same rules, and so the sitting page checks a record with the very parser a run
@@ -14,10 +15,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
-# Version 7 moved the Founder's records from Mandu into gr0wthlab's own ledger/founder/ and changed no format.
-EXCHANGE_VERSION = 7
+# Version 7 moved the Founder's records from Mandu into gr0wthlab's own ledger/founder/ and changed no format; version 8
+# added the Founder's results records and the queue's ask for them.
+EXCHANGE_VERSION = 8
 # The version that added the Beta Build record and the Beta Cohort report; neither exists at an earlier one.
 BETA_SINCE = 4
+# The version that added the results record.
+RESULTS_SINCE = 8
 
 # Each kind's body heading, in the order a week's non-post items are presented; posts come first by nearest slot.
 KINDS = {
@@ -35,7 +39,7 @@ OPTIONS = {
     "notice": ("Acknowledge, optionally with a note", "Reject, with a one-line reason"),
     "default": ("Approve, optionally with a note", "Reject, with a one-line reason"),
 }
-ITEM_KEYS = ("exchange", "id", "kind", "product", "new_angle", "window", "day", "slot", "asset", "supersedes")
+ITEM_KEYS = ("exchange", "id", "kind", "product", "new_angle", "window", "day", "read", "slot", "asset", "supersedes")
 # A post's finished video, by its path under ledger/: always a file of the launcher's own assets folder.
 ASSET_PATTERN = re.compile(r"assets/(?:[A-Za-z0-9][A-Za-z0-9._-]*/)*[A-Za-z0-9][A-Za-z0-9._-]*\.mp4")
 # What a package-change proposal declares: yes when it adds or changes an Angle or Hook, which any change to a Hook,
@@ -185,10 +189,21 @@ def check_fields(fields: Mapping[str, str], products: Sequence[str], published: 
         asset = fields.get("asset")
         if asset is not None and not ASSET_PATTERN.fullmatch(asset):
             problems.append("asset must be the finished video's path under ledger/, such as assets/window-1/day-03.mp4")
+    elif kind == "weekly-read-decision" and (fields.get("window") is not None or fields.get("read") is not None):
+        # Version 8: a Weekly Read decision names its window and the read it belongs to, by that read's day.
+        if not re.fullmatch(r"[1-9][0-9]*", fields.get("window", "")):
+            problems.append("a Weekly Read decision needs window: a whole number from 1")
+        if fields.get("read") not in [str(day) for day in READ_DAYS]:
+            problems.append(f"a Weekly Read decision needs read: {' or '.join(str(day) for day in READ_DAYS)}")
+        for key in ("slot", "day", "asset"):
+            if fields.get(key) is not None:
+                problems.append(f"only a post has {'an' if key == 'asset' else 'a'} {key}")
     else:
         for key in ("slot", "window", "day", "asset"):
             if fields.get(key) is not None:
                 problems.append(f"only a post has {'an' if key == 'asset' else 'a'} {key}")
+    if kind != "weekly-read-decision" and fields.get("read") is not None:
+        problems.append("only a Weekly Read decision has a read")
     supersedes = fields.get("supersedes")
     if supersedes is not None and not ID_PATTERN.fullmatch(supersedes):
         problems.append("supersedes must name an item id")
@@ -537,3 +552,140 @@ def parse_outreach(stem: str, data: object) -> tuple[Outreach | None, list[str]]
     if problems:
         return None, problems
     return Outreach(stem, sent_on, replied_on, wait, note), []
+
+
+# The Founder's results for a Weekly Read (version 8): one record for each post a read covers, on one platform.
+
+TIKTOK, YOUTUBE = "tiktok", "youtube"
+PLATFORMS = (TIKTOK, YOUTUBE)
+WHOLE, SECONDS, PERCENT, PERCENT_VIEWED = "whole", "seconds", "percent", "percent viewed"
+# The numbers the Founder may give for a post, as each platform's own Studio shows them, and what kind of number each
+# is. No follower count is among them, nor any number no signal, kill criterion, or read rule names.
+NUMBERS = {
+    TIKTOK: {
+        "views": WHOLE,
+        "average_watch_time_seconds": SECONDS,
+        "watched_full_percent": PERCENT,
+        "likes": WHOLE,
+        "comments": WHOLE,
+        "shares": WHOLE,
+        "saves": WHOLE,
+        "profile_visits": WHOLE,
+    },
+    YOUTUBE: {
+        "views": WHOLE,
+        "viewed_percent": PERCENT,
+        "average_percentage_viewed": PERCENT_VIEWED,
+        "likes": WHOLE,
+        "comments": WHOLE,
+        "shares": WHOLE,
+    },
+}
+READ_DAYS = {7: 5, 14: 13}  # each read's day, and the last calendar day it covers
+MAX_COMMENTS = 40
+MAX_WHOLE = 10**12
+MAX_SECONDS = 86400
+# YouTube's average percentage viewed counts every loop of a Short, so it runs past 100.
+MAX_PERCENT_VIEWED = 1000
+RESULT_STEM = re.compile(r"window-([1-9][0-9]?)-read-(07|14)-(tiktok|youtube)-day-([0-9]{2})")
+
+
+def result_stem(window: int, read: int, platform: str, day: int) -> str:
+    return f"window-{window}-read-{read:02d}-{platform}-day-{day:02d}"
+
+
+@dataclass(frozen=True)
+class Result:
+    """What the Founder gave for one post on one platform for one Weekly Read: each number he gave, and None for one
+    he left blank, which is not reported and never zero; the comments he gave, or None when he gave none; the date he
+    says the post went out; and the date he read them in the platform's Studio, which is their source."""
+
+    window: int
+    read: int
+    platform: str
+    day: int
+    numbers: Mapping[str, float | int | None]
+    comments: tuple[str, ...] | None
+    posted_on: str
+    read_on: str
+    recorded_at: str
+
+
+def number_problem(kind: str, value: object) -> str | None:
+    """Why a number cannot be one of its kind, or None when it can."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return "a number"
+    if kind == WHOLE:
+        return None if isinstance(value, int) and 0 <= value <= MAX_WHOLE else "a whole number from 0"
+    if kind == SECONDS:
+        return None if 0 <= value <= MAX_SECONDS else f"a number of seconds from 0 to {MAX_SECONDS}"
+    if kind == PERCENT_VIEWED:
+        return None if 0 <= value <= MAX_PERCENT_VIEWED else f"a percentage from 0 to {MAX_PERCENT_VIEWED}"
+    return None if 0 <= value <= 100 else "a percentage from 0 to 100"
+
+
+def parse_result(stem: str, data: object) -> tuple[Result | None, list[str]]:
+    """A results record from results/window-<n>-read-<07|14>-<platform>-day-<nn>.json; any other field is ignored."""
+    problems: list[str] = []
+    if not isinstance(data, dict):
+        return None, ["the record must be a JSON object"]
+    before = len(problems)
+    check_version(data, problems)
+    if len(problems) == before and data["exchange"] < RESULTS_SINCE:
+        problems.append(f"exchange must be {RESULTS_SINCE} or later, the version that added this record")
+    match = RESULT_STEM.fullmatch(stem)
+    window, read, platform, day = data.get("window"), data.get("read"), data.get("platform"), data.get("day")
+    if not match or stem != (
+        result_stem(window, read, platform, day)
+        if isinstance(window, int) and isinstance(read, int) and isinstance(platform, str) and isinstance(day, int)
+        else None
+    ):
+        problems.append(
+            f"the file name {stem!r} must be window-<n>-read-<07|14>-<tiktok|youtube>-day-<nn>, matching its window,"
+            " read, platform, and day"
+        )
+        return None, problems
+    if read not in READ_DAYS or not 1 <= day <= READ_DAYS[read]:
+        problems.append(f"the day-{read} read covers days 1 to {READ_DAYS.get(read, 0)}; day {day} is not one of them")
+    numbers = data.get("numbers")
+    given: dict[str, float | int | None] = {}
+    if not isinstance(numbers, dict):
+        problems.append("numbers must be an object of the numbers given, null for one left blank")
+        numbers = {}
+    for key, value in numbers.items():
+        kind = NUMBERS[platform].get(key)
+        if kind is None:
+            problems.append(f"{key!r} is not a number gr0wthlab takes from {platform}")
+            continue
+        problem = number_problem(kind, value) if value is not None else None
+        if problem:
+            problems.append(f"{key} must be {problem}, or null when it was not given")
+            continue
+        given[key] = value
+    comments = data.get("comments")
+    if comments is not None:
+        if not isinstance(comments, list) or not 1 <= len(comments) <= MAX_COMMENTS:
+            problems.append(f"comments must be null, or a list of 1 to {MAX_COMMENTS} comments")
+            comments = None
+        else:
+            texts = [one_line(comment, "a comment", problems, required=True) for comment in comments]
+            comments = tuple(text for text in texts if text)
+    if not problems and all(value is None for value in given.values()) and comments is None:
+        problems.append("the record gives no number and no comment")
+    posted_on = data.get("posted_on")
+    read_on = data.get("read_on")
+    recorded_at = data.get("recorded_at")
+    recorded = parse_datetime(recorded_at) if isinstance(recorded_at, str) else None
+    if recorded is None:
+        problems.append("recorded_at must be an ISO 8601 time with its UTC offset")
+    if not isinstance(read_on, str) or not valid_date(read_on):
+        problems.append("read_on must be the YYYY-MM-DD date the Founder read the numbers")
+    elif recorded is not None and date.fromisoformat(read_on) > recorded.date():
+        problems.append("read_on is after the day the record was made")
+    if not isinstance(posted_on, str) or not valid_date(posted_on):
+        problems.append("posted_on must be the YYYY-MM-DD date the Founder says the post went out")
+    elif isinstance(read_on, str) and valid_date(read_on) and posted_on > read_on:
+        problems.append("posted_on is after read_on, the day the numbers were read")
+    if problems:
+        return None, problems
+    return Result(window, read, platform, day, given, comments, posted_on, read_on, recorded_at), []

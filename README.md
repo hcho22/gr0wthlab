@@ -8,6 +8,9 @@ v1 serves RepToday's pre-launch phase; Immerse joins as Listening only after Rep
 Capitalized terms are defined in [`CONTEXT.md`](CONTEXT.md).
 Why this repository holds Evidence and Drafts but no strategy: [ADR 0001](docs/adr/0001-evidence-and-drafts-only.md).
 Why the Founder decides here, on a local page, and Mandu only reads: [ADR 0002](docs/adr/0002-the-founder-decides-in-gr0wthlab.md).
+Why the Founder posts by hand, with no scheduling service: [ADR 0004](docs/adr/0004-posting-is-manual.md).
+Why the Weekly Read reads no platform, and the Founder gives TikTok Studio's and YouTube Studio's numbers on the sitting page: [ADR 0005](docs/adr/0005-the-weekly-read-uses-no-youtube-connection.md).
+Why he types those numbers, and the page keeps no screenshot or file: [ADR 0006](docs/adr/0006-the-founder-types-the-weekly-read-numbers.md).
 Stories, requirements, and progress: [the v1 PRD](docs/prd/prd-marketing-engineer-v1_261008.md).
 
 ## No strategy lives here
@@ -21,19 +24,19 @@ The specification and decision records under `docs/` (the PRD, the [design decis
 
 | Actor | Owns | Never does |
 | --- | --- | --- |
-| Founder | Every approval and every public act (posting, sending, confirming a publishing schedule), filming, and the weekly TikTok export | - |
+| Founder | Every approval and every public act (posting, sending, confirming a publishing schedule), filming, and, in a read week, the TikTok Studio and YouTube Studio numbers of each post | - |
 | Marketing Engineer | Evidence, Drafts, Review Queue items, Weekly Read memos, run reports, and its own Instructions; its repository also serves the Founder's sitting page and keeps the Founder's decisions | Publish, send, spend, see email addresses, write to Mandu or a Product repository, write or change a decision of the Founder's, or change its own code or Guardrails |
 | Mandu | Each Product's Go-To-Market Package, applying approved package changes and giving the Founder a ready-to-send message for each approved Dispatch request when the Founder asks, and showing the Founder the Marketing Engineer's status | Build the Marketing Engineer, record a decision of the Founder's, or write anything the Marketing Engineer reads but the Go-To-Market Package |
 | firstmate | Building and changing the Marketing Engineer's code and Guardrails through reviewed pull requests, and carrying out approved Dispatches | Act on a Dispatch the Founder has not approved |
-| Scheduling service | Publishing approved posts at the fixed slot after the Founder confirms the schedule | - |
+| Scheduling service | Not used: the Founder posts each approved post by hand, his choice of 2026-10-11 ([ADR 0004](docs/adr/0004-posting-is-manual.md)) | - |
 
 ## The weekly cycle
 
-1. **Run.** The Marketing Engineer reads the Go-To-Market Package, the Founder's decisions, and its sources; performs Listening; writes the Weekly Read memo on read weeks; prepares next week's Drafts, proposals, and Dispatch requests; and writes a run report.
+1. **Run.** The Marketing Engineer reads the Go-To-Market Package, the Founder's decisions, and its sources; performs Listening; on read weeks lists exactly which numbers to give for which posts and writes the Weekly Read memo from the numbers given; prepares next week's Drafts, proposals, and Dispatch requests; and writes a run report.
 2. **Sitting.** The Founder runs `src/bin/gr0wthlab sitting`, which serves a small page on the Founder's Mac.
-   On read weeks the Founder first gives the week's TikTok export on that page.
+   On read weeks the Founder first gives each post's numbers on that page, read from TikTok Studio or YouTube Studio, then starts a run so the Weekly Read takes them in.
    The Founder then approves each Review Queue item or rejects it with a one-line reason, one item at a time; what the Founder clicks is what is saved.
-3. **Publish.** Approved posts become scheduling-service drafts at the fixed slot and the Founder confirms them; the Founder sends approved messages.
+3. **Publish.** The Founder posts each approved post by hand at the fixed slot, and sends approved messages.
 4. **Learn.** The next run reads the decisions, keeps every rejection reason as Evidence, refines Instructions for execution reasons only through each workflow's example set, and proposes package changes for strategy reasons; every kept Instructions change is a notice at the next sitting.
 
 ## Guardrails
@@ -45,8 +48,8 @@ The PRD's Guardrails section says what enforces each one.
 | --- | --- |
 | G1 | Writes are possible only in the Evidence, Drafts, Review Queue, Weekly Read, run report, and Instructions areas |
 | G2 | No writes to Mandu or any Product repository |
-| G3 | The scheduling service can receive drafts only |
-| G4 | YouTube access is read-only |
+| G3 | The scheduling service can receive drafts only (no scheduling service is connected: [ADR 0004](docs/adr/0004-posting-is-manual.md)) |
+| G4 | YouTube access is read-only (gr0wthlab has no YouTube access at all: [ADR 0005](docs/adr/0005-the-weekly-read-uses-no-youtube-connection.md)) |
 | G5 | No TikTok, Instagram, X, Reddit, or email sending credentials exist |
 | G6 | No email address is ever readable |
 | G7 | No spend is possible |
@@ -64,7 +67,7 @@ The PRD's Guardrails section says what enforces each one.
 | [`workspace/instructions/`](workspace/instructions/) | A change to the Instructions the agent proposes, before the launcher re-runs its example set | Yes |
 | [`ledger/`](ledger/) | The launcher's records: the published Review Queue, the launcher's own Evidence, run reports, and run state; and, outside git, the finished videos it renders | No |
 | [`ledger/instructions/`](ledger/instructions/) | The Marketing Engineer's Instructions in force, changed only by a change its workflow's example set passed, or by a reviewed pull request ([ADR 0003](docs/adr/0003-instructions-change-only-through-their-example-set.md)) | No |
-| [`ledger/founder/`](ledger/founder/) | The Founder's own records: each decision, each sitting, the Beta Build record, the Beta Cohort counts, and what was sent; only the sitting page writes them | No |
+| [`ledger/founder/`](ledger/founder/) | The Founder's own records: each decision, each sitting, the Beta Build record, the Beta Cohort counts, what was sent, and the numbers of each post for a Weekly Read; only the sitting page writes them | No |
 | [`src/`](src/) | Code | No |
 | [`config/`](config/) | Guardrail configuration, the Product registry, the run's settings, platform facts, and the network sources | No |
 | `docs/`, `CONTEXT.md`, this README | Specification and decision records | No |

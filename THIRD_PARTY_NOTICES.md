@@ -18,7 +18,7 @@ Each adapted file opens with a one-line header naming its source paths and commi
 | [`ledger/instructions/post-drafts.md`](ledger/instructions/post-drafts.md) | `skills/copywriting/references/ai-tells.md`, `skills/copy-editing/SKILL.md` |
 | [`src/examples/post-drafts/evals.json`](src/examples/post-drafts/evals.json), [`src/examples/listening/evals.json`](src/examples/listening/evals.json), [`src/examples/outreach/evals.json`](src/examples/outreach/evals.json) | the shape of the library's `skills/*/evals/evals.json` (`{id, prompt, expected_output, assertions[], files[]}`) |
 | [`src/examples/beta-recruiting/evals.json`](src/examples/beta-recruiting/evals.json) | the same shape of the library's `skills/*/evals/evals.json` |
-| [`src/examples/filming/evals.json`](src/examples/filming/evals.json), [`src/examples/package-review/evals.json`](src/examples/package-review/evals.json) | the same `evals.json` shape |
+| [`src/examples/filming/evals.json`](src/examples/filming/evals.json), [`src/examples/package-review/evals.json`](src/examples/package-review/evals.json), [`src/examples/weekly-read/evals.json`](src/examples/weekly-read/evals.json) | the same `evals.json` shape |
 | [`ledger/instructions/filming.md`](ledger/instructions/filming.md) | the review-once gate of `skills/video/references/edit-anatomy.md` (approve the plan before any edit), and the notes on fitting footage to the 9:16 frame of `skills/ad-creative/references/short-form-video-specs.md` |
 | [`src/gr0wthlab/filming.py`](src/gr0wthlab/filming.py) | the beat-sheet shape of `skills/video/references/edit-anatomy.md`: one row per shot, with its time, on-screen text, and caption, to which the filming plan adds the device, real time, and what may not be cut |
 

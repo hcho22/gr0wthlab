@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from gr0wthlab import exchange, founder, sitting
 from gr0wthlab.page import Page
-from gr0wthlab.sitting import COUNTS, END, ITEM, START, Refused
+from gr0wthlab.sitting import COUNTS, END, ITEM, RESULT, START, Refused
 from tests import fakes
 from tests.test_cycle import CycleTestCase
 from tests.test_page import Seen
@@ -21,10 +21,10 @@ WEEK = timedelta(days=7)
 # The evening of the first run's Sunday, when the Founder sits down: Sunday 2026-10-11 19:42 on the Mac's clock.
 SITTING = datetime(2026, 10, 12, 2, 42, tzinfo=timezone.utc)
 DAY = "2026-10-11"
+POSTED = "2026-10-05"  # the day a post went out, as the Founder gives it: day 1's, a week before the day-7 read
 KINDS = {
     "package-change-proposal": "name-status-stale",
     "dispatch-request": "waitlist",
-    "weekly-read-decision": "angle-keep",
     "notice": "example-notice",
 }
 
@@ -44,7 +44,9 @@ class SittingTestCase(CycleTestCase):
         return state
 
     def one_of_each(self):
-        """A first run that queues one item of each kind the Review Queue holds without filming."""
+        """A first run that queues one item of each kind the Review Queue holds without filming, after a run that
+        queues a Weekly Read decision from its memo, the one way such an item is queued."""
+        self.one_weekly_read_item()
         writes = {
             f"review-queue/incoming/{slug}.md": fakes.proposal(kind, "", title=slug) for kind, slug in KINDS.items()
         }
@@ -981,3 +983,196 @@ class StartTest(SittingTestCase):
         with self.assertRaises(ConfigError) as raised:
             self.sit_down()
         self.assertIn("founder/sittings must be a real folder", str(raised.exception))
+
+
+class ResultsTest(SittingTestCase):
+    """The Weekly Read's numbers, given on the page one post at a time (US-ME11): what the run asked for and nothing
+    else, a blank recorded as not reported and never as zero, and the exact figure the Studio shows."""
+
+    def setUp(self):
+        super().setUp()
+        first = fakes.SUNDAY_RUN.astimezone().date() - WEEK
+        fakes.set_window(self.repo, {"first_sitting": first.isoformat(), "slot": "19:00"})
+        fakes.keep_days(self.mandu, 1, 2, 3, 4, 5)
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+
+    def test_the_walk_asks_for_each_post_s_numbers_before_the_items(self):
+        view = self.sit_down().look()
+        keys = [asked.key for asked in view.asked]
+        self.assertEqual(keys, ["tiktok-1", "tiktok-2", "youtube-3", "youtube-4", "tiktok-5"])
+        self.assertEqual(view.steps()[: len(keys) + 1], [(START, "")] + [(RESULT, key) for key in keys])
+        self.assertEqual(view.steps()[len(keys) + 1][0], ITEM)
+        said = Seen(Page("/s").start(view, self.sit_down())).said
+        self.assertIn("First, the Weekly Read asks for 5 posts' numbers from TikTok Studio and YouTube Studio", said)
+
+    def test_once_every_post_is_given_the_start_links_back_to_the_numbers(self):
+        state = self.sit_down()
+        for key in ("tiktok-1", "tiktok-2", "youtube-3", "youtube-4", "tiktok-5"):
+            state.record_result(key, {"views": "300", "posted_on": POSTED, "read_on": DAY})
+        seen = Seen(Page("/s").start(state.look(), state))
+        self.assertIn("You gave the Weekly Read 5 posts' numbers from TikTok Studio and YouTube Studio.", seen.said)
+        self.assertNotIn("First, the Weekly Read asks", seen.said)
+        self.assertIn({"href": "/s/result/tiktok-1"}, seen.named("a"), "See or change them")
+
+    def test_the_start_names_only_the_studio_it_asks_and_one_post_in_the_singular(self):
+        fakes.keep_days(self.mandu, 1)
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))
+        self.assertEqual(code, 0, out)
+        state = self.sit_down()
+        said = Seen(Page("/s").start(state.look(), state)).said
+        self.assertIn("First, the Weekly Read asks for 1 post's numbers from TikTok Studio; 0 given so far.", said)
+
+    def typed(self, state, key):
+        view = state.look()
+        seen = Seen(Page("/s").result(view, view.asked_for(key), state))
+        return seen.said, {
+            attrs["name"]: attrs.get("value") for attrs in seen.named("input") if attrs.get("type") == "text"
+        }
+
+    def test_the_day_a_post_went_out_is_asked_filled_in_with_its_planned_day_and_recorded(self):
+        state = self.sit_down()
+        said, typed = self.typed(state, "tiktok-2")
+        self.assertEqual(typed["posted_on"], "2026-10-06", "filled in with the day the calendar planned it")
+        self.assertIn("Planned for 2026-10-06, P02.", said)
+        self.assertNotRegex(said, r"[Pp]osted (on )?2026-10-06", "before it is given, the planned day is never posted")
+        saved = state.record_result("tiktok-2", {"views": "900", "posted_on": "2026-10-07", "read_on": DAY})
+        self.assertEqual(saved.record["posted_on"], "2026-10-07")
+        self.assertEqual(state.look().asked_for("tiktok-2").record.posted_on, "2026-10-07")
+        said, typed = self.typed(state, "tiktok-2")
+        self.assertEqual(typed["posted_on"], "2026-10-07")
+        self.assertIn("Posted 2026-10-07, planned for 2026-10-06, P02.", said)
+        state.record_result("tiktok-2", {"views": "900", "posted_on": "2026-10-06", "read_on": DAY})
+        self.assertIn("Posted 2026-10-06, P02.", self.typed(state, "tiktok-2")[0])
+
+    def test_a_day_it_went_out_that_is_blank_not_a_date_ahead_or_after_the_reading_is_refused(self):
+        state = self.sit_down()
+        for given, reason in (
+            ({"posted_on": "", "read_on": DAY}, "The day it went out is needed"),
+            ({"posted_on": "Monday", "read_on": DAY}, "The day it went out must be a real date"),
+            ({"posted_on": "2099-01-01", "read_on": DAY}, "The day it went out is 2099-01-01, which has not come yet"),
+            (
+                {"posted_on": "2026-10-09", "read_on": "2026-10-08"},
+                "The day it went out, 2026-10-09, is after the day you read them, 2026-10-08",
+            ),
+        ):
+            with self.subTest(given=given):
+                reasons = self.refused(state.record_result, "tiktok-1", dict(given, views="10"))
+                self.assertTrue(any(found.startswith(reason) for found in reasons), reasons)
+        self.assertEqual(self.records("results"), [])
+
+    def test_what_the_founder_types_is_what_is_saved_and_a_blank_is_not_reported(self):
+        state = self.sit_down()
+        saved = state.record_result(
+            "tiktok-1",
+            {
+                "views": "1,412",
+                "watched_full_percent": "31.5%",
+                "posted_on": POSTED,
+                "read_on": DAY,
+                "comment_text": "a\n\n b ",
+            },
+        )
+        self.assertEqual(saved.path, "founder/results/window-1-read-07-tiktok-day-01.json")
+        self.assertEqual(saved.record["numbers"], {"views": 1412, "watched_full_percent": 31.5, "comments": None})
+        self.assertEqual(saved.record["comments"], ["a", "b"])
+        self.assertEqual(saved.record["read_on"], DAY)
+        self.assertEqual(saved.record["posted_on"], POSTED)
+        blank = state.record_result(
+            "youtube-3", {"views": "950", "viewed_percent": "", "posted_on": POSTED, "read_on": DAY}
+        )
+        self.assertEqual(blank.record["numbers"], {"views": 950, "viewed_percent": None, "comments": None})
+        self.assertIsNone(blank.record["comments"])
+        view = state.look()
+        self.assertEqual(view.asked_for("tiktok-1").record.numbers["views"], 1412)
+
+    def test_a_shortened_or_impossible_figure_is_refused_and_nothing_is_written(self):
+        state = self.sit_down()
+        for given, reason in (
+            (
+                {"views": "1.2K", "posted_on": POSTED, "read_on": DAY},
+                "Video views: give the exact number the Studio shows",
+            ),
+            (
+                {"views": "12.5", "posted_on": POSTED, "read_on": DAY},
+                "Video views must be a whole number, written in digits",
+            ),
+            (
+                {"watched_full_percent": "140", "posted_on": POSTED, "read_on": DAY},
+                "Watched full video, in percent must be a percentage",
+            ),
+            (
+                {"views": "", "watched_full_percent": "", "posted_on": POSTED, "read_on": DAY},
+                "give at least one number or a comment",
+            ),
+            (
+                {"views": "10", "posted_on": POSTED, "read_on": "2099-01-01"},
+                "The day you read them is 2099-01-01, which has not come yet",
+            ),
+            (
+                {
+                    "views": "10",
+                    "posted_on": POSTED,
+                    "read_on": DAY,
+                    "comment_text": "write me at jane.doe@example.com",
+                },
+                "comment 1 was refused",
+            ),
+        ):
+            with self.subTest(given=given):
+                reasons = self.refused(state.record_result, "tiktok-1", given)
+                self.assertTrue(any(found.startswith(reason) for found in reasons), reasons)
+        self.assertEqual(self.records("results"), [])
+        self.assertEqual(
+            self.refused(state.record_result, "youtube-1", {"views": "10", "posted_on": POSTED, "read_on": DAY}),
+            ["the Weekly Read due does not ask for this post, so nothing was saved"],
+        )
+
+    def test_the_next_run_takes_the_numbers_in_as_evidence_for_the_post(self):
+        state = self.sit_down()
+        state.record_result(
+            "tiktok-1", {"views": "412", "watched_full_percent": "31", "posted_on": POSTED, "read_on": DAY}
+        )
+        fakes.behave(self.codex_dir, {})
+        code, out = self.run_cycle(at=SITTING + timedelta(minutes=30))  # the run the page tells the Founder to start
+        self.assertEqual(code, 0, out)
+        evidence = json.loads(
+            (self.ledger() / "evidence/results/window-1/read-07/day-01.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            evidence["platforms"]["tiktok"]["numbers"], {"views": 412, "watched_full_percent": 31.0, "comments": None}
+        )
+        self.assertEqual(evidence["platforms"]["tiktok"]["source"]["read_on"], DAY)
+        self.assertEqual(evidence["platforms"]["tiktok"]["posted_on"], POSTED)
+
+    def test_the_day_14_read_offers_the_day_given_at_the_day_7_read_and_keeps_the_day_changed_there(self):
+        """Days 1 to 5 are asked again at the day-14 read: the day a post went out is filled in as the Founder gave it
+        at the day-7 read, the calendar's day only where he gave none, and a day he changes is what the day-14 read
+        keeps and its run uses."""
+        state = self.sit_down()
+        state.record_result("tiktok-2", {"views": "900", "posted_on": "2026-10-07", "read_on": DAY})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + WEEK)  # Sunday 2026-10-18, day 14: the day-14 read is due
+        self.assertEqual(code, 0, out)
+        later = self.sit_down(at=SITTING + WEEK)
+        self.assertEqual({asked.read for asked in later.look().asked}, {14})
+        said, typed = self.typed(later, "tiktok-2")
+        self.assertEqual(typed["posted_on"], "2026-10-07", "as given at the day-7 read")
+        self.assertIn("Posted 2026-10-07, as you gave it for the day-7 read, planned for 2026-10-06, P02.", said)
+        self.assertIn("Nothing is given for this post for the day-14 read yet.", said)
+        said, typed = self.typed(later, "tiktok-5")
+        self.assertEqual(typed["posted_on"], "2026-10-09", "nothing given at the day-7 read: the calendar's day")
+        self.assertIn("Planned for 2026-10-09, P05.", said)
+        saved = later.record_result("tiktok-2", {"views": "1500", "posted_on": "2026-10-08", "read_on": "2026-10-18"})
+        self.assertEqual(saved.path, "founder/results/window-1-read-14-tiktok-day-02.json")
+        self.assertEqual(saved.record["posted_on"], "2026-10-08")
+        self.assertIn("Posted 2026-10-08, planned for 2026-10-06, P02.", self.typed(later, "tiktok-2")[0])
+        code, out = self.run_cycle(at=SITTING + WEEK + timedelta(minutes=30))
+        self.assertEqual(code, 0, out)
+        evidence = json.loads(
+            (self.ledger() / "evidence/results/window-1/read-14/day-02.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(evidence["platforms"]["tiktok"]["posted_on"], "2026-10-08")
+        self.assertIn(
+            "- day 2 (P02), TikTok, posted 2026-10-08 (planned for 2026-10-06), read on 2026-10-18:",
+            self.brief(session="weekly-read"),
+        )

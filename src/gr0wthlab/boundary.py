@@ -27,9 +27,9 @@ LEDGER = "ledger"
 # The Founder's records, a folder of ledger/: a run reads them too, and only `gr0wthlab sitting` writes them
 # (founder.py).
 FOUNDER = "founder"
-# Its five folders, one for each kind of Founder record. Each is a forbidden target of the preflight before every
+# Its six folders, one for each kind of Founder record. Each is a forbidden target of the preflight before every
 # session and of the boundary check; founder.py names the kinds and holds the rules.
-FOUNDER_KINDS = ("decisions", "sittings", "beta-builds", "beta-reports", "outreach")
+FOUNDER_KINDS = ("decisions", "sittings", "beta-builds", "beta-reports", "outreach", "results")
 # The Instructions in force, a folder of ledger/, and the workflows' example sets, a folder of src/ (ADR 0003): the
 # sandbox reads both and writes neither. Only the launcher writes the Instructions, for a change its workflow's example
 # set passed, and only a reviewed pull request changes the example sets. Each is a forbidden target of its own of the
