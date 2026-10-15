@@ -53,6 +53,7 @@ Rules for items:
 - The brief lists the items earlier sessions of this run left in the incoming folder, which are not queued yet.
   Read each one that touches a file your work uses, write nothing that asks the same, and leave those files as they are.
 - Do not propose again what the Founder already rejected unless new Evidence answers the reason.
-  The launcher refuses an item that asks the same as an open or decided one, and rewording an ask does not make it new.
+  The launcher refuses only an exact repeat of an open or decided item: the same kind, `# ` title, and proposal text once case and spacing are ignored.
+  A reworded repeat is not refused, so catching it is yours: rewording an ask does not make it new.
 - Quote only the specific package text a proposal uses or replaces, citing its file; never copy a package file or a large part of one.
 - Check your items before you finish with the brief's check-incoming command.
