@@ -10,7 +10,7 @@ How to read the paths:
 - `<lab>` is the throwaway lab `<tmp>/gr0wthlab-us-me16-lab` described below.
 - Where a quoted line held the home folder's or the temporary folder's full path, that prefix was replaced with `~` or `<tmp>`.
 
-All times are Mac local time (PDT, UTC-7) on 2026-10-14; a run identifier carries the UTC time.
+All times are Mac local time (PDT, UTC-7) on 2026-10-14; a run identifier carries the UTC time, which round 7's runs put on 2026-10-15.
 Codex CLI 0.160.0 with `gpt-6-luna` at `high` reasoning effort throughout.
 
 ## What nothing here touched
@@ -33,16 +33,18 @@ Every session below started the real agent; the preflight runs no model.
 
 | What | Sessions | Agent time | Cost at API prices |
 | --- | --- | --- | --- |
-| Boundary checks (round 1: the worktree, the control, two hole tests; round 5: the worktree) | 5 | not summed | not reported by the check |
-| Lab weekly runs 1, 1b, 1c, 2, and 3 | 12 | 800 s | about $0.12 |
+| Boundary checks (round 1: the worktree, the control, two hole tests; rounds 5 and 7: the worktree) | 6 | not summed | not reported by the check |
+| Lab weekly runs 1, 1b, 1c, 2, 3, and 4 | 15 | 1,060 s | about $0.15 |
 | The example-set gate of run 2 | 20 | 1,610 s | about $0.21 |
 | The example-set gate of run 3 | 22 | 2,327 s | about $0.24 |
 | The change written to do harm, on the rule of round 3 | 26 | 3,152 s | about $0.31 |
 | The same change, on the rule of round 4 | 13 | 1,176 s | about $0.14 |
 | Examples 18, 19, and 20 on the fixed fixture (round 6) | 3 | 296 s | about $0.04 |
-| **Total** | 101 | | about $1.06 beside the boundary checks |
+| The example-set gate of run 4, on the merged head (round 7) | 20 | 1,935 s | about $0.24 |
+| The change written to do harm, on the merged head (round 7) | 3 | 195 s | about $0.03 |
+| **Total** | 128 | | about $1.36 beside the boundary checks |
 
-One Instructions change costs one gate: 20 to 22 sessions here, 27 to 39 minutes of agent time, and about $0.21 to $0.24 for the ten Post Drafts examples, inside the bound of 3,600 seconds that `learning.gate_time_limit_seconds` in `config/run.json` sets.
+One Instructions change costs one gate: 20 to 22 sessions here, 27 to 39 minutes of agent time, and about $0.21 to $0.24 for the ten Post Drafts examples, in each of the three weekly runs' gates, which ran every example, inside the bound of 3,600 seconds that `learning.gate_time_limit_seconds` in `config/run.json` sets.
 A run tries at most one change, so this is also the most a week can add.
 The gate on the rule of round 3 used 3,152 of its 3,600 seconds, since each example that did worse cost two more sessions; on the rule of round 4 a repeat costs one.
 
@@ -245,6 +247,62 @@ Run from 11:51 to 11:56 with a scratch script that called the lab clone's own `e
 Example 16 was left as it is: the Instructions in force ask for a proposal that cites both sides and leaves the choice to the Founder, which needs no quote record, and the session does not write one; the lab's weekly runs met the same for days 3 and 6.
 That is the Post Drafts session's behavior, which this change does not touch, and example 16 is the example that would show a change that fixes it.
 
+## Round 7: on the merged head
+
+`main` moved four changes while this branch waited (#19 to #22), and launcher code among them, so this round ran everything again on the branch merged with it.
+Merge commit `d0febe3` brought in `main` at `6a0036e`; `8e80049` fitted the Instructions change to `main`'s rule for what the launcher refuses (a refused proposal's reasons name a line by its number, and a change not kept keeps none of the agent's text), and `1f5779f` to its rule for a package file that is not valid text.
+The checks ran on commit `1f5779f00b7852035bf859782df8548410695f5d` (`src` tree `8878b5e20c9c89dbe91ef922c70943c331af688d`, `config` tree `578d1984f76e95cc63e37cdd6f720a68a8872f92`), from 16:19 to 17:58; `git status` was empty in the worktree before and after.
+The real checkouts' fingerprints at 17:15 and at 17:58 are identical for all three.
+
+### The unit suite and the boundary, from the worktree
+
+| Command | Run | What the records showed |
+| --- | --- | --- |
+| `ruff check` and `ruff format --check`, as CI runs them | none | all checks passed |
+| `/usr/bin/python3 -m unittest discover -s src/tests -t src`, one process, nothing else running from this change | none | 1,368 tests OK in 3,254 seconds, from 16:19 to 17:13 |
+| `src/bin/gr0wthlab preflight` | none (no model) | 6 areas written; 21 paths refused, `ledger/instructions` and `src/examples` among them; the listing of the footage place refused; neither listed host reachable from the sandbox |
+| `src/bin/gr0wthlab boundary-check` | `20261015T001407Z-on-demand-4a36` | PASSED at its first probe run; fingerprint `7ccfdcd62bd5b888ea3e8fe0f6a5ae7bac184751f7667bf76b56426c494b343a`; 47 steps to prove; 16 of 16 file-tool targets refused, each in a patch of its own; 18 kernel Seatbelt denials; 12 of 12 permitted sentinels written; 1 of 1 forbidden read of the footage place refused; no local connection got through; nothing changed since the snapshot |
+
+### The Validation Test again, in the same lab
+
+The lab clone moved to `1f5779f` with its lab-only commit on top (`a3f929c`), keeping its records from rounds 2 to 6; a comparison of the parsed JSON showed its `config/` differs from the commit's only in the lab-only commit's four settings.
+
+| Step | Run or sitting | What happened |
+| --- | --- | --- |
+| Sitting 4 | on the page, both decisions saved at 17:15 | Rejected the open day 3 post with an execution reason, "Beat 2's on-screen text only repeats the Hook; give each later beat on-screen text that says something the Hook did not.", and the open day 1 post with a strategy reason, "An app opening on a ready session speaks to people who already train; this window is for people who quit, so it misses the Fit."; recorded the sitting |
+| Run 4 | `20261015T001602Z-on-demand-21c5`, 17:16 to 17:53 | Took in both decisions and sitting 3's acknowledgement; the rejection reasons' session coded them `format` and `fit`, wrote the package-change proposal `20261014-day-1-comeback-fit` for the Fit reason, and proposed one change to the Post Drafts Instructions; the launcher re-ran the example set and kept the change, `20261014-post-drafts-3` |
+| Sitting 5 | on the page, the acknowledgement saved at 17:54 | Read the notice `20261014-instructions-post-drafts-2` and acknowledged it; recorded the sitting |
+
+The change added one line, "Each later beat's on-screen line must add distinct information beyond the Hook and earlier beats; do not repeat or paraphrase their on-screen text.", and reworded one other, "that is a claim" to "it is a claim"; the notice showed both line by line.
+Every example ran once on each side, and none was run again, since no assertion did worse:
+
+| Example | In force | With the change |
+| --- | --- | --- |
+| 1 | 4 of 4 | 4 of 4 |
+| 2 | 3 of 3 | 3 of 3 |
+| 8 | 1 of 1 | 1 of 1 |
+| 16 | 2 of 3 | 2 of 3 |
+| 17 | 5 of 5 | 5 of 5 |
+| 18 | 4 of 4 | 4 of 4 |
+| 19 | 4 of 4 | 4 of 4 |
+| 20 | 5 of 5 | 5 of 5 |
+| 21 | 3 of 3 | 3 of 3 |
+| 22 | 2 of 3 | 2 of 3 |
+
+Examples 19 and 20, which had never passed before round 6's fixture, held every assertion on both sides.
+The record says "kept: no example of 10 examples did worse", 20 sessions, 1,935 seconds against the bound of 3,600, about $0.24.
+The learning ledger the same run wrote gives the day 3 reason the change and its outcome, `kept`, as its decision Evidence does, and gives the Fit reason the proposal and no `instructions` field.
+The notice on the page showed the reason, the code and its line, the agent's summary, the three changed lines quoted, the ten rows, the nine statements not judged by anything, and the cost line.
+An indented line showed with its indent inside the quote, `"  Each later beat's...`; commit `0551259`, after this round, shows a changed line without its indent, and a unit test holds it.
+
+The change written to do harm, run as in round 4 through the lab clone's own `examples.gate` from 17:54 to 17:58, was not kept at its first example:
+
+| Example | In force | With the change | In force, run again |
+| --- | --- | --- | --- |
+| 1 | 4 of 4 | 2 of 4: `passes` and `cites angle: angle P03` failed, "day 3: blocked, blocked by claim-unsupported" | 4 of 4 |
+
+The record says "not kept: example 1 got worse", 3 sessions, 195 seconds, about $0.03, with examples 2 to 22 not run, and the lab's `ledger/instructions/post-drafts.md` had the same SHA-256 after the gate as before it.
+
 ## Scenarios
 
 Each scenario is bound to the commit, the lab, and the times of the round that holds its evidence.
@@ -267,4 +325,5 @@ Each scenario is bound to the commit, the lab, and the times of the round that h
 - A weekly run started by the schedule: every run here was started on demand.
 - The notice's wording after the three fixes of round 3 was not shown on the page again; the unit tests hold each line.
 - Examples 18, 19, and 20 on the fixed fixture were not run with the change of any gate; round 6 ran each once, with the Instructions in force.
-- This change merged with a newer `main`: every round here ran on this branch before any merge.
+- The record of a change not kept, which since `8e80049` keeps none of the agent's text: no change was refused or not kept through a weekly run in round 7, so `LoopTest` in `src/tests/test_instructions.py` alone holds it, a whole run with a fake agent.
+- Commit `0551259` came after round 7's suite and lab; `src/tests/test_instructions.py` ran on it and passed, and the rest of the suite did not run again for it.
