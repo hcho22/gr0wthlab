@@ -362,3 +362,35 @@ Read one by one, none of the nine Hook proposals could change a frozen Hook if a
 None of the four examples does worse with this round's changes: each held every check in every run, against 2 of 2 for example 1, 0 of 5 for examples 3 and 10, and 5 of 5 for example 6 on `main`.
 
 What this round did not exercise: examples 2, 4, 5, 7, 8, and 9 with this round's step 2, which stand on round E's runs; a proposal that declares `yes` with a kept quote record, which no example's lab holds; a run after the Founder decides one of these proposals; the Post Drafts set, as in round E.
+
+## Round K: the name-status check, and the other examples on the final step 2
+
+Review found that round J's name-status check, which asks only for `brand-guidelines.md`, holds for any queued proposal whose text names that file, since the check matches each name as text anywhere in a queued item (`examples.common`).
+Examples 1 and 10 now check that a queued proposal names both `brand-guidelines.md` and `checklist`, which both checklists' file names hold, and the two judged statements round J added are gone.
+A run that held the check of rounds 1 to I named the launch checklist, round J's five name-status proposals cite it too, and round I's `3fe7` cites the pre-publication checklist, so every earlier count for examples 1 and 10 stands under this check, `3fe7` holding as under round J's.
+
+Review also found that examples 2, 4, 5, 7, 8, and 9 had last run in round E, before rounds G to J rewrote step 2.
+They ran on 2026-10-16 from 06:34 to 06:40 PDT, with the same scratch script, Codex CLI, model, and effort as the rounds above, four at a time, from a fresh clone of this branch with this round's change: `src` tree `c234c7f44020241e68e07641708e8d8126cc7a1f`, `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
+`git status` in the clone was empty before its first run and after its last.
+
+| Example | Runs | All checks held | This branch before: rounds D, E | `main`: round 1 |
+| --- | --- | --- | --- | --- |
+| 2 | `dc92` | 1 of 1 | 2 of 2, 2 of 2 | 2 of 2 |
+| 4 | `45d4`, `233b`, `fddf` | 3 of 3 | 5 of 5, 5 of 5 | 4 of 5 |
+| 5 | `b28c` | 1 of 1 | 2 of 2, 2 of 2 | 2 of 2 |
+| 7 | `1cdd` | 1 of 1 | 2 of 2, 2 of 2 | 2 of 2 |
+| 8 | `c6d1`, `b03c`, `e9b9` | 3 of 3 | 10 of 10, 5 of 5 | 6 of 10 |
+| 9 | `2490`, `cc4e`, `4c21` | 3 of 3 | 10 of 10, 5 of 5 | 7 of 10 |
+
+Every session read all 16 of its listed files and closes `Session: complete`.
+No session queued a proposal beyond the one its example plants, every queued proposal declares `new_angle: no`, and nothing was set aside.
+Examples 8 and 9 queued no proposal in any run, so neither ran again.
+
+| Side | Sessions | Ran to their end | Closing line `Session: complete` | Package files read of those listed | Proposals queued | Agent seconds | Cost (USD, API prices) | Per session |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Round K | 12 | 12 | 12 | 192 of 192 | 6 | 991 | 0.116 | 83 s, 0.0097 |
+
+None of the six examples does worse than on `main`: each held every check in every run.
+With the final step 2, the four examples of the gap held every check in every run: example 3 in 3 of 3 (round J), 4 in 3 of 3 (this round), 8 in 3 of 3 (this round), and 10 in 3 of 3 (round J), against 0 of 5, 4 of 5, 6 of 10, and 0 of 5 on `main` in round 1.
+
+What this round did not exercise: examples 1 and 10 under this round's check, whose counts stand on the earlier rounds as above; examples 3 and 6, which last ran in round J with the same task definition; a proposal that declares `yes` with a kept quote record, which no example's lab holds; the Post Drafts set, as in round E.

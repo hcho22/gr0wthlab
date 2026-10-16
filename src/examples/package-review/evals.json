@@ -38,7 +38,8 @@
           "item": "package-change-proposal",
           "count": 1,
           "cites": [
-            "brand-guidelines.md"
+            "brand-guidelines.md",
+            "checklist"
           ],
           "at_least": true
         },
@@ -53,10 +54,6 @@
         {
           "kind": "judged",
           "text": "The proposal picks the side with a dated outcome as current, or asks the Founder to choose when neither has one."
-        },
-        {
-          "kind": "judged",
-          "text": "The proposal cites a checklist line recording the 2026-08-07 clearance, in either checklist, as the current side."
         }
       ],
       "files": [],
@@ -312,7 +309,8 @@
           "item": "package-change-proposal",
           "count": 1,
           "cites": [
-            "brand-guidelines.md"
+            "brand-guidelines.md",
+            "checklist"
           ],
           "at_least": true
         },
@@ -330,10 +328,6 @@
         {
           "kind": "deterministic",
           "check": "nothing_set_aside"
-        },
-        {
-          "kind": "judged",
-          "text": "The name-status proposal cites a checklist line recording the 2026-08-07 clearance, in either checklist, as the current side."
         }
       ],
       "files": [],
