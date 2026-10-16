@@ -305,7 +305,7 @@ Run on 2026-10-16 from 05:57 to 06:01 PDT, with the same scratch script, Codex C
 | --- | --- | --- | --- | --- |
 | 3 | `bb78`, `ad2a`, `6cd9` | 3 of 3 | 5 of 5, 5 of 5, 3 of 3, 3 of 3 | 0 of 5, not run |
 | 6 | `e4cc`, `b245`, `0be9` | 3 of 3 | 2 of 2, 2 of 2, 5 of 6, 3 of 3 | 2 of 2, 3 of 3 |
-| 10 | `fc28`, `cb9a`, `3fe7` (failed) | 2 of 3 | 5 of 5, 5 of 5, 3 of 3, 3 of 3 | 0 of 5, not run |
+| 10 | `fc28`, `cb9a`, `3fe7` (failed; holds under round J's example) | 2 of 3, 3 of 3 under round J's example | 5 of 5, 5 of 5, 3 of 3, 3 of 3 | 0 of 5, not run |
 
 Every session closes `Session: complete`, and every one read all 16 of its listed files except `6cd9`, which read 15, leaving `BUILD-SPEC.md`.
 Nothing was set aside, and every queued proposal declares `new_angle: no`.
@@ -316,6 +316,7 @@ Read one by one, none of these nine proposals could change a frozen Hook if appr
 `3fe7` failed the check that a queued proposal cites `brand-guidelines.md` and `02-marketing-launch-checklist_260807.md`.
 Its name-status proposal cites the brand guidelines' line 8 as the stale side and the pre-publication checklist's line 9 as the dated outcome, a line that records the trademark search cleared on 2026-08-07, and does not cite the launch checklist.
 Its pair proposal held.
+Round J's example 10 checks only that a queued proposal cites `brand-guidelines.md`, the stale side, so under it `3fe7` holds.
 
 | Side | Sessions | Ran to their end | Closing line `Session: complete` | Package files read of those listed | Proposals queued | Agent seconds | Cost (USD, API prices) | Per session |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -326,3 +327,38 @@ Example 10's `3fe7` is its first failing run on this branch in 19, in rounds D, 
 Three runs cannot show whether that is run-to-run variance, so it is left here for firstmate rather than worded around: the name-status check asks for the launch checklist alone, while the pre-publication checklist the session cited records the same dated outcome.
 
 What this round did not exercise: examples 1, 2, 4, 5, 7, 8, and 9 with this round's step 2, which stand on round E's runs; a proposal that declares `yes` with a kept quote record, which no example's lab holds; the Post Drafts set, as in round E.
+
+## Round J: the later proposal, and the name-status check
+
+Review found two things after round I.
+Step 2 had the proposal tell the Founder that changing the frozen one would enter through the next run as a new Angle, which no workflow does: a later run writes nothing for a decided item, and a new Angle needs a kept quote record that the case's own premise lacks.
+Step 2 now has the proposal say that the frozen one, if changed, would then enter as a new Angle in a later proposal, which needs sourced pain, as the Post Drafts task definition says of a Hook no code supports; the rest of round I's step 2 is unchanged.
+Examples 1 and 10 checked that the name-status proposal cites `brand-guidelines.md` and `02-marketing-launch-checklist_260807.md`, while the pre-publication checklist's line 9 records the same clearance on 2026-08-07, as example 1's prompt says of both checklists.
+Their deterministic check now asks only for `brand-guidelines.md`, the stale side, and a judged statement in each asks that the proposal cite a checklist line recording the 2026-08-07 clearance, in either checklist, as the current side; the fixtures and prompts are unchanged.
+A run that held the earlier check holds this one, so the earlier rounds' counts for examples 1 and 10 stand, except round I's `3fe7`, which holds under it.
+
+Run on 2026-10-16 from 06:11 to 06:15 PDT, with the same scratch script, Codex CLI, model, and effort as the rounds above, four at a time, from a fresh clone of this branch with this round's change: `src` tree `e7872ca90271d07cc0bb9bfc4bc5e46eea85c303`, `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
+`git status` in the clone was empty before its first run and after its last.
+
+| Example | Runs | All checks held | This branch before: rounds D, E, G, H, I | `main`: rounds 1, F |
+| --- | --- | --- | --- | --- |
+| 1 | `d614`, `e0a1` | 2 of 2 | 2 of 2, 4 of 5, not run, not run, not run | 2 of 2, not run |
+| 3 | `938a`, `5d76`, `98e9` | 3 of 3 | 5 of 5, 5 of 5, 3 of 3, 3 of 3, 3 of 3 | 0 of 5, not run |
+| 6 | `18d1`, `728a`, `f944` | 3 of 3 | 2 of 2, 2 of 2, 5 of 6, 3 of 3, 3 of 3 | 2 of 2, 3 of 3 |
+| 10 | `1fdd`, `e474`, `3de3` | 3 of 3 | 5 of 5, 5 of 5, 3 of 3, 3 of 3, 3 of 3 | 0 of 5, not run |
+
+Every session read all 16 of its listed files and closes `Session: complete`.
+Nothing was set aside, and every queued proposal declares `new_angle: no`.
+Each of the five name-status proposals cites the launch checklist's line 7 as the dated outcome, and `e0a1` and `e474` also cite the pre-publication checklist's line 9.
+Each of example 6's three proposals sets out both sides and leaves the choice to the Founder, changing neither the brand rule nor the Hook itself; its options on the brand rule's side are removing the word from the list or allowing it for this one Hook (`18d1`), or allowing it for this one Hook (`728a`, `f944`).
+Each says that changing the Hook would come in a later proposal as a new Angle and needs sourced pain.
+Each of example 3's three proposals and example 10's three pair proposals replaces leg A's Hook in the A/B pairs file with P01's Hook from the Angle bank.
+Read one by one, none of the twelve Hook proposals could change a frozen Hook if approved.
+
+| Side | Sessions | Ran to their end | Closing line `Session: complete` | Package files read of those listed | Proposals queued | Agent seconds | Cost (USD, API prices) | Per session |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Round J | 11 | 11 | 11 | 176 of 176 | 14 | 727 | 0.097 | 66 s, 0.0088 |
+
+None of the four examples does worse with this round's changes: each held every check in every run, against 2 of 2 for example 1, 0 of 5 for examples 3 and 10, and 5 of 5 for example 6 on `main`.
+
+What this round did not exercise: examples 2, 4, 5, 7, 8, and 9 with this round's step 2, which stand on round E's runs; a proposal that declares `yes` with a kept quote record, which no example's lab holds; a run after the Founder decides one of these proposals; the Post Drafts set, as in round E.
