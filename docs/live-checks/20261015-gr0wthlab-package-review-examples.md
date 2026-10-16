@@ -5,8 +5,8 @@ The Instructions in force (`ledger/instructions/package-review.md`), the shared 
 
 ## What was run, and where
 
-Run on 2026-10-15 from 09:27 to 10:55 PDT, Codex CLI `codex-cli 0.160.0`, model `gpt-6-luna` at reasoning effort `high`, as each session's record in its log folder shows.
-Five clones of this repository sat in the Mac's own temporary folder, each at one commit:
+Round 1 and rounds A to D ran on 2026-10-15 from 09:27 to 10:55 PDT, Codex CLI `codex-cli 0.160.0`, model `gpt-6-luna` at reasoning effort `high`, as each session's record in its log folder shows.
+Their five clones of this repository sat in the Mac's own temporary folder, each at one commit:
 
 | Side | Commit | `src` tree |
 | --- | --- | --- |
@@ -14,12 +14,12 @@ Five clones of this repository sat in the Mac's own temporary folder, each at on
 | Round A: the first fixture fix alone | `4d5fb979300f85801329e89825aac293f9d591fb` | `60be7f084903d381df658a9b25436b79571f8b8f` |
 | Round B: with the first task-definition change | `b622a799295df67ae1f819396f913a86b422f76a` | `805cf65b0d32cd33c48a1355753b7689b7419031` |
 | Round C: with the platform fixture and the omission line | `5a7f3dd9b22a931a3bf4844c6a0a91ad431efddc` | `53f635fd462562c7c64910c1ed3f8c85b1b8ffe4` |
-| Round D: the change as it is committed | `ccb7c5972ec1c46f84e68531795eb215bd44b7f6` | `d8e55f867677c5aa8a71248b2d9dafbc67991c6b` |
+| Round D: the change as first committed | `ccb7c5972ec1c46f84e68531795eb215bd44b7f6` | `d8e55f867677c5aa8a71248b2d9dafbc67991c6b` |
 
-Every side's `config` tree is `578d1984f76e95cc63e37cdd6f720a68a8872f92`.
+Each of these five sides' `config` tree is `578d1984f76e95cc63e37cdd6f720a68a8872f92`.
 Each clone was made fresh at its commit before its runs, and `git status` in each was empty after its last run.
 
-A scratch script outside the repository called each clone's own `examples.run_example`, the function the gate calls, once for each example run, with the Instructions in force from that clone's `ledger/instructions/` and each example's limit of 600 seconds, four at a time.
+A scratch script outside the repository called each clone's own `examples.run_example`, the function the gate calls, once for each example run, with the Instructions in force from that clone's `ledger/instructions/` and each example's limit of 600 seconds, four at a time in these rounds.
 It read each check from the run, each session's counts from the run's record in its log folder (`sessions[].work`, which the run report's Sessions section shows), each session's closing message from its `.last-message.md`, and each queued proposal from the lab's `ledger/review-queue/items/` before the lab was removed.
 Every lab run's identifier starts `20261011T230000Z-on-demand-`, the lab's fixed clock; the tables give the four characters after it, with each run whose checks did not all hold marked as failed.
 Every session of round 1 and rounds A to D ran to its end, and every closing line was `Session: complete`; no session ended early with a provider's refusal.
@@ -63,14 +63,14 @@ Its assertion matches what the Founder should see, so the example was right and 
 
 **Examples 8 and 9.**
 Both check that nothing is queued, and every failed run queued a proposal.
-Of all 45 `main` sessions, 14, in examples 3, 4, 6, 8, 9, and 10, queued a proposal setting the brand voice's rule against P02's Hook.
+Of round 1's 45 `main` sessions, 14, in examples 3, 4, 6, 8, 9, and 10, queued a proposal setting the brand voice's rule against P02's Hook.
 The brand guidelines' line 13 says "Identity-framed, never loss-framed", and P02's Hook in the Angle bank was "Skip a day and the score dips.", a line that states what the viewer loses by skipping a day.
 The two do contradict, so the package these examples call consistent was not.
 Two other `main` sessions, both of example 8 (`41b9`, `c7fc`), proposed removing "(blocking: everything public)" from the checked trademark item of the pre-publication checklist, and one proposed completing a calendar that lists three of its fourteen days.
 
 ## The change
 
-Six commits, each measured in the round named here.
+Up to round D, six commits, each measured in the round named here.
 
 - Round A: P02's Hook is now "Your score keeps every day you moved.", and the A/B pairs file, in the base package and in the overlay, says "Leg A of each pair opens on its Angle's Hook in the Angle bank, word for word; leg B is the Hook tested against it."
   Example 3's prompt and expected output now say what the Founder should see; no assertion changed.
@@ -105,7 +105,7 @@ The real package states the relations rounds C and D add in its own files, in it
 - Round C: four sessions of examples 8 and 9, and one of example 3, queued a proposal beyond the planted one: four removed the checked trademark item's "(blocking: everything public)" (`bc6f`, `aeb8`, `06e0`, and `57ea` in example 3), and `4c51` proposed aligning the brand guidelines' status line with the differently worded required disclosure, under the round's text that asked for word-for-word comparisons.
   `4c51`'s summary also says "The three listed calendar days do not specify all 14 days, but that omission is not a contradiction."
 
-## Round D: the change as committed, against `main`
+## Round D: the change as first committed, against `main`
 
 | Example | `main` runs | `main` held | Change runs | Change held |
 | --- | --- | --- | --- | --- |
@@ -120,7 +120,7 @@ The real package states the relations rounds C and D add in its own files, in it
 | 9 | `811a`, `e710`, `f15f` (failed), `186e`, `1513` (failed), `f279`, `4646`, `8fc0`, `7315`, `3f18` (failed) | 7 of 10 | `8abf`, `859b`, `09d4`, `71c5`, `ab1d`, `8932`, `810c`, `7f28`, `461a`, `cebb` | 10 of 10 |
 | 10 | `abf4` (failed), `3e1a` (failed), `0464` (failed), `1c97` (failed), `d6cb` (failed) | 0 of 5 | `2498`, `31ef`, `4494`, `9afd`, `088a` | 5 of 5 |
 
-With the change every example held every check in every run, and no session queued a proposal beyond the one its example plants; on `main`, 16 of 45 sessions did.
+With round D's commit every example held every check in every run, and no session queued a proposal beyond the one its example plants; on round 1's `main`, 16 of 45 sessions did.
 
 The launcher's counts of each session, summed for each side:
 
@@ -133,9 +133,9 @@ The launcher's counts of each session, summed for each side:
 | Round D, the change | 45 | 45 | 45 | 720 of 720 | 30 | 3,320 | 0.377 | 74 s, 0.0084 |
 
 Round B's two files not read were `02-marketing-launch-checklist_260807.md` in `3ff9` and `BUILD-SPEC.md` in `1680`.
-Altogether the checks ran 189 sessions, 13,941 seconds of agent time, about 1.63 dollars at API prices.
+Altogether round 1 and rounds A to D ran 189 sessions, 13,941 seconds of agent time, about 1.63 dollars at API prices.
 
-## The unit suite and lint
+## The unit suite and lint, at round D
 
 | Command | Where | What the records showed |
 | --- | --- | --- |
@@ -143,7 +143,7 @@ Altogether the checks ran 189 sessions, 13,941 seconds of agent time, about 1.63
 | `/usr/bin/python3 -m unittest discover -s src/tests -t src` | the `main` clone | 1,388 tests OK in 2,796 seconds |
 | the same | a clone at `ccb7c59` | 1,388 tests OK in 2,918 seconds |
 
-## What was not exercised
+## What rounds 1 to D did not exercise
 
 - The Post Drafts example set: no file it reads changed, since `common.md` and `items.md` did not.
 - The gate itself (`examples.gate`) deciding a proposed Instructions change against this set: the runs above call the function it calls for each example, and no change was proposed through the learning loop.
@@ -218,9 +218,9 @@ On `main`, `78b0` also queued two proposals beyond the planted one, one titled "
 | This branch | 3 | 3 | 3 | 48 of 48 | 3 | 202 | 0.029 | 67 s, 0.0097 |
 
 Example 6 holds no worse with the change.
-With this branch's task definition it held every check 5 of 5 times (round E 2, this round 3), and with round D's, before commit `42a505b` reworded step 2, 2 of 2.
+With the task definition of commit `42a505b` it held every check 5 of 5 times (round E 2, this round 3), and with round D's, before that commit reworded step 2, 2 of 2.
 On `main` it held 5 of 5 (round 1 2, this round 3).
-Its one failing run in any round is round A's `6abc`.
+Its one failing run in rounds 1 to F is round A's `6abc`.
 
 What this round did not exercise: more runs of examples 1, 2, 5, and 7, which stay as rounds 1, D, and E left them; the Post Drafts set, as in round E.
 
@@ -353,7 +353,7 @@ Each of the five name-status proposals cites the launch checklist's line 7 as th
 Each of example 6's three proposals sets out both sides and leaves the choice to the Founder, changing neither the brand rule nor the Hook itself; its options on the brand rule's side are removing the word from the list or allowing it for this one Hook (`18d1`), or allowing it for this one Hook (`728a`, `f944`).
 Each says that changing the Hook would come in a later proposal as a new Angle and needs sourced pain.
 Each of example 3's three proposals and example 10's three pair proposals replaces leg A's Hook in the A/B pairs file with P01's Hook from the Angle bank.
-Read one by one, none of the twelve Hook proposals could change a frozen Hook if approved.
+Read one by one, none of the nine Hook proposals could change a frozen Hook if approved.
 
 | Side | Sessions | Ran to their end | Closing line `Session: complete` | Package files read of those listed | Proposals queued | Agent seconds | Cost (USD, API prices) | Per session |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
