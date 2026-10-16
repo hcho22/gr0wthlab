@@ -22,7 +22,7 @@ Each clone was made fresh at its commit before its runs, and `git status` in eac
 A scratch script outside the repository called each clone's own `examples.run_example`, the function the gate calls, once for each example run, with the Instructions in force from that clone's `ledger/instructions/` and each example's limit of 600 seconds, four at a time.
 It read each check from the run, each session's counts from the run's record in its log folder (`sessions[].work`, which the run report's Sessions section shows), each session's closing message from its `.last-message.md`, and each queued proposal from the lab's `ledger/review-queue/items/` before the lab was removed.
 Every lab run's identifier starts `20261011T230000Z-on-demand-`, the lab's fixed clock; the tables give the four characters after it, with each run whose checks did not all hold marked as failed.
-Every session of every round ran to its end, and every closing line was `Session: complete`; no session ended early with a provider's refusal.
+Every session of round 1 and rounds A to D ran to its end, and every closing line was `Session: complete`; no session ended early with a provider's refusal.
 
 ## Round 1: the gap on `main`
 
