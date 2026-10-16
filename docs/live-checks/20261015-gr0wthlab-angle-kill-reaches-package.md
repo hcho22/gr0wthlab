@@ -13,6 +13,7 @@ A run identifier carries its time in UTC.
 | The filing | `23ce675b6beb903f8779048716a709565d775d61` | `3b189357074285c9a6c243befb8b7467abe88f82` | `28263a1b24ee1ecb5bf00469884bdc97aa7edc33` |
 | The page's code blocks | `7eee0da108d3ba15e17f0398d9460f1b76cf3b12` | `81ec9cb1372aa90ea131a4628488c563ac15ddf9` | `28263a1b24ee1ecb5bf00469884bdc97aa7edc33` |
 | The new Hook's checks | `1a2497acaa5a0708723ffdc4a8b977d27f83963c` | `a34d30917e0f841deb8ae97e7767517cc24a174c` | `28263a1b24ee1ecb5bf00469884bdc97aa7edc33` |
+| The merge of `main` (second round) | `e6b70f9fa4df9e434e8b7403e98616ca72753183` | `1077d54c9bf80b635e51259d999b7ab675e1184a` | `28263a1b24ee1ecb5bf00469884bdc97aa7edc33` |
 
 ## First round
 
@@ -138,3 +139,88 @@ Since `23ce675b6beb903f8779048716a709565d775d61` a kill's, a change's, a resolve
 - A new Angle that fails its checks in a live run: the real agent's rows all passed, so its removal with only its name and reasons kept stands on `test_a_change_whose_new_angle_is_not_filed_still_owes_it_and_says_why`, as does a Weekly Read session due only for a new Angle that falls short.
 - A flex decision once the next window's calendar is in force, a kill whose record already says killed, and an edit whose text the package no longer holds exactly once stand on `tests.test_weekly_changes` and the code's own checks.
 - A scheduled run, the real production clone, a browser other than Chrome, and the sitting page in Safari.
+
+## Second round: after the merge of `main`
+
+`main` had moved to `2af81a45181bc0ddb297cf604cecf73ed7d07fee` with three pull requests that this change had not seen: the Hook claim fix, its live-check record, and the guidance that no item supersedes an Instructions notice or a Weekly Read decision (https://github.com/hcho22/gr0wthlab/pull/28).
+The branch took `main` in with one ordinary merge commit, `e6b70f9fa4df9e434e8b7403e98616ca72753183`, with no conflict.
+Every check below ran on 2026-10-15, Mac local time (PDT), with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort where a real agent ran; a run identifier carries its time in UTC.
+
+### What the merge changed that the Weekly Read session reads
+
+- `src/instructions/weekly-run/items.md`, which the Weekly Read session's task definition holds as a shared part: an item that supersedes a Weekly Read decision or an Instructions notice is refused, and the exact repeat rule.
+- The brief's list of open Review Queue items (`item_lines` in `src/gr0wthlab/report.py`): a Weekly Read decision is marked as changing only through the Weekly Read memo, and each package-change proposal is listed with its item file.
+- Not read by the Weekly Read session: `post-drafts.md`, which the Hook claim fix changed, since only the Post Drafts session holds it.
+
+The two sets of words say different things and none twice.
+The task definition's `weekly-read.md` says that approving a decision changes no package file by itself and that the launcher files the package-change proposal, and `items.md` and the brief say what an item may supersede.
+In the lab runs below the brief marks the flex proposal this change files as "package-change-proposal, filed by the launcher" with the path of its item file, and a Weekly Read decision as "which changes only through the Weekly Read memo".
+Nothing in `weekly-read.md`, `docs/operations.md`, or `AGENTS.md` needed to change for the merge.
+
+### The labs, and a first attempt that is not counted
+
+Each lab was built as in the first round, with `tests.fakes` and the repository's no-model stand-in for every run before the real agent's, from a clone of `e6b70f9fa4df9e434e8b7403e98616ca72753183` with one lab commit on it.
+There were ten labs, of the three kinds the first round measured: three on the day-14 memo, four on a changed Angle's new row with the synthetic Angle bank, and three on it with copies of the real Angle bank and A/B pairs file in the lab's Mandu.
+
+The first attempt put the labs in a scratch folder under `/private/tmp`, which `config/guardrails/runtime.json` denies to the agent (`:slash_tmp`).
+Five of its ten sessions closed after 6 to 13 seconds with nothing written, each in its own words as unable to read its brief, and the other five read it.
+Codex's record of one of the five (`20261016T045242Z-on-demand-5465`) shows a `cat` of the brief by a path relative to its working folder failing, one `ls`, and the agent then saying the brief is under `/private/tmp`, a path the policy denies.
+That is where the lab was, not the provider refusing a request, and no run of this attempt is counted.
+The labs were removed and rebuilt in the Mac's temporary folder, where the first round's labs were.
+
+| Run | Lab | What the records showed |
+| --- | --- | --- |
+| `20261016T045054Z-on-demand-1877` | memo 1 | Read the brief, wrote the memo |
+| `20261016T045054Z-on-demand-63c9` | memo 2 | Read the brief, wrote the memo |
+| `20261016T045054Z-on-demand-eb96` | memo 3 | Read the brief, wrote the memo |
+| `20261016T045054Z-on-demand-a3de` | new Angle 1 | Closed after 6 s, brief unread, no new Angle |
+| `20261016T045054Z-on-demand-609b` | new Angle 2 | Closed after 13 s, brief unread, no new Angle |
+| `20261016T045112Z-on-demand-b10b` | new Angle 3 | Closed after 7 s, brief unread, no new Angle |
+| `20261016T045228Z-on-demand-0ebc` | new Angle 4 | Read the brief, filed the new Angle |
+| `20261016T045234Z-on-demand-5bca` | new Angle, real bank 1 | Read the brief, filed the new Angle |
+| `20261016T045242Z-on-demand-5465` | new Angle, real bank 2 | Closed after 13 s, brief unread, no new Angle |
+| `20261016T045310Z-on-demand-ddef` | new Angle, real bank 3 | Closed after 10 s, brief unread, no new Angle |
+
+### The agent's work with the merged task definition and brief
+
+As in the first round, these are measured by what the launcher counted of each session.
+Each run started two sessions, the package review and the Weekly Read; the agent time is the Weekly Read session's, the cost the whole run's, and every Weekly Read session read 4 of 4 package files and closed "Session: complete".
+In every memo lab day 10's viewed rate was 38%, so AB-2's legs, 81% and 38%, differ widely.
+
+| Run | What the agent did | Agent time | Cost |
+| --- | --- | --- | --- |
+| `20261016T045816Z-on-demand-e196` | Memo passed; AB-2 "resolved, leg A leads." | 1 min 1 s | about $0.023 |
+| `20261016T045816Z-on-demand-ee11` | Memo passed; AB-2 "resolved, leg A leads." | 1 min 3 s | about $0.031 |
+| `20261016T045816Z-on-demand-fefe` | Memo passed; AB-2 "resolved, leg A leads." | 1 min 7 s | about $0.026 |
+| `20261016T045816Z-on-demand-d82f` | P07's new Angle filed as P08 | 35 s | about $0.023 |
+| `20261016T045816Z-on-demand-65f2` | P07's new Angle filed as P08 | 26 s | about $0.013 |
+| `20261016T045942Z-on-demand-3231` | P07's new Angle filed as P08 | 31 s | about $0.019 |
+| `20261016T050021Z-on-demand-5af9` | P07's new Angle filed as P08 | 27 s | about $0.018 |
+| `20261016T050043Z-on-demand-9b22`, real bank | P07's new Angle filed as P17 | 37 s | about $0.019 |
+| `20261016T050043Z-on-demand-b855`, real bank | P07's new Angle filed as P17 | 41 s | about $0.027 |
+| `20261016T050057Z-on-demand-2b16`, real bank | P07's new Angle filed as P17 | 33 s | about $0.020 |
+
+- The memo runs show the pair line naming its leg in 3 of 3 sessions, with every memo passing its checks, and each queued 9 decision items with "package-change proposals owed by approved decisions: 1 of 1 filed" (the flex slot approved before the run).
+- In each of the seven new-Angle runs the Weekly Read session ran its brief's `check-work` command, and Codex's record of it holds "OK new Angle P08 for `20261015-weekly-read-14-p07`: its proposal can be filed", or P17 on the real bank, followed by "1 checked, 0 with problems".
+  The Weekly Read row read "no memo this run: the Founder has decided items of the window 1 day-14 Weekly Read, so its memo stands as it is; package-change proposals owed by approved decisions: 1 of 1 filed" in each, and `20261015-weekly-read-change-p07` was in the queue.
+- These counts are within what the first round counted for the same labs on `1a2497acaa5a0708723ffdc4a8b977d27f83963c`: memo sessions of 52 s to 1 min 20 s there and 1 min 1 s to 1 min 7 s here, new-Angle sessions of 29 s to 48 s there and 26 s to 41 s here.
+  Nothing in these counts shows the merged `items.md` or brief lines changing what the session read or wrote.
+
+### The boundary
+
+From this work's linked worktree at `e6b70f9fa4df9e434e8b7403e98616ca72753183`, against Mandu and the Product checkouts as they are, with `git status` empty before the preflight and after the check, and logs in a folder of the Mac's temporary directory named with `GR0WTHLAB_LOG_DIR`; `show-config` printed the configuration fingerprint `0daea7f4a2ca703b1e4ab2b0693837f6517a44f563953187c6c4c7f039ef5319`, the same as in the first round.
+
+- `src/bin/gr0wthlab preflight`, run three times from 22:03 to 22:04 and the last read in full, passed: six areas writable, 22 paths refused, no breach, a listing of the footage place refused, and neither listed host reached from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, from 22:04:04 to 22:04:50, passed at its first attempt as `20261016T050405Z-on-demand-014b`: 49 steps to prove, 30 tool calls in Codex's record with no problem, 17 of 17 file-tool targets refused each in a patch of its own, 19 kernel sandbox denials, the footage place's shell read refused, 1 of 1, 12 of 12 permitted sentinels written and none escaped, nothing unproven, the network probe's three targets refused inside the sandbox after its control reached its listener, two requests from the launcher's client, each a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed outside the areas.
+
+### Tests
+
+- The whole unit suite ran under `/usr/bin/python3`, Python 3.9.6, one process for each test module, at the merge commit: 1498 tests in 54 modules, none failed and none skipped.
+- `ruff check` and `ruff format --check` on `src` and `src/bin/gr0wthlab` passed, with ruff 0.15.20.
+- CI's run on Linux with the latest Python was not part of this round.
+
+### What this round did not exercise
+
+- Everything the first round did not exercise stands as it is.
+- A session that exits within seconds with a 429 in its Codex log was not seen; the five early closes of the first attempt were the lab's placement, as above.
+- The full week-14 flow of the first round (the sitting page, each decision kind approved and rejected, each proposal applied to a lab copy of the package) was not run again on the merged head; the merge changed no code that files, checks, or applies those proposals, and the unit tests that hold them passed.
