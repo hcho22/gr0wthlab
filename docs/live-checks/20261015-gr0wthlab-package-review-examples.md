@@ -394,3 +394,8 @@ None of the six examples does worse than on `main`: each held every check in eve
 With the final step 2, the four examples of the gap held every check in every run: example 3 in 3 of 3 (round J), 4 in 3 of 3 (this round), 8 in 3 of 3 (this round), and 10 in 3 of 3 (round J), against 0 of 5, 4 of 5, 6 of 10, and 0 of 5 on `main` in round 1.
 
 What this round did not exercise: examples 1 and 10 under this round's check, whose counts stand on the earlier rounds as above; examples 3 and 6, which last ran in round J with the same task definition; a proposal that declares `yes` with a kept quote record, which no example's lab holds; the Post Drafts set, as in round E.
+
+## After round K: the description of `cites`
+
+Commits `822de62ebfab34775a90444fa0e8d0c5d48ca983` and `0f5292c43594ad48dcf53c3e7d32e634b0eb5980` changed only the description of `cites` in the `assertion_kinds` line of `src/examples/package-review/evals.json`, and no check, fixture, or task-definition line, so round K's runs stand for the final `src` tree, `f440766916ab8c1e70e065aad8e61caea637624b`, with `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
+No example ran again.
