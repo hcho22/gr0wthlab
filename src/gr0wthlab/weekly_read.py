@@ -611,11 +611,12 @@ def item_for(found: Plan, line: Line, memo_path: str, product: str) -> exchange.
         body += result_rows(found, days) + [""]
     body += [results.FLOOR_COUNTS, "", CANNOT_TELL]
     angles = found.paths.get("angles", "angles.md")
+    log = found.paths.get("creative_log", "creative-log.json")
     if line.section == ANGLE and line.decision == "kill":
-        touches = then_proposal(f"marks {line.key} killed in `{found.paths.get('creative_log', 'creative-log.json')}`")
+        touches = then_proposal(f"marks {line.key} killed in `{log}`")
     elif line.section == ANGLE and line.decision == "change":
         touches = then_proposal(
-            f"adds a new Angle to `{angles}` in {line.key}'s place",
+            f"adds a new Angle to `{angles}` in {line.key}'s place, with its record in `{log}`",
             f"The Weekly Read session writes the new Angle's words at that run, and {line.key}'s row stays as it is.",
         )
     elif line.section == ANGLE:
@@ -630,7 +631,9 @@ def item_for(found: Plan, line: Line, memo_path: str, product: str) -> exchange.
     elif line.section == FLEX:
         touches = then_proposal(
             f"puts {flex_angle(found, line)} in the flex slot of the calendar,"
-            f" `{found.paths.get('calendar', 'cadence-14-day.md')}`"
+            f" `{found.paths.get('calendar', 'cadence-14-day.md')}`",
+            f"That holds while window {read.window} is the window in force: approved once another window is, it files"
+            " nothing, since its flex slot's day has passed.",
         )
     else:
         touches = "- Nothing is changed by this item; a product change would come to you as a Dispatch request"

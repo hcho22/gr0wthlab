@@ -2307,6 +2307,9 @@ class Cycle:
             ledger, ledger_ok = Ledger(), False
             state.problems.append(f"{error}; the Review Queue was left untouched this run")
         states = self.load_state(state, run_id)
+        if ledger_ok and not self.lab_of_another(weekly_read.WORKFLOW):
+            # Before any decision is taken in, so an approval given on one at a sitting is never acted on.
+            state.changes_withdrawn = weekly_changes.withdraw(ledger, config.window.number, run_id, self.now())
         self.take_decisions(state, config, ledger, ledger_ok, states.review_queue)
         if not self.only:
             state.instructions = instructions.Outcome()
@@ -2446,6 +2449,7 @@ class Cycle:
             )
         if ledger_ok and state.post_outcome is not None and state.post_outcome.withdrawn:
             posts.withdraw(ledger, state.post_outcome, state.notice, run_id, now)
+        weekly_changes.name_notice(ledger, state.changes_withdrawn, state.notice)
         if ledger_ok:
             taken_back = list(state.listening_result.replies if state.listening_result else ())
             taken_back += list(state.outreach_result.outcomes if state.outreach_result else ())

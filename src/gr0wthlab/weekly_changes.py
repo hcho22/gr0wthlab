@@ -11,11 +11,15 @@ approval:
   Reads, as the package's own kill rule says;
 - an Angle's change: a changed Hook, signal, or kill criterion enters only as a new Angle (FR-7), so the proposal adds
   one to the Angle bank under the next free number, with the changed Angle's pain and source as they are and its other
-  cells in the words the Weekly Read session writes; the changed Angle stays as it is, since it did not meet its kill
-  criterion;
+  cells in the words the Weekly Read session writes, and adds its record to the creative log in the shape of the
+  changed Angle's record, so a later kill of the new Angle has its record to mark; the changed Angle stays as it is,
+  since it did not meet its kill criterion;
 - a resolved pair: one line at the end of the pair's section in the A/B pairs file says which leg's Hook leads;
 - the flex slot, earned or not, while its window is the one in force: the calendar's flex row names the Angle that
-  earned it, or the one Angle the row names for when none did, on that Angle's own platform in the Angle bank.
+  earned it, or the one Angle the row names for when none did, on that Angle's own platform in the Angle bank. Once
+  another window is in force its day has passed: an approval found then files nothing, and the run says so once, and
+  an open proposal for it is withdrawn before the run takes in any decision, so approving it never fills the flex slot
+  of a window it was not filed for.
 
 An Angle kept or tested, a pair to repost, and a result that bears on the product owe nothing, and neither does a
 decision rejected, nor one given on an item a newer one had replaced. How a kill, a resolved pair, and a changed Angle
@@ -42,7 +46,7 @@ from pathlib import Path
 
 from . import exchange, kit, lint, results, weekly_read
 from .areas import Areas, Store, UnsafeFile, read_plain
-from .queue import APPROVED, Ledger
+from .queue import APPROVED, SUPERSEDED, Ledger
 from .waitlist import looks_like_address
 
 WORKFLOW = weekly_read.WORKFLOW
@@ -53,6 +57,18 @@ KILL, CHANGE, PAIR, FLEX = "kill", "change", "pair", "flex"
 CREATIVE_LOG = "creative_log"
 KILLED = "killed"
 READS_FIELD = "killed_on_reads"
+UNTESTED = "draft"  # the status the creative log gives an Angle no post has tested yet
+# A new Angle's record in the creative log: each of these fields from the new row's cell of that column, and these
+# from the changed Angle's record, the sourced pain the two carry.
+RECORD_CELLS = {
+    "hypothesis": "Hypothesis",
+    "format": "Format",
+    "preregistered_success_signal": "signal",
+    "kill_criterion": "Kill",
+}
+RECORD_PAIN = ("pain_rank", "pain_state", "verbatim_quote", "pain_source_url")
+# On an approved flex decision whose window passed before its proposal was filed: the window then in force.
+PASSED = "flex_window_passed"
 MAX_ROW = 3000
 FENCE = "```"
 BANK_COLUMNS = ("ID", "Angle", "pain", "Hook", "Format", "Platform", "signal", "Kill")
@@ -116,6 +132,7 @@ class Plan:
     paths: dict[str, str] = field(default_factory=dict)  # by role: calendar, angles, pairs, creative_log
     texts: dict[str, str] = field(default_factory=dict)
     owed: list[Owed] = field(default_factory=list)
+    passed: list[Owed] = field(default_factory=list)  # approved flex decisions of another window, owed no more
 
     def words(self) -> list[Owed]:
         """The changes whose new Angle the Weekly Read session was due to write this run, as worked out before it."""
@@ -128,6 +145,16 @@ class Outcome:
 
     filed: list[tuple[str, str]] = field(default_factory=list)
     set_aside: list[tuple[str, list[str]]] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class Withdrawn:
+    """An open flex-slot proposal taken off the queue, since its window is no longer the one in force."""
+
+    proposal: str
+    decision: str
+    window: int  # the flex slot's window, as its decision item names it
+    in_force: int
 
 
 # Which decisions owe a change.
@@ -145,9 +172,9 @@ def kind_of(line: Mapping[str, object]) -> str | None:
     return None
 
 
-def owed(ledger: Ledger, window: int) -> list[Owed]:
-    """Every approved Weekly Read decision that owes a package change and has none filed yet, oldest first. A flex
-    slot is owed only while its window is the one in force: once the next window's calendar is, its day has passed."""
+def owed(ledger: Ledger) -> list[Owed]:
+    """Every approved Weekly Read decision that owes a package change and has none filed yet, oldest first, but a
+    flex slot that a run already found its window passed for."""
     filed = {str(entry.get("origin")) for entry in ledger.entries.values() if entry.get("origin")}
     found = []
     for entry in sorted(ledger.entries.values(), key=lambda entry: str(entry["id"])):
@@ -155,9 +182,7 @@ def owed(ledger: Ledger, window: int) -> list[Owed]:
         if entry["kind"] != weekly_read.KIND or entry["status"] != APPROVED or not isinstance(line, dict):
             continue
         kind = kind_of(line)
-        if kind is None or origin(str(entry["id"])) in filed:
-            continue
-        if kind == FLEX and entry.get("window") != window:
+        if kind is None or origin(str(entry["id"])) in filed or PASSED in entry:
             continue
         try:
             read_date = date.fromisoformat(str(entry.get("read_date")))
@@ -197,7 +222,7 @@ def roles(registry: Mapping) -> tuple[str, dict[str, str]] | None:
 
 NEEDS = {
     KILL: (CREATIVE_LOG,),
-    CHANGE: ("angles", "pairs", "brand_rules"),
+    CHANGE: ("angles", "pairs", "brand_rules", CREATIVE_LOG),
     PAIR: ("pairs",),
     FLEX: ("calendar", "angles"),
 }
@@ -221,14 +246,16 @@ def read_text(mandu: Path, relative: str) -> tuple[str | None, str]:
 def prepare(ledger: Ledger, mandu: Path, registry: Mapping, window: int) -> Plan | None:
     """The package changes the Founder's approved Weekly Read decisions owe this run, with the package files they
     edit read once, before the sessions, and a change's new Angle numbered: the number after the highest in the Angle
-    bank and in every new Angle a change has proposed, so no two proposals add the same number. None when no active
-    Product has a 14-day kit."""
+    bank, the creative log, and every new Angle a change has proposed, so no two proposals add the same number. A flex
+    slot is owed only while its window is the one in force: once another window's calendar is, its day has passed, and
+    its decision is one of the plan's passed. None when no active Product has a 14-day kit."""
     found = roles(registry)
     if found is None:
         return None
     product, paths = found
     plan = Plan(product, window, paths)
-    plan.owed = owed(ledger, window)
+    for decision in owed(ledger):
+        (plan.passed if decision.kind == FLEX and decision.window != window else plan.owed).append(decision)
     unread: dict[str, str] = {}
     needed = {role for found in plan.owed for role in NEEDS[found.kind]}
     for role in sorted(needed | {role for found in plan.owed for role in CITES.get(found.kind, ())}):
@@ -253,6 +280,11 @@ def prepare(ledger: Ledger, mandu: Path, registry: Mapping, window: int) -> Plan
             bank = kit.parse_angles(plan.texts["angles"])
         except kit.KitError as error:
             unread["angles"] = f"`{paths['angles']}` could not be used ({error})"
+    records: list = []
+    if CREATIVE_LOG in plan.texts:
+        _, records, why = log_records(paths[CREATIVE_LOG], plan.texts[CREATIVE_LOG])
+        if why:
+            unread[CREATIVE_LOG] = why
     for found in plan.owed:
         missing = [unread[role] for role in NEEDS[found.kind] if role in unread]
         if missing:
@@ -261,8 +293,11 @@ def prepare(ledger: Ledger, mandu: Path, registry: Mapping, window: int) -> Plan
             found.problem = "its item's queue entry holds no date of its read"
         elif found.kind == CHANGE and found.key not in bank:
             found.problem = f"{found.key} is not in the Angle bank, `{paths['angles']}`"
+        elif found.kind == CHANGE and len(matching(records, found.key)) != 1:
+            found.problem = counted(paths[CREATIVE_LOG], found.key, len(matching(records, found.key)))
         elif found.kind == CHANGE:
-            found.angle, found.asked = next_number(list(bank) + claimed), True
+            logged = [number_of(record) for record in records]
+            found.angle, found.asked = next_number(list(bank) + claimed + logged), True
             claimed.append(found.angle)
     return plan
 
@@ -323,33 +358,60 @@ def row_text(cells: Sequence[str]) -> str:
     return "|" + "|".join(f" {cell.replace('|', chr(92) + '|')} " if cell else " " for cell in cells) + "|"
 
 
-def compose_kill(path: str, text: str, angle: str, reads: Sequence[str]) -> tuple[Edit | None, str, str]:
-    """The kill's edit to the creative log: from its Angle's angle_id line to its status line, the status "killed"
-    and the dates of the two reads added after it. Returns the edit, or why there is none: a problem, or that the
-    record already says it."""
+def log_records(path: str, text: str) -> tuple[object, list, str]:
+    """The creative log's data and its list of Angle records, or why it holds none."""
     try:
         data = json.loads(text)
     except ValueError as error:
-        return None, f"`{path}` is not JSON ({error})", ""
+        return None, [], f"`{path}` is not JSON ({error})"
     records = data.get("angles") if isinstance(data, dict) else data
     if not isinstance(records, list):
-        return None, f"`{path}` holds no list of Angle records", ""
-    matches = [
+        return None, [], f"`{path}` holds no list of Angle records"
+    return data, records, ""
+
+
+def number_of(record: object) -> str:
+    """The Angle a creative-log record is of: its angle_id up to the first hyphen."""
+    return str(record.get("angle_id", "")).split("-", 1)[0] if isinstance(record, dict) else ""
+
+
+def matching(records: Sequence[object], angle: str) -> list[int]:
+    """The index of each record of an Angle: its angle_id is the Angle's number, or starts with it and a hyphen."""
+    return [
         index
         for index, record in enumerate(records)
         if isinstance(record, dict)
         and (record.get("angle_id") == angle or str(record.get("angle_id", "")).startswith(f"{angle}-"))
     ]
+
+
+def counted(path: str, angle: str, count: int) -> str:
+    return f"`{path}` has {count} records whose angle_id is {angle} or starts with {angle}-"
+
+
+def id_lines(lines: Sequence[str], angle_id: object) -> list[int]:
+    """Each line of the creative log, counted from 0, that is exactly a record's angle_id line for this angle_id."""
+    named = re.compile(r'\s*"angle_id"\s*:\s*' + re.escape(json.dumps(angle_id)) + r"\s*,?\s*")
+    return [index for index, line in enumerate(lines) if named.fullmatch(line)]
+
+
+def compose_kill(path: str, text: str, angle: str, reads: Sequence[str]) -> tuple[Edit | None, str, str]:
+    """The kill's edit to the creative log: from its Angle's angle_id line to its status line, the status "killed"
+    and the dates of the two reads added after it. Returns the edit, or why there is none: a problem, or that the
+    record already says it."""
+    data, records, problem = log_records(path, text)
+    if problem:
+        return None, problem, ""
+    matches = matching(records, angle)
     if len(matches) != 1:
-        return None, f"`{path}` has {len(matches)} records whose angle_id is {angle} or starts with {angle}-", ""
+        return None, counted(path, angle, len(matches)), ""
     record = records[matches[0]]
     if record.get("status") == KILLED and record.get(READS_FIELD) == list(reads):
         return None, "", f"`{path}` already marks {angle} killed on the reads of {' and '.join(reads)}"
     if READS_FIELD in record:
         return None, f"{angle}'s record in `{path}` already holds `{READS_FIELD}`", ""
     lines = lines_of(text)
-    named = re.compile(r'\s*"angle_id"\s*:\s*' + re.escape(json.dumps(record["angle_id"])) + r"\s*,?\s*")
-    starts = [index for index, line in enumerate(lines) if named.fullmatch(line)]
+    starts = id_lines(lines, record["angle_id"])
     status = re.compile(r'(\s*)"status"(\s*:\s*)"[^"\\]*"(,?)\s*')
     found = None
     if len(starts) == 1:
@@ -471,6 +533,86 @@ def compose_change(path: str, text: str, cells: Sequence[str]) -> tuple[Edit | N
     if after != before or added is None or kit.cells(added.row) != list(cells):
         return None, f"no exact edit of `{path}` adds {number} and changes nothing else"
     return edit, ""
+
+
+def platform_name(records: Sequence[object], bank: Mapping[str, kit.Angle], platform: str) -> str | None:
+    """The creative log's own name for a platform: the one its records give every Angle the bank puts on it."""
+    wanted = results.platform_of(platform)
+    names = {
+        record["platform"]
+        for record in records
+        if number_of(record) in bank
+        and results.platform_of(bank[number_of(record)].platform) == wanted
+        and isinstance(record.get("platform"), str)
+    }
+    return names.pop() if len(names) == 1 else None
+
+
+def compose_record(
+    path: str, text: str, old: str, cells: Sequence[str], header: Sequence[str], bank: Mapping[str, kit.Angle]
+) -> tuple[Edit | None, str]:
+    """The change's edit to the creative log: the new Angle's record added after the last one, in the shape of the
+    changed Angle's record, so a later kill of the new Angle has its record to mark. It has the changed Angle's
+    record's fields in their order: its angle_id names the new Angle, its Hook and the RECORD_CELLS fields are the new
+    row's, its platform is the row's as the log names it, its sourced pain is the changed Angle's as its record has
+    it, and it is in no A/B pair, has no results, and has the status of an Angle no post has tested yet."""
+    data, records, problem = log_records(path, text)
+    if problem:
+        return None, problem
+    number = kit.cell(cells, header, "ID")
+    matches = matching(records, old)
+    if len(matches) != 1:
+        return None, counted(path, old, len(matches))
+    if matching(records, number):
+        return None, counted(path, number, len(matching(records, number))) + ", where the new Angle needs none"
+    platform = platform_name(records, bank, kit.cell(cells, header, "Platform"))
+    if platform is None:
+        return None, (
+            f"the records of `{path}` do not name the new Angle's platform one way for the Angles the bank puts on it,"
+            " so its record cannot name it"
+        )
+    name = re.sub(r"[^a-z0-9]+", "-", kit.cell(cells, header, "Angle").lower()).strip("-")
+    record: dict[str, object] = {}
+    problems = []
+    for key, value in records[matches[0]].items():
+        if key == "angle_id":
+            record[key] = f"{number}-{name}" if value != old and name else number
+        elif key == "hook":
+            record[key] = kit.one_quote(kit.cell(cells, header, "Hook"))
+        elif key == "platform":
+            record[key] = platform
+        elif key in RECORD_CELLS and kit.column_index(header, RECORD_CELLS[key]) is not None:
+            record[key] = kit.cell(cells, header, RECORD_CELLS[key])
+        elif key in RECORD_PAIN:
+            record[key] = value
+        elif key in ("ab_pair", "results"):
+            record[key] = None
+        elif key == "status":
+            record[key] = UNTESTED
+        else:
+            problems.append(f"{old}'s record in `{path}` holds `{key}`, which no cell of the new Angle's row gives")
+    if problems:
+        return None, "; ".join(problems)
+    expected = copy.deepcopy(data)
+    (expected["angles"] if isinstance(expected, dict) else expected).append(record)
+    lines = lines_of(text)
+    for end in range(len(lines) - 1, 1, -1):
+        if lines[end].strip() not in ("]", "],") or lines[end - 1].strip() != "}":
+            continue
+        brace, inner = lines[end - 1], lines[end - 2]
+        indent = brace[: len(brace) - len(brace.lstrip())]
+        step = max(len(inner) - len(inner.lstrip()) - len(indent), 1)
+        added = [indent + line for line in json.dumps(record, indent=step, ensure_ascii=False).split("\n")]
+        edit = Edit(path, end, "\n".join(lines[end - 1 : end + 1]), "\n".join([brace + ","] + added + [lines[end]]))
+        if edit_problems(text, [edit]):
+            continue
+        try:
+            changed = json.loads(apply(text, [edit]))
+        except ValueError:
+            continue
+        if changed == expected:
+            return edit, ""
+    return None, f"no exact edit of `{path}` adds {number}'s record after the last one and changes nothing else"
 
 
 def resolved_line(found: Owed) -> str:
@@ -606,9 +748,9 @@ def rule_line(text: str) -> int | None:
     return None
 
 
-def item_for(found: Owed, plan: Plan, edit: Edit, extra: Sequence[str] = ()) -> exchange.Item:
-    """The package-change proposal one decision owes, with its exact edit."""
-    paths = plan.paths
+def item_for(found: Owed, plan: Plan, edits: Sequence[Edit], extra: Sequence[str] = ()) -> exchange.Item:
+    """The package-change proposal one decision owes, with its exact edits: one, or a change's two."""
+    paths, edit = plan.paths, edits[0]
     lead = [decided_line(found)]
     evidence = evidence_lines(found, memo_of(found))
     new_angle = "no"
@@ -636,6 +778,12 @@ def item_for(found: Owed, plan: Plan, edit: Edit, extra: Sequence[str] = ()) -> 
         )
         lead += list(extra)
         lead.append(
+            f"It also adds {found.angle}'s record to `{paths[CREATIVE_LOG]}` after the last one, in the shape of"
+            f" {found.key}'s record: {found.key}'s pain as its record has it, {found.angle}'s own cells, no A/B pair,"
+            f' no results, and the status "{UNTESTED}", so a later kill of {found.angle} has its record to mark.'
+            " Approving this applies both edits."
+        )
+        lead.append(
             f"{found.key} stays as it is: it did not meet its kill criterion, so it is not killed."
             " Which Angle a later window tests is for that window's calendar to say."
         )
@@ -643,6 +791,11 @@ def item_for(found: Owed, plan: Plan, edit: Edit, extra: Sequence[str] = ()) -> 
             f"- {found.key}'s row, whose pain and source {found.angle} carries: `{paths['angles']}` line"
             f" {kit.parse_angles(plan.texts['angles'])[found.key].line}"
         )
+        _, records, _ = log_records(paths[CREATIVE_LOG], plan.texts[CREATIVE_LOG])
+        (index,) = matching(records, found.key)
+        starts = id_lines(lines_of(plan.texts[CREATIVE_LOG]), records[index]["angle_id"])
+        where = f" line {starts[0] + 1}" if len(starts) == 1 else ""
+        evidence.append(f"- {found.key}'s record, whose shape {found.angle}'s takes: `{paths[CREATIVE_LOG]}`{where}")
     elif found.kind == PAIR:
         title = f"Approve package change: record {found.key} as resolved, leg {found.leads}'s Hook leading"
         lead.append(
@@ -671,9 +824,12 @@ def item_for(found: Owed, plan: Plan, edit: Edit, extra: Sequence[str] = ()) -> 
         )
         evidence.append(f"- The flex slot's row: `{paths['calendar']}` line {edit.line}")
         evidence.append(f"- {found.angle}'s row, for its platform: `{paths['angles']}` line {bank[found.angle].line}")
-    body = lead + [""] + render_edit(edit)
+    body = list(lead)
+    for one in edits:
+        body += [""] + render_edit(one)
     fields = {"kind": "package-change-proposal", "product": plan.product, "new_angle": new_angle}
-    return exchange.Item(fields, title[: exchange.MAX_TITLE], "\n".join(body), f"- `{edit.path}`", "\n".join(evidence))
+    touches = "\n".join(f"- `{one.path}`" for one in edits)
+    return exchange.Item(fields, title[: exchange.MAX_TITLE], "\n".join(body), touches, "\n".join(evidence))
 
 
 def reads_of(found: Owed) -> tuple[str, str]:
@@ -704,8 +860,9 @@ def take(
 ) -> Outcome:
     """File the proposal each owed decision's edit makes this run, once the last session has ended; a change's new
     Angle is the file the Weekly Read session wrote for it, checked here. Every file in the changes folder is removed
-    once read, and one that is refused leaves only its name and the reasons. With publish off nothing is written or
-    removed, and the outcome says what a run would do."""
+    once read, and one that is refused leaves only its name and the reasons. Each approved flex decision whose window
+    passed is marked so, so no later run reports it again. With publish off nothing is written or removed, and the
+    outcome says what a run would do."""
     outcome = Outcome()
     folder = areas.path("weekly_reads", FOLDER)
     words = {found.item: found for found in plan.words()}
@@ -722,6 +879,9 @@ def take(
             )
             if publish:
                 areas.remove(path)
+    for found in plan.passed:
+        if publish:
+            ledger.entries[found.item][PASSED] = plan.window
     for found in plan.owed:
         if found.problem:
             continue
@@ -730,22 +890,25 @@ def take(
             edit, problem, already = compose_kill(
                 plan.paths[CREATIVE_LOG], plan.texts[CREATIVE_LOG], found.key, reads_of(found)
             )
+            edits = [edit] if edit else []
         elif found.kind == PAIR:
             edit, problem, already = compose_pair(plan.paths["pairs"], plan.texts["pairs"], found)
+            edits = [edit] if edit else []
         elif found.kind == FLEX:
             bank = kit.parse_angles(plan.texts["angles"])
             edit, found.angle, problem = compose_flex(
                 plan.paths["calendar"], plan.texts["calendar"], found, bank, plan.paths["angles"]
             )
+            edits = [edit] if edit else []
         else:
-            edit, problem, extra = take_change(found, plan, areas, files.get(found.item), outcome, publish)
+            edits, problem, extra = take_change(found, plan, areas, files.get(found.item), outcome, publish)
         if already:
             found.already = already
             continue
-        if edit is None:
+        if not edits:
             found.problem = problem
             continue
-        item = item_for(found, plan, edit, extra)
+        item = item_for(found, plan, edits, extra)
         check = exchange.check_item(
             exchange.render_item(item.fields, item.ask, item.body, item.touches, item.evidence), products
         )
@@ -780,11 +943,12 @@ def take(
 
 def take_change(
     found: Owed, plan: Plan, areas: Areas, path: Path | None, outcome: Outcome, publish: bool
-) -> tuple[Edit | None, str, list[str]]:
-    """The change's edit from the new Angle the Weekly Read session wrote, which is removed once read."""
+) -> tuple[list[Edit], str, list[str]]:
+    """The change's two edits, to the Angle bank and the creative log, from the new Angle the Weekly Read session
+    wrote, which is removed once read."""
     name = f"{found.item}.md"
     if path is None:
-        return None, f"no new Angle was written for it at `weekly-reads/{FOLDER}/{name}`", []
+        return [], f"no new Angle was written for it at `weekly-reads/{FOLDER}/{name}`", []
     try:
         text = read_plain(path).decode("utf-8")
     except (OSError, UnsafeFile, UnicodeDecodeError) as error:
@@ -793,7 +957,7 @@ def take_change(
         areas.remove(path)
     if text is None:
         outcome.set_aside.append((name, [unreadable]))
-        return None, f"its new Angle, `weekly-reads/{FOLDER}/{name}`, was set aside", []
+        return [], f"its new Angle, `weekly-reads/{FOLDER}/{name}`, was set aside", []
     bank_text = plan.texts["angles"]
     bank = kit.parse_angles(bank_text)
     try:
@@ -805,16 +969,48 @@ def take_change(
     cells, problems = check_row(
         text, bank_text, found.key, found.angle, hooks, rules, plan.paths.get("brand_rules", "")
     )
-    edit = None
+    header, _ = kit.table(bank_text, BANK_COLUMNS)
+    edits: list[Edit] = []
     if not problems:
         edit, problem = compose_change(plan.paths["angles"], bank_text, cells)
         problems += [problem] if problem else []
+        edits += [edit] if edit else []
+    if not problems:
+        edit, problem = compose_record(
+            plan.paths[CREATIVE_LOG], plan.texts[CREATIVE_LOG], found.key, cells, header, bank
+        )
+        problems += [problem] if problem else []
+        edits += [edit] if edit else []
     if problems:
         outcome.set_aside.append((name, problems))
-        return None, f"its new Angle, `weekly-reads/{FOLDER}/{name}`, was set aside", []
-    header, _ = kit.table(bank_text, BANK_COLUMNS)
+        return [], f"its new Angle, `weekly-reads/{FOLDER}/{name}`, was set aside", []
     changed = changed_cells(kit.cells(bank[found.key].row), cells, header)
-    return edit, "", [f"Its cells that differ from {found.key}'s: {', '.join(changed)}."] if changed else []
+    return edits, "", [f"Its cells that differ from {found.key}'s: {', '.join(changed)}."] if changed else []
+
+
+def withdraw(ledger: Ledger, window: int, run_id: str, now: datetime) -> list[Withdrawn]:
+    """Before the run takes in the Founder's decisions: take off the queue each open flex-slot proposal whose window,
+    the one its decision item names, is no longer the window in force, since its flex slot's day has passed and its
+    edit would fill another window's. A decision on it, given before or after, is kept on it as on any superseded
+    item, and Mandu never acts on it; superseded_by names the run's notice, which says why, once that is queued
+    (name_notice). A proposal whose decision item is not in the queue stands."""
+    found = []
+    for entry in sorted(ledger.open_entries(), key=lambda entry: str(entry["id"])):
+        mark = entry.get("weekly_change")
+        if entry["kind"] != "package-change-proposal" or not isinstance(mark, dict) or mark.get("kind") != FLEX:
+            continue
+        decision = ledger.entries.get(str(mark.get("decision")))
+        if decision is None or not isinstance(decision.get("window"), int) or decision["window"] == window:
+            continue
+        ledger.close(entry, SUPERSEDED, run_id, now, superseded_by="", withdrawn=True)
+        found.append(Withdrawn(str(entry["id"]), str(decision["id"]), int(decision["window"]), window))
+    return found
+
+
+def name_notice(ledger: Ledger, withdrawn: Sequence[Withdrawn], notice: str | None) -> None:
+    """Name the run's notice as what replaced each flex-slot proposal the run withdrew."""
+    for found in withdrawn:
+        ledger.entries[found.proposal]["superseded_by"] = notice or ""
 
 
 # What the brief, the run report, and the Weekly Read row say.
@@ -841,14 +1037,35 @@ def summary(plan: Plan | None) -> str:
     return f"package-change proposals owed by approved decisions: {filed} of {len(plan.owed)} filed"
 
 
-def report_lines(plan: Plan | None, outcome: Outcome | None, problem: str) -> list[str]:
-    """The run report's lines on the package changes the Founder's approved Weekly Read decisions owe."""
-    if problem:
-        return [f"- Package changes from approved decisions: not worked out: {problem}."]
-    if plan is None or (not plan.owed and not (outcome and outcome.set_aside)):
-        return []
-    lines = ["- Package changes from approved decisions, each a package-change proposal for the Founder to approve:"]
-    for found in plan.owed:
+def passed_why(found: Owed, in_force: int) -> str:
+    return (
+        f"window {found.window} is no longer the window in force (window {in_force} is), so its flex slot's day has"
+        " passed"
+    )
+
+
+def withdrawn_why(found: Withdrawn) -> str:
+    return (
+        f"window {found.window} is no longer the window in force (window {found.in_force} is), so its flex slot's day"
+        " has passed and approving it would fill another window's"
+    )
+
+
+def report_lines(
+    plan: Plan | None, outcome: Outcome | None, problem: str, withdrawn: Sequence[Withdrawn] = ()
+) -> list[str]:
+    """The run report's lines on the package changes the Founder's approved Weekly Read decisions owe, and on the
+    flex-slot decisions and proposals whose window passed."""
+    lines = [f"- Package changes from approved decisions: not worked out: {problem}."] if problem else []
+    owing = plan.owed if plan is not None and not problem else []
+    passed = plan.passed if plan is not None and not problem else []
+    set_aside = outcome.set_aside if outcome is not None and not problem else []
+    if not owing and not passed and not set_aside and not withdrawn:
+        return lines
+    lines.append(
+        "- Package changes from approved decisions, each a package-change proposal for the Founder to approve:"
+    )
+    for found in owing:
         if found.filed:
             state = f"filed as `{found.filed}`"
         elif found.already:
@@ -856,17 +1073,27 @@ def report_lines(plan: Plan | None, outcome: Outcome | None, problem: str) -> li
         else:
             state = f"not filed this run: {found.problem}"
         lines.append(f"  - {found.label}, `{found.item}`: {state}.")
-    for name, reasons in outcome.set_aside if outcome else []:
+    for found in passed:
+        why = passed_why(found, plan.window)
+        lines.append(f"  - {found.label}, `{found.item}`: nothing filed, now or later: {why}.")
+    for gone in withdrawn:
+        why = withdrawn_why(gone)
+        lines.append(f"  - the flex slot, `{gone.decision}`: its proposal `{gone.proposal}` was withdrawn: {why}.")
+    for name, reasons in set_aside:
         lines.append(f"  - `weekly-reads/{FOLDER}/{name}` was set aside, and removed: {'; '.join(reasons)}.")
     return lines
 
 
-def notice_section(plan: Plan | None, outcome: Outcome | None, day: str) -> tuple[int, str, str] | None:
-    """The notice's part for an approved decision whose package change could not be filed this run, and for a new
-    Angle the launcher refused, each in the launcher's own words."""
+def notice_section(
+    plan: Plan | None, outcome: Outcome | None, day: str, withdrawn: Sequence[Withdrawn] = ()
+) -> tuple[int, str, str] | None:
+    """The notice's part for an approved decision whose package change could not be filed this run, a flex-slot
+    decision or proposal whose window passed, and a new Angle the launcher refused, each in the launcher's own
+    words."""
     missing = [found for found in plan.owed if found.problem] if plan is not None else []
+    passed = plan.passed if plan is not None else []
     refused = outcome.set_aside if outcome is not None else []
-    if not missing and not refused:
+    if not missing and not passed and not refused and not withdrawn:
         return None
     lines = []
     if missing:
@@ -875,11 +1102,23 @@ def notice_section(plan: Plan | None, outcome: Outcome | None, day: str) -> tupl
             " owes, with its exact edit, could not be filed this run, and the next run tries again:"
         )
         lines += [f"- {found.label}, `{found.item}`: {found.problem}" for found in missing]
+    if passed:
+        lines.append(
+            "These approved flex-slot decisions file no package-change proposal, now or at a later run, and the"
+            " calendar is not changed for them:"
+        )
+        lines += [f"- {found.label}, `{found.item}`: {passed_why(found, plan.window)}" for found in passed]
+    if withdrawn:
+        lines.append(
+            "These open flex-slot proposals were withdrawn, so approving one changes nothing, and Mandu never applies"
+            " it:"
+        )
+        lines += [f"- `{gone.proposal}`, for `{gone.decision}`: {withdrawn_why(gone)}" for gone in withdrawn]
     if refused:
         lines.append("These new Angles the Weekly Read session wrote were set aside and removed, so none was filed:")
         lines += [f"- `weekly-reads/{FOLDER}/{name}`: {'; '.join(reasons)}" for name, reasons in refused]
     owing = {f"{found.item}.md" for found in missing}
-    count = len(missing) + sum(1 for name, _ in refused if name not in owing)
+    count = len(missing) + len(passed) + len(withdrawn) + sum(1 for name, _ in refused if name not in owing)
     return count, f"package changes from approved Weekly Read decisions not filed on {day}", "\n".join(lines)
 
 
@@ -922,10 +1161,11 @@ def plan_record(plan: Plan) -> dict[str, object]:
 
 
 def restore(record: Mapping, mandu: Path) -> tuple[Plan, list[str]]:
-    """The plan as the launcher recorded it, with the Angle bank and the A/B pairs read again."""
+    """The plan as the launcher recorded it, with the package files a change edits or is checked against read
+    again."""
     plan = Plan(str(record.get("product", "")), int(record.get("window") or 0), dict(record.get("paths") or {}))
     notes = []
-    for role in ("angles", "pairs", "brand_rules"):
+    for role in NEEDS[CHANGE]:
         if role not in plan.paths:
             continue
         text, why = read_text(mandu, plan.paths[role])

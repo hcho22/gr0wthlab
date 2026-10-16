@@ -5,11 +5,14 @@ any other decision. Every package file here is the synthetic kit, and every numb
 import json
 import re
 import shutil
+import tempfile
 import unittest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-from gr0wthlab import exchange, kit, weekly_changes
+from gr0wthlab import exchange, kit, weekly_changes, weekly_read
+from gr0wthlab.areas import Store
+from gr0wthlab.queue import Ledger
 from tests import fakes
 from tests.test_cycle import CycleTestCase
 
@@ -71,6 +74,11 @@ EDIT = re.compile(
     r"(.*?)\n```\n\nReplace it with this text:\n\n```\n(.*?)\n```",
     re.DOTALL,
 )
+
+
+def touches(item_text: str) -> list[str]:
+    """The files a proposal's Touches names, in order."""
+    return [line[3:-1] for line in item_text.split("## Touches\n\n", 1)[1].split("\n\n", 1)[0].split("\n")]
 
 
 def apply_exactly(item_text: str, mandu: Path) -> list[str]:
@@ -188,6 +196,59 @@ class EditTest(unittest.TestCase):
                 for problem_text in problems:
                     self.assertNotIn("timer", problem_text, "a reason never repeats what the file says")
 
+    def test_a_change_adds_its_new_angle_s_record_to_the_creative_log_in_the_changed_angle_s_shape(self):
+        cells, _ = self.check(NEW_ANGLE)
+        header, _ = kit.table(self.text(ANGLES), weekly_changes.BANK_COLUMNS)
+        bank, text = kit.parse_angles(self.text(ANGLES)), self.text(LOG)
+        edit, problem = weekly_changes.compose_record(LOG, text, "P07", cells, header, bank)
+        self.assertEqual(problem, "")
+        self.assertEqual(text.count(edit.old), 1)
+        before, after = json.loads(text), json.loads(weekly_changes.apply(text, [edit]))
+        self.assertEqual(after["angles"][:-1], before["angles"], "every record before it reads as it did")
+        old, added = before["angles"][6], after["angles"][-1]
+        self.assertEqual(list(added), list(old), "the same fields, in the same order")
+        self.assertEqual(
+            added,
+            dict(
+                old,
+                angle_id="P08-five-minutes-timed",
+                hypothesis="A timer that stops at five makes the session feel whole",
+                hook="Watch the timer stop at five.",
+                format="15s timer timelapse, the timer large on screen",
+                preregistered_success_signal="Watched-full rate in the top half",
+                kill_criterion="Bottom quartile watched-full on two reads",
+            ),
+            "P07's pain and platform, the new row's words, no A/B pair, no results, and the status draft",
+        )
+        # A later kill of the new Angle finds exactly its record.
+        kill, problem, _ = weekly_changes.compose_kill(
+            LOG, weekly_changes.apply(text, [edit]), "P08", ("2026-11-08", "2026-11-15")
+        )
+        self.assertEqual(problem, "")
+        self.assertIn('"angle_id": "P08-five-minutes-timed",', kill.old)
+
+    def test_a_new_angle_s_record_names_its_platform_as_the_log_does_and_never_takes_a_number_already_logged(self):
+        bank_text, text = self.text(ANGLES), self.text(LOG)
+        header, _ = kit.table(bank_text, weekly_changes.BANK_COLUMNS)
+        bank = kit.parse_angles(bank_text)
+        cells, _ = self.check(NEW_ANGLE.replace("| TikTok |", "| YouTube Shorts |"))
+        edit, _ = weekly_changes.compose_record(LOG, text, "P07", cells, header, bank)
+        self.assertEqual(json.loads(weekly_changes.apply(text, [edit]))["angles"][-1]["platform"], "youtube")
+        cells, _ = self.check(NEW_ANGLE)
+        data = json.loads(text)
+        data["angles"].append(dict(data["angles"][0], angle_id="P08-logged"))
+        logged = json.dumps(data, indent=2) + "\n"
+        _, problem = weekly_changes.compose_record(LOG, logged, "P07", cells, header, bank)
+        self.assertEqual(
+            problem, f"`{LOG}` has 1 records whose angle_id is P08 or starts with P08-, where the new Angle needs none"
+        )
+        data["angles"][-1] = dict(data["angles"][6], notes="kept by hand")
+        del data["angles"][6]
+        _, problem = weekly_changes.compose_record(LOG, json.dumps(data, indent=2), "P07", cells, header, bank)
+        self.assertEqual(problem, f"P07's record in `{LOG}` holds `notes`, which no cell of the new Angle's row gives")
+        _, problem = weekly_changes.compose_record(LOG, text, "P09", cells, header, bank)
+        self.assertEqual(problem, f"`{LOG}` has 0 records whose angle_id is P09 or starts with P09-")
+
     def test_a_resolved_pair_adds_one_line_at_the_end_of_its_section(self):
         text = self.text(PAIRS)
         found = owed(weekly_changes.PAIR, "AB-2", leads="A", read_date=date(2026, 10, 18))
@@ -249,6 +310,68 @@ class EditTest(unittest.TestCase):
         self.assertEqual(weekly_changes.next_number(["P01", "P16"]), "P17")
         self.assertEqual(weekly_changes.next_number(["P01", "P07", "P09"]), "P10")
         self.assertEqual(weekly_changes.next_number([]), "P01")
+
+
+class ChangeThenKillTest(unittest.TestCase):
+    """An approved change leaves its new Angle killable: its proposal adds the new Angle to the Angle bank and its
+    record to the creative log, so once Mandu has applied it, a later approved kill of the new Angle files its edit
+    like any other. The decisions are queue entries as a run keeps them, and each proposal is filed by the take-in a
+    run calls."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        root = Path(self.tmp.name)
+        self.mandu = root / "mandu"
+        shutil.copytree(str(KIT), str(self.mandu))
+        self.areas = fakes.workspace_areas(root / "repo")
+        self.store = Store(root / "repo" / "ledger")
+        self.registry = json.loads((fakes.REPO / "config" / "products.json").read_text(encoding="utf-8"))
+        self.ledger = Ledger()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def approve(self, identifier, angle, result, decision, window, read_on):
+        line = weekly_read.Line(weekly_read.ANGLE, angle, result, decision, "- ...")
+        self.ledger.entries[identifier] = {
+            "id": identifier,
+            "kind": weekly_read.KIND,
+            "ask": f"Weekly Read day 14: {angle}, {result}: {decision}",
+            "file": f"review-queue/items/{identifier}.md",
+            "status": "approved",
+            "window": window,
+            "read": 14,
+            "line_key": angle,
+            "line": line.as_json(),
+            "read_date": read_on.isoformat(),
+        }
+
+    def file(self, window, run):
+        """One run's take-in of what the approved decisions owe; each proposal it files, as its item's text."""
+        plan = weekly_changes.prepare(self.ledger, self.mandu, self.registry, window)
+        for found in plan.words():
+            path = self.areas.path("weekly_reads", weekly_changes.FOLDER, f"{found.item}.md")
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(NEW_ANGLE.replace("| P08 |", f"| {found.angle} |") + "\n", encoding="utf-8")
+        now = datetime(2026, 11, 15, 19, 0, tzinfo=timezone.utc)
+        outcome = weekly_changes.take(plan, self.areas, self.store, self.ledger, ["RepToday"], run, now, {})
+        self.assertEqual([found.problem for found in plan.owed], [""] * len(plan.owed))
+        return [(self.store.root / self.ledger.entries[filed]["file"]).read_text("utf-8") for _, filed in outcome.filed]
+
+    def test_a_new_angle_a_change_added_is_killed_by_its_own_approved_kill_later(self):
+        self.approve("20261018-weekly-read-14-p07", "P07", weekly_read.MISSED, "change", 1, date(2026, 10, 18))
+        (change,) = self.file(1, "run-1")
+        self.assertEqual(apply_exactly(change, self.mandu), [ANGLES, LOG])
+        self.assertIn("P08", kit.parse_angles((self.mandu / ANGLES).read_text(encoding="utf-8")))
+        # A later window tests P08, and its day-14 read kills it, the day-7 read having flagged it at risk.
+        self.approve("20261115-weekly-read-14-p08", "P08", weekly_read.MET_KILL, "kill", 2, date(2026, 11, 15))
+        (kill,) = self.file(2, "run-2")
+        self.assertIn("Approve package change: mark P08 killed in the creative log", kill)
+        self.assertEqual(apply_exactly(kill, self.mandu), [LOG])
+        log = json.loads((self.mandu / LOG).read_text(encoding="utf-8"))
+        (record,) = [record for record in log["angles"] if record["angle_id"].startswith("P08-")]
+        self.assertEqual((record["status"], record["killed_on_reads"]), ("killed", ["2026-11-08", "2026-11-15"]))
+        self.assertEqual(self.file(2, "run-3"), [], "each decision's proposal is filed once")
 
 
 class ApprovedDecisionRunTest(CycleTestCase):
@@ -337,6 +460,8 @@ class ApprovedDecisionRunTest(CycleTestCase):
         self.assertEqual(by_kind["change"]["weekly_change"]["angle"], "P08")
         self.assertEqual(by_kind["change"]["new_angle"], "yes")
         self.assertEqual(by_kind["kill"]["new_angle"], "no")
+        change_text = (self.ledger() / by_kind["change"]["file"]).read_text(encoding="utf-8")
+        self.assertEqual(touches(change_text), [ANGLES, LOG])
         self.assertFalse((self.workspace() / "weekly-reads" / "changes" / f"{change}.md").exists())
         outputs = self.report().split("## Outputs\n\n")[1].split("\n\n")[0]
         self.assertIn(
@@ -346,12 +471,15 @@ class ApprovedDecisionRunTest(CycleTestCase):
         # Mandu applies each as written: every text it names is in its file exactly once.
         for entry in [filed, *by_kind.values()]:
             text = (self.ledger() / entry["file"]).read_text(encoding="utf-8")
-            touched = apply_exactly(text, self.mandu)
-            self.assertEqual([f"- `{path}`" for path in touched], [text.split("## Touches\n\n")[1].split("\n")[0]])
+            self.assertEqual(apply_exactly(text, self.mandu), touches(text))
         log = json.loads((self.mandu / LOG).read_text(encoding="utf-8"))
         killed = next(record for record in log["angles"] if record["angle_id"].startswith("P04-"))
         read_7, read_14 = self.day_7.isoformat(), (self.day_7 + timedelta(days=7)).isoformat()
         self.assertEqual((killed["status"], killed["killed_on_reads"]), ("killed", [read_7, read_14]))
+        added = [record for record in log["angles"] if record["angle_id"].startswith("P08-")]
+        self.assertEqual(
+            [(record["hook"], record["status"]) for record in added], [("Watch the timer stop at five.", "draft")]
+        )
         bank = kit.parse_angles((self.mandu / ANGLES).read_text(encoding="utf-8"))
         self.assertEqual(bank["P08"].hook, "Watch the timer stop at five.")
         self.assertEqual(bank["P07"].row, kit.parse_angles((KIT / ANGLES).read_text(encoding="utf-8"))["P07"].row)
@@ -366,6 +494,70 @@ class ApprovedDecisionRunTest(CycleTestCase):
         self.assertEqual(code, 0, out)
         self.assertEqual(len(self.proposals()), 4)
         self.assertNotIn("weekly-read", fakes.sessions_started(self.codex_dir))
+
+    def test_a_flex_slot_approved_once_its_window_has_passed_files_nothing_and_says_so_once(self):
+        self.give(7, self.day_7)
+        fakes.behave(self.codex_dir, {"write": {"weekly-reads/window-1-read-07.md": DAY_7_MEMO}})
+        code, out = self.run_cycle()
+        self.assertEqual(code, 0, out)
+        flex = self.items("weekly-read-decision")["Weekly Read day 7: flex slot earned: test"]
+        # Window 2 is in force by the time the Founder approves it.
+        fakes.set_window(self.repo, {"number": 2})
+        self.decide(flex["id"], "approve")
+        fakes.behave(self.codex_dir, {})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.entry(flex["id"])["status"], "approved")
+        self.assertEqual(self.proposals(), [])
+        why = "window 1 is no longer the window in force (window 2 is), so its flex slot's day has passed"
+        said = f"the flex slot, `{flex['id']}`: nothing filed, now or later: {why}."
+        self.assertIn(f"  - {said}", self.report())
+        self.assertIn(f"- the flex slot, `{flex['id']}`: {why}", self.notices())
+        # Said once: no later run files it or says it again.
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7, hours=2))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.proposals(), [])
+        self.assertNotIn(said, self.report())
+
+    def test_an_open_flex_slot_proposal_is_withdrawn_once_its_window_has_passed_and_its_approval_is_never_acted_on(
+        self,
+    ):
+        flex, _ = self.read_items()
+        (filed,) = self.proposals()
+        self.assertEqual(filed["status"], "open")
+        # Window 2 is in force, and the Founder approves the open proposal at a sitting before the next run.
+        fakes.set_window(self.repo, {"number": 2})
+        self.decide(filed["id"], "approve")
+        fakes.behave(self.codex_dir, {})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
+        self.assertEqual(code, 0, out)
+        entry = self.entry(filed["id"])
+        self.assertEqual(
+            (entry["status"], entry.get("withdrawn"), entry.get("decided")),
+            ("superseded", True, "approved"),
+            "superseded, so Mandu never acts on the approval",
+        )
+        why = (
+            "window 1 is no longer the window in force (window 2 is), so its flex slot's day has passed and approving"
+            " it would fill another window's"
+        )
+        self.assertIn(
+            f"  - the flex slot, `{flex['id']}`: its proposal `{filed['id']}` was withdrawn: {why}.", self.report()
+        )
+        notice = self.entry(entry["superseded_by"])
+        self.assertEqual(notice["kind"], "notice")
+        self.assertIn(
+            f"- `{filed['id']}`, for `{flex['id']}`: {why}", (self.ledger() / notice["file"]).read_text("utf-8")
+        )
+        self.assertEqual([found["id"] for found in self.proposals()], [filed["id"]], "nothing is filed in its place")
+
+    def test_an_open_flex_slot_proposal_of_the_window_in_force_stands(self):
+        self.read_items()
+        (filed,) = self.proposals()
+        fakes.behave(self.codex_dir, {})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.entry(filed["id"])["status"], "open")
 
     def test_a_rejected_decision_files_nothing(self):
         flex, items = self.read_items()

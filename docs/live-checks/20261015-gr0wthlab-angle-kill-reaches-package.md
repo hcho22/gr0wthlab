@@ -224,3 +224,58 @@ From this work's linked worktree at `e6b70f9fa4df9e434e8b7403e98616ca72753183`, 
 - Everything the first round did not exercise stands as it is.
 - A session that exits within seconds with a 429 in its Codex log was not seen; the five early closes of the first attempt were the lab's placement, as above.
 - The full week-14 flow of the first round (the sitting page, each decision kind approved and rejected, each proposal applied to a lab copy of the package) was not run again on the merged head; the merge changed no code that files, checks, or applies those proposals, and the unit tests that hold them passed.
+
+## Third round: the review's two fixes
+
+The review of the merged head found two gaps, and this round closes both on top of `a62e901c1679a7486e6911214ee854cf5dfdf7b2`:
+
+- A change's proposal added the new Angle to the Angle bank alone, while a kill marks the Angle's record in `creative-log.json`, so a later approved kill of the new Angle could never be filed.
+  The proposal now carries a second exact edit, the new Angle's record at the end of `creative-log.json` in the shape of the changed Angle's record, so one approval applies both ([ADR 0007](../adr/0007-an-approved-weekly-read-decision-reaches-the-package-as-a-proposal.md) records the choice and why).
+- A flex decision approved once its window was no longer the one in force filed nothing and no run said so, and an open flex proposal stayed open once its window had passed.
+  Now the run that finds such an approval files nothing and says so in its report and its notice, once, and an open flex proposal whose window has passed is withdrawn before the run takes in any decision, so an approval given on it at a sitting is kept on a superseded item, which Mandu never acts on.
+
+Every check below ran on 2026-10-15, Mac local time (PDT), with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort where a real agent ran; a run identifier carries its time in UTC.
+The fix was not committed when they ran: its `src` tree was `4da6aefe5653699ceabab4f6e64da661a5ff170e` and its `config` tree `92af9e1f5971bf9d4a3ff122fc50896e26a5e54a`, written from a throwaway index over `a62e901c1679a7486e6911214ee854cf5dfdf7b2` with the working tree's `src` and `config`.
+
+### The failures before the fix
+
+Three new tests were run in a scratch copy of the working tree with the four launcher files the fix changes (`weekly_changes.py`, `cycle.py`, `report.py`, and `weekly_read.py` under `src/gr0wthlab/`) put back as `a62e901c1679a7486e6911214ee854cf5dfdf7b2` has them.
+Each failed there, and each passes on the fix.
+
+| Test | What it showed before the fix |
+| --- | --- |
+| `ChangeThenKillTest.test_a_new_angle_a_change_added_is_killed_by_its_own_approved_kill_later` | The change of P07 into P08 filed a proposal whose edits named `angles.md` alone, not `creative-log.json` |
+| `test_a_flex_slot_approved_once_its_window_has_passed_files_nothing_and_says_so_once` | With window 2 in force, the window 1 flex approval was taken in, nothing was filed, and the run report had no line for it |
+| `test_an_open_flex_slot_proposal_is_withdrawn_once_its_window_has_passed_and_its_approval_is_never_acted_on` | With window 2 in force, the window 1 flex proposal the Founder approved closed as `approved`, with no `withdrawn` |
+
+The two flex tests are whole runs of `cycle.Cycle` with the no-model stand-in, as `src/bin/gr0wthlab run` starts one; the first drives `weekly_changes.prepare` and `weekly_changes.take`, the two steps a run calls, on a copy of the synthetic kit, and applies each proposal as Mandu's reader does.
+
+### The new record, against the shape of the real package files
+
+The same five real files as in the first round were copied from `~/Mandu` into a folder of the Mac's temporary directory, read-only, and nothing of them is in this repository; their SHA-256 were the four listed in the first round, unchanged.
+A scratch script made, with `src/gr0wthlab/weekly_changes.py`, a change of each of the bank's 16 Angles into P17, the number after the bank's and the log's, with a Hook of its own.
+
+- All 16 rows passed the row checks with the real brand rules, and all 16 made both edits, each text found exactly once and checked by the launcher's own check that applying it changes nothing else.
+- Each new record had the changed Angle's record's 14 fields in their order, and the changed Angle's platform as that record names it.
+- On each log with its edit applied, the kill of P17 was made, checked, and applied, and the record read `"killed"` with both read dates: 16 of 16.
+- With each new row's platform moved to the other one, each of the 16 new records named its platform as the log's other records do, and none was refused.
+
+### The boundary
+
+From the gate's linked worktree at `a62e901c1679a7486e6911214ee854cf5dfdf7b2` with the fix in its working tree, against Mandu and the Product checkouts as they are, with the SHA-256 of `git status --porcelain` the same before the preflight and after the check, and logs in a folder of the Mac's temporary directory named with `GR0WTHLAB_LOG_DIR`.
+`show-config` printed the configuration fingerprint `32af654b78b3cfc5e0c257fc93ed76e5c5f6a2c6efe42f2898b6f270e2276e43`; the command it covers names the checkout's own path, and this worktree is not the one the earlier rounds ran from.
+
+- `src/bin/gr0wthlab preflight`, run twice at 22:44, passed each time: six areas writable, 22 paths refused, no breach, a listing of the footage place `~/Mandu/projects/RepToday` refused, and neither listed host reached from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, from 22:45:02 to 22:45:52, passed at its first attempt as `20261016T054504Z-on-demand-4f7c`: 49 steps to prove, 28 tool calls in Codex's record with no problem, 17 of 17 file-tool targets refused each in a patch of its own, 19 kernel sandbox denials, the footage place's shell read refused, 1 of 1, 12 of 12 permitted sentinels written and none escaped, nothing unproven, the network probe's three targets refused inside the sandbox after its control reached its listener, two requests from the launcher's client, each a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed outside the areas.
+
+### Tests
+
+- Under `/usr/bin/python3`, Python 3.9.6, on the working tree: `tests.test_weekly_changes` (19 tests), `tests.test_weekly_read` (28), `tests.test_weekly_read_cycle` (17), `tests.test_weekly_read_examples` (3), and `tests.test_sessions` (35), none failed and none skipped.
+- `ruff check` and `ruff format --check` on `src` passed, with ruff 0.15.20.
+- The whole unit suite and CI's run were not part of this round.
+
+### What this round did not exercise
+
+- No lab ran `src/bin/gr0wthlab run` or the sitting page on this round's code: the change-then-kill sequence and both flex cases stand on the tests above.
+- No real agent ran on this round's code but the boundary check's probe agent; the task definition and the brief's section on new Angles did not change.
+- Mandu's reader was not run on a proposal with two edits; its skill says it edits only the files `## Touches` lists, and a change's Touches now lists both.

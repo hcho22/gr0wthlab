@@ -163,6 +163,8 @@ class RunState:
     changes: weekly_changes.Plan | None = None  # the package changes the Founder's approved Weekly Read decisions owe
     changes_problem: str = ""  # why those could not be worked out, when they could not
     changes_outcome: weekly_changes.Outcome | None = None
+    # The open flex-slot proposals this run withdrew before it took in any decision, since their window had passed.
+    changes_withdrawn: list[weekly_changes.Withdrawn] = field(default_factory=list)
     attempt: attempts.Attempt | None = None  # a weekly scheduled run: which attempt at the run due, and those before
     slept: float = 0.0  # about how many seconds the Mac was asleep from the run's start to its last session's end
 
@@ -1099,7 +1101,9 @@ def render_report(state: RunState) -> str:
         state.floor_filing,
         state.results_notice,
     )
-    lines += weekly_changes.report_lines(state.changes, state.changes_outcome, state.changes_problem)
+    lines += weekly_changes.report_lines(
+        state.changes, state.changes_outcome, state.changes_problem, state.changes_withdrawn
+    )
     lines += [""] + posts.report_lines(state.posts, state.post_outcome, state.filing, state.posts_problem)
     if state.filming is not None or state.filming_problem:
         lines += [""] + filming.report_lines(state.filming, state.filming_problem)
@@ -1296,7 +1300,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
         sections.append(recruiting)
     for section in (
         weekly_read.notice_section(state.weekly, state.weekly_outcome, day),
-        weekly_changes.notice_section(state.changes, state.changes_outcome, day),
+        weekly_changes.notice_section(state.changes, state.changes_outcome, day, state.changes_withdrawn),
         listening.notice_section(state.listening, state.listening_result, day),
         outreach.notice_section(state.outreach, state.outreach_result, day, state.again),
         learning.notice_section(state.learning, day),

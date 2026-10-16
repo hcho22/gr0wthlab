@@ -370,6 +370,10 @@ class TakeTest(unittest.TestCase):
         found.paths["creative_log"] = "projects/RepToday/gtm/05-social-pmf/creative-log.json"
         then = "- Nothing yet: approving it has the next run file a package-change proposal with the exact edit that"
         approve = ", for you to approve before Mandu changes the file."
+        window = (
+            "That holds while window 1 is the window in force: approved once another window is, it files nothing,"
+            " since its flex slot's day has passed."
+        )
         lines = (
             (weekly_read.ANGLE, "P04", weekly_read.MET_KILL, "kill", None, None),
             (weekly_read.ANGLE, "P04", weekly_read.MISSED, "change", None, None),
@@ -382,17 +386,18 @@ class TakeTest(unittest.TestCase):
         )
         expected = (
             f"{then} marks P04 killed in `projects/RepToday/gtm/05-social-pmf/creative-log.json`{approve}",
-            f"{then} adds a new Angle to `projects/RepToday/gtm/05-social-pmf/angles.md` in P04's place{approve} The"
-            " Weekly Read session writes the new Angle's words at that run, and P04's row stays as it is.",
+            f"{then} adds a new Angle to `projects/RepToday/gtm/05-social-pmf/angles.md` in P04's place, with its"
+            f" record in `projects/RepToday/gtm/05-social-pmf/creative-log.json`{approve} The Weekly Read session"
+            " writes the new Angle's words at that run, and P04's row stays as it is.",
             "- Nothing: approving keeps P04's row in `projects/RepToday/gtm/05-social-pmf/angles.md` as it is",
             "- Nothing: approving keeps P04's row in `projects/RepToday/gtm/05-social-pmf/angles.md` as it is",
             f"{then} records in `projects/RepToday/gtm/05-social-pmf/ab-pairs.md` that AB-2 resolved with leg B's Hook"
             f" leading{approve}",
             "- Nothing: approving changes no package file, and AB-2 is not declared resolved",
             f"{then} puts P03 in the flex slot of the calendar,"
-            f" `projects/RepToday/gtm/05-social-pmf/cadence-14-day.md`{approve}",
+            f" `projects/RepToday/gtm/05-social-pmf/cadence-14-day.md`{approve} {window}",
             f"{then} puts P04 in the flex slot of the calendar,"
-            f" `projects/RepToday/gtm/05-social-pmf/cadence-14-day.md`{approve}",
+            f" `projects/RepToday/gtm/05-social-pmf/cadence-14-day.md`{approve} {window}",
         )
         for (section, key, result, decision, earned, leads), said in zip(lines, expected):
             with self.subTest(section=section, result=result, decision=decision):

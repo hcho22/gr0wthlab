@@ -645,18 +645,23 @@ Each decision item's Touches says so.
 
 - **A kill**: the Angle's record in `creative-log.json` takes `"status": "killed"` and `"killed_on_reads"` with the dates of the day-7 and day-14 reads, as the calendar's kill rule says.
   The edit spans the record from its `angle_id` line to its `status` line, so it names one record.
-- **A change**: a new row at the end of the Angle bank, under the next free number, with the changed Angle's pain and source as they are; the changed Angle stays as it is.
+- **A change**: a new row at the end of the Angle bank, under the next free number, with the changed Angle's pain and source as they are, and the new Angle's record at the end of `creative-log.json`, so a later kill of it has its record to mark; one approval applies both, and the changed Angle stays as it is.
+  The record has the changed Angle's record's fields in its order: the new Angle's number and name as its `angle_id`, the new row's Hook, hypothesis, format, signal, and kill criterion, the row's platform as the log's own records name it, the changed Angle's pain as its record has it, no A/B pair, no results, and the status `draft`; a field the launcher does not know keeps the change from being filed, with the reason.
   The Weekly Read session writes the new row's words in `workspace/weekly-reads/changes/<decision item>.md`, in a run the launcher starts it for that alone when no memo is due; the launcher files it only when the row has the bank's cells, the number the brief gave it, the changed Angle's pain and source character for character, a Hook in one quoted line that no Angle or A/B pair already holds and that passes the brand lint every post's Hook is held to, and a platform the Weekly Read reads.
   A row that fails is removed, and the run report and the notice keep only its name and the reasons; the next run asks for it again.
 - **A resolved pair**: one line at the end of the pair's section in the A/B pairs file, saying which leg's Hook leads; no Hook changes.
 - **The flex slot**, earned or not, while its window is the one in force: the calendar's flex row names the Angle that earned it, or the one Angle the row names for when none did, on that Angle's own platform in the Angle bank.
   Until the row names an Angle, no post Draft is prepared for that day.
+  Once `window.number` in `config/run.json` names another window, the flex slot's day has passed.
+  A flex decision whose approval a run finds then files nothing, and that run's report and notice say so, once; the decision's queue entry takes `flex_window_passed`, the window then in force, so no later run says it again.
+  An open proposal for it is withdrawn, with `"withdrawn": true` and `superseded_by` naming the run's notice, which says why, before the run takes in any decision, so an approval given on it at a sitting is kept on it and never acted on.
+  That rests on the Review Queue and `config/run.json` alone, which every run reads before it does anything, so no read that fails withdraws one.
 
 An Angle kept or tested, a pair to repost, a result that bears on the product, and every rejected decision file nothing.
 Every edit replaces a text that appears exactly once in the file as the run read it, so Mandu applies it with no judgment, and is filed only when applying it changes exactly what the decision fixes and nothing else.
 A decision's proposal is filed once, and never again, whatever the Founder decides of it.
 One whose edit cannot be made, as when its file cannot be read or no longer holds the text, is filed by a later run once it can be: until then the Weekly Read row is incomplete with the reason, and the notice says which decision's proposal was not filed.
-The launcher reads `creative-log.json` only to make a kill's edit; it is not a package source, so no run snapshots it and the package review does not review it.
+The launcher reads `creative-log.json` only to make a kill's edit and a change's; it is not a package source, so no run snapshots it and the package review does not review it.
 
 ### The floor in the package
 

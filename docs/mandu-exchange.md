@@ -150,6 +150,7 @@ Beside the Beta Cohort's two (below), there are four kinds, each named in the it
 
 gr0wthlab queues a message only from a Draft that passed every check; a Draft that did not is never an item, and a notice names it with what blocked it.
 An open message whose Draft stops passing, or whose follow-up may no longer be offered because a reply was recorded, leaves `open` as a withdrawn post does.
+So does an open package-change proposal for the flex slot of a window that is no longer the one in force, before the run takes in any decision on it, so a decision on it is kept on a superseded item and never acted on.
 
 The first time gr0wthlab reads a subreddit's rules, it queues one notice titled "Confirm r/<name>'s self-promotion rules before any reply Draft is offered", which quotes and links those rules.
 It queues one such notice for each subreddit and never another, whatever the rules say later.
