@@ -4,7 +4,7 @@
   "description": "The package review's example set (US-ME04, US-ME16, F5), in the marketingskills evals.json shape. Every example is re-run by the agent on every change to the package-review Instructions (ADR 0003): its session reviews a whole synthetic Go-To-Market Package, files/mandu with the example's own overlay, in a throwaway lab, and its deterministic assertions are read off the package-change proposals the launcher queued. Each overlay holds one stale fact, two facts that should agree and do not, or a plan that breaks a rule, except two: a package whose files all agree, and one that keeps an earlier version marked as history. A judged assertion is judged by nothing: the notice of a change lists it for the Founder.",
   "package": "files/mandu",
   "assertion_kinds": {
-    "deterministic": "check is one of: queued (item: a kind; count; cites: file names each queued item holds; at_least: the count is a floor), nothing_queued (item), nothing_set_aside",
+    "deterministic": "check is one of: queued (item: a kind; count; cites: text each queued item must hold, such as a file name or a part of one that several file names share; at_least: the count is a floor), nothing_queued (item), nothing_set_aside",
     "judged": "text is a statement of the agent's output that no check decides; nothing judges it, and the notice of an Instructions change lists it as not judged"
   },
   "lab": {
