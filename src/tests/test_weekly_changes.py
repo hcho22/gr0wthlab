@@ -17,6 +17,8 @@ from tests import fakes
 from tests.test_cycle import CycleTestCase
 
 HOOK = "Watch the timer stop at five."
+# AB-2 with its leg B line lost: the A/B pairs file still reads, and no longer parses.
+LOST_LEG = '- Leg B hook: "A skipped day never takes you back to zero."\n'
 TAKEN = (
     "its Hook is one the Angle bank, the A/B pairs, or another new Angle proposed already holds; a Hook belongs to"
     " exactly one Angle, so the new Angle needs a Hook of its own"
@@ -75,6 +77,8 @@ NEW_ANGLE = (
     ' stops at five makes the session feel whole | "Watch the timer stop at five." | 15s timer timelapse, the timer'
     " large on screen | TikTok | Watched-full rate in the top half | Bottom quartile watched-full on two reads |"
 )
+# A new Angle for P07's change whose Hook is AB-1's leg B Hook.
+PAIR_HOOK_ROW = NEW_ANGLE.replace(f'"{HOOK}"', '"The session is on screen before you decide."')
 EDIT = re.compile(
     r"In `([^`]+)`, lines? \d+(?: to \d+)? (?:is|are) this text, which appears exactly once in the file:\n\n```\n"
     r"(.*?)\n```\n\nReplace it with this text:\n\n```\n(.*?)\n```",
@@ -399,6 +403,28 @@ class ChangeThenKillTest(unittest.TestCase):
         self.assertEqual((record["status"], record["killed_on_reads"]), ("killed", ["2026-11-08", "2026-11-15"]))
         self.assertEqual(self.file(2, "run-3"), [], "each decision's proposal is filed once")
 
+    def test_a_pairs_file_that_reads_and_does_not_parse_leaves_a_change_owed_and_names_the_file(self):
+        """Check-work's dry run takes in the plan the run recorded before its session, with the package files read
+        again: once the A/B pairs file no longer parses, the change is owed with the file named, never checked
+        against no pair at all, and a run's own plan names the file before any session and asks for no new Angle."""
+        item = "20261018-weekly-read-14-p07"
+        self.approve(item, "P07", weekly_read.MISSED, "change", 1, date(2026, 10, 18))
+        record = weekly_changes.plan_record(weekly_changes.prepare(self.ledger, self.mandu, self.registry, 1))
+        problem = unparsed_pairs(self.mandu)
+        path = self.areas.path("weekly_reads", weekly_changes.FOLDER, f"{item}.md")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(PAIR_HOOK_ROW + "\n", encoding="utf-8")
+        restored, notes = weekly_changes.restore(record, self.mandu)
+        self.assertEqual(notes, [])
+        now = datetime(2026, 10, 18, 19, 0, tzinfo=timezone.utc)
+        outcome = weekly_changes.take(
+            restored, self.areas, self.store, self.ledger, ["RepToday"], "run", now, {}, publish=False
+        )
+        self.assertEqual(([found.problem for found in restored.owed], outcome.filed), ([problem], []))
+        self.assertEqual(outcome.set_aside, [], "the new Angle is not at fault")
+        plan = weekly_changes.prepare(self.ledger, self.mandu, self.registry, 1)
+        self.assertEqual([(found.problem, found.asked) for found in plan.owed], [(problem, False)])
+
     def test_no_two_new_angles_share_a_hook_in_one_run_or_while_a_proposal_that_adds_one_stands(self):
         """Two approved changes whose new Angles the session wrote with the same Hook: the first is filed, its queue
         entry keeping the Hook, and the second is refused, in that run and in the next while the first proposal is
@@ -420,6 +446,18 @@ class ChangeThenKillTest(unittest.TestCase):
         plan, outcome = self.take(1, "run-3")
         self.assertEqual((outcome.set_aside, [found.problem for found in plan.owed]), ([], [""]))
         self.assertEqual(self.ledger.entries[plan.owed[0].filed]["weekly_change"]["hook"], HOOK)
+
+
+def unparsed_pairs(mandu: Path) -> str:
+    """Make the A/B pairs file one that reads and does not parse; the reason a change it holds back gives."""
+    path = mandu / PAIRS
+    text = path.read_text(encoding="utf-8").replace(LOST_LEG, "")
+    path.write_text(text, encoding="utf-8")
+    try:
+        kit.parse_pairs(text)
+    except kit.KitError as error:
+        return f"`{PAIRS}` could not be used ({error})"
+    raise AssertionError("the A/B pairs file still parses")
 
 
 class ApprovedDecisionRunTest(CycleTestCase):
@@ -606,6 +644,34 @@ class ApprovedDecisionRunTest(CycleTestCase):
         code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
         self.assertEqual(code, 0, out)
         self.assertEqual(self.entry(filed["id"])["status"], "open")
+
+    def test_a_pairs_file_that_reads_and_does_not_parse_files_no_change_and_is_named_as_the_weekly_read_s_gap(self):
+        _, items = self.read_items()
+        change = items["P07"]["id"]
+        self.decide(change, "approve")
+        problem = unparsed_pairs(self.mandu)
+        fakes.behave(self.codex_dir, {"write": {f"weekly-reads/changes/{change}.md": PAIR_HOOK_ROW + "\n"}})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=14))
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("weekly-read", fakes.sessions_started(self.codex_dir))
+        kinds = [entry.get("weekly_change", {}).get("kind") for entry in self.proposals()]
+        self.assertEqual(kinds, ["flex"], "no change is filed")
+        outputs = self.report().split("## Outputs\n\n")[1].split("\n\n")[0]
+        row = next(line for line in outputs.split("\n") if line.startswith("| Weekly Read memo |"))
+        self.assertEqual(
+            row,
+            f"| Weekly Read memo | incomplete | RepToday package: `{PAIRS}` could not be used; no package-change"
+            f" proposal for the change of P07 (`{change}`): {problem} |",
+        )
+        sources = self.report().split("## Sources\n\n")[1].split("\n\n")[0]
+        reason = problem.split(" could not be used (", 1)[1][:-1]
+        self.assertIn(
+            f"| RepToday package: `{PAIRS}` | unusable | its fingerprint changed since the previous snapshot; read, but"
+            f" could not be used: {reason}. |",
+            sources,
+        )
+        line = next(line for line in self.notices().split("\n") if f"RepToday package: `{PAIRS}`" in line)
+        self.assertIn("Weekly Read memo", line.split(" Incomplete: ")[1], "the notice names the row the file left open")
 
     def test_a_rejected_decision_files_nothing(self):
         flex, items = self.read_items()

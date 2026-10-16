@@ -273,19 +273,9 @@ def prepare(ledger: Ledger, mandu: Path, registry: Mapping, window: int) -> Plan
         for entry in ledger.entries.values()
         if isinstance(entry.get("weekly_change"), dict) and entry["weekly_change"].get("angle")
     ]
-    if "brand_rules" in plan.texts and brand_rules(plan.texts["brand_rules"]) is None:
-        unread["brand_rules"] = f"`{paths['brand_rules']}` could not be used as the brand rules"
-    bank: dict[str, kit.Angle] = {}
-    if "angles" in plan.texts:
-        try:
-            bank = kit.parse_angles(plan.texts["angles"])
-        except kit.KitError as error:
-            unread["angles"] = f"`{paths['angles']}` could not be used ({error})"
-    records: list = []
-    if CREATIVE_LOG in plan.texts:
-        _, records, why = log_records(paths[CREATIVE_LOG], plan.texts[CREATIVE_LOG])
-        if why:
-            unread[CREATIVE_LOG] = why
+    unread.update(unusable(paths, plan.texts))
+    bank = kit.parse_angles(plan.texts["angles"]) if "angles" in plan.texts and "angles" not in unread else {}
+    records = log_records(paths[CREATIVE_LOG], plan.texts[CREATIVE_LOG])[1] if CREATIVE_LOG in plan.texts else []
     for found in plan.owed:
         missing = [unread[role] for role in NEEDS[found.kind] if role in unread]
         if missing:
@@ -301,6 +291,26 @@ def prepare(ledger: Ledger, mandu: Path, registry: Mapping, window: int) -> Plan
             found.angle, found.asked = next_number(list(bank) + claimed + logged), True
             claimed.append(found.angle)
     return plan
+
+
+def unusable(paths: Mapping[str, str], texts: Mapping[str, str]) -> dict[str, str]:
+    """Why each package file read for a change could not be used, by its role: an Angle bank or A/B pairs file that
+    does not parse, brand rules that are not the brand rules, or a creative log with no list of Angle records. Such a
+    file is a failed source, never an empty one, and each reason names it."""
+    found = {}
+    for role, parse in (("angles", kit.parse_angles), ("pairs", kit.parse_pairs)):
+        if role not in texts:
+            continue
+        try:
+            parse(texts[role])
+        except kit.KitError as error:
+            found[role] = f"`{paths[role]}` could not be used ({error})"
+    if "brand_rules" in texts and brand_rules(texts["brand_rules"]) is None:
+        found["brand_rules"] = f"`{paths['brand_rules']}` could not be used as the brand rules"
+    why = log_records(paths[CREATIVE_LOG], texts[CREATIVE_LOG])[2] if CREATIVE_LOG in texts else ""
+    if why:
+        found[CREATIVE_LOG] = why
+    return found
 
 
 def next_number(taken: Sequence[str]) -> str:
@@ -965,7 +975,11 @@ def take_change(
     proposed: Sequence[str],
 ) -> tuple[list[Edit], str, list[str]]:
     """The change's two edits, to the Angle bank and the creative log, from the new Angle the Weekly Read session
-    wrote, which is removed once read; proposed holds the Hook of every other new Angle proposed."""
+    wrote, which is removed once read; proposed holds the Hook of every other new Angle proposed. A package file the
+    change is checked against or edits that could not be used leaves it owed, with the reason."""
+    why = [reason for role, reason in unusable(plan.paths, plan.texts).items() if role in NEEDS[CHANGE]]
+    if why:
+        return [], "; ".join(why), []
     name = f"{found.item}.md"
     if path is None:
         return [], f"no new Angle was written for it at `weekly-reads/{FOLDER}/{name}`", []
@@ -980,15 +994,9 @@ def take_change(
         return [], f"its new Angle, `weekly-reads/{FOLDER}/{name}`, was set aside", []
     bank_text = plan.texts["angles"]
     bank = kit.parse_angles(bank_text)
-    try:
-        pairs = kit.parse_pairs(plan.texts["pairs"])
-    except kit.KitError:
-        pairs = {}
-    rules = brand_rules(plan.texts.get("brand_rules", ""))
-    hooks = known_hooks(bank, pairs) + list(proposed)
-    cells, problems = check_row(
-        text, bank_text, found.key, found.angle, hooks, rules, plan.paths.get("brand_rules", "")
-    )
+    hooks = known_hooks(bank, kit.parse_pairs(plan.texts["pairs"])) + list(proposed)
+    rules = brand_rules(plan.texts["brand_rules"])
+    cells, problems = check_row(text, bank_text, found.key, found.angle, hooks, rules, plan.paths["brand_rules"])
     header, _ = kit.table(bank_text, BANK_COLUMNS)
     edits: list[Edit] = []
     if not problems:

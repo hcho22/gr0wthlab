@@ -346,3 +346,44 @@ From the gate's linked worktree at `c54361acd11cc8698b39809a98707efb63649723` wi
 ### What this round did not exercise
 
 - No real agent wrote a new Angle for a change of an Angle whose Hook cell is a stage direction; the refusal stands on the test and the scratch check above, which call the check the take-in runs.
+
+## Sixth round: an A/B pairs file that reads and does not parse
+
+The review of the fifth round found that the A/B pairs side of the one-Hook-one-Angle check failed open: when the A/B pairs file read but did not parse, the take-in checked a new Angle's Hook against no pair at all and filed the change, and nothing before the session parsed that file.
+On top of `f1c546358cbdb41d39d8d1ef34bed1b85ab71564`, one check (`weekly_changes.unusable`) now says why each package file a change edits or is checked against could not be used: an Angle bank or A/B pairs file that does not parse, brand rules that are not the brand rules, or a creative log with no list of Angle records.
+The plan made before the sessions uses it, so such a change waits with the file named and no session is asked for its new Angle, and so does the take-in of a change, which is what `check-work` runs on the plan recorded before the session, so that dry run names the file too instead of checking against no pairs, raising on an Angle bank that does not parse, or skipping the brand lint.
+A resolved pair's decision, which also needs the A/B pairs file, waits with the same reason its own edit gave before.
+The pairs file is one the post kit reads every run, and that read already marks its source line `unusable`; since the change's gap names the file, the line also names the Weekly Read memo, as the rule for such a file says, and `docs/operations.md` says so.
+
+Every check below ran on 2026-10-15, Mac local time (PDT), with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort where a real agent ran; a run identifier carries its time in UTC.
+The fix was not committed when they ran: its `src` tree was `2288f39cadfbd7ca6187196893590eb7b978e66d` and its `config` tree `92af9e1f5971bf9d4a3ff122fc50896e26a5e54a`, written from a throwaway index over `f1c546358cbdb41d39d8d1ef34bed1b85ab71564` with the working tree's `src` and `config`.
+
+### The failures before the fix
+
+Two new tests were run in a scratch copy of the working tree with `src/gr0wthlab/weekly_changes.py` put back as `f1c546358cbdb41d39d8d1ef34bed1b85ab71564` has it, the synthetic A/B pairs file in each with AB-2's leg B line lost and the new Angle for P07's change written with AB-1's leg B Hook.
+Each failed there, and each passes on the fix.
+
+| Test | What it showed before the fix |
+| --- | --- |
+| `ChangeThenKillTest.test_a_pairs_file_that_reads_and_does_not_parse_leaves_a_change_owed_and_names_the_file` | `check-work`'s dry run on the recorded plan filed the change with no problem, as `change-p07` |
+| `ApprovedDecisionRunTest.test_a_pairs_file_that_reads_and_does_not_parse_files_no_change_and_is_named_as_the_weekly_read_s_gap` | The run started the Weekly Read session for the new Angle |
+
+On the fix, the whole run starts no Weekly Read session and files no change, its Weekly Read memo row reads incomplete with the pairs file's source line first and then the change's own gap naming the file and the parse error, the file's source line reads `unusable` with that error, and the notice's line for the file names the Weekly Read memo among what it left incomplete.
+
+### The boundary
+
+From the gate's linked worktree at `f1c546358cbdb41d39d8d1ef34bed1b85ab71564` with the fix in its working tree, against Mandu and the Product checkouts as they are, with the SHA-256 of `git status --porcelain` the same before the preflight and after the check, and logs in a folder of the Mac's temporary directory named with `GR0WTHLAB_LOG_DIR`; `show-config` printed the configuration fingerprint `32af654b78b3cfc5e0c257fc93ed76e5c5f6a2c6efe42f2898b6f270e2276e43`, the same as in the third to fifth rounds.
+
+- `src/bin/gr0wthlab preflight`, run twice at 23:23, passed each time: six areas writable, 22 paths refused, no breach, a listing of the footage place `~/Mandu/projects/RepToday` refused, and neither listed host reached from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, from 23:23:37 to 23:24:26, passed at its first attempt as `20261016T062339Z-on-demand-1d8c`: 49 steps to prove, 28 tool calls in Codex's record with no problem, 17 of 17 file-tool targets refused each in a patch of its own, 19 kernel sandbox denials, the footage place's shell read refused, 1 of 1, 12 of 12 permitted sentinels written and none escaped, nothing unproven, the network probe's three targets refused inside the sandbox after its control reached its listener, two requests from the launcher's client, each a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed outside the areas.
+
+### Tests
+
+- Under `/usr/bin/python3`, Python 3.9.6, on the working tree: `tests.test_weekly_changes` and `tests.test_weekly_read`, 51 tests, none failed and none skipped.
+- `ruff check` and `ruff format --check` on `src` passed, with ruff 0.15.20.
+- The whole unit suite and CI's run were not part of this round.
+
+### What this round did not exercise
+
+- No lab ran `src/bin/gr0wthlab run` or `check-work` from a terminal on this round's code: the whole run above is `cycle.Cycle` with the no-model stand-in, and the dry run is the restore and take-in `check-work` calls.
+- The real A/B pairs file was not altered or read for this round; only the synthetic one was broken, in each test's own copy.

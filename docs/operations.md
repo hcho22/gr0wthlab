@@ -661,6 +661,7 @@ An Angle kept or tested, a pair to repost, a result that bears on the product, a
 Every edit replaces a text that appears exactly once in the file as the run read it, so Mandu applies it with no judgment, and is filed only when applying it changes exactly what the decision fixes and nothing else.
 A decision's proposal is filed once, and never again, whatever the Founder decides of it.
 One whose edit cannot be made, as when its file cannot be read or no longer holds the text, is filed by a later run once it can be: until then the Weekly Read row is incomplete with the reason, and the notice says which decision's proposal was not filed.
+A package file it edits or checks a new Angle against that reads and does not parse, such as an A/B pairs file with a leg lost, is a failed source, never an empty one: the change waits with the file named, no session is asked for its new Angle, and the file's source line is `unusable` and names the Weekly Read memo.
 The launcher reads `creative-log.json` only to make a kill's edit and a change's; it is not a package source, so no run snapshots it and the package review does not review it.
 
 ### The floor in the package
