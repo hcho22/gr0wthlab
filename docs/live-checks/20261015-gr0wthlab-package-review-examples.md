@@ -149,3 +149,40 @@ Altogether the checks ran 189 sessions, 13,941 seconds of agent time, about 1.63
 - The gate itself (`examples.gate`) deciding a proposed Instructions change against this set: the runs above call the function it calls for each example, and no change was proposed through the learning loop.
 - A weekly run on a real package: whether the new step 1 and step 2 lines change what a review of RepToday's or Immerse's own package finds rests on these synthetic examples alone.
 - More runs of examples 1, 2, 5, 6, and 7, which ran twice on each side.
+
+## Round E: after the merge with `main`
+
+The branch took in `main` at `2af81a45181bc0ddb297cf604cecf73ed7d07fee` with one merge commit, `4a300176fe548556b6e29edbb27c5eb82e59ad81`, which brought the Hook claim fix and the Instructions-notice guidance fix: `items.md` now says what an item may not supersede and the exact rule by which the launcher refuses a repeat, and the brief's lines on open items changed with it.
+Both reach the Package review session, whose task definition carries `common.md` and `items.md`.
+`items.md` now also says when a proposal declares `new_angle: yes` and that a fix bringing stale text in line is `no`, so commit `42a505b` rewords the task definition's step 2 to say only what `items.md` does not: a proposal that leaves the choice to the Founder is `no` as well, and no contradiction is left unwritten for want of a quote record.
+
+Run on 2026-10-15 from 18:59 to 19:12 PDT, as in the rounds above, from a fresh clone at `42a505b72acb73aba379775ecee6a7e845e3e8af` (`src` tree `bae03e6a8519a7dca6f9a248f1085225097aad2b`, `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`), with the same Codex CLI, model, and effort; `git status` in the clone was empty after its last run.
+
+| Example | Runs | All checks held | Round D, for comparison |
+| --- | --- | --- | --- |
+| 1 | `a14c`, `36b1` (failed), `3632`, `20a5`, `118d` | 4 of 5 | 2 of 2 |
+| 2 | `2654`, `1b0c` | 2 of 2 | 2 of 2 |
+| 3 | `77c5`, `9305`, `1cc6`, `b8d7`, `442f` | 5 of 5 | 5 of 5 |
+| 4 | `11de`, `a8f1`, `a913`, `b46a`, `c0ed` | 5 of 5 | 5 of 5 |
+| 5 | `d187`, `c342` | 2 of 2 | 2 of 2 |
+| 6 | `5845`, `d887` | 2 of 2 | 2 of 2 |
+| 7 | `985c`, `215c` | 2 of 2 | 2 of 2 |
+| 8 | `0422`, `e04c`, `477f`, `84f4`, `77ab` | 5 of 5 | 10 of 10 |
+| 9 | `d61a`, `4a47`, `40dc`, `d189`, `ce5f` | 5 of 5 | 10 of 10 |
+| 10 | `c98a`, `d3ac`, `fd89`, `549a`, `3d2c` | 5 of 5 | 5 of 5 |
+
+No session queued a proposal beyond the one its example plants.
+Example 1's `36b1` read none of its 16 listed files, by the launcher's count, and closes `Session: incomplete`, saying the package files and the snapshot were not at their paths.
+Its event record shows its first command failed to start and every package path it then tried named the lab's folder with one `/` left out (`…0000gnT/gr0wthlab-prx/…` for `…0000gn/T/gr0wthlab-prx/…`), while its reads by relative path succeeded; example 1 then ran three more times, `3632`, `20a5`, and `118d`, and held each time.
+Two other sessions read fewer than all their listed files: `477f` (example 8) 11 of 16 and `5845` (example 6) 15 of 16; both held every check.
+
+| Side | Sessions | Ran to their end | Closing line `Session: complete` | Package files read of those listed | Proposals queued | Agent seconds | Cost (USD, API prices) | Per session |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Round E, the merged head | 38 | 38 | 37 | 586 of 608 | 32 | 2,413 | 0.335 | 64 s, 0.0088 |
+
+| Command | Where | What the records showed |
+| --- | --- | --- |
+| `ruff check src src/bin/gr0wthlab` and `ruff format --check src src/bin/gr0wthlab` (ruff 0.15.20) | the worktree at `42a505b` | all checks passed; 107 files already formatted |
+| `/usr/bin/python3 -m unittest discover -s src/tests -t src` | a clone at `42a505b` | 1,484 tests OK in 2,319 seconds |
+
+What this round did not exercise: the Post Drafts set, since this branch changes no file it reads and the merged changes to `items.md` were measured on it in their own records; `main`'s side again, since round 1 above is that side for the package review set; and anything round 1 to D left out.
