@@ -271,7 +271,7 @@ The review of the merged head found two places where the agent was not told exac
 - `items.md` said the launcher refuses only an exact repeat.
   It now says an item is refused as a repeat when its kind, `# ` title, and text match an open or decided item's once case and spacing are ignored, the text being a proposal's `## Proposal` section and a Dispatch request's `## Request` section (`exchange.item_hash`), and also when it has the kind and title of a queued item whose file the launcher could not read (`queue.may_repeat`); any other repeat is the session's own to catch.
 
-This round's code is not committed yet: it is commit `c368c0e5ecf73d887868b18822bfaaa21808ce82` with the change on top, `src` tree `e591ea8c80317cbc9acd00a9eb56d498a6696c88` and `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
+This round ran on the code of the commit that adds this record, on top of `c368c0e5ecf73d887868b18822bfaaa21808ce82`: `src` tree `e591ea8c80317cbc9acd00a9eb56d498a6696c88` and `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
 The other side is `main` at `05006936783d2e2cb6f08d91fa675182f0f6de24` (`src` tree `fb1d365d5c58b6b74a35a0c1bf1b13c777abab32`, the same as `b757595`'s, and the same `config` tree).
 The two sides' `src/instructions/` differ only in `items.md`: the change's lines that name a Weekly Read decision and the notice of an Instructions change, and its three lines of the repeat rule in place of `main`'s one.
 Run on 2026-10-15 from 16:45 to 17:34 PDT, Codex CLI `codex-cli 0.160.0`, at the model and reasoning effort in `config/guardrails/runtime.json` (`gpt-6-luna`, high).
