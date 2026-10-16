@@ -54,7 +54,7 @@ Rules for items:
 - The brief lists the items earlier sessions of this run left in the incoming folder, which are not queued yet.
   Read each one that touches a file your work uses, write nothing that asks the same, and leave those files as they are.
 - Do not propose again what the Founder already rejected unless new Evidence answers the reason.
-  The launcher refuses an item as a repeat when its kind, `# ` title, and text match an open or decided item's once case and spacing are ignored: the text compared is a proposal's `## Proposal` section, and a Dispatch request's `## Request` section.
+  The launcher refuses an item as a repeat when its kind, `# ` title, and text match those of any item ever queued, whether open, decided, or superseded, once case and spacing are ignored: the text compared is a proposal's `## Proposal` section, and a Dispatch request's `## Request` section.
   It also refuses one with the same kind and `# ` title as a queued item whose file it could not read.
   Any other repeat, a reworded one included, is yours to catch: rewording an ask does not make it new.
 - Quote only the specific package text a proposal uses or replaces, citing its file; never copy a package file or a large part of one.

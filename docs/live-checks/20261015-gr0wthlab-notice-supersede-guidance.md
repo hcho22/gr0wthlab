@@ -3,7 +3,7 @@
 This file records what was run on the Founder's Mac for the change that tells the agent, in `src/instructions/weekly-run/items.md` and in the brief's Review Queue section (`report.item_lines`), that the notice of a change to the Instructions cannot be superseded by any item and that only the Founder's decision closes it.
 From round 4 on, the change also tells it the same of a Weekly Read decision, which changes only through the Weekly Read memo.
 The launcher's rule in `Ledger` (`src/gr0wthlab/queue.py`) is unchanged.
-No configuration and no permission profile changed; rounds 1 to 3 ran no `preflight` or `boundary-check`, and round 4, which changed `report.py` again, ran both.
+No configuration and no permission profile changed; rounds 1 to 3 and round 5 ran no `preflight` or `boundary-check`, and round 4, which changed `report.py` again, ran both.
 
 ## Round 1: the gap on main, the unit suite, and the example sets on both sides
 
@@ -368,5 +368,69 @@ The sample does not tell a difference of that size from the run-to-run variance 
 ### What was not exercised
 
 - A session with the real agent whose brief lists an open Weekly Read decision or the notice of a kept Instructions change, or whose queue holds an item a reworded proposal would repeat: no example set holds one, so the wording's effect where it applies was not measured; the brief's header and marks rest on the unit tests that hold them, and the refusals on the launcher's unchanged rules.
+- The Rejection reasons session, which also carries `items.md`: it has no example set.
+- A weekly run in the production clone.
+
+## Round 5: the repeat rule names superseded items
+
+The review after round 4 found that `items.md` said an item is compared with an open or decided item's kind, title, and text, while the launcher compares it with every item the Review Queue has held, superseded ones included: `state.item_hashes` takes the fingerprint of every entry of the ledger, open or closed, and the launcher's list of known fingerprints is built from all of them.
+`items.md` now says the repeat check compares against any item ever queued, whether open, decided, or superseded; the rest of the rule is as round 4 measured it.
+This round changed only that sentence of a task definition and no launcher code, so it ran no `preflight` or `boundary-check`.
+
+This round ran on the code of the commit that adds this record, on top of `66a737c84eb586afe3d501e23378bc57b6249de0`: `src` tree `74308c217117f51d883415ee0cb0028d7403e98e` and `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
+`main` was still `05006936783d2e2cb6f08d91fa675182f0f6de24`, the `main` side of round 4, so only the change's side ran, and its runs are compared with round 4's first pass on `main`.
+Run on 2026-10-15 from 17:44 to 17:47 PDT, with the same Codex CLI and effort as round 4, and a scratch script like round 4's with up to ten sessions at a time.
+`/usr/bin/python3 -m unittest tests.test_sessions`, run from `src/` beside them, which puts every task definition together from its parts, passed: 35 tests OK.
+
+### The example sets, with the real agent
+
+Each lab's brief listed the Waitlist Dispatch request and the filming plan, each marked as filed by the launcher, under the change's header; no brief listed a Weekly Read decision or the notice of an Instructions change.
+
+Each example of both sets once (lab run identifiers after `20261011T230000Z-on-demand-`):
+
+| Set | Example | Round 4 `main` run | `main` checks held | Change run | Change checks held |
+| --- | --- | --- | --- | --- | --- |
+| Package review | 1 | `064a` | 2 of 2 | `30e0` | 2 of 2 |
+| Package review | 2 | `2306` | 2 of 2 | `3b60` | 2 of 2 |
+| Package review | 3 | `464a` | 1 of 2 | `1700` | 1 of 2 |
+| Package review | 4 | `4d3e` | 2 of 2 | `523e` | 2 of 2 |
+| Package review | 5 | `c0e9` | 2 of 2 | `a0cf` | 2 of 2 |
+| Package review | 6 | `a732` | 2 of 2 | `06b1` | 2 of 2 |
+| Package review | 7 | `68ec` | 2 of 2 | `8069` | 2 of 2 |
+| Package review | 8 | `9351` | 2 of 2 | `cb45` | 2 of 2 |
+| Package review | 9 | `220a` | 2 of 2 | `aa0e` | 1 of 2 |
+| Package review | 10 | `8707` | 2 of 3 | `85e5` | 2 of 3 |
+| Post Drafts | 1 | `cd9f` | 4 of 4 | `789b` | 4 of 4 |
+| Post Drafts | 2 | `cc92` | 3 of 3 | `ec9b` | 3 of 3 |
+| Post Drafts | 8 | `cf2a` | 1 of 1 | `3137` | 1 of 1 |
+| Post Drafts | 16 | `9253` | 3 of 3 | `be3b` | 3 of 3 |
+| Post Drafts | 17 | `0385` | 5 of 5 | `b97c` | 5 of 5 |
+| Post Drafts | 18 | `670c` | 4 of 4 | `586f` | 4 of 4 |
+| Post Drafts | 19 | `3ac8` | 4 of 4 | `90e0` | 4 of 4 |
+| Post Drafts | 20 | `ce0e` | 5 of 5 | `b6f1` | 5 of 5 |
+| Post Drafts | 21 | `9f9e` | 3 of 3 | `6dc8` | 3 of 3 |
+| Post Drafts | 22 | `9c94` | 3 of 3 | `3c70` | 3 of 3 |
+
+Every example held the same checks as its round 4 run on `main` except Package review 9, whose session queued one proposal, "clarify factual consequence copy", in a package that differs only in text it marks as history; on `main`, example 9 held every check in 3 of round 4's 5 runs and failed this same check in the other 2.
+Package review 3 and 10 failed as they did on `main`: no queued proposal cited both `ab-pairs.md` and `angles.md`.
+No item any session wrote named `supersedes` or was set aside as a repeat.
+
+The launcher's counts of each session, beside the same counts of round 4's first pass on `main`:
+
+| Set and side | Sessions | Ran to their end | Closing line `Session: complete` | Package files read of those listed | Proposals queued | Draft claims with a code location, without | Agent seconds | Cost (USD, API prices) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Package review, `main`, round 4's first pass | 10 | 10 | 9 | 160 of 160 | 9 | none written | 717 | 0.096 |
+| Package review, change | 10 | 10 | 10 | 160 of 160 | 10 | none written | 660 | 0.090 |
+| Post Drafts, `main`, round 4's first pass | 10 | 10 | 10 | 107 of 110 | 4 | 13, 1 | 903 | 0.117 |
+| Post Drafts, change | 10 | 10 | 10 | 110 of 110 | 4 | 14, 2 | 781 | 0.117 |
+
+Altogether this round ran 20 sessions, 1,441 seconds of agent time, about 0.21 dollars at API prices.
+
+What the numbers show: with the final wording, the counts the launcher keeps of each session are the same or within a session's variance as round 4's first pass on `main`, and 19 of the 20 examples held the same checks; the one that did not, Package review 9, also failed that check on `main` in 2 of round 4's 5 runs.
+
+### What was not exercised
+
+- `main`'s side, which was not run again: its round 4 runs stand for it, on the same commit.
+- A session with the real agent whose queue holds a superseded item that a proposal would repeat, or whose brief lists an open Weekly Read decision or the notice of a kept Instructions change: no example set holds one, so the wording's effect where it applies was not measured, and the refusals rest on the launcher's unchanged rules.
 - The Rejection reasons session, which also carries `items.md`: it has no example set.
 - A weekly run in the production clone.
