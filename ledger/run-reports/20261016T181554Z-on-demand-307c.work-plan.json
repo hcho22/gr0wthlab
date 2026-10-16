@@ -1,0 +1,162 @@
+{
+  "instructions": {
+    "reasons": [],
+    "why": "no rejection reason may lead to one",
+    "workflow": null
+  },
+  "listening": {
+    "confirmed": {},
+    "fit_path": "projects/RepToday/gtm/02-brand/positioning.md",
+    "fit_readable": true,
+    "limits": {
+      "site": "reptoday.app",
+      "waitlist_live": false
+    },
+    "product": "RepToday",
+    "replies": {},
+    "rules": {
+      "bodyweightfitness": "no reply Draft is offered: its rules could not be read (not read: robots.txt on www.reddit.com disallows it for automated readers (`Disallow: /`))",
+      "fitness30plus": "no reply Draft is offered: its rules could not be read (not read: robots.txt on www.reddit.com disallows it for automated readers (`Disallow: /`))",
+      "getdisciplined": "no reply Draft is offered: its rules could not be read (not read: robots.txt on www.reddit.com disallows it for automated readers (`Disallow: /`))"
+    },
+    "snapshot": "working/20261016T181554Z-on-demand-307c.sources.json"
+  },
+  "outreach": {
+    "limits": {
+      "site": "reptoday.app",
+      "waitlist_live": false
+    },
+    "plan_path": "projects/RepToday/gtm/06-channels/channel-plan.md",
+    "problem": "",
+    "product": "RepToday",
+    "skipped": [],
+    "slots": [
+      {
+        "approved": null,
+        "key": "network",
+        "label": "your personal network",
+        "link_source": "src/dispatches/reptoday-waitlist.md",
+        "open": null,
+        "path": "drafts/messages/outreach/network-ask.md",
+        "plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+        "purpose": "network-ask",
+        "reason": "",
+        "rejected": [],
+        "required": true,
+        "sent_on": "",
+        "source_link": "reptoday.app/network",
+        "wait_days": 0
+      },
+      {
+        "approved": null,
+        "key": "gmb-fitness",
+        "label": "GMB Fitness",
+        "link_source": "",
+        "open": null,
+        "path": "drafts/messages/outreach/creator-gmb-fitness.md",
+        "plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+        "purpose": "creator",
+        "reason": "",
+        "rejected": [],
+        "required": true,
+        "sent_on": "",
+        "source_link": "",
+        "wait_days": 7
+      },
+      {
+        "approved": null,
+        "key": "gmb-fitness",
+        "label": "GMB Fitness",
+        "link_source": "",
+        "open": null,
+        "path": "drafts/messages/outreach/follow-up-gmb-fitness.md",
+        "plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+        "purpose": "creator-follow-up",
+        "reason": "the first message to GMB Fitness is not approved yet",
+        "rejected": [],
+        "required": false,
+        "sent_on": "",
+        "source_link": "",
+        "wait_days": 0
+      },
+      {
+        "approved": null,
+        "key": "hybrid-calisthenics",
+        "label": "Hybrid Calisthenics",
+        "link_source": "",
+        "open": null,
+        "path": "drafts/messages/outreach/creator-hybrid-calisthenics.md",
+        "plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+        "purpose": "creator",
+        "reason": "",
+        "rejected": [],
+        "required": true,
+        "sent_on": "",
+        "source_link": "",
+        "wait_days": 7
+      },
+      {
+        "approved": null,
+        "key": "hybrid-calisthenics",
+        "label": "Hybrid Calisthenics",
+        "link_source": "",
+        "open": null,
+        "path": "drafts/messages/outreach/follow-up-hybrid-calisthenics.md",
+        "plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+        "purpose": "creator-follow-up",
+        "reason": "the first message to Hybrid Calisthenics is not approved yet",
+        "rejected": [],
+        "required": false,
+        "sent_on": "",
+        "source_link": "",
+        "wait_days": 0
+      },
+      {
+        "approved": null,
+        "key": "the-bioneer",
+        "label": "The Bioneer",
+        "link_source": "",
+        "open": null,
+        "path": "drafts/messages/outreach/creator-the-bioneer.md",
+        "plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+        "purpose": "creator",
+        "reason": "",
+        "rejected": [],
+        "required": true,
+        "sent_on": "",
+        "source_link": "",
+        "wait_days": 7
+      },
+      {
+        "approved": null,
+        "key": "the-bioneer",
+        "label": "The Bioneer",
+        "link_source": "",
+        "open": null,
+        "path": "drafts/messages/outreach/follow-up-the-bioneer.md",
+        "plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+        "purpose": "creator-follow-up",
+        "reason": "the first message to The Bioneer is not approved yet",
+        "rejected": [],
+        "required": false,
+        "sent_on": "",
+        "source_link": "",
+        "wait_days": 0
+      }
+    ]
+  },
+  "run": "20261016T181554Z-on-demand-307c",
+  "weekly_changes": {
+    "paths": {
+      "angles": "projects/RepToday/gtm/05-social-pmf/angles.md",
+      "brand_rules": "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json",
+      "calendar": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md",
+      "creative_log": "projects/RepToday/gtm/05-social-pmf/creative-log.json",
+      "pairs": "projects/RepToday/gtm/05-social-pmf/ab-pairs.md"
+    },
+    "product": "RepToday",
+    "window": 1,
+    "words": []
+  },
+  "weekly_read": null
+}

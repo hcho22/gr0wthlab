@@ -1,0 +1,22 @@
+{
+  "codes": {
+    "execution": [
+      "tone",
+      "length",
+      "factual-slip",
+      "format"
+    ],
+    "strategy": [
+      "fit",
+      "angle",
+      "claim",
+      "positioning"
+    ]
+  },
+  "format": 1,
+  "note": "Each reason is the Founder's own words, kept in its decision's Evidence. A count reads as n of m rejections of its workflow, never as a percentage. An execution code may refine Instructions, only through its workflow's example set (ADR 0003); a strategy code becomes a package-change proposal and never does.",
+  "reasons": [],
+  "updated_at": "2026-10-16T18:24:24.288823+00:00",
+  "updated_by_run": "20261016T181554Z-on-demand-307c",
+  "workflows": {}
+}

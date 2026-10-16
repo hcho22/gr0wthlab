@@ -1,0 +1,94 @@
+{
+  "code": {
+    "commit": "8455108032f3b988561fa34f50d3fc4229e10e9a",
+    "problem": null
+  },
+  "due": [
+    {
+      "approved": null,
+      "day": 1,
+      "open": null,
+      "rejected": [],
+      "slot": null
+    },
+    {
+      "approved": null,
+      "day": 2,
+      "open": null,
+      "rejected": [],
+      "slot": null
+    },
+    {
+      "approved": null,
+      "day": 3,
+      "open": null,
+      "rejected": [],
+      "slot": null
+    },
+    {
+      "approved": null,
+      "day": 4,
+      "open": null,
+      "rejected": [],
+      "slot": null
+    },
+    {
+      "approved": null,
+      "day": 5,
+      "open": null,
+      "rejected": [],
+      "slot": null
+    },
+    {
+      "approved": null,
+      "day": 6,
+      "open": null,
+      "rejected": [],
+      "slot": null
+    },
+    {
+      "approved": null,
+      "day": 7,
+      "open": null,
+      "rejected": [],
+      "slot": null
+    }
+  ],
+  "kit": {
+    "angles": {
+      "path": "projects/RepToday/gtm/05-social-pmf/angles.md",
+      "sha256": "73649503bc9c48682a033b5dcd169f74dba60582a004c881f8e65cb91c0271b1"
+    },
+    "brand_rules": {
+      "path": "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json",
+      "sha256": "52be5ecc2b93d89e55bd7a475f34c8759576e799ad7e409d97b06d3a04cb0ad2"
+    },
+    "calendar": {
+      "path": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md",
+      "sha256": "ce350354ea269d4ec3ac9b89008cc8ba200af9cb13c0b4610c352e0215a35667"
+    },
+    "checklist": {
+      "path": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md",
+      "sha256": "634681943f2a97f34b5c6c0dc8b86c2b654b5b423cbd2affec0433955429d79d"
+    },
+    "competitors": {
+      "path": "projects/RepToday/gtm/01-research/",
+      "sha256": "c9acfd550573e9b1166305bac95f456fc868c995106d2e4b1cdd0fb1f48eb853"
+    },
+    "pairs": {
+      "path": "projects/RepToday/gtm/05-social-pmf/ab-pairs.md",
+      "sha256": "06ef86f0f3adf5c044ce3b27f5481e76e0969ce46eb86c55eda550422cb154ab"
+    },
+    "platforms": {
+      "path": "projects/RepToday/gtm/05-social-pmf/platform-assignment.md",
+      "sha256": "0de409ac9d62c7e849361802ff94ba0a4749ad349ff82b9c96b7673bf3d7ff31"
+    }
+  },
+  "posted": {},
+  "product": "RepToday",
+  "reason": "Window 1's first sitting is not set in config/run.json, so this run prepares days 1 to 7 as the first batch, with no posting slot yet.",
+  "run": "20261016T181554Z-on-demand-307c",
+  "skipped": [],
+  "waitlist_live": false,
+  "window": 1
+}

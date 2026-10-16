@@ -1,0 +1,361 @@
+{
+  "format": 1,
+  "mandu": "/Users/hcho/Mandu",
+  "note": "Fingerprints only; the package itself stays in Mandu.",
+  "previous_run": null,
+  "products": {
+    "RepToday": {
+      "changes": {
+        "added": [],
+        "changed": [],
+        "removed": []
+      },
+      "files": [
+        {
+          "bytes": 5761,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md",
+          "read_at": "2026-10-16T18:15:55.886303+00:00",
+          "sha256": "ce350354ea269d4ec3ac9b89008cc8ba200af9cb13c0b4610c352e0215a35667",
+          "source": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md",
+          "status": "read"
+        },
+        {
+          "bytes": 14864,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/05-social-pmf/angles.md",
+          "read_at": "2026-10-16T18:15:55.886732+00:00",
+          "sha256": "73649503bc9c48682a033b5dcd169f74dba60582a004c881f8e65cb91c0271b1",
+          "source": "projects/RepToday/gtm/05-social-pmf/angles.md",
+          "status": "read"
+        },
+        {
+          "bytes": 4167,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/05-social-pmf/ab-pairs.md",
+          "read_at": "2026-10-16T18:15:55.887165+00:00",
+          "sha256": "06ef86f0f3adf5c044ce3b27f5481e76e0969ce46eb86c55eda550422cb154ab",
+          "source": "projects/RepToday/gtm/05-social-pmf/ab-pairs.md",
+          "status": "read"
+        },
+        {
+          "bytes": 6247,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/05-social-pmf/platform-assignment.md",
+          "read_at": "2026-10-16T18:15:55.887580+00:00",
+          "sha256": "0de409ac9d62c7e849361802ff94ba0a4749ad349ff82b9c96b7673bf3d7ff31",
+          "source": "projects/RepToday/gtm/05-social-pmf/platform-assignment.md",
+          "status": "read"
+        },
+        {
+          "bytes": 4597,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/05-social-pmf/read-the-results.md",
+          "read_at": "2026-10-16T18:15:55.887988+00:00",
+          "sha256": "04c3e6b5d8a270a6d49b92a6a83127e4d32d8a7b417c4bf47c9b73745785ec44",
+          "source": "projects/RepToday/gtm/05-social-pmf/read-the-results.md",
+          "status": "read"
+        },
+        {
+          "bytes": 19371,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/02-brand/brand-guidelines.md",
+          "read_at": "2026-10-16T18:15:55.888443+00:00",
+          "sha256": "ea7044130e93f1467b114c732e47203ab9896e5e9c6a5b395f45294d0b8429f5",
+          "source": "projects/RepToday/gtm/02-brand/brand-guidelines.md",
+          "status": "read"
+        },
+        {
+          "bytes": 8473,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/02-brand/positioning.md",
+          "read_at": "2026-10-16T18:15:55.888824+00:00",
+          "sha256": "272c9b902b80f86881ce08a48974e755e4c86f1a9e7e397b16e45c71a7361911",
+          "source": "projects/RepToday/gtm/02-brand/positioning.md",
+          "status": "read"
+        },
+        {
+          "bytes": 1741,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json",
+          "read_at": "2026-10-16T18:15:55.889202+00:00",
+          "sha256": "52be5ecc2b93d89e55bd7a475f34c8759576e799ad7e409d97b06d3a04cb0ad2",
+          "source": "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json",
+          "status": "read"
+        },
+        {
+          "bytes": 10329,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md",
+          "read_at": "2026-10-16T18:15:55.889635+00:00",
+          "sha256": "634681943f2a97f34b5c6c0dc8b86c2b654b5b423cbd2affec0433955429d79d",
+          "source": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md",
+          "status": "read"
+        },
+        {
+          "bytes": 20219,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/06-channels/channel-plan-v1.md",
+          "read_at": "2026-10-16T18:15:55.890261+00:00",
+          "sha256": "f4a7240c22d1b9d2d4af9e86dd1ed12653863e20ef1b3198e57ca80a112d8579",
+          "source": "projects/RepToday/gtm/06-channels/",
+          "status": "read"
+        },
+        {
+          "bytes": 20061,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/06-channels/channel-plan.md",
+          "read_at": "2026-10-16T18:15:55.890707+00:00",
+          "sha256": "5012a57b3a9cc5d46c7286b5c695c33fec864b1e4db745fe25f62c2cb7d5ff9c",
+          "source": "projects/RepToday/gtm/06-channels/",
+          "status": "read"
+        },
+        {
+          "bytes": 7719,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/06-channels/event-metric-schema.md",
+          "read_at": "2026-10-16T18:15:55.891111+00:00",
+          "sha256": "c90cfbdcac3539a78da98251d790b23b4aefb8b0522eeab023f2d436902875f2",
+          "source": "projects/RepToday/gtm/06-channels/",
+          "status": "read"
+        },
+        {
+          "bytes": 48137,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/07-thesis/investment-thesis.md",
+          "read_at": "2026-10-16T18:15:55.891819+00:00",
+          "sha256": "e251b2e0c041b345ea40db9340a9593ebc5c3e01681d2ea23c68f9f07b97b8af",
+          "source": "projects/RepToday/gtm/07-thesis/",
+          "status": "read"
+        },
+        {
+          "bytes": 23986,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/07-thesis/k8-wedge-comprehension-rubric.md",
+          "read_at": "2026-10-16T18:15:55.892303+00:00",
+          "sha256": "a8dbfa0e40e01ad432633987b570b69533bad26987b4aab4d1395ddbbcb5592f",
+          "source": "projects/RepToday/gtm/07-thesis/",
+          "status": "read"
+        },
+        {
+          "bytes": 11409,
+          "change": "first read",
+          "path": "projects/RepToday/02-marketing-launch-checklist_260807.md",
+          "read_at": "2026-10-16T18:15:55.892686+00:00",
+          "sha256": "db49a469f8a85e28d293a2c75895cd85915a4011cee03c47d44126125e2750da",
+          "source": "projects/RepToday/02-marketing-launch-checklist_260807.md",
+          "status": "read"
+        },
+        {
+          "bytes": 10356,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/09-extras/marketing-agent/BUILD-SPEC.md",
+          "read_at": "2026-10-16T18:15:55.893072+00:00",
+          "sha256": "e084f32872431f054d2038c65b5fcaa9998cf480a004bcf7d66405d72ba17764",
+          "source": "projects/RepToday/gtm/09-extras/marketing-agent/BUILD-SPEC.md",
+          "status": "read"
+        },
+        {
+          "bytes": 10969,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/01-research/competitor-apple-fitness-plus.md",
+          "read_at": "2026-10-16T18:15:55.893764+00:00",
+          "sha256": "5346e84db4a255c3d3fde2dd4164c3c9576b907ab9dd588fc4338209d941f8d2",
+          "source": "projects/RepToday/gtm/01-research/",
+          "status": "read"
+        },
+        {
+          "bytes": 11486,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/01-research/competitor-caliber.md",
+          "read_at": "2026-10-16T18:15:55.894155+00:00",
+          "sha256": "b1227507f69e9e5cf71ee320d7c1dae2ec0838d7133bc0eb3222a77f96ad75c0",
+          "source": "projects/RepToday/gtm/01-research/",
+          "status": "read"
+        },
+        {
+          "bytes": 10211,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/01-research/competitor-down-dog.md",
+          "read_at": "2026-10-16T18:15:55.894535+00:00",
+          "sha256": "f26249704c8f605625cf5c183fd209b573cb886edd435c86c59302af662d4630",
+          "source": "projects/RepToday/gtm/01-research/",
+          "status": "read"
+        },
+        {
+          "bytes": 11822,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/01-research/competitor-freeletics.md",
+          "read_at": "2026-10-16T18:15:55.894918+00:00",
+          "sha256": "d74a76a36a9e119a8b5ca6d88e3964cf72adbe6f0e6bb1e8383c81739957e06b",
+          "source": "projects/RepToday/gtm/01-research/",
+          "status": "read"
+        },
+        {
+          "bytes": 11330,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/01-research/competitor-ladder.md",
+          "read_at": "2026-10-16T18:15:55.895316+00:00",
+          "sha256": "7c34c9bac874aaba67721ee4021f4d83359b577f9ca90ebaa6cb2db4a7b168eb",
+          "source": "projects/RepToday/gtm/01-research/",
+          "status": "read"
+        },
+        {
+          "bytes": 10693,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/01-research/competitor-nike-training-club.md",
+          "read_at": "2026-10-16T18:15:55.895716+00:00",
+          "sha256": "f40c5a90b4959b30c5e73164f64e2aa46d70672fd3093a5e284796a7331fd455",
+          "source": "projects/RepToday/gtm/01-research/",
+          "status": "read"
+        },
+        {
+          "bytes": 10824,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/01-research/competitor-peloton-app.md",
+          "read_at": "2026-10-16T18:15:55.896083+00:00",
+          "sha256": "15f2b836572267cc6555a8a23012f77d79d9b5f6b26bea034e39b54f0f73e11d",
+          "source": "projects/RepToday/gtm/01-research/",
+          "status": "read"
+        },
+        {
+          "bytes": 5348,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/01-research/competitor-sweat.md",
+          "read_at": "2026-10-16T18:15:55.896470+00:00",
+          "sha256": "b25ca98b2ed3d17b888ea987662e778d9a4e67778b55058e60ed3be1987d8a2f",
+          "source": "projects/RepToday/gtm/01-research/",
+          "status": "read"
+        },
+        {
+          "bytes": 10888,
+          "change": "first read",
+          "path": "projects/RepToday/gtm/01-research/competitors-additional.md",
+          "read_at": "2026-10-16T18:15:55.896878+00:00",
+          "sha256": "802ffd7937fc8c2e8de186e58e2595e179d6d0a224e0cf7b5d96bf8d14d5e8ef",
+          "source": "projects/RepToday/gtm/01-research/",
+          "status": "read"
+        }
+      ],
+      "sources": [
+        {
+          "needed_by": [
+            "post-drafts",
+            "filming-plan",
+            "weekly-read"
+          ],
+          "path": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md",
+          "status": "read"
+        },
+        {
+          "needed_by": [
+            "post-drafts",
+            "filming-plan",
+            "weekly-read",
+            "listening"
+          ],
+          "path": "projects/RepToday/gtm/05-social-pmf/angles.md",
+          "status": "read"
+        },
+        {
+          "needed_by": [
+            "post-drafts",
+            "filming-plan",
+            "weekly-read"
+          ],
+          "path": "projects/RepToday/gtm/05-social-pmf/ab-pairs.md",
+          "status": "read"
+        },
+        {
+          "needed_by": [
+            "post-drafts"
+          ],
+          "path": "projects/RepToday/gtm/05-social-pmf/platform-assignment.md",
+          "status": "read"
+        },
+        {
+          "needed_by": [
+            "weekly-read"
+          ],
+          "path": "projects/RepToday/gtm/05-social-pmf/read-the-results.md",
+          "status": "read"
+        },
+        {
+          "needed_by": [
+            "post-drafts",
+            "outreach-drafts",
+            "beta-recruiting"
+          ],
+          "path": "projects/RepToday/gtm/02-brand/brand-guidelines.md",
+          "status": "read"
+        },
+        {
+          "needed_by": [
+            "listening"
+          ],
+          "path": "projects/RepToday/gtm/02-brand/positioning.md",
+          "status": "read"
+        },
+        {
+          "needed_by": [
+            "post-drafts",
+            "outreach-drafts",
+            "beta-recruiting"
+          ],
+          "path": "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json",
+          "status": "read"
+        },
+        {
+          "needed_by": [
+            "post-drafts",
+            "outreach-drafts"
+          ],
+          "path": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md",
+          "status": "read"
+        },
+        {
+          "needed_by": [
+            "waitlist-counts",
+            "outreach-drafts",
+            "beta-recruiting"
+          ],
+          "path": "projects/RepToday/gtm/06-channels/",
+          "status": "read"
+        },
+        {
+          "needed_by": [
+            "beta-recruiting"
+          ],
+          "path": "projects/RepToday/gtm/07-thesis/",
+          "status": "read"
+        },
+        {
+          "needed_by": [
+            "post-drafts",
+            "outreach-drafts"
+          ],
+          "path": "projects/RepToday/02-marketing-launch-checklist_260807.md",
+          "status": "read"
+        },
+        {
+          "needed_by": [
+            "post-drafts"
+          ],
+          "path": "projects/RepToday/gtm/09-extras/marketing-agent/BUILD-SPEC.md",
+          "status": "read"
+        },
+        {
+          "files_starting_with": "competitor",
+          "needed_by": [
+            "post-drafts",
+            "listening"
+          ],
+          "path": "projects/RepToday/gtm/01-research/",
+          "status": "read"
+        }
+      ]
+    }
+  },
+  "run": "20261016T181554Z-on-demand-307c",
+  "taken_at": "2026-10-16T18:15:55.896906+00:00"
+}
