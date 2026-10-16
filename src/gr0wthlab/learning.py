@@ -96,6 +96,8 @@ def workflow_of(entry: Mapping[str, object]) -> str:
             return "beta-recruiting"
         purpose = (entry.get("message") or {}).get("purpose")
         return "listening" if purpose == "reply" else "outreach"
+    if item_kind == "package-change-proposal" and entry.get("weekly_change"):
+        return "weekly-read"  # the exact edit an approved Weekly Read decision owes (weekly_changes)
     if item_kind == "package-change-proposal":
         return "listening" if entry.get("listening") else "package-review"
     if item_kind == "notice" and entry.get("instructions"):

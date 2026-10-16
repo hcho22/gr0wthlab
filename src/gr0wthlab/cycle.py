@@ -85,6 +85,7 @@ from . import (
     sources,
     visibility,
     waitlist,
+    weekly_changes,
     weekly_read,
     work,
 )
@@ -115,6 +116,7 @@ INTAKE = (
     ("drafts", messages.DRAFTS),
     ("drafts", listening.REPLIES_IN),
     ("drafts", outreach.FOLDER),
+    ("weekly_reads", (weekly_changes.FOLDER,)),
 )
 # The package review's row when it is complete: complete by the agent's closing line alone, so the row says whose word
 # that is and where the launcher's own counts are.
@@ -600,17 +602,28 @@ class Cycle:
         """What the Weekly Read checked and acted on: the posts it asks for, and the notice and decision items it
         queued."""
         found, outcome = state.weekly, state.weekly_outcome
-        incomplete = "; ".join(
-            weekly_read.gaps(found, outcome, state.weekly_problem, state.agent_gap(weekly_read.WORKFLOW))
-        )
+        incomplete = "; ".join(self.weekly_gaps(state))
+        changes = state.changes
+        filed = len(state.changes_outcome.filed) if state.changes_outcome else 0
+        owing = len(changes.owed) if changes is not None else 0
+        said = weekly_changes.summary(changes)
         if found is None:
             note = f"not prepared: {state.weekly_problem}" if state.weekly_problem else state.weekly_why or "none due"
-            return run_state.Tally(weekly_read.WORKFLOW, 0, 0, note, incomplete)
+            note += f"; {said}" if said else ""
+            return run_state.Tally(weekly_read.WORKFLOW, owing, filed, note, incomplete)
         acted = len(outcome.published) if outcome else 0
-        acted += int(bool(state.results_notice))
+        acted += int(bool(state.results_notice)) + filed
         note = f"{len(found.taken.given)} of {report.plural(len(found.read.asks), 'post')} given; "
-        note += weekly_read.outcome_line(found, outcome)
-        return run_state.Tally(weekly_read.WORKFLOW, len(found.read.asks), acted, note, incomplete)
+        note += weekly_read.outcome_line(found, outcome) + (f"; {said}" if said else "")
+        return run_state.Tally(weekly_read.WORKFLOW, len(found.read.asks) + owing, acted, note, incomplete)
+
+    def weekly_gaps(self, state: RunState) -> list[str]:
+        """The Weekly Read's gaps: its memo's, and the package changes the Founder's approved decisions owe that were
+        not filed, with its session's falling short whenever that session was due for either."""
+        session_gap = state.agent_gap(weekly_read.WORKFLOW)
+        found = weekly_read.gaps(state.weekly, state.weekly_outcome, state.weekly_problem, session_gap)
+        found += weekly_changes.gaps(state.changes, state.changes_problem, session_gap)
+        return list(dict.fromkeys(found))
 
     def waitlist_tally(self, state: RunState, breach: str | None) -> run_state.Tally:
         """The Waitlist's line: the sign-ups counted, or why there are no counts; a routine read acts on nothing, and a
@@ -795,9 +808,13 @@ class Cycle:
         if state.filming is None and not state.filming_problem:
             skipped["filming-plan"] = "no active Product films"
         weekly = state.weekly
+        # A run with package changes owed has a Weekly Read row to say what became of them, whatever its memo.
+        owing = bool(state.changes is not None and state.changes.owed) or bool(state.changes_problem)
         if weekly is None and not state.weekly_problem:
-            skipped["results"] = skipped["weekly-read"] = state.weekly_why or "no Weekly Read is due"
-        elif weekly is not None and not weekly.due and not weekly_read.gaps(weekly, None, "", ""):
+            skipped["results"] = state.weekly_why or "no Weekly Read is due"
+            if not owing:
+                skipped["weekly-read"] = skipped["results"]
+        elif weekly is not None and not weekly.due and not weekly_read.gaps(weekly, None, "", "") and not owing:
             skipped["weekly-read"] = weekly.why
         heard, offered = gap(listening.WORKFLOW), gap(outreach.WORKFLOW)
         own = {
@@ -833,8 +850,15 @@ class Cycle:
                 f"{len(weekly.taken.given)} of {len(weekly.read.asks)} posts given" if weekly else "",
             ),
             "weekly-read": (
-                weekly_read.gaps(weekly, state.weekly_outcome, state.weekly_problem, gap(weekly_read.WORKFLOW)),
-                weekly_read.outcome_line(weekly, state.weekly_outcome) if weekly else "",
+                self.weekly_gaps(state),
+                "; ".join(
+                    part
+                    for part in (
+                        weekly_read.outcome_line(weekly, state.weekly_outcome) if weekly else "",
+                        weekly_changes.summary(state.changes),
+                    )
+                    if part
+                ),
             ),
             "rejection-codes": (
                 learning.gaps(state.learning, state.learning_problem, gap(learning.WORKFLOW)),
@@ -1109,6 +1133,9 @@ class Cycle:
         )
         paths = {name: str(context.paths[name]) for name in ("calendar", "angles", "pairs")}
         paths["read_the_results"] = role or "read-the-results.md"
+        roles = weekly_changes.roles(registry)
+        if roles is not None and weekly_changes.CREATIVE_LOG in roles[1]:
+            paths[weekly_changes.CREATIVE_LOG] = roles[1][weekly_changes.CREATIVE_LOG]
         read = results.prepare(
             config.window,
             read_day,
@@ -1146,6 +1173,49 @@ class Cycle:
             else:
                 state.results_notice = identifier
                 state.published.append(identifier)
+
+    def prepare_changes(
+        self, state: RunState, config: settings.Settings, registry: Mapping, boundary: Boundary, ledger: Ledger
+    ) -> None:
+        """Before the first session: the package change each of the Founder's approved Weekly Read decisions owes and
+        has not had filed, with the package files they edit read once, and a change's new Angle numbered, so the
+        Weekly Read session is due to write it (weekly_changes)."""
+        if self.lab_of_another(weekly_read.WORKFLOW):
+            return
+        mandu = next(location.path for location in boundary.locations if location.label == "Mandu")
+        try:
+            state.changes = weekly_changes.prepare(ledger, mandu, registry, config.window.number)
+        except (OSError, ConfigError) as error:
+            state.changes_problem = str(error)
+            state.problems.append(
+                f"the package changes approved Weekly Read decisions owe could not be worked out ({error})"
+            )
+
+    def take_changes(
+        self,
+        state: RunState,
+        areas: Areas,
+        ledger: Ledger,
+        products: Sequence[str],
+        run_id: str,
+        now: datetime,
+        seen: dict[str, str],
+    ) -> None:
+        """Once the last session has ended: file the package-change proposal each approved Weekly Read decision owes,
+        a change's from the new Angle the Weekly Read session wrote for it."""
+        if state.changes is None:
+            return
+        try:
+            state.changes_outcome = weekly_changes.take(
+                state.changes, areas, self.store, ledger, products, run_id, now, seen
+            )
+        except (OSError, ConfigError) as error:
+            state.changes_problem = str(error)
+            state.problems.append(
+                f"the package changes approved Weekly Read decisions owe could not be filed ({error})"
+            )
+            return
+        state.published += [identifier for _, identifier in state.changes_outcome.filed]
 
     def take_weekly_read(
         self,
@@ -1487,6 +1557,7 @@ class Cycle:
                 "listening": listening.plan_record(state.listening) if state.listening else None,
                 "outreach": outreach.plan_record(state.outreach, areas) if state.outreach else None,
                 "weekly_read": weekly_read.plan_record(state.weekly) if state.weekly else None,
+                "weekly_changes": weekly_changes.plan_record(state.changes) if state.changes else None,
                 "instructions": {
                     "workflow": offered.workflow if offered else None,
                     "reasons": list(offered.reasons) if offered else [],
@@ -1763,10 +1834,11 @@ class Cycle:
         """Why one workflow has no work for the agent this run, or "" when it has, from what the launcher read before
         the first session. A workflow has work exactly when the launcher can name it: a package file to review, a
         calendar day whose copy is not approved, a day ready for an edit record, a recruiting Draft, a thread or a
-        review to read, a message that is due, a rejection reason with no code, or a strategy reason with no
-        proposal. This is the one test of a session: it decides whether the session starts, and a session it starts
-        that falls short always leaves its own workflow's output incomplete, whatever it had written by then, since
-        every workflow's gap rule adds the gap of a session that was due (Session.gap)."""
+        review to read, a message that is due, a Weekly Read memo, a new Angle an approved change decision asks for,
+        a rejection reason with no code, or a strategy reason with no proposal. This is the one test of a session: it
+        decides whether the session starts, and a session it starts that falls short always leaves its own workflow's
+        output incomplete, whatever it had written by then, since every workflow's gap rule adds the gap of a session
+        that was due (Session.gap)."""
         if key == sessions.REVIEW:
             read = [file for result in state.snapshot for file in result.files if file.status != package.FAILED]
             return "" if read else "no package file could be read"
@@ -1817,6 +1889,8 @@ class Cycle:
                 return plan.problem
             return "" if plan.due() else "no outreach message is due this run"
         if key == weekly_read.WORKFLOW:
+            if state.changes is not None and state.changes.words():
+                return ""
             if state.weekly is None:
                 problem = state.weekly_problem
                 return f"the Weekly Read was {problem}" if problem else state.weekly_why or "no Weekly Read is due"
@@ -2233,6 +2307,9 @@ class Cycle:
             ledger, ledger_ok = Ledger(), False
             state.problems.append(f"{error}; the Review Queue was left untouched this run")
         states = self.load_state(state, run_id)
+        if ledger_ok and not self.lab_of_another(weekly_read.WORKFLOW):
+            # Before any decision is taken in, so an approval given on one at a sitting is never acted on.
+            state.changes_withdrawn = weekly_changes.withdraw(ledger, config.window.number, run_id, self.now())
         self.take_decisions(state, config, ledger, ledger_ok, states.review_queue)
         if not self.only:
             state.instructions = instructions.Outcome()
@@ -2285,6 +2362,8 @@ class Cycle:
             state, config, beta_rules, registry, boundary, ledger, ledger_ok, areas, states.beta_recruiting
         )
         self.prepare_weekly_read(state, config, registry, boundary, ledger, ledger_ok, states.review_queue, areas)
+        if ledger_ok:
+            self.prepare_changes(state, config, registry, boundary, ledger)
         areas.ensure_folder(areas.path("review_queue", INCOMING))
         self.prepare_work(state, config, registry, boundary, areas, ledger if ledger_ok else None, states, network)
         self.unusable_sources(state, config)
@@ -2323,6 +2402,7 @@ class Cycle:
         self.take_work(state, areas, ledger, ledger_ok, products, run_id, now, seen)
         if ledger_ok:
             self.take_weekly_read(state, areas, ledger, products, run_id, now, seen)
+            self.take_changes(state, areas, ledger, products, run_id, now, seen)
         elif state.weekly is not None and state.weekly.due:
             state.weekly_problem = "not taken in: the Review Queue could not be read"
         self.learn(state, config, boundary, areas, ledger, ledger_ok, run_id, now, seen)
@@ -2369,6 +2449,7 @@ class Cycle:
             )
         if ledger_ok and state.post_outcome is not None and state.post_outcome.withdrawn:
             posts.withdraw(ledger, state.post_outcome, state.notice, run_id, now)
+        weekly_changes.name_notice(ledger, state.changes_withdrawn, state.notice)
         if ledger_ok:
             taken_back = list(state.listening_result.replies if state.listening_result else ())
             taken_back += list(state.outreach_result.outcomes if state.outreach_result else ())

@@ -13,7 +13,7 @@
 
 ## Pairs
 
-- AB-1 (days 1 and 8): resolved. Leg A ranked far above leg B. Decision: keep
+- AB-1 (days 1 and 8): resolved, leg A leads. Leg A ranked far above leg B. Decision: keep
 - AB-2 (days 3 and 10): repost. The gap between the legs' viewed rates is small. What would settle it: a larger gap in window 2. Decision: test
 
 ## Product

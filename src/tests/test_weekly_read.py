@@ -202,8 +202,8 @@ class Day14Test(unittest.TestCase):
         }
         verdicts["P06"] = ("met its kill criterion", "kill")
         pairs = [
-            "- AB-1 (days 1 and 8): resolved. Leg A ranked well above leg B. Decision: keep",
-            "- AB-2 (days 3 and 10): resolved. Leg B ranked well above leg A. Decision: keep",
+            "- AB-1 (days 1 and 8): resolved, leg A leads. Leg A ranked well above leg B. Decision: keep",
+            "- AB-2 (days 3 and 10): resolved, leg B leads. Leg B ranked well above leg A. Decision: keep",
         ]
         found = lab.plan()
         problems = weekly_read.check(self.memo(self.lines(verdicts), pairs), found)[1]
@@ -222,8 +222,8 @@ class Day14Test(unittest.TestCase):
             angle: ("cleared its signal", "keep") for angle in ("P01", "P02", "P03", "P04", "P05", "P06", "P07")
         }
         pairs = [
-            "- AB-1 (days 1 and 8): resolved. Leg A ranked well above leg B. Decision: keep",
-            "- AB-2 (days 3 and 10): resolved. Leg B ranked well above leg A. Decision: keep",
+            "- AB-1 (days 1 and 8): resolved, leg A leads. Leg A ranked well above leg B. Decision: keep",
+            "- AB-2 (days 3 and 10): resolved, leg B leads. Leg B ranked well above leg A. Decision: keep",
         ]
         record = weekly_read.record_path(lab.store, 1, 7)
         record.parent.mkdir(parents=True, exist_ok=True)
@@ -257,8 +257,8 @@ class Day14Test(unittest.TestCase):
             angle: ("cleared its signal", "keep") for angle in ("P01", "P02", "P03", "P04", "P05", "P06", "P07")
         }
         pairs = [
-            "- AB-1 (days 1 and 8): resolved. Leg A ranked well above leg B. Decision: keep",
-            "- AB-2 (days 3 and 10): resolved. Leg B ranked well above leg A. Decision: keep",
+            "- AB-1 (days 1 and 8): resolved, leg A leads. Leg A ranked well above leg B. Decision: keep",
+            "- AB-2 (days 3 and 10): resolved, leg B leads. Leg B ranked well above leg A. Decision: keep",
         ]
         return self.lines(verdicts), pairs
 
@@ -304,7 +304,7 @@ class Day14Test(unittest.TestCase):
             angle: ("cleared its signal", "keep") for angle in ("P01", "P02", "P03", "P04", "P05", "P06", "P07")
         }
         pairs = [
-            "- AB-1 (days 1 and 8): resolved. Leg A ranked well above leg B. Decision: keep",
+            "- AB-1 (days 1 and 8): resolved, leg A leads. Leg A ranked well above leg B. Decision: keep",
             "- AB-2 (days 3 and 10): repost. The gap is small. What would settle it: a repost in window 2."
             " Decision: test",
         ]
@@ -362,20 +362,49 @@ class TakeTest(unittest.TestCase):
         self.assertIn("in percent: 81% (n=1); Comments: 2 (n=1) | none given | 2026-10-25 |", memo)
         self.assertIn("| 1 | P01 (AB-1 leg A) | TikTok (unread: under the floor) |", memo)
 
-    def test_only_a_kill_or_a_change_is_said_to_change_the_angle_bank(self):
+    def test_each_item_says_what_approving_it_changes_in_the_package(self):
+        """Approving a Weekly Read decision changes no package file by itself, since Mandu applies only an approved
+        package-change proposal: a kill, a change, a resolved pair, and the flex slot each say the next run files the
+        proposal with the exact edit, for the Founder to approve; a keep, a test, and a repost say nothing changes."""
         found = self.lab.plan()
-        for decision, said in (
-            (
-                "kill",
-                "- P04's row in `projects/RepToday/gtm/05-social-pmf/angles.md`, which Mandu changes if you approve",
-            ),
-            ("change", "which Mandu changes if you approve"),
-            ("keep", "- Nothing: approving keeps P04's row in"),
-            ("test", "- Nothing: approving keeps P04's row in"),
-        ):
-            with self.subTest(decision=decision):
-                line = weekly_read.Line(weekly_read.ANGLE, "P04", weekly_read.AT_RISK, decision, "- P04 (day 4): ...")
-                self.assertIn(said, weekly_read.item_for(found, line, "weekly-reads/memo.md", "RepToday").touches)
+        found.paths["creative_log"] = "projects/RepToday/gtm/05-social-pmf/creative-log.json"
+        then = "- Nothing yet: approving it has the next run file a package-change proposal with the exact edit that"
+        approve = ", for you to approve before Mandu changes the package."
+        window = (
+            "That holds while window 1 is the window in force: approved once another window is, it files nothing,"
+            " since its flex slot's day has passed."
+        )
+        lines = (
+            (weekly_read.ANGLE, "P04", weekly_read.MET_KILL, "kill", None, None),
+            (weekly_read.ANGLE, "P04", weekly_read.MISSED, "change", None, None),
+            (weekly_read.ANGLE, "P04", weekly_read.AT_RISK, "keep", None, None),
+            (weekly_read.ANGLE, "P04", weekly_read.INSUFFICIENT, "test", None, None),
+            (weekly_read.PAIR, "AB-2", weekly_read.RESOLVED, "keep", None, "B"),
+            (weekly_read.PAIR, "AB-2", weekly_read.REPOST, "test", None, None),
+            (weekly_read.FLEX, "flex", "earned", "test", "P03", None),
+            (weekly_read.FLEX, "flex", "not earned", "keep", None, None),
+        )
+        expected = (
+            f"{then} marks P04 killed in `projects/RepToday/gtm/05-social-pmf/creative-log.json`{approve}",
+            f"{then} adds a new Angle to `projects/RepToday/gtm/05-social-pmf/angles.md` in P04's place, with its"
+            f" record in `projects/RepToday/gtm/05-social-pmf/creative-log.json`{approve} The Weekly Read session"
+            " writes the new Angle's words at that run, and P04's row stays as it is.",
+            "- Nothing: approving keeps P04's row in `projects/RepToday/gtm/05-social-pmf/angles.md` as it is",
+            "- Nothing: approving keeps P04's row in `projects/RepToday/gtm/05-social-pmf/angles.md` as it is",
+            f"{then} records in `projects/RepToday/gtm/05-social-pmf/ab-pairs.md` that AB-2 resolved with leg B's Hook"
+            f" leading{approve}",
+            "- Nothing: approving changes no package file, and AB-2 is not declared resolved",
+            f"{then} puts P03 in the flex slot of the calendar,"
+            f" `projects/RepToday/gtm/05-social-pmf/cadence-14-day.md`{approve} {window}",
+            f"{then} puts P04 in the flex slot of the calendar,"
+            f" `projects/RepToday/gtm/05-social-pmf/cadence-14-day.md`{approve} {window}",
+        )
+        for (section, key, result, decision, earned, leads), said in zip(lines, expected):
+            with self.subTest(section=section, result=result, decision=decision):
+                line = weekly_read.Line(section, key, result, decision, "- ...", earned_by=earned, leads=leads)
+                touches = weekly_read.item_for(found, line, "weekly-reads/memo.md", "RepToday").touches
+                self.assertEqual(touches, said)
+                self.assertNotIn("which Mandu changes if you approve", touches)
 
     def test_a_memo_that_fails_a_check_queues_nothing_and_stays_as_written(self):
         text = GOOD_DAY_7.replace("81% (n=1)", "81%")

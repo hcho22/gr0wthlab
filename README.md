@@ -11,6 +11,7 @@ Why the Founder decides here, on a local page, and Mandu only reads: [ADR 0002](
 Why the Founder posts by hand, with no scheduling service: [ADR 0004](docs/adr/0004-posting-is-manual.md).
 Why the Weekly Read reads no platform, and the Founder gives TikTok Studio's and YouTube Studio's numbers on the sitting page: [ADR 0005](docs/adr/0005-the-weekly-read-uses-no-youtube-connection.md).
 Why he types those numbers, and the page keeps no screenshot or file: [ADR 0006](docs/adr/0006-the-founder-types-the-weekly-read-numbers.md).
+Why an approved kill, change, resolved pair, or flex slot reaches the package only as a package-change proposal he approves too: [ADR 0007](docs/adr/0007-an-approved-weekly-read-decision-reaches-the-package-as-a-proposal.md).
 Stories, requirements, and progress: [the v1 PRD](docs/prd/prd-marketing-engineer-v1_261008.md).
 
 ## No strategy lives here
@@ -32,7 +33,7 @@ The specification and decision records under `docs/` (the PRD, the [design decis
 
 ## The weekly cycle
 
-1. **Run.** The Marketing Engineer reads the Go-To-Market Package, the Founder's decisions, and its sources; performs Listening; on read weeks lists exactly which numbers to give for which posts and writes the Weekly Read memo from the numbers given; prepares next week's Drafts, proposals, and Dispatch requests; and writes a run report.
+1. **Run.** The Marketing Engineer reads the Go-To-Market Package, the Founder's decisions, and its sources; performs Listening; on read weeks lists exactly which numbers to give for which posts and writes the Weekly Read memo from the numbers given; files the package-change proposal, with the exact edit, that each approved Weekly Read kill, change, resolved pair, or flex slot owes; prepares next week's Drafts, proposals, and Dispatch requests; and writes a run report.
 2. **Sitting.** The Founder runs `src/bin/gr0wthlab sitting`, which serves a small page on the Founder's Mac.
    On read weeks the Founder first gives each post's numbers on that page, read from TikTok Studio or YouTube Studio, then starts a run so the Weekly Read takes them in.
    The Founder then approves each Review Queue item or rejects it with a one-line reason, one item at a time; what the Founder clicks is what is saved.
@@ -62,7 +63,7 @@ The PRD's Guardrails section says what enforces each one.
 | [`workspace/evidence/`](workspace/evidence/) | Evidence | Yes |
 | [`workspace/drafts/`](workspace/drafts/) | Drafts | Yes |
 | [`workspace/review-queue/`](workspace/review-queue/) | Review Queue items the agent proposes, before the launcher checks them | Yes |
-| [`workspace/weekly-reads/`](workspace/weekly-reads/) | Weekly Read memos | Yes |
+| [`workspace/weekly-reads/`](workspace/weekly-reads/) | Weekly Read memos, and the new Angle each approved change decision asks for, before the launcher checks it | Yes |
 | [`workspace/run-reports/`](workspace/run-reports/) | Notes the agent writes during a run | Yes |
 | [`workspace/instructions/`](workspace/instructions/) | A change to the Instructions the agent proposes, before the launcher re-runs its example set | Yes |
 | [`ledger/`](ledger/) | The launcher's records: the published Review Queue, the launcher's own Evidence, run reports, and run state; and, outside git, the finished videos it renders | No |

@@ -106,6 +106,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    A day whose copy the Founder approved before its video existed gets its video only while its Draft is still that copy; otherwise no video is cut and the notice says so.
    It files each reviewed proposal in `src/proposals/` once, and never again whatever the Founder decides: the brand lint's word lists, the wording that says the 200-impression floor counts each platform's views while `read-the-results.md` does not say so, and, in a run with outreach messages to offer, the loss-framing and sponsorship-ask lists.
    It checks the Weekly Read memo when its session was due, and, when it passes, keeps the memo the Founder reads in `ledger/weekly-reads/`, queues one Weekly Read decision item for each of its lines, and removes the memo from `workspace/weekly-reads/`, so it is never taken in again for other numbers; a memo that fails a check stays in `workspace/weekly-reads/` as written, and the notice names each failing check, and a memo an earlier run left there unchanged is no memo written, and stays as it is.
+   It files the one package-change proposal each approved Weekly Read kill, change, resolved pair, or flex slot owes, with the exact edit, a change's from the new Angle the Weekly Read session wrote ([What an approved decision changes](#what-an-approved-decision-changes)).
    It checks each recruiting Draft the brief asked for in `workspace/drafts/beta-recruiting/`, and queues the invitation, with its batch attached, or the Waitlist ask only from a Draft that passes; a blocked Draft is named in the run report and the notice with every failing rule.
    A recruiting Draft that holds anything that looks like an email address is removed from `workspace/`, so the records step never saves it.
    It withdraws an open recruiting item whose Draft stopped passing, or that outlived the end of recruiting, at the Founder's stop or once the Founder reports the cohort full, and keeps the run's recruiting Evidence in `ledger/evidence/beta-recruiting/`.
@@ -150,7 +151,7 @@ The sessions, in the order a run starts them:
 | Session | It has work due when | What it writes |
 | --- | --- | --- |
 | Package review | The snapshot read at least one package file | Package-change proposals in `workspace/review-queue/incoming/` |
-| Weekly Read | A Weekly Read is due, the Founder has given numbers for it, and its memo was not written from exactly those, with none of its items decided | The memo in `workspace/weekly-reads/`, and a Dispatch request where a result would change the product |
+| Weekly Read | A Weekly Read is due, the Founder has given numbers for it, and its memo was not written from exactly those, with none of its items decided; or an approved change decision owes its new Angle | The memo in `workspace/weekly-reads/`, a Dispatch request where a result would change the product, and the new Angle each approved change asks for in `workspace/weekly-reads/changes/` |
 | Post Drafts | The plan lists a calendar day the Founder has not approved | The due days' Drafts in `workspace/drafts/posts/` |
 | Filming | The Filming table marks a day ready for an edit record | Edit records in `workspace/drafts/edits/` |
 | Beta Cohort recruiting | The Founder's gate is recorded and the plan asks for a Draft | The recruiting Drafts in `workspace/drafts/beta-recruiting/` |
@@ -293,7 +294,7 @@ Everything else the launcher refuses is removed from `workspace/`, copied nowher
 
 - A file set aside from `workspace/review-queue/incoming/`, of any kind, a post, a message, or a filming plan written there included.
   The run's set-aside record, `ledger/review-queue/set-aside/<run id>.json`, keeps its name and the reasons, under the run's identifier; the run report and notice name it with the reasons.
-- A quote record the launcher refuses, a proposed Angle or Hook it discards from `workspace/review-queue/angles/`, and a rejection code it sets aside.
+- A quote record the launcher refuses, a proposed Angle or Hook it discards from `workspace/review-queue/angles/`, a new Angle for a change decision it refuses from `workspace/weekly-reads/changes/`, and a rejection code it sets aside.
 - A proposed Instructions change the launcher refuses from `workspace/instructions/`, and one whose example set did not keep it.
   The record of one not kept, `ledger/evidence/instructions/<change id>.json`, keeps each line it changed by its number and the fingerprints of the two texts, beside the example set's results.
 
@@ -305,7 +306,7 @@ They are kept in the set-aside record, in each run's Listening Evidence (`ledger
 
 These also keep the agent's words, and none of them is a refusal:
 
-- What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, the line that says why a rejection code fits, and each line of a Weekly Read memo that passed, in the memo the Founder reads and in its item.
+- What the launcher accepts keeps the agent's own words: the text of a queued item, the context of a kept quote, the line that says why a rejection code fits, each line of a Weekly Read memo that passed, in the memo the Founder reads and in its item, and the new Angle a change decision asked for, in the package-change proposal that adds it, whose queue entry keeps its Hook (`weekly_change.hook`) so no later new Angle repeats it.
   So does a kept Instructions change: its text is the Instructions in force (`ledger/instructions/<workflow>.md`), its record keeps that text, the text before it, the agent's summary, and its notice as filed, and its notice shows the summary and each changed line.
 - Any other file the agent leaves in `workspace/` that the launcher neither takes in nor puts back is committed as written.
   An edit record waiting for a fix is one: its `shot` and `source` values can hold any text, and it stays committed as written.
@@ -622,7 +623,7 @@ The launcher checks the memo before anything is queued from it:
 - every line ends in keep, kill, change, or test, and "insufficient data" is a result of its own, never a fail;
 - nothing is killed at day 7, and a kill at day 14 needs the Angle flagged at risk at day 7, since a kill takes two consecutive Weekly Reads;
 - an Angle none of whose posts reached the floor on the platform that judges it is insufficient data, and the floor is `read-the-results.md`'s own figure, counted in views;
-- the flex slot goes only to an Angle whose line says it cleared its signal, never on rank alone, and a pair is resolved only when both legs reached the floor;
+- the flex slot goes only to an Angle whose line says it cleared its signal, never on rank alone, and a pair is resolved only when both legs reached the floor, its line naming the leg whose Hook leads;
 - every number has its n beside it, every unread or at-risk Angle and every pair to repost says what would settle it at the next read, and every comment quoted is on a quote line of its own and word for word one the Founder gave for that post; a decision line quotes nothing.
 
 A memo that passes becomes the memo the Founder reads, `ledger/weekly-reads/window-<n>-read-<07|14>.md`: one line that says the floor counts each platform's views, one that says what the read cannot tell, the launcher's own table of every post's numbers with its n and "not reported" where nothing was given, the day it went out as the Founder gave it, likewise "not reported" where he gave nothing for it, whether each post is readable or unread, under the floor or with its views not given, and how many comments were given as text, the agent's lines with the comments they quote as third-party text, the Waitlist counts by Source and Fit with progress toward the opt-in bar, and the Founder's sitting time in the seven days before the read's own day, whose sitting counts toward the next read, so no sitting is in two memos.
@@ -635,6 +636,33 @@ A `read-the-results.md` the run read that is not text, or no longer says the flo
 A result that `read-the-results.md` says would change the product is listed under the memo's Product lines, and, where it warrants one, comes as a Dispatch request for the Founder to decide, never acted on.
 
 The run report's Weekly Read section says which read is due, how many posts it asks for and how many were given, the notice, the memo, and its items; the Post results row is incomplete while anything asked is not given, and names those posts as not reported.
+
+### What an approved decision changes
+
+Approving a Weekly Read decision changes no package file by itself, since Mandu applies only an approved package-change proposal ([ADR 0007](adr/0007-an-approved-weekly-read-decision-reaches-the-package-as-a-proposal.md)).
+So the run that takes in the approval of an Angle's kill or change, a resolved pair, or the flex slot files one package-change proposal with the exact edit to the file the decision touches, for the Founder to approve at the next sitting; Mandu applies it once he has.
+Each decision item's Touches says so.
+
+- **A kill**: the Angle's record in `creative-log.json` takes `"status": "killed"` and `"killed_on_reads"` with the dates of the day-7 and day-14 reads, as the calendar's kill rule says.
+  The edit spans the record from its `angle_id` line to its `status` line, so it names one record.
+- **A change**: a new row at the end of the Angle bank, under the next free number, with the changed Angle's pain and source as they are, and the new Angle's record at the end of `creative-log.json`, so a later kill of it has its record to mark; one approval applies both, and the changed Angle stays as it is.
+  The record has the changed Angle's record's fields in its order: the new Angle's number and name as its `angle_id`, the new row's Hook, hypothesis, format, signal, and kill criterion, the row's platform as the log's own records name it, the changed Angle's pain as its record has it, no A/B pair, no results, and the status `draft`; a field the launcher does not know keeps the change from being filed, with the reason.
+  The Weekly Read session writes the new row's words in `workspace/weekly-reads/changes/<decision item>.md`, in a run the launcher starts it for that alone when no memo is due; the launcher files it only when the row has the bank's cells, the number the brief gave it, the changed Angle's pain and source character for character, a Hook in one quoted line that no Angle or A/B pair already holds, an Angle's Hook cell holding it whole or as a quoted text in it, nor another new Angle filed in the same run or one whose proposal is open or approved, and that passes the brand lint every post's Hook is held to, and a platform the Weekly Read reads.
+  A row that fails is removed, and the run report and the notice keep only its name and the reasons; the next run asks for it again.
+- **A resolved pair**: one line at the end of the pair's section in the A/B pairs file, saying which leg's Hook leads; no Hook changes.
+- **The flex slot**, earned or not, while its window is the one in force: the calendar's flex row names the Angle that earned it, or the one Angle the row names for when none did, on that Angle's own platform in the Angle bank.
+  Until the row names an Angle, no post Draft is prepared for that day.
+  Once `window.number` in `config/run.json` names another window, the flex slot's day has passed.
+  A flex decision whose approval a run finds then files nothing, and that run's report and notice say so, once; the decision's queue entry takes `flex_window_passed`, the window then in force, so no later run says it again.
+  An open proposal for it is withdrawn, with `"withdrawn": true` and `superseded_by` naming the run's notice, which says why, before the run takes in any decision, so an approval given on it at a sitting is kept on it and never acted on.
+  That rests on the Review Queue and `config/run.json` alone, which every run reads before it does anything, so no read that fails withdraws one.
+
+An Angle kept or tested, a pair to repost, a result that bears on the product, and every rejected decision file nothing.
+Every edit replaces a text that appears exactly once in the file as the run read it, so Mandu applies it with no judgment, and is filed only when applying it changes exactly what the decision fixes and nothing else.
+A decision's proposal is filed once, and never again, whatever the Founder decides of it.
+One whose edit cannot be made, as when its file cannot be read or no longer holds the text, is filed by a later run once it can be: until then the Weekly Read row is incomplete with the reason, and the notice says which decision's proposal was not filed.
+A package file it edits or checks a new Angle against that reads and does not parse, such as an A/B pairs file with a leg lost, is a failed source, never an empty one: the change waits with the file named, no session is asked for its new Angle, and the file's source line is `unusable` and names the Weekly Read memo.
+The launcher reads `creative-log.json` only to make a kill's edit and a change's; it is not a package source, so no run snapshots it and the package review does not review it.
 
 ### The floor in the package
 

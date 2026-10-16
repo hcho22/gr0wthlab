@@ -118,8 +118,9 @@ The Draft or proposal itself.
 - `supersedes` names an earlier item this one replaces; the earlier one has left `open` and is never presented again.
 - A Weekly Read decision also has `window` and `read`: the number of the 14-day window and the read it belongs to, by that read's own calendar day, `7` or `14`, such as `window: 1` and `read: 7` (version 8).
   gr0wthlab queues one only from a Weekly Read memo that passed its checks, one item for each decision line, and its `## Recommendation` holds that line, the comments it quotes as third-party text, and the launcher's own table of the numbers it rests on.
+  Approving one changes no package file by itself, and Mandu acts on nothing about it: for an approved kill or change of an Angle, a resolved pair, or the flex slot, gr0wthlab's next run files one `package-change-proposal` with the exact edit, which the Founder approves or rejects like any other ([ADR 0007](adr/0007-an-approved-weekly-read-decision-reaches-the-package-as-a-proposal.md)), and its Touches says so.
 - A package-change proposal also has `new_angle`, what the proposal declares of itself: `yes` when it adds or changes an Angle or Hook, which covers any change to a Hook, signal, or kill criterion, and `no` when it does neither.
-  gr0wthlab queues a `yes` proposal only when its Evidence names the record of at least one Listening quote it keeps.
+  gr0wthlab queues a `yes` proposal only when its Evidence names the record of at least one Listening quote it keeps, but for the one that adds the new Angle an approved Weekly Read change decision asks for, which carries the changed Angle's pain and source from the Angle bank unchanged.
   It queues a `no` proposal whatever the proposal touches or says, and never checks a declaration against the proposal's wording: the Founder is the check on a wrong declaration.
   So the sitting page says, on every package-change proposal, which the proposal declares, so that a wrong one is seen at the sitting and can be rejected.
   A proposal queued before version 5 has no `new_angle`.
@@ -149,12 +150,17 @@ Beside the Beta Cohort's two (below), there are four kinds, each named in the it
 
 gr0wthlab queues a message only from a Draft that passed every check; a Draft that did not is never an item, and a notice names it with what blocked it.
 An open message whose Draft stops passing, or whose follow-up may no longer be offered because a reply was recorded, leaves `open` as a withdrawn post does.
+So does an open package-change proposal for the flex slot of a window that is no longer the one in force, before the run takes in any decision on it, so a decision on it is kept on a superseded item and never acted on.
 
 The first time gr0wthlab reads a subreddit's rules, it queues one notice titled "Confirm r/<name>'s self-promotion rules before any reply Draft is offered", which quotes and links those rules.
 It queues one such notice for each subreddit and never another, whatever the rules say later.
 Acknowledging that notice is the Founder's confirmation, and the answer stands: until its decision record says `approve`, gr0wthlab offers no reply for that subreddit, and a `reject` means none is ever offered.
 
 A package-change proposal that declares `new_angle: yes` rests on Listening Evidence: its Evidence names the record of each quote it rests on, as `evidence/listening/quotes/<document id>.json`.
+The one exception is the new Angle an approved Weekly Read change decision asks for, whose sourced pain is the changed Angle's own, cited by its line in the Angle bank.
+
+A package-change proposal that an approved Weekly Read decision owes names that decision in its Evidence, as `evidence/decisions/<id>.json`, and its `## Proposal` gives each edit exactly: the text it replaces, which appears exactly once in the file named, with the line or lines it is on, and the text to put in its place, each in a block of its own.
+Applying it is replacing that one text with the other, with no judgment; gr0wthlab files it only when that changes exactly what the decision fixes and nothing else in the file as its run read it.
 One that gr0wthlab renders from an Angle or Hook the Marketing Engineer proposed also quotes each person's words under a line that says where they were read and when, with the link, and its `## Proposal` ends with the confidence gr0wthlab counted from the independent, unprompted sources behind it (High for three or more, Medium for two, Low for one).
 
 A post's `## Draft` is everything the Founder needs to judge it in under a minute: the day, its Angle and pair leg, the primary platform, the slot or that none is set yet, and whether anything can be published yet (nothing can until the Waitlist is live); the frozen Hook; the video beat by beat; each platform's text, hashtags, and alt text; each behavioral claim its Draft lists with the code that supports it, and that only those were checked; and the checks it passed, with any warnings, its status against the pre-publication checklist, and the kit's own checklist lines for every asset, which are the Founder's to judge.

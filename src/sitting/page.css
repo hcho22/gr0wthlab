@@ -377,10 +377,39 @@ main > .refused {
 .doc-code {
   margin: 0 0 12px;
   padding: 12px 14px;
-  overflow-x: auto;
   border-radius: 6px;
   background: var(--tint);
+  /* Every character of a block is in view, as an exact edit's text must be: a long line wraps, never scrolls. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  container-type: inline-size;
+}
+
+/* A wrapped line goes on indented under its first character that is not a space, so where each line of the block
+   begins, and how far it is indented, stays plain. Its indentation is a cell that never wraps, and the rest of the
+   line is the cell beside it, which starts 2ch further in and pulls its first line back by as much. The rest is no
+   element of its own, so a copied line is its exact text, with nothing between its indentation and the rest. */
+.doc-codeline {
+  display: table;
+  width: 100%;
+  text-indent: -2ch;
+}
+
+/* An indentation that would leave the rest of its line less than 16ch shows only as wide as that, so no line ever
+   reaches past the block. */
+.doc-indent {
+  display: table-cell;
+  width: 0;
+  max-width: calc(100cqi - 16ch);
+  overflow: hidden;
+  padding-right: 2ch;
   white-space: pre;
+  text-indent: 0;
+}
+
+/* An empty line keeps the height of a line. */
+.doc-indent::after {
+  content: "\200b";
 }
 
 .doc-table {
