@@ -63,7 +63,7 @@ The PRD's Guardrails section says what enforces each one.
 | [`workspace/evidence/`](workspace/evidence/) | Evidence | Yes |
 | [`workspace/drafts/`](workspace/drafts/) | Drafts | Yes |
 | [`workspace/review-queue/`](workspace/review-queue/) | Review Queue items the agent proposes, before the launcher checks them | Yes |
-| [`workspace/weekly-reads/`](workspace/weekly-reads/) | Weekly Read memos | Yes |
+| [`workspace/weekly-reads/`](workspace/weekly-reads/) | Weekly Read memos, and the new Angle each approved change decision asks for, before the launcher checks it | Yes |
 | [`workspace/run-reports/`](workspace/run-reports/) | Notes the agent writes during a run | Yes |
 | [`workspace/instructions/`](workspace/instructions/) | A change to the Instructions the agent proposes, before the launcher re-runs its example set | Yes |
 | [`ledger/`](ledger/) | The launcher's records: the published Review Queue, the launcher's own Evidence, run reports, and run state; and, outside git, the finished videos it renders | No |

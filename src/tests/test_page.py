@@ -230,7 +230,8 @@ class DocumentTest(unittest.TestCase):
             '<div class="doc"><pre class="doc-code">'
             '<span class="doc-codeline"><span class="doc-indent"></span>| P07 | a |</span>'
             '<span class="doc-codeline"><span class="doc-indent"></span></span>'
-            '<span class="doc-codeline"><span class="doc-indent">      </span>&quot;status&quot;: &quot;draft&quot;,</span>'
+            '<span class="doc-codeline"><span class="doc-indent">      </span>'
+            "&quot;status&quot;: &quot;draft&quot;,</span>"
             '<span class="doc-codeline"><span class="doc-indent">\t  </span>x </span>'
             '<span class="doc-codeline"><span class="doc-indent">   </span></span>'
             "</pre></div>",
