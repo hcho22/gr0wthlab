@@ -233,11 +233,11 @@ Examples 3, 6, and 10, whose planted contradictions are about a Hook, ran again 
 Run on 2026-10-15 from 20:15 to 20:22 PDT, with the same scratch script, Codex CLI, model, and effort as the rounds above, the first nine runs four at a time and the last three three at a time, from a fresh clone of this branch with this round's change: `src` tree `dcb43ea4c735cbcf855bb9c5e2c305da156e4e11`, `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
 `git status` in the clone was empty before its first run and after its last.
 
-| Example | Runs | All checks held | This branch before: rounds D, E, F | `main`: rounds 1, F |
-| --- | --- | --- | --- | --- |
-| 3 | `da21`, `ba50`, `9a53` | 3 of 3 | 5 of 5, 5 of 5, not run | 0 of 5, not run |
-| 6 | `d936` (failed), `8529`, `6b6a`, `1dd7`, `e1bf`, `6ce0` | 5 of 6 | 2 of 2, 2 of 2, 3 of 3 | 2 of 2, 3 of 3 |
-| 10 | `7bd3`, `4bf9`, `9402` | 3 of 3 | 5 of 5, 5 of 5, not run | 0 of 5, not run |
+| Example | Runs | All checks held | Held under round H's declaration rule | This branch before: rounds D, E, F | `main`: rounds 1, F |
+| --- | --- | --- | --- | --- | --- |
+| 3 | `da21`, `ba50`, `9a53` | 3 of 3 | 3 of 3 | 5 of 5, 5 of 5, not run | 0 of 5, not run |
+| 6 | `d936` (failed), `8529`, `6b6a`, `1dd7`, `e1bf`, `6ce0` | 5 of 6 | 0 of 6 | 2 of 2, 2 of 2, 3 of 3 | 2 of 2, 3 of 3 |
+| 10 | `7bd3`, `4bf9` (does not hold under round H's rule), `9402` | 3 of 3 | 2 of 3 | 5 of 5, 5 of 5, not run | 0 of 5, not run |
 
 `d936` read none of its 16 listed files, by the launcher's count, queued nothing, and closes `Session: incomplete`, saying the package files could not be opened at their listed paths.
 Its event record shows one listing of the package folder by its full path, and after it every package path it tried named the lab's folder with one `/` left out (`…0000gnT/gr0wthlab-pr-g/…` for `…0000gn/T/gr0wthlab-pr-g/…`), and four of its commands failed to start, as round E's `36b1` shows.
@@ -246,11 +246,44 @@ Every other session read all 16 of its listed files and closes `Session: complet
 No session queued a proposal beyond the one its example plants, and every queued proposal declares `new_angle: no`.
 Each of example 6's five proposals asks the Founder to choose between the brand rule and P01's Hook and says it proposes no replacement Hook.
 Each of example 3's three proposals, and two of example 10's three pair proposals, replace leg A's Hook in the A/B pairs file with P01's Hook from the Angle bank; example 10's `4bf9` asks the Founder to choose which of the two existing wordings stays, either leg A's or P01's in the Angle bank, and to make the other file match.
+Approving any of example 6's five proposals or `4bf9` could change P01's frozen Hook, so under the rule round H's step 2 states each should have declared `new_angle: yes`, and none of the six holds; the column for that rule counts them so.
 
 | Side | Sessions | Ran to their end | Closing line `Session: complete` | Package files read of those listed | Proposals queued | Agent seconds | Cost (USD, API prices) | Per session |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | Round G | 12 | 12 | 11 | 176 of 192 | 14 | 703 | 0.115 | 59 s, 0.0096 |
 
-None of the three examples does worse with this round's step 2: in every session that read the package each held every check, and example 6's one failing run read no package file.
+By the examples' checks none of the three does worse with this round's step 2: in every session that read the package each held every check, and example 6's one failing run read no package file.
 
 What this round did not exercise: examples 1, 2, 4, 5, 7, 8, and 9 with this round's step 2, which stand on round E's runs of the line before it; a proposal that offers a newly worded Hook and declares `yes`, which no session here wrote and no example's lab holds the quote record for; the Post Drafts set, as in round E.
+
+## Round H: step 2 declares from what approving a proposal could change
+
+Review found that round G's step 2, which made a proposal leaving the choice to the Founder `new_angle: no` when it offered no newly worded Hook, let a `no` proposal rewrite a frozen Hook to another file's existing wording, as round G's `4bf9` offered.
+Step 2 now says a proposal is `new_angle: yes` whenever approving it could change a frozen Hook, signal, or kill criterion, including by choosing another file's existing wording, since such a change enters only as a new Angle.
+It says a proposal that only brings a stale copy in line with its source is `no`, and that for the A/B pairs the Angle bank is the source and leg A the copy.
+Where no kept quote record supports changing a frozen Hook, signal, or kill criterion, it has the `no` proposal propose the change on the other side and say that changing the frozen one instead enters only as a new Angle.
+Example 3's expected output now asks only for leg A brought in line with its source, and example 6's expected output and judged statement ask for a proposal whose approval changes no frozen Hook; no deterministic assertion changed.
+Under this rule round G's `4bf9` and example 6's five proposals do not hold, as round G's table now shows.
+
+Run on 2026-10-15 from 20:34 to 20:37 PDT, with the same scratch script, Codex CLI, model, and effort as the rounds above, four at a time, from a fresh clone of this branch with this round's change: `src` tree `d23070983634e7652e6220d0809e9ff1495912bb`, `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
+`git status` in the clone was empty before its first run and after its last.
+
+| Example | Runs | All checks held | Held under this round's declaration rule | Round G: checks, this rule | `main`: rounds 1, F |
+| --- | --- | --- | --- | --- | --- |
+| 3 | `d89f`, `7cc2`, `fb0d` | 3 of 3 | 3 of 3 | 3 of 3, 3 of 3 | 0 of 5, not run |
+| 6 | `93a0`, `f530`, `9dd9` | 3 of 3 | 3 of 3 | 5 of 6, 0 of 6 | 2 of 2, 3 of 3 |
+| 10 | `12a9`, `b71b`, `aa87` | 3 of 3 | 3 of 3 | 3 of 3, 2 of 3 | 0 of 5, not run |
+
+Every session read all 16 of its listed files and closes `Session: complete`.
+No session queued a proposal beyond the one its example plants, every queued proposal declares `new_angle: no`, and nothing was set aside.
+Each of example 6's three proposals proposes removing the banned word from the brand rules' list of words banned in a Hook, leaving P01's Hook as it is, and says that changing the Hook instead enters only as a new Angle.
+Each of example 3's three proposals and example 10's three pair proposals replaces leg A's Hook in the A/B pairs file with P01's Hook from the Angle bank.
+Read one by one, none of these nine proposals could change a frozen Hook if approved, so each holds under this round's rule.
+
+| Side | Sessions | Ran to their end | Closing line `Session: complete` | Package files read of those listed | Proposals queued | Agent seconds | Cost (USD, API prices) | Per session |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Round H | 9 | 9 | 9 | 144 of 144 | 12 | 530 | 0.083 | 59 s, 0.0093 |
+
+None of the three examples does worse with this round's step 2: each held every check in every run, against 0 of 5 for examples 3 and 10 and 5 of 5 for example 6 on `main`.
+
+What this round did not exercise: examples 1, 2, 4, 5, 7, 8, and 9 with this round's step 2, which stand on round E's runs; a proposal that declares `yes` with a kept quote record, which no example's lab holds; whether the proposals of rounds before G, on either side, hold under this round's rule, since this record keeps none of their wording; the Post Drafts set, as in round E.

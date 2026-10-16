@@ -98,7 +98,7 @@
     {
       "id": 3,
       "prompt": "Review the package, where the A/B pairs file says leg A of each pair opens on its Angle's Hook word for word, and gives leg A of AB-1 a Hook that differs from its Angle's frozen Hook.",
-      "expected_output": "One proposal citing the pairs file and the Angle bank that brings leg A in line with its Angle's frozen Hook, or asks the Founder which wording stands; it words no new Hook, so it declares new_angle: no and needs no quote record.",
+      "expected_output": "One proposal citing the pairs file and the Angle bank that brings leg A in line with its source, its Angle's frozen Hook in the Angle bank; approving it changes no frozen Hook, so it declares new_angle: no and needs no quote record.",
       "assertions": [
         {
           "kind": "deterministic",
@@ -194,7 +194,7 @@
     {
       "id": 6,
       "prompt": "Review the package, where the brand rules now ban a word that an Angle's frozen Hook holds.",
-      "expected_output": "One proposal citing the brand rule and the Hook, leaving to the Founder which side changes; a Hook change enters only as a new Angle.",
+      "expected_output": "One proposal citing the brand rule and the Hook that proposes the brand rule give way for that Hook and says that changing the Hook instead enters only as a new Angle; approving it changes no frozen Hook, so it declares new_angle: no and needs no quote record.",
       "assertions": [
         {
           "kind": "deterministic",
@@ -213,7 +213,7 @@
         },
         {
           "kind": "judged",
-          "text": "The proposal picks the side with a dated outcome as current, or asks the Founder to choose when neither has one."
+          "text": "The proposal changes no frozen Hook, and says what the Founder decides by approving or rejecting it."
         }
       ],
       "files": [],

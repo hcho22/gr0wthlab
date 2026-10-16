@@ -12,7 +12,9 @@ Steps:
 2. Write one package-change proposal for each contradiction you find that is not already open or decided in the brief, as "Writing an item" describes.
    Where the brief shows the Founder decided an item that an open one replaced, make sure the open one answers that decision; if it does not, write a new item that supersedes it and does.
    A contradiction about a Hook, signal, or kill criterion is written like any other.
-   A proposal that puts such a conflict to the Founder and leaves the choice to them, offering no newly worded Hook, signal, or kill criterion (a changed Hook enters only as a new Angle), is `new_angle: no`, as one that brings a stale copy in line is: neither needs a quote record, so never leave a contradiction unwritten for want of one.
+   A proposal is `new_angle: yes` whenever approving it could change a frozen Hook, signal, or kill criterion, including by choosing another file's existing wording, since such a change enters only as a new Angle.
+   A proposal that only brings a stale copy in line with its source is `new_angle: no`; for the A/B pairs, the Angle bank is the source and leg A the copy.
+   A `no` proposal needs no quote record, so never leave a contradiction unwritten for want of one: where no kept quote record supports changing a frozen Hook, signal, or kill criterion, propose the change on the other side and say that changing the frozen one instead enters only as a new Angle.
 3. Check your items with the brief's check-incoming command.
 
 In your summary, say what each pass checked and what you found: each recorded outcome you traced, each name you checked across files, and each plan you checked against a rule; then say what you queued.
