@@ -279,3 +279,36 @@ From the gate's linked worktree at `a62e901c1679a7486e6911214ee854cf5dfdf7b2` wi
 - No lab ran `src/bin/gr0wthlab run` or the sitting page on this round's code: the change-then-kill sequence and both flex cases stand on the tests above.
 - No real agent ran on this round's code but the boundary check's probe agent; the task definition and the brief's section on new Angles did not change.
 - Mandu's reader was not run on a proposal with two edits; its skill says it edits only the files `## Touches` lists, and a change's Touches now lists both.
+
+## Fourth round: one Hook for one Angle, across new Angles
+
+The review of the third round found that a new Angle's Hook was held only to the Angle bank and the A/B pairs as the run read them, so two new Angles filed in one run, or one filed while an earlier change's proposal still waited to be applied, could share a Hook.
+On top of `2e3d6e4df23e03c3528ed378e598a6f0edc560ff`, the take-in that a run and `check-work` both call now holds each new Hook also to every new Angle filed earlier in it and to the Hook of every change proposal that is open or approved, which each such proposal's queue entry now keeps (`weekly_change.hook`).
+A rejected proposal's Hook belongs to no Angle, so it does not count.
+`AGENTS.md` now says the proposal of an approved change declares `new_angle: yes` with the changed Angle's own row as its sourced pain, as `docs/mandu-exchange.md` already did.
+
+Every check below ran on 2026-10-15, Mac local time (PDT), with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort where a real agent ran; a run identifier carries its time in UTC.
+The fix was not committed when they ran: its `src` tree was `4d471dd73d67c0463fa842821d5e510447d06319` and its `config` tree `92af9e1f5971bf9d4a3ff122fc50896e26a5e54a`, written from a throwaway index over `2e3d6e4df23e03c3528ed378e598a6f0edc560ff` with the working tree's `src` and `config`.
+
+### The failure before the fix
+
+`ChangeThenKillTest.test_no_two_new_angles_share_a_hook_in_one_run_or_while_a_proposal_that_adds_one_stands` was run in a scratch copy of the working tree with `src/gr0wthlab/weekly_changes.py` put back as `2e3d6e4df23e03c3528ed378e598a6f0edc560ff` has it, and ended with an error there: the first change's proposal was filed with no Hook in its queue entry.
+On the fix it passes: of two changes written with the same Hook in one take-in the second is refused, again at the next take-in while the first proposal is open, and filed once the Founder has rejected the first.
+
+### The boundary
+
+From the gate's linked worktree at `2e3d6e4df23e03c3528ed378e598a6f0edc560ff` with the fix in its working tree, against Mandu and the Product checkouts as they are, with the SHA-256 of `git status --porcelain` the same before the preflight and after the check, and logs in a folder of the Mac's temporary directory named with `GR0WTHLAB_LOG_DIR`; `show-config` printed the configuration fingerprint `32af654b78b3cfc5e0c257fc93ed76e5c5f6a2c6efe42f2898b6f270e2276e43`, the same as in the third round.
+
+- `src/bin/gr0wthlab preflight`, run twice at 22:58, passed each time: six areas writable, 22 paths refused, no breach, a listing of the footage place `~/Mandu/projects/RepToday` refused, and neither listed host reached from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, from 22:58:51 to 23:00:10, passed at its first attempt as `20261016T055853Z-on-demand-aaff`: 49 steps to prove, 29 tool calls in Codex's record with no problem, 17 of 17 file-tool targets refused each in a patch of its own, 19 kernel sandbox denials, the footage place's shell read refused, 1 of 1, 12 of 12 permitted sentinels written and none escaped, nothing unproven, the network probe's three targets refused inside the sandbox after its control reached its listener, two requests from the launcher's client, each a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed outside the areas.
+
+### Tests
+
+- Under `/usr/bin/python3`, Python 3.9.6, on the working tree: `tests.test_weekly_changes` and `tests.test_weekly_read`, 48 tests, none failed and none skipped.
+- `ruff check` and `ruff format --check` on `src` passed, with ruff 0.15.20.
+- The whole unit suite and CI's run were not part of this round.
+
+### What this round did not exercise
+
+- No real agent wrote two new Angles in one session; the refusal stands on the test above, which drives the take-in a run calls.
+- A change proposal filed before this round keeps no Hook in its queue entry, so it would not count; none was filed outside a lab.

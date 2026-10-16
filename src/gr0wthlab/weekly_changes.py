@@ -46,7 +46,7 @@ from pathlib import Path
 
 from . import exchange, kit, lint, results, weekly_read
 from .areas import Areas, Store, UnsafeFile, read_plain
-from .queue import APPROVED, SUPERSEDED, Ledger
+from .queue import APPROVED, OPEN, SUPERSEDED, Ledger
 from .waitlist import looks_like_address
 
 WORKFLOW = weekly_read.WORKFLOW
@@ -107,6 +107,7 @@ class Owed:
     read_date: date | None  # the read's own day
     leads: str = ""  # the leg whose Hook leads, for a resolved pair
     angle: str = ""  # the flex slot's Angle, or a change's new Angle number
+    hook: str = ""  # a change's new Hook, once its row passed
     earned: bool = False  # whether an Angle earned the flex slot
     asked: bool = False  # whether the Weekly Read session was due to write its new Angle this run
     problem: str = ""  # why its proposal cannot be filed this run
@@ -497,8 +498,8 @@ def check_row(
     hook = folded(hook_cell)
     if hook and hook in {folded(found) for found in hooks}:
         problems.append(
-            "its Hook is one the Angle bank or the A/B pairs already hold; a Hook belongs to exactly one Angle, so the"
-            " new Angle needs a Hook of its own"
+            "its Hook is one the Angle bank, the A/B pairs, or another new Angle proposed already holds; a Hook belongs"
+            " to exactly one Angle, so the new Angle needs a Hook of its own"
         )
     if results.platform_of(kit.cell(cells, header, "Platform")) is None:
         problems.append("its Platform cell must name TikTok or YouTube Shorts, the platform whose numbers judge it")
@@ -514,6 +515,13 @@ def known_hooks(bank: Mapping[str, kit.Angle], pairs: Mapping[str, kit.Pair]) ->
     found = [angle.hook_cell for angle in bank.values()]
     found += [leg.hook for pair in pairs.values() for leg in pair.legs.values() if leg.hook]
     return found
+
+
+def proposed_hooks(ledger: Ledger) -> list[str]:
+    """The Hook of each new Angle a change's proposal adds while that proposal is open or approved, so the Angle may
+    yet be in the bank, which the run read before Mandu applied it."""
+    marks = [entry.get("weekly_change") for entry in ledger.entries.values() if entry["status"] in (OPEN, APPROVED)]
+    return [str(mark["hook"]) for mark in marks if isinstance(mark, dict) and mark.get("hook")]
 
 
 def compose_change(path: str, text: str, cells: Sequence[str]) -> tuple[Edit | None, str]:
@@ -860,10 +868,12 @@ def take(
 ) -> Outcome:
     """File the proposal each owed decision's edit makes this run, once the last session has ended; a change's new
     Angle is the file the Weekly Read session wrote for it, checked here. Every file in the changes folder is removed
-    once read, and one that is refused leaves only its name and the reasons. Each approved flex decision whose window
-    passed is marked so, so no later run reports it again. With publish off nothing is written or removed, and the
-    outcome says what a run would do."""
+    once read, and one that is refused leaves only its name and the reasons; its Hook is held to every Hook of the
+    package, of a new Angle filed earlier in this take-in, and of one an open or approved proposal adds. Each approved
+    flex decision whose window passed is marked so, so no later run reports it again. With publish off nothing is
+    written or removed, and the outcome says what a run would do."""
     outcome = Outcome()
+    hooks = proposed_hooks(ledger)
     folder = areas.path("weekly_reads", FOLDER)
     words = {found.item: found for found in plan.words()}
     files: dict[str, Path] = {}
@@ -901,7 +911,7 @@ def take(
             )
             edits = [edit] if edit else []
         else:
-            edits, problem, extra = take_change(found, plan, areas, files.get(found.item), outcome, publish)
+            edits, problem, extra = take_change(found, plan, areas, files.get(found.item), outcome, publish, hooks)
         if already:
             found.already = already
             continue
@@ -923,7 +933,7 @@ def take(
         if publish:
             mark = {"decision": found.item, "kind": found.kind}
             if found.kind == CHANGE:
-                mark["angle"] = found.angle
+                mark.update(angle=found.angle, hook=found.hook)
             identifier = ledger.publish(
                 store,
                 check.item,
@@ -936,16 +946,23 @@ def take(
         seen[fingerprint] = identifier
         found.filed = identifier
         outcome.filed.append((found.item, identifier))
+        hooks += [found.hook] if found.hook else []
     if publish and areas.real_folder(folder):
         areas.remove_empty_folders(folder)
     return outcome
 
 
 def take_change(
-    found: Owed, plan: Plan, areas: Areas, path: Path | None, outcome: Outcome, publish: bool
+    found: Owed,
+    plan: Plan,
+    areas: Areas,
+    path: Path | None,
+    outcome: Outcome,
+    publish: bool,
+    proposed: Sequence[str],
 ) -> tuple[list[Edit], str, list[str]]:
     """The change's two edits, to the Angle bank and the creative log, from the new Angle the Weekly Read session
-    wrote, which is removed once read."""
+    wrote, which is removed once read; proposed holds the Hook of every other new Angle proposed."""
     name = f"{found.item}.md"
     if path is None:
         return [], f"no new Angle was written for it at `weekly-reads/{FOLDER}/{name}`", []
@@ -965,7 +982,7 @@ def take_change(
     except kit.KitError:
         pairs = {}
     rules = brand_rules(plan.texts.get("brand_rules", ""))
-    hooks = known_hooks(bank, pairs)
+    hooks = known_hooks(bank, pairs) + list(proposed)
     cells, problems = check_row(
         text, bank_text, found.key, found.angle, hooks, rules, plan.paths.get("brand_rules", "")
     )
@@ -984,6 +1001,7 @@ def take_change(
     if problems:
         outcome.set_aside.append((name, problems))
         return [], f"its new Angle, `weekly-reads/{FOLDER}/{name}`, was set aside", []
+    found.hook = kit.one_quote(kit.cell(cells, header, "Hook")) or ""
     changed = changed_cells(kit.cells(bank[found.key].row), cells, header)
     return edits, "", [f"Its cells that differ from {found.key}'s: {', '.join(changed)}."] if changed else []
 

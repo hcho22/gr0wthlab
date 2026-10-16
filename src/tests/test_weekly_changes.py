@@ -16,6 +16,12 @@ from gr0wthlab.queue import Ledger
 from tests import fakes
 from tests.test_cycle import CycleTestCase
 
+HOOK = "Watch the timer stop at five."
+TAKEN = (
+    "its Hook is one the Angle bank, the A/B pairs, or another new Angle proposed already holds; a Hook belongs to"
+    " exactly one Angle, so the new Angle needs a Hook of its own"
+)
+
 KIT = fakes.EXAMPLES / "files" / "mandu"
 GTM = "projects/RepToday/gtm/05-social-pmf"
 ANGLES, PAIRS, CALENDAR, LOG = (
@@ -170,12 +176,10 @@ class EditTest(unittest.TestCase):
             " Angle",
             NEW_ANGLE.replace('"I only had ten minutes"', '"I had no time"'): "its pain and source cell must be P07's"
             " exactly as the Angle bank has it: the new Angle carries the same sourced pain",
-            NEW_ANGLE.replace('"Watch the timer stop at five."', bank["P07"].hook_cell): "its Hook is one the Angle"
-            " bank or the A/B pairs already hold; a Hook belongs to exactly one Angle, so the new Angle needs a Hook of"
-            " its own",
-            NEW_ANGLE.replace('"Watch the timer stop at five."', '"the session is on screen before you decide."'): "its"
-            " Hook is one the Angle bank or the A/B pairs already hold; a Hook belongs to exactly one Angle, so the new"
-            " Angle needs a Hook of its own",
+            NEW_ANGLE.replace('"Watch the timer stop at five."', bank["P07"].hook_cell): TAKEN,
+            NEW_ANGLE.replace(
+                '"Watch the timer stop at five."', '"the session is on screen before you decide."'
+            ): TAKEN,
             NEW_ANGLE.replace("| TikTok |", "| Instagram |"): "its Platform cell must name TikTok or YouTube Shorts,"
             " the platform whose numbers judge it",
             NEW_ANGLE.replace("| 15s timer", "| | 15s timer"): "the row has 10 cells; the Angle bank's header has 9",
@@ -346,15 +350,25 @@ class ChangeThenKillTest(unittest.TestCase):
             "read_date": read_on.isoformat(),
         }
 
-    def file(self, window, run):
-        """One run's take-in of what the approved decisions owe; each proposal it files, as its item's text."""
+    def take(self, window, run):
+        """One run's take-in of what the approved decisions owe, the Weekly Read session having written each new Angle
+        asked for as the changed Angle's row under its new number, with HOOK."""
         plan = weekly_changes.prepare(self.ledger, self.mandu, self.registry, window)
+        bank_text = (self.mandu / ANGLES).read_text(encoding="utf-8")
+        header, _ = kit.table(bank_text, weekly_changes.BANK_COLUMNS)
         for found in plan.words():
+            cells = kit.cells(kit.parse_angles(bank_text)[found.key].row)
+            cells[kit.column_index(header, "ID")] = found.angle
+            cells[kit.column_index(header, "Hook")] = f'"{HOOK}"'
             path = self.areas.path("weekly_reads", weekly_changes.FOLDER, f"{found.item}.md")
             path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(NEW_ANGLE.replace("| P08 |", f"| {found.angle} |") + "\n", encoding="utf-8")
+            path.write_text(weekly_changes.row_text(cells) + "\n", encoding="utf-8")
         now = datetime(2026, 11, 15, 19, 0, tzinfo=timezone.utc)
-        outcome = weekly_changes.take(plan, self.areas, self.store, self.ledger, ["RepToday"], run, now, {})
+        return plan, weekly_changes.take(plan, self.areas, self.store, self.ledger, ["RepToday"], run, now, {})
+
+    def file(self, window, run):
+        """One run's take-in, every proposal owed filed; each, as its item's text."""
+        plan, outcome = self.take(window, run)
         self.assertEqual([found.problem for found in plan.owed], [""] * len(plan.owed))
         return [(self.store.root / self.ledger.entries[filed]["file"]).read_text("utf-8") for _, filed in outcome.filed]
 
@@ -372,6 +386,28 @@ class ChangeThenKillTest(unittest.TestCase):
         (record,) = [record for record in log["angles"] if record["angle_id"].startswith("P08-")]
         self.assertEqual((record["status"], record["killed_on_reads"]), ("killed", ["2026-11-08", "2026-11-15"]))
         self.assertEqual(self.file(2, "run-3"), [], "each decision's proposal is filed once")
+
+    def test_no_two_new_angles_share_a_hook_in_one_run_or_while_a_proposal_that_adds_one_stands(self):
+        """Two approved changes whose new Angles the session wrote with the same Hook: the first is filed, its queue
+        entry keeping the Hook, and the second is refused, in that run and in the next while the first proposal is
+        open; once the Founder rejects the first, no Angle holds the Hook, and the second is filed."""
+        for angle in ("P06", "P07"):
+            self.approve(
+                f"20261018-weekly-read-14-{angle.lower()}", angle, weekly_read.MISSED, "change", 1, date(2026, 10, 18)
+            )
+        plan, outcome = self.take(1, "run-1")
+        self.assertEqual([found.angle for found in plan.owed], ["P08", "P09"])
+        first, second = plan.owed
+        self.assertEqual(self.ledger.entries[first.filed]["weekly_change"]["hook"], HOOK)
+        self.assertEqual((second.filed, outcome.set_aside), ("", [(f"{second.item}.md", [TAKEN])]))
+        plan, outcome = self.take(1, "run-2")
+        self.assertEqual([found.item for found in plan.owed], [second.item])
+        self.assertEqual(outcome.set_aside, [(f"{second.item}.md", [TAKEN])])
+        now = datetime(2026, 11, 15, 20, 0, tzinfo=timezone.utc)
+        self.ledger.close(self.ledger.entries[first.filed], "rejected", "run-2", now, decided_at=now.isoformat())
+        plan, outcome = self.take(1, "run-3")
+        self.assertEqual((outcome.set_aside, [found.problem for found in plan.owed]), ([], [""]))
+        self.assertEqual(self.ledger.entries[plan.owed[0].filed]["weekly_change"]["hook"], HOOK)
 
 
 class ApprovedDecisionRunTest(CycleTestCase):
