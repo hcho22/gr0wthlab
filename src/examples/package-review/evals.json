@@ -194,7 +194,7 @@
     {
       "id": 6,
       "prompt": "Review the package, where the brand rules now ban a word that an Angle's frozen Hook holds.",
-      "expected_output": "One proposal citing the brand rule and the Hook that proposes the brand rule give way for that Hook and says that changing the Hook instead enters only as a new Angle; approving it changes no frozen Hook, so it declares new_angle: no and needs no quote record.",
+      "expected_output": "One proposal citing the brand rule and the Hook that puts the conflict to the Founder and changes nothing frozen; it declares new_angle: no and needs no quote record.",
       "assertions": [
         {
           "kind": "deterministic",
@@ -213,7 +213,7 @@
         },
         {
           "kind": "judged",
-          "text": "The proposal changes no frozen Hook, and says what the Founder decides by approving or rejecting it."
+          "text": "The proposal neither unbans the word nor rewords the Hook, and leaves the choice to the Founder."
         }
       ],
       "files": [],

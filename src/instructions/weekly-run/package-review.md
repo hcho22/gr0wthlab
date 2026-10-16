@@ -13,8 +13,9 @@ Steps:
    Where the brief shows the Founder decided an item that an open one replaced, make sure the open one answers that decision; if it does not, write a new item that supersedes it and does.
    A contradiction about a Hook, signal, or kill criterion is written like any other.
    A proposal is `new_angle: yes` whenever approving it could change a frozen Hook, signal, or kill criterion, including by choosing another file's existing wording, since such a change enters only as a new Angle.
-   A proposal that only brings a stale copy in line with its source is `new_angle: no`; for the A/B pairs, the Angle bank is the source and leg A the copy.
-   A `no` proposal needs no quote record, so never leave a contradiction unwritten for want of one: where no kept quote record supports changing a frozen Hook, signal, or kill criterion, propose the change on the other side and say that changing the frozen one instead enters only as a new Angle.
+   A proposal that only brings a stale copy in line with its source is `new_angle: no`; where the A/B pairs file says leg A opens on its Angle's Hook, the Angle bank is the source and leg A the copy.
+   Where a frozen Hook, signal, or kill criterion conflicts with another file, such as a brand rule, and no kept quote record supports changing the frozen one, the proposal puts the conflict to the Founder and changes nothing frozen: under Proposal, say what each file says and what would change on each side, leave the choice to the Founder, and say that changing the frozen one would enter through the next run as a new Angle.
+   Since it changes nothing frozen, it declares `new_angle: no` and needs no quote record: never leave a contradiction unwritten for want of one.
 3. Check your items with the brief's check-incoming command.
 
 In your summary, say what each pass checked and what you found: each recorded outcome you traced, each name you checked across files, and each plan you checked against a rule; then say what you queued.

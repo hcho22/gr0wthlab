@@ -287,3 +287,42 @@ Read one by one, none of these nine proposals could change a frozen Hook if appr
 None of the three examples does worse with this round's step 2: each held every check in every run, against 0 of 5 for examples 3 and 10 and 5 of 5 for example 6 on `main`.
 
 What this round did not exercise: examples 1, 2, 4, 5, 7, 8, and 9 with this round's step 2, which stand on round E's runs; a proposal that declares `yes` with a kept quote record, which no example's lab holds; whether the proposals of rounds before G, on either side, hold under this round's rule, since this record keeps none of their wording; the Post Drafts set, as in round E.
+
+## Round I: step 2 puts a conflict with a frozen Hook to the Founder
+
+Review found two things in round H's step 2.
+It said for every package that the Angle bank is the source and leg A the copy, which only a pairs file that says so makes true.
+It also had a proposal about a frozen Hook, signal, or kill criterion with no kept quote record propose the change on the other side, which in example 6 meant unbanning the word for every Hook.
+Step 2 now keeps round H's rule that a proposal whose approval could change a frozen Hook, signal, or kill criterion declares `new_angle: yes`, and makes the Angle bank leg A's source only where the A/B pairs file says leg A opens on its Angle's Hook.
+Where a frozen Hook, signal, or kill criterion conflicts with another file and no kept quote record supports changing it, the proposal puts the conflict to the Founder and changes nothing frozen: it says what each file says and what would change on each side, leaves the choice to the Founder, says that changing the frozen one would enter through the next run as a new Angle, and declares `new_angle: no`.
+Example 6's expected output asks again for a proposal that puts the conflict to the Founder and changes nothing frozen, and its judged statement now reads "The proposal neither unbans the word nor rewords the Hook, and leaves the choice to the Founder."
+Round H's three example 6 proposals each removed the word from the brand rules' list, which that expected output and judged statement now rule out.
+
+Run on 2026-10-16 from 05:57 to 06:01 PDT, with the same scratch script, Codex CLI, model, and effort as the rounds above, four at a time, from a fresh clone of this branch with this round's change: `src` tree `9781524a4e7becf1fae7c59e2516be80891dc03f`, `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
+`git status` in the clone was empty before its first run and after its last.
+
+| Example | Runs | All checks held | This branch before: rounds D, E, G, H | `main`: rounds 1, F |
+| --- | --- | --- | --- | --- |
+| 3 | `bb78`, `ad2a`, `6cd9` | 3 of 3 | 5 of 5, 5 of 5, 3 of 3, 3 of 3 | 0 of 5, not run |
+| 6 | `e4cc`, `b245`, `0be9` | 3 of 3 | 2 of 2, 2 of 2, 5 of 6, 3 of 3 | 2 of 2, 3 of 3 |
+| 10 | `fc28`, `cb9a`, `3fe7` (failed) | 2 of 3 | 5 of 5, 5 of 5, 3 of 3, 3 of 3 | 0 of 5, not run |
+
+Every session closes `Session: complete`, and every one read all 16 of its listed files except `6cd9`, which read 15, leaving `BUILD-SPEC.md`.
+Nothing was set aside, and every queued proposal declares `new_angle: no`.
+Each of example 6's three proposals sets out both sides, leaves the choice to the Founder, changes neither the brand rule nor the Hook itself, and says that changing the Hook would enter through the next run, or in `0be9` a later run, as a new Angle.
+Each of example 3's three proposals and example 10's three pair proposals replaces leg A's Hook in the A/B pairs file with P01's Hook from the Angle bank.
+Read one by one, none of these nine proposals could change a frozen Hook if approved.
+
+`3fe7` failed the check that a queued proposal cites `brand-guidelines.md` and `02-marketing-launch-checklist_260807.md`.
+Its name-status proposal cites the brand guidelines' line 8 as the stale side and the pre-publication checklist's line 9 as the dated outcome, a line that records the trademark search cleared on 2026-08-07, and does not cite the launch checklist.
+Its pair proposal held.
+
+| Side | Sessions | Ran to their end | Closing line `Session: complete` | Package files read of those listed | Proposals queued | Agent seconds | Cost (USD, API prices) | Per session |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Round I | 9 | 9 | 9 | 143 of 144 | 12 | 633 | 0.086 | 70 s, 0.0096 |
+
+Against `main` none of the three examples does worse: 3 of 3 for example 3 and 2 of 3 for example 10 against 0 of 5 each, and 3 of 3 for example 6 against 5 of 5.
+Example 10's `3fe7` is its first failing run on this branch in 19, in rounds D, E, G, H, and this one, and it fails on the name-status proposal, which no line of this round's step 2 is about.
+Three runs cannot show whether that is run-to-run variance, so it is left here for firstmate rather than worded around: the name-status check asks for the launch checklist alone, while the pre-publication checklist the session cited records the same dated outcome.
+
+What this round did not exercise: examples 1, 2, 4, 5, 7, 8, and 9 with this round's step 2, which stand on round E's runs; a proposal that declares `yes` with a kept quote record, which no example's lab holds; the Post Drafts set, as in round E.
