@@ -491,7 +491,7 @@ class WeekByWeekTest(BetaCycleTestCase):
                 report,
             )
         self.assertIn(
-            "a post or a message only through its Draft, and the notice of a change to the Instructions only through",
+            "a post or a message only through its Draft, a Weekly Read decision only through the Weekly Read memo, and",
             self.brief(),
         )
 

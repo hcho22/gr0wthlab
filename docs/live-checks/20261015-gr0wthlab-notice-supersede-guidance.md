@@ -1,8 +1,9 @@
 # Live checks: the agent is told no item supersedes the notice of a kept Instructions change (US-ME16)
 
 This file records what was run on the Founder's Mac for the change that tells the agent, in `src/instructions/weekly-run/items.md` and in the brief's Review Queue section (`report.item_lines`), that the notice of a change to the Instructions cannot be superseded by any item and that only the Founder's decision closes it.
+From round 4 on, the change also tells it the same of a Weekly Read decision, which changes only through the Weekly Read memo.
 The launcher's rule in `Ledger` (`src/gr0wthlab/queue.py`) is unchanged.
-No launcher code that a session runs under, no configuration, and no permission profile changed, so no `preflight` or `boundary-check` was run.
+No configuration and no permission profile changed; rounds 1 to 3 ran no `preflight` or `boundary-check`, and round 4, which changed `report.py` again, ran both.
 
 ## Round 1: the gap on main, the unit suite, and the example sets on both sides
 
@@ -260,3 +261,112 @@ Altogether this round ran 64 sessions, 5,443 seconds of agent time, about 0.66 d
 
 What the numbers show: on the merged head the counts the launcher keeps of each session are the same or within a session's variance as on `main`, both sets held the same number of examples in full (10 of 18 Package review runs and 14 of 14 Post Drafts runs on each side), and the examples that failed did so on both sides across the three rounds.
 What round 2 says was not exercised holds for this round too.
+
+## Round 4: the Weekly Read decision named, and the repeat rule in the launcher's terms
+
+The review of the merged head found two places where the agent was not told exactly what the launcher refuses, and this round's change closes both:
+
+- `Ledger.check_incoming` refuses any item that supersedes an open Weekly Read decision, since `queue.FROM_DRAFT` holds that kind, and neither `items.md` nor the brief said so.
+  `items.md` now says a Weekly Read decision cannot be superseded and changes only through the Weekly Read memo; the brief's header names it beside the others, and its line in the brief's list of open items carries the mark "which changes only through the Weekly Read memo".
+- `items.md` said the launcher refuses only an exact repeat.
+  It now says an item is refused as a repeat when its kind, `# ` title, and text match an open or decided item's once case and spacing are ignored, the text being a proposal's `## Proposal` section and a Dispatch request's `## Request` section (`exchange.item_hash`), and also when it has the kind and title of a queued item whose file the launcher could not read (`queue.may_repeat`); any other repeat is the session's own to catch.
+
+This round's code is not committed yet: it is commit `c368c0e5ecf73d887868b18822bfaaa21808ce82` with the change on top, `src` tree `e591ea8c80317cbc9acd00a9eb56d498a6696c88` and `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
+The other side is `main` at `05006936783d2e2cb6f08d91fa675182f0f6de24` (`src` tree `fb1d365d5c58b6b74a35a0c1bf1b13c777abab32`, the same as `b757595`'s, and the same `config` tree).
+The two sides' `src/instructions/` differ only in `items.md`: the change's lines that name a Weekly Read decision and the notice of an Instructions change, and its three lines of the repeat rule in place of `main`'s one.
+Run on 2026-10-15 from 16:45 to 17:34 PDT, Codex CLI `codex-cli 0.160.0`, at the model and reasoning effort in `config/guardrails/runtime.json` (`gpt-6-luna`, high).
+
+### The gap before this round
+
+`ItemLinesTest` in `src/tests/test_report.py` now lists an open Weekly Read decision among the open items, and `WeeklyReadRunTest.test_no_item_of_the_agent_s_supersedes_a_weekly_read_decision_and_the_brief_says_so` in `src/tests/test_weekly_read_cycle.py` queues a read's decision items, has the stand-in agent write a proposal whose `supersedes:` names one of them, and reads the Package review session's brief and the run report.
+Run against round 3's `report.py` in a throwaway copy, both failed; both pass on the change.
+
+### The unit suite and lint
+
+| Command | Where | What the records showed |
+| --- | --- | --- |
+| `ruff check src src/bin/gr0wthlab` and `ruff format --check src src/bin/gr0wthlab` (ruff 0.15.20) | the worktree with the change | all checks passed; 107 files already formatted |
+| `/usr/bin/python3 -m unittest discover -s src/tests -t src` | a clone of the worktree's files, `src` tree `e591ea8` | 1,484 tests OK in 2,841 seconds, from 16:46 to 17:34, beside the example-set runs |
+
+### The preflight and the boundary check
+
+From this work's linked worktree, against Mandu and the Product checkouts as they are, with logs in a folder of the Mac's temporary directory named with `GR0WTHLAB_LOG_DIR`.
+`git status --porcelain` printed the same 6 changed files, with the same SHA-256, before the preflight and after the check.
+`show-config` printed the configuration fingerprint `258ebc6a8aa74a5c2da1c4986bd50032dc364581194246fe1984e3208a7f8480`; its output names this worktree's own path.
+
+- `src/bin/gr0wthlab preflight`, run twice at 16:45, passed both times: six areas writable, 22 paths refused, among them the six folders of the Founder's records, the Instructions in force, and the example sets; no breach; a listing of the footage place `~/Mandu/projects/RepToday` refused; and neither listed host reached from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, from 16:46:03 to 16:46:57, passed at its first attempt as `20261015T234605Z-on-demand-9a45`, with `gpt-6-luna` at `high` reasoning effort and 42.5 s of agent time: 49 steps to prove, 28 tool calls in Codex's record with no problem, 17 of 17 file-tool targets refused each in a patch of its own, 19 kernel sandbox denials naming the run's sentinels or the check's listeners, the footage place's read refused, 1 of 1, 12 of 12 permitted sentinels written and none escaped, no local connection through, the network probe's three targets refused inside the sandbox after its control reached the listener, two requests from the launcher's client, each a GET for a listed host's `robots.txt`, an unlisted address refused, and no change since the snapshot from before the check.
+
+### The example sets, with the real agent
+
+A scratch script outside the repository called each side's own `examples.run_example`, as in round 1, with up to ten sessions at a time.
+Each lab's brief listed two open items, the Waitlist Dispatch request and the filming plan, each marked as filed by the launcher, under the header of its side: all 48 change-side briefs carried the change's header, which names a Weekly Read decision and the notice of an Instructions change, and all 48 `main` briefs carried `main`'s.
+No brief listed a Weekly Read decision or the notice of an Instructions change, since no example's queue holds one.
+
+Each example of both sets once on each side, from 16:47 to 16:54 (lab run identifiers after `20261011T230000Z-on-demand-`):
+
+| Set | Example | `main` run | `main` checks held | change run | change checks held |
+| --- | --- | --- | --- | --- | --- |
+| Package review | 1 | `064a` | 2 of 2 | `c6eb` | 2 of 2 |
+| Package review | 2 | `2306` | 2 of 2 | `c235` | 2 of 2 |
+| Package review | 3 | `464a` | 1 of 2 | `25d9` | 1 of 2 |
+| Package review | 4 | `4d3e` | 2 of 2 | `1fec` | 2 of 2 |
+| Package review | 5 | `c0e9` | 2 of 2 | `a254` | 2 of 2 |
+| Package review | 6 | `a732` | 2 of 2 | `6e06` | 2 of 2 |
+| Package review | 7 | `68ec` | 2 of 2 | `f5ce` | 2 of 2 |
+| Package review | 8 | `9351` | 2 of 2 | `6069` | 1 of 2 |
+| Package review | 9 | `220a` | 2 of 2 | `868a` | 1 of 2 |
+| Package review | 10 | `8707` | 2 of 3 | `ac91` | 2 of 3 |
+| Post Drafts | 1 | `cd9f` | 4 of 4 | `cff6` | 4 of 4 |
+| Post Drafts | 2 | `cc92` | 3 of 3 | `e23a` | 3 of 3 |
+| Post Drafts | 8 | `cf2a` | 1 of 1 | `aa60` | 1 of 1 |
+| Post Drafts | 16 | `9253` | 3 of 3 | `6e14` | 3 of 3 |
+| Post Drafts | 17 | `0385` | 5 of 5 | `231e` | 5 of 5 |
+| Post Drafts | 18 | `670c` | 4 of 4 | `83b0` | 4 of 4 |
+| Post Drafts | 19 | `3ac8` | 4 of 4 | `8a6d` | 4 of 4 |
+| Post Drafts | 20 | `ce0e` | 5 of 5 | `ec45` | 5 of 5 |
+| Post Drafts | 21 | `9f9e` | 3 of 3 | `ae5f` | 3 of 3 |
+| Post Drafts | 22 | `9c94` | 3 of 3 | `1e4b` | 3 of 3 |
+
+Package review examples 3, 4, 8, and 10 and Post Drafts examples 16 and 21, the ones earlier rounds re-ran, and Package review example 9, which held on `main` and not with the change, ran four more times on each side, from 16:54 to 17:04; a run marked `*` did not hold every check:
+
+| Example | `main` runs | `main` all checks held, of five | change runs | change all checks held, of five |
+| --- | --- | --- | --- | --- |
+| Package review 3 | `4537*`, `63aa*`, `e27e*`, `8804*` | 0 | `a4de*`, `9e76*`, `2d71`, `ed15*` | 1 |
+| Package review 4 | `75a1`, `4769`, `2460`, `c13a` | 5 | `7b4a*`, `3b44`, `10d6`, `d7ec` | 4 |
+| Package review 8 | `cc76*`, `5ff7*`, `61df*`, `5199*` | 1 | `c8e1*`, `62e8*`, `9bf5*`, `a971*` | 0 |
+| Package review 9 | `8ca1*`, `ac9a`, `9449*`, `6f7b` | 3 | `11ea*`, `1b1b*`, `c7bb`, `7f72` | 2 |
+| Package review 10 | `8c48*`, `f52c*`, `09dd*`, `65a9` | 1 | `af61*`, `af25*`, `9f4c*`, `f5cd*` | 0 |
+| Post Drafts 16 | `719c`, `d948`, `7646`, `99db` | 5 | `0796`, `38af`, `278a`, `7c2f` | 5 |
+| Post Drafts 21 | `3584`, `7552`, `026b`, `269a` | 5 | `82dc`, `565d`, `ff7c`, `e4b6` | 5 |
+
+Over five runs each, the five Package review examples held every check 10 of 25 times on `main` and 7 of 25 with the change; without example 9, which earlier rounds did not re-run, 7 of 20 and 5 of 20.
+Examples 3, 8, 9, and 10 failed at least once on each side.
+Example 4 held 5 of 5 on `main` and 4 of 5 with the change; on `main` it failed once in each of rounds 1, 2, and 3.
+In its one failed run, `7b4a`, the session queued one proposal, to remove the cleared trademark blocker, and none citing both `cadence-14-day.md` and `angles.md`.
+The failing checks were otherwise the ones earlier rounds saw: in 3 and 10 no queued proposal cited both `ab-pairs.md` and `angles.md`, and a proposal was queued in 8, a package whose files agree, and in 9, one that differs only in text it marks as history.
+In 11 of the 14 runs of 8 and 9 that failed, on both sides, a queued proposal's title names the loss-framing rule or the score's factual behavior, and in the other three it names the trademark.
+Every Post Drafts run on both sides held every check.
+No item any session wrote named `supersedes`: no queued entry in any lab carries it, and no set-aside reason names it.
+
+The launcher's counts of each session, summed for each side over every run of this round:
+
+| Set and side | Sessions | Ran to their end | Closing line `Session: complete` | Package files read of those listed | Proposals queued | Draft claims with a code location, without | Agent seconds | Cost (USD, API prices) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Package review, `main` | 30 | 30 | 29 | 480 of 480 | 28 | none written | 2,269 | 0.292 |
+| Package review, change | 30 | 30 | 28 | 479 of 480 | 31 | none written | 2,404 | 0.319 |
+| Post Drafts, `main` | 18 | 18 | 18 | 195 of 198 | 12 | 22, 6 | 1,694 | 0.223 |
+| Post Drafts, change | 18 | 18 | 18 | 195 of 198 | 12 | 23, 5 | 1,930 | 0.225 |
+
+The three sessions whose closing line was `Session: incomplete` were `main`'s example 3 run `464a` and the change's example 3 run `ed15` and example 8 run `a971`; each names a Hook proposal it did not write, for want of a kept Listening quote record.
+Altogether this round ran 96 example sessions, 8,297 seconds of agent time, about 1.06 dollars at API prices, beside the boundary check's one.
+
+What the numbers show: with the change, the counts the launcher keeps of each session are the same or within a session's variance as on `main`, and every Post Drafts run held every check on both sides.
+In the Package review set, the difference between the sides in the examples re-run went toward `main` in round 1 (8 to 6 of 20), toward the change in round 2 (5 to 8 of 20) and round 3 (4 to 5 of 12), and toward `main` in this round (7 to 5 of 20 for the same four examples).
+The sample does not tell a difference of that size from the run-to-run variance those rounds recorded.
+
+### What was not exercised
+
+- A session with the real agent whose brief lists an open Weekly Read decision or the notice of a kept Instructions change, or whose queue holds an item a reworded proposal would repeat: no example set holds one, so the wording's effect where it applies was not measured; the brief's header and marks rest on the unit tests that hold them, and the refusals on the launcher's unchanged rules.
+- The Rejection reasons session, which also carries `items.md`: it has no example set.
+- A weekly run in the production clone.
