@@ -223,3 +223,34 @@ On `main` it held 5 of 5 (round 1 2, this round 3).
 Its one failing run in any round is round A's `6abc`.
 
 What this round did not exercise: more runs of examples 1, 2, 5, and 7, which stay as rounds 1, D, and E left them; the Post Drafts set, as in round E.
+
+## Round G: step 2 states its declaration as a condition
+
+Review found that step 2 said a proposal leaving the choice to the Founder is `new_angle: no` "since" it words no new Hook, signal, or kill criterion, which reads as covering one that offers a newly worded Hook; `items.md` and the guidance in force declare that one `yes`.
+Step 2 now says a proposal that leaves the choice to the Founder, offering no newly worded Hook, signal, or kill criterion (a changed Hook enters only as a new Angle), is `new_angle: no`.
+Examples 3, 6, and 10, whose planted contradictions are about a Hook, ran again on this branch; `main` has not moved since round F, so its side is the counts above.
+
+Run on 2026-10-15 from 20:15 to 20:22 PDT, with the same scratch script, Codex CLI, model, and effort as the rounds above, the first nine runs four at a time and the last three three at a time, from a fresh clone of this branch with this round's change: `src` tree `dcb43ea4c735cbcf855bb9c5e2c305da156e4e11`, `config` tree `e3b97b510841032f95c57c5f8f61285f8906e657`.
+`git status` in the clone was empty before its first run and after its last.
+
+| Example | Runs | All checks held | This branch before: rounds D, E, F | `main`: rounds 1, F |
+| --- | --- | --- | --- | --- |
+| 3 | `da21`, `ba50`, `9a53` | 3 of 3 | 5 of 5, 5 of 5, not run | 0 of 5, not run |
+| 6 | `d936` (failed), `8529`, `6b6a`, `1dd7`, `e1bf`, `6ce0` | 5 of 6 | 2 of 2, 2 of 2, 3 of 3 | 2 of 2, 3 of 3 |
+| 10 | `7bd3`, `4bf9`, `9402` | 3 of 3 | 5 of 5, 5 of 5, not run | 0 of 5, not run |
+
+`d936` read none of its 16 listed files, by the launcher's count, queued nothing, and closes `Session: incomplete`, saying the package files could not be opened at their listed paths.
+Its event record shows one listing of the package folder by its full path, and after it every package path it tried named the lab's folder with one `/` left out (`…0000gnT/gr0wthlab-pr-g/…` for `…0000gn/T/gr0wthlab-pr-g/…`), and four of its commands failed to start, as round E's `36b1` shows.
+Example 6 then ran three more times, `1dd7`, `e1bf`, and `6ce0`, and held each time.
+Every other session read all 16 of its listed files and closes `Session: complete`.
+No session queued a proposal beyond the one its example plants, and every queued proposal declares `new_angle: no`.
+Each of example 6's five proposals asks the Founder to choose between the brand rule and P01's Hook and says it proposes no replacement Hook.
+Each of example 3's three proposals, and two of example 10's three pair proposals, replace leg A's Hook in the A/B pairs file with P01's Hook from the Angle bank; example 10's `4bf9` asks the Founder to choose which of the two existing wordings stays, either leg A's or P01's in the Angle bank, and to make the other file match.
+
+| Side | Sessions | Ran to their end | Closing line `Session: complete` | Package files read of those listed | Proposals queued | Agent seconds | Cost (USD, API prices) | Per session |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Round G | 12 | 12 | 11 | 176 of 192 | 14 | 703 | 0.115 | 59 s, 0.0096 |
+
+None of the three examples does worse with this round's step 2: in every session that read the package each held every check, and example 6's one failing run read no package file.
+
+What this round did not exercise: examples 1, 2, 4, 5, 7, 8, and 9 with this round's step 2, which stand on round E's runs of the line before it; a proposal that offers a newly worded Hook and declares `yes`, which no session here wrote and no example's lab holds the quote record for; the Post Drafts set, as in round E.
