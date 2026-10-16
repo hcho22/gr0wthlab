@@ -186,3 +186,40 @@ Two other sessions read fewer than all their listed files: `477f` (example 8) 11
 | `/usr/bin/python3 -m unittest discover -s src/tests -t src` | a clone at `42a505b` | 1,484 tests OK in 2,319 seconds |
 
 What this round did not exercise: the Post Drafts set, since this branch changes no file it reads and the merged changes to `items.md` were measured on it in their own records; `main`'s side again, since round 1 above is that side for the package review set; and anything round 1 to D left out.
+
+## Round F: example 6 again, on `main` and on this branch
+
+Review asked for more runs of example 6.
+Its planted conflict, a brand rule that bans a word in P01's frozen Hook, is the case step 2 of the task definition covers, and it failed once in two runs in round A, which ran the first fixture fix with `main`'s task definition.
+
+Run on 2026-10-15 from 19:47 to 19:50 PDT, three at a time with the sides taken in turn, with the same scratch script, Codex CLI, model, and effort as the rounds above, from two fresh clones:
+
+| Side | Commit | `src` tree | `config` tree |
+| --- | --- | --- | --- |
+| `main` | `2af81a45181bc0ddb297cf604cecf73ed7d07fee` | `74308c217117f51d883415ee0cb0028d7403e98e` | `e3b97b510841032f95c57c5f8f61285f8906e657` |
+| This branch | `05be1889246c04cb094efd5e0b6671e3aa382679` | `bae03e6a8519a7dca6f9a248f1085225097aad2b` | `e3b97b510841032f95c57c5f8f61285f8906e657` |
+
+`main` here is the commit round E merged in, not round 1's `main`.
+This branch's trees are round E's.
+After these runs the change took back the line it had added to `AGENTS.md`, a file a lab does not copy (`examples.COPIED`).
+`git status` in each clone was empty before its first run and after its last.
+
+| Example | `main` runs | `main` held | Branch runs | Branch held |
+| --- | --- | --- | --- | --- |
+| 6 | `78b0`, `eead`, `8254` | 3 of 3 | `6325`, `9bf0`, `f981` | 3 of 3 |
+
+Every session ran to its end, read all 16 of its listed package files, and closes `Session: complete`.
+In each of the six runs one queued proposal cites `brand-rules.json` and `angles.md` and declares `new_angle: no`, and nothing was set aside.
+On `main`, `78b0` also queued two proposals beyond the planted one, one titled "clarify the loss-framing rule" and one titled "limit posts to their primary platform"; no session on this branch queued one.
+
+| Side | Sessions | Ran to their end | Closing line `Session: complete` | Package files read of those listed | Proposals queued | Agent seconds | Cost (USD, API prices) | Per session |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `main` | 3 | 3 | 3 | 48 of 48 | 5 | 252 | 0.031 | 84 s, 0.0104 |
+| This branch | 3 | 3 | 3 | 48 of 48 | 3 | 202 | 0.029 | 67 s, 0.0097 |
+
+Example 6 holds no worse with the change.
+With this branch's task definition it held every check 5 of 5 times (round E 2, this round 3), and with round D's, before commit `42a505b` reworded step 2, 2 of 2.
+On `main` it held 5 of 5 (round 1 2, this round 3).
+Its one failing run in any round is round A's `6abc`.
+
+What this round did not exercise: more runs of examples 1, 2, 5, and 7, which stay as rounds 1, D, and E left them; the Post Drafts set, as in round E.
