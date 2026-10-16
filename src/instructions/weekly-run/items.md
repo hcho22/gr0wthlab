@@ -45,13 +45,17 @@ Every package-change proposal declares `new_angle`, and the Founder sees what yo
 
 Rules for items:
 
-- Write only new item files in the incoming folder, and only package-change proposals.
+- Write only new item files in the incoming folder, and only package-change proposals, or a Dispatch request where "This session" says so.
 - Do not queue an item that is already open; to replace one, write a new item with `supersedes: <id>` in its front matter.
   An item the brief marks as filed by the launcher, such as a Dispatch request, cannot be superseded: only a reviewed change to its source text replaces it.
   A post or a message cannot be superseded either: each changes only through its Draft.
+  Nor can a Weekly Read decision, which the brief marks so: it changes only through the Weekly Read memo.
+  Nor can the notice of a change to the Instructions, which the brief marks so: only the Founder's decision closes it.
 - The brief lists the items earlier sessions of this run left in the incoming folder, which are not queued yet.
   Read each one that touches a file your work uses, write nothing that asks the same, and leave those files as they are.
 - Do not propose again what the Founder already rejected unless new Evidence answers the reason.
-  The launcher refuses an item that asks the same as an open or decided one, and rewording an ask does not make it new.
+  The launcher refuses an item as a repeat when its kind, `# ` title, and text match those of any item ever queued, whether open, decided, or superseded, once case and spacing are ignored: the text compared is a proposal's `## Proposal` section, and a Dispatch request's `## Request` section.
+  It also refuses one with the same kind and `# ` title as a queued item whose file it could not read.
+  Any other repeat, a reworded one included, is yours to catch: rewording an ask does not make it new.
 - Quote only the specific package text a proposal uses or replaces, citing its file; never copy a package file or a large part of one.
 - Check your items before you finish with the brief's check-incoming command.

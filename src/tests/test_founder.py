@@ -55,9 +55,11 @@ class AreaTest(unittest.TestCase):
                 os.chmod(os.path.join(root, name), 0o755)
         self.tmp.cleanup()
 
-    def test_the_five_kinds_each_have_their_own_folder_of_ledger_founder(self):
+    def test_the_six_kinds_each_have_their_own_folder_of_ledger_founder(self):
         self.assertEqual(
-            founder.KINDS, ("decisions", "sittings", "beta-builds", "beta-reports", "outreach"), "the exchange's five"
+            founder.KINDS,
+            ("decisions", "sittings", "beta-builds", "beta-reports", "outreach", "results"),
+            "the exchange's six",
         )
         self.assertEqual(
             list(founder.folders(self.ledger).values()), [self.ledger / "founder" / kind for kind in founder.KINDS]

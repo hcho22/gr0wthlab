@@ -349,10 +349,10 @@ Day 14 joins the plan once the calendar decides its Angle, and the script card o
 **Acceptance Criteria:**
 
 - [ ] YouTube results are read with read-only access to the Founder's channel: per post, views, the share viewed rather than swiped away, average percentage viewed, likes, comment count, and comment text.
-- [ ] Before each read week's sitting, the Review Queue carries a notice listing exactly which TikTok Studio numbers and comments to export for which posts (views or impressions, average watch time, watched-full rate, likes, comments, shares, saves, profile visits, and comment text).
+- [x] Before each read week's sitting, the Review Queue carries a notice listing exactly which TikTok Studio numbers and comments to export for which posts (views or impressions, average watch time, watched-full rate, likes, comments, shares, saves, profile visits, and comment text).
 - [ ] The Founder's export, given on the sitting page as screenshots or a file and never through Mandu, is turned into Evidence per post with the export date as its source.
-- [ ] A number that was not reported is recorded as not reported, never as zero, and never estimated.
-- [ ] Follower counts and other numbers without a pre-registered use are not stored.
+- [x] A number that was not reported is recorded as not reported, never as zero, and never estimated.
+- [x] Follower counts and other numbers without a pre-registered use are not stored.
 
 **Validation Test:**
 
@@ -371,14 +371,14 @@ Day 14 joins the plan once the calendar decides its Angle, and the script card o
 
 **Acceptance Criteria:**
 
-- [ ] The memo applies `read-the-results.md` exactly: the 200-impression floor (below it a post is unread, not failed), relative rank within the Angle bank once at least ten posts are readable, and kills only after two consecutive Weekly Reads.
-- [ ] The day-7 memo covers days 1 to 5 only, may flag an Angle at risk but never kill it, and states whether the day-14 flex slot is earned per the cadence rules.
-- [ ] The day-14 memo resolves A/B pairs only where both legs were readable and the rank gap is large, and otherwise recommends reposting.
-- [ ] Comment content is reported as a first-class result, quoting comments that describe the pains the Angles target.
-- [ ] Results that `read-the-results.md` says would change the product are listed as Evidence and, if warranted, as a Dispatch request for the Founder, never acted on.
-- [ ] The memo includes Waitlist counts by Source and Fit, progress toward the opt-in bar, and the Founder's reported time that week.
-- [ ] Every line ends in keep, kill, change, or test, and "insufficient data" is stated as its own result.
-- [ ] Each decision line is its own Weekly Read decision item in the Review Queue.
+- [x] The memo applies `read-the-results.md` exactly: the 200-impression floor (below it a post is unread, not failed), relative rank within the Angle bank once at least ten posts are readable, and kills only after two consecutive Weekly Reads.
+- [x] The day-7 memo covers days 1 to 5 only, may flag an Angle at risk but never kill it, and states whether the day-14 flex slot is earned per the cadence rules.
+- [x] The day-14 memo resolves A/B pairs only where both legs were readable and the rank gap is large, and otherwise recommends reposting.
+- [x] Comment content is reported as a first-class result, quoting comments that describe the pains the Angles target.
+- [x] Results that `read-the-results.md` says would change the product are listed as Evidence and, if warranted, as a Dispatch request for the Founder, never acted on.
+- [x] The memo includes Waitlist counts by Source and Fit, progress toward the opt-in bar, and the Founder's reported time that week.
+- [x] Every line ends in keep, kill, change, or test, and "insufficient data" is stated as its own result.
+- [x] Each decision line is its own Weekly Read decision item in the Review Queue.
 
 **Validation Test:**
 

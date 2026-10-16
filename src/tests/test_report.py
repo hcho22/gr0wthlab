@@ -243,13 +243,50 @@ class NoticeTest(unittest.TestCase):
 
     def test_the_report_lists_every_source_and_output(self):
         state = self.state()
-        state.sources = [SourceLine("YouTube results", report.SKIPPED, "not connected until US-ME11")]
-        state.outputs = [["Weekly Read memo", report.NOT_BUILT, "US-ME12"]]
+        state.sources = [
+            SourceLine(
+                "Immerse Listening confirmation on the sitting page", report.SKIPPED, "not connected until US-ME18"
+            )
+        ]
+        state.outputs = [["Scheduling-service drafts", report.NOT_BUILT, "US-ME10"]]
         text = report.render_report(state)
-        self.assertIn("| YouTube results | skipped | not connected until US-ME11 |", text)
-        self.assertIn("| Weekly Read memo | not built yet | US-ME12 |", text)
+        self.assertIn(
+            "| Immerse Listening confirmation on the sitting page | skipped | not connected until US-ME18 |", text
+        )
+        self.assertIn("| Scheduling-service drafts | not built yet | US-ME10 |", text)
         self.assertIn("1 skipped", text)
         self.assertTrue(text.startswith("# Run report: R\n\n## Summary\n"))
+
+
+class ItemLinesTest(unittest.TestCase):
+    def test_the_brief_says_no_item_supersedes_a_launcher_item_a_draft_s_item_or_an_instructions_notice(self):
+        state = RunState("R", "on-demand", local(2026, 10, 18, 16), "i.md")
+        state.queue_before = [
+            {"id": "w", "kind": "dispatch-request", "origin": "waitlist", "ask": "Approve Dispatch: build it"},
+            {"id": "d", "kind": "weekly-read-decision", "ask": "Weekly Read day 7: P02, cleared its signal: keep"},
+            {"id": "n", "kind": "notice", "instructions": "post-drafts", "ask": "Notice: the Instructions changed"},
+            {"id": "p", "kind": "package-change-proposal", "file": "items/p.md", "ask": "Approve change: fix it"},
+        ]
+        lines = report.item_lines(state, [], Path("ledger"))
+        self.assertIn(
+            "An item filed by the launcher changes only through a reviewed change to its source text, a post or a"
+            " message only through its Draft, a Weekly Read decision only through the Weekly Read memo, and the"
+            " notice of a change to the Instructions only through the Founder's decision, which alone closes it, so"
+            " an item that supersedes any of them is refused.",
+            lines,
+        )
+        self.assertIn("- `w` (dispatch-request, filed by the launcher): Approve Dispatch: build it", lines)
+        self.assertIn(
+            "- `d` (weekly-read-decision, which changes only through the Weekly Read memo): Weekly Read day 7: P02,"
+            " cleared its signal: keep",
+            lines,
+        )
+        self.assertIn(
+            "- `n` (notice, the notice of a change to the Instructions, which only the Founder's decision closes):"
+            " Notice: the Instructions changed",
+            lines,
+        )
+        self.assertIn("- `p` (package-change-proposal, `ledger/items/p.md`): Approve change: fix it", lines)
 
 
 class NextDueTest(unittest.TestCase):

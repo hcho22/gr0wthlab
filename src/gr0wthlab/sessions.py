@@ -7,7 +7,8 @@ takes in what they all wrote once the last has ended. Nothing passes from one se
 workspace/.
 
 The order is fixed here, not in configuration, because it follows from what each session needs: the package review
-first, so every later session can read what it proposed; the post Drafts before filming, since an edit record runs
+first, so every later session can read what it proposed; the Weekly Read next, so the post Drafts session can read its
+memo; the post Drafts before filming, since an edit record runs
 exactly as long as its day's Draft; the rejection reasons last, so their proposals can take account of every proposal
 the run already holds. A workflow with nothing due starts no session, and which sessions a run starts is decided once,
 before the first.
@@ -81,6 +82,7 @@ class Workflow:
 # In the order a run starts them.
 WORKFLOWS = (
     Workflow("package-review", "Package review", "package-review", ALL, (ITEMS,)),
+    Workflow("weekly-read", "Weekly Read", "weekly-read", NEEDED, (ITEMS,)),
     Workflow("post-drafts", "Post Drafts", "post-drafts", NEEDED, (ITEMS,)),
     Workflow("filming", "Filming", "filming-plan", NONE),
     Workflow("beta-recruiting", "Beta Cohort recruiting", "beta-recruiting", NEEDED),

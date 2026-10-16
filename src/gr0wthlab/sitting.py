@@ -8,6 +8,9 @@ founder.Writer. Each method that writes is one explicit act of the Founder's:
 - report_counts: the three Beta Cohort counts, where a count left blank is recorded as not reported, never as zero;
 - record_sitting: how long the sitting took, which the page measured and the Founder can correct; it is the one
   way to end a sitting from the page, which then stops;
+- record_result: the numbers and comments the Founder read for one post in TikTok Studio or YouTube Studio, for the
+  Weekly Read due, with the day the post went out, where a number left blank is recorded as not reported, never as
+  zero;
 - record_sent: an approved message sent, a reply received, the wait before the one follow-up;
 - record_beta_build and set_recruiting: a Beta Build approved, recruiting stopped or reopened.
 
@@ -25,6 +28,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -49,7 +53,11 @@ NO_PERSON = (
 HOLDS_ADDRESS = (
     "it holds something that looks like an email address; no record may hold an address or anything else about a person"
 )
-START, ITEM, COUNTS, END = "start", "item", "counts", "end"
+START, RESULT, ITEM, COUNTS, END = "start", "result", "item", "counts", "end"
+COMMENTS_HINT = "One comment a line, its words only, as the Studio shows them; never who wrote it."
+# The form field of a post's comment text: never one of the numbers' own names, since a post may be asked for its
+# comment count too.
+COMMENT_TEXT = "comment_text"
 # The three Beta Cohort counts as the page names them: on each field, in the reason a value typed there is refused,
 # and in what the page says was saved.
 COUNT_LABELS = {
@@ -159,6 +167,47 @@ class Recruiting:
 
 
 @dataclass
+class Asked:
+    """One post the Weekly Read due asks the Founder for, as the Review Queue holds the ask, and what he gave."""
+
+    ask: Mapping[str, object]
+    window: int
+    read: int
+    record: exchange.Result | None = None
+    record_problem: str = ""  # why the record in its place cannot be used, when one cannot
+    earlier: exchange.Result | None = None  # the same post's usable record from the window's latest earlier read
+
+    @property
+    def platform(self) -> str:
+        return str(self.ask["platform"])
+
+    @property
+    def day(self) -> int:
+        return int(self.ask["day"])
+
+    @property
+    def key(self) -> str:
+        return f"{self.platform}-{self.day}"
+
+    @property
+    def stem(self) -> str:
+        return exchange.result_stem(self.window, self.read, self.platform, self.day)
+
+    @property
+    def earlier_stems(self) -> list[str]:
+        """The names of the same post's records at the window's earlier reads that cover its day, the latest first."""
+        return [
+            exchange.result_stem(self.window, read, self.platform, self.day)
+            for read in sorted(exchange.READ_DAYS, reverse=True)
+            if read < self.read and self.day <= exchange.READ_DAYS[read]
+        ]
+
+    @property
+    def numbers(self) -> list[tuple[str, str]]:
+        return [(str(number), str(label)) for number, label in self.ask["numbers"]]
+
+
+@dataclass
 class View:
     """Everything one page of the sitting is drawn from, read fresh for each request."""
 
@@ -176,6 +225,7 @@ class View:
     recruiting: list[Recruiting] = field(default_factory=list)
     sitting: exchange.Sitting | None = None
     stray: list[tuple[str, str]] = field(default_factory=list)  # each record file that is no record, with why
+    asked: list[Asked] = field(default_factory=list)  # each post the Weekly Read due asks the Founder for
 
     def find(self, item: str) -> Entry | None:
         return next((entry for entry in self.entries if entry.id == item), None)
@@ -183,10 +233,14 @@ class View:
     def product(self, name: str) -> Recruiting | None:
         return next((found for found in self.recruiting if found.product == name), None)
 
+    def asked_for(self, key: str) -> Asked | None:
+        return next((asked for asked in self.asked if asked.key == key), None)
+
     def steps(self) -> list[tuple[str, str]]:
-        """The walk, in order: the start, each open item as the Review Queue lists them, the counts of each Product
-        whose Beta Cohort is being recruited, and the end."""
-        steps = [(START, "")] + [(ITEM, entry.id) for entry in self.entries]
+        """The walk, in order: the start, each post the Weekly Read due asks numbers for, each open item as the Review
+        Queue lists them, the counts of each Product whose Beta Cohort is being recruited, and the end."""
+        steps = [(START, "")] + [(RESULT, asked.key) for asked in self.asked]
+        steps += [(ITEM, entry.id) for entry in self.entries]
         steps += [(COUNTS, found.product) for found in self.recruiting if found.open]
         return steps + [(END, "")]
 
@@ -199,6 +253,80 @@ class View:
         steps = self.steps()
         index = steps.index(step) if step in steps else 0
         return steps[max(index - 1, 0)]
+
+
+def asked_from(section: object) -> tuple[int, int, list[Asked]] | None:
+    """The queue's ask for the Weekly Read due, when it holds one in its format: what the run asked the Founder for.
+    Anything else asks for nothing, since the page reads no package file and never guesses."""
+    if not isinstance(section, dict):
+        return None
+    window, read, asks = section.get("window"), section.get("read"), section.get("asks")
+    if not isinstance(window, int) or read not in exchange.READ_DAYS or not isinstance(asks, list):
+        return None
+    found = []
+    for ask in asks:
+        if not isinstance(ask, dict) or ask.get("platform") not in exchange.PLATFORMS:
+            continue
+        day, numbers, planned = ask.get("day"), ask.get("numbers"), ask.get("planned")
+        if not isinstance(day, int) or not 1 <= day <= exchange.READ_DAYS[read] or not isinstance(numbers, list):
+            continue
+        if not isinstance(planned, str) or not exchange.valid_date(planned):
+            continue
+        shown = exchange.NUMBERS[ask["platform"]]
+        if not all(
+            isinstance(pair, list) and len(pair) == 2 and pair[0] in shown and isinstance(pair[1], str)
+            for pair in numbers
+        ):
+            continue
+        found.append(Asked(ask, window, read))
+    return window, read, found
+
+
+def studio_number(value: str, label: str, kind: str, reasons: list[str]) -> float | int | None:
+    """A number as the Founder typed it from a platform's Studio, or None when he left it blank: a blank is never a
+    zero. Thousands may be grouped with commas, and a percentage may carry its sign; a shortened figure such as 1.2K
+    is refused, since it is not the number itself."""
+    text = value.strip()
+    if not text:
+        return None
+    if kind in (exchange.PERCENT, exchange.PERCENT_VIEWED) and text.endswith("%"):
+        text = text[:-1].strip()
+    if re.search(r"[kKmM]$", text):
+        reasons.append(f"{label}: give the exact number the Studio shows for the post, not a shortened one like 1.2K")
+        return None
+    if kind == exchange.WHOLE:
+        if not re.fullmatch(r"\d{1,3}(,\d{3})*|\d+", text):
+            reasons.append(f"{label} must be a whole number, written in digits")
+            return None
+        number: float | int = int(text.replace(",", ""))
+    else:
+        if not re.fullmatch(r"\d+(\.\d+)?", text):
+            reasons.append(f"{label} must be a number, written in digits with a point for any decimals")
+            return None
+        number = float(text)
+    problem = exchange.number_problem(kind, number)
+    if problem:
+        reasons.append(f"{label} must be {problem}")
+        return None
+    return number
+
+
+def comment_lines(value: str, reasons: list[str]) -> list[str] | None:
+    """The comments the Founder pasted, one a line, or None when he gave none."""
+    lines = [line.strip() for line in value.splitlines() if line.strip()]
+    if not lines:
+        return None
+    if len(lines) > exchange.MAX_COMMENTS:
+        reasons.append(f"give at most {exchange.MAX_COMMENTS} comments, one a line; you gave {len(lines)}")
+        return None
+    for number, line in enumerate(lines, 1):
+        if len(line) > exchange.MAX_LINE:
+            reasons.append(
+                f"comment {number} is {len(line)} characters long; one comment holds at most {exchange.MAX_LINE}"
+            )
+        if looks_like_address(line):
+            reasons.append(f"comment {number} was refused: {HOLDS_ADDRESS}")
+    return lines
 
 
 def one_line(value: str, name: str, required: bool, reasons: list[str]) -> str | None:
@@ -393,6 +521,14 @@ class Sitting:
             self.first_run = view.run
         view.changed = view.run != self.first_run
         view.summary, view.summary_problem = self.summary(view.report)
+        found = asked_from(queue.get("results"))
+        if found is not None:
+            given = self.records(founder.RESULTS, exchange.parse_result, view)
+            for asked in found[2]:
+                asked.record, asked.record_problem = given.get(asked.stem, (None, ""))
+                earlier = [given.get(stem, (None, ""))[0] for stem in asked.earlier_stems]
+                asked.earlier = next((record for record in earlier if record is not None), None)
+            view.asked = found[2]
 
         for entry in opened:
             shown = Entry(entry, taken_in=founder.taken_in(self.ledger, str(entry["id"])), video=self.video(entry))
@@ -526,6 +662,43 @@ class Sitting:
             "recorded_at": self.now().isoformat(),
         }
         return self.write(founder.BETA_REPORTS, f"{product}-{self.day}", record, exchange.parse_beta_report, reasons)
+
+    def record_result(self, key: str, given: Mapping[str, str]) -> Saved:
+        """The numbers and comments the Founder read for one post in a platform's Studio, for the Weekly Read due,
+        and the day he says the post went out. A number left blank is written as null, which is not reported and never
+        zero. Giving them again writes the record again, whole."""
+        found = next((asked for asked in self.look().asked if asked.key == key), None)
+        if found is None:
+            raise Refused(["the Weekly Read due does not ask for this post, so nothing was saved"])
+        reasons: list[str] = []
+        kinds = exchange.NUMBERS[found.platform]
+        numbers = {
+            number: studio_number(given.get(number, ""), label, kinds[number], reasons)
+            for number, label in found.numbers
+        }
+        comments = comment_lines(given.get(COMMENT_TEXT, ""), reasons)
+        posted_on = a_day(given.get("posted_on", ""), "The day it went out", self.today(), True, reasons)
+        read_on = a_day(given.get("read_on", ""), "The day you read them", self.today(), True, reasons)
+        if posted_on and read_on and posted_on > read_on:
+            reasons.append(f"The day it went out, {posted_on}, is after the day you read them, {read_on}")
+        if not reasons and comments is None and all(value is None for value in numbers.values()):
+            reasons.append(
+                "give at least one number or a comment; to give nothing for this post, leave it for later, and it is"
+                " not reported"
+            )
+        record = {
+            "exchange": exchange.EXCHANGE_VERSION,
+            "window": found.window,
+            "read": found.read,
+            "platform": found.platform,
+            "day": found.day,
+            "numbers": numbers,
+            "comments": comments,
+            "posted_on": posted_on,
+            "read_on": read_on,
+            "recorded_at": self.now().isoformat(),
+        }
+        return self.write(founder.RESULTS, found.stem, record, exchange.parse_result, reasons)
 
     def record_sitting(self, minutes: str, note: str) -> Saved:
         """How long the sitting took, in minutes, with an optional one-line note: the record that ends a sitting.

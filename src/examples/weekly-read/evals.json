@@ -1,0 +1,216 @@
+{
+  "adapted_from": "the evals.json shape of github.com/coreyhaines31/marketingskills skills/*/evals/evals.json at commit 1efedbc5148b54b2f0f6c6c9fe0be62e151c7fff (MIT; see THIRD_PARTY_NOTICES.md)",
+  "skill_name": "weekly-read",
+  "description": "The Weekly Read workflow's example set (US-ME12, F9), in the marketingskills evals.json shape. A deterministic assertion is checked by the unit tests (src/tests/test_weekly_read_examples.py) with the launcher's own checks of a memo, against the synthetic kit of the post-Drafts set and the synthetic numbers in files/results/; a judged assertion waits for US-ME16's re-run on every Instructions change. An example's first file is its memo, and its second the Founder's numbers for the read, as the sitting page would record them.",
+  "kit": "../post-drafts/files/mandu",
+  "assertion_kinds": {
+    "deterministic": "check is one of: passes (the memo passes every check); items (count: how many decision items it queues); refused (problem: the start of one of its problems)",
+    "judged": "text is a statement a reviewer, or a model at US-ME16, judges true or false of the agent's output"
+  },
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Write the day-7 memo from the Founder's numbers for days 1 to 5.",
+      "expected_output": "A memo whose every line ends in a decision: the under-floor post unread, nothing killed, one Angle at risk, and the flex slot to the Angle that cleared its signal; six decision items.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "passes"
+        },
+        {
+          "kind": "deterministic",
+          "check": "items",
+          "count": 6
+        },
+        {
+          "kind": "judged",
+          "text": "Each line's result follows read-the-results.md for its Angle's own signal."
+        },
+        {
+          "kind": "judged",
+          "text": "Every quoted comment describes the pain its Angle targets."
+        },
+        {
+          "kind": "judged",
+          "text": "No line judges an Angle on a number or comment text the Founder did not give; where its signal needs one, the result is insufficient data."
+        }
+      ],
+      "files": [
+        "files/memos/day-07-good.md",
+        "files/results/day-07.json"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Write the day-7 memo, killing the Angle whose comments named no offline use.",
+      "expected_output": "The launcher refuses it: nothing is killed at day 7; it may only be flagged at risk.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "refused",
+          "problem": "P04: nothing can be killed at day 7"
+        }
+      ],
+      "files": [
+        "files/memos/day-07-kill.md",
+        "files/results/day-07.json"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Write the day-7 memo, judging day 1 though it is under the floor.",
+      "expected_output": "The launcher refuses it: a post under the floor is unread, never failed, so its Angle is insufficient data.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "refused",
+          "problem": "P01: none of its posts reached the floor"
+        }
+      ],
+      "files": [
+        "files/memos/day-07-under-floor-judged.md",
+        "files/results/day-07.json"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Write the day-7 memo, giving the flex slot to the post with the most views.",
+      "expected_output": "The launcher refuses it: the flex slot goes only to an Angle that cleared its signal, never on rank alone.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "refused",
+          "problem": "the flex slot goes to P02 only if its line says it cleared its signal"
+        }
+      ],
+      "files": [
+        "files/memos/day-07-flex-on-rank.md",
+        "files/results/day-07.json"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Write the day-7 memo with a percentage and no n beside it.",
+      "expected_output": "The launcher refuses it: every number has its n beside it.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "refused",
+          "problem": "P03: 1 number with no `(n=<posts>)` beside it"
+        }
+      ],
+      "files": [
+        "files/memos/day-07-no-n.md",
+        "files/results/day-07.json"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Write the day-7 memo, quoting a comment as you remember it.",
+      "expected_output": "The launcher refuses it: a quoted comment must be word for word one the Founder gave for that post.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "refused",
+          "problem": "P05: a comment quoted under it from day 5 is not, word for word, in what the Founder gave"
+        }
+      ],
+      "files": [
+        "files/memos/day-07-invented-quote.md",
+        "files/results/day-07.json"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Write the day-7 memo, flagging an Angle at risk without saying what would settle it.",
+      "expected_output": "The launcher refuses it: an unread or at-risk Angle ends with what would settle it at the next read.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "refused",
+          "problem": "P04: an unread, at-risk, or reposted line ends with `What would settle it:`"
+        }
+      ],
+      "files": [
+        "files/memos/day-07-no-settle.md",
+        "files/results/day-07.json"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Write the day-7 memo, leaving out an Angle that has a post in the read.",
+      "expected_output": "The launcher refuses it: every Angle with a post the read covers has exactly one line.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "refused",
+          "problem": "P03 needs exactly one line under Angles; it has 0"
+        }
+      ],
+      "files": [
+        "files/memos/day-07-missing-angle.md",
+        "files/results/day-07.json"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Write the day-14 memo from the Founder's numbers for days 1 to 13.",
+      "expected_output": "A memo with one line for each Angle and each pair with both legs in the read, the pair with an unread leg reposted; nine decision items.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "passes"
+        },
+        {
+          "kind": "deterministic",
+          "check": "items",
+          "count": 9
+        },
+        {
+          "kind": "judged",
+          "text": "Each pair is resolved only where both legs were readable and the rank gap is large."
+        },
+        {
+          "kind": "judged",
+          "text": "No line judges an Angle on a number or comment text the Founder did not give; where its signal needs one, the result is insufficient data."
+        }
+      ],
+      "files": [
+        "files/memos/day-14-good.md",
+        "files/results/day-14.json"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Write the day-14 memo, resolving the pair whose second leg is under the floor.",
+      "expected_output": "The launcher refuses it: a pair resolves only when both legs were readable.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "refused",
+          "problem": "AB-1: a pair resolves only when both legs were readable"
+        }
+      ],
+      "files": [
+        "files/memos/day-14-unread-leg-resolved.md",
+        "files/results/day-14.json"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Write the day-14 memo, killing an Angle the day-7 read did not flag at risk.",
+      "expected_output": "The launcher refuses it: a kill needs two consecutive Weekly Reads at or under the criterion.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "refused",
+          "problem": "P06: a kill needs two consecutive Weekly Reads"
+        }
+      ],
+      "files": [
+        "files/memos/day-14-kill-without-at-risk.md",
+        "files/results/day-14.json"
+      ]
+    }
+  ]
+}

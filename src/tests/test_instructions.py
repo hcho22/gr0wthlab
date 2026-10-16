@@ -750,6 +750,14 @@ class LoopTest(WorkCycleTestCase):
         replace = fakes.proposal("notice", f"supersedes: {notice}\n", "say the change another way")
         fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/replace-notice.md": replace}})
         report = self.go(weeks=2)
+        brief = self.brief(session="package-review")
+        self.assertIn(
+            f"- `{notice}` (notice, the notice of a change to the Instructions, which only the Founder's decision"
+            " closes): ",
+            brief,
+            "the session is told before it writes",
+        )
+        self.assertIn("and the notice of a change to the Instructions only through the Founder's decision", brief)
         self.assertIn(notice, [entry["id"] for entry in self.items("notice")], "the notice stays open")
         self.assertIn(
             f"- Set aside, not queued: `replace-notice.md`: supersedes {notice}, the notice of a change to the"

@@ -31,6 +31,7 @@ from . import (
     sessions,
     settings,
     sources,
+    weekly_read,
 )
 from . import state as run_state
 from .areas import Areas, Store, UnsafeFile, read_plain
@@ -39,7 +40,7 @@ from .queue import QUEUE_FILE, REVIEW_QUEUE, Ledger, QueueError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 # The parts check-work checks, each the work of one session of the weekly run, by that session's workflow.
-WORK_PARTS = (listening.WORKFLOW, outreach.WORKFLOW, learning.WORKFLOW)
+WORK_PARTS = (weekly_read.WORKFLOW, listening.WORKFLOW, outreach.WORKFLOW, learning.WORKFLOW)
 ENTRY = REPO_ROOT / "src" / "bin" / "gr0wthlab"
 INCOMING = REPO_ROOT / "workspace" / "review-queue" / "incoming"
 LEDGER_DIR = REPO_ROOT / LEDGER
@@ -103,8 +104,8 @@ def parser() -> argparse.ArgumentParser:
     rebuild.add_argument("record", help="the asset's record under ledger/, such as evidence/filming/assets/<name>.json")
     work = commands.add_parser(
         "check-work",
-        help="check a run's quote records, Angle and Hook proposals, messages, rejection codes, and proposed"
-        " Instructions change",
+        help="check a run's Weekly Read memo, quote records, Angle and Hook proposals, messages, rejection codes, and"
+        " proposed Instructions change",
     )
     work.add_argument(
         "--run", required=True, metavar="RUN_ID", help="the run in progress, as its brief's check-work command names it"
@@ -112,7 +113,7 @@ def parser() -> argparse.ArgumentParser:
     work.add_argument(
         "--part",
         choices=WORK_PARTS,
-        help="check one session's part only, as that session's brief names it (default: all three)",
+        help="check one session's part only, as that session's brief names it (default: every part)",
     )
 
     agent = commands.add_parser("launch-agent", help="print a LaunchAgent plist that runs the launcher on a schedule")
@@ -447,10 +448,10 @@ def work_context(run_id: str, config, registry, boundary, env, out):
 
 
 def check_work(run_id: str, out=sys.stdout, part: str | None = None) -> int:
-    """The launcher's own checks of a run's Listening work, outreach Drafts, proposed rejection codes, and proposed
-    Instructions change, for the agent to use before it finishes. Nothing is written, kept, or queued here. Each of
-    the three parts is one session's work, so a session checks its own part alone: what a later session has not
-    written yet is no problem of its.
+    """The launcher's own checks of a run's Weekly Read memo, Listening work, outreach Drafts, proposed rejection
+    codes, and proposed Instructions change, for the agent to use before it finishes. Nothing is written, kept, or
+    queued here. Each of the four parts is one session's work, so a session checks its own part alone: what a later
+    session has not written yet is no problem of its.
 
     What may be offered is read from the record the launcher wrote for the run before the agent started, never
     worked out again: the Founder's decisions and records it rests on are saved only when the run ends. Every quote
@@ -530,6 +531,19 @@ def check_work(run_id: str, out=sys.stdout, part: str | None = None) -> int:
         else:
             for outcome in outreach.take(plan, context, areas, store, ledger, run_id, now, products, False).outcomes:
                 say_message(outcome, f"{outcome.target.label}, {outreach.kind_of(outcome.target)}")
+    if record.get("weekly_read") and weekly_read.WORKFLOW in wanted:
+        plan, notes = weekly_read.restore(record["weekly_read"], LEDGER_DIR)
+        for note in notes:
+            print(f"{note[0].upper()}{note[1:]}.", file=out)
+        text, why = weekly_read.read_memo(areas, plan)
+        if text is None:
+            say(False, f"PROBLEM memo: {why}")
+        else:
+            lines, problems = weekly_read.check(text, plan)
+            if problems:
+                say(False, f"PROBLEM memo `weekly-reads/{plan.memo}`", problems)
+            else:
+                say(True, f"OK memo `weekly-reads/{plan.memo}`: {exchange.plural(len(lines), 'decision line')}")
     if learning.WORKFLOW in wanted:
         coded = learning.take(areas, store, ledger, products, run_id, now, publish=False)
         for item, code in coded.coded:

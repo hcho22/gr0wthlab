@@ -9,7 +9,8 @@ Each run's records step commits this folder with the rest of `ledger/`.
 - `beta-builds/<Product>.json`: the Founder's word that a Beta Build passed Apple's review, and whether recruiting is open.
 - `beta-reports/<Product>-<date>.json`: the three Beta Cohort counts the Founder gave on that date.
 - `outreach/<item id>.json`: when the Founder sent an approved message, and when a reply came.
+- `results/window-<n>-read-<07|14>-<tiktok|youtube>-day-<nn>.json`: the numbers and comments the Founder read for one post in TikTok Studio or YouTube Studio for a Weekly Read, each number he left blank as not reported.
 
 Never edit a file here by hand: a record that does not follow its format is not a record, and the next run reports it and takes nothing from it.
-The five folders must stay real folders; the `.gitkeep` in each keeps it in a fresh clone, and a run refuses to start without them.
+The six folders must stay real folders; the `.gitkeep` in each keeps it in a fresh clone, and a run refuses to start without them.
 The formats, and the rules for correcting a record: [the Mandu exchange](../../docs/mandu-exchange.md).

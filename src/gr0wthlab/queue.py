@@ -38,7 +38,11 @@ MAX_SLUG = 60
 NOT_QUEUED = "could not be queued"
 # The kinds the launcher renders only from a Draft that passed its checks, each with the folders its Drafts are
 # written in. No file of these kinds is taken from incoming/, and no item written there supersedes one.
-FROM_DRAFT = {"post": "drafts/posts/", "message": "drafts/messages/ or drafts/beta-recruiting/"}
+FROM_DRAFT = {
+    "post": "drafts/posts/",
+    "message": "drafts/messages/ or drafts/beta-recruiting/",
+    "weekly-read-decision": "weekly-reads/, the Weekly Read memo,",
+}
 
 
 class QueueError(Exception):
@@ -88,17 +92,19 @@ def stands(current: Mapping[str, object] | None, unread: Sequence[str]) -> Stand
     The places that come here judge an open item: the check of an open post, message, reply, or recruiting item
     against its Draft and what that check reads; an open invitation or Waitlist ask while a report of the Founder's
     is unread; an open follow-up whose record of the first message is unread; the open filming plan while the kit
-    is unread; a Dispatch request's open item whose item file is unread; and an item in incoming/ that supersedes
-    an open item whose item file is unread. A step that did not run at all because its source could not be read
-    judges no item and does not come here: recruiting without a usable Waitlist view or Beta Build record, a
-    Dispatch request whose reviewed text is unread, post Drafts without the calendar, outreach without the channel
-    plan or the kit, replies without the kit, and the video of a day whose copy is approved and whose Draft is
-    unread. There the output always reads incomplete in the run report with the real reason, and no item of the
-    step is touched or listed. The run's notice names the source only where its read failed as a source, where it was
-    read and could not be used, as a calendar or channel plan that could not be parsed or decoded, or was recorded as
-    a launcher problem, and in the line that says no video was cut for an approved day. While the window's filming
-    plan is open, that plan also stands on a calendar that fails this way, as on any kit file, so the notice's list
-    of open items not checked again names the plan with the kit file as its reason.
+    is unread; a Dispatch request's open item whose item file is unread; an item in incoming/ that supersedes an
+    open item whose item file is unread; and a Weekly Read's open decision items while one of the Founder's results
+    records for that read cannot be used, the floor cannot be found, or the launcher's record of that read's memo, or
+    at day 14 of the day-7 read's, is unread, since the memo written again would replace them. A step that did not
+    run at all because its source could not be read judges no item and does not come here: recruiting without a usable
+    Waitlist view or Beta Build record, a Dispatch request whose reviewed text is unread, post Drafts without the
+    calendar, outreach without the channel plan or the kit, replies without the kit, and the video of a day whose copy
+    is approved and whose Draft is unread. There the output always reads incomplete in the run report with the real
+    reason, and no item of the step is touched or listed. The run's notice names the source only where its read failed
+    as a source, where it was read and could not be used, as a calendar or channel plan that could not be parsed or
+    decoded, or was recorded as a launcher problem, and in the line that says no video was cut for an approved day.
+    While the window's filming plan is open, that plan also stands on a calendar that fails this way, as on any kit
+    file, so the notice's list of open items not checked again names the plan with the kit file as its reason.
     """
     if current is None or not unread:
         return None
@@ -249,7 +255,7 @@ class Ledger:
         for key in ("product", "new_angle", "slot", "asset", "supersedes"):
             if item.fields.get(key):
                 entry[key] = item.fields[key]
-        for key in ("window", "day"):
+        for key in ("window", "day", "read"):
             if item.fields.get(key):
                 entry[key] = int(item.fields[key])
         entry.update(extra or {})
@@ -440,19 +446,24 @@ class Ledger:
             else:
                 entry.pop("carried_over_from", None)
 
-    def as_json(self, run_id: str, now: datetime, report: str, next_run: datetime) -> dict[str, object]:
-        """queue.json: when the next weekly run is due, the open items in presentation order, then every closed item."""
+    def as_json(
+        self, run_id: str, now: datetime, report: str, next_run: datetime, results: Mapping[str, object] | None = None
+    ) -> dict[str, object]:
+        """queue.json: when the next weekly run is due, what the Weekly Read due asks the Founder to give on the
+        sitting page, if one is due, the open items in presentation order, then every closed item."""
         closed = sorted(
             (entry for entry in self.entries.values() if entry["status"] != OPEN),
             key=lambda entry: (str(entry.get("closed_at", "")), str(entry["id"])),
         )
-        return {
+        found: dict[str, object] = {
             "exchange": exchange.EXCHANGE_VERSION,
             "updated_by_run": run_id,
             "updated_at": now.isoformat(),
             "run_report": report,
             "next_run": next_run.isoformat(),
             "paths": "Every path here is relative to the ledger/ directory that holds this file's folder.",
-            "open": self.ordered(),
-            "closed": closed,
         }
+        if results:
+            found["results"] = dict(results)
+        found.update(open=self.ordered(), closed=closed)
+        return found

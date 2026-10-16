@@ -83,6 +83,7 @@ class Settings:
     attempts_per_week: int
     shown_output_chars: int
     learning: Learning
+    not_used: tuple[Mapping, ...] = ()  # sources the Founder chose not to use, each with why
 
     def waitlist_live(self, today: date) -> bool:
         """Whether the Waitlist is live: only once a reviewed change has set the date it went live."""
@@ -221,6 +222,7 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
         prices = {key: float(value) for key, value in data["cost"]["usd_per_million_tokens"].items()}
         outputs = dict(data["outputs"])
         not_connected = tuple(data.get("sources_not_connected") or ())
+        not_used = tuple(data.get("sources_not_used") or ())
         window = load_window(data["window"], weekly[0])
         live_since = load_live_since(data["waitlist"])
         batch_size = load_batch_size(data["beta_recruiting"])
@@ -233,10 +235,13 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
         learning = load_learning(data.get("learning"))
     except (KeyError, TypeError, ValueError, schedule.ScheduleError) as error:
         raise ConfigError(f"{RUN_CONFIG} is incomplete or malformed: {error}") from error
-    for source in not_connected:
+    for source in not_connected + not_used:
         for output in source.get("needed_by", ()):
             if output not in outputs:
                 raise ConfigError(f"{RUN_CONFIG}: {source.get('name')} feeds unknown output {output}")
+    for source in not_used:
+        if not isinstance(source.get("why"), str) or not source["why"]:
+            raise ConfigError(f"{RUN_CONFIG}: {source.get('name')} is not used, and needs why: the Founder's choice")
     return Settings(
         data,
         weekly,
@@ -253,6 +258,7 @@ def load(repo_root: Path, env: Mapping[str, str], home: Path) -> Settings:
         tries,
         shown_output,
         learning,
+        not_used,
     )
 
 

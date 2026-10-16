@@ -37,7 +37,7 @@ from pathlib import Path
 
 from . import beta, beta_drafts, fetch, filming, messages, posts, process, queue, video
 from .areas import UnsafeFile, read_plain
-from .boundary import canonical
+from .boundary import FOUNDER_KINDS, canonical
 from .exchange import plural
 from .waitlist import looks_like_address
 
@@ -55,7 +55,6 @@ DEFAULT_AT = "2026-10-11T23:00:00+00:00"
 COPIED = ("config", "CONTEXT.md", ".gitignore", "docs/mandu-exchange.md")
 SOURCE_SKIPPED = ("tests", "examples", "__pycache__")
 AREAS = ("evidence", "drafts", "review-queue", "weekly-reads", "run-reports", "instructions")
-FOUNDER_KINDS = ("decisions", "sittings", "beta-builds", "beta-reports", "outreach")
 NO_SOURCES = {"subreddits": [], "app_store": None}
 LAB_GIT = ("-c", "user.name=gr0wthlab lab", "-c", "user.email=gr0wthlab-lab", "-c", "commit.gpgsign=false")
 

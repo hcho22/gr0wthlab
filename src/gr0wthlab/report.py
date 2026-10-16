@@ -29,6 +29,7 @@ from . import (
     schedule,
     sessions,
     waitlist,
+    weekly_read,
     work,
 )
 from .attempts import ASLEEP_AT_LEAST, asleep_for
@@ -41,6 +42,7 @@ from .state import Tally, run_tally
 COMPLETE = "complete"
 INCOMPLETE = "incomplete"
 NOT_BUILT = "not built yet"
+NOT_USED = "not used"
 USAGE_FIELDS = ("input_tokens", "cached_input_tokens", "cache_write_input_tokens", "output_tokens")
 NOTICE_BODY_LIMIT = exchange.MAX_ITEM_CHARS // 2
 __all__ = ["ASLEEP_AT_LEAST", "asleep_for"]
@@ -150,6 +152,13 @@ class RunState:
     probe_files_removed: list[str] = field(default_factory=list)
     work_published: list[str] = field(default_factory=list)  # the items Listening and outreach queued this run
     check_work: str = ""  # the command the agent checks its Listening and outreach work with
+    weekly: weekly_read.Plan | None = None  # the Weekly Read due this run: what it asked, what was given, its memo
+    weekly_why: str = ""  # why no Weekly Read is due this run, when none is
+    weekly_problem: str = ""  # why the Weekly Read was not prepared or not taken in, when it was not
+    weekly_outcome: weekly_read.Outcome | None = None
+    results_notice: str | None = None  # the notice that lists what to give for the read, when this run queued it
+    rules_text: str | None = None  # read-the-results.md as this run read it, for the floor and the floor proposal
+    floor_filing: str = ""  # where the proposal that the floor counts views stands
     attempt: attempts.Attempt | None = None  # a weekly scheduled run: which attempt at the run due, and those before
     slept: float = 0.0  # about how many seconds the Mac was asleep from the run's start to its last session's end
 
@@ -679,7 +688,7 @@ def render_brief(
     lines += ["", "## Founder decisions taken in this run", ""]
     lines += decision_lines(state, taken_only=True) or ["None."]
     if session.workflow.writes_items:
-        lines += [""] + item_lines(state, standing)
+        lines += [""] + item_lines(state, standing, ledger)
     if key == sessions.REVIEW:
         lines += ["", "## Waitlist", ""]
         if state.waitlist is not None:
@@ -704,6 +713,8 @@ def render_brief(
         if state.instructions is not None:
             offered, why = state.instructions.offer, state.instructions.offer_why
             lines += [""] + instructions.brief_lines(offered, why, state.reasons, workspace, repo_root, check)
+    if key == weekly_read.WORKFLOW and state.weekly is not None:
+        lines += [""] + weekly_read.brief_lines(state.weekly, workspace, mandu, check)
     lines += ["", "## Where to write", ""]
     if session.workflow.writes_items:
         lines += [
@@ -723,18 +734,33 @@ def render_brief(
     return "\n".join(lines)
 
 
-def item_lines(state: RunState, standing: Sequence[tuple[str, str]]) -> list[str]:
+def item_lines(state: RunState, standing: Sequence[tuple[str, str]], ledger: Path) -> list[str]:
     """What a session that may write items is told of the Review Queue: what is open, what was decided, and what
-    stands in incoming/ that the launcher has not taken in yet."""
+    stands in incoming/ that the launcher has not taken in yet. Each package-change proposal comes with its item file,
+    since its title, which the session that wrote it chose, may not name what it asks, and the launcher refuses only
+    a repeat of its exact wording."""
+    proposal = "package-change-proposal"
     lines = ["## Open Review Queue items", ""]
     if state.queue_before:
         lines += [
             "Do not queue these again; to change one, write a new item with `supersedes: <id>`.",
-            "An item filed by the launcher changes only through a reviewed change to its source text, and a post or a"
-            " message only through its Draft, so an item that supersedes any of them is refused.",
+            "An item filed by the launcher changes only through a reviewed change to its source text, a post or a"
+            " message only through its Draft, a Weekly Read decision only through the Weekly Read memo, and the"
+            " notice of a change to the Instructions only through the Founder's decision, which alone closes it, so"
+            " an item that supersedes any of them is refused.",
         ]
+        if any(entry["kind"] == proposal for entry in state.queue_before):
+            lines.append(
+                "A title may not name all a proposal asks: before you write a package-change proposal, read the file"
+                " of each one listed here, and write nothing that asks the same."
+            )
         for entry in state.queue_before:
             filed = ", filed by the launcher" if entry.get("origin") else ""
+            if entry.get("instructions"):
+                filed = ", the notice of a change to the Instructions, which only the Founder's decision closes"
+            if entry["kind"] == "weekly-read-decision":
+                filed = ", which changes only through the Weekly Read memo"
+            filed += f", `{ledger / str(entry['file'])}`" if entry["kind"] == proposal else ""
             line = f"- `{entry['id']}` ({entry['kind']}{filed}): {entry['ask']}"
             for earlier in state.replaced.get(str(entry["id"]), ()):
                 line += (
@@ -746,10 +772,14 @@ def item_lines(state: RunState, standing: Sequence[tuple[str, str]]) -> list[str
         lines.append("None.")
     lines += ["", "## Package-change proposals already decided or withdrawn", ""]
     if state.closed_proposals:
-        lines.append("Do not propose these again unless new Evidence answers the reason.")
+        lines.append(
+            "Do not propose these again unless new Evidence answers the reason; before you write a package-change"
+            " proposal, read the file of each one listed here."
+        )
         for entry in state.closed_proposals:
             status = entry["status"] + (f" and {entry['decided']}" if entry.get("decided") else "")
-            lines.append(f"- `{entry['id']}` {status}: {entry['ask']}.{founder_words(entry)}")
+            file = ledger / str(entry["file"])
+            lines.append(f"- `{entry['id']}` {status} (`{file}`): {entry['ask']}.{founder_words(entry)}")
     else:
         lines.append("None.")
     lines += ["", "## Items waiting in the incoming folder", ""]
@@ -983,12 +1013,14 @@ def summary_lines(state: RunState) -> list[str]:
         lines.append(f"- The Mac was asleep for about {span_text(elsewhere)} of this run outside its sessions' time.")
     lines.append(f"- {what_follows(state)}" if what_follows(state) else "")
     refused = sum(1 for line in state.sources if line.status == waitlist.REFUSED)
+    unused = sum(1 for line in state.sources if line.status == NOT_USED)
     lines.append(
         f"- Sources: {len(failed)} failed"
         + (f" ({', '.join(line.name for line in failed)})" if failed else "")
         + f", {sum(1 for line in state.sources if line.status == package.CHANGED)} changed,"
         + f" {sum(1 for line in state.sources if line.status == package.READ)} read,"
         + f" {sum(1 for line in state.sources if line.status == SKIPPED)} skipped"
+        + (f", {unused} not used" if unused else "")
         + (f", {refused} refused." if refused else ".")
     )
     if state.waitlist is not None:
@@ -1049,6 +1081,14 @@ def render_report(state: RunState) -> str:
         lines.append("Nothing is waiting for the Founder.")
     for item in state.set_aside:
         lines.append(f"- Set aside, not queued: `{item.name}`: {'; '.join(item.problems)}")
+    lines += [""] + weekly_read.report_lines(
+        state.weekly,
+        state.weekly_outcome,
+        state.weekly_why,
+        state.weekly_problem,
+        state.floor_filing,
+        state.results_notice,
+    )
     lines += [""] + posts.report_lines(state.posts, state.post_outcome, state.filing, state.posts_problem)
     if state.filming is not None or state.filming_problem:
         lines += [""] + filming.report_lines(state.filming, state.filming_problem)
@@ -1244,6 +1284,7 @@ def problems_notice(state: RunState, report_path: str) -> tuple[str, str, str, s
     if recruiting:
         sections.append(recruiting)
     for section in (
+        weekly_read.notice_section(state.weekly, state.weekly_outcome, day),
         listening.notice_section(state.listening, state.listening_result, day),
         outreach.notice_section(state.outreach, state.outreach_result, day, state.again),
         learning.notice_section(state.learning, day),
