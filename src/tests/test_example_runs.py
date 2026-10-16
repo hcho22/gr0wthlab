@@ -61,7 +61,7 @@ def review(slug: str, *sides: tuple[str, int]) -> dict:
 
 
 NAME = review("name-status", ("gtm/02-brand/brand-guidelines.md", 8), ("02-marketing-launch-checklist_260807.md", 7))
-PAIR = review("pair-hook", ("gtm/05-social-pmf/ab-pairs.md", 9), ("gtm/05-social-pmf/angles.md", 7))
+PAIR = review("pair-hook", ("gtm/05-social-pmf/ab-pairs.md", 10), ("gtm/05-social-pmf/angles.md", 7))
 
 
 def cut(*days: int) -> dict:
@@ -156,7 +156,7 @@ GOOD = {
     ),
     ("package-review", 5): review(
         "waitlist-live",
-        ("gtm/08-redteam/pre-publication-checklist.md", 11),
+        ("gtm/08-redteam/pre-publication-checklist.md", 13),
         ("02-marketing-launch-checklist_260807.md", 10),
     ),
     ("package-review", 6): review(
