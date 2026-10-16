@@ -463,7 +463,11 @@ class DecisionRoundTripTest(CycleTestCase):
         self.assertIn(f"asks the same as {ids['package-change-proposal']}, which is rejected", notice)
         self.assertIn(f"carried over from the sitting on {day}", self.report())
         self.assertIn("4 records, 0 new since the previous run", self.report())
-        self.assertIn("rejected: Approve package change: name-status-stale. Reason: Wait for counsel.", self.brief())
+        proposal = self.ledger() / f"review-queue/items/{ids['package-change-proposal']}.md"
+        self.assertIn(
+            f"rejected (`{proposal}`): Approve package change: name-status-stale. Reason: Wait for counsel.",
+            self.brief(),
+        )
 
     def test_a_decision_on_an_item_superseded_before_it_was_taken_in_is_kept(self):
         old, new = "20261011-name-status-stale", "20261011-name-status-cleared"
@@ -496,8 +500,8 @@ class DecisionRoundTripTest(CycleTestCase):
             self.report(),
         )
         replaced = (
-            f"- `{new}` (package-change-proposal): {ask} and reserved. It replaces `{old}`, which the Founder rejected:"
-            f" {ask}. Reason: Wait for counsel."
+            f"- `{new}` (package-change-proposal, `{self.ledger() / 'review-queue/items' / new}.md`): {ask} and"
+            f" reserved. It replaces `{old}`, which the Founder rejected: {ask}. Reason: Wait for counsel."
         )
         self.assertIn(replaced, self.brief())
 
@@ -507,6 +511,32 @@ class DecisionRoundTripTest(CycleTestCase):
         self.assertEqual([entry["id"] for entry in self.queue()["open"]], [new])
         self.assertIn("| Founder decisions | read | 1 record, 0 new since the previous run |", self.report())
         self.assertIn(replaced, self.brief())
+
+    def test_a_session_is_told_the_file_of_each_proposal_whatever_its_title_names(self):
+        """A proposal's title is the words of the session that wrote it and may name another subject than its text,
+        and the launcher refuses only a repeat of that wording: so a session that may write items is told the file
+        of each open and decided proposal, the text the Founder decides on, to read before it writes another."""
+        stale, misnamed = "20261011-name-status-stale", "20261011-score-dip"
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/name-status-stale.md": fakes.PROPOSAL}})
+        self.run_cycle()
+        self.decide(stale, "reject", reason="Wait for counsel.")
+        # The same proposal again under a title that names another subject: the launcher queues it.
+        again = {"review-queue/incoming/score-dip.md": fakes.proposal(title="resolve the score-dip Hook")}
+        fakes.behave(self.codex_dir, {"write": again})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(minutes=30))
+        fakes.behave(self.codex_dir, {})
+        code, out = self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(days=7))
+        self.assertEqual(code, 0, out)
+
+        queue = self.queue()
+        self.assertEqual([entry["id"] for entry in queue["open"]], [misnamed])
+        self.assertEqual([entry["id"] for entry in queue["closed"]], [stale])
+        brief = self.brief(session="package-review").splitlines()
+        for identifier in (stale, misnamed):
+            [line] = [line for line in brief if line.startswith(f"- `{identifier}` ")]
+            item = self.ledger() / f"review-queue/items/{identifier}.md"
+            self.assertIn(f"`{item}`", line)
+            self.assertIn("Replace the stale caveat with the cleared status.", item.read_text(encoding="utf-8"))
 
     def test_records_about_no_open_item_are_reported_once_until_they_change(self):
         old = "20261011-name-status-stale"
@@ -2154,7 +2184,7 @@ class PostDraftsTest(CycleTestCase):
         )
         self.assertIn("| 3 | P03 / AB-2 leg A | kept |", report)
         self.assertIn(
-            "and a post or a message only through its Draft, so an item that supersedes any of them is refused.",
+            "a post or a message only through its Draft, a Weekly Read decision only through the Weekly Read memo, and",
             self.brief(),
         )
 
@@ -2443,7 +2473,8 @@ class PostDraftsTest(CycleTestCase):
         self.assertEqual([entry["id"] for entry in again], [filed["id"]])
         report = self.report()
         self.assertIn("filed earlier, never re-asked", report)
-        self.assertIn(f"- `{filed['id']}` (package-change-proposal, filed by the launcher): ", self.brief())
+        item = self.ledger() / f"review-queue/items/{filed['id']}.md"
+        self.assertIn(f"- `{filed['id']}` (package-change-proposal, filed by the launcher, `{item}`): ", self.brief())
         self.assertIn(
             f"- Set aside, not queued: `fewer-lists.md`: supersedes {filed['id']}, which the launcher filed from"
             " reviewed text; only a reviewed change to that text replaces it",

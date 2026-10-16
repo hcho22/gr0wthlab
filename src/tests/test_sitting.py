@@ -444,7 +444,11 @@ class ValidationTest(SittingTestCase):
         self.assertIn("| Founder decisions | changed | 4 records, 4 new since the previous run |", report)
         self.assertIn("Reason: Wait for counsel.", report)
         self.assertIn(f"Sitting {DAY}: 41 minutes.", report)
-        self.assertIn("rejected: Approve package change: name-status-stale. Reason: Wait for counsel.", self.brief())
+        proposal = self.ledger() / f"review-queue/items/{ids['package-change-proposal']}.md"
+        self.assertIn(
+            f"rejected (`{proposal}`): Approve package change: name-status-stale. Reason: Wait for counsel.",
+            self.brief(),
+        )
 
         # Nothing decided is asked again: not at the next sitting, and not when the agent writes it again.
         later = self.sit_down(SITTING + WEEK)

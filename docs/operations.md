@@ -180,6 +180,7 @@ What a session is, and is told:
   It lists the package files the Product registry says that workflow's output needs (`needed_by` in [`config/products.json`](../config/products.json)); the package review's brief lists them all, and the Filming and Rejection reasons briefs list none, since those briefs hold what the sessions work from.
   It names the sessions the run starts, and no workflow with nothing due, so nothing is said of work that has not begun.
 - A session that may write proposals is told which files wait in `incoming/`, by name alone, so it neither repeats one nor rests a claim on text an earlier session found stale.
+  It is also told the item file in `ledger/review-queue/items/` of each package-change proposal the Review Queue holds, open or closed, and to read each before it writes a proposal: a title is the words of the session that wrote it and may not name all the proposal asks, and the launcher's fingerprint of an item is its kind, title, and text, whatever their case and spacing (`exchange.item_hash`), so a repeat in other words is the session's to catch.
   The Filming session is told which ready days have a post Draft in place.
 
 The launcher takes nothing in while a session can still write.
