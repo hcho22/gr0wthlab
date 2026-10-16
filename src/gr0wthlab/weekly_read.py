@@ -586,7 +586,7 @@ def then_proposal(what: str, more: str = "") -> str:
     applies only an approved package-change proposal, so the next run files one with the exact edit (weekly_changes)."""
     return (
         "- Nothing yet: approving it has the next run file a package-change proposal with the exact edit that"
-        f" {what}, for you to approve before Mandu changes the file." + (f" {more}" if more else "")
+        f" {what}, for you to approve before Mandu changes the package." + (f" {more}" if more else "")
     )
 
 

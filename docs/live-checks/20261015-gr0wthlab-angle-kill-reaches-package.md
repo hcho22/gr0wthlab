@@ -387,3 +387,60 @@ From the gate's linked worktree at `f1c546358cbdb41d39d8d1ef34bed1b85ab71564` wi
 
 - No lab ran `src/bin/gr0wthlab run` or `check-work` from a terminal on this round's code: the whole run above is `cycle.Cycle` with the no-model stand-in, and the dry run is the restore and take-in `check-work` calls.
 - The real A/B pairs file was not altered or read for this round; only the synthetic one was broken, in each test's own copy.
+
+## Seventh round: a code block's indented lines, and a Touches that names two files
+
+The test of the sixth round's code found that the sitting page's code block, which this change made wrap, garbled an indented line of an exact edit when the line wrapped.
+At 390 wide, the six spaces that indent `"preregistered_success_signal"` in a change proposal's creative-log record were drawn alone on a row of their own, so the edit looked as if it held a blank line it does not have, and at any width the wrapped part of an indented line started at 2ch, left of its own key.
+The same test found that a change item's Touches, which names two files, ended "for you to approve before Mandu changes the file".
+On top of `6fe9780392460e92b0af2f3ea546b66d67177e02`, each line of a code block is now its indentation, a cell that never wraps, and the rest of the line beside it, which wraps 2ch past where the line's text begins (`codeline` in `src/gr0wthlab/page.py`, `.doc-codeline` and `.doc-indent` in `src/sitting/page.css`).
+The rest of the line is no element of its own, so a selected line is its exact text, with nothing between its indentation and the rest.
+An indentation that would leave the rest of its line less than 16ch is drawn only as wide as that, so no line reaches past its block.
+Each Touches that says a package-change proposal follows approval now ends "for you to approve before Mandu changes the package".
+
+Every check below ran on 2026-10-16, Mac local time (PDT), with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort where a real agent ran; a run identifier carries its time in UTC.
+The fix was not committed when they ran: its `src` tree was `f5b3800fb361b388149995c36778689332e409dd` and its `config` tree `92af9e1f5971bf9d4a3ff122fc50896e26a5e54a`, written from a throwaway index over `6fe9780392460e92b0af2f3ea546b66d67177e02` with the working tree's `src` and `config`.
+The page checks, the tests, and the first boundary check below ran on the `src` tree `e2cee26278e80af98f77096888dd57b21ebc2c64`, which differs from it only in the docstring of `codeline` in `src/gr0wthlab/page.py`, made accurate after them; the second boundary check ran on `f5b3800fb361b388149995c36778689332e409dd`.
+
+### The page before the fix and on it
+
+A copy of the test's lab H, a throwaway clone of `6fe9780392460e92b0af2f3ea546b66d67177e02` in the Mac's temporary directory whose queue held the open change proposal `20261015-weekly-read-change-p07` with its creative-log edit, was served by `src/bin/gr0wthlab sitting` from its clone twice.
+The first time `src/gr0wthlab/page.py`, `src/sitting/page.css`, and `src/gr0wthlab/weekly_read.py` were as `6fe9780392460e92b0af2f3ea546b66d67177e02` has them, and the second time as the working tree has them.
+Each time the item's page was opened in headless Chrome through `chrome-devtools-axi`, and a script in the page found where each character of the item's four code blocks was drawn, then selected each block and compared the selection's text with the block in the item file.
+
+| Page code | Window | What the page showed |
+| --- | --- | --- |
+| `6fe9780` | 390 by 844, light | A row holding only the six spaces before `"preregistered_success_signal"`, and every wrapped row of the record's eight long lines at 2ch, under keys at 6ch |
+| `6fe9780` | 1280 by 800, dark | No line of the record wrapped |
+| This change | 320 by 640 light, 390 by 844 light and dark, 1280 by 800 light and dark | No row holding only spaces, each record line's first row at 6ch and each of its wrapped rows at 8ch, and each Angle bank row's wrapped rows at 2ch as before |
+
+In every window each block's selection was its text in the item file, character for character, and no block and no page was wider than the window.
+
+A static page of `document()`'s output with `src/sitting/page.css`, opened the same way, held a line indented by a tab, a line of spaces only, an empty line, and a line indented by 60 spaces.
+The tab's line wrapped 2ch past its 8ch tab.
+The 60-space line was drawn at 60ch at 1280 wide, and at 390 and 320 wide was held inside its block, where before the indentation's cell had its cap it made the page 569 wide at 390.
+The empty line drops out of a selection's text, as it did on `6fe9780392460e92b0af2f3ea546b66d67177e02`; nothing applies an edit from the page, and Mandu reads the item file.
+
+### The boundary
+
+From the gate's linked worktree at `6fe9780392460e92b0af2f3ea546b66d67177e02` with the fix in its working tree, against Mandu and the Product checkouts as they are, with the SHA-256 of `git status --porcelain` the same before each tree's preflights and after its check, and logs in a folder of the Mac's temporary directory named with `GR0WTHLAB_LOG_DIR`; `show-config` printed the configuration fingerprint `32af654b78b3cfc5e0c257fc93ed76e5c5f6a2c6efe42f2898b6f270e2276e43` on each tree, the same as in the third to sixth rounds.
+
+- `src/bin/gr0wthlab preflight`, run three times at 00:08 and 00:09 on `e2cee26278e80af98f77096888dd57b21ebc2c64` and twice at 00:11 on `f5b3800fb361b388149995c36778689332e409dd`, passed each time: six areas writable, 22 paths refused, no breach, a listing of the footage place `~/Mandu/projects/RepToday` refused, and neither listed host reached from inside the sandbox.
+
+| Run | `src` tree | Time | What its record showed |
+| --- | --- | --- | --- |
+| `20261016T070902Z-on-demand-f3d7` | `e2cee26278e80af98f77096888dd57b21ebc2c64` | 00:09:00 to 00:10:00 | Passed at its first attempt, 30 tool calls in Codex's record with no problem |
+| `20261016T071201Z-on-demand-f872` | `f5b3800fb361b388149995c36778689332e409dd` | 00:12:00 to 00:14:14 | Passed at its first attempt, 52 tool calls in Codex's record with no problem |
+
+Each `src/bin/gr0wthlab boundary-check` above showed 49 steps to prove, 17 of 17 file-tool targets refused each in a patch of its own, 19 kernel sandbox denials, the footage place's shell read refused, 1 of 1, 12 of 12 permitted sentinels written and none escaped, nothing unproven, the network probe's three targets refused inside the sandbox after its control reached its listener, two requests from the launcher's client, each a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed outside the areas.
+
+### Tests
+
+- Under `/usr/bin/python3`, Python 3.9.6, on the working tree: `tests.test_page`, `tests.test_weekly_read`, `tests.test_weekly_changes`, and `tests.test_serve`, 109 tests, none failed and none skipped.
+- `DocumentTest.test_each_line_of_a_block_is_its_own_line` in `tests.test_page` now holds each line's indentation as a part of its own; run in a scratch copy of the working tree with `src/gr0wthlab/page.py` put back as `6fe9780392460e92b0af2f3ea546b66d67177e02` has it, it failed, and on the fix it passes.
+- Ruff, the whole unit suite, and CI's run were not part of this round.
+
+### What this round did not exercise
+
+- No run filed a Weekly Read decision item with the new Touches ending; the ending stands on `TakeTest`'s `test_each_item_says_what_approving_it_changes_in_the_package` and on `ApprovedDecisionRunTest` in `tests.test_weekly_changes`, which read the items those write.
+- A browser other than Chrome, and the sitting page in Safari.

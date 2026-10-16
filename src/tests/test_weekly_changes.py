@@ -498,7 +498,7 @@ class ApprovedDecisionRunTest(CycleTestCase):
         flex = self.items("weekly-read-decision")["Weekly Read day 7: flex slot earned: test"]
         self.assertIn(
             "- Nothing yet: approving it has the next run file a package-change proposal with the exact edit that puts"
-            f" P03 in the flex slot of the calendar, `{CALENDAR}`, for you to approve before Mandu changes the file.",
+            f" P03 in the flex slot of the calendar, `{CALENDAR}`, for you to approve before Mandu changes the package.",
             (self.ledger() / flex["file"]).read_text(encoding="utf-8"),
         )
         self.decide(flex["id"], "approve")

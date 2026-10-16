@@ -369,7 +369,7 @@ class TakeTest(unittest.TestCase):
         found = self.lab.plan()
         found.paths["creative_log"] = "projects/RepToday/gtm/05-social-pmf/creative-log.json"
         then = "- Nothing yet: approving it has the next run file a package-change proposal with the exact edit that"
-        approve = ", for you to approve before Mandu changes the file."
+        approve = ", for you to approve before Mandu changes the package."
         window = (
             "That holds while window 1 is the window in force: approved once another window is, it files nothing,"
             " since its flex slot's day has passed."

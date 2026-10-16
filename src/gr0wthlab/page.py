@@ -87,6 +87,12 @@ def word(cell: str) -> str | None:
     return "doc-word" if cell and len(cell) <= WORD and not any(char.isspace() for char in cell) else None
 
 
+def codeline(line: str) -> H:
+    """A line of a code block: its indentation, then the rest of it as text, so a copied line is its exact text."""
+    indent = re.match(r"[ \t]*", line).group()
+    return tag("span", tag("span", indent, class_="doc-indent"), line[len(indent) :], class_="doc-codeline")
+
+
 def document(source: str) -> H:
     """A section of an item, laid out by its lines and shown as text.
 
@@ -111,8 +117,9 @@ def document(source: str) -> H:
                 body.append(lines[index])
                 index += 1
             index += 1
-            # Each line its own, so a long line that wraps reads as one line, never as the next.
-            blocks.append(tag("pre", *(tag("span", part, class_="doc-codeline") for part in body), class_="doc-code"))
+            # Each line its own, so a long line that wraps reads as one line, never as the next; its indentation is
+            # a part of its own, so the rest of the line wraps under its first character that is not a space.
+            blocks.append(tag("pre", *(codeline(part) for part in body), class_="doc-code"))
         elif stripped.startswith("|") and index + 1 < len(lines) and TABLE_RULE.fullmatch(lines[index + 1].strip()):
             head = cells(line)
             index += 2

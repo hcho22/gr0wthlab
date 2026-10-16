@@ -222,14 +222,20 @@ class DocumentTest(unittest.TestCase):
         self.assertEqual(document(""), '<div class="doc"></div>')
 
     def test_each_line_of_a_block_is_its_own_line(self):
-        """An exact edit's text is shown whole, line by line, so a long line that wraps never reads as the next."""
-        made = document('```\n| P07 | a |\n\n      "status": "draft",\n```')
+        """An exact edit's text is shown whole, line by line, so a long line that wraps never reads as the next, and
+        each line's indentation is a part of its own, so the rest of the line wraps under where its text begins."""
+        made = document('```\n| P07 | a |\n\n      "status": "draft",\n\t  x \n   \n```')
         self.assertEqual(
             made,
-            '<div class="doc"><pre class="doc-code"><span class="doc-codeline">| P07 | a |</span>'
-            '<span class="doc-codeline"></span><span class="doc-codeline">      &quot;status&quot;: &quot;draft&quot;,'
-            "</span></pre></div>",
+            '<div class="doc"><pre class="doc-code">'
+            '<span class="doc-codeline"><span class="doc-indent"></span>| P07 | a |</span>'
+            '<span class="doc-codeline"><span class="doc-indent"></span></span>'
+            '<span class="doc-codeline"><span class="doc-indent">      </span>&quot;status&quot;: &quot;draft&quot;,</span>'
+            '<span class="doc-codeline"><span class="doc-indent">\t  </span>x </span>'
+            '<span class="doc-codeline"><span class="doc-indent">   </span></span>'
+            "</pre></div>",
         )
+        self.assertEqual(Seen(made).said, '| P07 | a |      "status": "draft",\t  x    ', "every character, as written")
 
     def test_a_very_long_line_is_one_line_of_text(self):
         made = document("x" * 12000 + "\n" + "word " * 3000)
