@@ -312,3 +312,37 @@ From the gate's linked worktree at `2e3d6e4df23e03c3528ed378e598a6f0edc560ff` wi
 
 - No real agent wrote two new Angles in one session; the refusal stands on the test above, which drives the take-in a run calls.
 - A change proposal filed before this round keeps no Hook in its queue entry, so it would not count; none was filed outside a lab.
+
+## Fifth round: a Hook spoken inside a stage direction
+
+The review of the fourth round found that the Angle bank's side of the one-Hook-one-Angle check compared each bank Hook cell whole, so a cell that wraps its spoken Hook in a stage direction never matched a new Angle that repeats the spoken words, and such a new Angle could be filed holding another Angle's Hook.
+On top of `c54361acd11cc8698b39809a98707efb63649723`, `known_hooks` now also counts each quoted text in a bank Hook cell, with the pattern the kit already reads an A/B pair leg's Hook with (`kit.QUOTED`), and `docs/operations.md` says so.
+The other half of that rule, a new Angle filed earlier in the same take-in or by a change proposal that is open or approved, is the fourth round's, and its test passed again here with no change to it.
+
+Every check below ran on 2026-10-15, Mac local time (PDT), with Codex CLI 0.160.0 and `gpt-6-luna` at `high` reasoning effort where a real agent ran; a run identifier carries its time in UTC.
+The fix was not committed when they ran: its `src` tree was `264b6704745d7fa7b3ef604826bc1c9fb79a56b4` and its `config` tree `92af9e1f5971bf9d4a3ff122fc50896e26a5e54a`, written from a throwaway index over `c54361acd11cc8698b39809a98707efb63649723` with the working tree's `src` and `config`.
+
+### The failure before the fix
+
+- `EditTest.test_a_new_angle_s_hook_is_refused_when_a_bank_hook_cell_speaks_it_inside_a_stage_direction`, on the synthetic bank with P07's Hook cell put inside a stage direction, was run in a scratch copy of the working tree with `src/gr0wthlab/weekly_changes.py` put back as `c54361acd11cc8698b39809a98707efb63649723` has it: the new Angle that repeats P07's spoken words had no problem there, and the test failed.
+  On the fix it passes, and the same row with a Hook of its own still has none.
+- The real `angles.md` and `ab-pairs.md` of RepToday's `gtm/05-social-pmf/` were copied from `~/Mandu` into a folder of the Mac's temporary directory, read-only, and removed after; their SHA-256 were the first round's.
+  The bank has 1 Hook cell that is not one quoted line, and it holds 1 quoted text.
+  A change of that Angle whose new row repeats that text as its Hook, every other cell the Angle's own, was refused 0 times of 1 on `c54361acd11cc8698b39809a98707efb63649723` and 1 time of 1 on the fix, with the reason that the Hook is one the Angle bank already holds.
+
+### The boundary
+
+From the gate's linked worktree at `c54361acd11cc8698b39809a98707efb63649723` with the fix in its working tree, against Mandu and the Product checkouts as they are, with the SHA-256 of `git status --porcelain` the same before the preflight and after the check, and logs in a folder of the Mac's temporary directory named with `GR0WTHLAB_LOG_DIR`; `show-config` printed the configuration fingerprint `32af654b78b3cfc5e0c257fc93ed76e5c5f6a2c6efe42f2898b6f270e2276e43`, the same as in the third and fourth rounds.
+
+- `src/bin/gr0wthlab preflight`, run twice at 23:09, passed each time: six areas writable, 22 paths refused, no breach, a listing of the footage place `~/Mandu/projects/RepToday` refused, and neither listed host reached from inside the sandbox.
+- `src/bin/gr0wthlab boundary-check`, from 23:09:58 to 23:10:51, passed at its first attempt as `20261016T060959Z-on-demand-1e13`: 49 steps to prove, 28 tool calls in Codex's record with no problem, 17 of 17 file-tool targets refused each in a patch of its own, 19 kernel sandbox denials, the footage place's shell read refused, 1 of 1, 12 of 12 permitted sentinels written and none escaped, nothing unproven, the network probe's three targets refused inside the sandbox after its control reached its listener, two requests from the launcher's client, each a GET for a listed host's `robots.txt`, an unlisted address refused, and nothing changed outside the areas.
+
+### Tests
+
+- Under `/usr/bin/python3`, Python 3.9.6, on the working tree: `tests.test_weekly_changes`, 21 tests, none failed and none skipped.
+- `ruff check` and `ruff format --check` on `src` passed, with ruff 0.15.20.
+- The whole unit suite and CI's run were not part of this round.
+
+### What this round did not exercise
+
+- No real agent wrote a new Angle for a change of an Angle whose Hook cell is a stage direction; the refusal stands on the test and the scratch check above, which call the check the take-in runs.

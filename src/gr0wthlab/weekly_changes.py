@@ -512,7 +512,10 @@ def folded(text: str) -> str:
 
 
 def known_hooks(bank: Mapping[str, kit.Angle], pairs: Mapping[str, kit.Pair]) -> list[str]:
+    """Every Hook the package holds: each Angle's Hook cell, and each quoted text in it, the words spoken when the cell
+    wraps them in a stage direction; and each A/B pair leg's Hook."""
     found = [angle.hook_cell for angle in bank.values()]
+    found += [quote for angle in bank.values() for quote in kit.QUOTED.findall(angle.hook_cell)]
     found += [leg.hook for pair in pairs.values() for leg in pair.legs.values() if leg.hook]
     return found
 

@@ -253,6 +253,18 @@ class EditTest(unittest.TestCase):
         _, problem = weekly_changes.compose_record(LOG, text, "P09", cells, header, bank)
         self.assertEqual(problem, f"`{LOG}` has 0 records whose angle_id is P09 or starts with P09-")
 
+    def test_a_new_angle_s_hook_is_refused_when_a_bank_hook_cell_speaks_it_inside_a_stage_direction(self):
+        spoken = "Five minutes still counts as showing up."
+        bank_text = self.text(ANGLES).replace(
+            f'| "{spoken}" |', f'| Founder reads the review aloud, then: "{spoken}" |'
+        )
+        bank = kit.parse_angles(bank_text)
+        self.assertIsNone(bank["P07"].hook, "P07's Hook cell wraps its spoken Hook in a stage direction")
+        hooks = weekly_changes.known_hooks(bank, kit.parse_pairs(self.text(PAIRS)))
+        row = NEW_ANGLE.replace(f'"{HOOK}"', f'"{spoken}"')
+        self.assertEqual(weekly_changes.check_row(row, bank_text, "P07", "P08", hooks)[1], [TAKEN])
+        self.assertEqual(weekly_changes.check_row(NEW_ANGLE, bank_text, "P07", "P08", hooks)[1], [])
+
     def test_a_resolved_pair_adds_one_line_at_the_end_of_its_section(self):
         text = self.text(PAIRS)
         found = owed(weekly_changes.PAIR, "AB-2", leads="A", read_date=date(2026, 10, 18))
