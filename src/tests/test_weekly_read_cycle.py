@@ -452,6 +452,30 @@ class WeeklyReadRunTest(CycleTestCase):
             "a weekly-read-decision is queued only from its Draft in weekly-reads/, the Weekly Read memo,", reasons
         )
 
+    def test_no_item_of_the_agent_s_supersedes_a_weekly_read_decision_and_the_brief_says_so(self):
+        self.give_tiktok()
+        fakes.behave(self.codex_dir, {"write": {"weekly-reads/window-1-read-07.md": MEMO}})
+        self.run_cycle()
+        decision = self.items()[0]
+        replace = fakes.proposal(extra=f"supersedes: {decision['id']}\n", title="read the post another way")
+        fakes.behave(self.codex_dir, {"write": {"review-queue/incoming/replace-decision.md": replace}})
+        self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=1))
+        brief = self.brief(session="package-review")
+        self.assertIn(
+            f"- `{decision['id']}` (weekly-read-decision, which changes only through the Weekly Read memo):"
+            f" {decision['ask']}\n",
+            brief,
+            "the session is told before it writes",
+        )
+        self.assertIn("a Weekly Read decision only through the Weekly Read memo", brief)
+        self.assertIn(decision["id"], [entry["id"] for entry in self.items()], "the decision item stays open")
+        self.assertIn(
+            f"- Set aside, not queued: `replace-decision.md`: supersedes {decision['id']}, a weekly-read-decision the"
+            " launcher queued from its Draft; only a change to that Draft in weekly-reads/, the Weekly Read memo,"
+            " replaces it",
+            self.report(),
+        )
+
     def test_an_example_s_lab_for_another_workflow_files_none_of_the_weekly_read_s_items(self):
         """A lab's run (examples.py) starts one workflow's session: the Weekly Read's notice of what to give and the
         floor proposal belong to the Weekly Read, so a lab for another workflow queues neither."""

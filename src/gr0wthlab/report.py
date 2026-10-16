@@ -744,8 +744,10 @@ def item_lines(state: RunState, standing: Sequence[tuple[str, str]], ledger: Pat
     if state.queue_before:
         lines += [
             "Do not queue these again; to change one, write a new item with `supersedes: <id>`.",
-            "An item filed by the launcher changes only through a reviewed change to its source text, and a post or a"
-            " message only through its Draft, so an item that supersedes any of them is refused.",
+            "An item filed by the launcher changes only through a reviewed change to its source text, a post or a"
+            " message only through its Draft, a Weekly Read decision only through the Weekly Read memo, and the"
+            " notice of a change to the Instructions only through the Founder's decision, which alone closes it, so"
+            " an item that supersedes any of them is refused.",
         ]
         if any(entry["kind"] == proposal for entry in state.queue_before):
             lines.append(
@@ -754,6 +756,10 @@ def item_lines(state: RunState, standing: Sequence[tuple[str, str]], ledger: Pat
             )
         for entry in state.queue_before:
             filed = ", filed by the launcher" if entry.get("origin") else ""
+            if entry.get("instructions"):
+                filed = ", the notice of a change to the Instructions, which only the Founder's decision closes"
+            if entry["kind"] == "weekly-read-decision":
+                filed = ", which changes only through the Weekly Read memo"
             filed += f", `{ledger / str(entry['file'])}`" if entry["kind"] == proposal else ""
             line = f"- `{entry['id']}` ({entry['kind']}{filed}): {entry['ask']}"
             for earlier in state.replaced.get(str(entry["id"]), ()):

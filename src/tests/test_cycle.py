@@ -2184,7 +2184,7 @@ class PostDraftsTest(CycleTestCase):
         )
         self.assertIn("| 3 | P03 / AB-2 leg A | kept |", report)
         self.assertIn(
-            "and a post or a message only through its Draft, so an item that supersedes any of them is refused.",
+            "a post or a message only through its Draft, a Weekly Read decision only through the Weekly Read memo, and",
             self.brief(),
         )
 
