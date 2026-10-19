@@ -1,0 +1,26 @@
+{
+  "ask": "Approve message to GMB Fitness: A conversation about ready workouts",
+  "code": {
+    "code": "fit",
+    "coded_at": "2026-10-19T13:37:07.978914+00:00",
+    "coded_by_run": "20261019T133323Z-on-demand-c2e0",
+    "kind": "strategy",
+    "route": "proposal",
+    "why": "The Founder rejected this recipient, indicating GMB Fitness is not a fit for the planned outreach."
+  },
+  "decided_at": "2026-10-19T05:52:50-07:00",
+  "decision": "reject",
+  "item": "20261016-message-creator-gmb-fitness",
+  "item_file": "review-queue/items/20261016-message-creator-gmb-fitness.md",
+  "kind": "message",
+  "note": null,
+  "reason": "no need to contact GMB fitness",
+  "sitting": "2026-10-18",
+  "source": {
+    "path": "founder/decisions/20261016-message-creator-gmb-fitness.json",
+    "sha256": "c559fadb025e46aa4cca42f72e915a7754f19e35be9b420aebde62466c5c9a42"
+  },
+  "superseded_by": null,
+  "taken_in_at": "2026-10-19T13:33:25.334024+00:00",
+  "taken_in_by_run": "20261019T133323Z-on-demand-c2e0"
+}

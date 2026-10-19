@@ -1,0 +1,18 @@
+{
+  "ask": "Approve personal-network ask: A personal note about Rep Today",
+  "decided_at": "2026-10-19T05:54:40-07:00",
+  "decision": "approve",
+  "item": "20261016-message-network-ask",
+  "item_file": "review-queue/items/20261016-message-network-ask.md",
+  "kind": "message",
+  "note": null,
+  "reason": null,
+  "sitting": "2026-10-18",
+  "source": {
+    "path": "founder/decisions/20261016-message-network-ask.json",
+    "sha256": "30950611049f41049823a825b87b561ed49d5675d51119c653d7745ef7ddac8a"
+  },
+  "superseded_by": null,
+  "taken_in_at": "2026-10-19T13:33:25.334024+00:00",
+  "taken_in_by_run": "20261019T133323Z-on-demand-c2e0"
+}

@@ -1,9 +1,79 @@
 {
-  "carried": {},
+  "carried": {
+    "20261016-message-creator-hybrid-calisthenics": {
+      "carried_over_from": "2026-10-18",
+      "hash": "25f8175e526da615f6a785dbad4974ff216c24cb4a9ce85d93b4c0662909d36d"
+    },
+    "20261016-message-creator-the-bioneer": {
+      "carried_over_from": "2026-10-18",
+      "hash": "6cb3b83a31344f208d96d97a16bb192cc7f417606f6ffde5d016b7863b07fc40"
+    }
+  },
   "format": 1,
-  "handled": {},
+  "handled": {
+    "20261016-brand-rules-word-lists": {
+      "hash": "52e8f7dfb3a8cfb784083f568bb0548f9075a670de28bcc0136930f611fcd13d",
+      "outcome": "approved"
+    },
+    "20261016-domain-and-handle-status": {
+      "hash": "e6d7829edc70caab8d1cfa06b9f1a2be6867dac1947938f33688302d0c44e395",
+      "outcome": "approved"
+    },
+    "20261016-filming-plan-w1": {
+      "hash": "41844311d6e9585fb6dd85b70b6136fdd1c7594c5779a0d071a0a9c81650d3fa",
+      "outcome": "approved"
+    },
+    "20261016-handle-status": {
+      "hash": "cdb5dbe22fceaa186e35bd26c586a2b16811d76075c56b4c9f14e32b64266d1b",
+      "outcome": "approved"
+    },
+    "20261016-k8-rubric-status": {
+      "hash": "779bdbb321fbeb7b47caf72cef63598b14e0d1969fad5046e29bcdf02da3f013",
+      "outcome": "approved"
+    },
+    "20261016-message-creator-gmb-fitness": {
+      "hash": "04d4da52f7576965f7c3bc9f9db020eb6d68f54c1ae358f5746be683ea15b0a2",
+      "outcome": "rejected"
+    },
+    "20261016-message-network-ask": {
+      "hash": "010fd0b7ea9e5a4fcee054703dd8346f480917b7b7bc40e60dcc6310b8535941",
+      "outcome": "approved"
+    },
+    "20261016-name-status-update": {
+      "hash": "56714e9e6a243f612f712eacf4a767eb28a3b925e7e51bf8ae738e514e196962",
+      "outcome": "approved"
+    },
+    "20261016-notice-run-problems": {
+      "hash": "74f8b4db0f845ecde20c7248cc068c7bab3294b2796d3416fe0c1efd5bf517c3",
+      "outcome": "approved"
+    },
+    "20261016-outreach-word-lists": {
+      "hash": "7bb678e86e771e90e447913103eccd801a4480d4ba9752e4b5bd3938968dbb44",
+      "outcome": "approved"
+    },
+    "20261016-p11-kill-read-conflict": {
+      "hash": "f060c2b4d76d1e2c5b17b83531d7d0344876732cdbb9d51e3c5c962598f6bd6d",
+      "outcome": "approved"
+    },
+    "20261016-pmf-hook-qa-conflicts": {
+      "hash": "4a6172abcb21b7f79376c5cc434a49c111be0ffb09c5200db3ec38dff800008c",
+      "outcome": "approved"
+    },
+    "20261016-prelaunch-paid-spend-conflict": {
+      "hash": "bb3c21ace274f52a052cbc3f1a883fd3544acf8efb8619dc2d97b8f4f943f378",
+      "outcome": "approved"
+    },
+    "20261016-read-the-results-views-floor": {
+      "hash": "39d6c512d37dd94e40d22ce82776362c9ca9c2611450a1179c0a72202238ecbe",
+      "outcome": "approved"
+    },
+    "20261016-reptoday-waitlist": {
+      "hash": "670db20fc2bb3faf914b7490550f74ea38e67037643311db9f70666bb03abef0",
+      "outcome": "approved"
+    }
+  },
   "reported": [],
-  "updated_at": "2026-10-16T18:24:24.288823+00:00",
-  "updated_by_run": "20261016T181554Z-on-demand-307c",
+  "updated_at": "2026-10-19T13:37:07.978914+00:00",
+  "updated_by_run": "20261019T133323Z-on-demand-c2e0",
   "workflow": "review-queue"
 }

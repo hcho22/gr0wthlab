@@ -4,18 +4,18 @@ product: RepToday
 purpose: creator
 to: gmb-fitness
 angle: P03
-offer: founder-conversation
+offer: early-access
 ---
 
-# A conversation about ready workouts
+# Early access to Rep Today
 
 ## Message
 
-I'm the founder of Rep Today. When the Ready screen loads, it generates a workout for that day. I'd be glad to offer a conversation about how I built it.
+I'm the founder of Rep Today. When the Ready screen loads, it generates a workout for that day. I can offer early access to the free product, with no promotion expected.
 
 ## Notes
 
-The channel plan says GMB Fitness aligns with no-equipment workouts and busy adults. Check that a founder conversation is still the right offer before sending.
+The channel plan names GMB Fitness for its no-equipment and busy-adult positioning. The Founder rejected the earlier message because there is no need to contact GMB Fitness. Do not send this unless the Founder decides to reopen outreach.
 
 ## Claims
 

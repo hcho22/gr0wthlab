@@ -1,0 +1,18 @@
+{
+  "ask": "Resolve PMF hooks that conflict with the brand QA rule",
+  "decided_at": "2026-10-19T06:17:02-07:00",
+  "decision": "approve",
+  "item": "20261016-pmf-hook-qa-conflicts",
+  "item_file": "review-queue/items/20261016-pmf-hook-qa-conflicts.md",
+  "kind": "package-change-proposal",
+  "note": null,
+  "reason": null,
+  "sitting": "2026-10-18",
+  "source": {
+    "path": "founder/decisions/20261016-pmf-hook-qa-conflicts.json",
+    "sha256": "6a8e0bcb1a5fc054c569ca39303f10c354394a153f4578f1e133ed9cd92c7009"
+  },
+  "superseded_by": null,
+  "taken_in_at": "2026-10-19T13:33:25.334024+00:00",
+  "taken_in_by_run": "20261019T133323Z-on-demand-c2e0"
+}

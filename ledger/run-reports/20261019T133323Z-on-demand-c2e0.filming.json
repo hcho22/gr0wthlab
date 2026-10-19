@@ -1,0 +1,337 @@
+{
+  "approved": {},
+  "canvas": {
+    "bottom": 500,
+    "caption_size": 52,
+    "font": "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "font_name": "Arial",
+    "fps": 30,
+    "height": 1920,
+    "left": 180,
+    "max_chars": 160,
+    "outline": 6,
+    "right": 180,
+    "text_size": 64,
+    "top": 220,
+    "width": 1080
+  },
+  "days": {
+    "1": {
+      "ready": false,
+      "spec": {
+        "day": 1,
+        "hooks": [],
+        "job": "d01",
+        "leg": "A",
+        "length": [
+          8,
+          12
+        ],
+        "other": 8,
+        "pair": "AB-1",
+        "product": "RepToday",
+        "recut": false,
+        "shots": [
+          {
+            "id": "d01-s1",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 1,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "the Format: real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "the Format: no cuts",
+            "what": "screen record, cold open from home screen to ready session, no cuts, real time, on-screen text only"
+          }
+        ],
+        "window": 1
+      },
+      "why": "no footage yet for shot d01-s1"
+    },
+    "2": {
+      "ready": false,
+      "spec": {
+        "day": 2,
+        "hooks": [
+          "you cannot use this app unless you pay for it. You just can't.",
+          "Free means the workouts. All of them. Forever."
+        ],
+        "job": "d02",
+        "leg": "A",
+        "length": [
+          20,
+          20
+        ],
+        "other": 9,
+        "pair": "AB-3",
+        "product": "RepToday",
+        "recut": true,
+        "shots": [
+          {
+            "id": "d02-s1",
+            "kind": "founder on camera",
+            "needs": "the Founder",
+            "number": 1,
+            "real_device": false,
+            "real_time": null,
+            "real_time_why": "",
+            "setup": "camera",
+            "uncut": false,
+            "uncut_why": "",
+            "what": "founder-on-camera (mandatory, first person), review shown as on-screen text while read"
+          }
+        ],
+        "window": 1
+      },
+      "why": "no footage yet for shot d02-s1"
+    },
+    "3": {
+      "ready": false,
+      "spec": {
+        "day": 3,
+        "hooks": [],
+        "job": "d03",
+        "leg": "A",
+        "length": [
+          12,
+          12
+        ],
+        "other": 10,
+        "pair": "AB-2",
+        "product": "RepToday",
+        "recut": false,
+        "shots": [
+          {
+            "id": "d03-s1",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 1,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: a screen recording is cut only where its shot list says, and it names no cut",
+            "what": "screen record: history view with a missed day, Consistency Score visibly dips and does not reset, on-screen text"
+          }
+        ],
+        "window": 1
+      },
+      "why": "no footage yet for shot d03-s1"
+    },
+    "4": {
+      "ready": false,
+      "spec": {
+        "day": 4,
+        "hooks": [],
+        "job": "d04",
+        "leg": null,
+        "length": [
+          20,
+          30
+        ],
+        "other": null,
+        "pair": null,
+        "product": "RepToday",
+        "recut": false,
+        "shots": [
+          {
+            "id": "d04-s1",
+            "kind": "founder on camera",
+            "needs": "the Founder",
+            "number": 1,
+            "real_device": false,
+            "real_time": null,
+            "real_time_why": "",
+            "setup": "camera",
+            "uncut": false,
+            "uncut_why": "",
+            "what": "founder-on-camera (mandatory for first-person lines)"
+          },
+          {
+            "id": "d04-s2",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 2,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: a screen recording is cut only where its shot list says, and it names no cut",
+            "what": "screen-record insert of the return flow"
+          }
+        ],
+        "window": 1
+      },
+      "why": "no footage yet for shots d04-s1, d04-s2"
+    },
+    "5": {
+      "ready": false,
+      "spec": {
+        "day": 5,
+        "hooks": [],
+        "job": "d05",
+        "leg": null,
+        "length": [
+          10,
+          12
+        ],
+        "other": null,
+        "pair": null,
+        "product": "RepToday",
+        "recut": false,
+        "shots": [
+          {
+            "id": "d05-s1",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 1,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "the Format: no cuts",
+            "what": "screen record: toggle airplane mode in Control Center, cold open, ready session, no cuts"
+          }
+        ],
+        "window": 1
+      },
+      "why": "no footage yet for shot d05-s1"
+    },
+    "6": {
+      "ready": false,
+      "spec": {
+        "day": 6,
+        "hooks": [
+          "I built a workout app with no streaks, on purpose. Watch what happens when I miss a day.",
+          "Watch what happens in my app when I miss a day."
+        ],
+        "job": "d06",
+        "leg": "A",
+        "length": [
+          20,
+          30
+        ],
+        "other": 13,
+        "pair": "AB-6",
+        "product": "RepToday",
+        "recut": true,
+        "shots": [
+          {
+            "id": "d06-s1",
+            "kind": "founder on camera",
+            "needs": "the Founder",
+            "number": 1,
+            "real_device": false,
+            "real_time": null,
+            "real_time_why": "",
+            "setup": "camera",
+            "uncut": false,
+            "uncut_why": "",
+            "what": "founder-on-camera intro (mandatory, first person)"
+          },
+          {
+            "id": "d06-s2",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 2,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: a screen recording is cut only where its shot list says, and it names no cut",
+            "what": "screen record of a missed day and the score dipping without resetting"
+          }
+        ],
+        "window": 1
+      },
+      "why": "no footage yet for shots d06-s1, d06-s2"
+    },
+    "7": {
+      "ready": false,
+      "spec": {
+        "day": 7,
+        "hooks": [],
+        "job": "d07",
+        "leg": null,
+        "length": [
+          15,
+          20
+        ],
+        "other": null,
+        "pair": null,
+        "product": "RepToday",
+        "recut": false,
+        "shots": [
+          {
+            "id": "d07-s1",
+            "kind": "timelapse",
+            "needs": "the Founder",
+            "number": 1,
+            "real_device": false,
+            "real_time": false,
+            "real_time_why": "the Format: timelapse",
+            "setup": "camera",
+            "uncut": false,
+            "uncut_why": "",
+            "what": "timelapse of one real 5-minute session, phone timer visible, app screen shown at start and end"
+          }
+        ],
+        "window": 1
+      },
+      "why": "no footage yet for shot d07-s1"
+    }
+  },
+  "drafts": "/Users/hcho/gr0wthlab/workspace/drafts/posts/window-1",
+  "due": {
+    "1": false,
+    "2": false,
+    "3": false,
+    "4": false,
+    "5": false,
+    "6": false,
+    "7": false
+  },
+  "edits": "/Users/hcho/gr0wthlab/workspace/drafts/edits/window-1",
+  "footage": {
+    "clips": [],
+    "detail": "`/Users/hcho/Mandu/projects/RepToday/window-1` does not exist yet",
+    "folder": "window-1",
+    "ignored": [],
+    "place": "/Users/hcho/Mandu/projects/RepToday",
+    "status": "nothing there yet"
+  },
+  "plan": {
+    "item": "20261016-filming-plan-w1",
+    "status": "approved"
+  },
+  "posted": {},
+  "problem": "",
+  "product": "RepToday",
+  "rejected": {
+    "1": [],
+    "2": [],
+    "3": [],
+    "4": [],
+    "5": [],
+    "6": [],
+    "7": []
+  },
+  "run": "20261019T133323Z-on-demand-c2e0",
+  "tooling": {
+    "converts_hdr": true,
+    "ffmpeg": "/usr/local/bin/ffmpeg",
+    "ffprobe": "/usr/local/bin/ffprobe",
+    "problem": "",
+    "version": "ffmpeg version 7.1.1"
+  },
+  "unplanned": {
+    "14": "the calendar decides its Angle later (Double-down re-cut of the day-7 review's top angle; if nothing qualifies under the rules below, post P14 (no-signup demo))"
+  },
+  "window": 1
+}

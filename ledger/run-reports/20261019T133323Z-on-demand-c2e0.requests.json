@@ -1,0 +1,254 @@
+{
+  "bodies_sent": 0,
+  "hosts_contacted": [
+    "itunes.apple.com",
+    "www.reddit.com"
+  ],
+  "methods_sent": [
+    "GET"
+  ],
+  "not_sent": 18,
+  "note": "Every request the launcher was asked to make this run. Only entries with sent true left the machine: each was one GET with no body, cookie, or credential, to a listed host on port 443.",
+  "policy": {
+    "config": "config/guardrails/fetch.json",
+    "hosts": [
+      "www.reddit.com",
+      "itunes.apple.com"
+    ],
+    "max_requests_per_run": 30,
+    "user_agent": "growthlab-reader/1 (gr0wthlab, a weekly read-only reader run by one person; +https://github.com/hcho22)"
+  },
+  "requests": [
+    {
+      "at": "2026-10-19T13:33:26.215259+00:00",
+      "bytes": 538,
+      "detail": "",
+      "host": "www.reddit.com",
+      "method": "GET",
+      "outcome": "HTTP 200",
+      "purpose": "robots.txt of www.reddit.com",
+      "sent": true,
+      "status": 200,
+      "url": "https://www.reddit.com/robots.txt"
+    },
+    {
+      "at": "2026-10-19T13:33:26.215517+00:00",
+      "detail": "robots.txt on www.reddit.com disallows it for automated readers (`Disallow: /`)",
+      "host": "www.reddit.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "r/fitness30plus threads",
+      "sent": false,
+      "url": "https://www.reddit.com/r/fitness30plus/new/.rss"
+    },
+    {
+      "at": "2026-10-19T13:33:26.215596+00:00",
+      "detail": "robots.txt on www.reddit.com disallows it for automated readers (`Disallow: /`)",
+      "host": "www.reddit.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "r/fitness30plus rules",
+      "sent": false,
+      "url": "https://www.reddit.com/r/fitness30plus/about/rules.json"
+    },
+    {
+      "at": "2026-10-19T13:33:26.215656+00:00",
+      "detail": "robots.txt on www.reddit.com disallows it for automated readers (`Disallow: /`)",
+      "host": "www.reddit.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "r/bodyweightfitness threads",
+      "sent": false,
+      "url": "https://www.reddit.com/r/bodyweightfitness/new/.rss"
+    },
+    {
+      "at": "2026-10-19T13:33:26.215711+00:00",
+      "detail": "robots.txt on www.reddit.com disallows it for automated readers (`Disallow: /`)",
+      "host": "www.reddit.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "r/bodyweightfitness rules",
+      "sent": false,
+      "url": "https://www.reddit.com/r/bodyweightfitness/about/rules.json"
+    },
+    {
+      "at": "2026-10-19T13:33:26.215763+00:00",
+      "detail": "robots.txt on www.reddit.com disallows it for automated readers (`Disallow: /`)",
+      "host": "www.reddit.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "r/getdisciplined threads",
+      "sent": false,
+      "url": "https://www.reddit.com/r/getdisciplined/new/.rss"
+    },
+    {
+      "at": "2026-10-19T13:33:26.215815+00:00",
+      "detail": "robots.txt on www.reddit.com disallows it for automated readers (`Disallow: /`)",
+      "host": "www.reddit.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "r/getdisciplined rules",
+      "sent": false,
+      "url": "https://www.reddit.com/r/getdisciplined/about/rules.json"
+    },
+    {
+      "at": "2026-10-19T13:33:26.364626+00:00",
+      "bytes": 447,
+      "detail": "",
+      "host": "itunes.apple.com",
+      "method": "GET",
+      "outcome": "HTTP 200",
+      "purpose": "robots.txt of itunes.apple.com",
+      "sent": true,
+      "status": 200,
+      "url": "https://itunes.apple.com/robots.txt"
+    },
+    {
+      "at": "2026-10-19T13:33:26.365590+00:00",
+      "detail": "robots.txt on itunes.apple.com disallows it for automated readers (`Disallow: /*/rss/*`)",
+      "host": "itunes.apple.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "App Store reviews: Apple Fitness+",
+      "sent": false,
+      "url": "https://itunes.apple.com/us/rss/customerreviews/page=1/id=1208224953/sortby=mostrecent/json"
+    },
+    {
+      "at": "2026-10-19T13:33:26.365726+00:00",
+      "detail": "robots.txt on itunes.apple.com disallows it for automated readers (`Disallow: /*/rss/*`)",
+      "host": "itunes.apple.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "App Store reviews: Caliber",
+      "sent": false,
+      "url": "https://itunes.apple.com/us/rss/customerreviews/page=1/id=1482405410/sortby=mostrecent/json"
+    },
+    {
+      "at": "2026-10-19T13:33:26.365850+00:00",
+      "detail": "robots.txt on itunes.apple.com disallows it for automated readers (`Disallow: /*/rss/*`)",
+      "host": "itunes.apple.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "App Store reviews: Down Dog",
+      "sent": false,
+      "url": "https://itunes.apple.com/us/rss/customerreviews/page=1/id=983693694/sortby=mostrecent/json"
+    },
+    {
+      "at": "2026-10-19T13:33:26.365970+00:00",
+      "detail": "robots.txt on itunes.apple.com disallows it for automated readers (`Disallow: /*/rss/*`)",
+      "host": "itunes.apple.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "App Store reviews: Freeletics",
+      "sent": false,
+      "url": "https://itunes.apple.com/us/rss/customerreviews/page=1/id=654810212/sortby=mostrecent/json"
+    },
+    {
+      "at": "2026-10-19T13:33:26.366084+00:00",
+      "detail": "robots.txt on itunes.apple.com disallows it for automated readers (`Disallow: /*/rss/*`)",
+      "host": "itunes.apple.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "App Store reviews: Ladder",
+      "sent": false,
+      "url": "https://itunes.apple.com/us/rss/customerreviews/page=1/id=1502936453/sortby=mostrecent/json"
+    },
+    {
+      "at": "2026-10-19T13:33:26.366201+00:00",
+      "detail": "robots.txt on itunes.apple.com disallows it for automated readers (`Disallow: /*/rss/*`)",
+      "host": "itunes.apple.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "App Store reviews: Nike Training Club",
+      "sent": false,
+      "url": "https://itunes.apple.com/us/rss/customerreviews/page=1/id=301521403/sortby=mostrecent/json"
+    },
+    {
+      "at": "2026-10-19T13:33:26.366315+00:00",
+      "detail": "robots.txt on itunes.apple.com disallows it for automated readers (`Disallow: /*/rss/*`)",
+      "host": "itunes.apple.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "App Store reviews: Peloton App",
+      "sent": false,
+      "url": "https://itunes.apple.com/us/rss/customerreviews/page=1/id=792750948/sortby=mostrecent/json"
+    },
+    {
+      "at": "2026-10-19T13:33:26.366439+00:00",
+      "detail": "robots.txt on itunes.apple.com disallows it for automated readers (`Disallow: /*/rss/*`)",
+      "host": "itunes.apple.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "App Store reviews: Sweat",
+      "sent": false,
+      "url": "https://itunes.apple.com/us/rss/customerreviews/page=1/id=1049234587/sortby=mostrecent/json"
+    },
+    {
+      "at": "2026-10-19T13:33:26.366554+00:00",
+      "detail": "robots.txt on itunes.apple.com disallows it for automated readers (`Disallow: /*/rss/*`)",
+      "host": "itunes.apple.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "App Store reviews: Seven",
+      "sent": false,
+      "url": "https://itunes.apple.com/us/rss/customerreviews/page=1/id=650276551/sortby=mostrecent/json"
+    },
+    {
+      "at": "2026-10-19T13:33:26.366667+00:00",
+      "detail": "robots.txt on itunes.apple.com disallows it for automated readers (`Disallow: /*/rss/*`)",
+      "host": "itunes.apple.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "App Store reviews: Bend",
+      "sent": false,
+      "url": "https://itunes.apple.com/us/rss/customerreviews/page=1/id=1513988468/sortby=mostrecent/json"
+    },
+    {
+      "at": "2026-10-19T13:33:26.366779+00:00",
+      "detail": "robots.txt on itunes.apple.com disallows it for automated readers (`Disallow: /*/rss/*`)",
+      "host": "itunes.apple.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "App Store reviews: Wakeout",
+      "sent": false,
+      "url": "https://itunes.apple.com/us/rss/customerreviews/page=1/id=1242116567/sortby=mostrecent/json"
+    },
+    {
+      "at": "2026-10-19T13:33:26.366894+00:00",
+      "detail": "robots.txt on itunes.apple.com disallows it for automated readers (`Disallow: /*/rss/*`)",
+      "host": "itunes.apple.com",
+      "method": "GET",
+      "outcome": "disallowed",
+      "purpose": "App Store reviews: pliability",
+      "sent": false,
+      "url": "https://itunes.apple.com/us/rss/customerreviews/page=1/id=1175346453/sortby=mostrecent/json"
+    }
+  ],
+  "robots": {
+    "itunes.apple.com": {
+      "detail": "",
+      "rules": [
+        "Disallow: /WebObjects/MZFastFinance.woa",
+        "Disallow: /WebObjects/MZFinance.woa",
+        "Disallow: /WebObjects/MZPersonalizer.woa",
+        "Disallow: /WebObjects/MZStoreElements.woa",
+        "Disallow: /station/idst.",
+        "Disallow: /WebObjects/*",
+        "Allow: /WebObjects/MZStore.woa/wa/viewMultiRoom?*",
+        "Disallow: /search*",
+        "Disallow: /*/rss/*",
+        "Disallow: /*/lookup?"
+      ],
+      "state": "read"
+    },
+    "www.reddit.com": {
+      "detail": "",
+      "rules": [
+        "Disallow: /"
+      ],
+      "state": "read"
+    }
+  },
+  "run": "20261019T133323Z-on-demand-c2e0",
+  "sent": 2
+}

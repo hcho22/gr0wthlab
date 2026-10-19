@@ -1,0 +1,1212 @@
+{
+  "at": "2026-10-19T13:37:07.978914+00:00",
+  "code": {
+    "branch": "main",
+    "checkout": "/Users/hcho/Developer/FM_Private/firstmate-private/projects/RepToday",
+    "commit": "8455108032f3b988561fa34f50d3fc4229e10e9a",
+    "problem": null
+  },
+  "competitors": [
+    "Apple Fitness+",
+    "Caliber",
+    "Down Dog",
+    "Freeletics",
+    "Ladder",
+    "Nike Training Club",
+    "Peloton App",
+    "Peloton",
+    "Sweat",
+    "NTC",
+    "Seven",
+    "Bend",
+    "Wakeout",
+    "pliability"
+  ],
+  "days": [
+    {
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "the Hook has 13 words; at most 12",
+          "field": "Hook",
+          "rule": "hook_max_words"
+        },
+        {
+          "blocks": true,
+          "detail": "USPTO trademark search for \"Rep Today\": open, and it blocks everything public",
+          "field": "",
+          "rule": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md line 9"
+        }
+      ],
+      "checklist": [
+        {
+          "line": 9,
+          "note": "open, and it blocks everything public",
+          "status": "blocks",
+          "title": "USPTO trademark search for \"Rep Today\""
+        },
+        {
+          "line": 10,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Decide on the reptoday.com domain ($3,895 buy-now at HugeDomains as fetched 2026-07-15) or commit to reptoday.app;"
+        },
+        {
+          "line": 11,
+          "note": "blocks site, submission only",
+          "status": "open",
+          "title": "Author the privacy policy"
+        },
+        {
+          "line": 12,
+          "note": "blocks nothing today, blocking submission of any emitting build only",
+          "status": "open",
+          "title": "Reconcile the landing FAQ, the event schema, and the privacy nutrition label with the shipped opt-out, before any build that genuinely collects ships."
+        },
+        {
+          "line": 13,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Account deletion path:"
+        },
+        {
+          "line": 17,
+          "note": "blocks only assets that use the 'under 100 milliseconds' claim",
+          "status": "open",
+          "title": "Device benchmark record for the \"under 100 milliseconds\" claim"
+        },
+        {
+          "line": 18,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Confirm final App Store Connect pricing, then regenerate App Store screenshot 05 (it states planned prices) and the site pricing section."
+        },
+        {
+          "line": 22,
+          "note": "blocks video publication only",
+          "status": "open",
+          "title": "Re-record the video voiceover with a human voice"
+        },
+        {
+          "line": 23,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Capture the real App Store submission screenshots from the built app"
+        },
+        {
+          "line": 24,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify every behavioral claim in the site/video/screenshots against the actual approved binary before launch day (the package was written against the PRD and test suite, pre-submission)."
+        },
+        {
+          "line": 25,
+          "note": "checked",
+          "status": "done",
+          "title": "Give the landing page exactly one low-pressure action"
+        },
+        {
+          "line": 26,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Consider replacing or augmenting App Store screenshot 4 with the return-after-a-gap screen (celebrated, easy comeback session) - it is implemented behavior and the strongest emotional differentiator;"
+        },
+        {
+          "line": 30,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Manually read the self-promotion rules"
+        },
+        {
+          "line": 31,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify X/Instagram handle availability for @reptoday (login walls blocked checks)."
+        },
+        {
+          "line": 35,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Instrument the funnel before TestFlight:"
+        },
+        {
+          "line": 36,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Read K5's install count off App Store Connect units, not off the telemetry `app_install` count."
+        },
+        {
+          "line": 37,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Check the pre-registered opt-out revisit trigger at each review."
+        },
+        {
+          "line": 38,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Pre-register the K8 wedge-comprehension rubric (written coding criteria, 25+ observed first runs, non-founder coding) before the first cohort, per the skeptic's fix."
+        }
+      ],
+      "claims": [
+        {
+          "claim": "The app opens with a workout already ready.",
+          "code": "ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:422-435",
+          "problem": null,
+          "shows": "let generated = try await workoutEngine.generateWorkout("
+        }
+      ],
+      "day": 1,
+      "detail": "",
+      "draft": "drafts/posts/window-1/day-01.md",
+      "draft_sha256": "4cb2f1652217cf62f1b1d25c293588e83110700360701e062c221a21f430a909",
+      "item": null,
+      "status": "blocked",
+      "unread": [],
+      "video": null,
+      "warnings": [
+        {
+          "blocks": false,
+          "detail": "its first line is 72 characters; about 70 show before it is cut",
+          "field": "YouTube Shorts title",
+          "rule": "config/platforms.json YouTube Shorts Title visible_chars"
+        }
+      ],
+      "withdrawn": null
+    },
+    {
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "the Hook has 13 words; at most 12",
+          "field": "Hook",
+          "rule": "hook_max_words"
+        },
+        {
+          "blocks": true,
+          "detail": "USPTO trademark search for \"Rep Today\": open, and it blocks everything public",
+          "field": "",
+          "rule": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md line 9"
+        }
+      ],
+      "checklist": [
+        {
+          "line": 9,
+          "note": "open, and it blocks everything public",
+          "status": "blocks",
+          "title": "USPTO trademark search for \"Rep Today\""
+        },
+        {
+          "line": 10,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Decide on the reptoday.com domain ($3,895 buy-now at HugeDomains as fetched 2026-07-15) or commit to reptoday.app;"
+        },
+        {
+          "line": 11,
+          "note": "blocks site, submission only",
+          "status": "open",
+          "title": "Author the privacy policy"
+        },
+        {
+          "line": 12,
+          "note": "blocks nothing today, blocking submission of any emitting build only",
+          "status": "open",
+          "title": "Reconcile the landing FAQ, the event schema, and the privacy nutrition label with the shipped opt-out, before any build that genuinely collects ships."
+        },
+        {
+          "line": 13,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Account deletion path:"
+        },
+        {
+          "line": 17,
+          "note": "blocks only assets that use the 'under 100 milliseconds' claim",
+          "status": "open",
+          "title": "Device benchmark record for the \"under 100 milliseconds\" claim"
+        },
+        {
+          "line": 18,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Confirm final App Store Connect pricing, then regenerate App Store screenshot 05 (it states planned prices) and the site pricing section."
+        },
+        {
+          "line": 22,
+          "note": "blocks video publication only",
+          "status": "open",
+          "title": "Re-record the video voiceover with a human voice"
+        },
+        {
+          "line": 23,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Capture the real App Store submission screenshots from the built app"
+        },
+        {
+          "line": 24,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify every behavioral claim in the site/video/screenshots against the actual approved binary before launch day (the package was written against the PRD and test suite, pre-submission)."
+        },
+        {
+          "line": 25,
+          "note": "checked",
+          "status": "done",
+          "title": "Give the landing page exactly one low-pressure action"
+        },
+        {
+          "line": 26,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Consider replacing or augmenting App Store screenshot 4 with the return-after-a-gap screen (celebrated, easy comeback session) - it is implemented behavior and the strongest emotional differentiator;"
+        },
+        {
+          "line": 30,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Manually read the self-promotion rules"
+        },
+        {
+          "line": 31,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify X/Instagram handle availability for @reptoday (login walls blocked checks)."
+        },
+        {
+          "line": 35,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Instrument the funnel before TestFlight:"
+        },
+        {
+          "line": 36,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Read K5's install count off App Store Connect units, not off the telemetry `app_install` count."
+        },
+        {
+          "line": 37,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Check the pre-registered opt-out revisit trigger at each review."
+        },
+        {
+          "line": 38,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Pre-register the K8 wedge-comprehension rubric (written coding criteria, 25+ observed first runs, non-founder coding) before the first cohort, per the skeptic's fix."
+        }
+      ],
+      "claims": [
+        {
+          "claim": "Rep Today's workouts are free, while premium adds depth.",
+          "code": "ios/RepToday/RepToday/Models/User.swift:181",
+          "problem": null,
+          "shows": "/// The free tier - unlimited core workouts forever, no expiry. The default entitlement for a"
+        }
+      ],
+      "day": 2,
+      "detail": "",
+      "draft": "drafts/posts/window-1/day-02.md",
+      "draft_sha256": "c0a8e76547db09c3c6d2f6227dca04f12f9fbac79c216795cbba8682a2d0d0f5",
+      "item": null,
+      "status": "blocked",
+      "unread": [],
+      "video": null,
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "USPTO trademark search for \"Rep Today\": open, and it blocks everything public",
+          "field": "",
+          "rule": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md line 9"
+        }
+      ],
+      "checklist": [
+        {
+          "line": 9,
+          "note": "open, and it blocks everything public",
+          "status": "blocks",
+          "title": "USPTO trademark search for \"Rep Today\""
+        },
+        {
+          "line": 10,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Decide on the reptoday.com domain ($3,895 buy-now at HugeDomains as fetched 2026-07-15) or commit to reptoday.app;"
+        },
+        {
+          "line": 11,
+          "note": "blocks site, submission only",
+          "status": "open",
+          "title": "Author the privacy policy"
+        },
+        {
+          "line": 12,
+          "note": "blocks nothing today, blocking submission of any emitting build only",
+          "status": "open",
+          "title": "Reconcile the landing FAQ, the event schema, and the privacy nutrition label with the shipped opt-out, before any build that genuinely collects ships."
+        },
+        {
+          "line": 13,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Account deletion path:"
+        },
+        {
+          "line": 17,
+          "note": "blocks only assets that use the 'under 100 milliseconds' claim",
+          "status": "open",
+          "title": "Device benchmark record for the \"under 100 milliseconds\" claim"
+        },
+        {
+          "line": 18,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Confirm final App Store Connect pricing, then regenerate App Store screenshot 05 (it states planned prices) and the site pricing section."
+        },
+        {
+          "line": 22,
+          "note": "blocks video publication only",
+          "status": "open",
+          "title": "Re-record the video voiceover with a human voice"
+        },
+        {
+          "line": 23,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Capture the real App Store submission screenshots from the built app"
+        },
+        {
+          "line": 24,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify every behavioral claim in the site/video/screenshots against the actual approved binary before launch day (the package was written against the PRD and test suite, pre-submission)."
+        },
+        {
+          "line": 25,
+          "note": "checked",
+          "status": "done",
+          "title": "Give the landing page exactly one low-pressure action"
+        },
+        {
+          "line": 26,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Consider replacing or augmenting App Store screenshot 4 with the return-after-a-gap screen (celebrated, easy comeback session) - it is implemented behavior and the strongest emotional differentiator;"
+        },
+        {
+          "line": 30,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Manually read the self-promotion rules"
+        },
+        {
+          "line": 31,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify X/Instagram handle availability for @reptoday (login walls blocked checks)."
+        },
+        {
+          "line": 35,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Instrument the funnel before TestFlight:"
+        },
+        {
+          "line": 36,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Read K5's install count off App Store Connect units, not off the telemetry `app_install` count."
+        },
+        {
+          "line": 37,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Check the pre-registered opt-out revisit trigger at each review."
+        },
+        {
+          "line": 38,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Pre-register the K8 wedge-comprehension rubric (written coding criteria, 25+ observed first runs, non-founder coding) before the first cohort, per the skeptic's fix."
+        }
+      ],
+      "claims": [
+        {
+          "claim": "A missed day can lower the rolling Consistency Score, but does not reset it to zero.",
+          "code": "ios/RepToday/RepToday/Services/Consistency/ConsistencyScore.swift:102-135",
+          "problem": null,
+          "shows": "private static func score("
+        }
+      ],
+      "day": 3,
+      "detail": "",
+      "draft": "drafts/posts/window-1/day-03.md",
+      "draft_sha256": "be4c33793c5fcb25de1d99a4bc0817bcf76a330076366773ea70f24fcd776b8b",
+      "item": null,
+      "status": "blocked",
+      "unread": [],
+      "video": null,
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "the Hook has 17 words; at most 12",
+          "field": "Hook",
+          "rule": "hook_max_words"
+        },
+        {
+          "blocks": true,
+          "detail": "USPTO trademark search for \"Rep Today\": open, and it blocks everything public",
+          "field": "",
+          "rule": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md line 9"
+        }
+      ],
+      "checklist": [
+        {
+          "line": 9,
+          "note": "open, and it blocks everything public",
+          "status": "blocks",
+          "title": "USPTO trademark search for \"Rep Today\""
+        },
+        {
+          "line": 10,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Decide on the reptoday.com domain ($3,895 buy-now at HugeDomains as fetched 2026-07-15) or commit to reptoday.app;"
+        },
+        {
+          "line": 11,
+          "note": "blocks site, submission only",
+          "status": "open",
+          "title": "Author the privacy policy"
+        },
+        {
+          "line": 12,
+          "note": "blocks nothing today, blocking submission of any emitting build only",
+          "status": "open",
+          "title": "Reconcile the landing FAQ, the event schema, and the privacy nutrition label with the shipped opt-out, before any build that genuinely collects ships."
+        },
+        {
+          "line": 13,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Account deletion path:"
+        },
+        {
+          "line": 17,
+          "note": "blocks only assets that use the 'under 100 milliseconds' claim",
+          "status": "open",
+          "title": "Device benchmark record for the \"under 100 milliseconds\" claim"
+        },
+        {
+          "line": 18,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Confirm final App Store Connect pricing, then regenerate App Store screenshot 05 (it states planned prices) and the site pricing section."
+        },
+        {
+          "line": 22,
+          "note": "blocks video publication only",
+          "status": "open",
+          "title": "Re-record the video voiceover with a human voice"
+        },
+        {
+          "line": 23,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Capture the real App Store submission screenshots from the built app"
+        },
+        {
+          "line": 24,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify every behavioral claim in the site/video/screenshots against the actual approved binary before launch day (the package was written against the PRD and test suite, pre-submission)."
+        },
+        {
+          "line": 25,
+          "note": "checked",
+          "status": "done",
+          "title": "Give the landing page exactly one low-pressure action"
+        },
+        {
+          "line": 26,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Consider replacing or augmenting App Store screenshot 4 with the return-after-a-gap screen (celebrated, easy comeback session) - it is implemented behavior and the strongest emotional differentiator;"
+        },
+        {
+          "line": 30,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Manually read the self-promotion rules"
+        },
+        {
+          "line": 31,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify X/Instagram handle availability for @reptoday (login walls blocked checks)."
+        },
+        {
+          "line": 35,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Instrument the funnel before TestFlight:"
+        },
+        {
+          "line": 36,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Read K5's install count off App Store Connect units, not off the telemetry `app_install` count."
+        },
+        {
+          "line": 37,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Check the pre-registered opt-out revisit trigger at each review."
+        },
+        {
+          "line": 38,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Pre-register the K8 wedge-comprehension rubric (written coding criteria, 25+ observed first runs, non-founder coding) before the first cohort, per the skeptic's fix."
+        }
+      ],
+      "claims": [
+        {
+          "claim": "The app celebrates a return after a gap.",
+          "code": "ios/RepToday/RepToday/Services/Engine/ReturnOverride.swift:3-7",
+          "problem": null,
+          "shows": "/// feel behind - their first session back is served easy, winnable, and celebrated regardless of the"
+        }
+      ],
+      "day": 4,
+      "detail": "",
+      "draft": "drafts/posts/window-1/day-04.md",
+      "draft_sha256": "2ecf26ed736efa41bd43120c1b2d25140de18bb53ab679622a0fc79091bd2def",
+      "item": null,
+      "status": "blocked",
+      "unread": [],
+      "video": null,
+      "warnings": [
+        {
+          "blocks": false,
+          "detail": "its first line is 87 characters; about 70 show before it is cut",
+          "field": "YouTube Shorts title",
+          "rule": "config/platforms.json YouTube Shorts Title visible_chars"
+        }
+      ],
+      "withdrawn": null
+    },
+    {
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "USPTO trademark search for \"Rep Today\": open, and it blocks everything public",
+          "field": "",
+          "rule": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md line 9"
+        }
+      ],
+      "checklist": [
+        {
+          "line": 9,
+          "note": "open, and it blocks everything public",
+          "status": "blocks",
+          "title": "USPTO trademark search for \"Rep Today\""
+        },
+        {
+          "line": 10,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Decide on the reptoday.com domain ($3,895 buy-now at HugeDomains as fetched 2026-07-15) or commit to reptoday.app;"
+        },
+        {
+          "line": 11,
+          "note": "blocks site, submission only",
+          "status": "open",
+          "title": "Author the privacy policy"
+        },
+        {
+          "line": 12,
+          "note": "blocks nothing today, blocking submission of any emitting build only",
+          "status": "open",
+          "title": "Reconcile the landing FAQ, the event schema, and the privacy nutrition label with the shipped opt-out, before any build that genuinely collects ships."
+        },
+        {
+          "line": 13,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Account deletion path:"
+        },
+        {
+          "line": 17,
+          "note": "blocks only assets that use the 'under 100 milliseconds' claim",
+          "status": "open",
+          "title": "Device benchmark record for the \"under 100 milliseconds\" claim"
+        },
+        {
+          "line": 18,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Confirm final App Store Connect pricing, then regenerate App Store screenshot 05 (it states planned prices) and the site pricing section."
+        },
+        {
+          "line": 22,
+          "note": "blocks video publication only",
+          "status": "open",
+          "title": "Re-record the video voiceover with a human voice"
+        },
+        {
+          "line": 23,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Capture the real App Store submission screenshots from the built app"
+        },
+        {
+          "line": 24,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify every behavioral claim in the site/video/screenshots against the actual approved binary before launch day (the package was written against the PRD and test suite, pre-submission)."
+        },
+        {
+          "line": 25,
+          "note": "checked",
+          "status": "done",
+          "title": "Give the landing page exactly one low-pressure action"
+        },
+        {
+          "line": 26,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Consider replacing or augmenting App Store screenshot 4 with the return-after-a-gap screen (celebrated, easy comeback session) - it is implemented behavior and the strongest emotional differentiator;"
+        },
+        {
+          "line": 30,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Manually read the self-promotion rules"
+        },
+        {
+          "line": 31,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify X/Instagram handle availability for @reptoday (login walls blocked checks)."
+        },
+        {
+          "line": 35,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Instrument the funnel before TestFlight:"
+        },
+        {
+          "line": 36,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Read K5's install count off App Store Connect units, not off the telemetry `app_install` count."
+        },
+        {
+          "line": 37,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Check the pre-registered opt-out revisit trigger at each review."
+        },
+        {
+          "line": 38,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Pre-register the K8 wedge-comprehension rubric (written coding criteria, 25+ observed first runs, non-founder coding) before the first cohort, per the skeptic's fix."
+        }
+      ],
+      "claims": [
+        {
+          "claim": "The app generates a ready session while the phone is offline.",
+          "code": "ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:422-435",
+          "problem": null,
+          "shows": "let generated = try await workoutEngine.generateWorkout("
+        }
+      ],
+      "day": 5,
+      "detail": "",
+      "draft": "drafts/posts/window-1/day-05.md",
+      "draft_sha256": "2ce49ca14875b0e8c06618c6e79e1aec2277aded66863cacfdd38f2a716401cd",
+      "item": null,
+      "status": "blocked",
+      "unread": [],
+      "video": null,
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "the Hook has 18 words; at most 12",
+          "field": "Hook",
+          "rule": "hook_max_words"
+        },
+        {
+          "blocks": true,
+          "detail": "banned word 'streak'",
+          "field": "Hook",
+          "rule": "banned_words_in_hook"
+        },
+        {
+          "blocks": true,
+          "detail": "banned word 'streak'",
+          "field": "beat 1 spoken line",
+          "rule": "banned_words_in_hook"
+        },
+        {
+          "blocks": true,
+          "detail": "banned word 'streak'",
+          "field": "beat 1 on-screen text",
+          "rule": "banned_words_in_hook"
+        },
+        {
+          "blocks": true,
+          "detail": "banned word 'streak'",
+          "field": "TikTok caption",
+          "rule": "banned_words_in_hook"
+        },
+        {
+          "blocks": true,
+          "detail": "banned word 'streak'",
+          "field": "YouTube Shorts title",
+          "rule": "banned_words_in_hook"
+        },
+        {
+          "blocks": true,
+          "detail": "banned word 'streak'",
+          "field": "YouTube Shorts description",
+          "rule": "banned_words_in_hook"
+        },
+        {
+          "blocks": true,
+          "detail": "USPTO trademark search for \"Rep Today\": open, and it blocks everything public",
+          "field": "",
+          "rule": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md line 9"
+        }
+      ],
+      "checklist": [
+        {
+          "line": 9,
+          "note": "open, and it blocks everything public",
+          "status": "blocks",
+          "title": "USPTO trademark search for \"Rep Today\""
+        },
+        {
+          "line": 10,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Decide on the reptoday.com domain ($3,895 buy-now at HugeDomains as fetched 2026-07-15) or commit to reptoday.app;"
+        },
+        {
+          "line": 11,
+          "note": "blocks site, submission only",
+          "status": "open",
+          "title": "Author the privacy policy"
+        },
+        {
+          "line": 12,
+          "note": "blocks nothing today, blocking submission of any emitting build only",
+          "status": "open",
+          "title": "Reconcile the landing FAQ, the event schema, and the privacy nutrition label with the shipped opt-out, before any build that genuinely collects ships."
+        },
+        {
+          "line": 13,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Account deletion path:"
+        },
+        {
+          "line": 17,
+          "note": "blocks only assets that use the 'under 100 milliseconds' claim",
+          "status": "open",
+          "title": "Device benchmark record for the \"under 100 milliseconds\" claim"
+        },
+        {
+          "line": 18,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Confirm final App Store Connect pricing, then regenerate App Store screenshot 05 (it states planned prices) and the site pricing section."
+        },
+        {
+          "line": 22,
+          "note": "blocks video publication only",
+          "status": "open",
+          "title": "Re-record the video voiceover with a human voice"
+        },
+        {
+          "line": 23,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Capture the real App Store submission screenshots from the built app"
+        },
+        {
+          "line": 24,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify every behavioral claim in the site/video/screenshots against the actual approved binary before launch day (the package was written against the PRD and test suite, pre-submission)."
+        },
+        {
+          "line": 25,
+          "note": "checked",
+          "status": "done",
+          "title": "Give the landing page exactly one low-pressure action"
+        },
+        {
+          "line": 26,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Consider replacing or augmenting App Store screenshot 4 with the return-after-a-gap screen (celebrated, easy comeback session) - it is implemented behavior and the strongest emotional differentiator;"
+        },
+        {
+          "line": 30,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Manually read the self-promotion rules"
+        },
+        {
+          "line": 31,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify X/Instagram handle availability for @reptoday (login walls blocked checks)."
+        },
+        {
+          "line": 35,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Instrument the funnel before TestFlight:"
+        },
+        {
+          "line": 36,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Read K5's install count off App Store Connect units, not off the telemetry `app_install` count."
+        },
+        {
+          "line": 37,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Check the pre-registered opt-out revisit trigger at each review."
+        },
+        {
+          "line": 38,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Pre-register the K8 wedge-comprehension rubric (written coding criteria, 25+ observed first runs, non-founder coding) before the first cohort, per the skeptic's fix."
+        }
+      ],
+      "claims": [
+        {
+          "claim": "The app has no streaks.",
+          "code": "ios/RepToday/RepToday/Services/Consistency/ConsistencyScore.swift:3-7",
+          "problem": null,
+          "shows": "/// measure of **showing up**. It replaces the fragile streak entirely - there is no XP, no"
+        },
+        {
+          "claim": "The Consistency Score can dip after a missed day without resetting.",
+          "code": "ios/RepToday/RepToday/Services/Consistency/ConsistencyScore.swift:102-135",
+          "problem": null,
+          "shows": "weightedSum += weight * adherence"
+        }
+      ],
+      "day": 6,
+      "detail": "",
+      "draft": "drafts/posts/window-1/day-06.md",
+      "draft_sha256": "ca0a61dfb96d8aab3cd11d2a6cffc7b7d6ae216935c8eda4229208f42a5912f5",
+      "item": null,
+      "status": "blocked",
+      "unread": [],
+      "video": null,
+      "warnings": [
+        {
+          "blocks": false,
+          "detail": "its first line is 88 characters; about 70 show before it is cut",
+          "field": "YouTube Shorts title",
+          "rule": "config/platforms.json YouTube Shorts Title visible_chars"
+        }
+      ],
+      "withdrawn": null
+    },
+    {
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "USPTO trademark search for \"Rep Today\": open, and it blocks everything public",
+          "field": "",
+          "rule": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md line 9"
+        }
+      ],
+      "checklist": [
+        {
+          "line": 9,
+          "note": "open, and it blocks everything public",
+          "status": "blocks",
+          "title": "USPTO trademark search for \"Rep Today\""
+        },
+        {
+          "line": 10,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Decide on the reptoday.com domain ($3,895 buy-now at HugeDomains as fetched 2026-07-15) or commit to reptoday.app;"
+        },
+        {
+          "line": 11,
+          "note": "blocks site, submission only",
+          "status": "open",
+          "title": "Author the privacy policy"
+        },
+        {
+          "line": 12,
+          "note": "blocks nothing today, blocking submission of any emitting build only",
+          "status": "open",
+          "title": "Reconcile the landing FAQ, the event schema, and the privacy nutrition label with the shipped opt-out, before any build that genuinely collects ships."
+        },
+        {
+          "line": 13,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Account deletion path:"
+        },
+        {
+          "line": 17,
+          "note": "blocks only assets that use the 'under 100 milliseconds' claim",
+          "status": "open",
+          "title": "Device benchmark record for the \"under 100 milliseconds\" claim"
+        },
+        {
+          "line": 18,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Confirm final App Store Connect pricing, then regenerate App Store screenshot 05 (it states planned prices) and the site pricing section."
+        },
+        {
+          "line": 22,
+          "note": "blocks video publication only",
+          "status": "open",
+          "title": "Re-record the video voiceover with a human voice"
+        },
+        {
+          "line": 23,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Capture the real App Store submission screenshots from the built app"
+        },
+        {
+          "line": 24,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify every behavioral claim in the site/video/screenshots against the actual approved binary before launch day (the package was written against the PRD and test suite, pre-submission)."
+        },
+        {
+          "line": 25,
+          "note": "checked",
+          "status": "done",
+          "title": "Give the landing page exactly one low-pressure action"
+        },
+        {
+          "line": 26,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Consider replacing or augmenting App Store screenshot 4 with the return-after-a-gap screen (celebrated, easy comeback session) - it is implemented behavior and the strongest emotional differentiator;"
+        },
+        {
+          "line": 30,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Manually read the self-promotion rules"
+        },
+        {
+          "line": 31,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify X/Instagram handle availability for @reptoday (login walls blocked checks)."
+        },
+        {
+          "line": 35,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Instrument the funnel before TestFlight:"
+        },
+        {
+          "line": 36,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Read K5's install count off App Store Connect units, not off the telemetry `app_install` count."
+        },
+        {
+          "line": 37,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Check the pre-registered opt-out revisit trigger at each review."
+        },
+        {
+          "line": 38,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Pre-register the K8 wedge-comprehension rubric (written coding criteria, 25+ observed first runs, non-founder coding) before the first cohort, per the skeptic's fix."
+        }
+      ],
+      "claims": [
+        {
+          "claim": "A five-minute session counts as a full show-up.",
+          "code": "ios/RepToday/RepToday/Models/WorkoutLog.swift:22-23",
+          "problem": null,
+          "shows": "/// The actually-completed minutes exercised; a 5-minute session still counts as a full"
+        }
+      ],
+      "day": 7,
+      "detail": "",
+      "draft": "drafts/posts/window-1/day-07.md",
+      "draft_sha256": "67e200e63dcea73ca79e2a5eac30a827c911b81c70193c8dc7ab5df6eddcb536",
+      "item": null,
+      "status": "blocked",
+      "unread": [],
+      "video": null,
+      "warnings": [],
+      "withdrawn": null
+    }
+  ],
+  "kit": {
+    "angles": {
+      "path": "projects/RepToday/gtm/05-social-pmf/angles.md",
+      "sha256": "73649503bc9c48682a033b5dcd169f74dba60582a004c881f8e65cb91c0271b1"
+    },
+    "brand_rules": {
+      "path": "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json",
+      "sha256": "52be5ecc2b93d89e55bd7a475f34c8759576e799ad7e409d97b06d3a04cb0ad2"
+    },
+    "calendar": {
+      "path": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md",
+      "sha256": "ce350354ea269d4ec3ac9b89008cc8ba200af9cb13c0b4610c352e0215a35667"
+    },
+    "checklist": {
+      "path": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md",
+      "sha256": "634681943f2a97f34b5c6c0dc8b86c2b654b5b423cbd2affec0433955429d79d"
+    },
+    "competitors": {
+      "path": "projects/RepToday/gtm/01-research/",
+      "sha256": "c9acfd550573e9b1166305bac95f456fc868c995106d2e4b1cdd0fb1f48eb853"
+    },
+    "pairs": {
+      "path": "projects/RepToday/gtm/05-social-pmf/ab-pairs.md",
+      "sha256": "06ef86f0f3adf5c044ce3b27f5481e76e0969ce46eb86c55eda550422cb154ab"
+    },
+    "platforms": {
+      "path": "projects/RepToday/gtm/05-social-pmf/platform-assignment.md",
+      "sha256": "0de409ac9d62c7e849361802ff94ba0a4749ad349ff82b9c96b7673bf3d7ff31"
+    }
+  },
+  "kit_problems": {},
+  "lint": [
+    {
+      "detail": "the Hook has at most this many words",
+      "rule": "hook_max_words",
+      "status": "applied"
+    },
+    {
+      "detail": "no copy asks a question",
+      "rule": "hook_must_not_be_question",
+      "status": "applied"
+    },
+    {
+      "detail": "no copy uses a banned word",
+      "rule": "banned_words_in_hook",
+      "status": "applied"
+    },
+    {
+      "detail": "no copy uses social-proof language",
+      "rule": "banned_social_proof_in_hook",
+      "status": "applied"
+    },
+    {
+      "detail": "no copy uses a banned character",
+      "rule": "banned_characters_anywhere",
+      "status": "applied"
+    },
+    {
+      "detail": "no copy uses an emoji or other non-text symbol",
+      "rule": "no_emoji_in_hook",
+      "status": "applied"
+    },
+    {
+      "detail": "no copy has an all-caps word outside all_caps_allowlist",
+      "rule": "no_all_caps_words_in_hook",
+      "status": "applied"
+    },
+    {
+      "detail": "all-caps words the all-caps rule allows",
+      "rule": "all_caps_allowlist",
+      "status": "applied"
+    },
+    {
+      "detail": "the layout of the dry-run creative briefs; a post Draft has its own format",
+      "rule": "required_sections",
+      "status": "not applicable"
+    },
+    {
+      "detail": "screens shown as simulated; the kit's posts are real-device recordings",
+      "rule": "required_disclosure",
+      "status": "not applicable"
+    },
+    {
+      "detail": "the Angle's sourced pain links its source with this prefix",
+      "rule": "pain_source_url_must_start_with",
+      "status": "applied"
+    },
+    {
+      "detail": "brand-rules.json has no stock_phrases yet",
+      "rule": "stock phrases",
+      "status": "pending"
+    },
+    {
+      "detail": "brand-rules.json has no capped_words, capped_words_per_paragraph yet",
+      "rule": "capped words per paragraph",
+      "status": "pending"
+    },
+    {
+      "detail": "brand-rules.json has no long_sentence_words, long_sentence_commas yet",
+      "rule": "long sentences (warning)",
+      "status": "pending"
+    },
+    {
+      "detail": "brand-rules.json has no invented_proof_terms, invented_proof_quantities yet",
+      "rule": "invented proof",
+      "status": "pending"
+    },
+    {
+      "detail": "brand-rules.json has no fake_scarcity yet",
+      "rule": "fake scarcity",
+      "status": "pending"
+    },
+    {
+      "detail": "brand-rules.json has no lint_allow_phrases yet",
+      "rule": "allowed phrases",
+      "status": "pending"
+    },
+    {
+      "detail": "brand-rules.json has no loss_framing yet",
+      "rule": "loss framing",
+      "status": "pending"
+    }
+  ],
+  "plan": "Window 1's first sitting is not set in config/run.json, so this run prepares days 1 to 7 as the first batch, with no posting slot yet.",
+  "product": "RepToday",
+  "run": "20261019T133323Z-on-demand-c2e0",
+  "window": {
+    "day_1": null,
+    "first_sitting": null,
+    "number": 1,
+    "slot": null
+  }
+}

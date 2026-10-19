@@ -1,0 +1,466 @@
+{
+  "at": "2026-10-19T13:37:07.978914+00:00",
+  "days": [
+    {
+      "asset": null,
+      "asset_record": null,
+      "asset_sha256": null,
+      "blocks": [],
+      "bytes": null,
+      "checks": [],
+      "day": 1,
+      "detail": "no footage yet for shot d01-s1",
+      "edit": null,
+      "edit_sha256": null,
+      "facts": null,
+      "ready": false,
+      "reused": false,
+      "status": "no edit record",
+      "unread": [],
+      "why": "no footage yet for shot d01-s1"
+    },
+    {
+      "asset": null,
+      "asset_record": null,
+      "asset_sha256": null,
+      "blocks": [],
+      "bytes": null,
+      "checks": [],
+      "day": 2,
+      "detail": "no footage yet for shot d02-s1",
+      "edit": null,
+      "edit_sha256": null,
+      "facts": null,
+      "ready": false,
+      "reused": false,
+      "status": "no edit record",
+      "unread": [],
+      "why": "no footage yet for shot d02-s1"
+    },
+    {
+      "asset": null,
+      "asset_record": null,
+      "asset_sha256": null,
+      "blocks": [],
+      "bytes": null,
+      "checks": [],
+      "day": 3,
+      "detail": "no footage yet for shot d03-s1",
+      "edit": null,
+      "edit_sha256": null,
+      "facts": null,
+      "ready": false,
+      "reused": false,
+      "status": "no edit record",
+      "unread": [],
+      "why": "no footage yet for shot d03-s1"
+    },
+    {
+      "asset": null,
+      "asset_record": null,
+      "asset_sha256": null,
+      "blocks": [],
+      "bytes": null,
+      "checks": [],
+      "day": 4,
+      "detail": "no footage yet for shots d04-s1, d04-s2",
+      "edit": null,
+      "edit_sha256": null,
+      "facts": null,
+      "ready": false,
+      "reused": false,
+      "status": "no edit record",
+      "unread": [],
+      "why": "no footage yet for shots d04-s1, d04-s2"
+    },
+    {
+      "asset": null,
+      "asset_record": null,
+      "asset_sha256": null,
+      "blocks": [],
+      "bytes": null,
+      "checks": [],
+      "day": 5,
+      "detail": "no footage yet for shot d05-s1",
+      "edit": null,
+      "edit_sha256": null,
+      "facts": null,
+      "ready": false,
+      "reused": false,
+      "status": "no edit record",
+      "unread": [],
+      "why": "no footage yet for shot d05-s1"
+    },
+    {
+      "asset": null,
+      "asset_record": null,
+      "asset_sha256": null,
+      "blocks": [],
+      "bytes": null,
+      "checks": [],
+      "day": 6,
+      "detail": "no footage yet for shots d06-s1, d06-s2",
+      "edit": null,
+      "edit_sha256": null,
+      "facts": null,
+      "ready": false,
+      "reused": false,
+      "status": "no edit record",
+      "unread": [],
+      "why": "no footage yet for shots d06-s1, d06-s2"
+    },
+    {
+      "asset": null,
+      "asset_record": null,
+      "asset_sha256": null,
+      "blocks": [],
+      "bytes": null,
+      "checks": [],
+      "day": 7,
+      "detail": "no footage yet for shot d07-s1",
+      "edit": null,
+      "edit_sha256": null,
+      "facts": null,
+      "ready": false,
+      "reused": false,
+      "status": "no edit record",
+      "unread": [],
+      "why": "no footage yet for shot d07-s1"
+    }
+  ],
+  "footage": {
+    "clips": [],
+    "detail": "`/Users/hcho/Mandu/projects/RepToday/window-1` does not exist yet",
+    "folder": "window-1",
+    "ignored": [],
+    "place": "/Users/hcho/Mandu/projects/RepToday",
+    "status": "nothing there yet"
+  },
+  "plan": {
+    "fingerprint": "41ae19b846e56568747bf0cf1a25724ca34eb1992571f1a4716f77d0760ea494",
+    "item": "20261016-filming-plan-w1",
+    "jobs": [
+      {
+        "angle": "P01",
+        "days": [
+          1,
+          8
+        ],
+        "digest": "dcd8bb70180aabda2655a492683ecd3697c567954bd19273db41bb3000066ed3",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 23",
+        "key": "d01",
+        "pair": "AB-1",
+        "recut": false,
+        "shots": [
+          {
+            "id": "d01-s1",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 1,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "the Format: real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "the Format: no cuts",
+            "what": "screen record, cold open from home screen to ready session, no cuts, real time, on-screen text only"
+          }
+        ]
+      },
+      {
+        "angle": "P07",
+        "days": [
+          2,
+          9
+        ],
+        "digest": "3d421d107c91afd2599a08c5d2f2d518d4638f96cc0ce3f6f89aa1934e7efe91",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 29",
+        "key": "d02",
+        "pair": "AB-3",
+        "recut": true,
+        "shots": [
+          {
+            "id": "d02-s1",
+            "kind": "founder on camera",
+            "needs": "the Founder",
+            "number": 1,
+            "real_device": false,
+            "real_time": null,
+            "real_time_why": "",
+            "setup": "camera",
+            "uncut": false,
+            "uncut_why": "",
+            "what": "founder-on-camera (mandatory, first person), review shown as on-screen text while read"
+          }
+        ]
+      },
+      {
+        "angle": "P03",
+        "days": [
+          3,
+          10
+        ],
+        "digest": "5096d6d9e4cb9517a7ad30e4f06a3650b37e8d95d098ad9264916675b79a7e7f",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 25",
+        "key": "d03",
+        "pair": "AB-2",
+        "recut": false,
+        "shots": [
+          {
+            "id": "d03-s1",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 1,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: a screen recording is cut only where its shot list says, and it names no cut",
+            "what": "screen record: history view with a missed day, Consistency Score visibly dips and does not reset, on-screen text"
+          }
+        ]
+      },
+      {
+        "angle": "P02",
+        "days": [
+          4
+        ],
+        "digest": "8e60a7c5f47fba8c611e9f558bc2f674ecc93e7cefcc0f29623eb323fad7e7b1",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 24",
+        "key": "d04",
+        "pair": null,
+        "recut": false,
+        "shots": [
+          {
+            "id": "d04-s1",
+            "kind": "founder on camera",
+            "needs": "the Founder",
+            "number": 1,
+            "real_device": false,
+            "real_time": null,
+            "real_time_why": "",
+            "setup": "camera",
+            "uncut": false,
+            "uncut_why": "",
+            "what": "founder-on-camera (mandatory for first-person lines)"
+          },
+          {
+            "id": "d04-s2",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 2,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: a screen recording is cut only where its shot list says, and it names no cut",
+            "what": "screen-record insert of the return flow"
+          }
+        ]
+      },
+      {
+        "angle": "P11",
+        "days": [
+          5
+        ],
+        "digest": "5afc28a527dd361a86bfbdb13f8b558859bd6cdbd5d7bc166c3eec76fea0d36c",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 33",
+        "key": "d05",
+        "pair": null,
+        "recut": false,
+        "shots": [
+          {
+            "id": "d05-s1",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 1,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "the Format: no cuts",
+            "what": "screen record: toggle airplane mode in Control Center, cold open, ready session, no cuts"
+          }
+        ]
+      },
+      {
+        "angle": "P09",
+        "days": [
+          6,
+          13
+        ],
+        "digest": "b914dc22762045acc3b5ce159af58046b196e88cdd2a3c970a6ea2be098b6ce3",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 31",
+        "key": "d06",
+        "pair": "AB-6",
+        "recut": true,
+        "shots": [
+          {
+            "id": "d06-s1",
+            "kind": "founder on camera",
+            "needs": "the Founder",
+            "number": 1,
+            "real_device": false,
+            "real_time": null,
+            "real_time_why": "",
+            "setup": "camera",
+            "uncut": false,
+            "uncut_why": "",
+            "what": "founder-on-camera intro (mandatory, first person)"
+          },
+          {
+            "id": "d06-s2",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 2,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: a screen recording is cut only where its shot list says, and it names no cut",
+            "what": "screen record of a missed day and the score dipping without resetting"
+          }
+        ]
+      },
+      {
+        "angle": "P04",
+        "days": [
+          7
+        ],
+        "digest": "36e15e05df4608eda4a7813b554dede4ce6e35c7cb59909c40f0aa7a881a2972",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 26",
+        "key": "d07",
+        "pair": null,
+        "recut": false,
+        "shots": [
+          {
+            "id": "d07-s1",
+            "kind": "timelapse",
+            "needs": "the Founder",
+            "number": 1,
+            "real_device": false,
+            "real_time": false,
+            "real_time_why": "the Format: timelapse",
+            "setup": "camera",
+            "uncut": false,
+            "uncut_why": "",
+            "what": "timelapse of one real 5-minute session, phone timer visible, app screen shown at start and end"
+          }
+        ]
+      },
+      {
+        "angle": "P08",
+        "days": [
+          11
+        ],
+        "digest": "564823ac194b74f29e913a00c8fe34baa48e801e0bfcd21d5ec892de0a5d9030",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 30",
+        "key": "d11",
+        "pair": null,
+        "recut": false,
+        "shots": [
+          {
+            "id": "d11-s1",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 1,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: a screen recording is cut only where its shot list says, and it names no cut",
+            "what": "screen record scrolling a generated session where mobility blocks are visibly co-equal with strength, on-screen text"
+          }
+        ]
+      },
+      {
+        "angle": "P10",
+        "days": [
+          12
+        ],
+        "digest": "34aa772c2bffbd9e631da9afee393930e6ca6907abaa7f3cd37acdadf4a8cba4",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 32",
+        "key": "d12",
+        "pair": null,
+        "recut": false,
+        "shots": [
+          {
+            "id": "d12-s1",
+            "kind": "founder on camera",
+            "needs": "the Founder",
+            "number": 1,
+            "real_device": false,
+            "real_time": null,
+            "real_time_why": "",
+            "setup": "camera",
+            "uncut": false,
+            "uncut_why": "",
+            "what": "founder-on-camera line (mandatory, first person)"
+          },
+          {
+            "id": "d12-s2",
+            "kind": "device demo",
+            "needs": "a real device",
+            "number": 2,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: a screen recording is cut only where its shot list says, and it names no cut",
+            "what": "immediate cold-open demo, no chaperone sentence"
+          }
+        ]
+      }
+    ],
+    "sittings": [
+      {
+        "number": 1,
+        "setup": "device",
+        "shots": [
+          "d01-s1",
+          "d03-s1",
+          "d04-s2",
+          "d05-s1",
+          "d06-s2",
+          "d11-s1",
+          "d12-s2"
+        ]
+      },
+      {
+        "number": 2,
+        "setup": "camera",
+        "shots": [
+          "d02-s1",
+          "d04-s1",
+          "d06-s1",
+          "d07-s1",
+          "d12-s1"
+        ]
+      }
+    ],
+    "status": "approved",
+    "unplanned": [
+      {
+        "day": 14,
+        "why": "the calendar decides its Angle later (Double-down re-cut of the day-7 review's top angle; if nothing qualifies under the rules below, post P14 (no-signup demo))"
+      }
+    ]
+  },
+  "problem": "",
+  "product": "RepToday",
+  "run": "20261019T133323Z-on-demand-c2e0",
+  "tooling": {
+    "converts_hdr": true,
+    "ffmpeg": "/usr/local/bin/ffmpeg",
+    "ffprobe": "/usr/local/bin/ffprobe",
+    "problem": "",
+    "version": "ffmpeg version 7.1.1"
+  },
+  "window": 1
+}
