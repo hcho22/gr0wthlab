@@ -164,11 +164,11 @@
       },
       "waitlist": {
         "view": {
-          "local_path": null,
+          "local_path": "~/Library/Application Support/RepToday/waitlist/waitlist-view.json",
           "env": "GR0WTHLAB_WAITLIST_VIEW",
           "access": "read-only",
           "format": "src/dispatches/reptoday-waitlist.md",
-          "note": "The anonymous Waitlist view RepToday's Waitlist build produces, in the format its Dispatch request specifies. Only the launcher reads it, never the sandboxed agent, so it must lie outside this repository and every location above; the launcher refuses to start otherwise. null until the build lands (US-ME05), when a reviewed change sets its path."
+          "note": "The anonymous Waitlist view RepToday's Waitlist build produces, in the format its Dispatch request specifies. Only the launcher reads it, never the sandboxed agent, so it must lie outside this repository and every location above; the launcher refuses to start otherwise. RepToday's own job on the Founder's Mac rewrites it, owner-only, every hour the Mac is awake and at 06:30; gr0wthlab never writes there. Set by a reviewed change once the build landed on 2026-10-21 (US-ME05)."
         },
         "source_tags": ["tiktok", "youtube", "reddit", "network"],
         "fit_answers": ["lost-the-routine", "exercises-regularly", "never-had-a-routine"],

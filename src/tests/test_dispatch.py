@@ -347,8 +347,9 @@ class FilingTest(unittest.TestCase):
 
 
 class SettingsAgreeTest(unittest.TestCase):
-    def test_the_committed_waitlist_has_no_view_until_the_build_lands(self):
-        self.assertEqual(committed_rules(), RULES)
+    def test_the_committed_waitlist_counts_as_the_request_defines_from_the_view_reptoday_writes(self):
+        written = Path("/srv/home/Library/Application Support/RepToday/waitlist/waitlist-view.json")
+        self.assertEqual(committed_rules(), replace(RULES, view=written))
 
 
 if __name__ == "__main__":
