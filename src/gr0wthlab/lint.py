@@ -15,18 +15,18 @@ hyphens, dashes, or underscores). A hashtag runs words together, so there it mat
 is stricter: a false hit costs another hashtag, and a miss puts banned language in a public post. An allowed
 phrase is blanked in a hashtag only when it is the whole tag, so a longer tag is always checked in full.
 
-A post Draft's frozen Hook is planned test text, so brand-rules.json may exempt it from the Hook's word cap and its
-banned words (frozen_hooks_exempt_from): the cap is then skipped for a Hook that is its day's frozen Hook word for
-word, and a banned word is not counted inside the frozen Hook's own words, the whole Hook or one of its sentences,
-wherever the Draft repeats them. Every other word in the same field, and every other rule, is read as before, and
-nothing that is not a post Draft's frozen Hook is ever exempt.
+A post Draft's frozen Hooks are planned test text, so brand-rules.json may exempt them from the Hook's word cap and
+its banned words (frozen_hooks_exempt_from). The post Draft checks alone name the frozen Hooks each field may show
+(Copy.frozen): the cap is then skipped for a Hook that is one of them word for word, and a banned word is not counted
+inside their own words, a whole Hook or one of its sentences, wherever the field repeats them. Every other word in the
+same field, and every other rule, is read as before, and no other text is ever exempt.
 """
 
 from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 APPLIED = "applied"
 PENDING = "pending"
@@ -64,7 +64,7 @@ KNOWN_RULES = {
     "lint_allow_phrases": "phrases no word or phrase rule counts",
     "loss_framing": "no copy uses a loss-framed phrase",
     "sponsorship_asks": "no message to a creator asks for a sponsorship or a paid placement",
-    "frozen_hooks_exempt_from": "a post's frozen Hook, in its own words, is exempt from these Hook rules",
+    "frozen_hooks_exempt_from": "a post's frozen Hooks, in their own words, are exempt from these Hook rules",
 }
 # The rules frozen_hooks_exempt_from may name: the Hook's word cap and its banned words, and no other.
 FROZEN_EXEMPTABLE = ("hook_max_words", "banned_words_in_hook")
@@ -97,13 +97,16 @@ class RulesError(ValueError):
 class Copy:
     """One field of a post, named as the Founder sees it; a description, such as alt text, describes the video
     rather than speaking to the viewer, so the sentence-length warnings skip it, and a note, such as a beat's visual
-    action, is a filming note no viewer reads, so only the social-proof rule reads it."""
+    action, is a filming note no viewer reads, so only the social-proof rule reads it. frozen holds the frozen Hooks
+    the field may show, whose own words are exempt from the Hook rules frozen_hooks_exempt_from names; only the post
+    Draft checks set it."""
 
     field: str
     text: str
     hook: bool = False
     description: bool = False
     note: bool = False
+    frozen: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -254,7 +257,7 @@ class Rules:
         return rows
 
     def exempt_rules(self) -> list[str]:
-        """The Hook rules a post's frozen Hook is exempt from, in the order the lint knows them."""
+        """The Hook rules a post's frozen Hooks are exempt from, in the order the lint knows them."""
         return [rule for rule in FROZEN_EXEMPTABLE if rule in self.frozen_exempt]
 
     def pending(self) -> list[str]:
@@ -279,44 +282,44 @@ class Rules:
             text = pattern.sub(lambda match: " " * len(match.group(0)), text)
         return text
 
-    def check(self, copies: Sequence[Copy], frozen: str = "") -> list[Finding]:
-        """Every rule on every field. frozen is the post's frozen Hook, whose own words are exempt from the rules
-        frozen_hooks_exempt_from names; nothing else is ever exempt."""
+    def check(self, copies: Sequence[Copy]) -> list[Finding]:
+        """Every rule on every field. The own words of the frozen Hooks a field may show (Copy.frozen) are exempt
+        from the rules frozen_hooks_exempt_from names; nothing else is ever exempt."""
         findings = [Finding(key, "", "gr0wthlab cannot check this brand rule yet") for key in self.unknown]
         for copy in copies:
             if copy.text.strip():
-                findings += self.check_one(copy, frozen)
+                findings += self.check_one(copy)
         return findings
 
-    def exemptions(self, copies: Sequence[Copy], frozen: str) -> list[Finding]:
-        """What the frozen Hook's exemption let pass: each finding of an exempt rule that the same fields would carry
+    def exemptions(self, copies: Sequence[Copy]) -> list[Finding]:
+        """What the frozen Hooks' exemption let pass: each finding of an exempt rule that the same fields would carry
         without it, so a report can say where it applied. None of them blocks."""
         found = []
         for copy in copies:
             if copy.text.strip():
-                kept = {(finding.rule, finding.detail) for finding in self.check_one(copy, frozen)}
+                kept = {(finding.rule, finding.detail) for finding in self.check_one(copy)}
                 found += [
                     Finding(finding.rule, finding.field, EXEMPT + finding.detail, False)
-                    for finding in self.check_one(copy)
+                    for finding in self.check_one(replace(copy, frozen=()))
                     if finding.rule in self.frozen_exempt and (finding.rule, finding.detail) not in kept
                 ]
         return found
 
-    def unfrozen(self, text: str, frozen: str) -> str:
-        """The text with the frozen Hook's own words blanked out, as written (case kept): the whole Hook, and each
+    def unfrozen(self, text: str, frozen: Sequence[str]) -> str:
+        """The text with the frozen Hooks' own words blanked out, as written (case kept): each whole Hook, and each
         of its sentences, wherever the text repeats one as whole words."""
-        for part in [frozen, *sentences(frozen)]:
+        for part in [part for hook in frozen for part in (hook, *sentences(hook))]:
             words = plain(part).split()
             if words:
                 pattern = re.compile(BEFORE + r"\s+".join(re.escape(word) for word in words) + AFTER)
                 text = pattern.sub(lambda match: " " * len(match.group(0)), text)
         return text
 
-    def check_one(self, copy: Copy, frozen: str = "") -> list[Finding]:
+    def check_one(self, copy: Copy) -> list[Finding]:
         found: list[Finding] = []
         text = copy.text
         words_text = self.masked(plain(text))
-        frozen = frozen if frozen.strip() and not copy.note else ""
+        frozen = () if copy.note else tuple(hook for hook in copy.frozen if hook.strip())
         if frozen and "banned_words_in_hook" in self.frozen_exempt:
             # The frozen words go before the allowed phrases, so blanking an allowed phrase never hides one of them.
             banned_text = self.masked(self.unfrozen(plain(text), frozen))
@@ -334,7 +337,7 @@ class Rules:
         if copy.note:
             banned("banned_social_proof_in_hook", "social proof")
             return found
-        verbatim = bool(frozen) and plain(text).split() == plain(frozen).split()
+        verbatim = any(plain(text).split() == plain(hook).split() for hook in frozen)
         exempt_cap = verbatim and "hook_max_words" in self.frozen_exempt
         if copy.hook and "hook_max_words" in self.numbers and not exempt_cap:
             count = len(text.split())

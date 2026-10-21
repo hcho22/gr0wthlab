@@ -223,21 +223,22 @@ class TakeTest(TakeTestCase):
             "platform's fields, with the platform limits (`config/platforms.json`): passed.\n"
             "  Of these rules, each beat's visual action, a filming note, is read only for social-proof phrases; it is"
             " also checked for another Hook. The rest of what it shows is yours to judge in the Video table.\n"
-            "- Frozen test Hook: its own words passed only because `brand-rules.json` exempts them"
+            "- Frozen test Hooks: their own words passed only because `brand-rules.json` exempts them"
             f" (`frozen_hooks_exempt_from`): {exempt}.\n",
             text,
         )
         report = "\n".join(posts.report_lines(self.plan(3), outcome, ""))
         self.assertIn(
-            "Day 3's frozen test Hook, exempt by `brand-rules.json` (`frozen_hooks_exempt_from`) from:\n\n"
+            "Day 3's frozen test Hooks, exempt by `brand-rules.json` (`frozen_hooks_exempt_from`) from:\n\n"
             "- hook_max_words: the Hook has 10 words; at most 5 (Hook)\n"
             "- banned_words_in_hook: banned word 'resets' (Hook, beat 1 on-screen text, TikTok caption, YouTube Shorts"
             " title, YouTube Shorts description)",
             report,
         )
         self.assertIn(
-            "  The frozen Hook's own words are exempt from hook_max_words, banned_words_in_hook"
-            " (`frozen_hooks_exempt_from`)",
+            "  The frozen Hooks' own words are exempt from hook_max_words, banned_words_in_hook"
+            " (`frozen_hooks_exempt_from`), the whole Hook or one of its sentences: the day's frozen Hook wherever the"
+            " Draft repeats it, and in a re-cut pair's leg the pair's other Hook in a beat after the hook beat",
             "\n".join(posts.rule_summary(self.plan(3))),
         )
         self.assertNotIn("frozen_hooks_exempt_from.", "\n".join(posts.rule_summary(self.plan(3))))

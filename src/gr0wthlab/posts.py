@@ -891,7 +891,7 @@ def lint_lines(plan: Plan, verdict: Verdict) -> list[str]:
     lines = [line + ".", VISUAL_ACTIONS + " The rest of what it shows is yours to judge in the Video table."]
     if verdict.exempt:
         lines.append(
-            "- Frozen test Hook: its own words passed only because `brand-rules.json` exempts them"
+            "- Frozen test Hooks: their own words passed only because `brand-rules.json` exempts them"
             f" (`frozen_hooks_exempt_from`): {'; '.join(grouped(verdict.exempt, exemption=True))}."
         )
     return lines
@@ -1141,9 +1141,10 @@ def rule_summary(plan: Plan) -> list[str]:
     ]
     if exempt:
         lines.append(
-            f"  The frozen Hook's own words are exempt from {', '.join(exempt)} (`frozen_hooks_exempt_from`), wherever"
-            " the Draft repeats the whole Hook or one of its sentences; every other word, and every other rule, is"
-            " still checked."
+            f"  The frozen Hooks' own words are exempt from {', '.join(exempt)} (`frozen_hooks_exempt_from`), the whole"
+            " Hook or one of its sentences: the day's frozen Hook wherever the Draft repeats it, and in a re-cut pair's"
+            " leg the pair's other Hook in a beat after the hook beat; every other word, and every other rule, is still"
+            " checked."
         )
     if by["pending"]:
         lines.append(f"  Pending, until Mandu adds their lists: {', '.join(by['pending'])}.")
@@ -1312,7 +1313,7 @@ def report_lines(plan: Plan | None, outcome: Outcome | None, filing: str, proble
     for result in [result for result in outcome.results if result.verdict and result.verdict.exempt]:
         lines += [
             "",
-            f"Day {result.day}'s frozen test Hook, exempt by `brand-rules.json` (`frozen_hooks_exempt_from`) from:",
+            f"Day {result.day}'s frozen test Hooks, exempt by `brand-rules.json` (`frozen_hooks_exempt_from`) from:",
             "",
         ]
         lines += [f"- {line}" for line in grouped(result.verdict.exempt, exemption=True)]
