@@ -4,10 +4,10 @@ launcher offers it to the Founder.
 The checks follow US-ME08 and the kit in Mandu: the Draft is the calendar's day (its Angle, pair leg, and Product);
 its Hook is the frozen text, opens the video and every caption, and no other Angle's Hook appears; both platforms
 carry identical content; an A/B leg differs from its other leg only in the Hook; every field passes the brand-rules
-lint and the platform limits, and no visual action shows social proof the rules ban; no competitor is named; every
-behavioral claim it lists shows the code that supports it; and its status against the pre-publication checklist lets
-it be offered. Judgment (the words themselves, and which claims a Draft makes) is the agent's; these checks decide only
-what can be decided from text.
+lint, the frozen Hook's own words exempt only from the Hook rules brand-rules.json names, and the platform limits, and
+no visual action shows social proof the rules ban; no competitor is named; every behavioral claim it lists shows the
+code that supports it; and its status against the pre-publication checklist lets it be offered. Judgment (the words
+themselves, and which claims a Draft makes) is the agent's; these checks decide only what can be decided from text.
 """
 
 from __future__ import annotations
@@ -265,6 +265,7 @@ class Verdict:
     hook: FrozenHook | None = None
     angle: Angle | None = None
     unread: list[str] = field(default_factory=list)  # each source a block rests on that could not be read
+    exempt: list[Finding] = field(default_factory=list)  # each brand-rule finding the frozen Hook is exempt from
 
     @property
     def passed(self) -> bool:
@@ -392,7 +393,9 @@ def evaluate(
     if reference is not None and verdict.hook is not None:
         check_pair(draft, reference, reference_approved, context, opening, verdict)
     if context.rules is not None:
-        verdict.add(context.rules.check(draft.shown()))
+        frozen = verdict.hook.text if verdict.hook is not None else ""
+        verdict.add(context.rules.check(draft.shown(), frozen))
+        verdict.exempt = context.rules.exemptions(draft.shown(), frozen)
         check_pain(verdict.angle, context, verdict)
     check_competitors(draft, kit, context, verdict)
     check_claims(draft, context.code, verdict)

@@ -6,7 +6,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from gr0wthlab import drafts
+from gr0wthlab import drafts, lint
 from tests import fakes
 
 
@@ -319,6 +319,63 @@ class EvaluateTest(DraftTestCase):
         )
         verdict = self.check(fakes.draft(3))
         self.assertEqual(rules_of(verdict), ["projects/RepToday/gtm/08-redteam/pre-publication-checklist.md line 7"])
+
+
+class FrozenHookExemptionTest(DraftTestCase):
+    """Day 3's frozen Hook, "Skip a day and the score dips. It never resets.", against brand rules that cap a Hook
+    at 5 words and ban a word it holds."""
+
+    def strict(self, banned, exempt=None):
+        data = dict(self.context.rules.data, hook_max_words=5)
+        data["banned_words_in_hook"] = [*data["banned_words_in_hook"], banned]
+        if exempt is not None:
+            data["frozen_hooks_exempt_from"] = exempt
+        self.context.rules = lint.Rules(data)
+
+    def test_without_the_key_the_frozen_hook_is_blocked_as_before(self):
+        self.strict("resets")
+        verdict = self.check(fakes.draft(3))
+        self.assertEqual(rules_of(verdict), ["banned_words_in_hook", "hook_max_words"])
+        self.assertEqual(verdict.exempt, [])
+
+    def test_with_the_key_the_frozen_hook_passes_and_the_verdict_says_where_the_exemption_applied(self):
+        self.strict("resets", ["hook_max_words", "banned_words_in_hook"])
+        verdict = self.check(fakes.draft(3))
+        self.assertEqual(verdict.blocks, [])
+        self.assertEqual(
+            [(finding.rule, finding.field) for finding in verdict.exempt],
+            [
+                ("hook_max_words", "Hook"),
+                ("banned_words_in_hook", "Hook"),
+                ("banned_words_in_hook", "beat 1 on-screen text"),
+                ("banned_words_in_hook", "TikTok caption"),
+                ("banned_words_in_hook", "YouTube Shorts title"),
+                ("banned_words_in_hook", "YouTube Shorts description"),
+            ],
+        )
+
+    def test_a_banned_word_outside_the_frozen_hook_still_blocks(self):
+        # "score" is in the frozen Hook and also in the alt text, which is not the Hook's words.
+        self.strict("score", ["hook_max_words", "banned_words_in_hook"])
+        verdict = self.check(fakes.draft(3))
+        self.assertEqual(
+            sorted((finding.rule, finding.field) for finding in verdict.blocks),
+            [("banned_words_in_hook", "TikTok alt text"), ("banned_words_in_hook", "YouTube Shorts alt text")],
+        )
+
+    def test_a_hook_that_is_not_the_frozen_text_is_held_to_both_rules(self):
+        self.strict("resets", ["hook_max_words", "banned_words_in_hook"])
+        edited = "Skip a day and the score dips, but it never resets."
+        text = fakes.draft(3).replace(
+            "## Hook\n\nSkip a day and the score dips. It never resets.", f"## Hook\n\n{edited}"
+        )
+        verdict = self.check(text)
+        self.assertIn("frozen-hook", rules_of(verdict))
+        held = [finding for finding in verdict.blocks if finding.rule in lint.FROZEN_EXEMPTABLE]
+        self.assertEqual(
+            sorted((finding.rule, finding.field) for finding in held),
+            [("banned_words_in_hook", "Hook"), ("hook_max_words", "Hook")],
+        )
 
 
 if __name__ == "__main__":

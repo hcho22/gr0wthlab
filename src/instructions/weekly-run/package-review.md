@@ -16,6 +16,7 @@ Steps:
    A proposal that only brings a stale copy in line with its source is `new_angle: no`; where the A/B pairs file says leg A opens on its Angle's Hook, the Angle bank is the source and leg A the copy.
    Where a frozen Hook, signal, or kill criterion conflicts with another file, such as a brand rule, and no kept quote record supports changing the frozen one, the proposal puts the conflict to the Founder and changes nothing frozen: under Proposal, say what each file says and what would change on each side, leave the choice to the Founder, and say that the frozen one, if changed, would then enter as a new Angle in a later proposal, which needs sourced pain.
    Since it changes nothing frozen, it declares `new_angle: no` and needs no quote record: never leave a contradiction unwritten for want of one.
+   A Hook rule that `brand-rules.json` lists under `frozen_hooks_exempt_from` does not reach a frozen Hook's own words, so a frozen Hook that breaks only such a rule contradicts nothing; it is still held to every other rule.
 3. Check your items with the brief's check-incoming command.
 
 In your summary, say what each pass checked and what you found: each recorded outcome you traced, each name you checked across files, and each plan you checked against a rule; then say what you queued.

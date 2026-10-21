@@ -278,6 +278,141 @@ class NewRuleTypesTest(unittest.TestCase):
         self.assertEqual(rules_hit(rules, "It is simply seamless."), [])
 
 
+class FrozenHookExemptionTest(unittest.TestCase):
+    """brand-rules.json's frozen_hooks_exempt_from: a post's frozen Hook, in its own words, passes the Hook rules it
+    names, and nothing else does."""
+
+    FROZEN = "I built a workout app with no streaks, on purpose. Watch what happens when I miss a day."
+    BOTH = ["hook_max_words", "banned_words_in_hook"]
+
+    def rules(self, exempt=BOTH):
+        return lint.Rules(dict(HOOK_RULES, frozen_hooks_exempt_from=exempt))
+
+    def blocking(self, rules, copies, frozen=FROZEN):
+        return sorted({(finding.rule, finding.field) for finding in rules.check(copies, frozen) if finding.blocks})
+
+    def test_without_the_key_the_frozen_hook_is_held_to_every_rule_as_before(self):
+        rules = lint.Rules(HOOK_RULES)
+        copies = [lint.Copy("Hook", self.FROZEN, hook=True), lint.Copy("beat 1 on-screen text", self.FROZEN)]
+        self.assertEqual(rules.check(copies, self.FROZEN), rules.check(copies))
+        self.assertEqual(
+            self.blocking(rules, copies),
+            [
+                ("banned_words_in_hook", "Hook"),
+                ("banned_words_in_hook", "beat 1 on-screen text"),
+                ("hook_max_words", "Hook"),
+            ],
+        )
+        self.assertEqual(rules.exemptions(copies, self.FROZEN), [])
+        self.assertNotIn("frozen_hooks_exempt_from", {row.rule for row in rules.statuses()})
+
+    def test_the_frozen_hook_word_for_word_passes_the_word_cap_and_the_banned_words(self):
+        rules = self.rules()
+        copies = [
+            lint.Copy("Hook", self.FROZEN, hook=True),
+            lint.Copy("beat 1 on-screen text", self.FROZEN),
+            lint.Copy("beat 1 spoken line", "I built a workout app with no streaks, on purpose."),
+            lint.Copy("TikTok caption", self.FROZEN + "\nBuilt by one person. Not released yet."),
+            lint.Copy("YouTube Shorts title", self.FROZEN),
+        ]
+        self.assertEqual(self.blocking(rules, copies), [])
+        self.assertEqual(
+            [(finding.rule, finding.field, finding.blocks) for finding in rules.exemptions(copies, self.FROZEN)],
+            [
+                ("hook_max_words", "Hook", False),
+                ("banned_words_in_hook", "Hook", False),
+                ("banned_words_in_hook", "beat 1 on-screen text", False),
+                ("banned_words_in_hook", "beat 1 spoken line", False),
+                ("banned_words_in_hook", "TikTok caption", False),
+                ("banned_words_in_hook", "YouTube Shorts title", False),
+            ],
+        )
+        self.assertEqual(
+            rules.exemptions(copies, self.FROZEN)[0].line(),
+            "hook_max_words: frozen test Hook, exempt by brand-rules.json frozen_hooks_exempt_from: the Hook has 18"
+            " words; at most 12 (Hook)",
+        )
+        self.assertEqual(
+            {row.rule: row.detail for row in rules.statuses()}["frozen_hooks_exempt_from"],
+            "a post's frozen Hook, in its own words, is exempt from these Hook rules: hook_max_words,"
+            " banned_words_in_hook",
+        )
+
+    def test_a_hook_that_is_not_frozen_text_is_held_to_both_rules(self):
+        rules = self.rules()
+        hook = "Most workout apps open with a question and no streak. This one opens with it."
+        for frozen in ("", self.FROZEN, "Most workout apps open with a question. This one opens with the workout."):
+            with self.subTest(frozen=frozen):
+                self.assertEqual(
+                    self.blocking(rules, [lint.Copy("Hook", hook, hook=True)], frozen),
+                    [("banned_words_in_hook", "Hook"), ("hook_max_words", "Hook")],
+                )
+        thirteen = "Most workout apps open with a question. This one opens with the workout."
+        self.assertEqual(
+            self.blocking(rules, [lint.Copy("Hook", thirteen, hook=True)], ""), [("hook_max_words", "Hook")]
+        )
+        self.assertEqual(rules.exemptions([lint.Copy("Hook", hook, hook=True)], self.FROZEN), [])
+
+    def test_an_edited_frozen_hook_keeps_the_word_cap_and_its_own_case(self):
+        rules = self.rules()
+        for edited in (self.FROZEN + " Really.", self.FROZEN.lower(), self.FROZEN.replace("I miss", "I skip")):
+            with self.subTest(edited=edited):
+                self.assertIn(("hook_max_words", "Hook"), self.blocking(rules, [lint.Copy("Hook", edited, hook=True)]))
+        lowered = [lint.Copy("TikTok caption", self.FROZEN.lower())]
+        self.assertEqual(self.blocking(rules, lowered), [("banned_words_in_hook", "TikTok caption")])
+
+    def test_a_banned_word_outside_the_frozen_words_still_blocks_in_the_same_field(self):
+        rules = self.rules()
+        caption = lint.Copy("TikTok caption", self.FROZEN + "\nNo streak to keep, no grind.")
+        self.assertEqual(self.blocking(rules, [caption]), [("banned_words_in_hook", "TikTok caption")])
+        self.assertEqual(
+            sorted(finding.detail for finding in rules.check([caption], self.FROZEN) if finding.blocks),
+            ["banned word 'grind'", "banned word 'streak'"],
+        )
+        self.assertEqual(rules.exemptions([caption], self.FROZEN), [])
+        hashtags = lint.Copy("TikTok hashtags", "#nostreaks")
+        self.assertEqual(self.blocking(rules, [hashtags]), [("banned_words_in_hook", "TikTok hashtags")])
+        note = lint.Copy("beat 1 visual action", self.FROZEN + " Five stars on screen.", note=True)
+        self.assertEqual(self.blocking(rules, [note]), [("banned_social_proof_in_hook", "beat 1 visual action")])
+
+    def test_every_other_hook_rule_still_applies_to_the_frozen_hook(self):
+        rules = lint.Rules(dict(full_rules().data, frozen_hooks_exempt_from=self.BOTH))
+        frozen = "Rated five stars by thousands of users? Try it NOW \U0001f525"
+        found = {finding.rule for finding in rules.check([lint.Copy("Hook", frozen, hook=True)], frozen)}
+        self.assertEqual(
+            found,
+            {
+                "hook_must_not_be_question",
+                "banned_social_proof_in_hook",
+                "no_emoji_in_hook",
+                "no_all_caps_words_in_hook",
+                "invented_proof_terms",
+            },
+        )
+
+    def test_only_the_rules_the_key_names_are_exempt(self):
+        copies = [lint.Copy("Hook", self.FROZEN, hook=True)]
+        self.assertEqual(self.blocking(self.rules(["hook_max_words"]), copies), [("banned_words_in_hook", "Hook")])
+        self.assertEqual(self.blocking(self.rules(["banned_words_in_hook"]), copies), [("hook_max_words", "Hook")])
+        self.assertEqual(
+            self.blocking(self.rules([]), copies), [("banned_words_in_hook", "Hook"), ("hook_max_words", "Hook")]
+        )
+
+    def test_a_malformed_key_or_any_other_rule_name_makes_the_rules_unusable(self):
+        for value in (
+            "hook_max_words",
+            ["hook_must_not_be_question"],
+            ["banned_words_in_hook", "stock_phrases"],
+            ["Hook_Max_Words"],
+            [12],
+            {"hook_max_words": True},
+            None,
+            True,
+        ):
+            with self.subTest(value=value), self.assertRaisesRegex(lint.RulesError, "frozen_hooks_exempt_from"):
+                lint.Rules(dict(HOOK_RULES, frozen_hooks_exempt_from=value))
+
+
 class PlatformTest(unittest.TestCase):
     def setUp(self):
         self.platforms = lint.load_platforms(json.loads((fakes.REPO / "config/platforms.json").read_text()))

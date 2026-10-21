@@ -170,6 +170,7 @@ GOOD = {
     ("package-review", 8): {},
     ("package-review", 9): {},
     ("package-review", 10): dict(NAME, **PAIR),
+    ("package-review", 11): {},
     ("filming", 2): cut(1),
     ("filming", 14): cut(7),
     ("filming", 15): cut(2),

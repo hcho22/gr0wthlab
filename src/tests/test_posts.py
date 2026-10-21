@@ -201,6 +201,52 @@ class TakeTest(TakeTestCase):
             text,
         )
 
+    def test_a_frozen_hook_the_brand_rules_exempt_is_offered_and_the_item_and_report_say_so(self):
+        data = dict(self.context.rules.data, hook_max_words=5)
+        data["banned_words_in_hook"] = [*data["banned_words_in_hook"], "resets"]
+        self.context.rules = lint.Rules(data)
+        self.write(3, fakes.draft(3))
+        before = self.take(3)
+        self.assertEqual([result.status for result in before.results], [posts.BLOCKED])
+        self.assertNotIn("frozen test Hook", "\n".join(posts.report_lines(self.plan(3), before, "")))
+        self.context.rules = lint.Rules(dict(data, frozen_hooks_exempt_from=["hook_max_words", "banned_words_in_hook"]))
+        outcome = self.take(3, run="RUN2")
+        [result] = outcome.results
+        self.assertEqual(result.status, posts.QUEUED, result.verdict.blocks)
+        text = (self.store.root / self.ledger.entries[result.item]["file"]).read_text(encoding="utf-8")
+        self.assertEqual(exchange.check_item(text, PRODUCTS, published=True).problems, [])
+        exempt = (
+            "hook_max_words: the Hook has 10 words; at most 5 (Hook); banned_words_in_hook: banned word 'resets' (Hook,"
+            " beat 1 on-screen text, TikTok caption, YouTube Shorts title, YouTube Shorts description)"
+        )
+        self.assertIn(
+            "platform's fields, with the platform limits (`config/platforms.json`): passed.\n"
+            "  Of these rules, each beat's visual action, a filming note, is read only for social-proof phrases; it is"
+            " also checked for another Hook. The rest of what it shows is yours to judge in the Video table.\n"
+            "- Frozen test Hook: its own words passed only because `brand-rules.json` exempts them"
+            f" (`frozen_hooks_exempt_from`): {exempt}.\n",
+            text,
+        )
+        report = "\n".join(posts.report_lines(self.plan(3), outcome, ""))
+        self.assertIn(
+            "Day 3's frozen test Hook, exempt by `brand-rules.json` (`frozen_hooks_exempt_from`) from:\n\n"
+            "- hook_max_words: the Hook has 10 words; at most 5 (Hook)\n"
+            "- banned_words_in_hook: banned word 'resets' (Hook, beat 1 on-screen text, TikTok caption, YouTube Shorts"
+            " title, YouTube Shorts description)",
+            report,
+        )
+        self.assertIn(
+            "  The frozen Hook's own words are exempt from hook_max_words, banned_words_in_hook"
+            " (`frozen_hooks_exempt_from`)",
+            "\n".join(posts.rule_summary(self.plan(3))),
+        )
+        self.assertNotIn("frozen_hooks_exempt_from.", "\n".join(posts.rule_summary(self.plan(3))))
+        record = posts.findings_json(result.verdict)
+        self.assertEqual(
+            [(finding["rule"], finding["field"], finding["blocks"]) for finding in record["exempt"]][:2],
+            [("hook_max_words", "Hook", False), ("banned_words_in_hook", "Hook", False)],
+        )
+
     def test_a_draft_listing_a_claim_no_code_supports_is_never_offered_beside_a_claim_the_code_does_support(self):
         text = (fakes.EXAMPLES / "files/drafts/day-02-unsupported-hook.md").read_text(encoding="utf-8")
         self.write(2, text)
