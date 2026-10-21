@@ -33,39 +33,22 @@ Its inputs were copies, and nothing was written in `~/Mandu`, `~/gr0wthlab`, or 
 - `<scratch>/proof/drafts/`: copies of `~/gr0wthlab/workspace/drafts/posts/window-1/day-01.md` to `day-07.md`, which `cmp` found identical to the production clone's files at 15:53.
 - Claims were checked against RepToday `main` at `6249e4a`, read with `git show`.
 
-The Mandu edit, against `~/Mandu/projects/RepToday/gtm/` as its working files stood on 2026-10-21:
+The Mandu edit, as a diff with no context lines, against `~/Mandu/projects/RepToday/gtm/` as its working files stood on 2026-10-21:
 
 ```diff
 --- a/projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json
 +++ b/projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json
-@@ -19,6 +19,7 @@
-     "leaderboard",
-     "xp"
-   ],
+@@ -21,0 +22 @@
 +  "frozen_hooks_exempt_from": ["hook_max_words", "banned_words_in_hook"],
-   "banned_social_proof_in_hook": [
-     "stars",
-     "reviews",
-@@ -239,6 +240,7 @@
-   "notes": [
-     "Banned words are checked in the hook only: the pain-state section quotes users verbatim and may legitimately name mechanics like streaks (voice rule 8: name the mechanic, don't celebrate it).",
-     "The question ban follows brand section 10 (never asks the user a question in an ad); the one approved question line in the do/don't table is deliberately excluded from this seed bank to keep the lint strict.",
+@@ -242 +243,2 @@
 -    "No invented stats, ratings, or testimonials may appear anywhere (brand section 10: never fabricates social proof)."
 +    "No invented stats, ratings, or testimonials may appear anywhere (brand section 10: never fabricates social proof).",
 +    "Frozen PMF Hooks, the planned Hooks in ../../05-social-pmf/angles.md and ab-pairs.md, are exempt from hook_max_words and banned_words_in_hook in their own words (frozen_hooks_exempt_from), by the founder's decision of 2026-10-21, so the 14-day test compares the Hooks as planned; every other Hook and all other copy still follow both rules, and every other rule still applies to frozen Hooks."
-   ]
- }
 --- a/projects/RepToday/gtm/09-extras/marketing-agent/BUILD-SPEC.md
 +++ b/projects/RepToday/gtm/09-extras/marketing-agent/BUILD-SPEC.md
-@@ -48,7 +48,7 @@
- 
- 1. **Angle bank.** 5 to 8 seed angles, each tracing to a real mined pain in `../../01-research/pain-point-frequency.md` with its real source URL and verbatim quote. New angles enter only with a source; no angle may be invented from vibes.
- 2. **Variant generation.** `generate` emits one creative-brief markdown stub per angle into `out/`, carrying the hook, format, platform, pre-registered success signal, and kill criterion. A/B pairs vary only the hook, so the variable stays isolated.
+@@ -51 +51 @@
 -3. **Brand-QA pass.** Two layers. The runnable layer is `qa`: a checklist lint against `brand-rules.json` (banned words like grind, beast mode, no excuses, streak; hook of 12 words or fewer; pain state named; source URL present; no questions, all-caps, emojis, or social-proof language in hooks; disclosure line present). The second layer, once assets are visual, is a vision-model review of the rendered asset against `../../02-brand/brand-guidelines.md` for palette, type, layout, and imagery rules; it is described here and not yet built.
 +3. **Brand-QA pass.** Two layers. The runnable layer is `qa`: a checklist lint against `brand-rules.json` (banned words like grind, beast mode, no excuses, streak; hook of 12 words or fewer; pain state named; source URL present; no questions, all-caps, emojis, or social-proof language in hooks; disclosure line present). Frozen PMF Hooks, the planned Hooks in `../../05-social-pmf/angles.md` and `ab-pairs.md`, are exempt from the 12-word length check and the banned-word check by the founder's decision of 2026-10-21 (`frozen_hooks_exempt_from` in `brand-rules.json`); every other hook and all other copy still follow both. The second layer, once assets are visual, is a vision-model review of the rendered asset against `../../02-brand/brand-guidelines.md` for palette, type, layout, and imagery rules; it is described here and not yet built.
- 4. **Creative log.** Every asset's structured JSON record (schema below) in `out/creative-log.json`, so a future system can learn which inputs won. This is a flat file, not a warehouse.
- 5. **Publish adapter.** A seam only. The `PublishAdapter.publish()` stub raises `NotImplementedError` with a message naming the founder decision required. Per-platform adapters (Apple Ads first, per the channel plan; Meta later) get written only after that decision.
- 6. **Results ingestion.** Designed SKAN-aware from day one, because iOS attribution is aggregated, campaign-level, delayed 24 hours to 60 days, and threshold-gated by crowd anonymity (`../../01-research/ios-attribution-and-paid-vs-organic.md`). The schema therefore stores campaign-level cost, postback counts, and coarse signal values with an explicit measured window, and never user-level rows. At $500/mo, most reads will sit below crowd-anonymity and learning-phase thresholds, so the scoreboard must render "insufficient data" as its own state, never as a zero.
 ```
 
 The captain decided this exemption on 2026-10-21; firstmate brings him this exact edit to approve, and his Mandu applies it.
