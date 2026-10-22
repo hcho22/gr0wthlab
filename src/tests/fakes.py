@@ -766,7 +766,7 @@ def keep_days(mandu: Path, *days: int) -> None:
 
 def kit_context(code_checkout: Path, env: dict[str, str], mandu: Path | None = None):
     """The post-Draft checks' context for the synthetic kit, as a run builds it, with the given code checkout."""
-    from gr0wthlab import codebase, drafts, lint, messages, posts
+    from gr0wthlab import codebase, drafts, lint, posts
 
     registry = json.loads((REPO / "config" / "products.json").read_text(encoding="utf-8"))
     product, roles = posts.kit_config(registry)
@@ -776,9 +776,7 @@ def kit_context(code_checkout: Path, env: dict[str, str], mandu: Path | None = N
     code = codebase.open_code(product, code_checkout, "main", env)
     context = drafts.Context(product, 1, parsed, rules, problem, platforms, code, dict(roles))
     entry = next(item for item in registry["products"] if item["name"] == product)
-    for tag, (link, request) in messages.source_links(REPO, [product], entry["waitlist"]["source_tags"]).items():
-        context.source_links[tag] = link
-        context.links_from = request
+    context.source_tags = tuple(entry["waitlist"]["source_tags"])
     return context
 
 

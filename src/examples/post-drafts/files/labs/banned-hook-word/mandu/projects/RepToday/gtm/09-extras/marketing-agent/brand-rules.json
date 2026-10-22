@@ -22,6 +22,6 @@
   "lint_allow_phrases": ["no card required"],
   "loss_framing": ["before it's too late", "you'll regret", "falling behind", "don't break your", "stop wasting"],
   "sponsorship_asks": ["sponsor", "sponsorship", "paid partnership", "promo code", "affiliate", "your rates", "shoutout"],
-  "caption_call_to_action": {"line": "Join the waitlist: {link}", "sources": {"TikTok": "tiktok", "YouTube Shorts": "youtube"}},
+  "caption_call_to_action": {"line": "Join the waitlist: {link}", "links": {"TikTok": "reptoday.app/tiktok", "YouTube Shorts": "reptoday.app/youtube"}},
   "notes": ["Synthetic."]
 }

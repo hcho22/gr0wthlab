@@ -218,7 +218,7 @@ class TakeTest(TakeTestCase):
             "- Call to action: every caption ends with its platform's line from"
             " `projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json` (`caption_call_to_action`), word for"
             " word, as its last line: TikTok `Join the waitlist: reptoday.app/tiktok`; YouTube Shorts `Join the"
-            " waitlist: reptoday.app/youtube`, the Source links of `src/dispatches/reptoday-waitlist.md`.\n"
+            " waitlist: reptoday.app/youtube`.\n"
             "  It is the post's one call to action and only link: no other line of a caption, and nothing in the Hook,"
             " the beats, a title, hashtags, or alt text, carries a link or its words.\n"
         )

@@ -4,7 +4,7 @@ launcher offers it to the Founder.
 The checks follow US-ME08 and the kit in Mandu: the Draft is the calendar's day (its Angle, pair leg, and Product);
 its Hook is the frozen text, opens the video and every caption, and no other Angle's Hook appears; both platforms
 carry identical content, apart from the call-to-action line that ends each caption when brand-rules.json gives one,
-which carries its platform's Waitlist Source link and is the post's one call to action and only link; an A/B leg
+which carries its platform's Waitlist link and is the post's one call to action and only link; an A/B leg
 differs from its other leg only in the Hook; every field passes the brand-rules lint, the own words of each frozen
 Hook it may show exempt only from the Hook rules brand-rules.json names, and the platform limits, and no visual action
 shows social proof the rules ban; no competitor is named; every behavioral claim it lists shows the code that supports
@@ -298,8 +298,7 @@ class Context:
     platforms: Mapping[str, Platform]
     code: Code
     paths: Mapping[str, str]  # kit role: its Mandu-relative path, for citations
-    source_links: Mapping[str, str] = field(default_factory=dict)  # each Waitlist Source tag: its link
-    links_from: str = ""  # the reviewed Waitlist Dispatch request that defines those links
+    source_tags: tuple[str, ...] = ()  # the Product registry's Waitlist Source tags, which every Waitlist link names
 
 
 def claim_pattern(claim: str) -> re.Pattern:
@@ -513,20 +512,38 @@ def check_platforms(draft: PostDraft, context: Context, verdict: Verdict) -> Non
             )
 
 
+def source_tag(link: str, context: Context) -> str | None:
+    """The Waitlist Source a link names: its one path segment, when that is a Source tag of the Product registry."""
+    _, slash, path = re.sub(r"^https?://", "", link, flags=re.IGNORECASE).rstrip("/").partition("/")
+    tag = path.casefold()
+    return tag if slash and tag in context.source_tags else None
+
+
 def call_to_action_lines(context: Context) -> tuple[dict[str, str], list[str]]:
-    """Each test platform's call-to-action line, brand-rules.json's words with the link the Waitlist Dispatch request
-    defines for the platform's Source, and why a platform has none; both empty when brand-rules.json gives no line."""
+    """Each test platform's call-to-action line, brand-rules.json's words with the Waitlist link it gives the
+    platform, and why a platform has none: no link, a link that names no Waitlist Source, or another platform's link.
+    Both are empty when brand-rules.json gives no line."""
     action = context.rules.call_to_action if context.rules else None
     lines: dict[str, str] = {}
     problems: list[str] = []
+    tags = ", ".join(context.source_tags) or "none"
     for platform in context.kit.platforms if action else ():
-        tag = action.sources.get(platform)
-        link = context.source_links.get(tag) if tag else None
-        if tag is None:
-            problems.append(f"brand-rules.json caption_call_to_action names no Waitlist Source for {platform}")
-        elif link is None:
-            where = f"`{context.links_from}`" if context.links_from else "no reviewed Waitlist Dispatch request"
-            problems.append(f"{where} defines no Source link for `{tag}`, the Waitlist Source of {platform}")
+        link = action.links.get(platform)
+        shared = [
+            other for other, theirs in action.links.items() if other != platform and same_link(theirs, link or "")
+        ]
+        if link is None:
+            problems.append(f"brand-rules.json caption_call_to_action gives no Waitlist link for {platform}")
+        elif source_tag(link, context) is None:
+            problems.append(
+                f"brand-rules.json caption_call_to_action gives {platform} `{link}`, which names no Waitlist Source:"
+                f" its path must be one of the Product registry's Source tags ({tags})"
+            )
+        elif shared:
+            problems.append(
+                f"brand-rules.json caption_call_to_action gives {platform} the same link as {', '.join(shared)},"
+                f" `{link}`, so sign-ups from the two could not be told apart"
+            )
         else:
             lines[platform] = action.with_link(link)
     return lines, problems
@@ -553,7 +570,6 @@ def check_call_to_action(draft: PostDraft, context: Context, verdict: Verdict) -
     for problem in problems:
         verdict.block(CALL_TO_ACTION, problem)
     wording = [words_pattern(words, plural=False) for words in action.wording()]
-    tags = {link: tag for tag, link in context.source_links.items()}
 
     def stray(text: str) -> str:
         """Everything in a text that reads as a link or as the call-to-action line's own words, quoted, or nothing."""
@@ -581,8 +597,9 @@ def check_call_to_action(draft: PostDraft, context: Context, verdict: Verdict) -
         last = lines[-1] if lines else ""
         line = expected.get(platform)
         if line is not None and norm(last) != norm(line):
-            other = next((tags[link] for link in tags for written in links(last) if same_link(written, link)), None)
-            if other is not None and other != action.sources.get(platform):
+            own = source_tag(action.links[platform], context)
+            other = next(filter(None, (source_tag(written, context) for written in links(last))), None)
+            if other is not None and other != own:
                 why = f"ends with the Source link for `{other}`: {last!r}"
             elif stray(last):
                 why = f"ends with {last!r}, not the line brand-rules.json caption_call_to_action words"

@@ -440,7 +440,8 @@ class FrozenHookExemptionTest(unittest.TestCase):
 
 
 class CallToActionTest(unittest.TestCase):
-    LINE = {"line": "Join the waitlist: {link}", "sources": {"TikTok": "tiktok", "YouTube Shorts": "youtube"}}
+    LINKS = {"TikTok": "reptoday.app/tiktok", "YouTube Shorts": "reptoday.app/youtube"}
+    LINE = {"line": "Join the waitlist: {link}", "links": LINKS}
 
     def test_without_the_key_no_line_is_given(self):
         self.assertIsNone(lint.Rules(HOOK_RULES).call_to_action)
@@ -451,7 +452,7 @@ class CallToActionTest(unittest.TestCase):
         action = rules.call_to_action
         self.assertEqual(action.with_link("reptoday.app/tiktok"), "Join the waitlist: reptoday.app/tiktok")
         self.assertEqual(action.wording(), ["Join the waitlist"])
-        self.assertEqual(dict(action.sources), {"TikTok": "tiktok", "YouTube Shorts": "youtube"})
+        self.assertEqual(dict(action.links), self.LINKS)
         self.assertIn(
             lint.RuleStatus("caption_call_to_action", lint.APPLIED, lint.KNOWN_RULES["caption_call_to_action"]),
             rules.statuses(),
@@ -475,13 +476,16 @@ class CallToActionTest(unittest.TestCase):
         for value in (
             "Join the waitlist: {link}",
             {"line": "Join the waitlist"},
-            {"line": "Join the waitlist: reptoday.app/tiktok", "sources": self.LINE["sources"]},
-            {"line": "{link}", "sources": self.LINE["sources"]},
-            {"line": "Join {link} or {link}", "sources": self.LINE["sources"]},
-            {"line": "Join the waitlist:\n{link}", "sources": self.LINE["sources"]},
-            {"line": "Join the waitlist: {link}", "sources": {}},
-            {"line": "Join the waitlist: {link}", "sources": {"TikTok": "TikTok"}},
-            {"line": "Join the waitlist: {link}", "sources": ["tiktok"]},
+            {"line": "Join the waitlist: reptoday.app/tiktok", "links": self.LINKS},
+            {"line": "{link}", "links": self.LINKS},
+            {"line": "Join {link} or {link}", "links": self.LINKS},
+            {"line": "Join the waitlist:\n{link}", "links": self.LINKS},
+            {"line": "Join the waitlist: {link}", "links": {}},
+            {"line": "Join the waitlist: {link}", "links": {"TikTok": "tiktok"}},
+            {"line": "Join the waitlist: {link}", "links": {"TikTok": "https://reptoday.app/tiktok"}},
+            {"line": "Join the waitlist: {link}", "links": {"TikTok": "reptoday.app/tiktok and more"}},
+            {"line": "Join the waitlist: {link}", "links": ["reptoday.app/tiktok"]},
+            {"line": "Join the waitlist: {link}", "sources": {"TikTok": "tiktok"}},
             dict(self.LINE, extra=True),
             None,
             [],

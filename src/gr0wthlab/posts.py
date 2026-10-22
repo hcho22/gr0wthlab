@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from pathlib import Path
 
-from . import exchange, kit, lint, messages, schedule
+from . import exchange, kit, lint, schedule
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import Boundary, ConfigError, load_json
 from .codebase import CLT_GIT, COMMIT, Code, open_code
@@ -352,10 +352,7 @@ def context_plan(
     if location is None:
         code.problem = f"the Product registry names no {product} checkout"
     context = Context(product, config.window.number, parsed, rules, rules_problem, platforms, code, dict(roles))
-    tags = [str(tag) for tag in (entry.get("waitlist") or {}).get("source_tags") or ()]
-    for tag, (link, request) in messages.source_links(repo_root, [product], tags).items():
-        context.source_links[tag] = link
-        context.links_from = request
+    context.source_tags = tuple(str(tag) for tag in (entry.get("waitlist") or {}).get("source_tags") or ())
     plan = Plan(
         product,
         config.window,
@@ -1185,9 +1182,9 @@ def call_to_action_summary(plan: Plan) -> list[str]:
     lines, problems = call_to_action_lines(plan.context)
     found = [
         f"- Call to action: every caption ends with its platform's line from `{plan.context.paths['brand_rules']}`"
-        f" (`caption_call_to_action`), word for word, as its last line: "
-        + "; ".join(f"{platform} `{line}`" for platform, line in lines.items())
-        + (f", the Source links of `{plan.context.links_from}`." if lines else "."),
+        f" (`caption_call_to_action`), word for word, as its last line"
+        + (": " + "; ".join(f"{platform} `{line}`" for platform, line in lines.items()) if lines else "")
+        + ".",
         "  It is the post's one call to action and only link: no other line of a caption, and nothing in the Hook,"
         " the beats, a title, hashtags, or alt text, carries a link or its words.",
     ]

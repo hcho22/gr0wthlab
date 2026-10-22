@@ -453,8 +453,8 @@ class RecutPairFrozenHookExemptionTest(DraftTestCase):
 
 
 class CallToActionTest(DraftTestCase):
-    """The synthetic brand rules give the line "Join the waitlist: {link}", with TikTok's Source tiktok and YouTube
-    Shorts' youtube, whose links are the reviewed Waitlist Dispatch request's."""
+    """The synthetic brand rules give the line "Join the waitlist: {link}", with TikTok's link reptoday.app/tiktok and
+    YouTube Shorts' reptoday.app/youtube, each naming one of the Product registry's Waitlist Source tags."""
 
     TIKTOK = "Join the waitlist: reptoday.app/tiktok"
     YOUTUBE = "Join the waitlist: reptoday.app/youtube"
@@ -474,7 +474,7 @@ class CallToActionTest(DraftTestCase):
             drafts.call_to_action_lines(self.context),
             ({"TikTok": self.TIKTOK, "YouTube Shorts": self.YOUTUBE}, []),
         )
-        self.assertEqual(self.context.links_from, "src/dispatches/reptoday-waitlist.md")
+        self.assertEqual(self.context.source_tags, ("tiktok", "youtube", "reddit", "network"))
         clean = fakes.draft(3)
         self.assertTrue(clean.count(self.TIKTOK) == clean.count(self.YOUTUBE) == 1)
         self.assertTrue(self.check(clean).passed)
@@ -581,26 +581,34 @@ class CallToActionTest(DraftTestCase):
         verdict = self.check(fakes.draft(8), missing)
         self.assertEqual(self.blocking(verdict), [("pair-legs", "TikTok caption")])
 
-    def test_a_platform_with_no_source_or_no_link_blocks_every_draft(self):
+    def test_a_platform_with_no_link_or_one_that_names_no_source_or_another_s_blocks_every_draft(self):
         line = self.context.rules.data["caption_call_to_action"]
-        for sources, links, problem in (
+        tags = "its path must be one of the Product registry's Source tags (tiktok, youtube, reddit, network)"
+        cases = (
             (
-                {"TikTok": "tiktok"},
-                None,
-                "brand-rules.json caption_call_to_action names no Waitlist Source for YouTube Shorts",
+                {"TikTok": "reptoday.app/tiktok"},
+                "brand-rules.json caption_call_to_action gives no Waitlist link for YouTube Shorts",
             ),
             (
-                None,
-                {"tiktok": "reptoday.app/tiktok"},
-                "`src/dispatches/reptoday-waitlist.md` defines no Source link"
-                " for `youtube`, the Waitlist Source of YouTube Shorts",
+                {"TikTok": "reptoday.app/tiktok", "YouTube Shorts": "reptoday.app/shorts"},
+                "brand-rules.json caption_call_to_action gives YouTube Shorts `reptoday.app/shorts`, which names no"
+                f" Waitlist Source: {tags}",
             ),
-        ):
+            (
+                {"TikTok": "reptoday.app/tiktok", "YouTube Shorts": "reptoday.app/"},
+                "brand-rules.json caption_call_to_action gives YouTube Shorts `reptoday.app/`, which names no"
+                f" Waitlist Source: {tags}",
+            ),
+            (
+                {"TikTok": "reptoday.app/tiktok", "YouTube Shorts": "reptoday.app/TikTok"},
+                "brand-rules.json caption_call_to_action gives YouTube Shorts the same link as TikTok,"
+                " `reptoday.app/TikTok`, so sign-ups from the two could not be told apart",
+            ),
+        )
+        for found, problem in cases:
             with self.subTest(problem=problem):
-                data = dict(
-                    self.context.rules.data, caption_call_to_action=dict(line, sources=sources or line["sources"])
-                )
-                context = replace(self.context, rules=lint.Rules(data), source_links=links or self.context.source_links)
+                data = dict(self.context.rules.data, caption_call_to_action=dict(line, links=found))
+                context = replace(self.context, rules=lint.Rules(data))
                 verdict = drafts.evaluate(drafts.parse(fakes.draft(3), "day-03.md"), context)
                 self.assertIn(problem, [finding.detail for finding in verdict.blocks])
                 self.assertEqual(rules_of(verdict), ["call-to-action"])

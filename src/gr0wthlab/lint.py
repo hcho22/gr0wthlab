@@ -47,7 +47,7 @@ LINK = re.compile(
     re.IGNORECASE,
 )
 MARKDOWN_LINK = re.compile(r"\]\(")
-LINK_SLOT = "{link}"  # where caption_call_to_action's line carries its platform's Source link
+LINK_SLOT = "{link}"  # where caption_call_to_action's line carries its platform's Waitlist link
 
 # What each key of brand-rules.json makes the lint do. The F1 rule types are listed with the keys they read.
 KNOWN_RULES = {
@@ -134,11 +134,11 @@ class Finding:
 @dataclass(frozen=True)
 class CallToAction:
     """brand-rules.json caption_call_to_action: the one call-to-action line every post caption ends with, written
-    with {link} where its link goes, and the Waitlist Source whose link each platform's line carries. The links are
-    the Source links the reviewed Waitlist Dispatch request defines, so none is ever written here or invented."""
+    with {link} where its link goes, and the Waitlist link each platform's line carries, as Mandu gives them, so no
+    link is ever written in gr0wthlab or invented."""
 
     line: str
-    sources: Mapping[str, str]  # each platform's Source tag
+    links: Mapping[str, str]  # each platform's Waitlist link
 
     def with_link(self, link: str) -> str:
         return self.line.replace(LINK_SLOT, link)
@@ -238,25 +238,25 @@ def snippet(text: str, limit: int = 60) -> str:
 
 
 def call_to_action(value: object) -> CallToAction:
-    """caption_call_to_action, validated: one line holding {link} once beside words of its own, and a Source tag for
-    each platform it names."""
-    line, sources = (value.get("line"), value.get("sources")) if isinstance(value, Mapping) else (None, None)
+    """caption_call_to_action, validated: one line holding {link} once beside words of its own, and for each platform
+    it names one link, written without its scheme."""
+    line, found = (value.get("line"), value.get("links")) if isinstance(value, Mapping) else (None, None)
     if (
         not isinstance(value, Mapping)
-        or sorted(value) != ["line", "sources"]
+        or sorted(value) != ["line", "links"]
         or not isinstance(line, str)
         or line.count(LINK_SLOT) != 1
         or "\n" in line
         or not re.search(LETTER, line.replace(LINK_SLOT, ""))
-        or not isinstance(sources, Mapping)
-        or not sources
-        or not all(isinstance(tag, str) and re.fullmatch(r"[a-z0-9-]+", tag) for tag in sources.values())
+        or not isinstance(found, Mapping)
+        or not found
+        or not all(isinstance(link, str) and links(link) == [link] and "://" not in link for link in found.values())
     ):
         raise RulesError(
             f"brand-rules.json caption_call_to_action must hold line, one line with {LINK_SLOT} in it once beside its"
-            " own words, and sources, each platform's Waitlist Source tag in lowercase"
+            " own words, and links, each platform's Waitlist link written as a bare address such as site/tag"
         )
-    return CallToAction(" ".join(line.split()), dict(sources))
+    return CallToAction(" ".join(line.split()), dict(found))
 
 
 class Rules:
