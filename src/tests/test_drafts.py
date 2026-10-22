@@ -606,6 +606,27 @@ class CallToActionTest(DraftTestCase):
         unchanged = drafts.parse(fakes.draft(8), "day-08.md")
         self.assertTrue(drafts.evaluate(unchanged, self.context, reference, reference_approved=True).passed)
 
+    def test_an_approved_leg_with_the_line_after_the_key_is_removed_blocks_its_other_leg_naming_the_rule(self):
+        reference = drafts.parse(fakes.draft(1), "day-01.md")
+        data = {key: value for key, value in self.context.rules.data.items() if key != "caption_call_to_action"}
+        removed = replace(self.context, rules=lint.Rules(data))
+        now_fails = (
+            "day 1's leg, which this leg must match beyond the Hook, now fails identical-content, so the pair cannot"
+            " both pass until the Founder resolves it by a package change or by re-cutting both legs"
+        )
+        bare = fakes.draft(8).replace(self.TIKTOK + "\n", "").replace(self.YOUTUBE + "\n", "")
+        cases = (
+            ("day 1's lines", fakes.draft(8), [("identical-content", "")]),
+            ("no line", bare, [("pair-legs", "TikTok caption"), ("pair-legs", "YouTube Shorts description")]),
+        )
+        for name, leg, own in cases:
+            with self.subTest(leg=name):
+                verdict = drafts.evaluate(drafts.parse(leg, "day-08.md"), removed, reference, reference_approved=True)
+                self.assertEqual(self.blocking(verdict), own + [("pair-legs", "")])
+                self.assertEqual(verdict.blocks[-1].detail, now_fails)
+        unapproved = drafts.evaluate(drafts.parse(bare, "day-08.md"), removed, reference)
+        self.assertEqual(self.blocking(unapproved), cases[1][2])
+
     def test_a_platform_with_no_link_or_one_that_names_no_source_or_another_s_blocks_every_draft(self):
         line = self.context.rules.data["caption_call_to_action"]
         tags = "its path must be one of the Product registry's Source tags (tiktok, youtube, reddit, network)"

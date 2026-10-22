@@ -692,7 +692,16 @@ def check_pair(
         rechecked = Verdict()
         check_call_to_action(theirs, context, rechecked)
         failing += rechecked.blocks
-    rules = sorted({finding.rule for finding in failing if finding.blocks and finding.field})
+        platforms = Verdict()
+        check_platforms(reference, context, platforms)
+        failing += [finding for finding in platforms.blocks if finding.rule == "identical-content"]
+    rules = sorted(
+        {
+            finding.rule
+            for finding in failing
+            if finding.blocks and (finding.field or finding.rule == "identical-content")
+        }
+    )
     if rules:
         verdict.block(
             "pair-legs",
