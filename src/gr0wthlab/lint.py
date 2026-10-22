@@ -147,12 +147,6 @@ class CallToAction:
         """The line's own words around its link, such as "Join the waitlist", each as written."""
         return [part.strip(" :;,.-") for part in self.line.split(LINK_SLOT) if re.search(LETTER, part)]
 
-    def any_link(self, text: str) -> bool:
-        """Whether a line is this one with some link where its link goes, spacing collapsed and case kept."""
-        before, after = (" ".join(plain(part).split()) for part in self.line.split(LINK_SLOT))
-        pattern = rf"{re.escape(before)}\s*(?i:{LINK.pattern})[.,;:!?)']*\s*{re.escape(after)}"
-        return re.fullmatch(pattern, " ".join(plain(text).split())) is not None
-
 
 @dataclass(frozen=True)
 class RuleStatus:

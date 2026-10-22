@@ -601,8 +601,18 @@ class CallToActionTest(DraftTestCase):
             ),
             (
                 {"TikTok": "reptoday.app/tiktok", "YouTube Shorts": "reptoday.app/TikTok"},
-                "brand-rules.json caption_call_to_action gives YouTube Shorts the same link as TikTok,"
-                " `reptoday.app/TikTok`, so sign-ups from the two could not be told apart",
+                "brand-rules.json caption_call_to_action gives YouTube Shorts `reptoday.app/TikTok`, which names the"
+                " same Waitlist Source as TikTok, `tiktok`, so sign-ups from the two could not be told apart",
+            ),
+            (
+                {"TikTok": "reptoday.app/tiktok", "YouTube Shorts": "www.reptoday.app/tiktok"},
+                "brand-rules.json caption_call_to_action gives YouTube Shorts `www.reptoday.app/tiktok`, which names"
+                " the same Waitlist Source as TikTok, `tiktok`, so sign-ups from the two could not be told apart",
+            ),
+            (
+                {"TikTok": "reptoday.app/tiktok", "YouTube Shorts": "other.app/tiktok"},
+                "brand-rules.json caption_call_to_action gives TikTok `reptoday.app/tiktok`, which names the same"
+                " Waitlist Source as YouTube Shorts, `tiktok`, so sign-ups from the two could not be told apart",
             ),
         )
         for found, problem in cases:

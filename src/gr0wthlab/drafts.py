@@ -22,7 +22,7 @@ from itertools import zip_longest
 
 from .codebase import Code
 from .kit import Angle, ChecklistItem, FrozenHook, Kit, all_hooks, frozen_hook, recut_hooks
-from .lint import Copy, Finding, Platform, Rules, check_platform, hashtags, links, plain, same_link, words_pattern
+from .lint import Copy, Finding, Platform, Rules, check_platform, hashtags, links, plain, words_pattern
 
 FRONT_KEYS = ("draft", "product", "window", "day", "angle", "pair", "leg")
 BEAT_HEADING = re.compile(r"Beat (\d+)( \(hook\))?: (\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)s")
@@ -521,7 +521,7 @@ def source_tag(link: str, context: Context) -> str | None:
 
 def call_to_action_lines(context: Context) -> tuple[dict[str, str], list[str]]:
     """Each test platform's call-to-action line, brand-rules.json's words with the Waitlist link it gives the
-    platform, and why a platform has none: no link, a link that names no Waitlist Source, or another platform's link.
+    platform, and why a platform has none: no link, a link that names no Waitlist Source, or another platform's Source.
     Both are empty when brand-rules.json gives no line."""
     action = context.rules.call_to_action if context.rules else None
     lines: dict[str, str] = {}
@@ -529,20 +529,23 @@ def call_to_action_lines(context: Context) -> tuple[dict[str, str], list[str]]:
     tags = ", ".join(context.source_tags) or "none"
     for platform in context.kit.platforms if action else ():
         link = action.links.get(platform)
+        tag = source_tag(link, context) if link is not None else None
         shared = [
-            other for other, theirs in action.links.items() if other != platform and same_link(theirs, link or "")
+            other
+            for other, theirs in action.links.items()
+            if other != platform and tag is not None and source_tag(theirs, context) == tag
         ]
         if link is None:
             problems.append(f"brand-rules.json caption_call_to_action gives no Waitlist link for {platform}")
-        elif source_tag(link, context) is None:
+        elif tag is None:
             problems.append(
                 f"brand-rules.json caption_call_to_action gives {platform} `{link}`, which names no Waitlist Source:"
                 f" its path must be one of the Product registry's Source tags ({tags})"
             )
         elif shared:
             problems.append(
-                f"brand-rules.json caption_call_to_action gives {platform} the same link as {', '.join(shared)},"
-                f" `{link}`, so sign-ups from the two could not be told apart"
+                f"brand-rules.json caption_call_to_action gives {platform} `{link}`, which names the same Waitlist"
+                f" Source as {', '.join(shared)}, `{tag}`, so sign-ups from the two could not be told apart"
             )
         else:
             lines[platform] = action.with_link(link)

@@ -21,10 +21,12 @@ All times are UTC on 2026-10-22.
 | First build, round 2 | `d34df3bba83169ea1eff9cbd30f64fa8c3a86119` | `270230938452bc366edd71c9ec4939dca3360506` | `e0f2c496a52232ca2c670385d19f424a1de60ba0` |
 | Links from Mandu, round 1 | `e83ee84a8b889dc2ff1a49f04427080751ea713b` | `523e52883dcef363c23a9af991116cf387ee7593` | `e0f2c496a52232ca2c670385d19f424a1de60ba0` |
 | The change, rounds 3 and 4 | `cd52c6cf082e532dbe93a7c8e17437628a778c78` | `a75751cef49f5b4c9adbeacef95dcfdce2996231` | `e0f2c496a52232ca2c670385d19f424a1de60ba0` |
+| After review, round 5 | the commit that holds this round's record | `e91c46ba9b5aec0ed195874c5013b2f2d8ac08a2` | `e0f2c496a52232ca2c670385d19f424a1de60ba0` |
 
 The change leaves `config/` as it was.
 `d34df3b` took each platform's link from the reviewed Waitlist Dispatch request; `e83ee84` takes it from `brand-rules.json` beside the line's words and holds it to the Product registry's Source tags, and the brief no longer names the Dispatch request.
-`cd52c6c` differs from `e83ee84` only in the filming example set's eight post Draft fixtures, which gained the line, so round 1's launcher code is the change's.
+`cd52c6c` differs from `e83ee84` only in the filming example set's eight post Draft fixtures, which gained the line, so round 1's launcher code is the change's as it stood before review.
+Rounds 1 to 4 ran before the review round, which changes the check that no two platforms share a Waitlist Source and removes `lint.CallToAction.any_link` ([round 5](#round-5-after-review-preflight-and-boundary-check)).
 
 ## The Mandu edit
 
@@ -141,6 +143,49 @@ boundary check 20261022T140336Z-on-demand-3c33: PASSED
   changes since the snapshot from before the check: none
   evidence: ~/Library/Logs/gr0wthlab/20261022T140336Z-on-demand-3c33.boundary-check.json
 ```
+
+## Round 5: after review, preflight and boundary check
+
+Review found that `drafts.call_to_action_lines` told two platforms' Waitlist Sources apart by their whole links, not by the Source tags the links name.
+So `brand-rules.json` links of `reptoday.app/tiktok` for TikTok and `www.reptoday.app/tiktok` or `other.app/tiktok` for YouTube Shorts gave each platform its line and no problem, and every Draft could pass with YouTube Shorts' caption pointing at the `tiktok` Source.
+The review round makes it compare the Source tag each link names (`drafts.source_tag`): two platforms whose links name one tag get no line, and the problem, which blocks every Draft, reads, for YouTube Shorts in the first case, "gives YouTube Shorts `www.reptoday.app/tiktok`, which names the same Waitlist Source as TikTok, `tiktok`", where it read "the same link as".
+`test_drafts.CallToActionTest` holds both links above, and fails on the code before the review round.
+The review round also removes `lint.CallToAction.any_link`, which no launcher code called, with its test, and sets the Post Drafts example lab's `waitlist.live_since` back to null.
+At the labs' fixed date, `examples.DEFAULT_AT` (2026-10-11), the `2026-10-21` it replaces left the lab's Waitlist not live too, and neither an example's expected result nor an earlier round of this file cites it.
+
+Round 1's package copy and the synthetic `brand-rules.json` of rounds 2 and 3 give TikTok and YouTube Shorts links that name two different Source tags, `tiktok` and `youtube`.
+The examples of rounds 2 and 3 were not run again on the review round's code.
+
+Run from 14:15 to 14:18 from the worktree at the review round's code, uncommitted, with Codex CLI 0.160.0.
+`git status --short` listed the review round's five changed files under `src/`, the same before the boundary check and after it; this file was changed only after the boundary check ended.
+`show-config` printed the configuration fingerprint `27b89374df9576784e1daf4e169729c83baae0b7da35d60f5a1bde822e62f7dd`, not round 4's; the command it fingerprints names the checkout's own path, and `config/` is the tree round 4 had.
+
+- `src/bin/gr0wthlab preflight` at 14:15:48: `ok: true`, 6 writable areas, 22 refused paths, no breach and no failure; the footage place `~/Mandu/projects/RepToday` refused to the sandbox with nothing listed, and `www.reddit.com:443` and `itunes.apple.com:443` unreachable with nothing reached.
+
+- `src/bin/gr0wthlab boundary-check` from 14:15:56 to 14:17:19, one probe run, `20261022T141557Z-on-demand-a831`, at its first attempt, with the same configuration fingerprint.
+  Its preflight refused 22 paths, allowed 6 areas, and refused a listing of the footage place and of 0 footage folders in it.
+  Its verdict, as printed (the home folder's path replaced by `~`):
+
+```
+boundary check 20261022T141557Z-on-demand-a831: PASSED
+  steps this run had to prove: 49
+  sentinels that escaped (files among them removed): 0
+  permitted sentinels written: 12 of 12
+  the agent's report was kept as ~/Library/Logs/gr0wthlab/gr0wthlab-boundary-probe-20261022T141557Z-on-demand-a831-report.md
+  file-tool targets Codex refused, each in a patch of its own: 17 of 17
+  kernel Seatbelt denials naming this run's sentinels or the check's listeners: 19
+  forbidden reads of the footage place and its footage folders the runtime refused, each on its own: 1 of 1
+  local connections that got through: none
+  sandbox network: 3 targets refused, reached: none (the control outside the sandbox reached its listener: yes)
+  launcher network: 2 requests sent, methods ['GET'], hosts ['itunes.apple.com', 'www.reddit.com']; robots.txt: www.reddit.com read, itunes.apple.com read; an unlisted address was refused
+  changes since the snapshot from before the check: none
+  evidence: ~/Library/Logs/gr0wthlab/20261022T141557Z-on-demand-a831.boundary-check.json
+```
+
+- At 14:18, with no run, no sitting, and no Codex session, `<tmp>/cta-review-lines.py` built the post-Draft checks' context from `<lab>/mandu`, round 1's copy with the Mandu edit, as `fakes.kit_context` does, and called the worktree's `drafts.call_to_action_lines`.
+  As copied, it gave TikTok `Join the waitlist: reptoday.app/tiktok` and YouTube Shorts `Join the waitlist: reptoday.app/youtube`, and no problem.
+  With YouTube Shorts' link changed in memory to `www.reptoday.app/tiktok`, and then to `other.app/tiktok`, it gave neither platform a line and gave two problems each time, one per platform, each naming the other platform and `tiktok`.
+  `diff -rq` found `<lab>/mandu-before` identical to `~/Mandu/projects/RepToday/gtm` at 14:18.
 
 ## What was not exercised
 

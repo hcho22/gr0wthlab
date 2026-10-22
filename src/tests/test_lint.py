@@ -459,19 +459,6 @@ class CallToActionTest(unittest.TestCase):
         )
         self.assertEqual(rules.check([lint.Copy("TikTok caption", "Join the waitlist: reptoday.app/tiktok")]), [])
 
-    def test_the_line_with_any_link_is_told_from_other_lines(self):
-        action = lint.Rules(dict(HOOK_RULES, caption_call_to_action=self.LINE)).call_to_action
-        for line, matches in (
-            ("Join the waitlist: reptoday.app/tiktok", True),
-            ("Join  the waitlist:  https://reptoday.app/youtube/", True),
-            ("Join the waitlist: reptoday.app/tiktok.", True),
-            ("join the waitlist: reptoday.app/tiktok", False),
-            ("Join the waitlist: soon", False),
-            ("Join the beta: reptoday.app/tiktok", False),
-        ):
-            with self.subTest(line=line):
-                self.assertEqual(action.any_link(line), matches)
-
     def test_a_malformed_key_makes_the_rules_unusable(self):
         for value in (
             "Join the waitlist: {link}",
