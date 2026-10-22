@@ -192,17 +192,32 @@ Immerse joins as Listening only, after RepToday's first 14-day window has run cl
 
 **Acceptance Criteria:**
 
-- [ ] The Dispatch request is a Review Queue item and reaches firstmate only after the Founder approves it.
-- [ ] The request specifies a sign-up on `reptoday.app` with exactly one low-pressure call to action and three fields: email, one Fit question, and an opt-in to a Beta Build invitation.
-- [ ] The Fit question offers three answers, worded for Founder approval in the request: used to exercise and lost the routine; exercises regularly; never had a routine.
-- [ ] Source is captured from the link with no extra field, using one link per Source (at least TikTok, YouTube, Reddit, and the Founder's personal network), with a sign-up reached without a tagged link recorded as unknown Source.
-- [ ] The web events `landing_page_view` and `waitlist_signup` with `referrer_source` are emitted as defined in `gtm/06-channels/event-metric-schema.md`.
-- [ ] The privacy policy at `reptoday.app/privacy` gains a Waitlist section covering what is collected, why, how long it is kept, and how to be removed.
-- [ ] The Marketing Engineer gets a read-only, anonymous view of sign-ups (entry identifier, Source, Fit answer, opt-in, sign-up date) that contains no email address.
-- [ ] Email addresses can be resolved only on the Founder's side, at send time.
-- [ ] The request leaves storage, hosting, and implementation choices to RepToday's own design under firstmate.
+- [x] The Dispatch request is a Review Queue item and reaches firstmate only after the Founder approves it.
+- [x] The request specifies a sign-up on `reptoday.app` with exactly one low-pressure call to action and three fields: email, one Fit question, and an opt-in to a Beta Build invitation.
+- [x] The Fit question offers three answers, worded for Founder approval in the request: used to exercise and lost the routine; exercises regularly; never had a routine.
+- [x] Source is captured from the link with no extra field, using one link per Source (at least TikTok, YouTube, Reddit, and the Founder's personal network), with a sign-up reached without a tagged link recorded as unknown Source.
+- [x] The web events `landing_page_view` and `waitlist_signup` with `referrer_source` are emitted as defined in `gtm/06-channels/event-metric-schema.md`.
+- [x] The privacy policy at `reptoday.app/privacy` gains a Waitlist section covering what is collected, why, how long it is kept, and how to be removed.
+- [x] The Marketing Engineer gets a read-only, anonymous view of sign-ups (entry identifier, Source, Fit answer, opt-in, sign-up date) that contains no email address.
+- [x] Email addresses can be resolved only on the Founder's side, at send time.
+- [x] The request leaves storage, hosting, and implementation choices to RepToday's own design under firstmate.
 
-gr0wthlab's side is in place, with the request filed from `src/dispatches/reptoday-waitlist.md`; every box waits for the approved RepToday build to land and pass this story's Validation Test.
+The request was filed from `src/dispatches/reptoday-waitlist.md` as a Review Queue item on 2026-10-16, the Founder approved it at the sitting of 2026-10-18, run `20261019T133323Z-on-demand-c2e0` took the approval in, and firstmate built it in RepToday through RepToday's reviewed path.
+On 2026-10-21, on production `reptoday.app`, this story's Validation Test passed on the Sources, the Fit answers, no address in the view, and the privacy page, and its opt-in part is untested, as RepToday's go-live record shows ([`artifacts/reports/US-WL12/validation.md`](https://github.com/hcho22/RepToday/blob/main/artifacts/reports/US-WL12/validation.md), merged in https://github.com/hcho22/RepToday/pull/211):
+
+- The Founder signed up once through `reptoday.app/tiktok` and once through plain `reptoday.app`, and confirmed both.
+- Passed: RepToday's job produced the view, and gr0wthlab's own reader, run read-only from the production clone, read it with status `read`: one entry with Source `tiktok` and one with Source `unknown`, each with the Fit answer the Founder chose, and no address in the file.
+- Untested: an opt-in given at sign-up reaching gr0wthlab as true.
+  Both entries stored the opt-in as false, though the Founder remembered ticking the box for the TikTok sign-up: the record explains that the tick was in the other sign-up form's box from the form whose Join the Founder pressed, and each form sends only its own box.
+  No entry with the opt-in true has been seen end to end, so the Expected Result's "opt-ins as entered" has not passed.
+- RepToday's production events counted `landing_page_view` and `waitlist_signup`, each with `referrer_source`, one per page load and per accepted sign-up.
+  That count is RepToday's record alone: gr0wthlab reads nothing of RepToday's database, so it did not observe the events itself.
+- The privacy page carried the Waitlist section, which the Founder opened.
+- Addresses stay on the Founder's side: the Founder resolves an entry identifier to its address in Kit at send time, and RepToday's audit after the rehearsal found no email-service credential and no export that holds addresses in the gr0wthlab, Mandu, or RepToday checkouts.
+- Those sign-ups were then removed, and the view went back to no entries.
+
+On 2026-10-21 gr0wthlab's reader read the real view at the path `config/products.json` now names, with status `read`, and `https://reptoday.app/privacy`, fetched read-only, showed its section 11, "The waitlist", covering what is collected, why, how long it is kept, how to be removed, and who sees the address ([the record](../live-checks/20261021-gr0wthlab-waitlist-live.md)).
+`waitlist.live_since` in `config/run.json` is 2026-10-21, so post items no longer say that nothing can be published until the Waitlist is live.
 
 **Validation Test:**
 
@@ -666,9 +681,9 @@ Judged at about day 30, against the Founder's bar (decision 16).
 - **Repository name and review posture.** Answered 2026-10-08: the working name `MarketingEngineer` became gr0wthlab; product-facing work goes through the full no-mistakes pipeline, internal tooling by direct pull request, and the Founder approves every merge.
 - **Scheduling service.** Which service qualifies under US-ME03, at what cost, and what the Founder wants if none does.
 - **Clickable link on TikTok.** The package's research notes that TikTok may not offer a new account a clickable profile link; until it does, TikTok viewers can reach the Waitlist only by typing the address, so a short, speakable Source path (for example one per Source on `reptoday.app`) may be needed, and the kit's "no URL on slides" rule may need a package change now that the domain is decided.
-- **Waitlist details on RepToday's side.** Storage, whether sign-ups confirm their email, retention period, and how the Founder resolves addresses from entry identifiers at send time.
+- **Waitlist details on RepToday's side.** Answered 2026-10-21 by RepToday's build (its record under US-ME05): Kit stores each sign-up, which confirms its email, until 30 days after the launch email or a request to be removed, and the Founder resolves an entry identifier to its address in Kit at send time.
 - **Beta invitations.** Whether the Founder invites by TestFlight public link or by individual email invitation, and therefore what the Founder's send step needs.
-- **Sitting day and window start.** Which weekday the Founder's sitting falls on, which sets the run time and day 1 of window 1.
+- **Sitting day and window start.** Answered 2026-10-21: the sitting is on Sunday, window 1's first sitting is Sunday 2026-10-25, so its day 1 is Monday 2026-10-26, and the Founder set its one fixed posting slot to 10:00, a morning time where FR-8 and the kit's calendar say evening; `window` in `config/run.json` holds both.
 - **TikTok export form.** Whether TikTok Studio offers a file export at this account size or screenshots are the only route.
 - **Founder time measurement.** Answered 2026-10-12: the sitting page times each sitting, and the Founder can correct the minutes before they are recorded.
 - **Owner slots outside this PRD.** The thesis still needs a named non-founder to code K8 first runs and an outside person to hold the walk-away call; the Beta Cohort's value depends on both, and neither is the Marketing Engineer's to fill.

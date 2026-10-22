@@ -21,7 +21,7 @@ A run on demand always does it, and so does a one-off scheduled start (`--once`)
    From then on a decision can no longer be changed on the page ([The weekly sitting](#the-weekly-sitting)).
    It keeps each sitting it learns of as Evidence too (`ledger/evidence/sittings/`): from the sitting record, with its minutes, or, where a sitting ended without that record, from a decision given at it, with its time not recorded.
    It reads every other record of the Founder's from `ledger/founder/` too, and nothing in a run ever writes there.
-4. It reads RepToday's anonymous Waitlist view, once its build has made one, and keeps the counts by Source, Fit answer, and opt-in, per week and cumulative, with the entry identifiers, as Evidence (`ledger/evidence/waitlist/`).
+4. It reads RepToday's anonymous Waitlist view ([RepToday's Waitlist view](#reptodays-waitlist-view)) and keeps the counts by Source, Fit answer, and opt-in, per week and cumulative, with the entry identifiers, as Evidence (`ledger/evidence/waitlist/`).
    It checks every value for anything that looks like an email address first; on a hit it discards the whole read, keeps nothing from it, and queues a Guardrail breach notice.
    A week runs Monday to Sunday, and the run report leads with the week the run is in on the Mac's clock, the one that ends at the Sunday sitting; it also says how old the view was when the run started.
 5. It files each reviewed Dispatch request in `src/dispatches/` that needs filing, such as RepToday's Waitlist, under an identifier that never changes.
@@ -242,7 +242,7 @@ They change from an execution-coded rejection reason only through that workflow'
 4. **The example set.**
    The launcher runs each example of the workflow's set in `src/examples/<workflow>/evals.json` that carries `run`, one at a time, once with the Instructions in force and once with the proposed text.
    Each run is that workflow's session in a throwaway lab under `ledger/working/examples/<change id>/`, built from the example's synthetic fixtures, with the same Codex command, permission profile, preflight, task definition, and brief a weekly run uses; the lab's run takes the session's work in with the weekly run's own checks, and the example's assertions are read off what it took in.
-   A lab reads no network: what an example's sources answer comes from its fixtures.
+   A lab reads no network and none of the Founder's Waitlist view: what an example's sources answer, and the one Waitlist view an example may name, come from its fixtures.
    A filming example's footage is made with `ffmpeg`'s test pattern, so a Mac without the video tooling cannot run the filming set.
    Each lab is removed once its checks are read, and each lab run's log is kept in `~/Library/Logs/gr0wthlab/examples/<change id>/`, beside the sessions' own files.
 5. **The verdict.**
@@ -998,10 +998,11 @@ If the report names a process that could not be stopped, end it by hand (`kill -
 There is one limit on a session, on its agent's total time, and none on silence: Codex's event stream reports only whole steps, and the longest recorded run went 35 seconds without an event while it worked, so a long step and a stalled stream look the same from outside until the step ends.
 Every other process the launcher starts (git, Codex's version and sandbox probes, the boundary check's kernel-log query, and the `ffmpeg` and `ffprobe` that measure footage and cut video) has a fixed time limit of its own, counted on the same two clocks; one that passes it is stopped the same way, and the step that needed it fails with the reason or, where it can do without the answer, goes on with what it has.
 
-## When RepToday's Waitlist build lands
+## RepToday's Waitlist view
 
-The Founder approves the Waitlist Dispatch request at a sitting, asks Mandu for it, and passes the ready-to-send message Mandu gives for it to firstmate, which builds it in RepToday; until then every run reports the Waitlist view as skipped.
-Once the build writes its anonymous view, a reviewed gr0wthlab pull request sets `waitlist.view.local_path` for RepToday in [`config/products.json`](../config/products.json) to the file's path, and the next run reads it.
+The Founder approved the Waitlist Dispatch request at the sitting of 2026-10-18, and firstmate built it in RepToday, where the Waitlist went live on 2026-10-21.
+RepToday's own job on the Founder's Mac writes the anonymous view, and a reviewed gr0wthlab pull request set `waitlist.view.local_path` for RepToday in [`config/products.json`](../config/products.json) to that file's path, so each run reads it; with no path and no override below, every run reports the Waitlist view as skipped.
+A change of the path goes through a reviewed pull request the same way.
 The path must lie outside this clone, Mandu, and every Product checkout; the launcher refuses to start otherwise, so the agent can never open the view.
 The sandbox reads this clone, every Product checkout, and of Mandu only the package paths, and the view may be nowhere in the Mandu checkout all the same.
 `GR0WTHLAB_WAITLIST_VIEW` overrides the path on one machine, for example to try the run against a test copy of the view.

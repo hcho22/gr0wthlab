@@ -219,11 +219,22 @@ def set_window(repo: Path, window: dict) -> None:
     set_run(repo, "window", window)
 
 
-def set_filming(repo: Path, films: bool) -> None:
-    """Whether any Product films in a throwaway checkout: with films, the registry is the real one; without, no
-    Product has a filming block, so a run files no filming plan."""
-    path = repo / "config" / "products.json"
+def throwaway_registry() -> dict:
+    """The real Product registry with no Waitlist view location, so a throwaway checkout reads none of the Founder's
+    Mac: a test gives a view through GR0WTHLAB_WAITLIST_VIEW, the override the registry names."""
     registry = json.loads((REPO / "config" / "products.json").read_text(encoding="utf-8"))
+    for product in registry["products"]:
+        if product.get("waitlist"):
+            product["waitlist"]["view"]["local_path"] = None
+    return registry
+
+
+def set_filming(repo: Path, films: bool) -> None:
+    """Whether any Product films in a throwaway checkout: with films, the registry is the real one but for its
+    Waitlist view (throwaway_registry); without, no Product has a filming block either, so a run files no filming
+    plan."""
+    path = repo / "config" / "products.json"
+    registry = throwaway_registry()
     if not films:
         for product in registry["products"]:
             product.pop("filming", None)
@@ -253,10 +264,11 @@ def make_repo(path: Path, env: dict[str, str], window: dict | None = None, films
     """A gr0wthlab checkout with the real configuration, task definition, proposals, Instructions in force, and area
     READMEs, and a folder for example sets that holds none, committed on main; its window is QUIET_WINDOW unless a
     test gives another, no Product films unless a test says so, so a run that is not about filming files no filming
-    plan, and it reads no network source and prepares no outreach message unless a test gives it some (set_sources,
-    set_run)."""
+    plan, it reads no network source and prepares no outreach message unless a test gives it some (set_sources,
+    set_run), and its Waitlist is not live unless a test sets the date it went live."""
     shutil.copytree(str(REPO / "config"), str(path / "config"))
     set_window(path, QUIET_WINDOW if window is None else window)
+    set_run(path, "waitlist", {"live_since": None})
     set_filming(path, films)
     set_sources(path, SOURCES_QUIET)
     set_run(path, "outreach", {"network_ask_source": None, "creators": []})

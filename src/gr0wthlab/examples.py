@@ -466,7 +466,8 @@ def build(
 ) -> Lab:
     """A throwaway lab for one example: a repository like the real one with the Instructions under test, and its own
     synthetic Mandu and Product checkout beside it. Its workspace READMEs are as the last commit holds them, never as
-    a session left the checkout's."""
+    a session left the checkout's, and its registry names no Waitlist view, so it reads only the view its example
+    names, never the Founder's."""
     workflow = example_set.workflow
     if root.exists():
         shutil.rmtree(str(root))
@@ -543,6 +544,10 @@ def build(
     sources = json.loads((repo / "config" / "sources.json").read_text(encoding="utf-8"))
     sources["listening"] = dict(sources["listening"], **(setting(example_set, example, "sources", NO_SOURCES) or {}))
     (repo / "config" / "sources.json").write_text(json.dumps(sources, indent=2), encoding="utf-8")
+    for item in registry.get("products", []):
+        if item.get("waitlist"):
+            item["waitlist"]["view"]["local_path"] = None
+    (repo / "config" / "products.json").write_text(json.dumps(registry, indent=2), encoding="utf-8")
     git(repo, "init", "--quiet")
     git(repo, "add", "--all")
     git(repo, "commit", "--quiet", "-m", "lab")

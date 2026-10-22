@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from dataclasses import replace
-from datetime import date
+from datetime import date, time
 from pathlib import Path
 from unittest import mock
 
@@ -60,7 +60,9 @@ class RunSettingsTest(unittest.TestCase):
                 settings.load_shown_output({"shown_output_characters": value})
 
     def test_day_1_follows_the_window_s_first_sitting_which_only_the_founder_sets(self):
-        unset = settings.load(REPO, {}, HOME).window
+        committed = settings.load(REPO, {}, HOME).window
+        self.assertEqual((committed.day_1, committed.slot), (date(2026, 10, 26), time(10, 0)))
+        unset = settings.load_window({"number": 1, "first_sitting": None, "slot": None}, "sunday")
         self.assertEqual((unset, unset.day_1), (settings.Window(1, None, None), None))
         window = settings.load_window({"number": 1, "first_sitting": "2026-10-11", "slot": "19:00"}, "sunday")
         self.assertEqual((window.day_1.isoformat(), window.slot.isoformat()), ("2026-10-12", "19:00:00"))
@@ -79,8 +81,9 @@ class RunSettingsTest(unittest.TestCase):
                 settings.load_window(bad, "sunday")
 
     def test_the_waitlist_is_live_only_from_the_date_a_reviewed_change_sets(self):
-        unset = settings.load(REPO, {}, HOME)
-        self.assertIsNone(unset.waitlist_live_since)
+        committed = settings.load(REPO, {}, HOME)
+        self.assertEqual(committed.waitlist_live_since, date(2026, 10, 21), "set the day the Waitlist went live")
+        unset = replace(committed, waitlist_live_since=None)
         self.assertFalse(unset.waitlist_live(date(2030, 1, 1)))
         self.assertIsNone(settings.load_live_since({"live_since": None}))
         since = settings.load_live_since({"live_since": "2026-10-20", "why": "set after US-ME05"})
@@ -108,13 +111,15 @@ class WaitlistSettingsTest(unittest.TestCase):
     def block(self, registry):
         return next(product for product in registry["products"] if product["name"] == "RepToday")["waitlist"]
 
-    def test_no_view_until_the_build_lands_then_the_reviewed_path_or_an_override(self):
-        self.assertIsNone(self.rules().view)
-        registry = copy.deepcopy(self.registry)
-        self.block(registry)["view"]["local_path"] = "~/Library/RepToday/waitlist-view.json"
-        self.assertEqual(self.rules(registry=registry).view, self.HOME / "Library/RepToday/waitlist-view.json")
+    def test_the_reviewed_path_is_the_one_reptoday_s_job_writes_or_an_override(self):
+        written = self.HOME / "Library/Application Support/RepToday/waitlist/waitlist-view.json"
+        self.assertEqual(self.rules().view, written)
         env = {"GR0WTHLAB_WAITLIST_VIEW": "/srv/exports/waitlist-view.json"}
         self.assertEqual(self.rules(env).view, Path("/srv/exports/waitlist-view.json"))
+        registry = copy.deepcopy(self.registry)
+        self.block(registry)["view"]["local_path"] = None
+        self.assertIsNone(self.rules(registry=registry).view, "no view where the registry names none")
+        self.assertEqual(self.rules(env, registry).view, Path("/srv/exports/waitlist-view.json"))
         with self.assertRaises(ConfigError):
             self.rules({"GR0WTHLAB_WAITLIST_VIEW": "relative/view.json"})
 

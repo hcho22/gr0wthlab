@@ -63,9 +63,9 @@ class RunConfigTest(unittest.TestCase):
         self.assertEqual(product, "RepToday")
         self.assertEqual(sorted(role for role in roles if role != "note"), sorted(posts.ROLES))
 
-    def test_the_window_waits_for_the_founder(self):
+    def test_window_1_starts_after_the_sitting_the_founder_set_at_the_slot_the_founder_set(self):
         window = self.config["window"]
-        self.assertEqual((window["number"], window["first_sitting"], window["slot"]), (1, None, None))
+        self.assertEqual((window["number"], window["first_sitting"], window["slot"]), (1, "2026-10-25", "10:00"))
         self.assertTrue(self.config["outputs"]["post-drafts"]["built"])
         self.assertNotIn("RepToday repository", [source["name"] for source in self.config["sources_not_connected"]])
 
