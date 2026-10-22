@@ -216,7 +216,7 @@ class ExampleRunTest(unittest.TestCase):
     def tearDownClass(cls):
         cls.tmp.cleanup()
 
-    def run_example(self, workflow, example):
+    def run_example(self, workflow, example, home=None):
         writes = GOOD.get((workflow, example.id))
         self.assertIsNotNone(writes, f"GOOD says nothing of {workflow} example {example.id}")
         fakes.behave(self.codex_dir, {"write": writes})
@@ -225,7 +225,7 @@ class ExampleRunTest(unittest.TestCase):
         lab = self.root / "labs" / f"{workflow}-{example.id}"
         logs = self.root / "logs"
         return examples.run_example(
-            fakes.REPO, example_set, example, examples.IN_FORCE, text, lab, self.env, self.home, logs, 600
+            fakes.REPO, example_set, example, examples.IN_FORCE, text, lab, self.env, home or self.home, logs, 600
         )
 
     def test_each_set_has_about_ten_examples_the_agent_re_runs(self):
@@ -266,6 +266,35 @@ class ExampleRunTest(unittest.TestCase):
         lab = self.root / "labs" / f"post-drafts-{example.id}" / "gr0wthlab"
         self.assertEqual(list((lab / "src/examples").iterdir()), [lab / "src/examples/README.md"])
         self.assertEqual(list((lab / "ledger/run-reports").glob("*.requests.json")), [], "no source was read")
+
+    def test_a_lab_reads_none_of_the_founder_s_waitlist_view_and_only_the_view_its_example_names(self):
+        home = self.root / "founder-home"
+        (home / ".codex").mkdir(parents=True)
+        registry = json.loads((fakes.REPO / "config/products.json").read_text(encoding="utf-8"))
+        named = next(item for item in registry["products"] if item.get("waitlist"))["waitlist"]["view"]["local_path"]
+        founders = home / Path(named).relative_to("~")
+        sign_up = ("Rl8sFv2k", "tiktok", "lost-the-routine", True, "2026-10-11")
+        fakes.write_view(founders, fakes.waitlist_view(entries=[sign_up]))
+
+        def kept(workflow, example):
+            evidence = self.root / "labs" / f"{workflow}-{example.id}" / "gr0wthlab/ledger/evidence/waitlist"
+            return [json.loads(path.read_text(encoding="utf-8")) for path in sorted(evidence.glob("*.json"))]
+
+        drafts = examples.load(fakes.REPO, "post-drafts").examples[0]
+        run = self.run_example("post-drafts", drafts, home)
+        self.assertEqual(run.status, examples.RAN, run.why)
+        self.assertEqual(kept("post-drafts", drafts), [], "no Waitlist Evidence from the Founder's view")
+
+        recruiting_set = examples.load(fakes.REPO, "beta-recruiting")
+        recruiting = next(example for example in recruiting_set.examples if example.id == 1)
+        run = self.run_example("beta-recruiting", recruiting, home)
+        self.assertEqual(run.status, examples.RAN, run.why)
+        view = examples.fixture(recruiting_set, recruiting_set.lab["waitlist_view"])
+        fixture = json.loads(view.read_text(encoding="utf-8"))
+        [evidence] = kept("beta-recruiting", recruiting)
+        self.assertEqual(evidence["entries"], sorted(entry["entry"] for entry in fixture["entries"]))
+        self.assertNotIn(sign_up[0], evidence["entries"])
+        self.assertNotEqual(Path(evidence["source"]["view"]), founders)
 
     def test_a_lab_runs_with_the_video_tooling_this_mac_names_and_none_of_its_other_settings(self):
         example_set = examples.load(fakes.REPO, "post-drafts")

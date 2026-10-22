@@ -203,12 +203,13 @@ Immerse joins as Listening only, after RepToday's first 14-day window has run cl
 - [x] The request leaves storage, hosting, and implementation choices to RepToday's own design under firstmate.
 
 The request was filed from `src/dispatches/reptoday-waitlist.md` as a Review Queue item on 2026-10-16, the Founder approved it at the sitting of 2026-10-18, run `20261019T133323Z-on-demand-c2e0` took the approval in, and firstmate built it in RepToday through RepToday's reviewed path.
-This story's Validation Test passed on 2026-10-21 on production `reptoday.app`, as RepToday's go-live record shows ([`artifacts/reports/US-WL12/validation.md`](https://github.com/hcho22/RepToday/blob/main/artifacts/reports/US-WL12/validation.md), merged in https://github.com/hcho22/RepToday/pull/211):
+On 2026-10-21, on production `reptoday.app`, this story's Validation Test passed on the Sources, the Fit answers, no address in the view, and the privacy page, and its opt-in part is untested, as RepToday's go-live record shows ([`artifacts/reports/US-WL12/validation.md`](https://github.com/hcho22/RepToday/blob/main/artifacts/reports/US-WL12/validation.md), merged in https://github.com/hcho22/RepToday/pull/211):
 
 - The Founder signed up once through `reptoday.app/tiktok` and once through plain `reptoday.app`, and confirmed both.
-- RepToday's job produced the view, and gr0wthlab's own reader, run read-only from the production clone, read it with status `read`: one entry with Source `tiktok` and one with Source `unknown`, each with the Fit answer the Founder chose, and no address in the file.
-- Neither entry holds a beta opt-in, though the Founder remembered ticking the box for the TikTok sign-up.
-  The record explains it: the page's two sign-up forms each have their own box, and a box ticked in one form is not sent with the other form's Join, which matches what was stored.
+- Passed: RepToday's job produced the view, and gr0wthlab's own reader, run read-only from the production clone, read it with status `read`: one entry with Source `tiktok` and one with Source `unknown`, each with the Fit answer the Founder chose, and no address in the file.
+- Untested: an opt-in given at sign-up reaching gr0wthlab as true.
+  Both entries stored the opt-in as false, though the Founder remembered ticking the box for the TikTok sign-up: the record explains that the tick was in the other sign-up form's box from the form whose Join the Founder pressed, and each form sends only its own box.
+  No entry with the opt-in true has been seen end to end, so the Expected Result's "opt-ins as entered" has not passed.
 - RepToday's production events counted `landing_page_view` and `waitlist_signup`, each with `referrer_source`, one per page load and per accepted sign-up.
   That count is RepToday's record alone: gr0wthlab reads nothing of RepToday's database, so it did not observe the events itself.
 - The privacy page carried the Waitlist section, which the Founder opened.

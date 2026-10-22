@@ -82,7 +82,7 @@ class RunSettingsTest(unittest.TestCase):
 
     def test_the_waitlist_is_live_only_from_the_date_a_reviewed_change_sets(self):
         committed = settings.load(REPO, {}, HOME)
-        self.assertEqual(committed.waitlist_live_since, date(2026, 10, 21), "set once US-ME05's test passed")
+        self.assertEqual(committed.waitlist_live_since, date(2026, 10, 21), "set the day the Waitlist went live")
         unset = replace(committed, waitlist_live_since=None)
         self.assertFalse(unset.waitlist_live(date(2030, 1, 1)))
         self.assertIsNone(settings.load_live_since({"live_since": None}))

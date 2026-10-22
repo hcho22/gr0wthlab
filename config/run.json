@@ -31,7 +31,7 @@
   },
   "waitlist": {
     "live_since": "2026-10-21",
-    "why": "No public post may go out before the Waitlist is live (FR-9). live_since is the date (YYYY-MM-DD) the Waitlist went live, set here through a reviewed change once US-ME05's Validation Test has passed on reptoday.app, and never inferred from whether a source is connected or what it is named. It passed, and the Waitlist went live on reptoday.app, on 2026-10-21. While it is null, or a date still ahead, every post item, the run brief, and the run report say that nothing can be published until the Waitlist is live."
+    "why": "No public post may go out before the Waitlist is live (FR-9). live_since is the date (YYYY-MM-DD) the Waitlist went live, set here through a reviewed change once US-ME05's Validation Test has passed on reptoday.app, and never inferred from whether a source is connected or what it is named. The Waitlist went live on reptoday.app on 2026-10-21, where the Validation Test passed on the Sources, the Fit answers, no address in the view, and the privacy section, with its opt-in part untested (US-ME05 in the PRD). While it is null, or a date still ahead, every post item, the run brief, and the run report say that nothing can be published until the Waitlist is live."
   },
   "beta_recruiting": {
     "batch_size": 20,
