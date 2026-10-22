@@ -63,7 +63,12 @@ REPORT_SOURCE = "Beta Cohort reports"
 LAUNCHER_SOURCES = (GATE_SOURCE, REPORT_SOURCE)
 SKIPPED = "skipped"  # as report.SKIPPED
 # Brand rules about a post's Hook and its Angle, which a message has neither of.
-NOT_FOR_MESSAGES = ("hook_max_words", "pain_source_url_must_start_with", "frozen_hooks_exempt_from")
+NOT_FOR_MESSAGES = (
+    "hook_max_words",
+    "pain_source_url_must_start_with",
+    "frozen_hooks_exempt_from",
+    "caption_call_to_action",
+)
 NOT_RECORDED = "not recorded"
 UNUSABLE = "unusable"
 DRAFT_FILES = {INVITATION: "invitation.md", WAITLIST_ASK: "waitlist-ask.md"}

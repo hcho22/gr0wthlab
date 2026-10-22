@@ -40,6 +40,15 @@ BEFORE, AFTER = f"(?<!{LETTER})", f"(?!{LETTER})"
 QUOTES = str.maketrans({"\u2018": "'", "\u2019": "'", "\u201c": '"', "\u201d": '"'})
 NEED_MARKER = re.compile(r"\[NEED:[^\]]*\]", re.IGNORECASE)
 
+# Anything a reader could follow: an address with its scheme, a www. name, a bare domain, or a Markdown link.
+LINK = re.compile(
+    r"(?:https?://|www\.)[^\s<>\"]+"
+    r"|(?<![\w@./-])(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}(?![a-z0-9-])(?:/[^\s<>\"]*)?",
+    re.IGNORECASE,
+)
+MARKDOWN_LINK = re.compile(r"\]\(")
+LINK_SLOT = "{link}"  # where caption_call_to_action's line carries its platform's Waitlist link
+
 # What each key of brand-rules.json makes the lint do. The F1 rule types are listed with the keys they read.
 KNOWN_RULES = {
     "hook_max_words": "the Hook has at most this many words",
@@ -65,6 +74,8 @@ KNOWN_RULES = {
     "loss_framing": "no copy uses a loss-framed phrase",
     "sponsorship_asks": "no message to a creator asks for a sponsorship or a paid placement",
     "frozen_hooks_exempt_from": "a post's frozen Hooks, in their own words, are exempt from these Hook rules",
+    "caption_call_to_action": "every post caption ends with this one call-to-action line, carrying its platform's"
+    " Waitlist Source link, and nothing else in a post is a call to action or a link",
 }
 # The rules frozen_hooks_exempt_from may name: the Hook's word cap and its banned words, and no other.
 FROZEN_EXEMPTABLE = ("hook_max_words", "banned_words_in_hook")
@@ -118,6 +129,23 @@ class Finding:
 
     def line(self) -> str:
         return f"{self.rule}: {self.detail}" + (f" ({self.field})" if self.field else "")
+
+
+@dataclass(frozen=True)
+class CallToAction:
+    """brand-rules.json caption_call_to_action: the one call-to-action line every post caption ends with, written
+    with {link} where its link goes, and the Waitlist link each platform's line carries, as Mandu gives them, so no
+    link is ever written in gr0wthlab or invented."""
+
+    line: str
+    links: Mapping[str, str]  # each platform's Waitlist link
+
+    def with_link(self, link: str) -> str:
+        return self.line.replace(LINK_SLOT, link)
+
+    def wording(self) -> list[str]:
+        """The line's own words around its link, such as "Join the waitlist", each as written."""
+        return [part.strip(" :;,.-") for part in self.line.split(LINK_SLOT) if re.search(LETTER, part)]
 
 
 @dataclass(frozen=True)
@@ -182,9 +210,38 @@ def sentences(text: str) -> list[str]:
     return found
 
 
+def links(text: str) -> list[str]:
+    """Everything in a text a reader could follow as a link, as written, without the punctuation that ends a
+    sentence."""
+    found = [match.group(0).rstrip(".,;:!?)'") for match in LINK.finditer(text)]
+    return found + ["a Markdown link"] * len(MARKDOWN_LINK.findall(text))
+
+
 def snippet(text: str, limit: int = 60) -> str:
     text = " ".join(text.split())
     return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
+def call_to_action(value: object) -> CallToAction:
+    """caption_call_to_action, validated: one line holding {link} once beside words of its own, and for each platform
+    it names one link, written without its scheme."""
+    line, found = (value.get("line"), value.get("links")) if isinstance(value, Mapping) else (None, None)
+    if (
+        not isinstance(value, Mapping)
+        or sorted(value) != ["line", "links"]
+        or not isinstance(line, str)
+        or line.count(LINK_SLOT) != 1
+        or "\n" in line
+        or not re.search(LETTER, line.replace(LINK_SLOT, ""))
+        or not isinstance(found, Mapping)
+        or not found
+        or not all(isinstance(link, str) and links(link) == [link] and "://" not in link for link in found.values())
+    ):
+        raise RulesError(
+            f"brand-rules.json caption_call_to_action must hold line, one line with {LINK_SLOT} in it once beside its"
+            " own words, and links, each platform's Waitlist link written as a bare address such as site/tag"
+        )
+    return CallToAction(" ".join(line.split()), dict(found))
 
 
 class Rules:
@@ -229,6 +286,10 @@ class Rules:
                 "brand-rules.json frozen_hooks_exempt_from must be a list naming only " + " or ".join(FROZEN_EXEMPTABLE)
             )
         self.frozen_exempt = frozenset(exempt)
+        # None when brand-rules.json gives no line, so a caption carries none.
+        self.call_to_action = (
+            call_to_action(data["caption_call_to_action"]) if "caption_call_to_action" in data else None
+        )
         self.allow = [allowed_pattern(term) for term in self.lists.get("lint_allow_phrases", ())]
 
     def has(self, *keys: str) -> bool:

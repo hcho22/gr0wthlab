@@ -439,6 +439,49 @@ class FrozenHookExemptionTest(unittest.TestCase):
                 lint.Rules(dict(HOOK_RULES, frozen_hooks_exempt_from=value))
 
 
+class CallToActionTest(unittest.TestCase):
+    LINKS = {"TikTok": "reptoday.app/tiktok", "YouTube Shorts": "reptoday.app/youtube"}
+    LINE = {"line": "Join the waitlist: {link}", "links": LINKS}
+
+    def test_without_the_key_no_line_is_given(self):
+        self.assertIsNone(lint.Rules(HOOK_RULES).call_to_action)
+        self.assertNotIn("caption_call_to_action", [row.rule for row in lint.Rules(HOOK_RULES).statuses()])
+
+    def test_the_line_and_each_platform_s_source_are_read_and_reported_as_applied(self):
+        rules = lint.Rules(dict(HOOK_RULES, caption_call_to_action=self.LINE))
+        action = rules.call_to_action
+        self.assertEqual(action.with_link("reptoday.app/tiktok"), "Join the waitlist: reptoday.app/tiktok")
+        self.assertEqual(action.wording(), ["Join the waitlist"])
+        self.assertEqual(dict(action.links), self.LINKS)
+        self.assertIn(
+            lint.RuleStatus("caption_call_to_action", lint.APPLIED, lint.KNOWN_RULES["caption_call_to_action"]),
+            rules.statuses(),
+        )
+        self.assertEqual(rules.check([lint.Copy("TikTok caption", "Join the waitlist: reptoday.app/tiktok")]), [])
+
+    def test_a_malformed_key_makes_the_rules_unusable(self):
+        for value in (
+            "Join the waitlist: {link}",
+            {"line": "Join the waitlist"},
+            {"line": "Join the waitlist: reptoday.app/tiktok", "links": self.LINKS},
+            {"line": "{link}", "links": self.LINKS},
+            {"line": "Join {link} or {link}", "links": self.LINKS},
+            {"line": "Join the waitlist:\n{link}", "links": self.LINKS},
+            {"line": "Join the waitlist: {link}", "links": {}},
+            {"line": "Join the waitlist: {link}", "links": {"TikTok": "tiktok"}},
+            {"line": "Join the waitlist: {link}", "links": {"TikTok": "https://reptoday.app/tiktok"}},
+            {"line": "Join the waitlist: {link}", "links": {"TikTok": "reptoday.app/tiktok and more"}},
+            {"line": "Join the waitlist: {link}", "links": ["reptoday.app/tiktok"]},
+            {"line": "Join the waitlist: {link}", "sources": {"TikTok": "tiktok"}},
+            dict(self.LINE, extra=True),
+            None,
+            [],
+            5,
+        ):
+            with self.subTest(value=value), self.assertRaisesRegex(lint.RulesError, "caption_call_to_action"):
+                lint.Rules(dict(HOOK_RULES, caption_call_to_action=value))
+
+
 class PlatformTest(unittest.TestCase):
     def setUp(self):
         self.platforms = lint.load_platforms(json.loads((fakes.REPO / "config/platforms.json").read_text()))

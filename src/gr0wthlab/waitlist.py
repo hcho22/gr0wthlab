@@ -304,7 +304,7 @@ def not_configured(rules: Waitlist | None) -> Reading:
         return Reading(SKIPPED, "no Product has a Waitlist in the Product registry")
     return Reading(
         SKIPPED,
-        f"{rules.product}'s Waitlist build has not landed, so no view location is configured yet (US-ME05)",
+        f"no view location is configured for {rules.product}'s Waitlist in the Product registry",
         rules,
     )
 

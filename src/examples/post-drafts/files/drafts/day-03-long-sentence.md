@@ -41,6 +41,7 @@ Skip a day and the score dips. It never resets.
 Skip a day and the score dips. It never resets.
 This is the history view after three missed days this month, and the line dips at each gap, climbs back, and keeps going after every one of them.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/tiktok
 
 ### Hashtags
 
@@ -61,6 +62,7 @@ Skip a day and the score dips. It never resets.
 Skip a day and the score dips. It never resets.
 This is the history view after three missed days this month, and the line dips at each gap, climbs back, and keeps going after every one of them.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 

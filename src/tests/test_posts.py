@@ -201,6 +201,85 @@ class TakeTest(TakeTestCase):
             text,
         )
 
+    def test_the_item_brief_and_report_say_which_call_to_action_line_each_caption_ends_with(self):
+        self.write(3, fakes.draft(3))
+        outcome = self.take(3)
+        [result] = outcome.results
+        self.assertEqual(result.status, posts.QUEUED, result.verdict.blocks)
+        text = (self.store.root / self.ledger.entries[result.item]["file"]).read_text(encoding="utf-8")
+        self.assertIn(
+            "- Call to action (`brand-rules.json` `caption_call_to_action`): each caption ends with its platform's"
+            " line, TikTok `Join the waitlist: reptoday.app/tiktok`; YouTube Shorts `Join the waitlist:"
+            " reptoday.app/youtube`, and nothing else in the post carries a link or that line's words: passed. Whether"
+            " other words ask the viewer to do something is yours to judge.\n",
+            text,
+        )
+        said = (
+            "- Call to action: every caption ends with its platform's line from"
+            " `projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json` (`caption_call_to_action`), word for"
+            " word, as its last line: TikTok `Join the waitlist: reptoday.app/tiktok`; YouTube Shorts `Join the"
+            " waitlist: reptoday.app/youtube`.\n"
+            "  It is the post's one call to action and only link: no other line of a caption, and nothing in the Hook,"
+            " the beats, a title, hashtags, or alt text, carries a link or its words.\n"
+        )
+        self.assertIn(said, "\n".join(posts.report_lines(self.plan(3), outcome, "")) + "\n")
+        brief = "\n".join(posts.brief_lines(self.plan(3), self.repo))
+        self.assertIn(said, brief)
+        self.assertIn(
+            "### Caption (starts with the Hook and ends with the call-to-action line, identical on every platform but"
+            " that line;",
+            brief,
+        )
+        data = {key: value for key, value in self.context.rules.data.items() if key != "caption_call_to_action"}
+        self.context.rules = lint.Rules(data)
+        brief = "\n".join(posts.brief_lines(self.plan(3), self.repo))
+        self.assertIn(
+            "- Call to action: `projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json` gives no"
+            " call-to-action line (`caption_call_to_action`), so a caption ends with none and no post carries a link.",
+            brief,
+        )
+        self.assertIn("### Caption (starts with the Hook, identical on every platform;", brief)
+
+    def item_text(self, draft):
+        self.write(3, draft)
+        [result] = self.take(3).results
+        self.assertEqual(result.status, posts.QUEUED, result.verdict.blocks)
+        return (self.store.root / self.ledger.entries[result.item]["file"]).read_text(encoding="utf-8")
+
+    def test_the_item_shows_each_platform_s_own_caption_since_its_call_to_action_line_differs(self):
+        text = self.item_text(fakes.draft(3))
+        self.assertIn(
+            "Primary platform YouTube Shorts; the same video and text, apart from each caption's call-to-action line,"
+            " post to TikTok the same day.\n",
+            text,
+        )
+        self.assertIn("  > Join the waitlist: reptoday.app/tiktok\n", text[: text.index("**YouTube Shorts**")])
+        self.assertEqual(
+            text[text.index("**YouTube Shorts**") : text.index("**Claims")],
+            "**YouTube Shorts**\n\n"
+            "- Title: Skip a day and the score dips. It never resets.\n"
+            "- Description:\n"
+            "  > Skip a day and the score dips. It never resets.\n"
+            "  > This is the history view after three missed days this month.\n"
+            "  > Built by one person. Not released yet.\n"
+            "  > Join the waitlist: reptoday.app/youtube\n"
+            "- The rest is identical to TikTok's: the same text apart from each caption's call-to-action line, and the"
+            " same hashtags and alt text.\n\n",
+        )
+
+    def test_without_the_call_to_action_line_the_item_shows_the_first_platform_s_text_for_both(self):
+        data = {key: value for key, value in self.context.rules.data.items() if key != "caption_call_to_action"}
+        self.context.rules = lint.Rules(data)
+        bare = fakes.draft(3).replace("Join the waitlist: reptoday.app/tiktok\n", "")
+        text = self.item_text(bare.replace("Join the waitlist: reptoday.app/youtube\n", ""))
+        self.assertIn("Primary platform YouTube Shorts; the same video and text post to TikTok the same day.\n", text)
+        self.assertEqual(
+            text[text.index("**YouTube Shorts**") : text.index("**Claims")],
+            "**YouTube Shorts**\n\n"
+            "- Title: Skip a day and the score dips. It never resets.\n"
+            "- The rest is identical to TikTok's: the same text, hashtags, and alt text.\n\n",
+        )
+
     def test_a_frozen_hook_the_brand_rules_exempt_is_offered_and_the_item_and_report_say_so(self):
         data = dict(self.context.rules.data, hook_max_words=5)
         data["banned_words_in_hook"] = [*data["banned_words_in_hook"], "resets"]

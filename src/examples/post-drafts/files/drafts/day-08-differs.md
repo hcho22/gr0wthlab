@@ -41,6 +41,7 @@ The session is on screen before you decide.
 The session is on screen before you decide.
 From a tap on the icon to the first movement, in one take.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/tiktok
 
 ### Hashtags
 
@@ -61,6 +62,7 @@ The session is on screen before you decide.
 The session is on screen before you decide.
 From a tap on the icon to the first movement, in one take.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 

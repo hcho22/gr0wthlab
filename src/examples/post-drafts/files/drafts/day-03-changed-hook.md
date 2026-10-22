@@ -41,6 +41,7 @@ Skip a day and your score dips. It never resets.
 Skip a day and your score dips. It never resets.
 This is the history view after three missed days this month.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/tiktok
 
 ### Hashtags
 
@@ -61,6 +62,7 @@ Skip a day and your score dips. It never resets.
 Skip a day and your score dips. It never resets.
 This is the history view after three missed days this month.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 

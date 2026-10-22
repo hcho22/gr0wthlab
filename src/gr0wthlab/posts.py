@@ -31,7 +31,7 @@ from . import exchange, kit, lint, schedule
 from .areas import Areas, Store, UnsafeFile, read_plain
 from .boundary import Boundary, ConfigError, load_json
 from .codebase import CLT_GIT, COMMIT, Code, open_code
-from .drafts import BLOCKS, DONE, Context, PostDraft, Verdict, evaluate, parse
+from .drafts import BLOCKS, DONE, Context, PostDraft, Verdict, call_to_action_lines, evaluate, parse
 from .queue import APPROVED, OPEN, REJECTED, Ledger, stands
 from .settings import Settings, Window
 
@@ -352,6 +352,7 @@ def context_plan(
     if location is None:
         code.problem = f"the Product registry names no {product} checkout"
     context = Context(product, config.window.number, parsed, rules, rules_problem, platforms, code, dict(roles))
+    context.source_tags = tuple(str(tag) for tag in (entry.get("waitlist") or {}).get("source_tags") or ())
     plan = Plan(
         product,
         config.window,
@@ -894,6 +895,15 @@ def lint_lines(plan: Plan, verdict: Verdict) -> list[str]:
             "- Frozen test Hooks: their own words passed only because `brand-rules.json` exempts them"
             f" (`frozen_hooks_exempt_from`): {'; '.join(grouped(verdict.exempt, exemption=True))}."
         )
+    if rules is not None and rules.call_to_action is not None:
+        ended = call_to_action_lines(plan.context)[0]
+        lines.append(
+            "- Call to action (`brand-rules.json` `caption_call_to_action`): each caption ends with its platform's"
+            " line, "
+            + "; ".join(f"{platform} `{text}`" for platform, text in ended.items())
+            + ", and nothing else in the post carries a link or that line's words: passed."
+            " Whether other words ask the viewer to do something is yours to judge."
+        )
     return lines
 
 
@@ -933,6 +943,7 @@ def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict, as
     roles = plan.context.paths
     leg = f", {day.pair} leg {day.leg}" if day.pair else ""
     others = [name for name in plan.context.kit.platforms if name != day.primary]
+    action = plan.context.rules is not None and plan.context.rules.call_to_action is not None
     slot = (
         f"Slot: {datetime.fromisoformat(day_plan.slot):%A %Y-%m-%d %H:%M} ({day_plan.slot[-6:]})."
         if day_plan.slot
@@ -940,8 +951,9 @@ def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict, as
     )
     body = [
         f"Day {day.day} of {plan.product} window {plan.window.number}: Angle {angle.id} ({angle.name}){leg}."
-        f" Primary platform {day.primary}; the same video and text post to {', '.join(others) or 'no other platform'}"
-        " the same day.",
+        f" Primary platform {day.primary}; the same video and text"
+        + (", apart from each caption's call-to-action line," if action else "")
+        + f" post to {', '.join(others) or 'no other platform'} the same day.",
         slot,
         f"Nothing can be published until the {plan.product} Waitlist is live."
         if not plan.waitlist_live
@@ -974,14 +986,19 @@ def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict, as
         body += ["", f"**{platform}**", ""]
         for limit in facts.fields:
             text = values[limit.name]
-            if first is not None and not limit.title:
+            if first is not None and not limit.title and not (action and limit.body):
                 continue
             if "\n" in text.strip():
                 body += [f"- {limit.name}:"] + quoted(text)
             else:
                 body.append(f"- {limit.name}: {text.strip()}")
         if first is not None:
-            body.append(f"- The rest is identical to {first}'s: the same text, hashtags, and alt text.")
+            same = (
+                "the same text apart from each caption's call-to-action line, and the same hashtags and alt text"
+                if action
+                else "the same text, hashtags, and alt text"
+            )
+            body.append(f"- The rest is identical to {first}'s: {same}.")
         first = first or platform
     commit = plan.code.short
     body += ["", f"**Claims, checked against {plan.product} `{plan.code.branch}` at `{commit}`**", ""]
@@ -1153,6 +1170,36 @@ def rule_summary(plan: Plan) -> list[str]:
     return lines
 
 
+def body_note(plan: Plan) -> str:
+    if plan.context.rules is not None and plan.context.rules.call_to_action is not None:
+        return "starts with the Hook and ends with the call-to-action line, identical on every platform but that line"
+    return "starts with the Hook, identical on every platform"
+
+
+def call_to_action_summary(plan: Plan) -> list[str]:
+    """The call-to-action line each caption ends with, for the brief and the run report alike."""
+    rules = plan.context.rules
+    if rules is None:
+        return []
+    if rules.call_to_action is None:
+        return [
+            f"- Call to action: `{plan.context.paths['brand_rules']}` gives no call-to-action line"
+            " (`caption_call_to_action`), so a caption ends with none and no post carries a link."
+        ]
+    lines, problems = call_to_action_lines(plan.context)
+    found = [
+        f"- Call to action: every caption ends with its platform's line from `{plan.context.paths['brand_rules']}`"
+        f" (`caption_call_to_action`), word for word, as its last line"
+        + (": " + "; ".join(f"{platform} `{line}`" for platform, line in lines.items()) if lines else "")
+        + ".",
+        "  It is the post's one call to action and only link: no other line of a caption, and nothing in the Hook,"
+        " the beats, a title, hashtags, or alt text, carries a link or its words.",
+    ]
+    if problems:
+        found.append(f"  So every Draft is blocked: {'; '.join(problems)}.")
+    return found
+
+
 def checklist_summary(plan: Plan) -> list[str]:
     items = plan.context.kit.checklist
     every = [item for item in items if not item.checked and item.gates_social and not item.claim]
@@ -1230,7 +1277,7 @@ def brief_lines(plan: Plan, repo_root: Path) -> list[str]:
         for limit in facts.fields:
             notes = [
                 "the Hook" if limit.title else "",
-                "starts with the Hook, identical on every platform" if limit.body else "",
+                body_note(plan) if limit.body else "",
                 f"at most {limit.max_chars} characters" + (" with the hashtags" if limit.body else "")
                 if limit.max_chars
                 else "",
@@ -1243,6 +1290,7 @@ def brief_lines(plan: Plan, repo_root: Path) -> list[str]:
             detail = "; ".join(note for note in notes if note)
             fields.append(f"### {limit.name}" + (f" ({detail})" if detail else ""))
         lines.append(f"- `## {platform}` holds exactly: {', '.join(fields)}.")
+    lines += call_to_action_summary(plan)
     names = ", ".join(competitor.name for competitor in plan.context.kit.competitors)
     if names:
         lines.append(f"- Competitors the research names, which no Draft may name: {names}.")
@@ -1281,7 +1329,7 @@ def report_lines(plan: Plan | None, outcome: Outcome | None, filing: str, proble
     )
     if not plan.waitlist_live:
         lines.append(f"- Nothing can be published until the {plan.product} Waitlist is live; every post item says so.")
-    lines += rule_summary(plan)
+    lines += rule_summary(plan) + call_to_action_summary(plan)
     if filing:
         lines.append(f"- Proposed brand-rules lists: {filing}")
     competitors = plan.context.kit.competitors

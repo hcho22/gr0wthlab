@@ -39,6 +39,7 @@ I missed five days and the app welcomed me back.
 I missed five days and the app welcomed me back.
 The founder tells the story on camera, with one screen insert.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/tiktok
 
 ### Hashtags
 
@@ -59,6 +60,7 @@ I missed five days and the app welcomed me back.
 I missed five days and the app welcomed me back.
 The founder tells the story on camera, with one screen insert.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 

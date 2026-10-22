@@ -774,7 +774,10 @@ def kit_context(code_checkout: Path, env: dict[str, str], mandu: Path | None = N
     rules = None if problem else lint.Rules(data)
     platforms = lint.load_platforms(json.loads((REPO / "config" / "platforms.json").read_text(encoding="utf-8")))
     code = codebase.open_code(product, code_checkout, "main", env)
-    return drafts.Context(product, 1, parsed, rules, problem, platforms, code, dict(roles))
+    context = drafts.Context(product, 1, parsed, rules, problem, platforms, code, dict(roles))
+    entry = next(item for item in registry["products"] if item["name"] == product)
+    context.source_tags = tuple(entry["waitlist"]["source_tags"])
+    return context
 
 
 # Beta Cohort recruiting, on the synthetic thesis, K8 rubric, and channel plan in src/examples/beta-recruiting.

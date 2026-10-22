@@ -60,7 +60,14 @@ class ExampleSetTest(unittest.TestCase):
             for assertion in example["assertions"]
             if assertion.get("check") == "blocked_by"
         }
-        for case in ("banned_words_in_hook", "invented_proof_terms", "competitor-name", "frozen-hook", "max_hashtags"):
+        for case in (
+            "banned_words_in_hook",
+            "invented_proof_terms",
+            "competitor-name",
+            "frozen-hook",
+            "max_hashtags",
+            "call-to-action",
+        ):
             self.assertTrue(any(case in rule for rule in blocked), case)
         self.assertTrue(any("pre-publication-checklist.md" in rule for rule in blocked))
 

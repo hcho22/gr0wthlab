@@ -41,6 +41,7 @@ I open my own app and the session is already there.
 I open my own app and the session is already there.
 The founder shows it on camera, then on the phone's own screen.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/tiktok
 
 ### Hashtags
 
@@ -61,6 +62,7 @@ I open my own app and the session is already there.
 I open my own app and the session is already there.
 The founder shows it on camera, then on the phone's own screen.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 

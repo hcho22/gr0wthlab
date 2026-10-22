@@ -3,12 +3,13 @@ launcher offers it to the Founder.
 
 The checks follow US-ME08 and the kit in Mandu: the Draft is the calendar's day (its Angle, pair leg, and Product);
 its Hook is the frozen text, opens the video and every caption, and no other Angle's Hook appears; both platforms
-carry identical content; an A/B leg differs from its other leg only in the Hook; every field passes the brand-rules
-lint, the own words of each frozen Hook it may show exempt only from the Hook rules brand-rules.json names, and the
-platform limits, and no visual action shows social proof the rules ban; no competitor is named; every behavioral claim
-it lists shows the code that supports it; and its status against the pre-publication checklist lets it be offered.
-Judgment (the words themselves, and which claims a Draft makes) is the agent's; these checks decide only what can be
-decided from text.
+carry identical content, apart from the call-to-action line that ends each caption when brand-rules.json gives one,
+which carries its platform's Waitlist link and is the post's one call to action and only link; an A/B leg
+differs from its other leg only in the Hook; every field passes the brand-rules lint, the own words of each frozen
+Hook it may show exempt only from the Hook rules brand-rules.json names, and the platform limits, and no visual action
+shows social proof the rules ban; no competitor is named; every behavioral claim it lists shows the code that supports
+it; and its status against the pre-publication checklist lets it be offered. Judgment (the words themselves, and which
+claims a Draft makes) is the agent's; these checks decide only what can be decided from text.
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from itertools import zip_longest
 
 from .codebase import Code
 from .kit import Angle, ChecklistItem, FrozenHook, Kit, all_hooks, frozen_hook, recut_hooks
-from .lint import Copy, Finding, Platform, Rules, check_platform, hashtags, plain
+from .lint import Copy, Finding, Platform, Rules, check_platform, hashtags, links, plain, words_pattern
 
 FRONT_KEYS = ("draft", "product", "window", "day", "angle", "pair", "leg")
 BEAT_HEADING = re.compile(r"Beat (\d+)( \(hook\))?: (\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)s")
@@ -32,6 +33,7 @@ UNITS = (
     (r"seconds?|secs?", r"(?:s|secs?|seconds?)"),
     (r"minutes?|mins?", r"(?:mins?|minutes?)"),
 )
+CALL_TO_ACTION = "call-to-action"
 DONE = "done"
 OPEN = "open"
 BLOCKS = "blocks"
@@ -296,6 +298,7 @@ class Context:
     platforms: Mapping[str, Platform]
     code: Code
     paths: Mapping[str, str]  # kit role: its Mandu-relative path, for citations
+    source_tags: tuple[str, ...] = ()  # the Product registry's Waitlist Source tags, which every Waitlist link names
 
 
 def claim_pattern(claim: str) -> re.Pattern:
@@ -391,6 +394,7 @@ def evaluate(
     verdict.add(other_hooks(draft, draft.hook, kit, opening))
     check_beats(draft, verdict)
     check_platforms(draft, context, verdict)
+    check_call_to_action(draft, context, verdict)
     if reference is not None and verdict.hook is not None:
         check_pair(draft, reference, reference_approved, context, opening, verdict)
     if context.rules is not None:
@@ -494,14 +498,123 @@ def check_platforms(draft: PostDraft, context: Context, verdict: Verdict) -> Non
                 verdict.block("format", f"## {platform} ### {limit.name} is empty; only the hashtags may be none")
         verdict.add(check_platform(facts, values))
         shared[platform] = {
-            "text": norm(values[facts.field("body").name]),
+            "text": norm(without_call_to_action(values[facts.field("body").name], context)),
             "hashtags": " ".join(hashtags(values[facts.field("hashtags").name])),
             "alt text": norm(values.get("Alt text", "")),
         }
+    apart = " apart from each caption's call-to-action line" if context.rules and context.rules.call_to_action else ""
     for key in ("text", "hashtags", "alt text"):
         if len({values[key] for values in shared.values()}) > 1:
             verdict.block(
-                "identical-content", f"the {key} differs between {', '.join(shared)}; both carry identical content"
+                "identical-content",
+                f"the {key} {'differ' if key == 'hashtags' else 'differs'} between {', '.join(shared)}; both carry"
+                " identical content" + (apart if key == "text" else ""),
+            )
+
+
+def source_tag(link: str, context: Context) -> str | None:
+    """The Waitlist Source a link names: its one path segment, when that is a Source tag of the Product registry."""
+    _, slash, path = re.sub(r"^https?://", "", link, flags=re.IGNORECASE).rstrip("/").partition("/")
+    tag = path.casefold()
+    return tag if slash and tag in context.source_tags else None
+
+
+def call_to_action_lines(context: Context) -> tuple[dict[str, str], list[str]]:
+    """Each test platform's call-to-action line, brand-rules.json's words with the Waitlist link it gives the
+    platform, and why a platform has none: no link, a link that names no Waitlist Source, or another platform's Source.
+    Both are empty when brand-rules.json gives no line."""
+    action = context.rules.call_to_action if context.rules else None
+    lines: dict[str, str] = {}
+    problems: list[str] = []
+    tags = ", ".join(context.source_tags) or "none"
+    for platform in context.kit.platforms if action else ():
+        link = action.links.get(platform)
+        tag = source_tag(link, context) if link is not None else None
+        shared = [
+            other
+            for other, theirs in action.links.items()
+            if other != platform and tag is not None and source_tag(theirs, context) == tag
+        ]
+        if link is None:
+            problems.append(f"brand-rules.json caption_call_to_action gives no Waitlist link for {platform}")
+        elif tag is None:
+            problems.append(
+                f"brand-rules.json caption_call_to_action gives {platform} `{link}`, which names no Waitlist Source:"
+                f" its path must be one of the Product registry's Source tags ({tags})"
+            )
+        elif shared:
+            problems.append(
+                f"brand-rules.json caption_call_to_action gives {platform} `{link}`, which names the same Waitlist"
+                f" Source as {', '.join(shared)}, `{tag}`, so sign-ups from the two could not be told apart"
+            )
+        else:
+            lines[platform] = action.with_link(link)
+    return lines, problems
+
+
+def without_call_to_action(text: str, context: Context) -> str:
+    """A caption without its last line when brand-rules.json gives a call-to-action line, so the platforms' captions
+    compare as identical apart from it; check_call_to_action holds each last line to its platform's own line."""
+    kept = text.rstrip().splitlines()
+    if context.rules is not None and context.rules.call_to_action is not None:
+        kept = kept[:-1]
+    return "\n".join(kept)
+
+
+def check_call_to_action(draft: PostDraft, context: Context, verdict: Verdict) -> None:
+    """When brand-rules.json gives a call-to-action line, every caption ends with its platform's line, word for word,
+    and it is the post's one call to action and only link: no other line of a caption, and nothing else the post
+    shows or says, a beat's visual action included, carries a link or the line's own words. Which other words would
+    make a call to action is judgment no check makes; the Founder reads every post."""
+    action = context.rules.call_to_action if context.rules else None
+    if action is None:
+        return
+    expected, problems = call_to_action_lines(context)
+    for problem in problems:
+        verdict.block(CALL_TO_ACTION, problem)
+    wording = [words_pattern(words, plural=False) for words in action.wording()]
+
+    def stray(text: str) -> str:
+        """Everything in a text that reads as a link or as the call-to-action line's own words, quoted, or nothing."""
+        found = links(text) + [match.group(0) for pattern in wording for match in pattern.finditer(plain(text))]
+        return " and ".join(repr(each) for each in dict.fromkeys(found))
+
+    bodies = {}
+    for platform in draft.platforms:
+        facts = context.platforms.get(platform)
+        if facts is not None:
+            bodies[f"{platform} {facts.field('body').name.lower()}"] = platform
+    for copy in draft.shown():
+        platform = bodies.get(copy.field)
+        if platform is None:
+            found = stray(copy.text)
+            if found:
+                verdict.block(
+                    CALL_TO_ACTION,
+                    f"carries {found}; the call to action and its link go only at the end of each caption, never in"
+                    " the Hook, the video, a title, hashtags, or alt text",
+                    copy.field,
+                )
+            continue
+        lines = [line for line in copy.text.splitlines() if line.strip()]
+        last = lines[-1] if lines else ""
+        line = expected.get(platform)
+        if line is not None and norm(last) != norm(line):
+            own = source_tag(action.links[platform], context)
+            other = next(filter(None, (source_tag(written, context) for written in links(last))), None)
+            if other is not None and other != own:
+                why = f"ends with the Source link for `{other}`: {last!r}"
+            elif stray(last):
+                why = f"ends with {last!r}, not the line brand-rules.json caption_call_to_action words"
+            else:
+                why = "does not end with its call-to-action line"
+            verdict.block(CALL_TO_ACTION, f"{why}; the last line of every {platform} post is `{line}`", copy.field)
+        for found in filter(None, map(stray, lines[:-1])):
+            verdict.block(
+                CALL_TO_ACTION,
+                f"carries {found} before its last line; a post's one call to action and only link is the line that"
+                " ends each caption",
+                copy.field,
             )
 
 
@@ -576,7 +689,19 @@ def check_pair(
     if approved:
         failing = other_hooks(theirs, reference.hook, context.kit, opening)
         failing += context.rules.check(frozen_copies(theirs, context.kit)) if context.rules else []
-    rules = sorted({finding.rule for finding in failing if finding.blocks and finding.field})
+        rechecked = Verdict()
+        check_call_to_action(theirs, context, rechecked)
+        failing += rechecked.blocks
+        platforms = Verdict()
+        check_platforms(reference, context, platforms)
+        failing += [finding for finding in platforms.blocks if finding.rule == "identical-content"]
+    rules = sorted(
+        {
+            finding.rule
+            for finding in failing
+            if finding.blocks and (finding.field or finding.rule == "identical-content")
+        }
+    )
     if rules:
         verdict.block(
             "pair-legs",

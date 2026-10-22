@@ -1282,11 +1282,11 @@ class WaitlistRunTest(CycleTestCase):
         self.run_cycle(at=fakes.SUNDAY_RUN + timedelta(hours=2))
         self.assertEqual([entry["id"] for entry in self.queue()["open"]], [notice["id"]])
 
-    def test_no_view_yet_is_skipped_because_the_build_has_not_landed(self):
+    def test_no_view_location_is_skipped_as_not_configured(self):
         del self.env["GR0WTHLAB_WAITLIST_VIEW"]
         code, out = self.run_cycle()
         self.assertEqual(code, 0, out)
-        reason = "RepToday's Waitlist build has not landed, so no view location is configured yet (US-ME05)"
+        reason = "no view location is configured for RepToday's Waitlist in the Product registry"
         report = self.report()
         self.assertIn(f"| Waitlist anonymous view | skipped | {reason} |", report)
         self.assertIn(f"| Waitlist counts | skipped | {reason} |", report)

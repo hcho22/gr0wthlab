@@ -41,6 +41,7 @@ Skip a day and the score dips. It never resets.
 Skip a day and the score dips. It never resets.
 Join 10,000 people who stopped quitting after a missed day.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/tiktok
 
 ### Hashtags
 
@@ -61,6 +62,7 @@ Skip a day and the score dips. It never resets.
 Skip a day and the score dips. It never resets.
 Join 10,000 people who stopped quitting after a missed day.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 
