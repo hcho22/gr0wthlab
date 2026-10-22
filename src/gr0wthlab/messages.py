@@ -753,7 +753,8 @@ def describe_rules(context: Context, creator: bool) -> list[str]:
     rules = context.rules
     if rules is None:
         return [f"- `brand-rules.json` could not be used ({context.rules_problem}), so every message is blocked."]
-    applied = [row.rule for row in rules.statuses() if row.status == APPLIED]
+    # A message has no frozen Hook, so the frozen Hook's exemption is no rule it is read for.
+    applied = [row.rule for row in rules.statuses() if row.status == APPLIED and row.rule != "frozen_hooks_exempt_from"]
     pending = rules.pending() + (rules.creator_pending() if creator else [])
     lines = [
         f"- Every message passes the brand lint (`{context.paths.get('brand_rules', 'brand-rules.json')}`), read on"

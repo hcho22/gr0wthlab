@@ -4,10 +4,11 @@ launcher offers it to the Founder.
 The checks follow US-ME08 and the kit in Mandu: the Draft is the calendar's day (its Angle, pair leg, and Product);
 its Hook is the frozen text, opens the video and every caption, and no other Angle's Hook appears; both platforms
 carry identical content; an A/B leg differs from its other leg only in the Hook; every field passes the brand-rules
-lint and the platform limits, and no visual action shows social proof the rules ban; no competitor is named; every
-behavioral claim it lists shows the code that supports it; and its status against the pre-publication checklist lets
-it be offered. Judgment (the words themselves, and which claims a Draft makes) is the agent's; these checks decide only
-what can be decided from text.
+lint, the own words of each frozen Hook it may show exempt only from the Hook rules brand-rules.json names, and the
+platform limits, and no visual action shows social proof the rules ban; no competitor is named; every behavioral claim
+it lists shows the code that supports it; and its status against the pre-publication checklist lets it be offered.
+Judgment (the words themselves, and which claims a Draft makes) is the agent's; these checks decide only what can be
+decided from text.
 """
 
 from __future__ import annotations
@@ -265,6 +266,7 @@ class Verdict:
     hook: FrozenHook | None = None
     angle: Angle | None = None
     unread: list[str] = field(default_factory=list)  # each source a block rests on that could not be read
+    exempt: list[Finding] = field(default_factory=list)  # each brand-rule finding the frozen Hook is exempt from
 
     @property
     def passed(self) -> bool:
@@ -392,7 +394,9 @@ def evaluate(
     if reference is not None and verdict.hook is not None:
         check_pair(draft, reference, reference_approved, context, opening, verdict)
     if context.rules is not None:
-        verdict.add(context.rules.check(draft.shown()))
+        shown = frozen_copies(draft, kit)
+        verdict.add(context.rules.check(shown))
+        verdict.exempt = context.rules.exemptions(shown)
         check_pain(verdict.angle, context, verdict)
     check_competitors(draft, kit, context, verdict)
     check_claims(draft, context.code, verdict)
@@ -425,6 +429,22 @@ def check_hook(draft: PostDraft, hook: FrozenHook, context: Context, verdict: Ve
             verdict.block("frozen-hook", f"the {platform} {title.name.lower()} must be the Hook")
 
 
+def after_hook_beat(field_name: str) -> bool:
+    """A field of a beat after the hook beat, where a re-cut pair's leg may show the pair's other Hook."""
+    return field_name.startswith("beat ") and not field_name.startswith("beat 1 ")
+
+
+def frozen_copies(draft: PostDraft, kit: Kit) -> list[Copy]:
+    """What a Draft shows or says, each field with the frozen Hooks it may show in their own words (Copy.frozen): its
+    day's frozen Hook in every field, and in a beat after the hook beat of a re-cut pair's leg both of the pair's
+    Hooks, where other_hooks lets it show them."""
+    day = kit.days.get(draft.day or 0)
+    hook = frozen_hook(day, kit)[0] if day is not None else None
+    own = (hook.text,) if hook is not None else ()
+    recut = recut_hooks(day, kit) if day is not None else ()
+    return [replace(copy, frozen=own + (recut if after_hook_beat(copy.field) else ())) for copy in draft.shown()]
+
+
 def other_hooks(draft: PostDraft, own: str, kit: Kit, opening: Collection[str]) -> list[Finding]:
     """A Hook belongs to one Angle and one leg, so no Hook but its own appears anywhere in what a Draft shows or says,
     a beat's visual action included; only a later beat of a re-cut pair's leg may show the pair's other Hook, one of
@@ -435,7 +455,7 @@ def other_hooks(draft: PostDraft, own: str, kit: Kit, opening: Collection[str]) 
     reported = set()
     for copy in draft.shown():
         text = norm(copy.text).casefold()
-        video_after_hook = copy.field.startswith("beat ") and not copy.field.startswith("beat 1 ")
+        video_after_hook = after_hook_beat(copy.field)
         for hook, owner in all_hooks(kit):
             folded = norm(hook).casefold()
             if folded == own or folded not in text or (folded in opening and video_after_hook):
@@ -555,7 +575,7 @@ def check_pair(
     failing: list[Finding] = []
     if approved:
         failing = other_hooks(theirs, reference.hook, context.kit, opening)
-        failing += context.rules.check(theirs.shown()) if context.rules else []
+        failing += context.rules.check(frozen_copies(theirs, context.kit)) if context.rules else []
     rules = sorted({finding.rule for finding in failing if finding.blocks and finding.field})
     if rules:
         verdict.block(

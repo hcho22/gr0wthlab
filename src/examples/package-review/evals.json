@@ -337,6 +337,28 @@
           "files/labs/pair-hook-differs/mandu"
         ]
       }
+    },
+    {
+      "id": 11,
+      "prompt": "Review the package, where the brand rules ban a word that an Angle's frozen Hook holds and also exempt frozen Hooks from the banned words (frozen_hooks_exempt_from).",
+      "expected_output": "No package-change proposal: the brand rules exempt a frozen Hook's own words from the banned words, so the Hook and the rule can both be true.",
+      "assertions": [
+        {
+          "kind": "deterministic",
+          "check": "nothing_queued",
+          "item": "package-change-proposal"
+        },
+        {
+          "kind": "deterministic",
+          "check": "nothing_set_aside"
+        }
+      ],
+      "files": [],
+      "run": {
+        "mandu": [
+          "files/labs/hook-exempt/mandu"
+        ]
+      }
     }
   ]
 }

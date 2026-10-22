@@ -888,7 +888,13 @@ def lint_lines(plan: Plan, verdict: Verdict) -> list[str]:
         line += "; warnings: " + "; ".join(warnings)
     if pending:
         line += f"; rule types still waiting for their lists in Mandu: {', '.join(pending)}"
-    return [line + ".", VISUAL_ACTIONS + " The rest of what it shows is yours to judge in the Video table."]
+    lines = [line + ".", VISUAL_ACTIONS + " The rest of what it shows is yours to judge in the Video table."]
+    if verdict.exempt:
+        lines.append(
+            "- Frozen test Hooks: their own words passed only because `brand-rules.json` exempts them"
+            f" (`frozen_hooks_exempt_from`): {'; '.join(grouped(verdict.exempt, exemption=True))}."
+        )
+    return lines
 
 
 def checklist_lines(plan: Plan, verdict: Verdict) -> list[str]:
@@ -1020,6 +1026,7 @@ def findings_json(verdict: Verdict | None) -> dict[str, object]:
     return {
         "blocks": [finding.__dict__ for finding in verdict.blocks],
         "warnings": [finding.__dict__ for finding in verdict.warnings],
+        "exempt": [finding.__dict__ for finding in verdict.exempt],
         "checklist": [
             {"line": line.item.line, "title": line.item.title, "status": line.status, "note": line.note}
             for line in verdict.checklist
@@ -1082,11 +1089,13 @@ def record(plan: Plan, outcome: Outcome, store: Store, run_id: str, now: datetim
     return outcome.record
 
 
-def grouped(findings: Sequence[lint.Finding]) -> list[str]:
-    """Findings with the same rule and detail on one line, naming every field they were found in."""
+def grouped(findings: Sequence[lint.Finding], exemption: bool = False) -> list[str]:
+    """Findings with the same rule and detail on one line, naming every field they were found in. exemption leaves
+    out the words every frozen-Hook exemption's detail opens with, for a line that already says them."""
     lines: dict[tuple[str, str], list[str]] = {}
     for finding in findings:
-        fields = lines.setdefault((finding.rule, finding.detail), [])
+        detail = finding.detail.removeprefix(lint.EXEMPT) if exemption else finding.detail
+        fields = lines.setdefault((finding.rule, detail), [])
         if finding.field and finding.field not in fields:
             fields.append(finding.field)
     return [
@@ -1123,11 +1132,20 @@ def rule_summary(plan: Plan) -> list[str]:
     by = {
         status: [row.rule for row in statuses if row.status == status] for status in ("applied", "pending", "unknown")
     }
+    exempt = rules.exempt_rules()
+    applied = [rule for rule in by["applied"] if rule != "frozen_hooks_exempt_from"]
     lines = [
         f"- Brand rules from `{plan.context.paths['brand_rules']}`, run on every field a viewer reads:"
-        f" {', '.join(by['applied'])}.",
+        f" {', '.join(applied)}.",
         VISUAL_ACTIONS,
     ]
+    if exempt:
+        lines.append(
+            f"  The frozen Hooks' own words are exempt from {', '.join(exempt)} (`frozen_hooks_exempt_from`), the whole"
+            " Hook or one of its sentences: the day's frozen Hook wherever the Draft repeats it, and in a re-cut pair's"
+            " leg the pair's other Hook in a beat after the hook beat; every other word, and every other rule, is still"
+            " checked."
+        )
     if by["pending"]:
         lines.append(f"  Pending, until Mandu adds their lists: {', '.join(by['pending'])}.")
     if by["unknown"]:
@@ -1292,6 +1310,13 @@ def report_lines(plan: Plan | None, outcome: Outcome | None, filing: str, proble
     for result in warned:
         lines += ["", f"Day {result.day} warnings, which do not block:", ""]
         lines += [f"- {line}" for line in grouped(result.verdict.warnings)]
+    for result in [result for result in outcome.results if result.verdict and result.verdict.exempt]:
+        lines += [
+            "",
+            f"Day {result.day}'s frozen test Hooks, exempt by `brand-rules.json` (`frozen_hooks_exempt_from`) from:",
+            "",
+        ]
+        lines += [f"- {line}" for line in grouped(result.verdict.exempt, exemption=True)]
     return lines
 
 

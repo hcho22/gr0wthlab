@@ -265,6 +265,8 @@ def check_drafts(run_id: str, out=sys.stdout) -> int:
             print(f"  - {line}", file=out)
         for line in posts.grouped(verdict.warnings):
             print(f"  - warning, which does not block: {line}", file=out)
+        for line in posts.grouped(verdict.exempt):
+            print(f"  - exempt, which does not block: {line}", file=out)
     for number, why in plan.skipped:
         print(f"SKIP day {number}: {why}", file=out)
     due = len(plan.days) + len(gone)

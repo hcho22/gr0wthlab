@@ -6,14 +6,30 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from unittest import mock
 
-from gr0wthlab import codebase, drafts, exchange, learning, lint, messages, outreach, proposals
+from gr0wthlab import beta, codebase, drafts, exchange, learning, lint, messages, outreach, proposals
 from gr0wthlab.boundary import ConfigError
 from gr0wthlab.queue import Ledger
 from tests import fakes
 
 PRODUCTS = ["RepToday", "Immerse"]
+BRAND_RULES = "files/mandu/projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json"
+
+
+class FrozenHookExemptionTest(unittest.TestCase):
+    def test_no_message_is_exempt_or_told_of_the_frozen_hook_exemption(self):
+        data = json.loads((fakes.EXAMPLES / BRAND_RULES).read_text(encoding="utf-8"))
+        rules = lint.Rules(dict(data, frozen_hooks_exempt_from=["hook_max_words", "banned_words_in_hook"]))
+        context = SimpleNamespace(rules=rules, rules_problem=None, paths={})
+        self.assertNotIn("frozen_hooks_exempt_from", "\n".join(messages.describe_rules(context, creator=True)))
+        plan = SimpleNamespace(context=context, rules=SimpleNamespace(brand_rules="brand-rules.json"))
+        self.assertNotIn("frozen_hooks_exempt_from", "\n".join(beta.rule_summary(plan)))
+        draft = messages.MessageDraft("message.md", "", message="No grind, no excuses.")
+        self.assertEqual(
+            [finding.rule for finding in rules.check(draft.sent())], ["banned_words_in_hook", "banned_words_in_hook"]
+        )
 
 
 class LinksTest(unittest.TestCase):

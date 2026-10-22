@@ -6,7 +6,7 @@ import unittest
 from dataclasses import replace
 from pathlib import Path
 
-from gr0wthlab import drafts
+from gr0wthlab import drafts, lint
 from tests import fakes
 
 
@@ -319,6 +319,137 @@ class EvaluateTest(DraftTestCase):
         )
         verdict = self.check(fakes.draft(3))
         self.assertEqual(rules_of(verdict), ["projects/RepToday/gtm/08-redteam/pre-publication-checklist.md line 7"])
+
+
+class FrozenHookExemptionTest(DraftTestCase):
+    """Day 3's frozen Hook, "Skip a day and the score dips. It never resets.", against brand rules that cap a Hook
+    at 5 words and ban a word it holds."""
+
+    def strict(self, banned, exempt=None):
+        data = dict(self.context.rules.data, hook_max_words=5)
+        data["banned_words_in_hook"] = [*data["banned_words_in_hook"], banned]
+        if exempt is not None:
+            data["frozen_hooks_exempt_from"] = exempt
+        self.context.rules = lint.Rules(data)
+
+    def test_without_the_key_the_frozen_hook_is_blocked_as_before(self):
+        self.strict("resets")
+        verdict = self.check(fakes.draft(3))
+        self.assertEqual(rules_of(verdict), ["banned_words_in_hook", "hook_max_words"])
+        self.assertEqual(verdict.exempt, [])
+
+    def test_with_the_key_the_frozen_hook_passes_and_the_verdict_says_where_the_exemption_applied(self):
+        self.strict("resets", ["hook_max_words", "banned_words_in_hook"])
+        verdict = self.check(fakes.draft(3))
+        self.assertEqual(verdict.blocks, [])
+        self.assertEqual(
+            [(finding.rule, finding.field) for finding in verdict.exempt],
+            [
+                ("hook_max_words", "Hook"),
+                ("banned_words_in_hook", "Hook"),
+                ("banned_words_in_hook", "beat 1 on-screen text"),
+                ("banned_words_in_hook", "TikTok caption"),
+                ("banned_words_in_hook", "YouTube Shorts title"),
+                ("banned_words_in_hook", "YouTube Shorts description"),
+            ],
+        )
+
+    def test_a_banned_word_outside_the_frozen_hook_still_blocks(self):
+        # "score" is in the frozen Hook and also in the alt text, which is not the Hook's words.
+        self.strict("score", ["hook_max_words", "banned_words_in_hook"])
+        verdict = self.check(fakes.draft(3))
+        self.assertEqual(
+            sorted((finding.rule, finding.field) for finding in verdict.blocks),
+            [("banned_words_in_hook", "TikTok alt text"), ("banned_words_in_hook", "YouTube Shorts alt text")],
+        )
+
+    def test_a_hook_that_is_not_the_frozen_text_is_held_to_both_rules(self):
+        self.strict("resets", ["hook_max_words", "banned_words_in_hook"])
+        edited = "Skip a day and the score dips, but it never resets."
+        text = fakes.draft(3).replace(
+            "## Hook\n\nSkip a day and the score dips. It never resets.", f"## Hook\n\n{edited}"
+        )
+        verdict = self.check(text)
+        self.assertIn("frozen-hook", rules_of(verdict))
+        held = [finding for finding in verdict.blocks if finding.rule in lint.FROZEN_EXEMPTABLE]
+        self.assertEqual(
+            sorted((finding.rule, finding.field) for finding in held),
+            [("banned_words_in_hook", "Hook"), ("hook_max_words", "Hook")],
+        )
+
+
+class RecutPairFrozenHookExemptionTest(DraftTestCase):
+    """AB-1, days 1 and 8, whose leg A Hook has two sentences and a word the brand rules ban, under brand rules that
+    exempt frozen Hooks: a re-cut leg may show its pair's other Hook after its hook beat, and nothing else is exempt."""
+
+    HOOK_A = "Open it and the session is already waiting. Nothing to set up."
+    FIRST = "Open it and the session is already waiting."
+    CLOSE = ("Lock the phone.", "Done for today.")
+
+    def use(self, mandu):
+        for path in (mandu / "projects/RepToday/gtm/05-social-pmf").iterdir():
+            path.write_text(path.read_text(encoding="utf-8").replace(fakes.KIT_DAYS[1][3], self.HOOK_A), "utf-8")
+        self.context = fakes.kit_context(self.code, self.env, mandu)
+        data = dict(self.context.rules.data, frozen_hooks_exempt_from=["hook_max_words", "banned_words_in_hook"])
+        data["banned_words_in_hook"] = [*data["banned_words_in_hook"], "waiting"]
+        self.context.rules = lint.Rules(data)
+
+    def setUp(self):
+        super().setUp()
+        self.use(fakes.recut_mandu(self.root / "Mandu"))
+
+    def leg_b(self, *later, caption="This is the history view after three missed days this month."):
+        return fakes.with_beats(fakes.draft(8, caption), ("The home screen, then one tap.", self.HOOK_A), *later)
+
+    def blocking(self, verdict):
+        return sorted((finding.rule, finding.field) for finding in verdict.blocks)
+
+    def test_a_re_cut_leg_shows_its_pair_s_other_hook_or_one_of_its_sentences_after_its_hook_beat(self):
+        for shown in (self.HOOK_A, self.FIRST):
+            with self.subTest(shown=shown):
+                verdict = self.check(self.leg_b(("A tap.", shown), self.CLOSE))
+                self.assertEqual(verdict.blocks, [])
+                self.assertEqual(
+                    [(finding.rule, finding.field) for finding in verdict.exempt],
+                    [
+                        ("banned_words_in_hook", "beat 2 on-screen text"),
+                        ("banned_words_in_hook", "beat 3 on-screen text"),
+                    ],
+                )
+
+    def test_any_other_text_with_the_banned_word_still_blocks_a_re_cut_leg(self):
+        verdict = self.check(self.leg_b(("A tap.", "Nothing is waiting for you."), self.CLOSE))
+        self.assertEqual(self.blocking(verdict), [("banned_words_in_hook", "beat 3 on-screen text")])
+        captioned = self.check(self.leg_b(self.CLOSE, caption=self.FIRST))
+        self.assertEqual(
+            self.blocking(captioned),
+            [("banned_words_in_hook", "TikTok caption"), ("banned_words_in_hook", "YouTube Shorts description")],
+        )
+
+    def test_in_an_ordinary_pair_the_other_leg_s_hook_is_not_exempt(self):
+        self.use(fakes.make_mandu(self.root / "Ordinary"))
+        verdict = self.check(fakes.with_beats(fakes.draft(8), ("A tap.", self.FIRST), self.CLOSE))
+        self.assertEqual(self.blocking(verdict), [("banned_words_in_hook", "beat 2 on-screen text")])
+
+    def test_an_approved_leg_this_leg_must_match_is_read_with_its_own_exemption(self):
+        hook_b = fakes.KIT_DAYS[8][3]
+        for shown, blocks in (
+            (self.FIRST, []),
+            ("Nothing is waiting for you.", [("banned_words_in_hook", "beat 3 on-screen text"), ("pair-legs", "")]),
+        ):
+            with self.subTest(shown=shown):
+                later = (("A tap.", shown), self.CLOSE)
+                leg_a = fakes.with_beats(
+                    fakes.draft(1).replace(fakes.KIT_DAYS[1][3], self.HOOK_A),
+                    ("Hold on the session list.", hook_b),
+                    *later,
+                )
+                reference = drafts.parse(leg_a, "day-01.md")
+                self.assertEqual(self.blocking(self.check(leg_a)), blocks[:1])
+                verdict = drafts.evaluate(
+                    drafts.parse(self.leg_b(*later), "day-08.md"), self.context, reference, reference_approved=True
+                )
+                self.assertEqual(self.blocking(verdict), blocks)
 
 
 if __name__ == "__main__":

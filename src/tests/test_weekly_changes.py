@@ -204,6 +204,23 @@ class EditTest(unittest.TestCase):
                 for problem_text in problems:
                     self.assertNotIn("timer", problem_text, "a reason never repeats what the file says")
 
+    def test_a_new_angle_s_hook_is_not_frozen_yet_so_the_frozen_hook_exemption_never_reaches_it(self):
+        bank_text, pairs_text = self.text(ANGLES), self.text(PAIRS)
+        hooks = weekly_changes.known_hooks(kit.parse_angles(bank_text), kit.parse_pairs(pairs_text))
+        data = dict(json.loads(self.text(RULES)), frozen_hooks_exempt_from=["hook_max_words", "banned_words_in_hook"])
+        rules = weekly_changes.brand_rules(json.dumps(data))
+        long = '"Watch the timer stop at five, no grind, and the whole session still counts today."'
+        _, problems = weekly_changes.check_row(
+            NEW_ANGLE.replace('"Watch the timer stop at five."', long), bank_text, "P07", "P08", hooks, rules, RULES
+        )
+        self.assertEqual(
+            [problem for problem in problems if "brand rule" in problem],
+            [
+                f"its Hook breaks the brand rule `banned_words_in_hook` of `{RULES}`",
+                f"its Hook breaks the brand rule `hook_max_words` of `{RULES}`",
+            ],
+        )
+
     def test_a_change_adds_its_new_angle_s_record_to_the_creative_log_in_the_changed_angle_s_shape(self):
         cells, _ = self.check(NEW_ANGLE)
         header, _ = kit.table(self.text(ANGLES), weekly_changes.BANK_COLUMNS)
