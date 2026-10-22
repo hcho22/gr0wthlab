@@ -581,6 +581,31 @@ class CallToActionTest(DraftTestCase):
         verdict = self.check(fakes.draft(8), missing)
         self.assertEqual(self.blocking(verdict), [("pair-legs", "TikTok caption")])
 
+    def test_an_approved_leg_without_the_line_the_rules_now_give_blocks_its_other_leg_naming_the_rule(self):
+        reference = drafts.parse(fakes.draft(1), "day-01.md")
+        action = dict(self.context.rules.data["caption_call_to_action"], line="Join the beta: {link}")
+        changed = replace(self.context, rules=lint.Rules(dict(self.context.rules.data, caption_call_to_action=action)))
+        now_fails = (
+            "day 1's leg, which this leg must match beyond the Hook, now fails call-to-action, so the pair cannot both"
+            " pass until the Founder resolves it by a package change or by re-cutting both legs"
+        )
+        new_line = fakes.draft(8).replace(self.TIKTOK, "Join the beta: reptoday.app/tiktok")
+        new_line = new_line.replace(self.YOUTUBE, "Join the beta: reptoday.app/youtube")
+        cases = (
+            ("the new line", new_line, "pair-legs"),
+            ("day 1's line", fakes.draft(8), "call-to-action"),
+        )
+        for name, leg, rule in cases:
+            with self.subTest(leg=name):
+                verdict = drafts.evaluate(drafts.parse(leg, "day-08.md"), changed, reference, reference_approved=True)
+                self.assertEqual(
+                    self.blocking(verdict),
+                    [(rule, "TikTok caption"), (rule, "YouTube Shorts description"), ("pair-legs", "")],
+                )
+                self.assertEqual(verdict.blocks[-1].detail, now_fails)
+        unchanged = drafts.parse(fakes.draft(8), "day-08.md")
+        self.assertTrue(drafts.evaluate(unchanged, self.context, reference, reference_approved=True).passed)
+
     def test_a_platform_with_no_link_or_one_that_names_no_source_or_another_s_blocks_every_draft(self):
         line = self.context.rules.data["caption_call_to_action"]
         tags = "its path must be one of the Product registry's Source tags (tiktok, youtube, reddit, network)"

@@ -689,6 +689,9 @@ def check_pair(
     if approved:
         failing = other_hooks(theirs, reference.hook, context.kit, opening)
         failing += context.rules.check(frozen_copies(theirs, context.kit)) if context.rules else []
+        rechecked = Verdict()
+        check_call_to_action(theirs, context, rechecked)
+        failing += rechecked.blocks
     rules = sorted({finding.rule for finding in failing if finding.blocks and finding.field})
     if rules:
         verdict.block(
