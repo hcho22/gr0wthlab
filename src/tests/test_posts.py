@@ -240,6 +240,46 @@ class TakeTest(TakeTestCase):
         )
         self.assertIn("### Caption (starts with the Hook, identical on every platform;", brief)
 
+    def item_text(self, draft):
+        self.write(3, draft)
+        [result] = self.take(3).results
+        self.assertEqual(result.status, posts.QUEUED, result.verdict.blocks)
+        return (self.store.root / self.ledger.entries[result.item]["file"]).read_text(encoding="utf-8")
+
+    def test_the_item_shows_each_platform_s_own_caption_since_its_call_to_action_line_differs(self):
+        text = self.item_text(fakes.draft(3))
+        self.assertIn(
+            "Primary platform YouTube Shorts; the same video and text, apart from each caption's call-to-action line,"
+            " post to TikTok the same day.\n",
+            text,
+        )
+        self.assertIn("  > Join the waitlist: reptoday.app/tiktok\n", text[: text.index("**YouTube Shorts**")])
+        self.assertEqual(
+            text[text.index("**YouTube Shorts**") : text.index("**Claims")],
+            "**YouTube Shorts**\n\n"
+            "- Title: Skip a day and the score dips. It never resets.\n"
+            "- Description:\n"
+            "  > Skip a day and the score dips. It never resets.\n"
+            "  > This is the history view after three missed days this month.\n"
+            "  > Built by one person. Not released yet.\n"
+            "  > Join the waitlist: reptoday.app/youtube\n"
+            "- The rest is identical to TikTok's: the same text apart from each caption's call-to-action line, and the"
+            " same hashtags and alt text.\n\n",
+        )
+
+    def test_without_the_call_to_action_line_the_item_shows_the_first_platform_s_text_for_both(self):
+        data = {key: value for key, value in self.context.rules.data.items() if key != "caption_call_to_action"}
+        self.context.rules = lint.Rules(data)
+        bare = fakes.draft(3).replace("Join the waitlist: reptoday.app/tiktok\n", "")
+        text = self.item_text(bare.replace("Join the waitlist: reptoday.app/youtube\n", ""))
+        self.assertIn("Primary platform YouTube Shorts; the same video and text post to TikTok the same day.\n", text)
+        self.assertEqual(
+            text[text.index("**YouTube Shorts**") : text.index("**Claims")],
+            "**YouTube Shorts**\n\n"
+            "- Title: Skip a day and the score dips. It never resets.\n"
+            "- The rest is identical to TikTok's: the same text, hashtags, and alt text.\n\n",
+        )
+
     def test_a_frozen_hook_the_brand_rules_exempt_is_offered_and_the_item_and_report_say_so(self):
         data = dict(self.context.rules.data, hook_max_words=5)
         data["banned_words_in_hook"] = [*data["banned_words_in_hook"], "resets"]

@@ -31,7 +31,7 @@ from .areas import Areas, Store, UnsafeFile, read_plain
 from .drafts import BLOCKS, DONE, OPEN, ChecklistLine, Claim, ClaimResult, Context, Verdict, claim_pattern, none
 from .drafts import parse_claims as parse_claim_items
 from .exchange import plural, quoted
-from .lint import APPLIED, Copy, links, same_link, snippet
+from .lint import APPLIED, Copy, links, snippet
 from .queue import APPROVED, REJECTED, SUPERSEDED, Ledger, stands
 from .queue import OPEN as OPEN_ITEM
 from .waitlist import looks_like_address
@@ -79,6 +79,15 @@ def source_links(repo_root: Path, products: Sequence[str], tags: Sequence[str]) 
             if tag in tags:
                 found.setdefault(tag, (link, request.path))
     return found
+
+
+def same_link(written: str, wanted: str) -> bool:
+    """Whether a link in a message is the wanted one, with or without its scheme, in any letter case."""
+
+    def bare(link: str) -> str:
+        return re.sub(r"^https?://", "", link.strip(), flags=re.IGNORECASE).rstrip("/").casefold()
+
+    return bare(written) == bare(wanted)
 
 
 # Reading a Draft.

@@ -217,15 +217,6 @@ def links(text: str) -> list[str]:
     return found + ["a Markdown link"] * len(MARKDOWN_LINK.findall(text))
 
 
-def same_link(written: str, wanted: str) -> bool:
-    """Whether a link in a text is the wanted one, with or without its scheme, in any letter case."""
-
-    def bare(link: str) -> str:
-        return re.sub(r"^https?://", "", link.strip(), flags=re.IGNORECASE).rstrip("/").casefold()
-
-    return bare(written) == bare(wanted)
-
-
 def snippet(text: str, limit: int = 60) -> str:
     text = " ".join(text.split())
     return text if len(text) <= limit else text[: limit - 3] + "..."

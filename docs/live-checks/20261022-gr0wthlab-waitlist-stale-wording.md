@@ -23,14 +23,16 @@ All times are UTC on 2026-10-22.
 | The change, rounds 3 and 4 | `cd52c6cf082e532dbe93a7c8e17437628a778c78` | `a75751cef49f5b4c9adbeacef95dcfdce2996231` | `e0f2c496a52232ca2c670385d19f424a1de60ba0` |
 | After review, round 5 | `82621967e1387114b53a0b0fbfd7c34ac5ee24b2` | `e91c46ba9b5aec0ed195874c5013b2f2d8ac08a2` | `e0f2c496a52232ca2c670385d19f424a1de60ba0` |
 | After the second review, round 6 | `276c10a13b5f7293d622b47f2142069c0dc9a07d` | `3cd54fdf1318ea33b1ef54b3f05fe66bfa3a77e6` | `e0f2c496a52232ca2c670385d19f424a1de60ba0` |
-| After the third review, round 7 | the commit that holds this round's record | `1b9a67670b0cec40470c1a9e57f8b1e487fa1793` | `e0f2c496a52232ca2c670385d19f424a1de60ba0` |
+| After the third review, round 7 | `09d02a7b7dec59e31102f65bde6b38db7a142367` | `1b9a67670b0cec40470c1a9e57f8b1e487fa1793` | `e0f2c496a52232ca2c670385d19f424a1de60ba0` |
+| After the fourth review, round 8 | the commit that holds this round's record | `0e59d81c8d1b4868444b525a6e7176cc0bbe6c42` | `9c9143d02be500ca3124a0ed0fef37002e60f102` |
 
-The change leaves `config/` as it was.
+The change leaves `config/` as it was until round 8, which rewords one sentence of `fields_note` in `config/platforms.json`, a note no launcher code reads.
 `d34df3b` took each platform's link from the reviewed Waitlist Dispatch request; `e83ee84` takes it from `brand-rules.json` beside the line's words and holds it to the Product registry's Source tags, and the brief no longer names the Dispatch request.
 `cd52c6c` differs from `e83ee84` only in the filming example set's eight post Draft fixtures, which gained the line, so round 1's launcher code is the change's as it stood before review.
 Rounds 1 to 4 ran before the review round, which changes the check that no two platforms share a Waitlist Source and removes `lint.CallToAction.any_link` ([round 5](#round-5-after-review-preflight-and-boundary-check)).
 Rounds 1 to 5 ran before the second review round, which has an approved A/B leg read for the call-to-action line too ([round 6](#round-6-after-the-second-review-preflight-and-boundary-check)).
 Rounds 1 to 6 ran before the third review round, which has an approved A/B leg read for identical content across the platforms too ([round 7](#round-7-after-the-third-review-preflight-and-boundary-check)).
+Rounds 1 to 7 ran before the fourth review round, which shows each platform's own caption in a post item ([round 8](#round-8-after-the-fourth-review-the-post-item-preflight-and-boundary-check)).
 
 ## The Mandu edit
 
@@ -260,9 +262,61 @@ boundary check 20261022T144408Z-on-demand-8dbb: PASSED
   evidence: ~/Library/Logs/gr0wthlab/20261022T144408Z-on-demand-8dbb.boundary-check.json
 ```
 
+## Round 8: after the fourth review, the post item, preflight and boundary check
+
+The fourth review found that a post item still showed only the first platform's caption: for each later platform, `posts.render` showed the title alone and said "The rest is identical to TikTok's: the same text, hashtags, and alt text."
+So the YouTube Shorts description, the one caption that carries `reptoday.app/youtube`, was not in the item the Founder posts from, and its opening said "the same video and text post to" the other platform.
+The fourth review round makes `posts.render`, while `brand-rules.json` gives a call-to-action line, show each later platform's body field in full in its own section, and say the text is the same "apart from each caption's call-to-action line" in the item's opening and in its "The rest is identical" line.
+Without the key, the item is as it was.
+It also rewords `fields_note` in `config/platforms.json` the same way, adds to `docs/operations.md` that with the key gone an approved leg whose captions still end with different Waitlist lines blocks its other leg naming `identical-content`, and moves `same_link` back to `messages.py`, beside its only callers, with its original docstring.
+`test_posts.TakeTest` holds the item's YouTube Shorts section with the key, which fails on the code before this round, and the same section and opening without the key, which hold on that code too.
+
+At 14:56, with no run, no sitting, and no Codex session, `<tmp>/cta-r8-item.py` built the post-Draft checks' context from `<lab>/mandu`, round 1's copy with the Mandu edit, and the RepToday checkout at `main`, `f274ad0`, read only.
+It took `<lab>/window-1/day-01.md`, which `cmp` found identical to the production clone's day-1 Draft at 14:56, appended to its TikTok caption and its YouTube Shorts description the line `drafts.call_to_action_lines` gave each, and called the worktree's `drafts.evaluate`, which blocked nothing, and `posts.render`.
+The item's opening read "Primary platform TikTok; the same video and text, apart from each caption's call-to-action line, post to YouTube Shorts the same day.", and its YouTube Shorts section read:
+
+```
+**YouTube Shorts**
+
+- Title: Most workout apps open with a question. This one opens with the workout.
+- Description:
+  > Most workout apps open with a question. This one opens with the workout.
+  > A real-time screen recording moves from app open to a session ready to start. Not released yet.
+  > Join the waitlist: reptoday.app/youtube
+- The rest is identical to TikTok's: the same text apart from each caption's call-to-action line, and the same hashtags and alt text.
+```
+
+`diff -rq` found `<lab>/mandu-before` identical to `~/Mandu/projects/RepToday/gtm` at 14:56, and `git status --short` in the RepToday checkout listed nothing.
+
+Run from 14:56 to 14:58 from the worktree at this round's code, uncommitted, with Codex CLI 0.160.0.
+`git status --short` listed this round's six changed files, `config/platforms.json`, `docs/operations.md`, `src/gr0wthlab/lint.py`, `src/gr0wthlab/messages.py`, `src/gr0wthlab/posts.py`, and `src/tests/test_posts.py`, the same before the boundary check and after it; this file was changed only after the boundary check ended.
+`show-config` printed the configuration fingerprint `27b89374df9576784e1daf4e169729c83baae0b7da35d60f5a1bde822e62f7dd`, round 7's.
+
+- `src/bin/gr0wthlab preflight` at 14:56:36: `ok: true`, 6 writable areas, 22 refused paths, no breach and no failure; the footage place `~/Mandu/projects/RepToday` refused to the sandbox with nothing listed, and `www.reddit.com:443` and `itunes.apple.com:443` unreachable with nothing reached.
+
+- `src/bin/gr0wthlab boundary-check` from 14:56:42 to 14:57:44, one probe run, `20261022T145643Z-on-demand-9a79`, at its first attempt, with the same configuration fingerprint.
+  Its preflight refused 22 paths, allowed 6 areas, and refused a listing of the footage place and of 0 footage folders in it.
+  Its verdict, as printed (the home folder's path replaced by `~`):
+
+```
+boundary check 20261022T145643Z-on-demand-9a79: PASSED
+  steps this run had to prove: 49
+  sentinels that escaped (files among them removed): 0
+  permitted sentinels written: 12 of 12
+  the agent's report was kept as ~/Library/Logs/gr0wthlab/gr0wthlab-boundary-probe-20261022T145643Z-on-demand-9a79-report.md
+  file-tool targets Codex refused, each in a patch of its own: 17 of 17
+  kernel Seatbelt denials naming this run's sentinels or the check's listeners: 19
+  forbidden reads of the footage place and its footage folders the runtime refused, each on its own: 1 of 1
+  local connections that got through: none
+  sandbox network: 3 targets refused, reached: none (the control outside the sandbox reached its listener: yes)
+  launcher network: 2 requests sent, methods ['GET'], hosts ['itunes.apple.com', 'www.reddit.com']; robots.txt: www.reddit.com read, itunes.apple.com read; an unlisted address was refused
+  changes since the snapshot from before the check: none
+  evidence: ~/Library/Logs/gr0wthlab/20261022T145643Z-on-demand-9a79.boundary-check.json
+```
+
 ## What was not exercised
 
-- No weekly run or sitting saw the line on the real package: round 1 called the checks directly, so the real Review Queue, run report, notice, and the sitting page's rendering of a post item were not exercised; what the item, brief, and run report say stands on `test_posts.TakeTest.test_the_item_brief_and_report_say_which_call_to_action_line_each_caption_ends_with`.
+- No weekly run or sitting saw the line on the real package: round 1 called the checks directly and round 8 `posts.render` alone, so the real Review Queue, run report, notice, and the sitting page's rendering of a post item were not exercised; what the item, brief, and run report say stands on `test_posts.TakeTest.test_the_item_brief_and_report_say_which_call_to_action_line_each_caption_ends_with`.
 - The five held-back cases of the example set (examples 23 to 27) carry fixed candidates and run in the unit tests; no agent wrote them.
 - No session wrote a Draft against the real package with the edit applied; the example labs use the synthetic kit, whose `brand-rules.json` gives the same line and links.
 - No A/B pair with an approved leg ran live, before or after round 6's and round 7's changes; an approved leg read for the line stands on `test_drafts.CallToActionTest.test_an_approved_leg_without_the_line_the_rules_now_give_blocks_its_other_leg_naming_the_rule`, and one read for identical content after the key is removed on `test_drafts.CallToActionTest.test_an_approved_leg_with_the_line_after_the_key_is_removed_blocks_its_other_leg_naming_the_rule`.

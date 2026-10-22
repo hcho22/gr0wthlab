@@ -943,6 +943,7 @@ def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict, as
     roles = plan.context.paths
     leg = f", {day.pair} leg {day.leg}" if day.pair else ""
     others = [name for name in plan.context.kit.platforms if name != day.primary]
+    action = plan.context.rules is not None and plan.context.rules.call_to_action is not None
     slot = (
         f"Slot: {datetime.fromisoformat(day_plan.slot):%A %Y-%m-%d %H:%M} ({day_plan.slot[-6:]})."
         if day_plan.slot
@@ -950,8 +951,9 @@ def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict, as
     )
     body = [
         f"Day {day.day} of {plan.product} window {plan.window.number}: Angle {angle.id} ({angle.name}){leg}."
-        f" Primary platform {day.primary}; the same video and text post to {', '.join(others) or 'no other platform'}"
-        " the same day.",
+        f" Primary platform {day.primary}; the same video and text"
+        + (", apart from each caption's call-to-action line," if action else "")
+        + f" post to {', '.join(others) or 'no other platform'} the same day.",
         slot,
         f"Nothing can be published until the {plan.product} Waitlist is live."
         if not plan.waitlist_live
@@ -984,14 +986,19 @@ def render(plan: Plan, day_plan: DayPlan, draft: PostDraft, verdict: Verdict, as
         body += ["", f"**{platform}**", ""]
         for limit in facts.fields:
             text = values[limit.name]
-            if first is not None and not limit.title:
+            if first is not None and not limit.title and not (action and limit.body):
                 continue
             if "\n" in text.strip():
                 body += [f"- {limit.name}:"] + quoted(text)
             else:
                 body.append(f"- {limit.name}: {text.strip()}")
         if first is not None:
-            body.append(f"- The rest is identical to {first}'s: the same text, hashtags, and alt text.")
+            same = (
+                "the same text apart from each caption's call-to-action line, and the same hashtags and alt text"
+                if action
+                else "the same text, hashtags, and alt text"
+            )
+            body.append(f"- The rest is identical to {first}'s: {same}.")
         first = first or platform
     commit = plan.code.short
     body += ["", f"**Claims, checked against {plan.product} `{plan.code.branch}` at `{commit}`**", ""]
