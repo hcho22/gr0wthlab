@@ -39,6 +39,7 @@ Five minutes still counts as showing up.
 Five minutes still counts as showing up.
 One whole session, sped up, with the timer in view.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/tiktok
 
 ### Hashtags
 
@@ -59,6 +60,7 @@ Five minutes still counts as showing up.
 Five minutes still counts as showing up.
 One whole session, sped up, with the timer in view.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 
