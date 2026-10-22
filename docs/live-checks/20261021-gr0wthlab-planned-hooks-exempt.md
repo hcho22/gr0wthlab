@@ -22,6 +22,7 @@ All times are Mac local time (PDT, UTC-7) on 2026-10-21.
 | After review, round 4 | the commit that holds this round's record | `3c58ea197124e090bee4f40c11b1eda727fb595c` | `92af9e1f5971bf9d4a3ff122fc50896e26a5e54a` |
 
 The change leaves `config/` as it was.
+After round 4, the only change to `src/` is one sentence of agent task text in `src/instructions/weekly-run/weekly-read.md`, which says a new Angle's Hook is held to every rule of the brand rules file since no frozen-Hook exemption reaches it; it changes no launcher code, so round 4's checks still apply to the final tree.
 `show-config` printed the configuration fingerprint `e73481e3e3e4425625eb8cd7c121b6043119ed3bf6737e0b6f476b23500e6168` in the worktree at the change.
 The command it prints holds the checkout's own path, and round 4 ran in another worktree, where it printed `7ed7762e92b1a1e64e342fb882a0db81501d4bb96994bf9a44b2c69f5b24f237`.
 
