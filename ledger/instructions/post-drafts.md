@@ -27,8 +27,13 @@ The Draft's format is in the task definition, and the launcher's checks decide w
 
 - The first line is the Hook.
 - Then one or two short lines of plain fact about what the video shows, and the pre-launch status in words the brand guidelines allow, such as "Not released yet."
-- No call to action, link, or download line: the product has no listing, and the Waitlist is not live.
-- The other platform carries the same text, hashtags, and alt text; only the YouTube title differs, and it is the Hook.
+- The last line is the call-to-action line the brief gives for that platform, copied word for word.
+  It is the post's one call to action and its only link, and its address differs per platform so the Founder sees which channel brought each Waitlist sign-up.
+  When the brief gives no line, a caption ends without one.
+- Never put the call to action, its address, or any other link anywhere else: not in the Hook, a beat's spoken line, on-screen text, or visual action, the YouTube title, the hashtags, or the alt text.
+  The video never shows it.
+- No download line: the product has no listing.
+- The other platform carries the same text, hashtags, and alt text; only the YouTube title, which is the Hook, and the address in the call-to-action line differ.
 - Use at most one hashtag unless the kit asks for more.
 - The brand lint reads a hashtag as words run together: a word or phrase a brand rule lists blocks the Draft anywhere inside a hashtag, run together or joined by underscores, even as part of a longer word, and so does a number or quantity before an invented-proof term.
   That is stricter than in every other field, where a listed phrase matches only as whole words, whatever joins them (spaces, hyphens, dashes, or underscores).
@@ -62,7 +67,7 @@ These AI tells make copy read as machine-written; avoid each one, and never stac
 - A drumbeat of fragments ("Simple. Fast. Done."), and everything in threes.
 - Hype words and empty intensifiers; replace each with the fact it stands for.
 
-Leave alone: a single absence next to the point it supports, a list of three when there really are three things, and a clause after a comma that adds a new fact.
+Leave alone: a single absence next to the point it supports, a list of three when there really are three things, a clause after a comma that adds a new fact, and the call-to-action line, which you copy as the brief gives it.
 
 ## When the package blocks a Draft
 
@@ -73,7 +78,7 @@ Leave alone: a single absence next to the point it supports, a list of three whe
 ## Pair legs and re-drafts
 
 - For an A/B leg whose other leg already has an open or approved post, copy that leg's Draft and change only the Hook's lines: the hook beat's on-screen text, the first caption line, and the YouTube title.
-  The hook beat's visual action and spoken line may change with them; every later beat, the rest of each caption, the hashtags, and the alt text stay word for word, beat for beat, and every beat keeps its time.
+  The hook beat's visual action and spoken line may change with them; every later beat, the rest of each caption with its call-to-action line, the hashtags, and the alt text stay word for word, beat for beat, and every beat keeps its time.
 - When both legs are due in one run, write the earlier day first and copy it for the later day.
 - A re-cut pair is one the kit marks as a re-cut, in its section of the A/B pairs or in either leg's calendar row.
   Plan its opening for both legs before you write either: each leg opens on its own Hook in the hook beat, and the pair's other Hook, where the opening order calls for it, sits in one later beat as its on-screen text or spoken line.

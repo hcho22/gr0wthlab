@@ -237,12 +237,12 @@ class CountsTest(ReadTestCase):
 
 
 class NoViewTest(ReadTestCase):
-    def test_no_configured_location_is_skipped_because_the_build_has_not_landed(self):
+    def test_no_configured_location_is_skipped_as_not_configured(self):
         reading = waitlist.read(RULES, NOW)
         self.assertEqual(reading.status, waitlist.SKIPPED)
         self.assertEqual(
             reading.detail,
-            "RepToday's Waitlist build has not landed, so no view location is configured yet (US-ME05)",
+            "no view location is configured for RepToday's Waitlist in the Product registry",
         )
         self.assertEqual(waitlist.read(None, NOW).status, waitlist.SKIPPED)
 

@@ -31,7 +31,7 @@ from .areas import Areas, Store, UnsafeFile, read_plain
 from .drafts import BLOCKS, DONE, OPEN, ChecklistLine, Claim, ClaimResult, Context, Verdict, claim_pattern, none
 from .drafts import parse_claims as parse_claim_items
 from .exchange import plural, quoted
-from .lint import APPLIED, Copy, snippet
+from .lint import APPLIED, Copy, links, same_link, snippet
 from .queue import APPROVED, REJECTED, SUPERSEDED, Ledger, stands
 from .queue import OPEN as OPEN_ITEM
 from .waitlist import looks_like_address
@@ -59,14 +59,9 @@ APPROVED_BEFORE = "approved earlier"
 REPEATED = "not queued again"
 NOT_DUE = "not due"
 STATUSES = (QUEUED, KEPT, BLOCKED, MISSING, APPROVED_BEFORE, REPEATED, NOT_DUE)
+# The brand-rules.json keys only a post Draft is read for.
+POST_ONLY = ("frozen_hooks_exempt_from", "caption_call_to_action")
 
-# Anything a reader could follow: an address with its scheme, a www. name, a bare domain, or a Markdown link.
-LINK = re.compile(
-    r"(?:https?://|www\.)[^\s<>\"]+"
-    r"|(?<![\w@./-])(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}(?![a-z0-9-])(?:/[^\s<>\"]*)?",
-    re.IGNORECASE,
-)
-MARKDOWN_LINK = re.compile(r"\]\(")
 # Reddit turns r/name and u/name into links wherever they are typed, with or without a slash before them.
 MENTION = re.compile(r"(?<![\w/])/?[ru]/[A-Za-z0-9_-]{2,}")
 
@@ -84,22 +79,6 @@ def source_links(repo_root: Path, products: Sequence[str], tags: Sequence[str]) 
             if tag in tags:
                 found.setdefault(tag, (link, request.path))
     return found
-
-
-def links(text: str) -> list[str]:
-    """Everything in a text a reader could follow as a link, as written, without the punctuation that ends a
-    sentence."""
-    found = [match.group(0).rstrip(".,;:!?)'") for match in LINK.finditer(text)]
-    return found + ["a Markdown link"] * len(MARKDOWN_LINK.findall(text))
-
-
-def same_link(written: str, wanted: str) -> bool:
-    """Whether a link in a message is the wanted one, with or without its scheme, in any letter case."""
-
-    def bare(link: str) -> str:
-        return re.sub(r"^https?://", "", link.strip(), flags=re.IGNORECASE).rstrip("/").casefold()
-
-    return bare(written) == bare(wanted)
 
 
 # Reading a Draft.
@@ -753,8 +732,9 @@ def describe_rules(context: Context, creator: bool) -> list[str]:
     rules = context.rules
     if rules is None:
         return [f"- `brand-rules.json` could not be used ({context.rules_problem}), so every message is blocked."]
-    # A message has no frozen Hook, so the frozen Hook's exemption is no rule it is read for.
-    applied = [row.rule for row in rules.statuses() if row.status == APPLIED and row.rule != "frozen_hooks_exempt_from"]
+    # A message has no frozen Hook or caption, so the frozen Hook's exemption and the captions' call to action are no
+    # rules it is read for.
+    applied = [row.rule for row in rules.statuses() if row.status == APPLIED and row.rule not in POST_ONLY]
     pending = rules.pending() + (rules.creator_pending() if creator else [])
     lines = [
         f"- Every message passes the brand lint (`{context.paths.get('brand_rules', 'brand-rules.json')}`), read on"

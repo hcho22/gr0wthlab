@@ -12,7 +12,7 @@
     {
       "id": 1,
       "prompt": "Prepare the Draft for day 3 of window 1 (P03 / AB-2 leg A, primary YouTube Shorts) from the brief.",
-      "expected_output": "A Draft that passes every check: the frozen Hook opens the video and every caption, both platforms carry identical text, the one behavioral claim shows the code that supports it, and the item cites Angle P03, its sourced pain, signal, and kill criterion.",
+      "expected_output": "A Draft that passes every check: the frozen Hook opens the video and every caption, both platforms carry identical text but for the call-to-action line that ends each caption with its platform's Waitlist address, the one behavioral claim shows the code that supports it, and the item cites Angle P03, its sourced pain, signal, and kill criterion.",
       "assertions": [
         {"kind": "deterministic", "check": "passes"},
         {"kind": "deterministic", "check": "lint_passes"},
@@ -258,6 +258,61 @@
       ],
       "files": [],
       "run": {"calendar_days": [1], "mandu": ["files/labs/open-checklist-line/mandu"]}
+    },
+    {
+      "id": 23,
+      "prompt": "Prepare the Draft for day 3; the candidate below ends neither caption with the call-to-action line the brief gives.",
+      "expected_output": "The launcher blocks the Draft naming the call-to-action rule and, for each platform, the line its caption must end with.",
+      "assertions": [
+        {"kind": "deterministic", "check": "blocked_by", "rule": "call-to-action"},
+        {"kind": "deterministic", "check": "hook_frozen"},
+        {"kind": "judged", "text": "A good Draft ends each caption with its platform's line, word for word, after the pre-launch status."}
+      ],
+      "files": ["files/drafts/day-03-no-call-to-action.md"]
+    },
+    {
+      "id": 24,
+      "prompt": "Prepare the Draft for day 3; the candidate below words its call to action its own way instead of the brief's line.",
+      "expected_output": "The launcher blocks the Draft: only the line brand-rules.json gives, word for word, may end a caption.",
+      "assertions": [
+        {"kind": "deterministic", "check": "blocked_by", "rule": "call-to-action"},
+        {"kind": "deterministic", "check": "hook_frozen"},
+        {"kind": "judged", "text": "A good Draft copies the call-to-action line from the brief rather than rewording it."}
+      ],
+      "files": ["files/drafts/day-03-beta-call-to-action.md"]
+    },
+    {
+      "id": 25,
+      "prompt": "Prepare the Draft for day 3; the candidate below ends its TikTok caption with YouTube's Waitlist address.",
+      "expected_output": "The launcher blocks the Draft naming the Source the address belongs to, so no TikTok sign-up is counted as YouTube's.",
+      "assertions": [
+        {"kind": "deterministic", "check": "blocked_by", "rule": "call-to-action"},
+        {"kind": "deterministic", "check": "hook_frozen"},
+        {"kind": "judged", "text": "A good Draft gives each platform its own address, so the Founder sees which channel brought each sign-up."}
+      ],
+      "files": ["files/drafts/day-03-wrong-source.md"]
+    },
+    {
+      "id": 26,
+      "prompt": "Prepare the Draft for day 3; the candidate below adds a second line with a link before each caption's call to action.",
+      "expected_output": "The launcher blocks the Draft: the call-to-action line is the post's one call to action and only link.",
+      "assertions": [
+        {"kind": "deterministic", "check": "blocked_by", "rule": "call-to-action"},
+        {"kind": "deterministic", "check": "hook_frozen"},
+        {"kind": "judged", "text": "A good Draft asks the viewer for one thing only."}
+      ],
+      "files": ["files/drafts/day-03-second-call-to-action.md"]
+    },
+    {
+      "id": 27,
+      "prompt": "Prepare the Draft for day 3; the candidate below shows the call-to-action line as on-screen text in its last beat.",
+      "expected_output": "The launcher blocks the Draft naming the beat: the call to action goes in the caption text only, never on the video.",
+      "assertions": [
+        {"kind": "deterministic", "check": "blocked_by", "rule": "call-to-action"},
+        {"kind": "deterministic", "check": "hook_frozen"},
+        {"kind": "judged", "text": "A good Draft keeps the call to action in the caption text, never on the video."}
+      ],
+      "files": ["files/drafts/day-03-call-to-action-on-screen.md"]
     }
   ],
   "lab": {
@@ -272,7 +327,7 @@
         "slot": null
       },
       "waitlist": {
-        "live_since": null
+        "live_since": "2026-10-21"
       },
       "outreach": {
         "network_ask_source": null,

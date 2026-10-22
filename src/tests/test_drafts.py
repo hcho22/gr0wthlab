@@ -452,5 +452,168 @@ class RecutPairFrozenHookExemptionTest(DraftTestCase):
                 self.assertEqual(self.blocking(verdict), blocks)
 
 
+class CallToActionTest(DraftTestCase):
+    """The synthetic brand rules give the line "Join the waitlist: {link}", with TikTok's Source tiktok and YouTube
+    Shorts' youtube, whose links are the reviewed Waitlist Dispatch request's."""
+
+    TIKTOK = "Join the waitlist: reptoday.app/tiktok"
+    YOUTUBE = "Join the waitlist: reptoday.app/youtube"
+
+    def blocking(self, verdict):
+        return [(finding.rule, finding.field) for finding in verdict.blocks]
+
+    def caption(self, text, old, new, platform="TikTok"):
+        """The Draft with one platform's caption line old replaced by new, the other platform untouched."""
+        tiktok, youtube = text.split("## YouTube Shorts")
+        if platform == "TikTok":
+            return tiktok.replace(old, new, 1) + "## YouTube Shorts" + youtube
+        return tiktok + "## YouTube Shorts" + youtube.replace(old, new, 1)
+
+    def test_each_caption_ends_with_its_platform_s_line_and_the_draft_passes(self):
+        self.assertEqual(
+            drafts.call_to_action_lines(self.context),
+            ({"TikTok": self.TIKTOK, "YouTube Shorts": self.YOUTUBE}, []),
+        )
+        self.assertEqual(self.context.links_from, "src/dispatches/reptoday-waitlist.md")
+        clean = fakes.draft(3)
+        self.assertTrue(clean.count(self.TIKTOK) == clean.count(self.YOUTUBE) == 1)
+        self.assertTrue(self.check(clean).passed)
+
+    def test_a_caption_without_its_line_is_held_back_naming_the_line(self):
+        bare = fakes.draft(3).replace(self.TIKTOK + "\n", "").replace(self.YOUTUBE + "\n", "")
+        verdict = self.check(bare)
+        self.assertEqual(
+            self.blocking(verdict),
+            [("call-to-action", "TikTok caption"), ("call-to-action", "YouTube Shorts description")],
+        )
+        self.assertEqual(
+            [finding.detail for finding in verdict.blocks],
+            [
+                f"does not end with its call-to-action line; the last line of every TikTok post is `{self.TIKTOK}`",
+                "does not end with its call-to-action line; the last line of every YouTube Shorts post is"
+                f" `{self.YOUTUBE}`",
+            ],
+        )
+        one = self.check(self.caption(fakes.draft(3), self.TIKTOK + "\n", ""))
+        self.assertIn(("call-to-action", "TikTok caption"), self.blocking(one))
+
+    def test_other_wording_is_held_back(self):
+        for wording in (
+            "Join the beta: reptoday.app/tiktok",
+            "join the waitlist: reptoday.app/tiktok",
+            "Join the waitlist at reptoday.app/tiktok",
+            "Join the waitlist: https://reptoday.app/tiktok",
+            "Join the waitlist: reptoday.app",
+            "Join the waitlist.",
+        ):
+            with self.subTest(wording=wording):
+                verdict = self.check(self.caption(fakes.draft(3), self.TIKTOK, wording))
+                self.assertEqual(self.blocking(verdict), [("call-to-action", "TikTok caption")])
+                self.assertIn(f"ends with {wording!r}, not the line brand-rules.json", verdict.blocks[0].detail)
+
+    def test_another_channel_s_address_is_held_back_naming_its_source(self):
+        cases = (
+            ("TikTok", self.TIKTOK, self.YOUTUBE, "youtube", "TikTok caption"),
+            ("YouTube Shorts", self.YOUTUBE, self.TIKTOK, "tiktok", "YouTube Shorts description"),
+            ("TikTok", self.TIKTOK, "Join the waitlist: reptoday.app/reddit", "reddit", "TikTok caption"),
+        )
+        for platform, line, wrong, tag, field in cases:
+            with self.subTest(platform=platform, wrong=wrong):
+                verdict = self.check(self.caption(fakes.draft(3), line, wrong, platform))
+                self.assertEqual(self.blocking(verdict), [("call-to-action", field)])
+                self.assertTrue(verdict.blocks[0].detail.startswith(f"ends with the Source link for `{tag}`"))
+
+    def test_a_second_call_to_action_or_link_in_a_caption_is_held_back(self):
+        clean = fakes.draft(3)
+        for extra, found in (
+            (self.TIKTOK, "'reptoday.app/tiktok' and 'Join the waitlist'"),
+            ("Sign up at reptoday.app/tiktok.", "'reptoday.app/tiktok'"),
+            ("More at https://example.com/rep", "'https://example.com/rep'"),
+            ("Tap [here](https://reptoday.app).", "'https://reptoday.app' and 'a Markdown link'"),
+        ):
+            with self.subTest(extra=extra):
+                verdict = self.check(self.caption(clean, self.TIKTOK, extra + "\n" + self.TIKTOK))
+                self.assertIn(("call-to-action", "TikTok caption"), self.blocking(verdict))
+                details = [finding.detail for finding in verdict.blocks if finding.rule == "call-to-action"]
+                self.assertTrue(details[0].startswith(f"carries {found} before its last line"), details)
+
+    def test_the_line_anywhere_but_the_end_of_a_caption_is_held_back(self):
+        clean = fakes.draft(3)
+        cases = (
+            (
+                "- On-screen text: Three gaps this month. Still climbing.",
+                f"- On-screen text: {self.TIKTOK}",
+                "beat 2 on-screen text",
+            ),
+            (
+                "- Spoken line: none\n- On-screen text: Real phone",
+                "- Spoken line: Join the waitlist.\n- On-screen text: Real phone",
+                "beat 3 spoken line",
+            ),
+            ("Open today's session and tap Start.", "End card shows reptoday.app/tiktok.", "beat 3 visual action"),
+            ("#buildinpublic\n\n### Alt text", "#jointhewaitlist\n\n### Alt text", "TikTok hashtags"),
+            ("each missed day lowers", "the reptoday.app/tiktok page; each missed day lowers", "TikTok alt text"),
+        )
+        for old, new, field in cases:
+            with self.subTest(field=field):
+                verdict = self.check(clean.replace(old, new, 1))
+                self.assertIn(("call-to-action", field), self.blocking(verdict))
+                detail = next(finding.detail for finding in verdict.blocks if finding.field == field)
+                self.assertIn("go only at the end of each caption, never in the Hook, the video", detail)
+        title = clean.replace(
+            "### Title\n\nSkip a day and the score dips. It never resets.",
+            f"### Title\n\nSkip a day and the score dips. It never resets. {self.YOUTUBE}",
+        )
+        self.assertIn(("call-to-action", "YouTube Shorts title"), self.blocking(self.check(title)))
+
+    def test_the_platforms_captions_may_differ_only_in_the_line_s_link(self):
+        clean = fakes.draft(3)
+        self.assertNotIn("identical-content", rules_of(self.check(clean)))
+        changed = self.caption(clean, "Built by one person.", "Built by one developer.", "YouTube Shorts")
+        verdict = self.check(changed)
+        self.assertEqual(rules_of(verdict), ["identical-content"])
+        self.assertTrue(verdict.blocks[0].detail.endswith("apart from each caption's call-to-action line"))
+
+    def test_both_legs_of_a_pair_carry_the_same_line(self):
+        reference = drafts.parse(fakes.draft(1), "day-01.md")
+        self.assertTrue(self.check(fakes.draft(8), reference).passed)
+        missing = drafts.parse(self.caption(fakes.draft(1), self.TIKTOK + "\n", ""), "day-01.md")
+        verdict = self.check(fakes.draft(8), missing)
+        self.assertEqual(self.blocking(verdict), [("pair-legs", "TikTok caption")])
+
+    def test_a_platform_with_no_source_or_no_link_blocks_every_draft(self):
+        line = self.context.rules.data["caption_call_to_action"]
+        for sources, links, problem in (
+            (
+                {"TikTok": "tiktok"},
+                None,
+                "brand-rules.json caption_call_to_action names no Waitlist Source for YouTube Shorts",
+            ),
+            (
+                None,
+                {"tiktok": "reptoday.app/tiktok"},
+                "`src/dispatches/reptoday-waitlist.md` defines no Source link"
+                " for `youtube`, the Waitlist Source of YouTube Shorts",
+            ),
+        ):
+            with self.subTest(problem=problem):
+                data = dict(
+                    self.context.rules.data, caption_call_to_action=dict(line, sources=sources or line["sources"])
+                )
+                context = replace(self.context, rules=lint.Rules(data), source_links=links or self.context.source_links)
+                verdict = drafts.evaluate(drafts.parse(fakes.draft(3), "day-03.md"), context)
+                self.assertIn(problem, [finding.detail for finding in verdict.blocks])
+                self.assertEqual(rules_of(verdict), ["call-to-action"])
+
+    def test_without_the_key_a_caption_carries_no_line_and_none_is_checked(self):
+        data = {key: value for key, value in self.context.rules.data.items() if key != "caption_call_to_action"}
+        self.context.rules = lint.Rules(data)
+        self.assertEqual(drafts.call_to_action_lines(self.context), ({}, []))
+        bare = fakes.draft(3).replace(self.TIKTOK + "\n", "").replace(self.YOUTUBE + "\n", "")
+        self.assertTrue(self.check(bare).passed)
+        # The two lines' links differ, which the identical-content check holds against them as before.
+        self.assertEqual(rules_of(self.check(fakes.draft(3))), ["identical-content"])
+
+
 if __name__ == "__main__":
     unittest.main()

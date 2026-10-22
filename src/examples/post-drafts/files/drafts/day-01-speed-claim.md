@@ -41,6 +41,7 @@ Open it and the session is already waiting.
 Open it and the session is already waiting.
 Built on the phone in under 100 ms, from the home screen to the first movement.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/tiktok
 
 ### Hashtags
 
@@ -61,6 +62,7 @@ Open it and the session is already waiting.
 Open it and the session is already waiting.
 Built on the phone in under 100 ms, from the home screen to the first movement.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 

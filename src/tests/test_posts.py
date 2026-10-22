@@ -201,6 +201,45 @@ class TakeTest(TakeTestCase):
             text,
         )
 
+    def test_the_item_brief_and_report_say_which_call_to_action_line_each_caption_ends_with(self):
+        self.write(3, fakes.draft(3))
+        outcome = self.take(3)
+        [result] = outcome.results
+        self.assertEqual(result.status, posts.QUEUED, result.verdict.blocks)
+        text = (self.store.root / self.ledger.entries[result.item]["file"]).read_text(encoding="utf-8")
+        self.assertIn(
+            "- Call to action (`brand-rules.json` `caption_call_to_action`): each caption ends with its platform's"
+            " line, TikTok `Join the waitlist: reptoday.app/tiktok`; YouTube Shorts `Join the waitlist:"
+            " reptoday.app/youtube`, and nothing else in the post carries a link or that line's words: passed. Whether"
+            " other words ask the viewer to do something is yours to judge.\n",
+            text,
+        )
+        said = (
+            "- Call to action: every caption ends with its platform's line from"
+            " `projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json` (`caption_call_to_action`), word for"
+            " word, as its last line: TikTok `Join the waitlist: reptoday.app/tiktok`; YouTube Shorts `Join the"
+            " waitlist: reptoday.app/youtube`, the Source links of `src/dispatches/reptoday-waitlist.md`.\n"
+            "  It is the post's one call to action and only link: no other line of a caption, and nothing in the Hook,"
+            " the beats, a title, hashtags, or alt text, carries a link or its words.\n"
+        )
+        self.assertIn(said, "\n".join(posts.report_lines(self.plan(3), outcome, "")) + "\n")
+        brief = "\n".join(posts.brief_lines(self.plan(3), self.repo))
+        self.assertIn(said, brief)
+        self.assertIn(
+            "### Caption (starts with the Hook and ends with the call-to-action line, identical on every platform but"
+            " that line;",
+            brief,
+        )
+        data = {key: value for key, value in self.context.rules.data.items() if key != "caption_call_to_action"}
+        self.context.rules = lint.Rules(data)
+        brief = "\n".join(posts.brief_lines(self.plan(3), self.repo))
+        self.assertIn(
+            "- Call to action: `projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json` gives no"
+            " call-to-action line (`caption_call_to_action`), so a caption ends with none and no post carries a link.",
+            brief,
+        )
+        self.assertIn("### Caption (starts with the Hook, identical on every platform;", brief)
+
     def test_a_frozen_hook_the_brand_rules_exempt_is_offered_and_the_item_and_report_say_so(self):
         data = dict(self.context.rules.data, hook_max_words=5)
         data["banned_words_in_hook"] = [*data["banned_words_in_hook"], "resets"]

@@ -39,6 +39,7 @@ The session builds before the screen settles.
 The session builds before the screen settles.
 From the home screen to the first movement, in one take.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/tiktok
 
 ### Hashtags
 
@@ -59,6 +60,7 @@ The session builds before the screen settles.
 The session builds before the screen settles.
 From the home screen to the first movement, in one take.
 Built by one person. Not released yet.
+Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 

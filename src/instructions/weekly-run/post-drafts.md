@@ -59,7 +59,7 @@ leg: A
 
 ### Caption
 
-<the frozen Hook as the first line, then the rest of the caption>
+<the frozen Hook as the first line, then the rest of the caption, and last the TikTok call-to-action line the brief gives, if it gives one>
 
 ### Hashtags
 
@@ -77,7 +77,7 @@ leg: A
 
 ### Description
 
-<the same text as the TikTok caption>
+<the same text as the TikTok caption, with the YouTube Shorts call-to-action line the brief gives in place of TikTok's>
 
 ### Hashtags
 
@@ -96,7 +96,9 @@ leg: A
 
 - Leave out `pair` and `leg` for a day that is not an A/B pair leg.
 - Number the beats from 1 with times that follow on; only beat 1 is the hook beat, starting at 0s.
-- Each test platform the brief names gets one `##` section with exactly the `###` fields the brief lists for it; both carry identical content.
+- Each test platform the brief names gets one `##` section with exactly the `###` fields the brief lists for it; both carry identical content, except that each caption ends with its own platform's call-to-action line when the brief gives one.
+- That line, word for word as the brief gives it, is the last line of its caption and the post's one call to action and only link.
+  The launcher blocks a Draft whose caption lacks it or ends with other words or another platform's address, and a Draft that carries a link or the line's words anywhere else, a beat's visual action, on-screen text, the YouTube title, the hashtags, and the alt text included.
 - The brand lint matches a word or phrase a brand rule lists as whole words, whether spaces, hyphens, dashes, or underscores join them.
   A hashtag runs its words together, so there the lint is stricter: a listed word or phrase blocks the Draft anywhere inside a hashtag, run together or joined by underscores, even as part of a longer word.
   So does a number or quantity that comes before an invented-proof term inside one hashtag.
