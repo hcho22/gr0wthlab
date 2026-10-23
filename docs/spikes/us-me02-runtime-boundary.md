@@ -52,6 +52,7 @@ For each session of a run, and for the boundary check's probe, it starts `codex 
   Each of these either acts outside the local sandbox (ChatGPT connectors, MCP servers, hooks, browser or desktop control) or makes the run depend on the Founder's shell setup.
 - `-c agents.enabled=false` with `--disable multi_agent --disable multi_agent_v2`, so the agent has no sub-agent tools.
   `--disable multi_agent` alone is not enough: the model catalog marks `gpt-6-luna` as multi-agent v2, which outranks that flag.
+- `-c skills.include_instructions=false`, so the prompt lists none of the skills installed under `~/.codex/skills/` and `~/.agents/skills/`, which `--ignore-user-config` does not keep out (since 2026-10-23, [the check](../live-checks/20261023-gr0wthlab-codex-no-host-skills.md)).
 - An environment built from scratch (`HOME`, `USER`, `LOGNAME`, `SHELL`, `LANG`, `TMPDIR`, `PATH`, `CODEX_HOME`, `RUST_LOG`), so a launchd run and a terminal run see the same variables and no token in the caller's environment reaches the agent.
   `RUST_LOG` is `error,codex_otel.log_only=info`, which has Codex keep, in its own log, a record of each tool call with its arguments and output; the boundary check reads it.
 
