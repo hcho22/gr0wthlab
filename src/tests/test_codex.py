@@ -21,6 +21,7 @@ CODEX_CONFIG = dict(
         "reasoning_effort": "high",
         "approval_policy": "never",
         "sub_agents": False,
+        "skill_instructions": False,
         "session_flags": ["--ignore-user-config", "--ignore-rules", "--ephemeral"],
         "disabled_features": ["apps", "hooks"],
         "shell_environment": {"GIT_CONFIG_GLOBAL": "/dev/null"},
@@ -81,6 +82,7 @@ class CommandTest(CodexTestCase):
         self.assertIn("permissions.gr0wthlab.network.enabled=false", overrides)
         self.assertIn('approval_policy="never"', overrides)
         self.assertIn("agents.enabled=false", overrides)
+        self.assertIn("skills.include_instructions=false", overrides)
         self.assertIn('shell_environment_policy.set={"GIT_CONFIG_GLOBAL" = "/dev/null"}', overrides)
         filesystem = [o for o in overrides if o.startswith("permissions.gr0wthlab.filesystem=")]
         self.assertEqual(len(filesystem), 1)
@@ -109,6 +111,17 @@ class CommandTest(CodexTestCase):
             "--approve-for-me",
         ):
             self.assertNotIn(widening, command)
+
+    def test_no_session_or_sandbox_probe_is_shown_the_skills_installed_on_the_mac(self):
+        command = codex.build_exec_command(CODEX_CONFIG, self.boundary, self.codex_bin, Path("/logs/run.md"))
+        at = command.index("skills.include_instructions=false")
+        self.assertEqual(command[at - 1], "-c")
+        self.assertLess(at, command.index("-"))
+        self.assertEqual([part for part in command if part.startswith("skills.")], [command[at]])
+        # The preflight and the sandbox probes start Codex with the same overrides.
+        self.assertIn("skills.include_instructions=false", codex.config_overrides(CODEX_CONFIG, self.boundary))
+        listed = dict(CODEX_CONFIG, codex=dict(CODEX_CONFIG["codex"], skill_instructions=True))
+        self.assertIn("skills.include_instructions=true", codex.config_overrides(listed, self.boundary))
 
     def test_the_agent_runs_at_the_configured_reasoning_effort_and_the_preflight_takes_none(self):
         for effort in boundary.REASONING_EFFORTS:

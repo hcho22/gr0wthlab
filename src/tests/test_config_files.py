@@ -208,6 +208,7 @@ class RuntimeConfigTest(unittest.TestCase):
         for feature in ("apps", "plugins", "hooks", "browser_use", "computer_use", "multi_agent", "multi_agent_v2"):
             self.assertIn(feature, disabled)
         self.assertIs(self.config["codex"]["sub_agents"], False)
+        self.assertIs(self.config["codex"]["skill_instructions"], False)
         self.assertEqual(
             self.config["codex"]["session_flags"], ["--ignore-user-config", "--ignore-rules", "--ephemeral"]
         )
