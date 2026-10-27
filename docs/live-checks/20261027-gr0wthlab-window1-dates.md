@@ -1,7 +1,7 @@
 # Window 1 moves back one week (FR-8)
 
 No sitting took place on Sunday 2026-10-25 and no batch for days 1 to 7 was approved, because that day's scheduled run refused to start while the repository was public.
-Under the dates [the Waitlist change](20261021-gr0wthlab-waitlist-live.md) set, a run before 2026-11-01 would prepare days 8 to 14, and days 1 to 7 would never be prepared.
+Under the dates [the Waitlist change](20261021-gr0wthlab-waitlist-live.md) set, day 1 was Monday 2026-10-26, and `posts.target_days` gives days 3 to 14 for a run on Tuesday 2026-10-27, days 4 to 14 on Wednesday 2026-10-28, days 7 to 14 on Saturday 2026-10-31, and days 8 to 14 on Sunday 2026-11-01, so no run from 2026-10-27 on would prepare days 1 and 2.
 This change sets `window.first_sitting` in `config/run.json` to Sunday 2026-11-01, the Founder's choice of 2026-10-27, and leaves the slot, 10:00, and every other setting as they were.
 It changes none of the launcher code, the permission profile, the Codex command, the fetch policy, or the Product registry, so no boundary check was run.
 Of `src/` it changes only the two tests that hold the committed window's values.
@@ -24,7 +24,7 @@ Nothing ran in the production clone `~/gr0wthlab`, and the LaunchAgent was not t
 ### What the records showed
 
 - `settings.load_window` raised no error: 2026-11-01 is a Sunday, and day 1 is Monday 2026-11-02.
-- `kit.parse_calendar` read days 1 to 14; `results.day_date` put day 1 on Monday 2026-11-02 and day 14 on Sunday 2026-11-15, each at 10:00, offset `-0800` (PST) on every day.
+- `kit.parse_calendar` read days 1 to 14; `results.day_date` put day 1 on Monday 2026-11-02 and day 14 on Sunday 2026-11-15, and each day's date at the slot, 10:00, in the Mac's time zone was `-0800` (PST) on every day.
 - The Mac's clock leaves daylight time at 02:00 on Sunday 2026-11-01: 01:59 that day is `-0700` (PDT), and 10:00 and the schedule's 16:00 that day are `-0800` (PST), so the first sitting's day and every posting slot of the window fall after the change, at 10:00 local.
   A run due at 16:00 on 2026-10-27 is `-0700`.
 
@@ -70,3 +70,34 @@ No Codex session ran.
 
 - The date rules of the first round, which read the window's values and not `window.why`: they stand on the first round.
 - The whole unit suite and CI's run on Linux with the latest Python.
+
+## After the second review
+
+### What was run
+
+On 2026-10-27 at 16:47 PDT, from this change's linked worktree, under `/usr/bin/python3`, Python 3.9.6, with `git status` empty before the run.
+Review found that the opening said a run before 2026-11-01 under the old dates would prepare days 8 to 14, and that the first round credited `results.day_date`, which gives a date, with each day's time and offset.
+A script given to `/usr/bin/python3` on its standard input, run from `src/`, read the real calendar in `~/Mandu`, read-only, with `kit.parse_calendar`.
+It loaded this change's `window`, and the same `window` with `first_sitting` 2026-10-25, with `settings.load_window` against `sunday`, and called `posts.target_days`, `results.due`, `results.day_date`, and `posts.slot_for`.
+No Codex session ran, nothing ran in the production clone `~/gr0wthlab`, and the LaunchAgent was not touched.
+This round then changed only this record.
+
+### What the records showed
+
+- `kit.parse_calendar` read days 1 to 14.
+- With `first_sitting` 2026-10-25, `settings.load_window` put day 1 on Monday 2026-10-26, and `posts.target_days` gave:
+
+| Run on | `posts.target_days` |
+| --- | --- |
+| Tuesday 2026-10-27 | days 3 to 14: "the week after the sitting on Sunday 2026-11-01 (2026-11-02 to 2026-11-08), and the days from tomorrow, 2026-10-28, up to that week" |
+| Wednesday 2026-10-28 | days 4 to 14: the same week, and the days from tomorrow, 2026-10-29, up to that week |
+| Saturday 2026-10-31 | days 7 to 14: the same week, and the days from tomorrow, 2026-11-01, up to that week |
+| Sunday 2026-11-01 | days 8 to 14: "the week after the sitting on Sunday 2026-11-01 (2026-11-02 to 2026-11-08)" |
+
+- With this change's `window`, `posts.target_days` and `results.due` gave, for each date in the first round's table, the days and the quoted words its row shows.
+- `results.day_date` gave Monday 2026-11-02 for day 1 and Sunday 2026-11-15 for day 14, and `posts.slot_for` gave each of days 1 to 14 its date at 10:00 with offset `-08:00`, from `2026-11-02T10:00-08:00` to `2026-11-15T10:00-08:00`.
+
+### What this round did not exercise
+
+- The unit tests: this round changed only this record, and they stand on the round after review.
+- Everything the first round did not exercise.
