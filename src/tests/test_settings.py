@@ -61,7 +61,7 @@ class RunSettingsTest(unittest.TestCase):
 
     def test_day_1_follows_the_window_s_first_sitting_which_only_the_founder_sets(self):
         committed = settings.load(REPO, {}, HOME).window
-        self.assertEqual((committed.day_1, committed.slot), (date(2026, 10, 26), time(10, 0)))
+        self.assertEqual((committed.day_1, committed.slot), (date(2026, 11, 2), time(10, 0)))
         unset = settings.load_window({"number": 1, "first_sitting": None, "slot": None}, "sunday")
         self.assertEqual((unset, unset.day_1), (settings.Window(1, None, None), None))
         window = settings.load_window({"number": 1, "first_sitting": "2026-10-11", "slot": "19:00"}, "sunday")
