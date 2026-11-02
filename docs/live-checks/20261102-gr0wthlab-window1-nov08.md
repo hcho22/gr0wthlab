@@ -10,7 +10,7 @@ Of `src/` it changes only the two tests that hold the committed window's values.
 | Commit | Full hash | `src` tree | `config` tree |
 | --- | --- | --- | --- |
 | `main` before this change | `7178ef19780569a0c60b6d0517a2cce219704ab4` | `8494d47ac2824780425730a0385cb88ce568516e` | `131e367e9a7588c58629053ef6d031e5346e913d` |
-| This change | the commit this record lands in | given by `git rev-parse <commit>:src` | given by `git rev-parse <commit>:config` |
+| This change | the commit this record lands in | `2a2f5851ab56203d84233efbef0bc7cbb5f37ea6` | `99379828dec3738b54ce0839e53f3b66b980f35e` |
 
 ## First round
 
