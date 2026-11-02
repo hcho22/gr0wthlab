@@ -16,20 +16,20 @@ I skipped four days and my app celebrated my comeback. On purpose. I built it th
 
 ### Beat 1 (hook): 0-3s
 
-- Visual action: The founder speaks directly to camera in a quiet home setting.
-- Spoken line: I skipped four days and my app celebrated my comeback. On purpose. I built it that way.
+- Visual action: A real screen recording shows the history view with the four-day gap.
+- Spoken line: none
 - On-screen text: I skipped four days and my app celebrated my comeback. On purpose. I built it that way.
 
-### Beat 2: 3-9s
+### Beat 2: 3-12s
 
-- Visual action: Cut to a real screen recording of the return flow after a gap.
+- Visual action: Show the first session back on the Ready Screen, then its normal completion screen.
 - Spoken line: none
 - On-screen text: none
 
-### Beat 3: 9-20s
+### Beat 3: 12-25s
 
-- Visual action: Return to the founder on camera, then finish on the return session screen.
-- Spoken line: A return is a reason to begin again.
+- Visual action: Hold on the completed session screen, then return to the history view.
+- Spoken line: none
 - On-screen text: Not released yet.
 
 ## TikTok
@@ -37,7 +37,8 @@ I skipped four days and my app celebrated my comeback. On purpose. I built it th
 ### Caption
 
 I skipped four days and my app celebrated my comeback. On purpose. I built it that way.
-The founder shows the return flow after a gap. Not released yet.
+A silent screen recording shows a gap in history and the return session. Pre-launch.
+Join the waitlist: reptoday.app/tiktok
 
 ### Hashtags
 
@@ -45,7 +46,7 @@ The founder shows the return flow after a gap. Not released yet.
 
 ### Alt text
 
-The founder talks to camera, then shows a workout app's return flow after a gap.
+A workout history shows a gap, followed by a return session and its completion screen.
 
 ## YouTube Shorts
 
@@ -56,7 +57,8 @@ I skipped four days and my app celebrated my comeback. On purpose. I built it th
 ### Description
 
 I skipped four days and my app celebrated my comeback. On purpose. I built it that way.
-The founder shows the return flow after a gap. Not released yet.
+A silent screen recording shows a gap in history and the return session. Pre-launch.
+Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 
@@ -64,10 +66,10 @@ The founder shows the return flow after a gap. Not released yet.
 
 ### Alt text
 
-The founder talks to camera, then shows a workout app's return flow after a gap.
+A workout history shows a gap, followed by a return session and its completion screen.
 
 ## Claims
 
-- Claim: The app celebrates a return after a gap.
+- Claim: After a gap, the app celebrates the comeback and serves a gentler return session.
   Code: `ios/RepToday/RepToday/Services/Engine/ReturnOverride.swift:3-7`
   Shows: `/// feel behind - their first session back is served easy, winnable, and celebrated regardless of the`

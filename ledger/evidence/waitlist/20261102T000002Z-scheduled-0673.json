@@ -1,0 +1,136 @@
+{
+  "beta_cohort_bar": 50,
+  "cumulative": {
+    "by_fit": {
+      "exercises-regularly": {
+        "opted_in": 0,
+        "sign_ups": 0
+      },
+      "lost-the-routine": {
+        "opted_in": 0,
+        "sign_ups": 0
+      },
+      "never-had-a-routine": {
+        "opted_in": 0,
+        "sign_ups": 0
+      },
+      "unknown": {
+        "opted_in": 0,
+        "sign_ups": 0
+      }
+    },
+    "by_source": {
+      "network": {
+        "good_fit": 0,
+        "good_fit_opt_ins": 0,
+        "opted_in": 0,
+        "sign_ups": 0
+      },
+      "reddit": {
+        "good_fit": 0,
+        "good_fit_opt_ins": 0,
+        "opted_in": 0,
+        "sign_ups": 0
+      },
+      "tiktok": {
+        "good_fit": 0,
+        "good_fit_opt_ins": 0,
+        "opted_in": 0,
+        "sign_ups": 0
+      },
+      "unknown": {
+        "good_fit": 0,
+        "good_fit_opt_ins": 0,
+        "opted_in": 0,
+        "sign_ups": 0
+      },
+      "youtube": {
+        "good_fit": 0,
+        "good_fit_opt_ins": 0,
+        "opted_in": 0,
+        "sign_ups": 0
+      }
+    },
+    "good_fit": 0,
+    "good_fit_opt_ins": 0,
+    "opted_in": 0,
+    "sign_ups": 0
+  },
+  "entries": [],
+  "format": 1,
+  "good_fit": [
+    "lost-the-routine"
+  ],
+  "note": "Entry identifiers and counts only; no email address or anything else a sign-up wrote is ever kept.",
+  "product": "RepToday",
+  "progress": {
+    "bar": 50,
+    "good_fit_opt_ins": 0
+  },
+  "read_at": "2026-11-02T00:00:08.650064+00:00",
+  "run": "20261102T000002Z-scheduled-0673",
+  "source": {
+    "generated_at": "2026-11-01T23:36:50+00:00",
+    "sha256": "ea6d00a1572e59fb3e62bfd067a4d17b0b1c334801a0b17bab7159f928885299",
+    "view": "/Users/hcho/Library/Application Support/RepToday/waitlist/waitlist-view.json"
+  },
+  "weeks": [
+    {
+      "by_fit": {
+        "exercises-regularly": {
+          "opted_in": 0,
+          "sign_ups": 0
+        },
+        "lost-the-routine": {
+          "opted_in": 0,
+          "sign_ups": 0
+        },
+        "never-had-a-routine": {
+          "opted_in": 0,
+          "sign_ups": 0
+        },
+        "unknown": {
+          "opted_in": 0,
+          "sign_ups": 0
+        }
+      },
+      "by_source": {
+        "network": {
+          "good_fit": 0,
+          "good_fit_opt_ins": 0,
+          "opted_in": 0,
+          "sign_ups": 0
+        },
+        "reddit": {
+          "good_fit": 0,
+          "good_fit_opt_ins": 0,
+          "opted_in": 0,
+          "sign_ups": 0
+        },
+        "tiktok": {
+          "good_fit": 0,
+          "good_fit_opt_ins": 0,
+          "opted_in": 0,
+          "sign_ups": 0
+        },
+        "unknown": {
+          "good_fit": 0,
+          "good_fit_opt_ins": 0,
+          "opted_in": 0,
+          "sign_ups": 0
+        },
+        "youtube": {
+          "good_fit": 0,
+          "good_fit_opt_ins": 0,
+          "opted_in": 0,
+          "sign_ups": 0
+        }
+      },
+      "good_fit": 0,
+      "good_fit_opt_ins": 0,
+      "opted_in": 0,
+      "sign_ups": 0,
+      "week_of": "2026-10-26"
+    }
+  ]
+}

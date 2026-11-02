@@ -249,15 +249,11 @@
       "published_at": "2026-10-16T18:15:55.899544+00:00",
       "published_by_run": "20261016T181554Z-on-demand-307c",
       "status": "approved"
-    }
-  ],
-  "exchange": 8,
-  "next_run": "2026-10-25T16:00:00-07:00",
-  "open": [
+    },
     {
       "ask": "Approve message to Hybrid Calisthenics: Early access to Rep Today",
-      "carried_over": true,
-      "carried_over_from": "2026-10-18",
+      "closed_at": "2026-11-02T00:11:16.818933+00:00",
+      "closed_by_run": "20261102T000002Z-scheduled-0673",
       "draft": "drafts/messages/outreach/creator-hybrid-calisthenics.md",
       "draft_sha256": "7007bbe110f82f11782eb0f1ae7a25dcb21146ce77fa6bd2243269c42a4a35e9",
       "file": "review-queue/items/20261016-message-creator-hybrid-calisthenics.md",
@@ -270,12 +266,13 @@
       "product": "RepToday",
       "published_at": "2026-10-16T18:24:24.288823+00:00",
       "published_by_run": "20261016T181554Z-on-demand-307c",
-      "status": "open"
+      "status": "superseded",
+      "superseded_by": "20261101-message-creator-hybrid-calisthenics"
     },
     {
       "ask": "Approve message to The Bioneer: A story about ready workouts",
-      "carried_over": true,
-      "carried_over_from": "2026-10-18",
+      "closed_at": "2026-11-02T00:11:16.818933+00:00",
+      "closed_by_run": "20261102T000002Z-scheduled-0673",
       "draft": "drafts/messages/outreach/creator-the-bioneer.md",
       "draft_sha256": "20e949376034fecbd4804b42e2029beb924c63e8656f38bd910db0a26994a268",
       "file": "review-queue/items/20261016-message-creator-the-bioneer.md",
@@ -288,11 +285,13 @@
       "product": "RepToday",
       "published_at": "2026-10-16T18:24:24.288823+00:00",
       "published_by_run": "20261016T181554Z-on-demand-307c",
-      "status": "open"
+      "status": "superseded",
+      "superseded_by": "20261101-message-creator-the-bioneer"
     },
     {
       "ask": "Approve message to GMB Fitness: Early access to Rep Today",
-      "carried_over": false,
+      "closed_at": "2026-11-02T00:11:16.818933+00:00",
+      "closed_by_run": "20261102T000002Z-scheduled-0673",
       "draft": "drafts/messages/outreach/creator-gmb-fitness.md",
       "draft_sha256": "accfddc5eb2f983e07fed0e574af7c284b84543ddcfae8974ffee6738e91e2f1",
       "file": "review-queue/items/20261019-message-creator-gmb-fitness.md",
@@ -305,7 +304,187 @@
       "product": "RepToday",
       "published_at": "2026-10-19T13:37:07.978914+00:00",
       "published_by_run": "20261019T133323Z-on-demand-c2e0",
-      "status": "open"
+      "status": "superseded",
+      "superseded_by": "20261101-message-creator-gmb-fitness"
+    }
+  ],
+  "exchange": 8,
+  "next_run": "2026-11-08T16:00:00-08:00",
+  "open": [
+    {
+      "ask": "Approve day 1 post: cold-open demo, hook A",
+      "carried_over": false,
+      "day": 1,
+      "draft": "drafts/posts/window-1/day-01.md",
+      "draft_sha256": "aa4b64fed4300725994be764ae4d63d9c52304abb925702391ce16bd4c4db6c4",
+      "file": "review-queue/items/20261101-post-w1-day-01.md",
+      "id": "20261101-post-w1-day-01",
+      "kind": "post",
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "slot": "2026-11-02T10:00-08:00",
+      "status": "open",
+      "window": 1
+    },
+    {
+      "ask": "Approve day 2 post: paywall review on screen, pain-first cut",
+      "carried_over": false,
+      "day": 2,
+      "draft": "drafts/posts/window-1/day-02.md",
+      "draft_sha256": "1f9b6f93561dd135b8766f08fde906d7274783957713f703dbefe74a25fbd5c6",
+      "file": "review-queue/items/20261101-post-w1-day-02.md",
+      "id": "20261101-post-w1-day-02",
+      "kind": "post",
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "slot": "2026-11-03T10:00-08:00",
+      "status": "open",
+      "window": 1
+    },
+    {
+      "ask": "Approve day 3 post: missed-day score record",
+      "carried_over": false,
+      "day": 3,
+      "draft": "drafts/posts/window-1/day-03.md",
+      "draft_sha256": "56a1fb924cae0cfd79129a6e6b239d8602f1e372d15042ff28ddfa8220465ab0",
+      "file": "review-queue/items/20261101-post-w1-day-03.md",
+      "id": "20261101-post-w1-day-03",
+      "kind": "post",
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "slot": "2026-11-04T10:00-08:00",
+      "status": "open",
+      "window": 1
+    },
+    {
+      "ask": "Approve day 4 post: founder comeback story",
+      "carried_over": false,
+      "day": 4,
+      "draft": "drafts/posts/window-1/day-04.md",
+      "draft_sha256": "2006d885ee4f70807a6499a099dd752cd21fe678a9a4c3ada0493faf271a7798",
+      "file": "review-queue/items/20261101-post-w1-day-04.md",
+      "id": "20261101-post-w1-day-04",
+      "kind": "post",
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "slot": "2026-11-05T10:00-08:00",
+      "status": "open",
+      "window": 1
+    },
+    {
+      "ask": "Approve day 6 post: no-streaks contrarian, declaration-led",
+      "carried_over": false,
+      "day": 6,
+      "draft": "drafts/posts/window-1/day-06.md",
+      "draft_sha256": "4305f5650d7848796c787569a70b949f271ba2c4a7c8280f284391bcddc17762",
+      "file": "review-queue/items/20261101-post-w1-day-06.md",
+      "id": "20261101-post-w1-day-06",
+      "kind": "post",
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "slot": "2026-11-07T10:00-08:00",
+      "status": "open",
+      "window": 1
+    },
+    {
+      "ask": "Approve day 7 post: 5-minute timelapse",
+      "carried_over": false,
+      "day": 7,
+      "draft": "drafts/posts/window-1/day-07.md",
+      "draft_sha256": "144e79ea7123b2a00716f395df49881803ef447ec4f259a2c941c9b3db644eea",
+      "file": "review-queue/items/20261101-post-w1-day-07.md",
+      "id": "20261101-post-w1-day-07",
+      "kind": "post",
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "slot": "2026-11-08T10:00-08:00",
+      "status": "open",
+      "window": 1
+    },
+    {
+      "ask": "Approve the filming plan for RepToday window 1: 9 assets in 2 sittings",
+      "carried_over": false,
+      "file": "review-queue/items/20261101-filming-plan-w1.md",
+      "filming_jobs": {
+        "d01": "dcd8bb70180aabda2655a492683ecd3697c567954bd19273db41bb3000066ed3",
+        "d02": "9b2b7d88b6b2bbcaf30c0140caf0178245edb26fa4081a00f9bc41e15bab19f0",
+        "d03": "5096d6d9e4cb9517a7ad30e4f06a3650b37e8d95d098ad9264916675b79a7e7f",
+        "d04": "7aaa9064a25a95754d6a538d90c1882866c196c2c790c6b0665246997935fd31",
+        "d05": "5afc28a527dd361a86bfbdb13f8b558859bd6cdbd5d7bc166c3eec76fea0d36c",
+        "d06": "8e5050cf248161a75948985c9121902b021d0674b65f340cb0c8840efa536d0a",
+        "d07": "111cde6208097c9ab75951cd84516abdb1d55a774000f001b9c2d44bae353857",
+        "d11": "564823ac194b74f29e913a00c8fe34baa48e801e0bfcd21d5ec892de0a5d9030",
+        "d12": "c1e664a2aa6df8c943536f0142d58134a293c16a5f72c341a2276dc33430f538"
+      },
+      "filming_sha256": "552d9ac3d1b2f6f38365d3eb209bb6a251d1b626406f61db6ede7cae05f71581",
+      "id": "20261101-filming-plan-w1",
+      "kind": "filming-plan",
+      "origin": "filming-plan/RepToday/window-1",
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:00:08.878384+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "status": "open",
+      "supersedes": "20261016-filming-plan-w1"
+    },
+    {
+      "ask": "Approve message to GMB Fitness: Early access to Rep Today",
+      "carried_over": false,
+      "draft": "drafts/messages/outreach/creator-gmb-fitness.md",
+      "draft_sha256": "6fe7a4d3a74ed9831a9b198b9bebba474e214c821229bdc57a20f8312c3cd9b3",
+      "file": "review-queue/items/20261101-message-creator-gmb-fitness.md",
+      "id": "20261101-message-creator-gmb-fitness",
+      "kind": "message",
+      "message": {
+        "purpose": "creator",
+        "to": "gmb-fitness"
+      },
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "status": "open",
+      "supersedes": "20261019-message-creator-gmb-fitness"
+    },
+    {
+      "ask": "Approve message to Hybrid Calisthenics: Early access to Rep Today",
+      "carried_over": false,
+      "draft": "drafts/messages/outreach/creator-hybrid-calisthenics.md",
+      "draft_sha256": "e6ae7eda5deb6a6c3ee355df8a48958f1609273a8776e410cfeee72130e2ebac",
+      "file": "review-queue/items/20261101-message-creator-hybrid-calisthenics.md",
+      "id": "20261101-message-creator-hybrid-calisthenics",
+      "kind": "message",
+      "message": {
+        "purpose": "creator",
+        "to": "hybrid-calisthenics"
+      },
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "status": "open",
+      "supersedes": "20261016-message-creator-hybrid-calisthenics"
+    },
+    {
+      "ask": "Approve message to The Bioneer: A story about ready workouts",
+      "carried_over": false,
+      "draft": "drafts/messages/outreach/creator-the-bioneer.md",
+      "draft_sha256": "d815192729a3d33fe1cd48e480c0dc3683d27efa8eb93730b7c685120f70cbf4",
+      "file": "review-queue/items/20261101-message-creator-the-bioneer.md",
+      "id": "20261101-message-creator-the-bioneer",
+      "kind": "message",
+      "message": {
+        "purpose": "creator",
+        "to": "the-bioneer"
+      },
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "status": "open",
+      "supersedes": "20261016-message-creator-the-bioneer"
     },
     {
       "ask": "Approve package change: remove GMB Fitness from creator outreach",
@@ -320,6 +499,42 @@
       "status": "open"
     },
     {
+      "ask": "Approve the waitlist status and signal-gate corrections",
+      "carried_over": false,
+      "file": "review-queue/items/20261101-align-waitlist-status-and-signal-gates.md",
+      "id": "20261101-align-waitlist-status-and-signal-gates",
+      "kind": "package-change-proposal",
+      "new_angle": "no",
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "status": "open"
+    },
+    {
+      "ask": "Approve the remaining name and Instagram status corrections",
+      "carried_over": false,
+      "file": "review-queue/items/20261101-correct-residual-name-and-instagram-status.md",
+      "id": "20261101-correct-residual-name-and-instagram-status",
+      "kind": "package-change-proposal",
+      "new_angle": "no",
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "status": "open"
+    },
+    {
+      "ask": "Resolve the P11 airplane-mode claim against the Product code",
+      "carried_over": false,
+      "file": "review-queue/items/20261101-substantiate-p11-airplane-mode-hook.md",
+      "id": "20261101-substantiate-p11-airplane-mode-hook",
+      "kind": "package-change-proposal",
+      "new_angle": "no",
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "status": "open"
+    },
+    {
       "ask": "Notice: the run on 2026-10-19 had 25 problems",
       "carried_over": false,
       "file": "review-queue/items/20261019-notice-run-problems.md",
@@ -328,10 +543,20 @@
       "published_at": "2026-10-19T13:37:08.711345+00:00",
       "published_by_run": "20261019T133323Z-on-demand-c2e0",
       "status": "open"
+    },
+    {
+      "ask": "Notice: the run on 2026-11-01 had 19 problems",
+      "carried_over": false,
+      "file": "review-queue/items/20261101-notice-run-problems.md",
+      "id": "20261101-notice-run-problems",
+      "kind": "notice",
+      "published_at": "2026-11-02T00:11:20.482611+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "status": "open"
     }
   ],
   "paths": "Every path here is relative to the ledger/ directory that holds this file's folder.",
-  "run_report": "run-reports/20261019T133323Z-on-demand-c2e0.md",
-  "updated_at": "2026-10-19T13:37:07.978914+00:00",
-  "updated_by_run": "20261019T133323Z-on-demand-c2e0"
+  "run_report": "run-reports/20261102T000002Z-scheduled-0673.md",
+  "updated_at": "2026-11-02T00:11:16.818933+00:00",
+  "updated_by_run": "20261102T000002Z-scheduled-0673"
 }

@@ -18,13 +18,13 @@ Most workout apps open with a question. This one opens with the workout.
 
 ### Beat 1 (hook): 0-3s
 
-- Visual action: A real-time screen recording opens on the Rep Today home screen with today's ready session already visible.
+- Visual action: A continuous real-time screen recording opens on the Rep Today Ready Screen with today's session visible.
 - Spoken line: none
 - On-screen text: Most workout apps open with a question. This one opens with the workout.
 
 ### Beat 2: 3-9s
 
-- Visual action: Hold on the ready session and its Start button without tapping or cutting.
+- Visual action: Hold on the ready session and Start button without tapping or cutting.
 - Spoken line: none
 - On-screen text: none
 
@@ -33,7 +33,8 @@ Most workout apps open with a question. This one opens with the workout.
 ### Caption
 
 Most workout apps open with a question. This one opens with the workout.
-A real-time screen recording moves from app open to a session ready to start. Not released yet.
+A screen recording shows the session ready on the Ready Screen. Pre-launch.
+Join the waitlist: reptoday.app/tiktok
 
 ### Hashtags
 
@@ -41,7 +42,7 @@ A real-time screen recording moves from app open to a session ready to start. No
 
 ### Alt text
 
-A phone opens to a ready workout session with a Start button.
+A phone opens to the Rep Today Ready Screen with a workout and Start button visible.
 
 ## YouTube Shorts
 
@@ -52,7 +53,8 @@ Most workout apps open with a question. This one opens with the workout.
 ### Description
 
 Most workout apps open with a question. This one opens with the workout.
-A real-time screen recording moves from app open to a session ready to start. Not released yet.
+A screen recording shows the session ready on the Ready Screen. Pre-launch.
+Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 
@@ -60,10 +62,10 @@ A real-time screen recording moves from app open to a session ready to start. No
 
 ### Alt text
 
-A phone opens to a ready workout session with a Start button.
+A phone opens to the Rep Today Ready Screen with a workout and Start button visible.
 
 ## Claims
 
-- Claim: The app opens with a workout already ready.
-  Code: `ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:422-435`
-  Shows: `let generated = try await workoutEngine.generateWorkout(`
+- Claim: Rep Today opens with a workout ready to start.
+  Code: `ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:415-439`
+  Shows: `workout = generated`

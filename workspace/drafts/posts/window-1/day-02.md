@@ -8,7 +8,7 @@ pair: AB-3
 leg: A
 ---
 
-# Founder reads paywall review, pain-first cut
+# Paywall review on screen, pain-first cut
 
 ## Hook
 
@@ -18,20 +18,20 @@ you cannot use this app unless you pay for it. You just can't.
 
 ### Beat 1 (hook): 0-3s
 
-- Visual action: The founder faces camera and reads the review displayed beside them.
-- Spoken line: you cannot use this app unless you pay for it. You just can't.
+- Visual action: A real screen recording shows the app's Ready Screen; the review text appears over the app screen.
+- Spoken line: none
 - On-screen text: you cannot use this app unless you pay for it. You just can't.
 
-### Beat 2: 3-9s
+### Beat 2: 3-8s
 
-- Visual action: Stay on the founder as they respond, then cut to the real app screen showing the workout entry point.
-- Spoken line: In Rep Today, the workouts are free. Premium adds depth.
-- On-screen text: The workouts are free. Premium adds depth.
+- Visual action: Hold on the ready session and its Start button.
+- Spoken line: none
+- On-screen text: The core workouts are free.
 
-### Beat 3: 9-20s
+### Beat 3: 8-20s
 
-- Visual action: Show the founder and the real app screen together, then hold on the workout entry point.
-- Spoken line: Not released yet.
+- Visual action: Tap Start and show the workout screen, with no paywall or sign-up screen.
+- Spoken line: none
 - On-screen text: Not released yet.
 
 ## TikTok
@@ -39,7 +39,8 @@ you cannot use this app unless you pay for it. You just can't.
 ### Caption
 
 you cannot use this app unless you pay for it. You just can't.
-The founder reads a paywall review, then shares Rep Today's free-workout promise. Not released yet.
+A screen recording shows the ready workout and its Start button. Pre-launch.
+Join the waitlist: reptoday.app/tiktok
 
 ### Hashtags
 
@@ -47,7 +48,7 @@ The founder reads a paywall review, then shares Rep Today's free-workout promise
 
 ### Alt text
 
-The founder reads a paywall review on camera, then shows the Rep Today workout screen.
+A review quote appears over the Rep Today Ready Screen, then the workout screen opens.
 
 ## YouTube Shorts
 
@@ -58,7 +59,8 @@ you cannot use this app unless you pay for it. You just can't.
 ### Description
 
 you cannot use this app unless you pay for it. You just can't.
-The founder reads a paywall review, then shares Rep Today's free-workout promise. Not released yet.
+A screen recording shows the ready workout and its Start button. Pre-launch.
+Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 
@@ -66,10 +68,10 @@ The founder reads a paywall review, then shares Rep Today's free-workout promise
 
 ### Alt text
 
-The founder reads a paywall review on camera, then shows the Rep Today workout screen.
+A review quote appears over the Rep Today Ready Screen, then the workout screen opens.
 
 ## Claims
 
-- Claim: Rep Today's workouts are free, while premium adds depth.
-  Code: `ios/RepToday/RepToday/Models/User.swift:181`
-  Shows: `/// The free tier - unlimited core workouts forever, no expiry. The default entitlement for a`
+- Claim: The core workouts are free.
+  Code: `ios/RepToday/RepToday/Models/User.swift:178-184`
+  Shows: `/// The free tier - unlimited core workouts forever, no expiry.`

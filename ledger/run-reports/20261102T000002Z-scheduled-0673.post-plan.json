@@ -1,0 +1,94 @@
+{
+  "code": {
+    "commit": "138a203b626e2ecfdb44c956cd437b0956a99ebd",
+    "problem": null
+  },
+  "due": [
+    {
+      "approved": null,
+      "day": 1,
+      "open": null,
+      "rejected": [],
+      "slot": "2026-11-02T10:00-08:00"
+    },
+    {
+      "approved": null,
+      "day": 2,
+      "open": null,
+      "rejected": [],
+      "slot": "2026-11-03T10:00-08:00"
+    },
+    {
+      "approved": null,
+      "day": 3,
+      "open": null,
+      "rejected": [],
+      "slot": "2026-11-04T10:00-08:00"
+    },
+    {
+      "approved": null,
+      "day": 4,
+      "open": null,
+      "rejected": [],
+      "slot": "2026-11-05T10:00-08:00"
+    },
+    {
+      "approved": null,
+      "day": 5,
+      "open": null,
+      "rejected": [],
+      "slot": "2026-11-06T10:00-08:00"
+    },
+    {
+      "approved": null,
+      "day": 6,
+      "open": null,
+      "rejected": [],
+      "slot": "2026-11-07T10:00-08:00"
+    },
+    {
+      "approved": null,
+      "day": 7,
+      "open": null,
+      "rejected": [],
+      "slot": "2026-11-08T10:00-08:00"
+    }
+  ],
+  "kit": {
+    "angles": {
+      "path": "projects/RepToday/gtm/05-social-pmf/angles.md",
+      "sha256": "60eafe6fd2d09f31cd40681cfbbb0e3075d8a8eed68812b089fd2dd9536b1608"
+    },
+    "brand_rules": {
+      "path": "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json",
+      "sha256": "b950a7e13ff689eaa18bffe10e914d1b7895adbe6ec54b0bdd280443321b936f"
+    },
+    "calendar": {
+      "path": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md",
+      "sha256": "10d67857fdc5be8561bc0f08ed9914f0c0b65bdc68761d6cd050a3737d9254c2"
+    },
+    "checklist": {
+      "path": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md",
+      "sha256": "082baaf3deb3d40d35b8f7cbf7b5226187ede9582a212379c51ac9e4656f1f12"
+    },
+    "competitors": {
+      "path": "projects/RepToday/gtm/01-research/",
+      "sha256": "c9acfd550573e9b1166305bac95f456fc868c995106d2e4b1cdd0fb1f48eb853"
+    },
+    "pairs": {
+      "path": "projects/RepToday/gtm/05-social-pmf/ab-pairs.md",
+      "sha256": "a9aff1c1c782969fc716ecd640cd84689ae851ce0cfeed4470c955cc5a21c4dd"
+    },
+    "platforms": {
+      "path": "projects/RepToday/gtm/05-social-pmf/platform-assignment.md",
+      "sha256": "0de409ac9d62c7e849361802ff94ba0a4749ad349ff82b9c96b7673bf3d7ff31"
+    }
+  },
+  "posted": {},
+  "product": "RepToday",
+  "reason": "Window 1 begins on Monday 2026-11-02, the day after its first sitting; this run prepares days 1 to 7: the week after the sitting on Sunday 2026-11-01 (2026-11-02 to 2026-11-08).",
+  "run": "20261102T000002Z-scheduled-0673",
+  "skipped": [],
+  "waitlist_live": true,
+  "window": 1
+}

@@ -19,6 +19,11 @@ The channel plan says Hybrid Calisthenics has a shame-free philosophy and an ant
 
 ## Claims
 
-- Claim: When the Ready screen loads, Rep Today generates a workout for that day.
-  Code: `ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:197`
-  Shows: `try await generate(user: user)`
+- Claim: The Ready screen's generation function asks the workout engine for a workout using the selected duration, user profile, recent logs, and session policy.
+  Code: `ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:431-436`
+  Shows: `let generated = try await workoutEngine.generateWorkout(
+            requestedMinutes: requested,
+            user: user,
+            recentLogs: recentLogs,
+            sessionPolicy: policy
+        )`

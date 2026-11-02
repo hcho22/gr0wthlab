@@ -18,13 +18,13 @@ Miss a day and your score dips. It never resets.
 
 ### Beat 1 (hook): 0-3s
 
-- Visual action: A screen recording opens on the history view with a missed day visible.
+- Visual action: A continuous screen recording opens on the history view with a missed day visible.
 - Spoken line: none
 - On-screen text: Miss a day and your score dips. It never resets.
 
 ### Beat 2: 3-9s
 
-- Visual action: Show the Consistency Score after the missed day; keep the score visible as the history moves across the gap.
+- Visual action: Show the Consistency Score and move across the history gap without a cut.
 - Spoken line: none
 - On-screen text: none
 
@@ -39,7 +39,8 @@ Miss a day and your score dips. It never resets.
 ### Caption
 
 Miss a day and your score dips. It never resets.
-A silent screen recording shows the history view and Consistency Score. Not released yet.
+A silent screen recording shows the history view and Consistency Score. Pre-launch.
+Join the waitlist: reptoday.app/tiktok
 
 ### Hashtags
 
@@ -47,7 +48,7 @@ A silent screen recording shows the history view and Consistency Score. Not rele
 
 ### Alt text
 
-A workout history shows a missed day beside a Consistency Score.
+A workout history shows a missed day beside the Consistency Score.
 
 ## YouTube Shorts
 
@@ -58,7 +59,8 @@ Miss a day and your score dips. It never resets.
 ### Description
 
 Miss a day and your score dips. It never resets.
-A silent screen recording shows the history view and Consistency Score. Not released yet.
+A silent screen recording shows the history view and Consistency Score. Pre-launch.
+Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 
@@ -66,10 +68,10 @@ A silent screen recording shows the history view and Consistency Score. Not rele
 
 ### Alt text
 
-A workout history shows a missed day beside a Consistency Score.
+A workout history shows a missed day beside the Consistency Score.
 
 ## Claims
 
-- Claim: A missed day can lower the rolling Consistency Score, but does not reset it to zero.
-  Code: `ios/RepToday/RepToday/Services/Consistency/ConsistencyScore.swift:102-135`
-  Shows: `private static func score(`
+- Claim: A missed day can lower the rolling Consistency Score, but it never resets to zero.
+  Code: `ios/RepToday/RepToday/Services/Consistency/ConsistencyScore.swift:102-139`
+  Shows: `adherence = 0`

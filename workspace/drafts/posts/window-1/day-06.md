@@ -18,20 +18,20 @@ I built a workout app with no streaks, on purpose. Watch what happens when I mis
 
 ### Beat 1 (hook): 0-3s
 
-- Visual action: The founder looks into camera, then turns toward the phone showing the app.
-- Spoken line: I built a workout app with no streaks, on purpose.
+- Visual action: A real screen recording opens on the Ready Screen.
+- Spoken line: none
 - On-screen text: I built a workout app with no streaks, on purpose. Watch what happens when I miss a day.
 
 ### Beat 2: 3-9s
 
-- Visual action: A real screen recording shows the history view after a missed day and the Consistency Score.
-- Spoken line: Watch what happens when I miss a day.
+- Visual action: Show the history view after a missed day and the Consistency Score.
+- Spoken line: none
 - On-screen text: none
 
-### Beat 3: 9-20s
+### Beat 3: 9-25s
 
-- Visual action: Return to the founder on camera, then hold on the history view.
-- Spoken line: The score can dip without resetting.
+- Visual action: Hold on the history view and score, then show the first session back.
+- Spoken line: none
 - On-screen text: Not released yet.
 
 ## TikTok
@@ -39,7 +39,8 @@ I built a workout app with no streaks, on purpose. Watch what happens when I mis
 ### Caption
 
 I built a workout app with no streaks, on purpose. Watch what happens when I miss a day.
-The founder shows the Consistency Score after a missed day. Not released yet.
+A silent screen recording shows the history view and Consistency Score after a missed day. Pre-launch.
+Join the waitlist: reptoday.app/tiktok
 
 ### Hashtags
 
@@ -47,7 +48,7 @@ The founder shows the Consistency Score after a missed day. Not released yet.
 
 ### Alt text
 
-The founder introduces the app, then shows a workout history and Consistency Score after a missed day.
+A workout history and Consistency Score appear after a missed day, followed by a session screen.
 
 ## YouTube Shorts
 
@@ -58,7 +59,8 @@ I built a workout app with no streaks, on purpose. Watch what happens when I mis
 ### Description
 
 I built a workout app with no streaks, on purpose. Watch what happens when I miss a day.
-The founder shows the Consistency Score after a missed day. Not released yet.
+A silent screen recording shows the history view and Consistency Score after a missed day. Pre-launch.
+Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 
@@ -66,13 +68,13 @@ The founder shows the Consistency Score after a missed day. Not released yet.
 
 ### Alt text
 
-The founder introduces the app, then shows a workout history and Consistency Score after a missed day.
+A workout history and Consistency Score appear after a missed day, followed by a session screen.
 
 ## Claims
 
-- Claim: The app has no streaks.
-  Code: `ios/RepToday/RepToday/Services/Consistency/ConsistencyScore.swift:3-7`
+- Claim: The app has no workout streaks.
+  Code: `ios/RepToday/RepToday/Services/Consistency/ConsistencyScore.swift:3-6`
   Shows: `/// measure of **showing up**. It replaces the fragile streak entirely - there is no XP, no`
-- Claim: The Consistency Score can dip after a missed day without resetting.
-  Code: `ios/RepToday/RepToday/Services/Consistency/ConsistencyScore.swift:102-135`
-  Shows: `weightedSum += weight * adherence`
+- Claim: After a missed day, the Consistency Score can dip without resetting to zero.
+  Code: `ios/RepToday/RepToday/Services/Consistency/ConsistencyScore.swift:102-139`
+  Shows: `adherence = 0`

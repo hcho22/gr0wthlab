@@ -1,14 +1,5 @@
 {
-  "carried": {
-    "20261016-message-creator-hybrid-calisthenics": {
-      "carried_over_from": "2026-10-18",
-      "hash": "25f8175e526da615f6a785dbad4974ff216c24cb4a9ce85d93b4c0662909d36d"
-    },
-    "20261016-message-creator-the-bioneer": {
-      "carried_over_from": "2026-10-18",
-      "hash": "6cb3b83a31344f208d96d97a16bb192cc7f417606f6ffde5d016b7863b07fc40"
-    }
-  },
+  "carried": {},
   "format": 1,
   "handled": {
     "20261016-brand-rules-word-lists": {
@@ -34,6 +25,14 @@
     "20261016-message-creator-gmb-fitness": {
       "hash": "04d4da52f7576965f7c3bc9f9db020eb6d68f54c1ae358f5746be683ea15b0a2",
       "outcome": "rejected"
+    },
+    "20261016-message-creator-hybrid-calisthenics": {
+      "hash": "25f8175e526da615f6a785dbad4974ff216c24cb4a9ce85d93b4c0662909d36d",
+      "outcome": "superseded"
+    },
+    "20261016-message-creator-the-bioneer": {
+      "hash": "6cb3b83a31344f208d96d97a16bb192cc7f417606f6ffde5d016b7863b07fc40",
+      "outcome": "superseded"
     },
     "20261016-message-network-ask": {
       "hash": "010fd0b7ea9e5a4fcee054703dd8346f480917b7b7bc40e60dcc6310b8535941",
@@ -70,10 +69,14 @@
     "20261016-reptoday-waitlist": {
       "hash": "670db20fc2bb3faf914b7490550f74ea38e67037643311db9f70666bb03abef0",
       "outcome": "approved"
+    },
+    "20261019-message-creator-gmb-fitness": {
+      "hash": "005f9479c7ef3396a0db5b3637288471ccab4589f5c0d78207143320d1d0fb52",
+      "outcome": "superseded"
     }
   },
   "reported": [],
-  "updated_at": "2026-10-19T13:37:07.978914+00:00",
-  "updated_by_run": "20261019T133323Z-on-demand-c2e0",
+  "updated_at": "2026-11-02T00:11:16.818933+00:00",
+  "updated_by_run": "20261102T000002Z-scheduled-0673",
   "workflow": "review-queue"
 }

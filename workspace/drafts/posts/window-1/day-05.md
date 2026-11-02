@@ -16,19 +16,19 @@ Airplane mode on. The session still builds.
 
 ### Beat 1 (hook): 0-3s
 
-- Visual action: In one continuous real-device recording, open Control Center and turn airplane mode on.
+- Visual action: A continuous real-device screen recording opens Control Center and turns airplane mode on.
 - Spoken line: none
 - On-screen text: Airplane mode on. The session still builds.
 
 ### Beat 2: 3-9s
 
-- Visual action: Return to the app and open its home screen to the ready session, with no cuts.
+- Visual action: Return to the app and show the Ready Screen with a session visible, without a cut.
 - Spoken line: none
 - On-screen text: none
 
 ### Beat 3: 9-12s
 
-- Visual action: Hold on the generated session with airplane mode still on.
+- Visual action: Hold on the ready session while airplane mode remains enabled.
 - Spoken line: none
 - On-screen text: none
 
@@ -37,7 +37,8 @@ Airplane mode on. The session still builds.
 ### Caption
 
 Airplane mode on. The session still builds.
-A continuous screen recording shows airplane mode enabled before the session appears. Not released yet.
+A continuous screen recording shows airplane mode enabled before the session appears. Pre-launch.
+Join the waitlist: reptoday.app/tiktok
 
 ### Hashtags
 
@@ -56,7 +57,8 @@ Airplane mode on. The session still builds.
 ### Description
 
 Airplane mode on. The session still builds.
-A continuous screen recording shows airplane mode enabled before the session appears. Not released yet.
+A continuous screen recording shows airplane mode enabled before the session appears. Pre-launch.
+Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 
@@ -68,6 +70,7 @@ A phone switches on airplane mode, then shows a ready workout session.
 
 ## Claims
 
-- Claim: The app generates a ready session while the phone is offline.
-  Code: `ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:422-435`
-  Shows: `let generated = try await workoutEngine.generateWorkout(`
+- Claim: The app builds a workout session while the phone is in airplane mode.
+  Code: none
+  Shows: none
+

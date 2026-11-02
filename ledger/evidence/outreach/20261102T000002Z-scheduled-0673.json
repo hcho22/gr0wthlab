@@ -1,0 +1,120 @@
+{
+  "at": "2026-11-02T00:11:16.818933+00:00",
+  "channel_plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+  "messages": [
+    {
+      "blocks": [],
+      "claims": [],
+      "detail": "the Founder approved it, so it is not asked again",
+      "draft": null,
+      "draft_sha256": null,
+      "item": "20261016-message-network-ask",
+      "purpose": "network-ask",
+      "status": "approved earlier",
+      "to": "network",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [
+        {
+          "claim": "The Ready screen's generation function asks the workout engine for a workout using the selected duration, user profile, recent logs, and session policy.",
+          "code": "ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:431-436",
+          "problem": null
+        }
+      ],
+      "detail": "replaces `20261019-message-creator-gmb-fitness`",
+      "draft": "drafts/messages/outreach/creator-gmb-fitness.md",
+      "draft_sha256": "6fe7a4d3a74ed9831a9b198b9bebba474e214c821229bdc57a20f8312c3cd9b3",
+      "item": "20261101-message-creator-gmb-fitness",
+      "purpose": "creator",
+      "status": "queued",
+      "to": "gmb-fitness",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [],
+      "detail": "the first message to GMB Fitness is not approved yet",
+      "draft": null,
+      "draft_sha256": null,
+      "item": null,
+      "purpose": "creator-follow-up",
+      "status": "not due",
+      "to": "gmb-fitness",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [
+        {
+          "claim": "The Ready screen's generation function asks the workout engine for a workout using the selected duration, user profile, recent logs, and session policy.",
+          "code": "ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:431-436",
+          "problem": null
+        }
+      ],
+      "detail": "replaces `20261016-message-creator-hybrid-calisthenics`",
+      "draft": "drafts/messages/outreach/creator-hybrid-calisthenics.md",
+      "draft_sha256": "e6ae7eda5deb6a6c3ee355df8a48958f1609273a8776e410cfeee72130e2ebac",
+      "item": "20261101-message-creator-hybrid-calisthenics",
+      "purpose": "creator",
+      "status": "queued",
+      "to": "hybrid-calisthenics",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [],
+      "detail": "the first message to Hybrid Calisthenics is not approved yet",
+      "draft": null,
+      "draft_sha256": null,
+      "item": null,
+      "purpose": "creator-follow-up",
+      "status": "not due",
+      "to": "hybrid-calisthenics",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [
+        {
+          "claim": "The Ready screen's generation function asks the workout engine for a workout using the selected duration, user profile, recent logs, and session policy.",
+          "code": "ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:431-436",
+          "problem": null
+        }
+      ],
+      "detail": "replaces `20261016-message-creator-the-bioneer`",
+      "draft": "drafts/messages/outreach/creator-the-bioneer.md",
+      "draft_sha256": "d815192729a3d33fe1cd48e480c0dc3683d27efa8eb93730b7c685120f70cbf4",
+      "item": "20261101-message-creator-the-bioneer",
+      "purpose": "creator",
+      "status": "queued",
+      "to": "the-bioneer",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [],
+      "detail": "the first message to The Bioneer is not approved yet",
+      "draft": null,
+      "draft_sha256": null,
+      "item": null,
+      "purpose": "creator-follow-up",
+      "status": "not due",
+      "to": "the-bioneer",
+      "warnings": [],
+      "withdrawn": null
+    }
+  ],
+  "product": "RepToday",
+  "record_problems": [],
+  "records": [],
+  "run": "20261102T000002Z-scheduled-0673",
+  "skipped": []
+}
