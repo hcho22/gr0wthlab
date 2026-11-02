@@ -1,0 +1,14 @@
+{
+  "due": "2026-10-25T16:00",
+  "format": 1,
+  "runs": [
+    {
+      "attempt": 1,
+      "ended_at": "2026-10-25T23:00:02.035323+00:00",
+      "ending": "refused-to-start",
+      "run": null,
+      "started_at": "2026-10-25T23:00:00.856658+00:00",
+      "trigger": "scheduled"
+    }
+  ]
+}
