@@ -65,7 +65,7 @@ class RunConfigTest(unittest.TestCase):
 
     def test_window_1_starts_after_the_sitting_the_founder_set_at_the_slot_the_founder_set(self):
         window = self.config["window"]
-        self.assertEqual((window["number"], window["first_sitting"], window["slot"]), (1, "2026-11-01", "10:00"))
+        self.assertEqual((window["number"], window["first_sitting"], window["slot"]), (1, "2026-11-08", "10:00"))
         self.assertTrue(self.config["outputs"]["post-drafts"]["built"])
         self.assertNotIn("RepToday repository", [source["name"] for source in self.config["sources_not_connected"]])
 
