@@ -11,11 +11,11 @@ offer: early-access
 
 ## Message
 
-I'm the founder of Rep Today. It builds a complete workout on your device from your selected time and training history. I can offer early access, with no expectation of a reply or promotion.
+I'm the founder of Rep Today. It builds a workout around the time you have and your recent training. Your focus on no-equipment training for busy adults is why I'm reaching out. I can offer early access, with no request to promote it.
 
 ## Notes
 
-The channel plan cites GMB Fitness for no-equipment training and busy-adult positioning. The Founder rejected an earlier message as unnecessary. Check whether this outreach still makes sense before sending.
+The channel plan names GMB Fitness for no-equipment training and busy-adult positioning. Confirm a working early-access route is ready before sending.
 
 ## Claims
 

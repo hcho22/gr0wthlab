@@ -1,0 +1,161 @@
+{
+  "asset": "assets/window-1/day-13-f9e978e090ff.mp4",
+  "bytes": 1841890,
+  "canvas": {
+    "bottom": 500,
+    "caption_size": 52,
+    "font": "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "font_name": "Arial",
+    "fps": 30,
+    "height": 1920,
+    "left": 180,
+    "max_chars": 160,
+    "outline": 6,
+    "right": 180,
+    "text_size": 64,
+    "top": 220,
+    "width": 1080
+  },
+  "checks": [
+    "measured 1080x1920 (9:16) at 30 frames a second",
+    "d06-s1, which may not be cut, is one unbroken source range",
+    "d06-s2, which may not be cut, is one unbroken source range",
+    "every cut plays at the speed it was recorded at"
+  ],
+  "cuts": [
+    {
+      "bytes": 6257371,
+      "facts": {
+        "codec": "hevc",
+        "duration": 23.935,
+        "fps": 30.896,
+        "height": 2532,
+        "pix_fmt": "yuvj420p",
+        "sound": true,
+        "square_pixels": true,
+        "transfer": "bt709",
+        "width": 1170
+      },
+      "in": 5.715,
+      "out": 18.215,
+      "sha256": "9a538242886fec29284b7842fa433785f386597932720ab8369f9823966c399e",
+      "shot": "d06-s1",
+      "source": "window-1/d06-s1.MP4",
+      "speed": 1.0
+    },
+    {
+      "bytes": 1728654,
+      "facts": {
+        "codec": "hevc",
+        "duration": 24.418333,
+        "fps": 23.532,
+        "height": 2532,
+        "pix_fmt": "yuvj420p",
+        "sound": true,
+        "square_pixels": true,
+        "transfer": "bt709",
+        "width": 1170
+      },
+      "in": 5.96,
+      "out": 18.46,
+      "sha256": "1b5a0301d80012deae72c792e491f3bd40d090b501ef1cfb737cbe8205b021f1",
+      "shot": "d06-s2",
+      "source": "window-1/d06-s2.MP4",
+      "speed": 1.0
+    }
+  ],
+  "day": 13,
+  "draft": {
+    "path": "drafts/posts/window-1/day-13.md",
+    "sha256": "4e788eef095fca882b6b8d973fcc76be1759c5a2466a591ca592b2a0f6e7bc71"
+  },
+  "edit": {
+    "path": "drafts/edits/window-1/day-13.json",
+    "record": {
+      "day": 13,
+      "edit": 1,
+      "product": "RepToday",
+      "segments": [
+        {
+          "in": 5.715,
+          "out": 18.215,
+          "shot": "d06-s1",
+          "source": "window-1/d06-s1.MP4",
+          "speed": 1.0
+        },
+        {
+          "in": 5.96,
+          "out": 18.46,
+          "shot": "d06-s2",
+          "source": "window-1/d06-s2.MP4",
+          "speed": 1.0
+        }
+      ],
+      "window": 1
+    },
+    "sha256": "17cc8977fbb29a1cf428fd1cba23dc5cfeca1c1d0b752463cbb8d0f072c7b2ab"
+  },
+  "encoding": [
+    "-c:v",
+    "libx264",
+    "-preset",
+    "medium",
+    "-crf",
+    "18",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "192k",
+    "-ar",
+    "44100",
+    "-map_metadata",
+    "-1",
+    "-map_chapters",
+    "-1",
+    "-fflags",
+    "+bitexact",
+    "-flags:v",
+    "+bitexact"
+  ],
+  "facts": {
+    "codec": "h264",
+    "duration": 25.0,
+    "fps": 30.0,
+    "height": 1920,
+    "pix_fmt": "yuv420p",
+    "sound": true,
+    "square_pixels": true,
+    "transfer": "bt709",
+    "width": 1080
+  },
+  "made_at": "2026-11-09T14:48:09.795654+00:00",
+  "made_by_run": "20261109T143518Z-on-demand-079b",
+  "opening": [
+    [
+      0.0,
+      3.0
+    ]
+  ],
+  "overlays": [
+    {
+      "caption": false,
+      "end": 3.0,
+      "start": 0.0,
+      "text": "Watch what happens in my app when I miss a day."
+    },
+    {
+      "caption": false,
+      "end": 25.0,
+      "start": 9.0,
+      "text": "Not released yet."
+    }
+  ],
+  "product": "RepToday",
+  "rebuild": "src/bin/gr0wthlab rebuild-asset evidence/filming/assets/window-1-day-13-f9e978e090ff.json",
+  "recipe": "f9e978e090ff63178014dff09b96b7d04f65e6d95d85931980a548366ec2779c",
+  "sha256": "837fa27d45f55f9e104e773c9f93e427d9b941ba32b8662a94b908993d9095bc",
+  "tooling": "ffmpeg version 7.1.1",
+  "window": 1
+}

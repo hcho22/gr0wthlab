@@ -4,7 +4,7 @@
   "window": 1,
   "day": 6,
   "segments": [
-    {"shot": "d06-s1", "source": "window-1/d06-s1.MP4", "in": 0, "out": 3},
-    {"shot": "d06-s2", "source": "window-1/d06-s2.MP4", "in": 0, "out": 22}
+    {"shot": "d06-s1", "source": "window-1/d06-s1.MP4", "in": 5.715, "out": 18.215},
+    {"shot": "d06-s2", "source": "window-1/d06-s2.MP4", "in": 5.96, "out": 18.46}
   ]
 }

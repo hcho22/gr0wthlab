@@ -11,11 +11,11 @@ offer: story-material
 
 ## Message
 
-I'm the founder of Rep Today. It builds a complete workout on your device from your selected time and training history. I can offer story material about how its workout engine was built, with no expectation of coverage or a reply.
+I'm the founder of Rep Today. It builds a workout around the time you have and your recent training. The channel plan points to the workout engine as a story about deterministic design. I can offer story material, with no request for coverage.
 
 ## Notes
 
-The channel plan identifies The Bioneer as a video essay channel and suggests the engine story as relevant material. The Founder rejected an earlier message as unnecessary. Check whether this outreach still makes sense before sending.
+The channel plan identifies The Bioneer as a video essay channel and suggests the workout engine as story material. Have a concise explanation of the engine ready if you send this.
 
 ## Claims
 

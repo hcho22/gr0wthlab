@@ -1,0 +1,322 @@
+{
+  "instructions": {
+    "reasons": [],
+    "why": "no rejection reason may lead to one",
+    "workflow": null
+  },
+  "listening": {
+    "confirmed": {},
+    "fit_path": "projects/RepToday/gtm/02-brand/positioning.md",
+    "fit_readable": true,
+    "limits": {
+      "site": "reptoday.app",
+      "waitlist_live": true
+    },
+    "product": "RepToday",
+    "replies": {},
+    "rules": {
+      "bodyweightfitness": "no reply Draft is offered: its rules could not be read (not read: robots.txt on www.reddit.com disallows it for automated readers (`Disallow: /`))",
+      "fitness30plus": "no reply Draft is offered: its rules could not be read (not read: robots.txt on www.reddit.com disallows it for automated readers (`Disallow: /`))",
+      "getdisciplined": "no reply Draft is offered: its rules could not be read (not read: robots.txt on www.reddit.com disallows it for automated readers (`Disallow: /`))"
+    },
+    "snapshot": "working/20261109T143518Z-on-demand-079b.sources.json"
+  },
+  "outreach": {
+    "limits": {
+      "site": "reptoday.app",
+      "waitlist_live": true
+    },
+    "plan_path": "projects/RepToday/gtm/06-channels/channel-plan.md",
+    "problem": "",
+    "product": "RepToday",
+    "skipped": [],
+    "slots": [
+      {
+        "approved": {
+          "ask": "Approve personal-network ask: A personal note about Rep Today",
+          "closed_at": "2026-10-19T13:33:25.334024+00:00",
+          "closed_by_run": "20261019T133323Z-on-demand-c2e0",
+          "decided_at": "2026-10-19T05:54:40-07:00",
+          "draft": "drafts/messages/outreach/network-ask.md",
+          "draft_sha256": "99e33d292424ea95e72d5fc1473d201151f208a522ff49add23226b844e52f35",
+          "evidence": "evidence/decisions/20261016-message-network-ask.json",
+          "file": "review-queue/items/20261016-message-network-ask.md",
+          "id": "20261016-message-network-ask",
+          "kind": "message",
+          "message": {
+            "purpose": "network-ask",
+            "to": "network"
+          },
+          "product": "RepToday",
+          "published_at": "2026-10-16T18:24:24.288823+00:00",
+          "published_by_run": "20261016T181554Z-on-demand-307c",
+          "status": "approved"
+        },
+        "key": "network",
+        "label": "your personal network",
+        "link_source": "src/dispatches/reptoday-waitlist.md",
+        "open": null,
+        "path": "drafts/messages/outreach/network-ask.md",
+        "plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+        "purpose": "network-ask",
+        "reason": "",
+        "rejected": [],
+        "required": true,
+        "sent_on": "",
+        "source_link": "reptoday.app/network",
+        "wait_days": 0
+      },
+      {
+        "approved": null,
+        "key": "gmb-fitness",
+        "label": "GMB Fitness",
+        "link_source": "",
+        "open": {
+          "ask": "Approve message to GMB Fitness: Early access to Rep Today",
+          "carried_over": false,
+          "draft": "drafts/messages/outreach/creator-gmb-fitness.md",
+          "draft_sha256": "c4711fd67fac3b26fe84f3bbd553787444faea3e2ca8deacc225ac5518d0719e",
+          "file": "review-queue/items/20261108-message-creator-gmb-fitness-2.md",
+          "id": "20261108-message-creator-gmb-fitness-2",
+          "kind": "message",
+          "message": {
+            "purpose": "creator",
+            "to": "gmb-fitness"
+          },
+          "product": "RepToday",
+          "published_at": "2026-11-09T05:02:22.289558+00:00",
+          "published_by_run": "20261109T045521Z-on-demand-cb9a",
+          "status": "open",
+          "supersedes": "20261108-message-creator-gmb-fitness"
+        },
+        "path": "drafts/messages/outreach/creator-gmb-fitness.md",
+        "plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+        "purpose": "creator",
+        "reason": "",
+        "rejected": [
+          {
+            "ask": "Approve message to GMB Fitness: A conversation about ready workouts",
+            "closed_at": "2026-10-19T13:33:25.334024+00:00",
+            "closed_by_run": "20261019T133323Z-on-demand-c2e0",
+            "decided_at": "2026-10-19T05:52:50-07:00",
+            "draft": "drafts/messages/outreach/creator-gmb-fitness.md",
+            "draft_sha256": "3fdf342349dc7abb2e28964707b3a1f4ed0ed578c35f8717c9b6547f9898566a",
+            "evidence": "evidence/decisions/20261016-message-creator-gmb-fitness.json",
+            "file": "review-queue/items/20261016-message-creator-gmb-fitness.md",
+            "id": "20261016-message-creator-gmb-fitness",
+            "kind": "message",
+            "message": {
+              "purpose": "creator",
+              "to": "gmb-fitness"
+            },
+            "product": "RepToday",
+            "published_at": "2026-10-16T18:24:24.288823+00:00",
+            "published_by_run": "20261016T181554Z-on-demand-307c",
+            "reason": "no need to contact GMB fitness",
+            "status": "rejected"
+          },
+          {
+            "ask": "Approve message to GMB Fitness: Early access to Rep Today",
+            "closed_at": "2026-11-09T00:27:13.122166+00:00",
+            "closed_by_run": "20261109T002710Z-on-demand-4b97",
+            "decided_at": "2026-11-04T11:02:51-08:00",
+            "draft": "drafts/messages/outreach/creator-gmb-fitness.md",
+            "draft_sha256": "6fe7a4d3a74ed9831a9b198b9bebba474e214c821229bdc57a20f8312c3cd9b3",
+            "evidence": "evidence/decisions/20261101-message-creator-gmb-fitness.json",
+            "file": "review-queue/items/20261101-message-creator-gmb-fitness.md",
+            "id": "20261101-message-creator-gmb-fitness",
+            "kind": "message",
+            "message": {
+              "purpose": "creator",
+              "to": "gmb-fitness"
+            },
+            "product": "RepToday",
+            "published_at": "2026-11-02T00:11:16.818933+00:00",
+            "published_by_run": "20261102T000002Z-scheduled-0673",
+            "reason": "no need to message",
+            "status": "rejected",
+            "supersedes": "20261019-message-creator-gmb-fitness"
+          }
+        ],
+        "required": true,
+        "sent_on": "",
+        "source_link": "",
+        "wait_days": 7
+      },
+      {
+        "approved": null,
+        "key": "gmb-fitness",
+        "label": "GMB Fitness",
+        "link_source": "",
+        "open": null,
+        "path": "drafts/messages/outreach/follow-up-gmb-fitness.md",
+        "plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+        "purpose": "creator-follow-up",
+        "reason": "the first message to GMB Fitness is not approved yet",
+        "rejected": [],
+        "required": false,
+        "sent_on": "",
+        "source_link": "",
+        "wait_days": 0
+      },
+      {
+        "approved": null,
+        "key": "hybrid-calisthenics",
+        "label": "Hybrid Calisthenics",
+        "link_source": "",
+        "open": {
+          "ask": "Approve message to Hybrid Calisthenics: Early access to Rep Today",
+          "carried_over": false,
+          "draft": "drafts/messages/outreach/creator-hybrid-calisthenics.md",
+          "draft_sha256": "ba9fc228eb624e4d4bba47f5057fb061ed36efef6e933190a57be1f80a724abe",
+          "file": "review-queue/items/20261108-message-creator-hybrid-calisthenics-2.md",
+          "id": "20261108-message-creator-hybrid-calisthenics-2",
+          "kind": "message",
+          "message": {
+            "purpose": "creator",
+            "to": "hybrid-calisthenics"
+          },
+          "product": "RepToday",
+          "published_at": "2026-11-09T05:02:22.289558+00:00",
+          "published_by_run": "20261109T045521Z-on-demand-cb9a",
+          "status": "open",
+          "supersedes": "20261108-message-creator-hybrid-calisthenics"
+        },
+        "path": "drafts/messages/outreach/creator-hybrid-calisthenics.md",
+        "plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+        "purpose": "creator",
+        "reason": "",
+        "rejected": [
+          {
+            "ask": "Approve message to Hybrid Calisthenics: Early access to Rep Today",
+            "closed_at": "2026-11-09T00:27:13.122166+00:00",
+            "closed_by_run": "20261109T002710Z-on-demand-4b97",
+            "decided_at": "2026-11-04T11:03:00-08:00",
+            "draft": "drafts/messages/outreach/creator-hybrid-calisthenics.md",
+            "draft_sha256": "e6ae7eda5deb6a6c3ee355df8a48958f1609273a8776e410cfeee72130e2ebac",
+            "evidence": "evidence/decisions/20261101-message-creator-hybrid-calisthenics.json",
+            "file": "review-queue/items/20261101-message-creator-hybrid-calisthenics.md",
+            "id": "20261101-message-creator-hybrid-calisthenics",
+            "kind": "message",
+            "message": {
+              "purpose": "creator",
+              "to": "hybrid-calisthenics"
+            },
+            "product": "RepToday",
+            "published_at": "2026-11-02T00:11:16.818933+00:00",
+            "published_by_run": "20261102T000002Z-scheduled-0673",
+            "reason": "no need to message",
+            "status": "rejected",
+            "supersedes": "20261016-message-creator-hybrid-calisthenics"
+          }
+        ],
+        "required": true,
+        "sent_on": "",
+        "source_link": "",
+        "wait_days": 7
+      },
+      {
+        "approved": null,
+        "key": "hybrid-calisthenics",
+        "label": "Hybrid Calisthenics",
+        "link_source": "",
+        "open": null,
+        "path": "drafts/messages/outreach/follow-up-hybrid-calisthenics.md",
+        "plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+        "purpose": "creator-follow-up",
+        "reason": "the first message to Hybrid Calisthenics is not approved yet",
+        "rejected": [],
+        "required": false,
+        "sent_on": "",
+        "source_link": "",
+        "wait_days": 0
+      },
+      {
+        "approved": null,
+        "key": "the-bioneer",
+        "label": "The Bioneer",
+        "link_source": "",
+        "open": {
+          "ask": "Approve message to The Bioneer: A story about ready workouts",
+          "carried_over": false,
+          "draft": "drafts/messages/outreach/creator-the-bioneer.md",
+          "draft_sha256": "7a9a51df82aa4af6ea70c707537af6c68a8ea842f9b7a0db22fed2771f533e67",
+          "file": "review-queue/items/20261108-message-creator-the-bioneer-2.md",
+          "id": "20261108-message-creator-the-bioneer-2",
+          "kind": "message",
+          "message": {
+            "purpose": "creator",
+            "to": "the-bioneer"
+          },
+          "product": "RepToday",
+          "published_at": "2026-11-09T05:02:22.289558+00:00",
+          "published_by_run": "20261109T045521Z-on-demand-cb9a",
+          "status": "open",
+          "supersedes": "20261108-message-creator-the-bioneer"
+        },
+        "path": "drafts/messages/outreach/creator-the-bioneer.md",
+        "plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+        "purpose": "creator",
+        "reason": "",
+        "rejected": [
+          {
+            "ask": "Approve message to The Bioneer: A story about ready workouts",
+            "closed_at": "2026-11-09T00:27:13.122166+00:00",
+            "closed_by_run": "20261109T002710Z-on-demand-4b97",
+            "decided_at": "2026-11-04T11:03:10-08:00",
+            "draft": "drafts/messages/outreach/creator-the-bioneer.md",
+            "draft_sha256": "d815192729a3d33fe1cd48e480c0dc3683d27efa8eb93730b7c685120f70cbf4",
+            "evidence": "evidence/decisions/20261101-message-creator-the-bioneer.json",
+            "file": "review-queue/items/20261101-message-creator-the-bioneer.md",
+            "id": "20261101-message-creator-the-bioneer",
+            "kind": "message",
+            "message": {
+              "purpose": "creator",
+              "to": "the-bioneer"
+            },
+            "product": "RepToday",
+            "published_at": "2026-11-02T00:11:16.818933+00:00",
+            "published_by_run": "20261102T000002Z-scheduled-0673",
+            "reason": "no need to message.",
+            "status": "rejected",
+            "supersedes": "20261016-message-creator-the-bioneer"
+          }
+        ],
+        "required": true,
+        "sent_on": "",
+        "source_link": "",
+        "wait_days": 7
+      },
+      {
+        "approved": null,
+        "key": "the-bioneer",
+        "label": "The Bioneer",
+        "link_source": "",
+        "open": null,
+        "path": "drafts/messages/outreach/follow-up-the-bioneer.md",
+        "plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+        "purpose": "creator-follow-up",
+        "reason": "the first message to The Bioneer is not approved yet",
+        "rejected": [],
+        "required": false,
+        "sent_on": "",
+        "source_link": "",
+        "wait_days": 0
+      }
+    ]
+  },
+  "run": "20261109T143518Z-on-demand-079b",
+  "weekly_changes": {
+    "paths": {
+      "angles": "projects/RepToday/gtm/05-social-pmf/angles.md",
+      "brand_rules": "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json",
+      "calendar": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md",
+      "creative_log": "projects/RepToday/gtm/05-social-pmf/creative-log.json",
+      "pairs": "projects/RepToday/gtm/05-social-pmf/ab-pairs.md"
+    },
+    "product": "RepToday",
+    "window": 1,
+    "words": []
+  },
+  "weekly_read": null
+}

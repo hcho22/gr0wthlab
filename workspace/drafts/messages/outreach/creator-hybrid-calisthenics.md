@@ -11,11 +11,11 @@ offer: early-access
 
 ## Message
 
-I'm the founder of Rep Today. It builds a complete workout on your device from your selected time and training history. I can offer early access, with no expectation of a reply or promotion.
+I'm the founder of Rep Today. It builds a workout around the time you have and your recent training. Your shame-free approach is why I'm reaching out. I can offer early access, with no request to promote it.
 
 ## Notes
 
-The channel plan describes a shame-free philosophy and anti-selling stance. The Founder rejected an earlier message as unnecessary. Check whether this outreach still makes sense before sending.
+The channel plan describes a shame-free approach and an anti-selling stance. Keep the offer to early access and make no promotion request. Confirm a working early-access route is ready before sending.
 
 ## Claims
 
