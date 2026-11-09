@@ -11,20 +11,23 @@ offer: early-access
 
 ## Message
 
-I'm the founder of Rep Today, a workout app. The Ready screen asks the workout engine to generate a workout for the day. I can offer early access. No reply or promotion is expected.
+I'm the founder of Rep Today. It builds a complete workout on your device from your selected time and training history. I can offer early access, with no expectation of a reply or promotion.
 
 ## Notes
 
-The channel plan's cited fit is no-equipment training for busy adults. The Founder rejected the earlier message as unnecessary; this version makes the offer optional and asks for no promotion or reply. Check whether outreach to GMB Fitness still makes sense before sending.
+The channel plan cites GMB Fitness for no-equipment training and busy-adult positioning. The Founder rejected an earlier message as unnecessary. Check whether this outreach still makes sense before sending.
 
 ## Claims
 
-- Claim: The Ready screen asks the workout engine to generate a workout using the selected duration, user profile, recent logs, session policy, and requested variation.
-  Code: `ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:481-487`
-  Shows: `let generated = try await workoutEngine.generateWorkout(
-            requestedMinutes: requested,
+- Claim: Rep Today builds a complete workout on the device using the requested time and recent training history.
+  Code: `ios/RepToday/RepToday/Services/Engine/OnDeviceWorkoutEngine.swift:39-48`
+  Shows: `let library = try await exerciseService.exercises()
+        return SessionAssembly.assemble(
+            requestedMinutes: requestedMinutes,
             user: user,
+            library: library,
             recentLogs: recentLogs,
-            sessionPolicy: policy,
-            variation: requestedVariation
+            sessionPolicy: sessionPolicy,
+            variation: variation,
+            asOf: now()
         )`

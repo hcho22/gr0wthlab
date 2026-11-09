@@ -137,10 +137,22 @@
     "20261101-substantiate-p11-airplane-mode-hook": {
       "hash": "d1d9261c6e219c57fea89ac81031626e85a23b0adaf2dd5bdc8de7051af4c54d",
       "outcome": "approved"
+    },
+    "20261108-message-creator-gmb-fitness": {
+      "hash": "b052b043ff95fcf95c22cad62694249b4428c5a3e0de42fa8709dfdeec0a5d0d",
+      "outcome": "superseded"
+    },
+    "20261108-message-creator-hybrid-calisthenics": {
+      "hash": "fbf3739d2c7bb33a7150b2ba0dd12d493d50eccd35ca25f754d251978a1c5fc9",
+      "outcome": "superseded"
+    },
+    "20261108-message-creator-the-bioneer": {
+      "hash": "a2ab7846686634331d423359027ac23f6b47c7348d4c9aa411f2c246eba44934",
+      "outcome": "superseded"
     }
   },
   "reported": [],
-  "updated_at": "2026-11-09T00:38:43.834433+00:00",
-  "updated_by_run": "20261109T002710Z-on-demand-4b97",
+  "updated_at": "2026-11-09T05:02:22.289558+00:00",
+  "updated_by_run": "20261109T045521Z-on-demand-cb9a",
   "workflow": "review-queue"
 }

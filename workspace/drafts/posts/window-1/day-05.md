@@ -16,37 +16,15 @@ Airplane mode on. The session still builds.
 
 ### Beat 1 (hook): 0-3s
 
-- Visual action: A continuous real-device screen recording opens Control Center and turns airplane mode on.
+- Visual action: The real device shows Airplane Mode enabled in Control Center, then the recording returns to the app.
 - Spoken line: none
 - On-screen text: Airplane mode on. The session still builds.
 
-### Beat 2: 3-9s
+### Beat 2: 3-12s
 
-- Visual action: Return to the app and show the Ready Screen with a session visible, without a cut.
+- Visual action: In the same uninterrupted screen recording, the app opens to the ready session and its workout details.
 - Spoken line: none
 - On-screen text: none
-
-### Beat 3: 9-12s
-
-- Visual action: Hold on the ready session while airplane mode remains enabled.
-- Spoken line: none
-- On-screen text: none
-
-## TikTok
-
-### Caption
-
-Airplane mode on. The session still builds.
-A continuous screen recording shows airplane mode enabled before the session appears. Pre-launch.
-Join the waitlist: reptoday.app/tiktok
-
-### Hashtags
-
-#RepToday
-
-### Alt text
-
-A phone switches on airplane mode, then shows a ready workout session.
 
 ## YouTube Shorts
 
@@ -57,19 +35,45 @@ Airplane mode on. The session still builds.
 ### Description
 
 Airplane mode on. The session still builds.
-A continuous screen recording shows airplane mode enabled before the session appears. Pre-launch.
+
+The app opens to a ready session while Airplane Mode is on.
+Not released yet.
 Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 
-#RepToday
+#offlineworkout
 
 ### Alt text
 
-A phone switches on airplane mode, then shows a ready workout session.
+A phone shows Airplane Mode enabled, then opens Rep Today to a ready workout session.
+
+## TikTok
+
+### Caption
+
+Airplane mode on. The session still builds.
+
+The app opens to a ready session while Airplane Mode is on.
+Not released yet.
+Join the waitlist: reptoday.app/tiktok
+
+### Hashtags
+
+#offlineworkout
+
+### Alt text
+
+A phone shows Airplane Mode enabled, then opens Rep Today to a ready workout session.
 
 ## Claims
 
-- Claim: The app builds a workout session while the phone is in airplane mode.
-  Code: `ios/RepToday/RepToday/Services/Engine/OnDeviceWorkoutEngine.swift:8`
-  Shows: `/// bundled, load-validated exercise library. Nothing here reaches the network, a server, or an LLM,`
+- Claim: The session builds while Airplane Mode is on.
+  Code: `ios/RepToday/RepToday/Services/Engine/OnDeviceWorkoutEngine.swift:3-10`
+  Shows: `/// The production workout engine: the one `WorkoutEngineProtocol` conformer, wired by both
+  /// `ServiceContainer.live(...)` (the shipped app) and `ServiceContainer.mock()` (previews and tests).
+  ///
+  /// It is a thin adapter over the deterministic pipeline, not a stand-in for one. Generation runs
+  /// `SessionAssembly.assemble` and a swap runs `ExerciseSwap.swap`, both pure on-device Swift over the
+  /// bundled, load-validated exercise library. Nothing here reaches the network, a server, or an LLM,
+  /// so a session builds the same in airplane mode as online - `OfflineSessionGenerationTests` guards`

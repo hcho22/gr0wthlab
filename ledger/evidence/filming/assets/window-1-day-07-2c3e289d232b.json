@@ -1,0 +1,126 @@
+{
+  "asset": "assets/window-1/day-07-2c3e289d232b.mp4",
+  "bytes": 751400,
+  "canvas": {
+    "bottom": 500,
+    "caption_size": 52,
+    "font": "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "font_name": "Arial",
+    "fps": 30,
+    "height": 1920,
+    "left": 180,
+    "max_chars": 160,
+    "outline": 6,
+    "right": 180,
+    "text_size": 64,
+    "top": 220,
+    "width": 1080
+  },
+  "checks": [
+    "measured 1080x1920 (9:16) at 30 frames a second"
+  ],
+  "cuts": [
+    {
+      "bytes": 32431586,
+      "facts": {
+        "codec": "hevc",
+        "duration": 294.188333,
+        "fps": 39.748,
+        "height": 2532,
+        "pix_fmt": "yuvj420p",
+        "sound": true,
+        "square_pixels": true,
+        "transfer": "bt709",
+        "width": 1170
+      },
+      "in": 0.0,
+      "out": 97.99,
+      "sha256": "f121bddcb030422d9ff552c60e9b80d4b20e29db1919d63ffeddd268a9e0ef32",
+      "shot": "d07-s1",
+      "source": "window-1/d07-s1.MP4",
+      "speed": 4.8995
+    }
+  ],
+  "day": 7,
+  "draft": {
+    "path": "drafts/posts/window-1/day-07.md",
+    "sha256": "144e79ea7123b2a00716f395df49881803ef447ec4f259a2c941c9b3db644eea"
+  },
+  "edit": {
+    "path": "drafts/edits/window-1/day-07.json",
+    "record": {
+      "day": 7,
+      "edit": 1,
+      "product": "RepToday",
+      "segments": [
+        {
+          "in": 0.0,
+          "out": 97.99,
+          "shot": "d07-s1",
+          "source": "window-1/d07-s1.MP4",
+          "speed": 4.8995
+        }
+      ],
+      "window": 1
+    },
+    "sha256": "f6a08e44c61742d35a42ac99c43453ec96a8852eae442ab6a859d745abcf7239"
+  },
+  "encoding": [
+    "-c:v",
+    "libx264",
+    "-preset",
+    "medium",
+    "-crf",
+    "18",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "192k",
+    "-ar",
+    "44100",
+    "-map_metadata",
+    "-1",
+    "-map_chapters",
+    "-1",
+    "-fflags",
+    "+bitexact",
+    "-flags:v",
+    "+bitexact"
+  ],
+  "facts": {
+    "codec": "h264",
+    "duration": 20.0,
+    "fps": 30.0,
+    "height": 1920,
+    "pix_fmt": "yuv420p",
+    "sound": false,
+    "square_pixels": true,
+    "transfer": "bt709",
+    "width": 1080
+  },
+  "made_at": "2026-11-09T05:02:22.289558+00:00",
+  "made_by_run": "20261109T045521Z-on-demand-cb9a",
+  "opening": [],
+  "overlays": [
+    {
+      "caption": false,
+      "end": 3.0,
+      "start": 0.0,
+      "text": "This whole workout is five minutes. It counts as showing up."
+    },
+    {
+      "caption": false,
+      "end": 20.0,
+      "start": 15.0,
+      "text": "Timelapse."
+    }
+  ],
+  "product": "RepToday",
+  "rebuild": "src/bin/gr0wthlab rebuild-asset evidence/filming/assets/window-1-day-07-2c3e289d232b.json",
+  "recipe": "2c3e289d232b78dedc4d34f0358b5f136e346e63dee864104cbdbd383e6d8e03",
+  "sha256": "76aa322c8b06f892c59172eb4058bec02d856cf2ed9c6746074fc22e66886e7c",
+  "tooling": "ffmpeg version 7.1.1",
+  "window": 1
+}
