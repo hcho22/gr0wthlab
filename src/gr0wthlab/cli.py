@@ -311,7 +311,7 @@ def check_edits(run_id: str, out=sys.stdout) -> int:
         approved = found.approved.get(number) or {}
         video_posts = [entry for entry in found.rejected.get(number, ()) if entry.get("asset_sha256")]
         rejected = draft and posts.refused(video_posts, draft.sha256, asset.edit_sha256)
-        if draft and approved and draft.sha256 != approved.get("draft_sha256"):
+        if draft and approved and not posts.approved_copy(draft, approved):
             failed += 1
             print(
                 f"PROBLEM day {number}: {asset.edit} will not be cut this run: the Founder approved its copy as"

@@ -65,6 +65,47 @@ class FormatTest(DraftTestCase):
                 self.assertTrue(any(problem in finding.detail for finding in verdict.blocks), verdict.blocks)
 
 
+class SameCopyTest(unittest.TestCase):
+    """A Draft is still the copy approved when it is that very file, or that file with only its claims' Code lines
+    citing other lines."""
+
+    APPROVED = fakes.draft(3)
+    CITED = ["Engine/ConsistencyScore.swift:6-7"]
+
+    def digest(self, text):
+        return drafts.parse(text, "day-03.md").sha256
+
+    def test_the_very_file_is_the_copy(self):
+        self.assertTrue(drafts.same_copy(drafts.parse(self.APPROVED, "day-03.md"), self.digest(self.APPROVED)))
+
+    def test_a_draft_whose_citation_alone_moved_is_the_copy_given_what_it_cited(self):
+        moved = self.APPROVED.replace("ConsistencyScore.swift:6-7`", "ConsistencyScore.swift:9-10`")
+        draft = drafts.parse(moved, "day-03.md")
+        self.assertNotEqual(draft.sha256, self.digest(self.APPROVED))
+        self.assertEqual(drafts.cited_at(draft, self.CITED), self.APPROVED)
+        self.assertTrue(drafts.same_copy(draft, self.digest(self.APPROVED), self.CITED))
+        # Without what the approved copy cited, only the very file is that copy.
+        self.assertFalse(drafts.same_copy(draft, self.digest(self.APPROVED)))
+
+    def test_any_other_change_is_not_the_copy(self):
+        moved = self.APPROVED.replace("ConsistencyScore.swift:6-7`", "ConsistencyScore.swift:9-10`")
+        for change in (
+            moved.replace("This is the history view", "This is the history screen"),
+            moved.replace("value - missPenalty", "value - penalty"),
+            moved.replace("- Claim: A missed day", "- Claim: One missed day"),
+            moved + "\n",
+        ):
+            with self.subTest(change=change[-80:]):
+                self.assertFalse(
+                    drafts.same_copy(drafts.parse(change, "day-03.md"), self.digest(self.APPROVED), self.CITED)
+                )
+
+    def test_a_draft_with_another_number_of_claims_is_not_the_copy(self):
+        draft = drafts.parse(self.APPROVED, "day-03.md")
+        self.assertIsNone(drafts.cited_at(draft, self.CITED * 2))
+        self.assertIsNone(drafts.cited_at(draft, []))
+
+
 class EvaluateTest(DraftTestCase):
     def test_a_clean_draft_passes_and_shows_its_checklist_status(self):
         verdict = self.check(fakes.draft(3))

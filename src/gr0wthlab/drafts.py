@@ -28,6 +28,8 @@ FRONT_KEYS = ("draft", "product", "window", "day", "angle", "pair", "leg")
 BEAT_HEADING = re.compile(r"Beat (\d+)( \(hook\))?: (\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)s")
 BEAT_LINES = {"Visual action": "visual", "Spoken line": "spoken", "On-screen text": "on_screen"}
 CLAIM_LINES = ("Claim", "Code", "Shows")
+# A claim's Code line as a Draft writes it: what comes before the cited location, the location, and what follows.
+CODE_LINE = re.compile(r"(\s+Code:\s*)`([^`\n]+)`(\s*)")
 UNITS = (
     (r"milliseconds?|ms|msecs?", r"(?:ms|msecs?|milliseconds?)"),
     (r"seconds?|secs?", r"(?:s|secs?|seconds?)"),
@@ -77,6 +79,7 @@ class PostDraft:
     platforms: dict[str, dict[str, str]] = field(default_factory=dict)
     claims: list[Claim] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)
+    text: str = ""  # the file as read, which sha256 is the digest of
     unread_claims: int = 0  # claim items that do not follow the format, so they are in no check
 
     def number(self, key: str) -> int | None:
@@ -124,7 +127,7 @@ def text_of(lines: Sequence[str]) -> str:
 
 def parse(text: str, path: str) -> PostDraft:
     """A post Draft, or one whose problems say what does not follow the format."""
-    draft = PostDraft(path, hashlib.sha256(text.encode("utf-8")).hexdigest())
+    draft = PostDraft(path, hashlib.sha256(text.encode("utf-8")).hexdigest(), text=text)
     problems = draft.problems
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---" or "---" not in [line.strip() for line in lines[1:]]:
@@ -241,6 +244,36 @@ def parse_claims(draft: PostDraft, lines: Sequence[str]) -> None:
         if excerpt.startswith("`") and excerpt.endswith("`") and len(excerpt) > 1:
             excerpt = excerpt[1:-1]
         draft.claims.append(Claim(values["Claim"], location, excerpt))
+
+
+def cited_at(draft: PostDraft, locations: Sequence[str]) -> str | None:
+    """The Draft's text with each claim's Code line citing, in order, the location given for it, every other byte as
+    it is; None when the Draft does not list exactly that many claims, each with one Code line in that form."""
+    lines = draft.text.splitlines(keepends=True)
+    in_claims, found = False, []
+    for index, line in enumerate(lines):
+        if line.startswith("## "):
+            in_claims = line[3:].strip() == "Claims"
+        elif in_claims and CODE_LINE.fullmatch(line.rstrip("\r\n")):
+            found.append(index)
+    if not locations or len(found) != len(locations) or len(found) != len(draft.claims):
+        return None
+    for index, location in zip(found, locations):
+        body = lines[index].rstrip("\r\n")
+        match = CODE_LINE.fullmatch(body)
+        lines[index] = f"{match.group(1)}`{location}`{match.group(3)}{lines[index][len(body) :]}"
+    return "".join(lines)
+
+
+def same_copy(draft: PostDraft, sha256: object, locations: Sequence[str] = ()) -> bool:
+    """Whether a Draft is still the copy whose digest is sha256: that very file, or that file with only its claims'
+    Code lines citing other lines, given the locations that copy's claims cited. Code moves under a claim that stays
+    true, and the claims are checked again at the code's current commit, so a citation that followed the code changes
+    nothing the post shows or says."""
+    if draft.sha256 == sha256:
+        return True
+    text = cited_at(draft, locations)
+    return text is not None and hashlib.sha256(text.encode("utf-8")).hexdigest() == sha256
 
 
 # Checking a Draft.
