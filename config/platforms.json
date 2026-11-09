@@ -13,10 +13,12 @@
       "font_name": "Arial",
       "size": 64,
       "caption_size": 52,
-      "outline": 6,
+      "colour": "#F1EEE8",
+      "box_colour": "#14181C",
+      "box_padding": 18,
       "max_chars": 160
     },
-    "facts": "A finished asset is 1080x1920 (9:16) at 30 frames a second, H.264, as both test platforms take it, with AAC sound when any of its cuts carries sound and no sound stream when none does. A source of another shape is scaled down whole, with black beside it, and never cropped. Each platform's own buttons and caption cover the frame's edges, so text is drawn only inside the safe zone: 220 pixels clear at the top, 500 at the bottom, and 180 at each side. On-screen text and captions are white with a black outline and no box, shown whole for a beat's time with no animation, in a font that ships with macOS."
+    "facts": "A finished asset is 1080x1920 (9:16) at 30 frames a second, H.264, as both test platforms take it, with AAC sound when any of its cuts carries sound and no sound stream when none does. A source of another shape is scaled down whole, with black beside it, and never cropped. Each platform's own buttons and caption cover the frame's edges, so text is drawn only inside the safe zone: 220 pixels clear at the top, 500 at the bottom, and 180 at each side. On-screen text and captions are drawn in Bone (#F1EEE8) on a solid Night (#14181C) box behind each line, the dark palette for video in RepToday's brand guidelines (projects/RepToday/gtm/02-brand/brand-guidelines.md, section 4), so they read over the app's own text; each is shown whole for a beat's time with no animation, in a font that ships with macOS. Until 2026-11-09 they were white with a black outline and no box, which the Founder found hard to read over the app's white text."
   },
   "platforms": {
     "TikTok": {
