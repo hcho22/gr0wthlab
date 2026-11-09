@@ -51,6 +51,8 @@ class CanvasTest(unittest.TestCase):
             ({"fps": 0}, "fps must be a whole number from 1"),
             ({"safe_zone": dict(block["safe_zone"], left=600, right=600)}, "safe_zone leaves no room for text"),
             ({"text": dict(block["text"], font_file="Arial Bold.ttf")}, "font_file, an absolute path"),
+            ({"text": dict(block["text"], colour="white")}, "colour must be a colour written #RRGGBB"),
+            ({"text": dict(block["text"], box_colour="#14181")}, "box_colour must be a colour written #RRGGBB"),
             ({"safe_zone": None}, "needs safe_zone and text"),
         ):
             with self.subTest(said=said), self.assertRaisesRegex(ValueError, said):
@@ -132,15 +134,16 @@ class ComposeTest(unittest.TestCase):
     def cut(self, name, start, end, facts=SCREEN, speed=1.0):
         return video.Cut(Path("/footage/window-1") / name, start, end, speed, facts)
 
-    def test_text_is_drawn_inside_the_safe_zone_white_on_a_black_outline(self):
+    def test_text_is_drawn_inside_the_safe_zone_in_bone_on_a_night_box(self):
         text = video.subtitles(
             CANVAS, [video.Overlay(0, 3, "Open  it\nnow"), video.Overlay(3, 8.5, "A spoken line.", caption=True)]
         )
         self.assertIn("PlayResX: 1080\nPlayResY: 1920\nWrapStyle: 0\n", text)
-        self.assertIn("Style: Text,Arial,64,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,", text)
-        self.assertIn(",1,6,0,8,180,180,220,1\n", text)  # outlined, hung from the top of the safe zone
-        self.assertIn("Style: Caption,Arial,52,", text)
-        self.assertIn(",1,6,0,2,180,180,500,1\n", text)  # standing on the bottom of the safe zone
+        # Bone #F1EEE8 on Night #14181C, written blue first; BorderStyle 3 is the opaque box, reaching 18 px.
+        self.assertIn("Style: Text,Arial,64,&H00E8EEF1,&H00E8EEF1,&H001C1814,&H001C1814,-1,", text)
+        self.assertIn(",3,18,0,8,180,180,220,1\n", text)  # boxed, hung from the top of the safe zone
+        self.assertIn("Style: Caption,Arial,52,&H00E8EEF1,&H00E8EEF1,&H001C1814,&H001C1814,-1,", text)
+        self.assertIn(",3,18,0,2,180,180,500,1\n", text)  # standing on the bottom of the safe zone
         self.assertIn("Dialogue: 0,0:00:00.00,0:00:03.00,Text,,0,0,0,,Open it now\n", text)
         self.assertIn("Dialogue: 0,0:00:03.00,0:00:08.50,Caption,,0,0,0,,A spoken line.\n", text)
         self.assertEqual(video.stamp(3725.25), "1:02:05.25")

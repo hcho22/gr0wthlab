@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import tempfile
 from collections.abc import Mapping, Sequence
@@ -44,6 +45,7 @@ TO_SDR = (
     "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,"
     "zscale=t=bt709:m=bt709:r=tv,format=yuv420p"
 )
+COLOUR = re.compile(r"#[0-9A-Fa-f]{6}")
 PROBE_TIMEOUT = 60
 RENDER_TIMEOUT = 1800
 # How far a measured length may sit from the length asked for: under two frames of a 30 fps asset.
@@ -96,7 +98,9 @@ class Canvas:
     font_name: str
     text_size: int
     caption_size: int
-    outline: int
+    colour: str  # the text's colour, as #RRGGBB
+    box_colour: str  # the solid box drawn behind each line of text, as #RRGGBB
+    box_padding: int  # how far the box reaches beyond the text, in pixels
     max_chars: int
 
     @property
@@ -197,6 +201,12 @@ def load_canvas(data: Mapping) -> Canvas:
     if not isinstance(safe, dict) or not isinstance(text, dict):
         raise ValueError("config/platforms.json's video block needs safe_zone and text")
 
+    def colour(key: str) -> str:
+        value = text.get(key)
+        if not isinstance(value, str) or not COLOUR.fullmatch(value):
+            raise ValueError(f"config/platforms.json video text {key} must be a colour written #RRGGBB")
+        return value.upper()
+
     def whole(source: Mapping, key: str, least: int = 1) -> int:
         value = source.get(key)
         if isinstance(value, bool) or not isinstance(value, int) or value < least:
@@ -218,7 +228,9 @@ def load_canvas(data: Mapping) -> Canvas:
         text["font_name"],
         whole(text, "size"),
         whole(text, "caption_size"),
-        whole(text, "outline", 0),
+        colour("colour"),
+        colour("box_colour"),
+        whole(text, "box_padding", 0),
         whole(text, "max_chars"),
     )
     if canvas.width % 2 or canvas.height % 2:
@@ -382,9 +394,15 @@ def stamp(seconds: float) -> str:
     return f"{hundredths // 360000}:{hundredths // 6000 % 60:02d}:{hundredths // 100 % 60:02d}.{hundredths % 100:02d}"
 
 
+def ass_colour(colour: str) -> str:
+    """A #RRGGBB colour as a subtitle file writes it: opaque, blue first, &H00BBGGRR."""
+    return f"&H00{colour[5:7]}{colour[3:5]}{colour[1:3]}"
+
+
 def subtitles(canvas: Canvas, overlays: Sequence[Overlay]) -> str:
-    """The text drawn over an asset, as a subtitle file: white with a black outline and no box, static, and inside
-    the safe zone; on-screen text hangs from its top and a caption stands on its bottom."""
+    """The text drawn over an asset, as a subtitle file: in the canvas's colour on a solid box of its box colour,
+    one box to a line, so the text reads over whatever the footage shows beneath it; static, and inside the safe zone;
+    on-screen text hangs from its top and a caption stands on its bottom."""
     head = (
         "Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic,"
         " Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL,"
@@ -392,8 +410,10 @@ def subtitles(canvas: Canvas, overlays: Sequence[Overlay]) -> str:
     )
 
     def style(name: str, size: int, alignment: int, edge: int) -> str:
-        look = f"{canvas.font_name},{size},&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,100,100,0,0,1"
-        return f"Style: {name},{look},{canvas.outline},0,{alignment},{canvas.left},{canvas.right},{edge},1"
+        # BorderStyle 3 draws an opaque box in the outline colour, reaching the Outline value beyond the text.
+        text, box = ass_colour(canvas.colour), ass_colour(canvas.box_colour)
+        look = f"{canvas.font_name},{size},{text},{text},{box},{box},-1,0,0,0,100,100,0,0,3"
+        return f"Style: {name},{look},{canvas.box_padding},0,{alignment},{canvas.left},{canvas.right},{edge},1"
 
     lines = [
         "[Script Info]",
