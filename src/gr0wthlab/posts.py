@@ -357,6 +357,16 @@ def posted_days(ledger: Ledger, product: str, window: int, days: Sequence[int]) 
     return found
 
 
+def standing_posts(
+    store: Store, ledger: Ledger, product: str, window: int, days: Sequence[int]
+) -> dict[int, dict[str, object]]:
+    """Each of the days' open or approved post, an approved one with its copy's claim locations, so a leg whose
+    citation alone followed moved code is still the Draft the Founder approved when the other leg is compared with
+    it (reference_leg)."""
+    posted = posted_days(ledger, product, window, days)
+    return {number: cited(store, post) if post["status"] == APPROVED else post for number, post in posted.items()}
+
+
 def context_plan(
     repo_root: Path, config: Settings, registry: Mapping, boundary: Boundary, env: Mapping[str, str]
 ) -> Plan | None:
@@ -437,7 +447,7 @@ def prepare(
     store = Store(Path(boundary.repo_root) / LEDGER)
     plan.run = run_id
     plan.waitlist_live = config.waitlist_live(today)
-    plan.posted = posted_days(ledger, plan.product, window.number, list(parsed.days))
+    plan.posted = standing_posts(store, ledger, plan.product, window.number, list(parsed.days))
     if "calendar" in parsed.problems:
         plan.reason = f"The calendar could not be used ({parsed.problems['calendar']}), so no day can be prepared."
         return plan
@@ -570,7 +580,10 @@ def reference_leg(
         return None, False, "", ""
     if unread:
         return None, False, f"day {other.day}'s Draft, the one this leg must match beyond the Hook: {unread}", unread
-    if current is None or current.sha256 != posted.get("draft_sha256"):
+    if current is None or not (
+        current.sha256 == posted.get("draft_sha256")
+        or (posted["status"] == APPROVED and approved_copy(current, posted))
+    ):
         return (
             None,
             False,
