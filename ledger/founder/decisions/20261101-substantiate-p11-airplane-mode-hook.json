@@ -1,0 +1,9 @@
+{
+  "exchange": 8,
+  "item": "20261101-substantiate-p11-airplane-mode-hook",
+  "decision": "approve",
+  "reason": null,
+  "note": "build and verify the offline behavior and keep the hook,",
+  "decided_at": "2026-11-04T11:04:09-08:00",
+  "sitting": "2026-11-04"
+}

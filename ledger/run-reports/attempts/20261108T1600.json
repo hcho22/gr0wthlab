@@ -1,0 +1,14 @@
+{
+  "due": "2026-11-08T16:00",
+  "format": 1,
+  "runs": [
+    {
+      "attempt": 1,
+      "ended_at": "2026-11-09T00:00:01.290822+00:00",
+      "ending": "refused-to-start",
+      "run": null,
+      "started_at": "2026-11-09T00:00:00.507046+00:00",
+      "trigger": "scheduled"
+    }
+  ]
+}
