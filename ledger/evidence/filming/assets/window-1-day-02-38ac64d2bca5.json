@@ -1,0 +1,141 @@
+{
+  "asset": "assets/window-1/day-02-38ac64d2bca5.mp4",
+  "bytes": 633177,
+  "canvas": {
+    "bottom": 500,
+    "box_colour": "#14181C",
+    "box_padding": 18,
+    "caption_size": 52,
+    "colour": "#F1EEE8",
+    "font": "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "font_name": "Arial",
+    "fps": 30,
+    "height": 1920,
+    "left": 180,
+    "max_chars": 160,
+    "right": 180,
+    "text_size": 64,
+    "top": 220,
+    "width": 1080
+  },
+  "checks": [
+    "measured 1080x1920 (9:16) at 30 frames a second",
+    "d02-s1, which may not be cut, is one unbroken source range",
+    "every cut plays at the speed it was recorded at"
+  ],
+  "cuts": [
+    {
+      "bytes": 3430182,
+      "facts": {
+        "codec": "hevc",
+        "duration": 24.551667,
+        "fps": 24.324,
+        "height": 2532,
+        "pix_fmt": "yuvj420p",
+        "sound": true,
+        "square_pixels": true,
+        "transfer": "bt709",
+        "width": 1170
+      },
+      "in": 2.275,
+      "out": 22.275,
+      "sha256": "7f20eb59e7e8c28255d3630c8fff09105551c9daaac69010ed53b2b924a39507",
+      "shot": "d02-s1",
+      "source": "window-1/d02-s1.MP4",
+      "speed": 1.0
+    }
+  ],
+  "day": 2,
+  "draft": {
+    "path": "drafts/posts/window-1/day-02.md",
+    "sha256": "1f9b6f93561dd135b8766f08fde906d7274783957713f703dbefe74a25fbd5c6"
+  },
+  "edit": {
+    "path": "drafts/edits/window-1/day-02.json",
+    "record": {
+      "day": 2,
+      "edit": 1,
+      "product": "RepToday",
+      "segments": [
+        {
+          "in": 2.275,
+          "out": 22.275,
+          "shot": "d02-s1",
+          "source": "window-1/d02-s1.MP4",
+          "speed": 1.0
+        }
+      ],
+      "window": 1
+    },
+    "sha256": "30a173ccdffbc4a36296b4f39454718595fe952f6b627e52989e11118043bcf9"
+  },
+  "encoding": [
+    "-c:v",
+    "libx264",
+    "-preset",
+    "medium",
+    "-crf",
+    "18",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "192k",
+    "-ar",
+    "44100",
+    "-map_metadata",
+    "-1",
+    "-map_chapters",
+    "-1",
+    "-fflags",
+    "+bitexact",
+    "-flags:v",
+    "+bitexact"
+  ],
+  "facts": {
+    "codec": "h264",
+    "duration": 20.0,
+    "fps": 30.0,
+    "height": 1920,
+    "pix_fmt": "yuv420p",
+    "sound": true,
+    "square_pixels": true,
+    "transfer": "bt709",
+    "width": 1080
+  },
+  "made_at": "2026-11-09T21:46:20.779530+00:00",
+  "made_by_run": "20261109T213713Z-on-demand-f199",
+  "opening": [
+    [
+      0.0,
+      3.0
+    ]
+  ],
+  "overlays": [
+    {
+      "caption": false,
+      "end": 3.0,
+      "start": 0.0,
+      "text": "you cannot use this app unless you pay for it. You just can't."
+    },
+    {
+      "caption": false,
+      "end": 8.0,
+      "start": 3.0,
+      "text": "The core workouts are free."
+    },
+    {
+      "caption": false,
+      "end": 20.0,
+      "start": 8.0,
+      "text": "Not released yet."
+    }
+  ],
+  "product": "RepToday",
+  "rebuild": "src/bin/gr0wthlab rebuild-asset evidence/filming/assets/window-1-day-02-38ac64d2bca5.json",
+  "recipe": "38ac64d2bca542c25e1cee140575de84249198175ae92ed2c88e1a0151084ef7",
+  "sha256": "2405e12f3135e855da5ef948894f7b8ab72c93dc3aa586c67cb7d015b768ef99",
+  "tooling": "ffmpeg version 7.1.1",
+  "window": 1
+}

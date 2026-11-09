@@ -1,0 +1,124 @@
+{
+  "asset": "assets/window-1/day-03-c1458944cbb2.mp4",
+  "bytes": 722126,
+  "canvas": {
+    "bottom": 500,
+    "box_colour": "#14181C",
+    "box_padding": 18,
+    "caption_size": 52,
+    "colour": "#F1EEE8",
+    "font": "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "font_name": "Arial",
+    "fps": 30,
+    "height": 1920,
+    "left": 180,
+    "max_chars": 160,
+    "right": 180,
+    "text_size": 64,
+    "top": 220,
+    "width": 1080
+  },
+  "checks": [
+    "measured 1080x1920 (9:16) at 30 frames a second",
+    "d03-s1, which may not be cut, is one unbroken source range",
+    "every cut plays at the speed it was recorded at"
+  ],
+  "cuts": [
+    {
+      "bytes": 4038231,
+      "facts": {
+        "codec": "hevc",
+        "duration": 21.235,
+        "fps": 29.927,
+        "height": 2532,
+        "pix_fmt": "yuvj420p",
+        "sound": true,
+        "square_pixels": true,
+        "transfer": "bt709",
+        "width": 1170
+      },
+      "in": 4.615,
+      "out": 16.615,
+      "sha256": "41d4653707c6cd07c5bb215d95d52b748481c435358bd4dc9bc22b96cf696228",
+      "shot": "d03-s1",
+      "source": "window-1/d03-s1.MP4",
+      "speed": 1.0
+    }
+  ],
+  "day": 3,
+  "draft": {
+    "path": "drafts/posts/window-1/day-03.md",
+    "sha256": "56a1fb924cae0cfd79129a6e6b239d8602f1e372d15042ff28ddfa8220465ab0"
+  },
+  "edit": {
+    "path": "drafts/edits/window-1/day-03.json",
+    "record": {
+      "day": 3,
+      "edit": 1,
+      "product": "RepToday",
+      "segments": [
+        {
+          "in": 4.615,
+          "out": 16.615,
+          "shot": "d03-s1",
+          "source": "window-1/d03-s1.MP4",
+          "speed": 1.0
+        }
+      ],
+      "window": 1
+    },
+    "sha256": "c9c0849c9b78fdd8ec43fca4e0d3f4096f6075843469edbf9ed870ae09e1f86a"
+  },
+  "encoding": [
+    "-c:v",
+    "libx264",
+    "-preset",
+    "medium",
+    "-crf",
+    "18",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "192k",
+    "-ar",
+    "44100",
+    "-map_metadata",
+    "-1",
+    "-map_chapters",
+    "-1",
+    "-fflags",
+    "+bitexact",
+    "-flags:v",
+    "+bitexact"
+  ],
+  "facts": {
+    "codec": "h264",
+    "duration": 12.0,
+    "fps": 30.0,
+    "height": 1920,
+    "pix_fmt": "yuv420p",
+    "sound": true,
+    "square_pixels": true,
+    "transfer": "bt709",
+    "width": 1080
+  },
+  "made_at": "2026-11-09T21:46:20.779530+00:00",
+  "made_by_run": "20261109T213713Z-on-demand-f199",
+  "opening": [],
+  "overlays": [
+    {
+      "caption": false,
+      "end": 3.0,
+      "start": 0.0,
+      "text": "Miss a day and your score dips. It never resets."
+    }
+  ],
+  "product": "RepToday",
+  "rebuild": "src/bin/gr0wthlab rebuild-asset evidence/filming/assets/window-1-day-03-c1458944cbb2.json",
+  "recipe": "c1458944cbb2ccca996e25a883a2a315c158e2a47306e35bd1f6ba9047fe353a",
+  "sha256": "0417ebde9bfcc6a6ff5bf57c18c6b1f2e29c1010c6a8471d8e315ec325b62060",
+  "tooling": "ffmpeg version 7.1.1",
+  "window": 1
+}

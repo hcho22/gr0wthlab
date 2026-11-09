@@ -1,0 +1,120 @@
+{
+  "at": "2026-11-09T21:46:20.779530+00:00",
+  "channel_plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+  "messages": [
+    {
+      "blocks": [],
+      "claims": [],
+      "detail": "the Founder approved it, so it is not asked again",
+      "draft": null,
+      "draft_sha256": null,
+      "item": "20261016-message-network-ask",
+      "purpose": "network-ask",
+      "status": "approved earlier",
+      "to": "network",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [
+        {
+          "claim": "Rep Today assembles a workout using the requested time and recent training logs.",
+          "code": "ios/RepToday/RepToday/Services/Engine/OnDeviceWorkoutEngine.swift:39-48",
+          "problem": null
+        }
+      ],
+      "detail": "its Draft is unchanged and passes",
+      "draft": "drafts/messages/outreach/creator-gmb-fitness.md",
+      "draft_sha256": "982a1bcead23802937b8713134d8e08dfedb4854f770550eb81e45b1562e19e1",
+      "item": "20261109-message-creator-gmb-fitness-2",
+      "purpose": "creator",
+      "status": "kept",
+      "to": "gmb-fitness",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [],
+      "detail": "the first message to GMB Fitness is not approved yet",
+      "draft": null,
+      "draft_sha256": null,
+      "item": null,
+      "purpose": "creator-follow-up",
+      "status": "not due",
+      "to": "gmb-fitness",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [
+        {
+          "claim": "Rep Today assembles a workout using the requested time and recent training logs.",
+          "code": "ios/RepToday/RepToday/Services/Engine/OnDeviceWorkoutEngine.swift:39-48",
+          "problem": null
+        }
+      ],
+      "detail": "its Draft is unchanged and passes",
+      "draft": "drafts/messages/outreach/creator-hybrid-calisthenics.md",
+      "draft_sha256": "bbef225109fbd765c2700eb4cc65be7d7c84621965a0ef6862618742ce6459f9",
+      "item": "20261109-message-creator-hybrid-calisthenics-2",
+      "purpose": "creator",
+      "status": "kept",
+      "to": "hybrid-calisthenics",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [],
+      "detail": "the first message to Hybrid Calisthenics is not approved yet",
+      "draft": null,
+      "draft_sha256": null,
+      "item": null,
+      "purpose": "creator-follow-up",
+      "status": "not due",
+      "to": "hybrid-calisthenics",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [
+        {
+          "claim": "Rep Today assembles a workout using the requested time and recent training logs.",
+          "code": "ios/RepToday/RepToday/Services/Engine/OnDeviceWorkoutEngine.swift:39-48",
+          "problem": null
+        }
+      ],
+      "detail": "its Draft is unchanged and passes",
+      "draft": "drafts/messages/outreach/creator-the-bioneer.md",
+      "draft_sha256": "61a66e0c7f1665dba0dcab3bddbd26354fc1c85fd4c6c511c4a33887b8b39138",
+      "item": "20261109-message-creator-the-bioneer-2",
+      "purpose": "creator",
+      "status": "kept",
+      "to": "the-bioneer",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [],
+      "detail": "the first message to The Bioneer is not approved yet",
+      "draft": null,
+      "draft_sha256": null,
+      "item": null,
+      "purpose": "creator-follow-up",
+      "status": "not due",
+      "to": "the-bioneer",
+      "warnings": [],
+      "withdrawn": null
+    }
+  ],
+  "product": "RepToday",
+  "record_problems": [],
+  "records": [],
+  "run": "20261109T213713Z-on-demand-f199",
+  "skipped": []
+}

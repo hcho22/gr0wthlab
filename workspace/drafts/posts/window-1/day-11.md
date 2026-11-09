@@ -16,19 +16,13 @@ Half your session can be the part other apps skip.
 
 ### Beat 1 (hook): 0-3s
 
-- Visual action: A screen recording opens on a generated session with a mobility block visible.
+- Visual action: A screen recording opens on a generated session and shows a mobility block in its lineup.
 - Spoken line: none
 - On-screen text: Half your session can be the part other apps skip.
 
-### Beat 2: 3-9s
+### Beat 2: 3-15s
 
-- Visual action: Scroll through the session's mobility and strength blocks.
-- Spoken line: none
-- On-screen text: none
-
-### Beat 3: 9-15s
-
-- Visual action: Hold on the session list with both block types visible.
+- Visual action: Scroll through the session lineup, showing its mobility and strength blocks.
 - Spoken line: none
 - On-screen text: none
 
@@ -37,16 +31,16 @@ Half your session can be the part other apps skip.
 ### Caption
 
 Half your session can be the part other apps skip.
-A screen recording scrolls through a session with mobility and strength blocks. Pre-launch.
+A screen recording scrolls through a session lineup. Pre-launch.
 Join the waitlist: reptoday.app/tiktok
 
 ### Hashtags
 
-#RepToday
+#mobilityworkout
 
 ### Alt text
 
-A phone scrolls through a workout session with mobility and strength blocks.
+A session lineup scrolls through mobility and strength blocks.
 
 ## YouTube Shorts
 
@@ -57,19 +51,19 @@ Half your session can be the part other apps skip.
 ### Description
 
 Half your session can be the part other apps skip.
-A screen recording scrolls through a session with mobility and strength blocks. Pre-launch.
+A screen recording scrolls through a session lineup. Pre-launch.
 Join the waitlist: reptoday.app/youtube
 
 ### Hashtags
 
-#RepToday
+#mobilityworkout
 
 ### Alt text
 
-A phone scrolls through a workout session with mobility and strength blocks.
+A session lineup scrolls through mobility and strength blocks.
 
 ## Claims
 
-- Claim: A session can include mobility and strength blocks, with mobility making up half of it.
+- Claim: Half of a session can consist of mobility work, with mobility co-equal to strength.
   Code: none
   Shows: none

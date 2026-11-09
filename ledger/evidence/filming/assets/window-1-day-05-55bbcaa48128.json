@@ -1,0 +1,124 @@
+{
+  "asset": "assets/window-1/day-05-55bbcaa48128.mp4",
+  "bytes": 944073,
+  "canvas": {
+    "bottom": 500,
+    "box_colour": "#14181C",
+    "box_padding": 18,
+    "caption_size": 52,
+    "colour": "#F1EEE8",
+    "font": "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "font_name": "Arial",
+    "fps": 30,
+    "height": 1920,
+    "left": 180,
+    "max_chars": 160,
+    "right": 180,
+    "text_size": 64,
+    "top": 220,
+    "width": 1080
+  },
+  "checks": [
+    "measured 1080x1920 (9:16) at 30 frames a second",
+    "d05-s1, which may not be cut, is one unbroken source range",
+    "every cut plays at the speed it was recorded at"
+  ],
+  "cuts": [
+    {
+      "bytes": 7157567,
+      "facts": {
+        "codec": "hevc",
+        "duration": 17.401667,
+        "fps": 31.89,
+        "height": 2532,
+        "pix_fmt": "yuvj420p",
+        "sound": true,
+        "square_pixels": true,
+        "transfer": "bt709",
+        "width": 1170
+      },
+      "in": 2.7,
+      "out": 14.7,
+      "sha256": "aa586acb1330115757aafd4ee2e59a40d9f653a3dac9dc6b87368b496de5d176",
+      "shot": "d05-s1",
+      "source": "window-1/d05-s1.MP4",
+      "speed": 1.0
+    }
+  ],
+  "day": 5,
+  "draft": {
+    "path": "drafts/posts/window-1/day-05.md",
+    "sha256": "ca6c8915e490a3de532e76c2ce72dbf6cd69e80d6bb5c963d329c8cc82cb4cf1"
+  },
+  "edit": {
+    "path": "drafts/edits/window-1/day-05.json",
+    "record": {
+      "day": 5,
+      "edit": 1,
+      "product": "RepToday",
+      "segments": [
+        {
+          "in": 2.7,
+          "out": 14.7,
+          "shot": "d05-s1",
+          "source": "window-1/d05-s1.MP4",
+          "speed": 1.0
+        }
+      ],
+      "window": 1
+    },
+    "sha256": "37897ba500e8d151f62b35e2a8ac6581173606d39fe381c16f434809c0b34e47"
+  },
+  "encoding": [
+    "-c:v",
+    "libx264",
+    "-preset",
+    "medium",
+    "-crf",
+    "18",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "192k",
+    "-ar",
+    "44100",
+    "-map_metadata",
+    "-1",
+    "-map_chapters",
+    "-1",
+    "-fflags",
+    "+bitexact",
+    "-flags:v",
+    "+bitexact"
+  ],
+  "facts": {
+    "codec": "h264",
+    "duration": 12.0,
+    "fps": 30.0,
+    "height": 1920,
+    "pix_fmt": "yuv420p",
+    "sound": true,
+    "square_pixels": true,
+    "transfer": "bt709",
+    "width": 1080
+  },
+  "made_at": "2026-11-09T21:46:20.779530+00:00",
+  "made_by_run": "20261109T213713Z-on-demand-f199",
+  "opening": [],
+  "overlays": [
+    {
+      "caption": false,
+      "end": 3.0,
+      "start": 0.0,
+      "text": "Airplane mode on. The session still builds."
+    }
+  ],
+  "product": "RepToday",
+  "rebuild": "src/bin/gr0wthlab rebuild-asset evidence/filming/assets/window-1-day-05-55bbcaa48128.json",
+  "recipe": "55bbcaa48128843a3cceb5a3abe2e2ac061eda2a58950fb6e2da1e1c00e0e985",
+  "sha256": "4979fcdb9adbed8e09d7524c01bba7d3a311a3f2155cfe80622dee60444c80bc",
+  "tooling": "ffmpeg version 7.1.1",
+  "window": 1
+}

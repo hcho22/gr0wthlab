@@ -1,0 +1,124 @@
+{
+  "asset": "assets/window-1/day-08-db1269368019.mp4",
+  "bytes": 190446,
+  "canvas": {
+    "bottom": 500,
+    "box_colour": "#14181C",
+    "box_padding": 18,
+    "caption_size": 52,
+    "colour": "#F1EEE8",
+    "font": "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+    "font_name": "Arial",
+    "fps": 30,
+    "height": 1920,
+    "left": 180,
+    "max_chars": 160,
+    "right": 180,
+    "text_size": 64,
+    "top": 220,
+    "width": 1080
+  },
+  "checks": [
+    "measured 1080x1920 (9:16) at 30 frames a second",
+    "d01-s1, which may not be cut, is one unbroken source range",
+    "every cut plays at the speed it was recorded at"
+  ],
+  "cuts": [
+    {
+      "bytes": 2329494,
+      "facts": {
+        "codec": "hevc",
+        "duration": 18.485,
+        "fps": 24.278,
+        "height": 2532,
+        "pix_fmt": "yuvj420p",
+        "sound": true,
+        "square_pixels": true,
+        "transfer": "bt709",
+        "width": 1170
+      },
+      "in": 4.74,
+      "out": 13.74,
+      "sha256": "a8082060b76ae9726beab5a8df629903e5ee97ecc69ba78f7229e787f364d490",
+      "shot": "d01-s1",
+      "source": "window-1/d01-s1.MP4",
+      "speed": 1.0
+    }
+  ],
+  "day": 8,
+  "draft": {
+    "path": "drafts/posts/window-1/day-08.md",
+    "sha256": "37877e193b96eefe02d2b6009a88655f858e048013f2d61df76a2caa802fb78b"
+  },
+  "edit": {
+    "path": "drafts/edits/window-1/day-08.json",
+    "record": {
+      "day": 8,
+      "edit": 1,
+      "product": "RepToday",
+      "segments": [
+        {
+          "in": 4.74,
+          "out": 13.74,
+          "shot": "d01-s1",
+          "source": "window-1/d01-s1.MP4",
+          "speed": 1.0
+        }
+      ],
+      "window": 1
+    },
+    "sha256": "66301cd0d2b3f08e226c10ef5f2156b13e5636e4a25d0f1993767895a8ac1d9a"
+  },
+  "encoding": [
+    "-c:v",
+    "libx264",
+    "-preset",
+    "medium",
+    "-crf",
+    "18",
+    "-pix_fmt",
+    "yuv420p",
+    "-c:a",
+    "aac",
+    "-b:a",
+    "192k",
+    "-ar",
+    "44100",
+    "-map_metadata",
+    "-1",
+    "-map_chapters",
+    "-1",
+    "-fflags",
+    "+bitexact",
+    "-flags:v",
+    "+bitexact"
+  ],
+  "facts": {
+    "codec": "h264",
+    "duration": 9.0,
+    "fps": 30.0,
+    "height": 1920,
+    "pix_fmt": "yuv420p",
+    "sound": true,
+    "square_pixels": true,
+    "transfer": "bt709",
+    "width": 1080
+  },
+  "made_at": "2026-11-09T21:46:20.779530+00:00",
+  "made_by_run": "20261109T213713Z-on-demand-f199",
+  "opening": [],
+  "overlays": [
+    {
+      "caption": false,
+      "end": 3.0,
+      "start": 0.0,
+      "text": "Open the app. The workout is already there."
+    }
+  ],
+  "product": "RepToday",
+  "rebuild": "src/bin/gr0wthlab rebuild-asset evidence/filming/assets/window-1-day-08-db1269368019.json",
+  "recipe": "db1269368019fb9686f4656bc731f41934140e55072908faa6881cb279b6e1d2",
+  "sha256": "d702186e2e1a14ad707b1d52e48e16260253a75f5b61927c463147cfa54216e7",
+  "tooling": "ffmpeg version 7.1.1",
+  "window": 1
+}
