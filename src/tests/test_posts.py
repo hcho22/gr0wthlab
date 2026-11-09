@@ -119,7 +119,8 @@ class TakeTestCase(unittest.TestCase):
         self.areas = Areas(resolved)
         self.store = Store(resolved.ledger)
         self.ledger = Ledger()
-        self.context = fakes.kit_context(fakes.make_code(root / "RepToday", env), env)
+        self.env, self.code = env, fakes.make_code(root / "RepToday", env)
+        self.context = fakes.kit_context(self.code, env)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -140,7 +141,7 @@ class TakeTestCase(unittest.TestCase):
                 )
             )
         folder = self.repo / "workspace/drafts/posts/window-1"
-        posted = posts.posted_days(self.ledger, "RepToday", 1, list(kit.days))
+        posted = posts.standing_posts(self.store, self.ledger, "RepToday", 1, list(kit.days))
         window = Window(1, None, None)
         return posts.Plan("RepToday", window, "First batch.", plans, [], self.context, {}, folder, False, posted)
 
@@ -522,6 +523,25 @@ class TakeTest(TakeTestCase):
                 " compared with it"
             ],
         )
+
+    def test_a_newer_leg_passes_against_an_approved_reference_whose_citation_alone_followed_moved_code(self):
+        self.write(1, fakes.draft(1))
+        [first] = self.take(1).results
+        self.ledger.close(self.ledger.entries[first.item], APPROVED, "RUN2", NOW)
+        # A later change to the Product moves the code the claim cites two lines down; the claim stays true.
+        score = self.code / "Engine" / "ConsistencyScore.swift"
+        score.write_text("// One line.\n// Another.\n" + score.read_text(encoding="utf-8"), encoding="utf-8")
+        fakes.git(self.code, "commit", "--quiet", "--all", "--message", "move", env=self.env)
+        self.context = fakes.kit_context(self.code, self.env)
+        moved = {"`Engine/ConsistencyScore.swift:6-7`": "`Engine/ConsistencyScore.swift:8-9`"}
+        for day in (1, 8):
+            text = fakes.draft(day)
+            for old, new in moved.items():
+                self.assertIn(old, text)
+                text = text.replace(old, new)
+            self.write(day, text)
+        [newer] = self.take(8, run="RUN3").results
+        self.assertEqual((newer.status, posts.grouped(newer.verdict.blocks)), (posts.QUEUED, []))
 
     def test_a_leg_s_open_post_stands_while_the_draft_of_the_leg_it_must_match_cannot_be_read(self):
         self.write(1, fakes.draft(1))
