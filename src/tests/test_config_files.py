@@ -111,6 +111,21 @@ class RunConfigTest(unittest.TestCase):
             ignored = fakes.git(repo, "check-ignore", *locks, "ledger/founder/decisions/an-item.json", env=env)
         self.assertEqual(ignored.splitlines(), locks, "and a record of the Founder's is not ignored")
 
+    def test_git_ignores_finder_metadata_everywhere(self):
+        """Asked of git itself: Finder writes .DS_Store into any folder the Founder opens, and the production clone
+        refuses to run with a file git reports outside workspace/ and ledger/, while the records step would commit one
+        inside them."""
+        stray = [".DS_Store", "ledger/.DS_Store", "ledger/review-queue/.DS_Store", "workspace/drafts/.DS_Store"]
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            env = fakes.git_env(root)
+            repo = root / "repo"
+            repo.mkdir()
+            shutil.copy(str(REPO / ".gitignore"), str(repo / ".gitignore"))
+            fakes.git(repo, "init", "--quiet", env=env)
+            ignored = fakes.git(repo, "check-ignore", *stray, "workspace/drafts/posts/window-1/day-01.md", env=env)
+        self.assertEqual(ignored.splitlines(), stray, "and a Draft is not ignored")
+
     def test_filming_is_built_and_its_footage_place_is_the_folder_the_founder_named(self):
         from gr0wthlab import video
 
