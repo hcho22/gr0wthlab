@@ -1,0 +1,9 @@
+{
+  "edit": 1,
+  "product": "RepToday",
+  "window": 1,
+  "day": 3,
+  "segments": [
+    {"shot": "d03-s1", "source": "window-1/d03-s1.MP4", "in": 4.615, "out": 16.615}
+  ]
+}

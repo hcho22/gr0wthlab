@@ -11,19 +11,20 @@ offer: story-material
 
 ## Message
 
-I'm the founder of Rep Today. When the Ready screen loads, it generates a workout for that day. I can offer story material about how the workout engine was built.
+I'm the founder of Rep Today, a workout app. The Ready screen asks the workout engine to generate a workout for the day. I can offer story material about how the engine was built. No coverage or reply is expected.
 
 ## Notes
 
-The channel plan identifies The Bioneer as a video essay channel and recommends pitching the workout engine as story material. Check that this remains useful before sending.
+The channel plan identifies The Bioneer as a video essay channel and suggests the engine story as relevant material. The Founder rejected the earlier message as unnecessary; this version asks for no coverage or reply. Check whether outreach still makes sense before sending.
 
 ## Claims
 
-- Claim: The Ready screen's generation function asks the workout engine for a workout using the selected duration, user profile, recent logs, and session policy.
-  Code: `ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:431-436`
+- Claim: The Ready screen asks the workout engine to generate a workout using the selected duration, user profile, recent logs, session policy, and requested variation.
+  Code: `ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:481-487`
   Shows: `let generated = try await workoutEngine.generateWorkout(
             requestedMinutes: requested,
             user: user,
             recentLogs: recentLogs,
-            sessionPolicy: policy
+            sessionPolicy: policy,
+            variation: requestedVariation
         )`

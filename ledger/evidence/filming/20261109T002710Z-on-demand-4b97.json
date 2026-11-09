@@ -1,0 +1,710 @@
+{
+  "at": "2026-11-09T00:38:43.834433+00:00",
+  "days": [
+    {
+      "asset": null,
+      "asset_record": null,
+      "asset_sha256": null,
+      "blocks": [],
+      "bytes": null,
+      "checks": [],
+      "day": 1,
+      "detail": "its post Draft did not pass its checks, and a video is cut only from a Draft that passes",
+      "edit": null,
+      "edit_sha256": null,
+      "facts": null,
+      "ready": true,
+      "reused": false,
+      "status": "not cut",
+      "unread": [],
+      "why": ""
+    },
+    {
+      "asset": null,
+      "asset_record": null,
+      "asset_sha256": null,
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "the rendered asset was not kept: it is h264 yuvj420p, not h264 yuv420p",
+          "field": "",
+          "rule": "asset-shape"
+        }
+      ],
+      "bytes": null,
+      "checks": [
+        "d02-s1, which may not be cut, is one unbroken source range",
+        "every cut plays at the speed it was recorded at"
+      ],
+      "day": 2,
+      "detail": "",
+      "edit": "drafts/edits/window-1/day-02.json",
+      "edit_sha256": "30a173ccdffbc4a36296b4f39454718595fe952f6b627e52989e11118043bcf9",
+      "facts": null,
+      "ready": true,
+      "reused": false,
+      "status": "blocked",
+      "unread": [],
+      "why": ""
+    },
+    {
+      "asset": null,
+      "asset_record": null,
+      "asset_sha256": null,
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "the rendered asset was not kept: it is h264 yuvj420p, not h264 yuv420p",
+          "field": "",
+          "rule": "asset-shape"
+        }
+      ],
+      "bytes": null,
+      "checks": [
+        "d03-s1, which may not be cut, is one unbroken source range",
+        "every cut plays at the speed it was recorded at"
+      ],
+      "day": 3,
+      "detail": "",
+      "edit": "drafts/edits/window-1/day-03.json",
+      "edit_sha256": "c9c0849c9b78fdd8ec43fca4e0d3f4096f6075843469edbf9ed870ae09e1f86a",
+      "facts": null,
+      "ready": true,
+      "reused": false,
+      "status": "blocked",
+      "unread": [],
+      "why": ""
+    },
+    {
+      "asset": null,
+      "asset_record": null,
+      "asset_sha256": null,
+      "blocks": [],
+      "bytes": null,
+      "checks": [],
+      "day": 4,
+      "detail": "it is ready for an edit record and has none",
+      "edit": null,
+      "edit_sha256": null,
+      "facts": null,
+      "ready": true,
+      "reused": false,
+      "status": "no edit record",
+      "unread": [],
+      "why": ""
+    },
+    {
+      "asset": null,
+      "asset_record": null,
+      "asset_sha256": null,
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "the rendered asset was not kept: it is h264 yuvj420p, not h264 yuv420p",
+          "field": "",
+          "rule": "asset-shape"
+        }
+      ],
+      "bytes": null,
+      "checks": [
+        "d05-s1, which may not be cut, is one unbroken source range",
+        "every cut plays at the speed it was recorded at"
+      ],
+      "day": 5,
+      "detail": "",
+      "edit": "drafts/edits/window-1/day-05.json",
+      "edit_sha256": "37897ba500e8d151f62b35e2a8ac6581173606d39fe381c16f434809c0b34e47",
+      "facts": null,
+      "ready": true,
+      "reused": false,
+      "status": "blocked",
+      "unread": [],
+      "why": ""
+    },
+    {
+      "asset": null,
+      "asset_record": null,
+      "asset_sha256": null,
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "the rendered asset was not kept: it is h264 yuvj420p, not h264 yuv420p",
+          "field": "",
+          "rule": "asset-shape"
+        }
+      ],
+      "bytes": null,
+      "checks": [
+        "d06-s1, which may not be cut, is one unbroken source range",
+        "d06-s2, which may not be cut, is one unbroken source range",
+        "every cut plays at the speed it was recorded at"
+      ],
+      "day": 6,
+      "detail": "",
+      "edit": "drafts/edits/window-1/day-06.json",
+      "edit_sha256": "200a8a82b360d9da60803cb799878469eace37314a74e6dce380a763538c4c7d",
+      "facts": null,
+      "ready": true,
+      "reused": false,
+      "status": "blocked",
+      "unread": [],
+      "why": ""
+    },
+    {
+      "asset": null,
+      "asset_record": null,
+      "asset_sha256": null,
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "the rendered asset was not kept: it is h264 yuvj420p, not h264 yuv420p",
+          "field": "",
+          "rule": "asset-shape"
+        }
+      ],
+      "bytes": null,
+      "checks": [],
+      "day": 7,
+      "detail": "",
+      "edit": "drafts/edits/window-1/day-07.json",
+      "edit_sha256": "f6a08e44c61742d35a42ac99c43453ec96a8852eae442ab6a859d745abcf7239",
+      "facts": null,
+      "ready": true,
+      "reused": false,
+      "status": "blocked",
+      "unread": [],
+      "why": ""
+    }
+  ],
+  "footage": {
+    "clips": [
+      {
+        "bytes": 2329494,
+        "facts": {
+          "codec": "hevc",
+          "duration": 18.485,
+          "fps": 24.278,
+          "height": 2532,
+          "pix_fmt": "yuvj420p",
+          "sound": true,
+          "square_pixels": true,
+          "transfer": "bt709",
+          "width": 1170
+        },
+        "leg": null,
+        "name": "window-1/d01-s1.MP4",
+        "problem": "",
+        "sha256": "a8082060b76ae9726beab5a8df629903e5ee97ecc69ba78f7229e787f364d490",
+        "shot": "d01-s1"
+      },
+      {
+        "bytes": 3430182,
+        "facts": {
+          "codec": "hevc",
+          "duration": 24.551667,
+          "fps": 24.324,
+          "height": 2532,
+          "pix_fmt": "yuvj420p",
+          "sound": true,
+          "square_pixels": true,
+          "transfer": "bt709",
+          "width": 1170
+        },
+        "leg": null,
+        "name": "window-1/d02-s1.MP4",
+        "problem": "",
+        "sha256": "7f20eb59e7e8c28255d3630c8fff09105551c9daaac69010ed53b2b924a39507",
+        "shot": "d02-s1"
+      },
+      {
+        "bytes": 4038231,
+        "facts": {
+          "codec": "hevc",
+          "duration": 21.235,
+          "fps": 29.927,
+          "height": 2532,
+          "pix_fmt": "yuvj420p",
+          "sound": true,
+          "square_pixels": true,
+          "transfer": "bt709",
+          "width": 1170
+        },
+        "leg": null,
+        "name": "window-1/d03-s1.MP4",
+        "problem": "",
+        "sha256": "41d4653707c6cd07c5bb215d95d52b748481c435358bd4dc9bc22b96cf696228",
+        "shot": "d03-s1"
+      },
+      {
+        "bytes": 2848559,
+        "facts": {
+          "codec": "hevc",
+          "duration": 10.156667,
+          "fps": 36.609,
+          "height": 2532,
+          "pix_fmt": "yuvj420p",
+          "sound": true,
+          "square_pixels": true,
+          "transfer": "bt709",
+          "width": 1170
+        },
+        "leg": null,
+        "name": "window-1/d04-s1.MOV",
+        "problem": "",
+        "sha256": "1bf76351a846ff1efba2fc7d70317806cf6363c1132fd5140b28030106f0ca03",
+        "shot": "d04-s1"
+      },
+      {
+        "bytes": 2117857,
+        "facts": {
+          "codec": "hevc",
+          "duration": 10.065,
+          "fps": 34.962,
+          "height": 2532,
+          "pix_fmt": "yuvj420p",
+          "sound": true,
+          "square_pixels": true,
+          "transfer": "bt709",
+          "width": 1170
+        },
+        "leg": null,
+        "name": "window-1/d04-s2.MOV",
+        "problem": "",
+        "sha256": "2bf31b030573c409b19c824ca2fc8d6eecafa7dd429994472226247d7ba91e10",
+        "shot": "d04-s2"
+      },
+      {
+        "bytes": 7157567,
+        "facts": {
+          "codec": "hevc",
+          "duration": 17.401667,
+          "fps": 31.89,
+          "height": 2532,
+          "pix_fmt": "yuvj420p",
+          "sound": true,
+          "square_pixels": true,
+          "transfer": "bt709",
+          "width": 1170
+        },
+        "leg": null,
+        "name": "window-1/d05-s1.MP4",
+        "problem": "",
+        "sha256": "aa586acb1330115757aafd4ee2e59a40d9f653a3dac9dc6b87368b496de5d176",
+        "shot": "d05-s1"
+      },
+      {
+        "bytes": 6257371,
+        "facts": {
+          "codec": "hevc",
+          "duration": 23.935,
+          "fps": 30.896,
+          "height": 2532,
+          "pix_fmt": "yuvj420p",
+          "sound": true,
+          "square_pixels": true,
+          "transfer": "bt709",
+          "width": 1170
+        },
+        "leg": null,
+        "name": "window-1/d06-s1.MP4",
+        "problem": "",
+        "sha256": "9a538242886fec29284b7842fa433785f386597932720ab8369f9823966c399e",
+        "shot": "d06-s1"
+      },
+      {
+        "bytes": 1728654,
+        "facts": {
+          "codec": "hevc",
+          "duration": 24.418333,
+          "fps": 23.532,
+          "height": 2532,
+          "pix_fmt": "yuvj420p",
+          "sound": true,
+          "square_pixels": true,
+          "transfer": "bt709",
+          "width": 1170
+        },
+        "leg": null,
+        "name": "window-1/d06-s2.MP4",
+        "problem": "",
+        "sha256": "1b5a0301d80012deae72c792e491f3bd40d090b501ef1cfb737cbe8205b021f1",
+        "shot": "d06-s2"
+      },
+      {
+        "bytes": 32431586,
+        "facts": {
+          "codec": "hevc",
+          "duration": 294.188333,
+          "fps": 39.748,
+          "height": 2532,
+          "pix_fmt": "yuvj420p",
+          "sound": true,
+          "square_pixels": true,
+          "transfer": "bt709",
+          "width": 1170
+        },
+        "leg": null,
+        "name": "window-1/d07-s1.MP4",
+        "problem": "",
+        "sha256": "f121bddcb030422d9ff552c60e9b80d4b20e29db1919d63ffeddd268a9e0ef32",
+        "shot": "d07-s1"
+      },
+      {
+        "bytes": 2235607,
+        "facts": {
+          "codec": "hevc",
+          "duration": 15.651667,
+          "fps": 28.914,
+          "height": 2532,
+          "pix_fmt": "yuvj420p",
+          "sound": true,
+          "square_pixels": true,
+          "transfer": "bt709",
+          "width": 1170
+        },
+        "leg": null,
+        "name": "window-1/d11-s1.MP4",
+        "problem": "",
+        "sha256": "9cb45ee84bb72bf93643277f0fbeea1113324159ebdc6876531bf6fa3e1f1061",
+        "shot": "d11-s1"
+      },
+      {
+        "bytes": 4637340,
+        "facts": {
+          "codec": "hevc",
+          "duration": 22.585,
+          "fps": 24.361,
+          "height": 2532,
+          "pix_fmt": "yuvj420p",
+          "sound": true,
+          "square_pixels": true,
+          "transfer": "bt709",
+          "width": 1170
+        },
+        "leg": null,
+        "name": "window-1/d12-s1.MP4",
+        "problem": "",
+        "sha256": "be1752318d1c17a25a941f1a7527fb48fa5e94dd9be98a7a114b5321514ee116",
+        "shot": "d12-s1"
+      }
+    ],
+    "detail": "11 footage files in `/Users/hcho/Mandu/projects/RepToday/window-1`",
+    "folder": "window-1",
+    "ignored": [],
+    "place": "/Users/hcho/Mandu/projects/RepToday",
+    "status": "read"
+  },
+  "plan": {
+    "fingerprint": "552d9ac3d1b2f6f38365d3eb209bb6a251d1b626406f61db6ede7cae05f71581",
+    "item": "20261101-filming-plan-w1",
+    "jobs": [
+      {
+        "angle": "P01",
+        "days": [
+          1,
+          8
+        ],
+        "digest": "dcd8bb70180aabda2655a492683ecd3697c567954bd19273db41bb3000066ed3",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 23",
+        "key": "d01",
+        "pair": "AB-1",
+        "recut": false,
+        "shots": [
+          {
+            "id": "d01-s1",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 1,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "the Format: real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "the Format: no cuts",
+            "what": "screen record, cold open from home screen to ready session, no cuts, real time, on-screen text only"
+          }
+        ]
+      },
+      {
+        "angle": "P07",
+        "days": [
+          2,
+          9
+        ],
+        "digest": "9b2b7d88b6b2bbcaf30c0140caf0178245edb26fa4081a00f9bc41e15bab19f0",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 29",
+        "key": "d02",
+        "pair": "AB-3",
+        "recut": true,
+        "shots": [
+          {
+            "id": "d02-s1",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 1,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "the Format: real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "the Format: no cuts",
+            "what": "screen record, cold open from home screen to the ready session and Start tapped, no paywall or sign-up screen anywhere, real time, no cuts, the review and the first-person answer as on-screen text only, no person in frame, no voice"
+          }
+        ]
+      },
+      {
+        "angle": "P03",
+        "days": [
+          3,
+          10
+        ],
+        "digest": "5096d6d9e4cb9517a7ad30e4f06a3650b37e8d95d098ad9264916675b79a7e7f",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 25",
+        "key": "d03",
+        "pair": "AB-2",
+        "recut": false,
+        "shots": [
+          {
+            "id": "d03-s1",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 1,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: a screen recording is cut only where its shot list says, and it names no cut",
+            "what": "screen record: history view with a missed day, Consistency Score visibly dips and does not reset, on-screen text"
+          }
+        ]
+      },
+      {
+        "angle": "P02",
+        "days": [
+          4
+        ],
+        "digest": "7aaa9064a25a95754d6a538d90c1882866c196c2c790c6b0665246997935fd31",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 24",
+        "key": "d04",
+        "pair": null,
+        "recut": false,
+        "shots": [
+          {
+            "id": "d04-s1",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 1,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: a screen recording is cut only where its shot list says, and it names no cut",
+            "what": "screen record of the history view showing the real four-day gap, first-person lines as on-screen text only, no person in frame, no voice"
+          },
+          {
+            "id": "d04-s2",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 2,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: a screen recording is cut only where its shot list says, and it names no cut",
+            "what": "screen-record insert of the first session back, ending on its normal completion screen"
+          }
+        ]
+      },
+      {
+        "angle": "P11",
+        "days": [
+          5
+        ],
+        "digest": "5afc28a527dd361a86bfbdb13f8b558859bd6cdbd5d7bc166c3eec76fea0d36c",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 33",
+        "key": "d05",
+        "pair": null,
+        "recut": false,
+        "shots": [
+          {
+            "id": "d05-s1",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 1,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "the Format: no cuts",
+            "what": "screen record: toggle airplane mode in Control Center, cold open, ready session, no cuts"
+          }
+        ]
+      },
+      {
+        "angle": "P09",
+        "days": [
+          6,
+          13
+        ],
+        "digest": "8e5050cf248161a75948985c9121902b021d0674b65f340cb0c8840efa536d0a",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 31",
+        "key": "d06",
+        "pair": "AB-6",
+        "recut": true,
+        "shots": [
+          {
+            "id": "d06-s1",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 1,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: a screen recording is cut only where its shot list says, and it names no cut",
+            "what": "screen record, cold open from home screen to the history view, first-person lines as on-screen text only, no person in frame, no voice"
+          },
+          {
+            "id": "d06-s2",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 2,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: a screen recording is cut only where its shot list says, and it names no cut",
+            "what": "screen record of a missed day and the score dipping without resetting"
+          }
+        ]
+      },
+      {
+        "angle": "P04",
+        "days": [
+          7
+        ],
+        "digest": "111cde6208097c9ab75951cd84516abdb1d55a774000f001b9c2d44bae353857",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 26",
+        "key": "d07",
+        "pair": null,
+        "recut": false,
+        "shots": [
+          {
+            "id": "d07-s1",
+            "kind": "timelapse",
+            "needs": "the Founder",
+            "number": 1,
+            "real_device": false,
+            "real_time": false,
+            "real_time_why": "the Format: timelapse",
+            "setup": "camera",
+            "uncut": false,
+            "uncut_why": "",
+            "what": "timelapse of the phone's own display through one real 5-minute session, session timer and phone clock visible throughout, app screen shown at start and end, no person in frame, no voice"
+          }
+        ]
+      },
+      {
+        "angle": "P08",
+        "days": [
+          11
+        ],
+        "digest": "564823ac194b74f29e913a00c8fe34baa48e801e0bfcd21d5ec892de0a5d9030",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 30",
+        "key": "d11",
+        "pair": null,
+        "recut": false,
+        "shots": [
+          {
+            "id": "d11-s1",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 1,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: a screen recording is cut only where its shot list says, and it names no cut",
+            "what": "screen record scrolling a generated session where mobility blocks are visibly co-equal with strength, on-screen text"
+          }
+        ]
+      },
+      {
+        "angle": "P10",
+        "days": [
+          12
+        ],
+        "digest": "c1e664a2aa6df8c943536f0142d58134a293c16a5f72c341a2276dc33430f538",
+        "format": "projects/RepToday/gtm/05-social-pmf/angles.md line 32",
+        "key": "d12",
+        "pair": null,
+        "recut": false,
+        "shots": [
+          {
+            "id": "d12-s1",
+            "kind": "screen recording",
+            "needs": "a real device",
+            "number": 1,
+            "real_device": true,
+            "real_time": true,
+            "real_time_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: screen recordings are real time",
+            "setup": "device",
+            "uncut": true,
+            "uncut_why": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md line 65: a screen recording is cut only where its shot list says, and it names no cut",
+            "what": "screen record, the first-person line as on-screen text only over the home screen, no person in frame, no voice, held until the immediate cold-open demo, no chaperone sentence"
+          }
+        ]
+      }
+    ],
+    "sittings": [
+      {
+        "number": 1,
+        "setup": "device",
+        "shots": [
+          "d01-s1",
+          "d02-s1",
+          "d03-s1",
+          "d04-s1",
+          "d04-s2",
+          "d05-s1",
+          "d06-s1",
+          "d06-s2",
+          "d11-s1",
+          "d12-s1"
+        ]
+      },
+      {
+        "number": 2,
+        "setup": "camera",
+        "shots": [
+          "d07-s1"
+        ]
+      }
+    ],
+    "status": "approved",
+    "unplanned": [
+      {
+        "day": 14,
+        "why": "the calendar decides its Angle later (Double-down re-cut of the day-7 review's top angle; if nothing qualifies under the rules below, post P14 (no-signup demo))"
+      }
+    ]
+  },
+  "problem": "",
+  "product": "RepToday",
+  "run": "20261109T002710Z-on-demand-4b97",
+  "tooling": {
+    "converts_hdr": true,
+    "ffmpeg": "/usr/local/bin/ffmpeg",
+    "ffprobe": "/usr/local/bin/ffprobe",
+    "problem": "",
+    "version": "ffmpeg version 7.1.1"
+  },
+  "window": 1
+}

@@ -28,19 +28,58 @@
       "route": "proposal",
       "why": "The Founder rejected this recipient, indicating GMB Fitness is not a fit for the planned outreach.",
       "workflow": "outreach"
+    },
+    {
+      "code": "fit",
+      "coded_by_run": "20261109T002710Z-on-demand-4b97",
+      "decided_at": "2026-11-04T11:02:51-08:00",
+      "evidence": "evidence/decisions/20261101-message-creator-gmb-fitness.json",
+      "item": "20261101-message-creator-gmb-fitness",
+      "kind": "strategy",
+      "proposal": "20261108-remove-creator-outreach",
+      "reason": "no need to message",
+      "route": "proposal",
+      "why": "The Founder rejected the creator outreach as unnecessary, making this a question of whether these recipients belong in the outreach plan.",
+      "workflow": "outreach"
+    },
+    {
+      "code": "fit",
+      "coded_by_run": "20261109T002710Z-on-demand-4b97",
+      "decided_at": "2026-11-04T11:03:00-08:00",
+      "evidence": "evidence/decisions/20261101-message-creator-hybrid-calisthenics.json",
+      "item": "20261101-message-creator-hybrid-calisthenics",
+      "kind": "strategy",
+      "proposal": "20261108-remove-creator-outreach",
+      "reason": "no need to message",
+      "route": "proposal",
+      "why": "The Founder rejected the creator outreach as unnecessary, making this a question of whether these recipients belong in the outreach plan.",
+      "workflow": "outreach"
+    },
+    {
+      "code": "fit",
+      "coded_by_run": "20261109T002710Z-on-demand-4b97",
+      "decided_at": "2026-11-04T11:03:10-08:00",
+      "evidence": "evidence/decisions/20261101-message-creator-the-bioneer.json",
+      "item": "20261101-message-creator-the-bioneer",
+      "kind": "strategy",
+      "proposal": "20261108-remove-creator-outreach",
+      "reason": "no need to message.",
+      "route": "proposal",
+      "why": "The Founder rejected the creator outreach as unnecessary, making this a question of whether these recipients belong in the outreach plan.",
+      "workflow": "outreach"
     }
   ],
-  "updated_at": "2026-11-02T00:11:16.818933+00:00",
-  "updated_by_run": "20261102T000002Z-scheduled-0673",
+  "updated_at": "2026-11-09T00:38:43.834433+00:00",
+  "updated_by_run": "20261109T002710Z-on-demand-4b97",
   "workflows": {
     "outreach": {
-      "coded": 1,
+      "coded": 4,
       "codes": {
-        "fit": 1
+        "fit": 4
       },
       "execution": 0,
-      "rejections": 1,
-      "strategy": 1
+      "rejections": 4,
+      "strategy": 4
     }
   }
 }

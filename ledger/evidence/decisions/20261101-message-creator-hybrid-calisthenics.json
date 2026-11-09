@@ -1,0 +1,26 @@
+{
+  "ask": "Approve message to Hybrid Calisthenics: Early access to Rep Today",
+  "code": {
+    "code": "fit",
+    "coded_at": "2026-11-09T00:38:43.834433+00:00",
+    "coded_by_run": "20261109T002710Z-on-demand-4b97",
+    "kind": "strategy",
+    "route": "proposal",
+    "why": "The Founder rejected the creator outreach as unnecessary, making this a question of whether these recipients belong in the outreach plan."
+  },
+  "decided_at": "2026-11-04T11:03:00-08:00",
+  "decision": "reject",
+  "item": "20261101-message-creator-hybrid-calisthenics",
+  "item_file": "review-queue/items/20261101-message-creator-hybrid-calisthenics.md",
+  "kind": "message",
+  "note": null,
+  "reason": "no need to message",
+  "sitting": "2026-11-04",
+  "source": {
+    "path": "founder/decisions/20261101-message-creator-hybrid-calisthenics.json",
+    "sha256": "9e5d2481cd0b83e2a831f46fbd33a7ba47c977466f8082d0e03e9acbcec547f3"
+  },
+  "superseded_by": null,
+  "taken_in_at": "2026-11-09T00:27:13.122166+00:00",
+  "taken_in_by_run": "20261109T002710Z-on-demand-4b97"
+}

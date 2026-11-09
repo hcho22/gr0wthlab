@@ -1,0 +1,1228 @@
+{
+  "at": "2026-11-09T00:38:43.834433+00:00",
+  "code": {
+    "branch": "main",
+    "checkout": "/Users/hcho/Developer/FM_Private/firstmate-private/projects/RepToday",
+    "commit": "58f6dd48629fd237602bac30230a6943d2e2e002",
+    "problem": null
+  },
+  "competitors": [
+    "Apple Fitness+",
+    "Caliber",
+    "Down Dog",
+    "Freeletics",
+    "Ladder",
+    "Nike Training Club",
+    "Peloton App",
+    "Peloton",
+    "Sweat",
+    "NTC",
+    "Seven",
+    "Bend",
+    "Wakeout",
+    "pliability"
+  ],
+  "days": [
+    {
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "'Rep Today opens with a workout ready to start.': ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift lines 415-439 at 58f6dd4 do not contain 'workout = generated'",
+          "field": "",
+          "rule": "claim-location"
+        }
+      ],
+      "checklist": [
+        {
+          "line": 9,
+          "note": "checked",
+          "status": "done",
+          "title": "USPTO trademark search for \"Rep Today\""
+        },
+        {
+          "line": 10,
+          "note": "checked",
+          "status": "done",
+          "title": "Done 2026-08-11:"
+        },
+        {
+          "line": 11,
+          "note": "blocks site, submission only",
+          "status": "open",
+          "title": "Author the privacy policy"
+        },
+        {
+          "line": 12,
+          "note": "blocks nothing today, blocking submission of any emitting build only",
+          "status": "open",
+          "title": "Reconcile the landing FAQ, the event schema, and the privacy nutrition label with the shipped opt-out, before any build that genuinely collects ships."
+        },
+        {
+          "line": 13,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Account deletion path:"
+        },
+        {
+          "line": 17,
+          "note": "blocks only assets that use the 'under 100 milliseconds' claim",
+          "status": "open",
+          "title": "Device benchmark record for the \"under 100 milliseconds\" claim"
+        },
+        {
+          "line": 18,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Confirm final App Store Connect pricing, then regenerate App Store screenshot 05 (it states planned prices) and the site pricing section."
+        },
+        {
+          "line": 22,
+          "note": "blocks video publication only",
+          "status": "open",
+          "title": "Re-record the video voiceover with a human voice"
+        },
+        {
+          "line": 23,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Capture the real App Store submission screenshots from the built app"
+        },
+        {
+          "line": 24,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify every behavioral claim in the site/video/screenshots against the actual approved binary before launch day (the package was written against the PRD and test suite, pre-submission)."
+        },
+        {
+          "line": 25,
+          "note": "checked",
+          "status": "done",
+          "title": "Give the landing page exactly one low-pressure action"
+        },
+        {
+          "line": 26,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Consider replacing or augmenting App Store screenshot 4 with the return-after-a-gap screen (celebrated, easy comeback session) - it is implemented behavior and the strongest emotional differentiator;"
+        },
+        {
+          "line": 30,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Manually read the self-promotion rules"
+        },
+        {
+          "line": 31,
+          "note": "checked",
+          "status": "done",
+          "title": "Done 2026-08-07:"
+        },
+        {
+          "line": 35,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Instrument the funnel before TestFlight:"
+        },
+        {
+          "line": 36,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Read K5's install count off App Store Connect units, not off the telemetry `app_install` count."
+        },
+        {
+          "line": 37,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Check the pre-registered opt-out revisit trigger at each review."
+        },
+        {
+          "line": 38,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Pre-register the K8 wedge-comprehension rubric (written coding criteria, 25+ observed first runs, non-founder coding) before the first cohort, per the skeptic's fix."
+        }
+      ],
+      "claims": [
+        {
+          "claim": "Rep Today opens with a workout ready to start.",
+          "code": "ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:415-439",
+          "problem": "ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift lines 415-439 at 58f6dd4 do not contain 'workout = generated'",
+          "shows": "workout = generated"
+        }
+      ],
+      "day": 1,
+      "detail": "",
+      "draft": "drafts/posts/window-1/day-01.md",
+      "draft_sha256": "aa4b64fed4300725994be764ae4d63d9c52304abb925702391ce16bd4c4db6c4",
+      "exempt": [
+        {
+          "blocks": false,
+          "detail": "frozen test Hook, exempt by brand-rules.json frozen_hooks_exempt_from: the Hook has 13 words; at most 12",
+          "field": "Hook",
+          "rule": "hook_max_words"
+        }
+      ],
+      "item": null,
+      "status": "blocked",
+      "unread": [],
+      "video": null,
+      "warnings": [
+        {
+          "blocks": false,
+          "detail": "its first line is 72 characters; about 70 show before it is cut",
+          "field": "YouTube Shorts title",
+          "rule": "config/platforms.json YouTube Shorts Title visible_chars"
+        }
+      ],
+      "withdrawn": null
+    },
+    {
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "the rendered asset was not kept: it is h264 yuvj420p, not h264 yuv420p",
+          "field": "",
+          "rule": "asset-shape"
+        }
+      ],
+      "checklist": [
+        {
+          "line": 9,
+          "note": "checked",
+          "status": "done",
+          "title": "USPTO trademark search for \"Rep Today\""
+        },
+        {
+          "line": 10,
+          "note": "checked",
+          "status": "done",
+          "title": "Done 2026-08-11:"
+        },
+        {
+          "line": 11,
+          "note": "blocks site, submission only",
+          "status": "open",
+          "title": "Author the privacy policy"
+        },
+        {
+          "line": 12,
+          "note": "blocks nothing today, blocking submission of any emitting build only",
+          "status": "open",
+          "title": "Reconcile the landing FAQ, the event schema, and the privacy nutrition label with the shipped opt-out, before any build that genuinely collects ships."
+        },
+        {
+          "line": 13,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Account deletion path:"
+        },
+        {
+          "line": 17,
+          "note": "blocks only assets that use the 'under 100 milliseconds' claim",
+          "status": "open",
+          "title": "Device benchmark record for the \"under 100 milliseconds\" claim"
+        },
+        {
+          "line": 18,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Confirm final App Store Connect pricing, then regenerate App Store screenshot 05 (it states planned prices) and the site pricing section."
+        },
+        {
+          "line": 22,
+          "note": "blocks video publication only",
+          "status": "open",
+          "title": "Re-record the video voiceover with a human voice"
+        },
+        {
+          "line": 23,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Capture the real App Store submission screenshots from the built app"
+        },
+        {
+          "line": 24,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify every behavioral claim in the site/video/screenshots against the actual approved binary before launch day (the package was written against the PRD and test suite, pre-submission)."
+        },
+        {
+          "line": 25,
+          "note": "checked",
+          "status": "done",
+          "title": "Give the landing page exactly one low-pressure action"
+        },
+        {
+          "line": 26,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Consider replacing or augmenting App Store screenshot 4 with the return-after-a-gap screen (celebrated, easy comeback session) - it is implemented behavior and the strongest emotional differentiator;"
+        },
+        {
+          "line": 30,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Manually read the self-promotion rules"
+        },
+        {
+          "line": 31,
+          "note": "checked",
+          "status": "done",
+          "title": "Done 2026-08-07:"
+        },
+        {
+          "line": 35,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Instrument the funnel before TestFlight:"
+        },
+        {
+          "line": 36,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Read K5's install count off App Store Connect units, not off the telemetry `app_install` count."
+        },
+        {
+          "line": 37,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Check the pre-registered opt-out revisit trigger at each review."
+        },
+        {
+          "line": 38,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Pre-register the K8 wedge-comprehension rubric (written coding criteria, 25+ observed first runs, non-founder coding) before the first cohort, per the skeptic's fix."
+        }
+      ],
+      "claims": [
+        {
+          "claim": "The core workouts are free.",
+          "code": "ios/RepToday/RepToday/Models/User.swift:178-184",
+          "problem": null,
+          "shows": "/// The free tier - unlimited core workouts forever, no expiry."
+        }
+      ],
+      "day": 2,
+      "detail": "",
+      "draft": "drafts/posts/window-1/day-02.md",
+      "draft_sha256": "1f9b6f93561dd135b8766f08fde906d7274783957713f703dbefe74a25fbd5c6",
+      "exempt": [
+        {
+          "blocks": false,
+          "detail": "frozen test Hook, exempt by brand-rules.json frozen_hooks_exempt_from: the Hook has 13 words; at most 12",
+          "field": "Hook",
+          "rule": "hook_max_words"
+        }
+      ],
+      "item": null,
+      "status": "blocked",
+      "unread": [],
+      "video": {
+        "asset": null,
+        "asset_record": null,
+        "asset_sha256": null,
+        "blocks": [
+          {
+            "blocks": true,
+            "detail": "the rendered asset was not kept: it is h264 yuvj420p, not h264 yuv420p",
+            "field": "",
+            "rule": "asset-shape"
+          }
+        ],
+        "bytes": null,
+        "checks": [
+          "d02-s1, which may not be cut, is one unbroken source range",
+          "every cut plays at the speed it was recorded at"
+        ],
+        "day": 2,
+        "detail": "",
+        "edit": "drafts/edits/window-1/day-02.json",
+        "edit_sha256": "30a173ccdffbc4a36296b4f39454718595fe952f6b627e52989e11118043bcf9",
+        "facts": null,
+        "reused": false,
+        "status": "blocked",
+        "unread": []
+      },
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "the rendered asset was not kept: it is h264 yuvj420p, not h264 yuv420p",
+          "field": "",
+          "rule": "asset-shape"
+        }
+      ],
+      "checklist": [
+        {
+          "line": 9,
+          "note": "checked",
+          "status": "done",
+          "title": "USPTO trademark search for \"Rep Today\""
+        },
+        {
+          "line": 10,
+          "note": "checked",
+          "status": "done",
+          "title": "Done 2026-08-11:"
+        },
+        {
+          "line": 11,
+          "note": "blocks site, submission only",
+          "status": "open",
+          "title": "Author the privacy policy"
+        },
+        {
+          "line": 12,
+          "note": "blocks nothing today, blocking submission of any emitting build only",
+          "status": "open",
+          "title": "Reconcile the landing FAQ, the event schema, and the privacy nutrition label with the shipped opt-out, before any build that genuinely collects ships."
+        },
+        {
+          "line": 13,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Account deletion path:"
+        },
+        {
+          "line": 17,
+          "note": "blocks only assets that use the 'under 100 milliseconds' claim",
+          "status": "open",
+          "title": "Device benchmark record for the \"under 100 milliseconds\" claim"
+        },
+        {
+          "line": 18,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Confirm final App Store Connect pricing, then regenerate App Store screenshot 05 (it states planned prices) and the site pricing section."
+        },
+        {
+          "line": 22,
+          "note": "blocks video publication only",
+          "status": "open",
+          "title": "Re-record the video voiceover with a human voice"
+        },
+        {
+          "line": 23,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Capture the real App Store submission screenshots from the built app"
+        },
+        {
+          "line": 24,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify every behavioral claim in the site/video/screenshots against the actual approved binary before launch day (the package was written against the PRD and test suite, pre-submission)."
+        },
+        {
+          "line": 25,
+          "note": "checked",
+          "status": "done",
+          "title": "Give the landing page exactly one low-pressure action"
+        },
+        {
+          "line": 26,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Consider replacing or augmenting App Store screenshot 4 with the return-after-a-gap screen (celebrated, easy comeback session) - it is implemented behavior and the strongest emotional differentiator;"
+        },
+        {
+          "line": 30,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Manually read the self-promotion rules"
+        },
+        {
+          "line": 31,
+          "note": "checked",
+          "status": "done",
+          "title": "Done 2026-08-07:"
+        },
+        {
+          "line": 35,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Instrument the funnel before TestFlight:"
+        },
+        {
+          "line": 36,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Read K5's install count off App Store Connect units, not off the telemetry `app_install` count."
+        },
+        {
+          "line": 37,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Check the pre-registered opt-out revisit trigger at each review."
+        },
+        {
+          "line": 38,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Pre-register the K8 wedge-comprehension rubric (written coding criteria, 25+ observed first runs, non-founder coding) before the first cohort, per the skeptic's fix."
+        }
+      ],
+      "claims": [
+        {
+          "claim": "A missed day can lower the rolling Consistency Score, but it never resets to zero.",
+          "code": "ios/RepToday/RepToday/Services/Consistency/ConsistencyScore.swift:102-139",
+          "problem": null,
+          "shows": "adherence = 0"
+        }
+      ],
+      "day": 3,
+      "detail": "",
+      "draft": "drafts/posts/window-1/day-03.md",
+      "draft_sha256": "56a1fb924cae0cfd79129a6e6b239d8602f1e372d15042ff28ddfa8220465ab0",
+      "exempt": [],
+      "item": null,
+      "status": "blocked",
+      "unread": [],
+      "video": {
+        "asset": null,
+        "asset_record": null,
+        "asset_sha256": null,
+        "blocks": [
+          {
+            "blocks": true,
+            "detail": "the rendered asset was not kept: it is h264 yuvj420p, not h264 yuv420p",
+            "field": "",
+            "rule": "asset-shape"
+          }
+        ],
+        "bytes": null,
+        "checks": [
+          "d03-s1, which may not be cut, is one unbroken source range",
+          "every cut plays at the speed it was recorded at"
+        ],
+        "day": 3,
+        "detail": "",
+        "edit": "drafts/edits/window-1/day-03.json",
+        "edit_sha256": "c9c0849c9b78fdd8ec43fca4e0d3f4096f6075843469edbf9ed870ae09e1f86a",
+        "facts": null,
+        "reused": false,
+        "status": "blocked",
+        "unread": []
+      },
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "day": 4,
+      "detail": "the Founder approved it, so it is not asked again",
+      "draft": null,
+      "draft_sha256": null,
+      "item": "20261101-post-w1-day-04",
+      "status": "approved earlier",
+      "unread": [],
+      "video": null,
+      "withdrawn": null
+    },
+    {
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "the rendered asset was not kept: it is h264 yuvj420p, not h264 yuv420p",
+          "field": "",
+          "rule": "asset-shape"
+        }
+      ],
+      "checklist": [
+        {
+          "line": 9,
+          "note": "checked",
+          "status": "done",
+          "title": "USPTO trademark search for \"Rep Today\""
+        },
+        {
+          "line": 10,
+          "note": "checked",
+          "status": "done",
+          "title": "Done 2026-08-11:"
+        },
+        {
+          "line": 11,
+          "note": "blocks site, submission only",
+          "status": "open",
+          "title": "Author the privacy policy"
+        },
+        {
+          "line": 12,
+          "note": "blocks nothing today, blocking submission of any emitting build only",
+          "status": "open",
+          "title": "Reconcile the landing FAQ, the event schema, and the privacy nutrition label with the shipped opt-out, before any build that genuinely collects ships."
+        },
+        {
+          "line": 13,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Account deletion path:"
+        },
+        {
+          "line": 17,
+          "note": "blocks only assets that use the 'under 100 milliseconds' claim",
+          "status": "open",
+          "title": "Device benchmark record for the \"under 100 milliseconds\" claim"
+        },
+        {
+          "line": 18,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Confirm final App Store Connect pricing, then regenerate App Store screenshot 05 (it states planned prices) and the site pricing section."
+        },
+        {
+          "line": 22,
+          "note": "blocks video publication only",
+          "status": "open",
+          "title": "Re-record the video voiceover with a human voice"
+        },
+        {
+          "line": 23,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Capture the real App Store submission screenshots from the built app"
+        },
+        {
+          "line": 24,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify every behavioral claim in the site/video/screenshots against the actual approved binary before launch day (the package was written against the PRD and test suite, pre-submission)."
+        },
+        {
+          "line": 25,
+          "note": "checked",
+          "status": "done",
+          "title": "Give the landing page exactly one low-pressure action"
+        },
+        {
+          "line": 26,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Consider replacing or augmenting App Store screenshot 4 with the return-after-a-gap screen (celebrated, easy comeback session) - it is implemented behavior and the strongest emotional differentiator;"
+        },
+        {
+          "line": 30,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Manually read the self-promotion rules"
+        },
+        {
+          "line": 31,
+          "note": "checked",
+          "status": "done",
+          "title": "Done 2026-08-07:"
+        },
+        {
+          "line": 35,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Instrument the funnel before TestFlight:"
+        },
+        {
+          "line": 36,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Read K5's install count off App Store Connect units, not off the telemetry `app_install` count."
+        },
+        {
+          "line": 37,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Check the pre-registered opt-out revisit trigger at each review."
+        },
+        {
+          "line": 38,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Pre-register the K8 wedge-comprehension rubric (written coding criteria, 25+ observed first runs, non-founder coding) before the first cohort, per the skeptic's fix."
+        }
+      ],
+      "claims": [
+        {
+          "claim": "The app builds a workout session while the phone is in airplane mode.",
+          "code": "ios/RepToday/RepToday/Services/Engine/OnDeviceWorkoutEngine.swift:8",
+          "problem": null,
+          "shows": "/// bundled, load-validated exercise library. Nothing here reaches the network, a server, or an LLM,"
+        }
+      ],
+      "day": 5,
+      "detail": "",
+      "draft": "drafts/posts/window-1/day-05.md",
+      "draft_sha256": "2a9c28dad59949dce2d7d7e5fb0f820559ecee97c10404e97e418e85a64b0db3",
+      "exempt": [],
+      "item": null,
+      "status": "blocked",
+      "unread": [],
+      "video": {
+        "asset": null,
+        "asset_record": null,
+        "asset_sha256": null,
+        "blocks": [
+          {
+            "blocks": true,
+            "detail": "the rendered asset was not kept: it is h264 yuvj420p, not h264 yuv420p",
+            "field": "",
+            "rule": "asset-shape"
+          }
+        ],
+        "bytes": null,
+        "checks": [
+          "d05-s1, which may not be cut, is one unbroken source range",
+          "every cut plays at the speed it was recorded at"
+        ],
+        "day": 5,
+        "detail": "",
+        "edit": "drafts/edits/window-1/day-05.json",
+        "edit_sha256": "37897ba500e8d151f62b35e2a8ac6581173606d39fe381c16f434809c0b34e47",
+        "facts": null,
+        "reused": false,
+        "status": "blocked",
+        "unread": []
+      },
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "the rendered asset was not kept: it is h264 yuvj420p, not h264 yuv420p",
+          "field": "",
+          "rule": "asset-shape"
+        }
+      ],
+      "checklist": [
+        {
+          "line": 9,
+          "note": "checked",
+          "status": "done",
+          "title": "USPTO trademark search for \"Rep Today\""
+        },
+        {
+          "line": 10,
+          "note": "checked",
+          "status": "done",
+          "title": "Done 2026-08-11:"
+        },
+        {
+          "line": 11,
+          "note": "blocks site, submission only",
+          "status": "open",
+          "title": "Author the privacy policy"
+        },
+        {
+          "line": 12,
+          "note": "blocks nothing today, blocking submission of any emitting build only",
+          "status": "open",
+          "title": "Reconcile the landing FAQ, the event schema, and the privacy nutrition label with the shipped opt-out, before any build that genuinely collects ships."
+        },
+        {
+          "line": 13,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Account deletion path:"
+        },
+        {
+          "line": 17,
+          "note": "blocks only assets that use the 'under 100 milliseconds' claim",
+          "status": "open",
+          "title": "Device benchmark record for the \"under 100 milliseconds\" claim"
+        },
+        {
+          "line": 18,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Confirm final App Store Connect pricing, then regenerate App Store screenshot 05 (it states planned prices) and the site pricing section."
+        },
+        {
+          "line": 22,
+          "note": "blocks video publication only",
+          "status": "open",
+          "title": "Re-record the video voiceover with a human voice"
+        },
+        {
+          "line": 23,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Capture the real App Store submission screenshots from the built app"
+        },
+        {
+          "line": 24,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify every behavioral claim in the site/video/screenshots against the actual approved binary before launch day (the package was written against the PRD and test suite, pre-submission)."
+        },
+        {
+          "line": 25,
+          "note": "checked",
+          "status": "done",
+          "title": "Give the landing page exactly one low-pressure action"
+        },
+        {
+          "line": 26,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Consider replacing or augmenting App Store screenshot 4 with the return-after-a-gap screen (celebrated, easy comeback session) - it is implemented behavior and the strongest emotional differentiator;"
+        },
+        {
+          "line": 30,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Manually read the self-promotion rules"
+        },
+        {
+          "line": 31,
+          "note": "checked",
+          "status": "done",
+          "title": "Done 2026-08-07:"
+        },
+        {
+          "line": 35,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Instrument the funnel before TestFlight:"
+        },
+        {
+          "line": 36,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Read K5's install count off App Store Connect units, not off the telemetry `app_install` count."
+        },
+        {
+          "line": 37,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Check the pre-registered opt-out revisit trigger at each review."
+        },
+        {
+          "line": 38,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Pre-register the K8 wedge-comprehension rubric (written coding criteria, 25+ observed first runs, non-founder coding) before the first cohort, per the skeptic's fix."
+        }
+      ],
+      "claims": [
+        {
+          "claim": "The app has no workout streaks.",
+          "code": "ios/RepToday/RepToday/Services/Consistency/ConsistencyScore.swift:3-6",
+          "problem": null,
+          "shows": "/// measure of **showing up**. It replaces the fragile streak entirely - there is no XP, no"
+        },
+        {
+          "claim": "After a missed day, the Consistency Score can dip without resetting to zero.",
+          "code": "ios/RepToday/RepToday/Services/Consistency/ConsistencyScore.swift:102-139",
+          "problem": null,
+          "shows": "adherence = 0"
+        }
+      ],
+      "day": 6,
+      "detail": "",
+      "draft": "drafts/posts/window-1/day-06.md",
+      "draft_sha256": "4305f5650d7848796c787569a70b949f271ba2c4a7c8280f284391bcddc17762",
+      "exempt": [
+        {
+          "blocks": false,
+          "detail": "frozen test Hook, exempt by brand-rules.json frozen_hooks_exempt_from: the Hook has 18 words; at most 12",
+          "field": "Hook",
+          "rule": "hook_max_words"
+        },
+        {
+          "blocks": false,
+          "detail": "frozen test Hook, exempt by brand-rules.json frozen_hooks_exempt_from: banned word 'streak'",
+          "field": "Hook",
+          "rule": "banned_words_in_hook"
+        },
+        {
+          "blocks": false,
+          "detail": "frozen test Hook, exempt by brand-rules.json frozen_hooks_exempt_from: banned word 'streak'",
+          "field": "beat 1 on-screen text",
+          "rule": "banned_words_in_hook"
+        },
+        {
+          "blocks": false,
+          "detail": "frozen test Hook, exempt by brand-rules.json frozen_hooks_exempt_from: banned word 'streak'",
+          "field": "TikTok caption",
+          "rule": "banned_words_in_hook"
+        },
+        {
+          "blocks": false,
+          "detail": "frozen test Hook, exempt by brand-rules.json frozen_hooks_exempt_from: banned word 'streak'",
+          "field": "YouTube Shorts title",
+          "rule": "banned_words_in_hook"
+        },
+        {
+          "blocks": false,
+          "detail": "frozen test Hook, exempt by brand-rules.json frozen_hooks_exempt_from: banned word 'streak'",
+          "field": "YouTube Shorts description",
+          "rule": "banned_words_in_hook"
+        }
+      ],
+      "item": null,
+      "status": "blocked",
+      "unread": [],
+      "video": {
+        "asset": null,
+        "asset_record": null,
+        "asset_sha256": null,
+        "blocks": [
+          {
+            "blocks": true,
+            "detail": "the rendered asset was not kept: it is h264 yuvj420p, not h264 yuv420p",
+            "field": "",
+            "rule": "asset-shape"
+          }
+        ],
+        "bytes": null,
+        "checks": [
+          "d06-s1, which may not be cut, is one unbroken source range",
+          "d06-s2, which may not be cut, is one unbroken source range",
+          "every cut plays at the speed it was recorded at"
+        ],
+        "day": 6,
+        "detail": "",
+        "edit": "drafts/edits/window-1/day-06.json",
+        "edit_sha256": "200a8a82b360d9da60803cb799878469eace37314a74e6dce380a763538c4c7d",
+        "facts": null,
+        "reused": false,
+        "status": "blocked",
+        "unread": []
+      },
+      "warnings": [
+        {
+          "blocks": false,
+          "detail": "its first line is 88 characters; about 70 show before it is cut",
+          "field": "YouTube Shorts title",
+          "rule": "config/platforms.json YouTube Shorts Title visible_chars"
+        }
+      ],
+      "withdrawn": null
+    },
+    {
+      "blocks": [
+        {
+          "blocks": true,
+          "detail": "the rendered asset was not kept: it is h264 yuvj420p, not h264 yuv420p",
+          "field": "",
+          "rule": "asset-shape"
+        }
+      ],
+      "checklist": [
+        {
+          "line": 9,
+          "note": "checked",
+          "status": "done",
+          "title": "USPTO trademark search for \"Rep Today\""
+        },
+        {
+          "line": 10,
+          "note": "checked",
+          "status": "done",
+          "title": "Done 2026-08-11:"
+        },
+        {
+          "line": 11,
+          "note": "blocks site, submission only",
+          "status": "open",
+          "title": "Author the privacy policy"
+        },
+        {
+          "line": 12,
+          "note": "blocks nothing today, blocking submission of any emitting build only",
+          "status": "open",
+          "title": "Reconcile the landing FAQ, the event schema, and the privacy nutrition label with the shipped opt-out, before any build that genuinely collects ships."
+        },
+        {
+          "line": 13,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Account deletion path:"
+        },
+        {
+          "line": 17,
+          "note": "blocks only assets that use the 'under 100 milliseconds' claim",
+          "status": "open",
+          "title": "Device benchmark record for the \"under 100 milliseconds\" claim"
+        },
+        {
+          "line": 18,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Confirm final App Store Connect pricing, then regenerate App Store screenshot 05 (it states planned prices) and the site pricing section."
+        },
+        {
+          "line": 22,
+          "note": "blocks video publication only",
+          "status": "open",
+          "title": "Re-record the video voiceover with a human voice"
+        },
+        {
+          "line": 23,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Capture the real App Store submission screenshots from the built app"
+        },
+        {
+          "line": 24,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Verify every behavioral claim in the site/video/screenshots against the actual approved binary before launch day (the package was written against the PRD and test suite, pre-submission)."
+        },
+        {
+          "line": 25,
+          "note": "checked",
+          "status": "done",
+          "title": "Give the landing page exactly one low-pressure action"
+        },
+        {
+          "line": 26,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Consider replacing or augmenting App Store screenshot 4 with the return-after-a-gap screen (celebrated, easy comeback session) - it is implemented behavior and the strongest emotional differentiator;"
+        },
+        {
+          "line": 30,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Manually read the self-promotion rules"
+        },
+        {
+          "line": 31,
+          "note": "checked",
+          "status": "done",
+          "title": "Done 2026-08-07:"
+        },
+        {
+          "line": 35,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Instrument the funnel before TestFlight:"
+        },
+        {
+          "line": 36,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Read K5's install count off App Store Connect units, not off the telemetry `app_install` count."
+        },
+        {
+          "line": 37,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Check the pre-registered opt-out revisit trigger at each review."
+        },
+        {
+          "line": 38,
+          "note": "names no asset it blocks",
+          "status": "open",
+          "title": "Pre-register the K8 wedge-comprehension rubric (written coding criteria, 25+ observed first runs, non-founder coding) before the first cohort, per the skeptic's fix."
+        }
+      ],
+      "claims": [
+        {
+          "claim": "A completed five-minute session counts as a full show-up.",
+          "code": "ios/RepToday/RepToday/Models/WorkoutLog.swift:22-24",
+          "problem": null,
+          "shows": "/// The actually-completed minutes exercised; a 5-minute session still counts as a full"
+        }
+      ],
+      "day": 7,
+      "detail": "",
+      "draft": "drafts/posts/window-1/day-07.md",
+      "draft_sha256": "144e79ea7123b2a00716f395df49881803ef447ec4f259a2c941c9b3db644eea",
+      "exempt": [],
+      "item": null,
+      "status": "blocked",
+      "unread": [],
+      "video": {
+        "asset": null,
+        "asset_record": null,
+        "asset_sha256": null,
+        "blocks": [
+          {
+            "blocks": true,
+            "detail": "the rendered asset was not kept: it is h264 yuvj420p, not h264 yuv420p",
+            "field": "",
+            "rule": "asset-shape"
+          }
+        ],
+        "bytes": null,
+        "checks": [],
+        "day": 7,
+        "detail": "",
+        "edit": "drafts/edits/window-1/day-07.json",
+        "edit_sha256": "f6a08e44c61742d35a42ac99c43453ec96a8852eae442ab6a859d745abcf7239",
+        "facts": null,
+        "reused": false,
+        "status": "blocked",
+        "unread": []
+      },
+      "warnings": [],
+      "withdrawn": null
+    }
+  ],
+  "kit": {
+    "angles": {
+      "path": "projects/RepToday/gtm/05-social-pmf/angles.md",
+      "sha256": "60eafe6fd2d09f31cd40681cfbbb0e3075d8a8eed68812b089fd2dd9536b1608"
+    },
+    "brand_rules": {
+      "path": "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json",
+      "sha256": "b950a7e13ff689eaa18bffe10e914d1b7895adbe6ec54b0bdd280443321b936f"
+    },
+    "calendar": {
+      "path": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md",
+      "sha256": "10d67857fdc5be8561bc0f08ed9914f0c0b65bdc68761d6cd050a3737d9254c2"
+    },
+    "checklist": {
+      "path": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md",
+      "sha256": "082baaf3deb3d40d35b8f7cbf7b5226187ede9582a212379c51ac9e4656f1f12"
+    },
+    "competitors": {
+      "path": "projects/RepToday/gtm/01-research/",
+      "sha256": "c9acfd550573e9b1166305bac95f456fc868c995106d2e4b1cdd0fb1f48eb853"
+    },
+    "pairs": {
+      "path": "projects/RepToday/gtm/05-social-pmf/ab-pairs.md",
+      "sha256": "a9aff1c1c782969fc716ecd640cd84689ae851ce0cfeed4470c955cc5a21c4dd"
+    },
+    "platforms": {
+      "path": "projects/RepToday/gtm/05-social-pmf/platform-assignment.md",
+      "sha256": "0de409ac9d62c7e849361802ff94ba0a4749ad349ff82b9c96b7673bf3d7ff31"
+    }
+  },
+  "kit_problems": {},
+  "lint": [
+    {
+      "detail": "the Hook has at most this many words",
+      "rule": "hook_max_words",
+      "status": "applied"
+    },
+    {
+      "detail": "no copy asks a question",
+      "rule": "hook_must_not_be_question",
+      "status": "applied"
+    },
+    {
+      "detail": "no copy uses a banned word",
+      "rule": "banned_words_in_hook",
+      "status": "applied"
+    },
+    {
+      "detail": "a post's frozen Hooks, in their own words, are exempt from these Hook rules: hook_max_words, banned_words_in_hook",
+      "rule": "frozen_hooks_exempt_from",
+      "status": "applied"
+    },
+    {
+      "detail": "every post caption ends with this one call-to-action line, carrying its platform's Waitlist Source link, and nothing else in a post is a call to action or a link",
+      "rule": "caption_call_to_action",
+      "status": "applied"
+    },
+    {
+      "detail": "no copy uses social-proof language",
+      "rule": "banned_social_proof_in_hook",
+      "status": "applied"
+    },
+    {
+      "detail": "no copy uses a banned character",
+      "rule": "banned_characters_anywhere",
+      "status": "applied"
+    },
+    {
+      "detail": "no copy uses an emoji or other non-text symbol",
+      "rule": "no_emoji_in_hook",
+      "status": "applied"
+    },
+    {
+      "detail": "no copy has an all-caps word outside all_caps_allowlist",
+      "rule": "no_all_caps_words_in_hook",
+      "status": "applied"
+    },
+    {
+      "detail": "all-caps words the all-caps rule allows",
+      "rule": "all_caps_allowlist",
+      "status": "applied"
+    },
+    {
+      "detail": "the layout of the dry-run creative briefs; a post Draft has its own format",
+      "rule": "required_sections",
+      "status": "not applicable"
+    },
+    {
+      "detail": "screens shown as simulated; the kit's posts are real-device recordings",
+      "rule": "required_disclosure",
+      "status": "not applicable"
+    },
+    {
+      "detail": "the Angle's sourced pain links its source with this prefix",
+      "rule": "pain_source_url_must_start_with",
+      "status": "applied"
+    },
+    {
+      "detail": "no copy uses a stock phrase",
+      "rule": "stock_phrases",
+      "status": "applied"
+    },
+    {
+      "detail": "capped words, counted per paragraph",
+      "rule": "capped_words",
+      "status": "applied"
+    },
+    {
+      "detail": "how many capped words one paragraph may hold",
+      "rule": "capped_words_per_paragraph",
+      "status": "applied"
+    },
+    {
+      "detail": "a sentence with more words is flagged",
+      "rule": "long_sentence_words",
+      "status": "applied"
+    },
+    {
+      "detail": "a sentence with more commas is flagged",
+      "rule": "long_sentence_commas",
+      "status": "applied"
+    },
+    {
+      "detail": "no number or quantity of people, reviews, or results that does not exist",
+      "rule": "invented_proof_terms",
+      "status": "applied"
+    },
+    {
+      "detail": "quantity words the invented-proof rule reads before a term, such as thousands of",
+      "rule": "invented_proof_quantities",
+      "status": "applied"
+    },
+    {
+      "detail": "no scarcity or urgency phrase",
+      "rule": "fake_scarcity",
+      "status": "applied"
+    },
+    {
+      "detail": "phrases no word or phrase rule counts",
+      "rule": "lint_allow_phrases",
+      "status": "applied"
+    },
+    {
+      "detail": "no copy uses a loss-framed phrase",
+      "rule": "loss_framing",
+      "status": "applied"
+    },
+    {
+      "detail": "asks a message to a creator may not make; a post is not read for them",
+      "rule": "sponsorship_asks",
+      "status": "not applicable"
+    }
+  ],
+  "plan": "Window 1 begins on Monday 2026-11-09, the day after its first sitting; this run prepares days 1 to 7: the week after the sitting on Sunday 2026-11-08 (2026-11-09 to 2026-11-15).",
+  "product": "RepToday",
+  "run": "20261109T002710Z-on-demand-4b97",
+  "window": {
+    "day_1": "2026-11-09",
+    "first_sitting": "2026-11-08",
+    "number": 1,
+    "slot": "10:00"
+  }
+}

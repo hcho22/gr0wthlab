@@ -1,0 +1,120 @@
+{
+  "at": "2026-11-09T00:38:43.834433+00:00",
+  "channel_plan": "projects/RepToday/gtm/06-channels/channel-plan.md",
+  "messages": [
+    {
+      "blocks": [],
+      "claims": [],
+      "detail": "the Founder approved it, so it is not asked again",
+      "draft": null,
+      "draft_sha256": null,
+      "item": "20261016-message-network-ask",
+      "purpose": "network-ask",
+      "status": "approved earlier",
+      "to": "network",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [
+        {
+          "claim": "The Ready screen asks the workout engine to generate a workout using the selected duration, user profile, recent logs, session policy, and requested variation.",
+          "code": "ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:481-487",
+          "problem": null
+        }
+      ],
+      "detail": "",
+      "draft": "drafts/messages/outreach/creator-gmb-fitness.md",
+      "draft_sha256": "b249cb731044be79b18ea5eecf4ded15b9688e900db43f1e429c80c8dfbdaa27",
+      "item": "20261108-message-creator-gmb-fitness",
+      "purpose": "creator",
+      "status": "queued",
+      "to": "gmb-fitness",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [],
+      "detail": "the first message to GMB Fitness is not approved yet",
+      "draft": null,
+      "draft_sha256": null,
+      "item": null,
+      "purpose": "creator-follow-up",
+      "status": "not due",
+      "to": "gmb-fitness",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [
+        {
+          "claim": "The Ready screen asks the workout engine to generate a workout using the selected duration, user profile, recent logs, session policy, and requested variation.",
+          "code": "ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:481-487",
+          "problem": null
+        }
+      ],
+      "detail": "",
+      "draft": "drafts/messages/outreach/creator-hybrid-calisthenics.md",
+      "draft_sha256": "57d8b6e601679e7e01d7391274ce6de19ff18681e9c8aa841b158534a7ec2f6d",
+      "item": "20261108-message-creator-hybrid-calisthenics",
+      "purpose": "creator",
+      "status": "queued",
+      "to": "hybrid-calisthenics",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [],
+      "detail": "the first message to Hybrid Calisthenics is not approved yet",
+      "draft": null,
+      "draft_sha256": null,
+      "item": null,
+      "purpose": "creator-follow-up",
+      "status": "not due",
+      "to": "hybrid-calisthenics",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [
+        {
+          "claim": "The Ready screen asks the workout engine to generate a workout using the selected duration, user profile, recent logs, session policy, and requested variation.",
+          "code": "ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:481-487",
+          "problem": null
+        }
+      ],
+      "detail": "",
+      "draft": "drafts/messages/outreach/creator-the-bioneer.md",
+      "draft_sha256": "730b86a6859f5d9437c3bec5fa38cc0ec8520c51e4adcb06307038b85e8a2d7f",
+      "item": "20261108-message-creator-the-bioneer",
+      "purpose": "creator",
+      "status": "queued",
+      "to": "the-bioneer",
+      "warnings": [],
+      "withdrawn": null
+    },
+    {
+      "blocks": [],
+      "claims": [],
+      "detail": "the first message to The Bioneer is not approved yet",
+      "draft": null,
+      "draft_sha256": null,
+      "item": null,
+      "purpose": "creator-follow-up",
+      "status": "not due",
+      "to": "the-bioneer",
+      "warnings": [],
+      "withdrawn": null
+    }
+  ],
+  "product": "RepToday",
+  "record_problems": [],
+  "records": [],
+  "run": "20261109T002710Z-on-demand-4b97",
+  "skipped": []
+}

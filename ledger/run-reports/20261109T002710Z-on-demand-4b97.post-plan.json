@@ -1,0 +1,321 @@
+{
+  "code": {
+    "commit": "58f6dd48629fd237602bac30230a6943d2e2e002",
+    "problem": null
+  },
+  "due": [
+    {
+      "approved": {
+        "ask": "Approve day 1 post: cold-open demo, hook A",
+        "closed_at": "2026-11-09T00:27:13.122166+00:00",
+        "closed_by_run": "20261109T002710Z-on-demand-4b97",
+        "day": 1,
+        "decided_at": "2026-11-04T10:39:42-08:00",
+        "draft": "drafts/posts/window-1/day-01.md",
+        "draft_sha256": "aa4b64fed4300725994be764ae4d63d9c52304abb925702391ce16bd4c4db6c4",
+        "evidence": "evidence/decisions/20261101-post-w1-day-01.json",
+        "file": "review-queue/items/20261101-post-w1-day-01.md",
+        "id": "20261101-post-w1-day-01",
+        "kind": "post",
+        "product": "RepToday",
+        "published_at": "2026-11-02T00:11:16.818933+00:00",
+        "published_by_run": "20261102T000002Z-scheduled-0673",
+        "slot": "2026-11-02T10:00-08:00",
+        "status": "approved",
+        "window": 1
+      },
+      "day": 1,
+      "open": null,
+      "rejected": [],
+      "slot": "2026-11-09T10:00-08:00"
+    },
+    {
+      "approved": {
+        "ask": "Approve day 2 post: paywall review on screen, pain-first cut",
+        "closed_at": "2026-11-09T00:27:13.122166+00:00",
+        "closed_by_run": "20261109T002710Z-on-demand-4b97",
+        "day": 2,
+        "decided_at": "2026-11-04T10:39:53-08:00",
+        "draft": "drafts/posts/window-1/day-02.md",
+        "draft_sha256": "1f9b6f93561dd135b8766f08fde906d7274783957713f703dbefe74a25fbd5c6",
+        "evidence": "evidence/decisions/20261101-post-w1-day-02.json",
+        "file": "review-queue/items/20261101-post-w1-day-02.md",
+        "id": "20261101-post-w1-day-02",
+        "kind": "post",
+        "product": "RepToday",
+        "published_at": "2026-11-02T00:11:16.818933+00:00",
+        "published_by_run": "20261102T000002Z-scheduled-0673",
+        "slot": "2026-11-03T10:00-08:00",
+        "status": "approved",
+        "window": 1
+      },
+      "day": 2,
+      "open": null,
+      "rejected": [],
+      "slot": "2026-11-10T10:00-08:00"
+    },
+    {
+      "approved": {
+        "ask": "Approve day 3 post: missed-day score record",
+        "closed_at": "2026-11-09T00:27:13.122166+00:00",
+        "closed_by_run": "20261109T002710Z-on-demand-4b97",
+        "day": 3,
+        "decided_at": "2026-11-04T10:39:54-08:00",
+        "draft": "drafts/posts/window-1/day-03.md",
+        "draft_sha256": "56a1fb924cae0cfd79129a6e6b239d8602f1e372d15042ff28ddfa8220465ab0",
+        "evidence": "evidence/decisions/20261101-post-w1-day-03.json",
+        "file": "review-queue/items/20261101-post-w1-day-03.md",
+        "id": "20261101-post-w1-day-03",
+        "kind": "post",
+        "product": "RepToday",
+        "published_at": "2026-11-02T00:11:16.818933+00:00",
+        "published_by_run": "20261102T000002Z-scheduled-0673",
+        "slot": "2026-11-04T10:00-08:00",
+        "status": "approved",
+        "window": 1
+      },
+      "day": 3,
+      "open": null,
+      "rejected": [],
+      "slot": "2026-11-11T10:00-08:00"
+    },
+    {
+      "approved": {
+        "ask": "Approve day 4 post: founder comeback story",
+        "closed_at": "2026-11-09T00:27:13.122166+00:00",
+        "closed_by_run": "20261109T002710Z-on-demand-4b97",
+        "day": 4,
+        "decided_at": "2026-11-04T11:30:31-08:00",
+        "draft": "drafts/posts/window-1/day-04.md",
+        "draft_sha256": "2006d885ee4f70807a6499a099dd752cd21fe678a9a4c3ada0493faf271a7798",
+        "evidence": "evidence/decisions/20261101-post-w1-day-04.json",
+        "file": "review-queue/items/20261101-post-w1-day-04.md",
+        "id": "20261101-post-w1-day-04",
+        "kind": "post",
+        "note": "user consistency improves from 54 to 85 after the comeback",
+        "product": "RepToday",
+        "published_at": "2026-11-02T00:11:16.818933+00:00",
+        "published_by_run": "20261102T000002Z-scheduled-0673",
+        "slot": "2026-11-05T10:00-08:00",
+        "status": "approved",
+        "window": 1
+      },
+      "day": 4,
+      "open": null,
+      "rejected": [],
+      "slot": "2026-11-12T10:00-08:00"
+    },
+    {
+      "approved": null,
+      "day": 5,
+      "open": null,
+      "rejected": [],
+      "slot": "2026-11-13T10:00-08:00"
+    },
+    {
+      "approved": {
+        "ask": "Approve day 6 post: no-streaks contrarian, declaration-led",
+        "closed_at": "2026-11-09T00:27:13.122166+00:00",
+        "closed_by_run": "20261109T002710Z-on-demand-4b97",
+        "day": 6,
+        "decided_at": "2026-11-04T11:29:51-08:00",
+        "draft": "drafts/posts/window-1/day-06.md",
+        "draft_sha256": "4305f5650d7848796c787569a70b949f271ba2c4a7c8280f284391bcddc17762",
+        "evidence": "evidence/decisions/20261101-post-w1-day-06.json",
+        "file": "review-queue/items/20261101-post-w1-day-06.md",
+        "id": "20261101-post-w1-day-06",
+        "kind": "post",
+        "product": "RepToday",
+        "published_at": "2026-11-02T00:11:16.818933+00:00",
+        "published_by_run": "20261102T000002Z-scheduled-0673",
+        "slot": "2026-11-07T10:00-08:00",
+        "status": "approved",
+        "window": 1
+      },
+      "day": 6,
+      "open": null,
+      "rejected": [],
+      "slot": "2026-11-14T10:00-08:00"
+    },
+    {
+      "approved": {
+        "ask": "Approve day 7 post: 5-minute timelapse",
+        "closed_at": "2026-11-09T00:27:13.122166+00:00",
+        "closed_by_run": "20261109T002710Z-on-demand-4b97",
+        "day": 7,
+        "decided_at": "2026-11-04T11:08:31-08:00",
+        "draft": "drafts/posts/window-1/day-07.md",
+        "draft_sha256": "144e79ea7123b2a00716f395df49881803ef447ec4f259a2c941c9b3db644eea",
+        "evidence": "evidence/decisions/20261101-post-w1-day-07.json",
+        "file": "review-queue/items/20261101-post-w1-day-07.md",
+        "id": "20261101-post-w1-day-07",
+        "kind": "post",
+        "note": "recorded the whole 5 minutes, speed up that into clip.",
+        "product": "RepToday",
+        "published_at": "2026-11-02T00:11:16.818933+00:00",
+        "published_by_run": "20261102T000002Z-scheduled-0673",
+        "slot": "2026-11-08T10:00-08:00",
+        "status": "approved",
+        "window": 1
+      },
+      "day": 7,
+      "open": null,
+      "rejected": [],
+      "slot": "2026-11-15T10:00-08:00"
+    }
+  ],
+  "kit": {
+    "angles": {
+      "path": "projects/RepToday/gtm/05-social-pmf/angles.md",
+      "sha256": "60eafe6fd2d09f31cd40681cfbbb0e3075d8a8eed68812b089fd2dd9536b1608"
+    },
+    "brand_rules": {
+      "path": "projects/RepToday/gtm/09-extras/marketing-agent/brand-rules.json",
+      "sha256": "b950a7e13ff689eaa18bffe10e914d1b7895adbe6ec54b0bdd280443321b936f"
+    },
+    "calendar": {
+      "path": "projects/RepToday/gtm/05-social-pmf/cadence-14-day.md",
+      "sha256": "10d67857fdc5be8561bc0f08ed9914f0c0b65bdc68761d6cd050a3737d9254c2"
+    },
+    "checklist": {
+      "path": "projects/RepToday/gtm/08-redteam/pre-publication-checklist.md",
+      "sha256": "082baaf3deb3d40d35b8f7cbf7b5226187ede9582a212379c51ac9e4656f1f12"
+    },
+    "competitors": {
+      "path": "projects/RepToday/gtm/01-research/",
+      "sha256": "c9acfd550573e9b1166305bac95f456fc868c995106d2e4b1cdd0fb1f48eb853"
+    },
+    "pairs": {
+      "path": "projects/RepToday/gtm/05-social-pmf/ab-pairs.md",
+      "sha256": "a9aff1c1c782969fc716ecd640cd84689ae851ce0cfeed4470c955cc5a21c4dd"
+    },
+    "platforms": {
+      "path": "projects/RepToday/gtm/05-social-pmf/platform-assignment.md",
+      "sha256": "0de409ac9d62c7e849361802ff94ba0a4749ad349ff82b9c96b7673bf3d7ff31"
+    }
+  },
+  "posted": {
+    "1": {
+      "ask": "Approve day 1 post: cold-open demo, hook A",
+      "closed_at": "2026-11-09T00:27:13.122166+00:00",
+      "closed_by_run": "20261109T002710Z-on-demand-4b97",
+      "day": 1,
+      "decided_at": "2026-11-04T10:39:42-08:00",
+      "draft": "drafts/posts/window-1/day-01.md",
+      "draft_sha256": "aa4b64fed4300725994be764ae4d63d9c52304abb925702391ce16bd4c4db6c4",
+      "evidence": "evidence/decisions/20261101-post-w1-day-01.json",
+      "file": "review-queue/items/20261101-post-w1-day-01.md",
+      "id": "20261101-post-w1-day-01",
+      "kind": "post",
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "slot": "2026-11-02T10:00-08:00",
+      "status": "approved",
+      "window": 1
+    },
+    "2": {
+      "ask": "Approve day 2 post: paywall review on screen, pain-first cut",
+      "closed_at": "2026-11-09T00:27:13.122166+00:00",
+      "closed_by_run": "20261109T002710Z-on-demand-4b97",
+      "day": 2,
+      "decided_at": "2026-11-04T10:39:53-08:00",
+      "draft": "drafts/posts/window-1/day-02.md",
+      "draft_sha256": "1f9b6f93561dd135b8766f08fde906d7274783957713f703dbefe74a25fbd5c6",
+      "evidence": "evidence/decisions/20261101-post-w1-day-02.json",
+      "file": "review-queue/items/20261101-post-w1-day-02.md",
+      "id": "20261101-post-w1-day-02",
+      "kind": "post",
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "slot": "2026-11-03T10:00-08:00",
+      "status": "approved",
+      "window": 1
+    },
+    "3": {
+      "ask": "Approve day 3 post: missed-day score record",
+      "closed_at": "2026-11-09T00:27:13.122166+00:00",
+      "closed_by_run": "20261109T002710Z-on-demand-4b97",
+      "day": 3,
+      "decided_at": "2026-11-04T10:39:54-08:00",
+      "draft": "drafts/posts/window-1/day-03.md",
+      "draft_sha256": "56a1fb924cae0cfd79129a6e6b239d8602f1e372d15042ff28ddfa8220465ab0",
+      "evidence": "evidence/decisions/20261101-post-w1-day-03.json",
+      "file": "review-queue/items/20261101-post-w1-day-03.md",
+      "id": "20261101-post-w1-day-03",
+      "kind": "post",
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "slot": "2026-11-04T10:00-08:00",
+      "status": "approved",
+      "window": 1
+    },
+    "4": {
+      "ask": "Approve day 4 post: founder comeback story",
+      "closed_at": "2026-11-09T00:27:13.122166+00:00",
+      "closed_by_run": "20261109T002710Z-on-demand-4b97",
+      "day": 4,
+      "decided_at": "2026-11-04T11:30:31-08:00",
+      "draft": "drafts/posts/window-1/day-04.md",
+      "draft_sha256": "2006d885ee4f70807a6499a099dd752cd21fe678a9a4c3ada0493faf271a7798",
+      "evidence": "evidence/decisions/20261101-post-w1-day-04.json",
+      "file": "review-queue/items/20261101-post-w1-day-04.md",
+      "id": "20261101-post-w1-day-04",
+      "kind": "post",
+      "note": "user consistency improves from 54 to 85 after the comeback",
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "slot": "2026-11-05T10:00-08:00",
+      "status": "approved",
+      "window": 1
+    },
+    "6": {
+      "ask": "Approve day 6 post: no-streaks contrarian, declaration-led",
+      "closed_at": "2026-11-09T00:27:13.122166+00:00",
+      "closed_by_run": "20261109T002710Z-on-demand-4b97",
+      "day": 6,
+      "decided_at": "2026-11-04T11:29:51-08:00",
+      "draft": "drafts/posts/window-1/day-06.md",
+      "draft_sha256": "4305f5650d7848796c787569a70b949f271ba2c4a7c8280f284391bcddc17762",
+      "evidence": "evidence/decisions/20261101-post-w1-day-06.json",
+      "file": "review-queue/items/20261101-post-w1-day-06.md",
+      "id": "20261101-post-w1-day-06",
+      "kind": "post",
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "slot": "2026-11-07T10:00-08:00",
+      "status": "approved",
+      "window": 1
+    },
+    "7": {
+      "ask": "Approve day 7 post: 5-minute timelapse",
+      "closed_at": "2026-11-09T00:27:13.122166+00:00",
+      "closed_by_run": "20261109T002710Z-on-demand-4b97",
+      "day": 7,
+      "decided_at": "2026-11-04T11:08:31-08:00",
+      "draft": "drafts/posts/window-1/day-07.md",
+      "draft_sha256": "144e79ea7123b2a00716f395df49881803ef447ec4f259a2c941c9b3db644eea",
+      "evidence": "evidence/decisions/20261101-post-w1-day-07.json",
+      "file": "review-queue/items/20261101-post-w1-day-07.md",
+      "id": "20261101-post-w1-day-07",
+      "kind": "post",
+      "note": "recorded the whole 5 minutes, speed up that into clip.",
+      "product": "RepToday",
+      "published_at": "2026-11-02T00:11:16.818933+00:00",
+      "published_by_run": "20261102T000002Z-scheduled-0673",
+      "slot": "2026-11-08T10:00-08:00",
+      "status": "approved",
+      "window": 1
+    }
+  },
+  "product": "RepToday",
+  "reason": "Window 1 begins on Monday 2026-11-09, the day after its first sitting; this run prepares days 1 to 7: the week after the sitting on Sunday 2026-11-08 (2026-11-09 to 2026-11-15).",
+  "run": "20261109T002710Z-on-demand-4b97",
+  "skipped": [],
+  "waitlist_live": true,
+  "window": 1
+}

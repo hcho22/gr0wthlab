@@ -1,0 +1,18 @@
+{
+  "ask": "Approve day 1 post: cold-open demo, hook A",
+  "decided_at": "2026-11-04T10:39:42-08:00",
+  "decision": "approve",
+  "item": "20261101-post-w1-day-01",
+  "item_file": "review-queue/items/20261101-post-w1-day-01.md",
+  "kind": "post",
+  "note": null,
+  "reason": null,
+  "sitting": "2026-11-04",
+  "source": {
+    "path": "founder/decisions/20261101-post-w1-day-01.json",
+    "sha256": "c4a6fe67d3e5d01082f129f814fadb38aef293892b2d5a8b2a5e75fc09219266"
+  },
+  "superseded_by": null,
+  "taken_in_at": "2026-11-09T00:27:13.122166+00:00",
+  "taken_in_by_run": "20261109T002710Z-on-demand-4b97"
+}

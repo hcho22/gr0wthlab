@@ -9,6 +9,13 @@
       "run": null,
       "started_at": "2026-11-09T00:00:00.507046+00:00",
       "trigger": "scheduled"
+    },
+    {
+      "ended_at": "2026-11-09T00:39:03.392380+00:00",
+      "ending": "completed",
+      "run": "20261109T002710Z-on-demand-4b97",
+      "started_at": "2026-11-09T00:27:10.517467+00:00",
+      "trigger": "on-demand"
     }
   ]
 }

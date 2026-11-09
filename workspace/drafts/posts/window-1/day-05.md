@@ -71,6 +71,5 @@ A phone switches on airplane mode, then shows a ready workout session.
 ## Claims
 
 - Claim: The app builds a workout session while the phone is in airplane mode.
-  Code: none
-  Shows: none
-
+  Code: `ios/RepToday/RepToday/Services/Engine/OnDeviceWorkoutEngine.swift:8`
+  Shows: `/// bundled, load-validated exercise library. Nothing here reaches the network, a server, or an LLM,`

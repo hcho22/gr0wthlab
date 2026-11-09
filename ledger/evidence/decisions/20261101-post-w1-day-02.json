@@ -1,0 +1,18 @@
+{
+  "ask": "Approve day 2 post: paywall review on screen, pain-first cut",
+  "decided_at": "2026-11-04T10:39:53-08:00",
+  "decision": "approve",
+  "item": "20261101-post-w1-day-02",
+  "item_file": "review-queue/items/20261101-post-w1-day-02.md",
+  "kind": "post",
+  "note": null,
+  "reason": null,
+  "sitting": "2026-11-04",
+  "source": {
+    "path": "founder/decisions/20261101-post-w1-day-02.json",
+    "sha256": "6e985828194d948c10f04a169102f7ee2a26da837b3687a0d77335492c3922b9"
+  },
+  "superseded_by": null,
+  "taken_in_at": "2026-11-09T00:27:13.122166+00:00",
+  "taken_in_by_run": "20261109T002710Z-on-demand-4b97"
+}
