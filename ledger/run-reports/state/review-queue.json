@@ -138,6 +138,10 @@
       "hash": "d1d9261c6e219c57fea89ac81031626e85a23b0adaf2dd5bdc8de7051af4c54d",
       "outcome": "approved"
     },
+    "20261108-align-creator-outreach-checklist": {
+      "hash": "796b2d0d607485551cb394749b0b6fb299b45585555207334dbd9526ea0c7b52",
+      "outcome": "superseded"
+    },
     "20261108-message-creator-gmb-fitness": {
       "hash": "b052b043ff95fcf95c22cad62694249b4428c5a3e0de42fa8709dfdeec0a5d0d",
       "outcome": "superseded"
@@ -169,10 +173,30 @@
     "20261108-post-w1-day-07": {
       "hash": "cd4986d946fd3df60f38a31d021f7c46c6e91fdc0c2c7d91237e22c09ea7db22",
       "outcome": "superseded"
+    },
+    "20261109-message-creator-gmb-fitness": {
+      "hash": "f1792d5de4cd5495fde450a3fbbdb5280eea12cd001a2e60112aea4b5865a11d",
+      "outcome": "superseded"
+    },
+    "20261109-message-creator-hybrid-calisthenics": {
+      "hash": "78c370813e56b7a96edb5aef1c9b12989737d71d94699f9acc8565a3c585aded",
+      "outcome": "superseded"
+    },
+    "20261109-message-creator-the-bioneer": {
+      "hash": "80213ab9dc4bda32bc4791439a340b3c4a1005f2e6ec2d06dfb061416089b70b",
+      "outcome": "superseded"
+    },
+    "20261109-post-w1-day-07": {
+      "hash": "35f6323c2e1608cb851b0b29c68220dadcee5a6dd00ce9084b8fb33f290b73b6",
+      "outcome": "superseded"
+    },
+    "20261109-post-w1-day-09": {
+      "hash": "b77ed880e3312010ecafbac41d40765cfd5c02947a16e0a36726507a9f61e461",
+      "outcome": "superseded"
     }
   },
   "reported": [],
-  "updated_at": "2026-11-09T14:48:09.795654+00:00",
-  "updated_by_run": "20261109T143518Z-on-demand-079b",
+  "updated_at": "2026-11-09T18:02:24.065525+00:00",
+  "updated_by_run": "20261109T175145Z-on-demand-7f18",
   "workflow": "review-queue"
 }

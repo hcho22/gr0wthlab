@@ -11,7 +11,7 @@ offer: early-access
 
 ## Message
 
-I'm the founder of Rep Today. It builds a workout around the time you have and your recent training. Your shame-free approach is why I'm reaching out. I can offer early access, with no request to promote it.
+I'm the founder of Rep Today. The app assembles a workout using the time you request and your recent training logs. I can offer early access, with no request to promote it.
 
 ## Notes
 
@@ -19,15 +19,10 @@ The channel plan describes a shame-free approach and an anti-selling stance. Kee
 
 ## Claims
 
-- Claim: Rep Today builds a complete workout on the device using the requested time and recent training history.
+- Claim: Rep Today assembles a workout using the requested time and recent training logs.
   Code: `ios/RepToday/RepToday/Services/Engine/OnDeviceWorkoutEngine.swift:39-48`
-  Shows: `let library = try await exerciseService.exercises()
-        return SessionAssembly.assemble(
+  Shows: `return SessionAssembly.assemble(
             requestedMinutes: requestedMinutes,
             user: user,
             library: library,
-            recentLogs: recentLogs,
-            sessionPolicy: sessionPolicy,
-            variation: variation,
-            asOf: now()
-        )`
+            recentLogs: recentLogs,`

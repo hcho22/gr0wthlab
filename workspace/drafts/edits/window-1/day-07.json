@@ -4,6 +4,6 @@
   "window": 1,
   "day": 7,
   "segments": [
-    {"shot": "d07-s1", "source": "window-1/d07-s1.MP4", "in": 0.005, "out": 294.185, "speed": 14.709}
+    {"shot": "d07-s1", "source": "window-1/d07-s1.MP4", "in": 0.01, "out": 294.18, "speed": 14.7085}
   ]
 }

@@ -18,7 +18,7 @@ Free means the workouts. All of them. Forever.
 
 ### Beat 1 (hook): 0-3s
 
-- Visual action: A real screen recording shows the app's Ready Screen; the promise appears over the app screen.
+- Visual action: A real screen recording shows the app's Ready Screen; the review text appears over the app screen.
 - Spoken line: none
 - On-screen text: Free means the workouts. All of them. Forever.
 
