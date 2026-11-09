@@ -431,7 +431,7 @@ def graph(canvas: Canvas, cuts: Sequence[Cut], text: bool) -> tuple[str, bool]:
             f"fps={canvas.fps}",
             f"trim=duration={cut.length:.6f}",
             "setpts=PTS-STARTPTS",
-            f"scale={size}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos",
+            f"scale={size}:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos:out_range=tv",
             f"pad={size}:(ow-iw)/2:(oh-ih)/2:color=black",
             "setsar=1",
             "format=yuv420p",

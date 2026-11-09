@@ -185,7 +185,7 @@ class ComposeTest(unittest.TestCase):
         cuts = [self.cut("a.mov", 1, 4, CAMERA), self.cut("b.mov", 2, 13), self.cut("c.mov", 0, 4, wide)]
         graph, _ = video.graph(CANVAS, cuts, False)
         fit = (
-            "scale=1080:1920:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos,"
+            "scale=1080:1920:force_original_aspect_ratio=decrease:force_divisible_by=2:flags=lanczos:out_range=tv,"
             "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1,format=yuv420p"
         )
         self.assertEqual(graph.count(fit), 3)
@@ -392,6 +392,26 @@ class RealToolingTest(unittest.TestCase):
             facts = video.probe(TOOLING, out, self.env)
             self.assertFalse(facts.hdr)
             self.assertEqual(video.verify(facts, REAL_CANVAS, 2.0), [])
+        finally:
+            clip.unlink()
+
+    def test_full_range_footage_as_a_phone_records_it_is_converted_to_limited_range(self):
+        clip = self.root / "footage" / "d03-s1-full.mp4"
+        command = [str(TOOLING.ffmpeg), "-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-f", "lavfi"]
+        command += ["-i", "color=white:size=1080x1920:rate=30:duration=3", "-c:v", "libx264", "-preset", "ultrafast"]
+        command += ["-pix_fmt", "yuvj420p", "-color_range", "pc", "-colorspace", "bt709", str(clip)]
+        subprocess.run(command, check=True, capture_output=True)
+        try:
+            source = video.probe(TOOLING, clip, self.env)
+            self.assertEqual(source.pix_fmt, "yuvj420p")
+            out = self.root / "assets" / "from-full.mp4"
+            video.render(TOOLING, REAL_CANVAS, [video.Cut(clip, 0.0, 2.0, 1.0, source)], [], out, self.env)
+            self.assertEqual(video.verify(video.probe(TOOLING, out, self.env), REAL_CANVAS, 2.0), [])
+            # The pixels are converted, not only labelled: full-range white (255) lands on limited-range white (235).
+            frame = [str(TOOLING.ffmpeg), "-nostdin", "-loglevel", "error", "-i", str(out), "-frames:v", "1"]
+            frame += ["-f", "rawvideo", "-pix_fmt", "yuv420p", "-"]
+            luma = subprocess.run(frame, check=True, capture_output=True).stdout[: 1080 * 1920]
+            self.assertLessEqual(abs(max(luma) - 235), 1)
         finally:
             clip.unlink()
 
