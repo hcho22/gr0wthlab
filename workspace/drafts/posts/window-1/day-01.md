@@ -67,5 +67,5 @@ A phone opens to the Rep Today Ready Screen with a workout and Start button visi
 ## Claims
 
 - Claim: Rep Today opens with a workout ready to start.
-  Code: `ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:415-439`
+  Code: `ios/RepToday/RepToday/ViewModels/ReadyViewModel.swift:472-500`
   Shows: `workout = generated`
