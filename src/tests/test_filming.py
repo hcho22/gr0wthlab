@@ -2,6 +2,7 @@
 the footage place only ever read, and each edit record checked, rendered, measured, and shown in its day's post."""
 
 import collections
+import hashlib
 import io
 import json
 import os
@@ -2443,6 +2444,44 @@ class EditRunTest(FilmingRunCase):
         code, said = self.check_edits(queue["updated_by_run"])
         self.assertEqual(code, 0, said)
         self.assertIn("OK day 1: drafts/edits/window-1/day-01.json: it passes", said)
+
+    def test_a_claim_citation_that_followed_moved_code_is_still_the_approved_copy(self):
+        self.approved_plan()
+        queue = self.run_ok({fakes.draft_path(1): fakes.filming_draft(1)})
+        copy = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.decide(copy["id"], "approve")
+        self.clip("d01-s1.mov")
+        # A later change to the Product moves the code the claim cites two lines down; the claim stays true.
+        screen = self.code / "App" / "ReadyScreen.swift"
+        screen.write_text("// One line.\n// Another.\n" + screen.read_text(encoding="utf-8"), encoding="utf-8")
+        fakes.git(self.code, "commit", "--quiet", "--all", "--message", "move", env=self.env)
+        # The approved copy as it is no longer shows its claim, so its video is not cut.
+        queue = self.run_ok({fakes.edit_path(1): fakes.edit_record(1, DAY_1)})
+        self.assertEqual([entry for entry in queue["open"] if entry["kind"] == "post"], [])
+        self.assertIn("App/ReadyScreen.swift lines 8-9 at", self.report())
+        # With only its citation following the code, it is still the copy approved: its video is cut and offered.
+        moved = fakes.filming_draft(1).replace("`App/ReadyScreen.swift:8-9`", "`App/ReadyScreen.swift:10-11`")
+        self.assertNotEqual(moved, fakes.filming_draft(1))
+        queue = self.run_ok({fakes.draft_path(1): moved})
+        video_post = next(entry for entry in queue["open"] if entry["kind"] == "post")
+        self.assertIn("asset", video_post)
+        self.assertEqual(video_post["draft_sha256"], hashlib.sha256(moved.encode("utf-8")).hexdigest())
+        item = self.item(video_post)
+        self.assertIn(f"- You approved this day's copy as `{copy['id']}` before its video existed;", item)
+        self.assertIn("`App/ReadyScreen.swift:10-11` shows `SessionList(session: session)`", item)
+        code, said = self.check_edits(queue["updated_by_run"])
+        self.assertEqual(code, 0, said)
+        self.assertIn("OK day 1: drafts/edits/window-1/day-01.json: it passes", said)
+        self.assertEqual(self.run_ok()["open"][0]["id"], video_post["id"])
+        # Any other change besides the citation is not that copy.
+        changed = moved.replace("Real phone, no cuts.", "One real phone, no cuts.")
+        self.assertNotEqual(changed, moved)
+        self.run_ok({fakes.draft_path(1): changed})
+        self.assertIn(
+            f"| 1 | d01-s1 | not cut | the Founder approved its copy as `{copy['id']}`, and its Draft is no longer that"
+            " copy; its post keeps the video it shows |",
+            self.report(),
+        )
 
     def test_an_approved_copy_s_draft_that_cannot_be_read_is_the_run_s_gap_and_its_open_video_post_is_untouched(self):
         """No video is cut for the day, whose post is not judged: the Draft is named as the source that failed."""

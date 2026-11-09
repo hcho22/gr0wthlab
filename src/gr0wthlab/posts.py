@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shlex
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
@@ -29,9 +30,9 @@ from pathlib import Path
 
 from . import exchange, kit, lint, schedule
 from .areas import Areas, Store, UnsafeFile, read_plain
-from .boundary import Boundary, ConfigError, load_json
+from .boundary import LEDGER, Boundary, ConfigError, load_json
 from .codebase import CLT_GIT, COMMIT, Code, open_code
-from .drafts import BLOCKS, DONE, Context, PostDraft, Verdict, call_to_action_lines, evaluate, parse
+from .drafts import BLOCKS, DONE, Context, PostDraft, Verdict, call_to_action_lines, evaluate, parse, same_copy
 from .queue import APPROVED, OPEN, REJECTED, Ledger, stands
 from .settings import Settings, Window
 
@@ -53,6 +54,9 @@ REPEATED = "not queued again"
 NOT_OFFERED = "not offered"
 NOT_PREPARED = "not prepared"
 STATUSES = (QUEUED, KEPT, BLOCKED, MISSING, APPROVED_BEFORE, REPEATED, NOT_OFFERED, NOT_PREPARED)
+# A claim as a post item lists it under its Claims heading: the claim, the location it cites, and what that shows.
+ITEM_CLAIM = re.compile(r"- .*? `([^\s:`]+:\d+(?:-\d+)?)` shows `.*`")
+CLAIMS_HEADING = "**Claims, checked against "
 VISUAL_ACTIONS = (
     "  Of these rules, each beat's visual action, a filming note, is read only for social-proof phrases; it is also"
     " checked for another Hook."
@@ -308,6 +312,36 @@ def approved_post(entries: Sequence[dict[str, object]]) -> dict[str, object] | N
     return next((entry for entry in approved if entry.get("asset_sha256")), approved[0] if approved else None)
 
 
+def cited(store: Store, entry: dict[str, object] | None) -> dict[str, object] | None:
+    """An approved post's entry with the location each of its claims cited, in order, as its item file lists them, so
+    a Draft whose citations alone moved since is still known as the copy approved (drafts.same_copy). An item file
+    that cannot be read, or lists no claim, adds nothing, and the Draft must then be the very file approved."""
+    if entry is None or entry.get("asset_sha256"):
+        return entry
+    try:
+        text = read_plain(store.path(str(entry["file"]))).decode("utf-8")
+    except (ConfigError, KeyError, OSError, UnicodeDecodeError, UnsafeFile):
+        return entry
+    lines = text.splitlines()
+    start = next((index for index, line in enumerate(lines) if line.startswith(CLAIMS_HEADING)), None)
+    if start is None:
+        return entry
+    locations = []
+    for line in lines[start + 1 :]:
+        if line.startswith("**"):
+            break
+        match = ITEM_CLAIM.fullmatch(line)
+        if match:
+            locations.append(match.group(1))
+    return dict(entry, claim_locations=locations) if locations else entry
+
+
+def approved_copy(draft: PostDraft, approved: Mapping[str, object]) -> bool:
+    """Whether a Draft is still the copy the Founder approved: the very file, or it with only its claims' citations
+    moved to code that still shows what they quote."""
+    return same_copy(draft, approved.get("draft_sha256"), list(approved.get("claim_locations") or ()))
+
+
 def standing_post(entries: Sequence[dict[str, object]]) -> dict[str, object] | None:
     """The post of a day that stands: its open one, otherwise its approved one."""
     return next((entry for entry in entries if entry["status"] == OPEN), None) or approved_post(entries)
@@ -400,6 +434,7 @@ def prepare(
     if plan is None:
         return None
     parsed, window, today = plan.context.kit, config.window, now.astimezone().date()
+    store = Store(Path(boundary.repo_root) / LEDGER)
     plan.run = run_id
     plan.waitlist_live = config.waitlist_live(today)
     plan.posted = posted_days(ledger, plan.product, window.number, list(parsed.days))
@@ -412,13 +447,14 @@ def prepare(
             plan.skipped.append((number, f"the calendar decides its Angle later ({parsed.days[number].cell})"))
             continue
         entries = day_entries(ledger, plan.product, window.number, number)
+        approved = cited(store, approved_post(entries))
         plan.days.append(
             due_day(
                 plan,
                 number,
                 slot_for(window, number),
                 next((item for item in entries if item["status"] == OPEN), None),
-                approved_post(entries),
+                approved,
                 [item for item in entries if item["status"] == REJECTED],
             )
         )
@@ -663,7 +699,7 @@ def read_day(plan: Plan, day_plan: DayPlan, areas: Areas, video=None) -> DayResu
             number, APPROVED_BEFORE, "the Founder approved it, so it is not asked again", str(approved["id"])
         )
     draft, problem = read_draft(areas, plan.draft_path(number))
-    if approved and (draft is None or draft.sha256 != approved.get("draft_sha256")):
+    if approved and (draft is None or not approved_copy(draft, approved)):
         why = "its Draft could not be read" if problem else "its Draft is gone"
         why = why if draft is None else "its Draft is no longer that copy"
         video.hold(number, f"the Founder approved its copy as `{approved['id']}`, and {why}")
